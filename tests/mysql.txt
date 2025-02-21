@@ -1,0 +1,22 @@
+# mysql commands 
+
+# start mysql and enter db
+mysql -u root
+use eiou
+
+# Debug
+SELECT id, timestamp, level, message, file, line FROM debug;
+
+# Contacts output without a public key
+SELECT id, address, name, fee_percent, credit_limit, currency FROM contacts;
+
+# Transactions output
+SELECT id, tx_type, sender_address, receiver_address, amount, currency, timestamp, txid, previous_txid, memo FROM transactions;
+
+# p2p requests output without keys or signatures
+SELECT id, hash, time, currency, amount, my_fee_amount, request_level, max_request_level, sender_address, destination_address, incoming_txid, status FROM p2p;
+
+# rp2p requests output without keys or signatures
+SELECT id, hash, time, currency, amount, sender_address FROM rp2p;
+
+

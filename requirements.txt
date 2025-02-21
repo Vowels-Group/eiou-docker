@@ -1,0 +1,240 @@
+Functions
+Contacts
+My Info
+Add Contact
+Accept Contact
+Read Contact
+Update Contact
+Delete Contact
+Search Contacts
+Transactions
+Send eIOU
+Request eIOU
+Accept eIOU
+View eIOUs
+View Transaction History
+Peers of Peers
+Request Peers of Peers
+Receive Peers of Peers Request
+Respond Peers of Peers
+Receive Peers of Peers Response
+Settings
+Help
+View Settings
+Update Settings
+Generate Wallet
+Restore Wallet
+Suicide
+Assign Succession
+
+
+Functions Detail
+The owner of the account (user) interacts with other users (contacts) in the following ways
+My Info
+Outputs the user information including:
+-Their locators
+-Their pubkey
+-Their balance
+-Their balance detail (with filters)
+Contacts
+Create Contact
+Create a contact on the local database and send a request for the contact to do the same. If contact has valid eIOUs, add them to the local database.
+
+The following command will create a user “Adrien” who has address “123pubkey” 
+
+Example command: eiou add 123pubkey Adrien 0.1 10 USD
+Example command: eiou create 123pubkey Adrien 0.1 10 USD
+
+
+Parameters:
+Address/URI
+Name
+Fee (percent)
+Main Nominal Credit
+Main Currency (Should be USD until ‘Foreign Currencies’ feature)
+
+Accept Contact
+Accept a create contact request and add the contact back. Users can send funds to non contacts (from trusted contacts) but can not accept each other’s credit, or interact directly in Peer of Peer requests
+
+Example command: eiou accept 123pubkey Bob 0.2 20 USD
+
+Parameters
+Address/URI
+Name
+Fee
+Main Nominal Credit
+Main Currency (Should be USD until ‘Foreign Currencies’ feature)
+
+View Contact
+Read contact information from the local database
+
+Example command: eiou read 123pubkey
+Example command: eiou read adrien
+Example command: eiou view 123pubkey
+Example command: eiou view adrien
+
+Parameters:
+Address/URI
+Name
+
+Update Contact
+Update any information about contact, except Address/URI (Address/URI change can only be accomplished via Suicide then Assign Succession). Update 1 field at a time, unless All is specified, in which all must be presented in the following order: name, fee (percent), main nominal credit.
+
+Example command: eiou update 123pubkey name Adrien
+Example all command: eiou update 123pubkey all Adrien 0.1 100
+
+
+Parameters:
+Address/URI
+Type
+Name
+Fee (percent)
+Main Nominal Credit
+All
+
+Delete Contact
+Remove contact from the local database, and delete any eIOUs associated with them.
+
+Example command: eiou delete 123pubkey
+
+Parameters:
+Address/URI
+
+Search Contacts
+Lookup contact by name, or return all contacts.
+
+Example command: eiou search Adrien
+Example all command: eiou search
+
+Parameters:
+Name (optional)
+
+Returns:
+Address/URI
+Name
+Fee (percent)
+Main Nominal Credit
+Main Currency
+
+Transactions
+Send eIOU
+Transfer a value to a contact. The user will first check if they can send an eIOU directly, and if there is not enough credit available, will try to route the transaction through p2p
+If the user is a contact
+Check in the database for contacts credit limit with the user, subtract the outstanding eIOUs and add outstanding eIOUs from contact.
+If credit limit is greater than amount, prompt the user to confirm
+On confirm, sign the "send" transaction and send it
+If no, send a peer of peer request
+Wait for response
+Prompt user to confirm
+On Confirm, sign the "send" transaction and send it
+If the user is not a contact
+Send a peer of peer request
+Wait for response
+
+Example command: eiou send Adrien 100 USD
+Example command: eiou send 123pubkey 100 USD
+
+Parameters:
+Name or Address/URI
+Amount
+Currency
+
+Request eIOU
+Request a value from a contact. The user will first check the local database to see if they are willing to offer enough credit to accept an eIOU directly, and if there is not enough credit available, will try to route the transaction through p2p.
+If the user is a contact
+Check the local database to see if user will accept the amount in a direct eIOU
+If yes, prompt the user to confirm
+On confirm, sign the "request" transaction and send it
+If no, send a peer of peer request
+Wait for response
+Prompt user to confirm
+On Confirm, sign the "request" transaction and send it
+If the user is not a contact
+Send a peer of peer request
+Wait for response
+
+Example command: eiou request Adrien 100 USD
+Example command: eiou request 123pubkey 100 USD
+
+Accept eIOU Request
+Confirm a request from a contact.
+Sign transaction, save it to local database and send it back to contact
+If the contact has outstanding eIOUs (e.g. the user was deleted and added again), send eIOUs to contact
+
+Example command: eiou accept 123hash456
+
+View eIOU Totals
+Queries the local database for eIOUs, and returns the total for any outstanding balances
+If query is submitted, search by that before returning eIOU totals
+Else, return all eIOU totals
+
+Example command: eiou total
+Example command: eiou total adrien
+Example command: eiou total 123pubkey 
+
+View Transaction History
+Queries the local database for eIOUs, can search by address, nickname, date; or return all. Results can be sorted by address, date, amount. Default sort order is date descending. 
+If query is submitted, search by that and return all eIOUs
+Else, return all eIOUs
+
+Example command: eiou history
+Example command: eiou history adrien
+Example command: eiou history 123pubkey
+
+Peers of Peers
+Request Peers of Peers
+Hash(pubkey + salt + time). Send hash, salt, time, currency, nominal amount (the amount the recipient will receive), and request level (set to 0) to all contacts.
+Receive Peers of Peers Request
+Perform Hash(contact + salt + time) with all contacts. 
+If there is a match, check if the user would accept that much credit to send that much as an eIOU
+If there is no match, increment the request level by 1 and forward the request to all contacts
+Respond Peers of Peers
+Respond to peer to let them know you would accept the credit, and give an expiration
+Hold the credit until peer of peer request is completed
+Receive Peers of Peers Response
+Receive peer of peer response
+Show it to user
+On confirm, sign transaction and send it forward
+Settings
+Help
+CLI version only. Displays all available commands and how they work, writing help {command name} will display help information about the command name.
+
+Example command: eiou help
+Example command: eiou help create
+
+View Settings
+Shows the settings 
+Default fees
+Default currency (currently hardcoded to USD)
+LocalHost/Network Connection Only (API / GUI version, respectively)
+Disable Token (API only)
+Default Peer of Peer Expiration
+Maximum Peer of Peer Level (default 6)
+
+Example command: eiou settings
+Update Settings
+Change settings for user
+
+Example command: eiou settings defaultFee 0.1
+Example command: eiou settings p2pExpiration 120
+
+Generate Wallet
+Create a new passphrase and generate a keypair for it, then provide a passphrase to the user. Using composer: bitwasp/bitcoin
+
+Example command: eiou generate
+
+Restore Wallet
+Use passphrase to regenerate keypair.
+
+Example command: eiou restore passphrase
+
+Resign
+Send a resignation transaction to all contacts, this is to disable further damage from a compromised wallet.
+
+Example command: eiou resign
+(will be asked to confirm twice with “yes”)
+
+Assign Succession
+Once a wallet has resigned, it can sign a succession note. When a user adds a contact with a succession note, they will associate the resigned wallet’s transactions with the new one.
+
+Example command: eiou succeed newWalletAddress
