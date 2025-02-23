@@ -199,7 +199,7 @@ function deleteContact($data) {
 
 function freshInstall(){
     // Check if the configuration file exists
-    if (!file_exists('/etc/eiou/config.php')) {
+    if (!file_exists('var/www/html/eiou/config.php')) {
         // Create the directory if it doesn't exist
         if (!file_exists('/etc/eiou')) {
             mkdir('/etc/eiou', 0755, true);
@@ -262,13 +262,13 @@ function freshInstall(){
 
         
         // Write the default configuration
-        file_put_contents('/etc/eiou/config.php', $defaultConfig, LOCK_EX);
+        file_put_contents('var/www/html/eiou/config.php', $defaultConfig, LOCK_EX);
         // Retrieve the Tor hidden service hostname
         $torAddress = trim(file_get_contents('/var/lib/tor/hidden_service/hostname'));        
         // Append the Tor address to the config file
-        file_put_contents('/etc/eiou/config.php', "\n" . '$user["torAddress"]="' . addslashes($torAddress) . '";' . "\n", FILE_APPEND | LOCK_EX);
+        file_put_contents('var/www/html/eiou/config.php', "\n" . '$user["torAddress"]="' . addslashes($torAddress) . '";' . "\n", FILE_APPEND | LOCK_EX);
         
-        //echo "Created default configuration file at /etc/eiou/\n";
+        //echo "Created default configuration file at var/www/html/eiou/\n";
     }
 }
 

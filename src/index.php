@@ -1,11 +1,11 @@
 <?php
 // This file accepts incoming messages from the eIOU network
-require_once("/etc/eiou/functions.php");
-if (!file_exists("/etc/eiou/config.php")) {
+require_once("var/www/html/eiou/functions.php");
+if (!file_exists("var/www/html/eiou/config.php")) {
   echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
   die;
 }
-require_once("/etc/eiou/config.php");
+require_once("var/www/html/eiou/config.php");
 
 
 // Accept incoming connection and decode request

@@ -1,12 +1,12 @@
 <?php
 // This file is how users interact with eiou
-require_once("/etc/eiou/functions.php");
+require_once("/var/www/html/eiou/functions.php");
 // Check if config.php exists, if not run freshInstall()
-if (!file_exists('/etc/eiou/config.php')) {
+if (!file_exists('/var/www/html/eiou/config.php')) {
   // Performs a fresh installation of the eIOU system by creating configuration files, database, and necessary tables
   freshInstall();
 }
-require_once("/etc/eiou/config.php");
+require_once("/var/www/html/eiou/config.php");
 
 // Convert request to lowercase
 $request = strtolower($argv[1]);

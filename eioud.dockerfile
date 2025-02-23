@@ -9,8 +9,17 @@ RUN apt-get update && apt-get install -y \
     php \
     php-curl \
     php-mysql \
-    tor
+    tor \
+    php-dev
+# remove php-dev once done debugging
 
+# Xdebug- remove once done debugging
+RUN pecl install xdebug-3.4.0
+COPY src/xdebug/99-xdebug.ini /etc/php/8.2/cli/conf.d/99-docker-php-ext-xdebug.ini
+COPY src/xdebug/99-xdebug.ini /etc/php/8.2/cli/mods-available/99-docker-php-ext-xdebug.ini
+COPY .vscode /var/www/html/eiou/.vscode
+
+    
 # Edit /etc/tor/torrc
 RUN  chmod o+w /etc/tor/torrc
 RUN echo "HiddenServiceDir /var/lib/tor/hidden_service/" >> /etc/tor/torrc
@@ -34,19 +43,19 @@ RUN chown www-data:www-data /var/www/html/eiou -R
 RUN chmod 755 /var/www/html/eiou
 
 # Copy functions.php to a common location
-COPY src/functions.php /etc/eiou/functions.php
-RUN chown www-data:www-data /etc/eiou/functions.php
-RUN chmod 644 /etc/eiou/functions.php
+COPY src/functions.php /var/www/html/eiou/functions.php
+RUN chown www-data:www-data /var/www/html/eiou/functions.php
+RUN chmod 644 /var/www/html/eiou/functions.php
 
-# Copy functions folder to /etc/eiou/functions
-COPY src/functions /etc/eiou/functions
-RUN chown www-data:www-data /etc/eiou/functions -R
-RUN chmod 644 /etc/eiou/functions/*
+# Copy functions folder to /var/www/html/eiou/functions
+COPY src/functions /var/www/html/eiou/functions
+RUN chown www-data:www-data /var/www/html/eiou/functions -R
+RUN chmod 644 /var/www/html/eiou/functions/*
 
 # Copy messages.php to a common location
-COPY src/messages.php /etc/eiou/messages.php
-RUN chown www-data:www-data /etc/eiou/messages.php
-RUN chmod 644 /etc/eiou/messages.php
+COPY src/messages.php /var/www/html/eiou/messages.php
+RUN chown www-data:www-data /var/www/html/eiou/messages.php
+RUN chmod 644 /var/www/html/eiou/messages.php
 
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini
