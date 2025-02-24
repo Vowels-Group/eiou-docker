@@ -1,15 +1,15 @@
 # copy this into docker to build and launch 10 containers at once
 docker build -f .\eioud.dockerfile -t eioud .
-docker run -d --name eioud0tor eioud
-docker run -d --name eioud1tor eioud
-docker run -d --name eioud2tor eioud
-docker run -d --name eioud3tor eioud
-docker run -d --name eioud4tor eioud
-docker run -d --name eioud5tor eioud
-docker run -d --name eioud6tor eioud
-docker run -d --name eioud7tor eioud
-docker run -d --name eioud8tor eioud
-docker run -d --name eioud9tor eioud
+docker run -d -v eioud0tor --name eioud0tor eioud
+docker run -d -v eioud1tor --name eioud1tor eioud
+docker run -d -v eioud2tor --name eioud2tor eioud
+docker run -d -v eioud3tor --name eioud3tor eioud
+docker run -d -v eioud4tor --name eioud4tor eioud
+docker run -d -v eioud5tor --name eioud5tor eioud
+docker run -d -v eioud6tor --name eioud6tor eioud
+docker run -d -v eioud7tor --name eioud7tor eioud
+docker run -d -v eioud8tor --name eioud8tor eioud
+docker run -d -v eioud9tor --name eioud9tor eioud
 
 # copy this into docker to generate addresses
 docker exec eioud0tor eiou generate torAddressOnly

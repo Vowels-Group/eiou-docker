@@ -1,17 +1,13 @@
 # copy this into docker to build and launch 2 containers at once
 docker build -f .\eioud.dockerfile -t eioud .
-docker run -d --name eioud0 eioud
-docker run -d --name eioud1 eioud
+docker run -d -v eioud0 --name eioud0 eioud
+docker run -d -v eioud1 --name eioud1 eioud
 # needs more sleep if less containers 
 sleep 5 
 
 # copy this into docker to generate addresses
 docker exec eioud0 eiou generate torAddressOnly
 docker exec eioud1 eiou generate torAddressOnly
-
-
-
-
 
 
 # add contacts

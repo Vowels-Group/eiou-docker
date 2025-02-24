@@ -6,10 +6,10 @@ powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else {
 
 # build and start containers
 docker build -f eioud.dockerfile -t eioud .
-docker run -d --network=my-net --name eioud0http eioud
-docker run -d --network=my-net --name eioud1http eioud
-docker run -d --network=my-net --name eioud2http eioud
-docker run -d --network=my-net --name eioud3http eioud
+docker run -d -v eioud0http --network=my-net --name eioud0http eioud
+docker run -d -v eioud1http --network=my-net --name eioud1http eioud
+docker run -d -v eioud2http --network=my-net --name eioud2http eioud
+docker run -d -v eioud3http--network=my-net --name eioud3http eioud
 sleep 5
 
 # generate pubkeys and set hostname
