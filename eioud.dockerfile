@@ -19,7 +19,6 @@ COPY src/xdebug/99-xdebug.ini /etc/php/8.2/cli/conf.d/99-docker-php-ext-xdebug.i
 COPY src/xdebug/99-xdebug.ini /etc/php/8.2/cli/mods-available/99-docker-php-ext-xdebug.ini
 COPY .vscode /var/www/html/eiou/.vscode
 
-    
 # Edit /etc/tor/torrc
 RUN  chmod o+w /etc/tor/torrc
 RUN echo "HiddenServiceDir /var/lib/tor/hidden_service/" >> /etc/tor/torrc
