@@ -35,16 +35,16 @@ echo "Building base image..."
 docker build -f eioud.dockerfile -t eioud .
 
 echo "Creating containers..."
-docker run -d --network=eioud-network --name eioud-0-http eioud
-docker run -d --network=eioud-network --name eioud-1-http eioud
-docker run -d --network=eioud-network --name eioud-2-http eioud
-docker run -d --network=eioud-network --name eioud-3-http eioud
-docker run -d --network=eioud-network --name eioud-4-http eioud
-docker run -d --network=eioud-network --name eioud-5-http eioud
-docker run -d --network=eioud-network --name eioud-6-http eioud
-docker run -d --network=eioud-network --name eioud-7-http eioud
-docker run -d --network=eioud-network --name eioud-8-http eioud
-docker run -d --network=eioud-network --name eioud-9-http eioud
+docker run -d -v eioud-0-http:/var/www/html/ --network=eioud-network --name eioud-0-http eioud
+docker run -d -v eioud-1-http:/var/www/html/ --network=eioud-network --name eioud-1-http eioud
+docker run -d -v eioud-2-http:/var/www/html/ --network=eioud-network --name eioud-2-http eioud
+docker run -d -v eioud-3-http:/var/www/html/ --network=eioud-network --name eioud-3-http eioud
+docker run -d -v eioud-4-http:/var/www/html/ --network=eioud-network --name eioud-4-http eioud
+docker run -d -v eioud-5-http:/var/www/html/ --network=eioud-network --name eioud-5-http eioud
+docker run -d -v eioud-6-http:/var/www/html/ --network=eioud-network --name eioud-6-http eioud
+docker run -d -v eioud-7-http:/var/www/html/ --network=eioud-network --name eioud-7-http eioud
+docker run -d -v eioud-8-http:/var/www/html/ --network=eioud-network --name eioud-8-http eioud
+docker run -d -v eioud-9-http:/var/www/html/ --network=eioud-network --name eioud-9-http eioud
 
 # Function to wait for a container to be ready
 wait_for_container() {

@@ -1,7 +1,7 @@
 # copy this into docker to build and launch 2 containers at once
 docker build -f .\eioud.dockerfile -t eioud .
-docker run -d -v eioud0 --name eioud0 eioud
-docker run -d -v eioud1 --name eioud1 eioud
+docker run -d -v eioud0:/var/www/html/ --name eioud0 eioud
+docker run -d -v eioud1:/var/www/html/ --name eioud1 eioud
 # needs more sleep if less containers 
 sleep 5 
 

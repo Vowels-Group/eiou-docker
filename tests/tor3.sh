@@ -20,9 +20,9 @@ echo "Building base image..."
 docker build -f eioud.dockerfile -t eioud .
 
 echo "Creating containers..."
-docker run -d --name eioud-0-tor eioud
-docker run -d --name eioud-1-tor eioud
-docker run -d --name eioud-2-tor eioud
+docker run -d -v eioud-0-tor:/var/www/html/ --name eioud-0-tor eioud
+docker run -d -v eioud-1-tor:/var/www/html/ --name eioud-1-tor eioud
+docker run -d -v eioud-2-tor:/var/www/html/ --name eioud-2-tor eioud
 
 # Function to wait for a container to be ready
 wait_for_container() {
