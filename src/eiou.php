@@ -126,9 +126,8 @@ checkWalletExists($user, $request);
         openssl_sign($resignationMessage, $signature, $user['private'], OPENSSL_ALGO_SHA256);
         $payload['signature'] = base64_encode($signature);
 
-        $signedPayload = sign($payload);
 
-        send($signedPayload);
+        send( $contactAddress,$payload);
 
         echo "Resignation message sent to address: $contactAddress\n";
     }
@@ -185,7 +184,7 @@ checkWalletExists($user, $request);
         openssl_sign($successionMessage, $signature, $user['private'], OPENSSL_ALGO_SHA256);
         $payload['signature'] = base64_encode($signature);
 
-        send($payload, $user['private']);
+        send( $user['private'],$payload);
         echo "Succession message sent to address: $contactAddress\n";
     }
 
