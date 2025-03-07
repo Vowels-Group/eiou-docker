@@ -116,8 +116,7 @@ function displayHelp() {
     echo "succeed [new wallet address] - Assign a succession note to a new wallet.\n";
 }
 
-function displayUserInfo() {
-    global $user;
+function displayUserInfo($user) {
     echo "User Information:\n";
     
     // Locators array
@@ -212,7 +211,10 @@ function matchContact($request) {
 
 function output($message, $level = 'ECHO') {
     global $user;
+    //overwrite $message, remove after development
+    list($message,$level) = debugMessage($message);
     // Check if debug mode is enabled
+    
     if (isset($user['debug']) && $user['debug'] === true) {
         $data = [
             'level' => $level,
