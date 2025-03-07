@@ -1,5 +1,7 @@
 <?php
 // Require all files in the functions directory
+require_once 'functions/debug.php';
+require_once 'functions/pdo.php';
 require_once 'functions/contacts.php';
 require_once 'functions/database.php';
 require_once 'functions/databaseSchema.php';
