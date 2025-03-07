@@ -20,7 +20,7 @@ checkWalletExists($user, $request);
 // Info
   // Call the function in the info section
   if ($request == "info") {
-      output("Executing info request", 'SILENT');
+      output("Executing info request",  'SILENT');
       displayUserInfo($user);
   }
 // Contacts
@@ -91,109 +91,10 @@ checkWalletExists($user, $request);
     output("Executing restore wallet request", 'SILENT');
     restoreWallet($argv);
   }
-  elseif($request == "resign"){
-    //Resign
-    output("Executing resignation request", 'SILENT');
-    echo "Initiating resignation process...\n";
-
-    // Retrieve all contacts from the database
-    $query = "SELECT address FROM contacts";
-    $stmt = $pdo->prepare($query);
-    $stmt->execute();
-    $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Current Unix timestamp
-    $timestamp = time();
-
-    // Message to be sent to all contacts, now including a timestamp and machine-readable format
-    $resignationMessage = json_encode([
-        'message' => 'I am resigning and no longer accept transactions from this address.',
-        'timestamp' => $timestamp
-    ]);
-
-    // Loop through each contact and send the resignation message
-    foreach ($contacts as $contact) {
-        $contactAddress = $contact['address'];
-        $payload = array(
-            'type' => 'resign',
-            'senderPublicKey' => $user['public'],
-            'receiverAddress' => $contactAddress,
-            'message' => $resignationMessage
-        );
-
-        // Sign the message
-        $signature = null;
-        openssl_sign($resignationMessage, $signature, $user['private'], OPENSSL_ALGO_SHA256);
-        $payload['signature'] = base64_encode($signature);
-
-
-        send( $contactAddress,$payload);
-
-        echo "Resignation message sent to address: $contactAddress\n";
-    }
-
-    echo "Resignation process completed.\n";
-
-
-  }
-  elseif($request == "assignsuccession"){
-    //Assign Succession
-    output("Executing assign succession request", 'SILENT');
-    if(exec('whoami') !== 'root'){
-        echo "Please run 'sudo php /var/www/html/eiou/eiou.php assignsuccession' to assign succession.\n";
-        exit;
-    }
-
-    echo "Enter the new wallet address to assign succession to: ";
-    $newWalletAddress = trim(fgets(STDIN));
-
-    // Verify the new wallet address
-    if (!preg_match('/^[a-zA-Z0-9]{56}$/', $newWalletAddress)) {
-        echo "Invalid wallet address format. Please provide a valid 56-character alphanumeric address.\n";
-        exit;
-    }
-
-    // Retrieve all contacts from the database
-    $query = "SELECT address FROM contacts";
-    $stmt = $pdo->prepare($query);
-    $stmt->execute();
-    $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // Current Unix timestamp
-    $timestamp = time();
-
-    // Message to be sent to all contacts, including the new wallet address, timestamp, and machine-readable format
-    $successionMessage = json_encode([
-        'message' => 'I am assigning succession to the following wallet address:',
-        'newWalletAddress' => $newWalletAddress,
-        'timestamp' => $timestamp
-    ]);
-
-    // Loop through each contact and send the succession message
-    foreach ($contacts as $contact) {
-        $contactAddress = $contact['address'];
-        $payload = array(
-            'type' => 'assignsuccession',
-            'senderPublicKey' => $user['public'],
-            'receiverAddress' => $contactAddress,
-            'message' => $successionMessage
-        );
-
-        // Sign the message
-        $signature = null;
-        openssl_sign($successionMessage, $signature, $user['private'], OPENSSL_ALGO_SHA256);
-        $payload['signature'] = base64_encode($signature);
-
-        send( $user['private'],$payload);
-        echo "Succession message sent to address: $contactAddress\n";
-    }
-
-    echo "Succession assignment completed. The new wallet address is: $newWalletAddress\n";
-  }
   else{
     displayHelp();
     echo $request . " not found, displaying help above\n";
   }
 
 // Check for pending contact requests for users with no default fee set
-checkPendingContactRequests($pdo);
+checkPendingContactRequests();

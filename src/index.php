@@ -40,16 +40,6 @@ elseif ($request['type'] == "rp2p") {
   output("Processing rp2p request: " . print_r($request, TRUE), 'SILENT');
   handleRp2pRequest($request);
 }
-// Handle resignation note
-elseif ($request['type'] == "resign") {
-  // Handle resignation of other peer
-  output("Processing resign request", 'SILENT');
-  handleResignation($request);
-}
-elseif ($request['type'] == "assignsuccession") {
-  // Handle succession request
-  output("Processing assignsuccession request", 'SILENT');
-}
 else {
   output("Processing nonstandard request", 'SILENT');
   echo json_encode([
