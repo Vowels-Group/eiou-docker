@@ -69,7 +69,7 @@ function addContact($data) {
         }else {
             // If not accepted, show error and display the response
             output(returnContactRejected($responseData));
-            output("Failed contact request payload: ", print_r($payload, true));
+            output("Failed contact request payload: ". print_r($payload, true), 'SILENT');
             exit(1);
         }
     }
