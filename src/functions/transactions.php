@@ -1,7 +1,7 @@
 <?php
 
 function prepareSendData($request) {
-    output('Prepare send data: ' . print_r($request, true), 'SILENT');
+    output("Prepare send data: " . print_r($request, true), 'SILENT');
 
     $data['txType'] = 'standard';
     $data['time'] = time();
@@ -78,7 +78,7 @@ function sendByHttp ($recipient, $signedPayload) {
     $response = curl_exec($ch);
     curl_close($ch);
     // Return the response from the recipient
-    return $response;
+    return json_encode($response);
 }
 
 function sendByTor ($recipient, $signedPayload) {
@@ -93,7 +93,7 @@ function sendByTor ($recipient, $signedPayload) {
     $response = curl_exec($ch);
     curl_close($ch);
     // Return the response from the recipient
-    return $response;
+    return json_encode($response);
 }
 
 function sendEiou($request = null) {
@@ -103,12 +103,12 @@ function sendEiou($request = null) {
         global $data;
         $request = $data;
     }
-    output('Getting ready to send eIOU with request: ' . print_r($request, true), 'SILENT');
+    output("Getting ready to send eIOU with request: " . print_r($request, true), 'SILENT');
     validateSendRequest($request);
         
     // If receiver's public key is in contacts, prepare a transaction to send directly to them
     if ($contactInfo = lookupContactInfo ($request[2])) {
-        output('Looked up contact info: ' . print_r($contactInfo, true), 'SILENT');
+        output("Looked up contact info: " . print_r($contactInfo, true), 'SILENT');
         $data = prepareSendData($request);
         $data['receiverAddress'] = $contactInfo['receiverAddress'];
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
@@ -134,7 +134,7 @@ function sendEiou($request = null) {
 
 function sendP2pEiou($request) {
     global $user;
-    output('Getting ready to send P2p eIOU with request: ' . print_r($request, true));
+    output("Getting ready to send P2p eIOU with request: " . print_r($request, true));
 
     //Add some validation to make sure is a valid rp2p
 
@@ -151,7 +151,7 @@ function sendP2pEiou($request) {
     $payload = buildSendPayload($request);
     $response = json_decode(send($request['receiverAddress'], $payload), true);
 
-    output('Send P2p eIOU result: ' . print_r($response, true));
+    output("Send P2p eIOU result: " . print_r($response, true));
 
     if (isset($response['status']) && $response['status'] === 'accepted') {
         // Transaction accepted, now insert into database
