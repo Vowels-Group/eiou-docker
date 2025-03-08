@@ -203,7 +203,7 @@ function matchContact($request) {
         output("Calculating contact hash: address=" . $contact['address'] . ", salt=" . $request['salt'] . ", time=" . $request['time'], 'SILENT');
         output("Calculated contact hash: " . $contactHash, 'SILENT');
         if ($contactHash === $request['hash']) {
-            output('Contact matched!');
+            output("Contact matched!");
             return $contact;
         }
     }
@@ -212,7 +212,7 @@ function matchContact($request) {
 function output($message, $level = 'ECHO') {
     global $user;
     //overwrite $message, remove after development
-    list($message,$level) = debugMessage($message);
+    list($message,$level) = debugMessage($message,debug_backtrace());
     // Check if debug mode is enabled
     
     if (isset($user['debug']) && $user['debug'] === true) {

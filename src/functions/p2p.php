@@ -1,12 +1,12 @@
 <?php
 function acceptP2p($request) {
-    output('Begin processing send p2p request: ' . print_r($request, true), 'SILENT');
+    output("Begin processing send p2p request: " . print_r($request, true), 'SILENT');
     updateP2pRequestStatus($request['memo'], 'sent');
     sendP2pEiou($request);
 }
 
 function checkP2p($request) { 
-    output('Check p2p function triggered');
+    output("Check p2p function triggered");
 }
 
 function handleP2pRequest($request) {
@@ -23,14 +23,14 @@ function handleP2pRequest($request) {
     } 
 
     // Save request 
-    output('Inserting p2p request'); 
+    output("Inserting p2p request"); 
     $request['feeAmount'] = $requestedAmount - $request['amount'];
     $request['amount'] = $requestedAmount;
     insertP2pRequest($request, NULL);
 
     if ($matchedContact = matchContact($request)) {
         // Contact found, report back to sender
-        output('Contact found, report back to sender');
+        output("Contact found, report back to sender");
         $myAddress = resolveUserAddressForTransport($request['senderAddress']);
         $myPubkey = $user['public'];
         $request['amount'] = $requestedAmount;
@@ -42,9 +42,9 @@ function handleP2pRequest($request) {
             ]
         ];
         $rP2pPayload = buildRP2pPayload($request);
-        output('rP2p payload: ' . print_r($rP2pPayload, true));
+        output("rP2p payload: " . print_r($rP2pPayload, true));
         $result = send($request['senderAddress'], $rP2pPayload);
-        output('rP2p send result: ' . print_r($result, true));
+        output("rP2p send result: " . print_r($result, true));
         // Update the p2p request status to processed
         updateP2pRequestStatus($request['hash'], 'found');
         
@@ -57,14 +57,14 @@ function handleP2pRequest($request) {
 
 function handleRp2pRequest($request) {
     global $user;
-    //output('handleRp2pRequest() triggered', 'SILENT');
+    //output("handleRp2pRequest() triggered", 'SILENT');
 
     // Save rp2p response 
     $insertResult = insertRp2pRequest($request);
     
     if (!$insertResult) {
-        output('Failed to insert rp2p request: ' . print_r($request, true), 'SILENT');
-        output('Failed rp2p insert result: ' . print_r($insertResult, true), 'SILENT');
+        output("Failed to insert rp2p request: " . print_r($request, true), 'SILENT');
+        output("Failed rp2p insert result: " . print_r($insertResult, true), 'SILENT');
         return false;
     }
     $result = getP2pByHash($request['hash']);
@@ -72,14 +72,14 @@ function handleRp2pRequest($request) {
         throw new Exception('P2P request not found for the given hash.');
     }
     elseif(isset($result['destination_address'])) {
-        //output('I initiated this request', 'SILENT');
-        //output('My p2p details: ' . print_r($result, true), 'SILENT');
+        //output("I initiated this request", 'SILENT');
+        //output("My p2p details: " . print_r($result, true), 'SILENT');
         //I sent this request, let's check if i am willing to pay the fee
         $p2pAmount = $result['amount'];
         $rP2pAmount = $request['amount'];
         $feeAmount = $rP2pAmount - $p2pAmount;
         $feePercent = ($feeAmount / $p2pAmount) * 100;
-        //output('They want a fee of ' . $feePercent . ' percent, my max fee is ' . $user['maxFee'], 'SILENT');
+        //output("They want a fee of " . $feePercent . " percent, my max fee is " . $user['maxFee'], 'SILENT');
 
         if ($feePercent <= $user['maxFee']) {
             $result['amount'] = $request['amount'];
@@ -89,7 +89,7 @@ function handleRp2pRequest($request) {
             $result['memo'] = $request['hash'];
             acceptP2p($result);
         } else {
-            output('I reject the fee, ignore really. it will expire. or is there something else i can do?', 'SILENT');
+            output("I reject the fee, ignore really. it will expire. or is there something else i can do?", 'SILENT');
         }
     }
     else{
@@ -113,10 +113,10 @@ function handleRp2pRequest($request) {
 
 function prepareP2pRequestData($request) {
     global $user;
-    output('Prepare send p2p data: ' . print_r($request, true), 'SILENT');
+    output("Prepare send p2p data: " . print_r($request, true), 'SILENT');
     
     if (!isset($request[2])) {
-        output('$request[2] (receiverAddress) is not set: ' . print_r($request, true));
+        output("$request[2] (receiverAddress) is not set: " . print_r($request, true));
         die;
     }
 
@@ -130,8 +130,8 @@ function prepareP2pRequestData($request) {
     // Additional data preparation
     $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
     $data['p2pHash'] = hash('sha256', $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
-    output('Generated p2pHash: ' . $data['p2pHash'], 'SILENT'); // Added verbose output
-    output('p2pHash components - receiverAddress: ' . $data['receiverAddress'] . ', salt: ' . $data['salt'] . ', time: ' . $data['time'], 'SILENT'); // Detailed verbose output
+    output("Generated p2pHash: " . $data['p2pHash'], 'SILENT'); // Added verbose output
+    output("p2pHash components: " . ", receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time'], 'SILENT'); // Detailed verbose output
     $data['randomNumber'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // todo: lower bound should be private (generated in frehs install and put in config file) or generated for each contact
     $data['maxRequestLevel'] = $data['randomNumber'] + $user['maxP2pLevel'] - 1; // Handle off by 1 in request calculation
 
@@ -203,15 +203,15 @@ function processQueuedRP2pMessages() {
 
 function sendP2pRequest($data) {
     global $user;
-    //output('I want to send ' . ($data['amount'] / 100) . ' USD to ' . $data['receiverAddress'], 'SILENT');
-    //output('Full sendP2pRequest data: ' . print_r($data, true));
+    //output("I want to send " . ($data['amount'] / 100) . " USD to " . $data['receiverAddress'], 'SILENT');
+    //output("Full sendP2pRequest data: " . print_r($data, true));
     // Save the p2p request as a pending p2p transaction
     
     // Prepare p2p request payload
     $p2pPayload = buildP2pPayload(prepareP2pRequestData($data));
-    //output('Trying to insert p2p request: ' . print_r($data['receiverAddress'], true));
-    //output('Full P2p request payload: ' . print_r($p2pPayload, true));
-    output('Inserting p2p request with receiverAddress: ' . print_r($data[2], TRUE), 'SILENT');
+    //output("Trying to insert p2p request: " . print_r($data['receiverAddress'], true));
+    //output("Full P2p request payload: " . print_r($p2pPayload, true));
+    output("Inserting p2p request with receiverAddress: " . print_r($data[2], TRUE), 'SILENT');
     insertP2pRequest($p2pPayload, $data[2]);
 
     // Retrieve all contacts to send p2p request
@@ -221,7 +221,7 @@ function sendP2pRequest($data) {
     $totalSent = ['tor' => 0, 'http' => 0];
     foreach ($contacts as $contactAddress) {
         // Log each send attempt
-        //output('Sending p2p to: ' . $contactAddress, 'SILENT');
+        //output("Sending p2p to: " . $contactAddress, 'SILENT');
         send($contactAddress, $p2pPayload);
         if(isTorAddress($contactAddress)) {
             $totalSent['tor']++;
@@ -231,12 +231,12 @@ function sendP2pRequest($data) {
         }
     }
 
-    //output("Sent Peers of Peers request to " . $totalSent['tor'] . " tor contacts and " . $totalSent['http'] . " http(s) contacts.", 'ECHO');
+    //output("Sent Peers of Peers request to " . $totalSent['tor'] . " tor contacts and " . $totalSent['http'] . " http(s) contacts.", 'SILENT');
     // Inform user about expected response time
     
     $httpExpectedResponseTime = $user['maxP2pLevel']; // Use maxP2pLevel seconds for http
     $torExpectedResponseTime = 5 * 2 * $user['maxP2pLevel']; //5 seconds for a tor request, 2 times for a round trip, multiplied by maxP2pLevel
-    //output("You should expect a response within " . $httpExpectedResponseTime . " seconds for http and " . $torExpectedResponseTime . " seconds for tor.", 'ECHO');
+    //output("You should expect a response within " . $httpExpectedResponseTime . " seconds for http and " . $torExpectedResponseTime . " seconds for tor.", 'SILENT');
 
     return $p2pPayload;
 }

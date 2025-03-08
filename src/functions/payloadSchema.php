@@ -57,7 +57,7 @@ function buildP2pPayload($data) {
 
 function buildRP2pPayload($data) {
     global $user;
-    output('Building rP2p payload: ' . print_r($data, true));
+    output("Building rP2p payload: " . print_r($data, true));
     $userAddress = resolveUserAddressForTransport($data['senderAddress'] ?? $data['sender_address']);
     return array(
         'type' => 'rp2p',
