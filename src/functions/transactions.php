@@ -78,7 +78,7 @@ function sendByHttp ($recipient, $signedPayload) {
     $response = curl_exec($ch);
     curl_close($ch);
     // Return the response from the recipient
-    return json_encode($response);
+    return $response;
 }
 
 function sendByTor ($recipient, $signedPayload) {
@@ -93,7 +93,7 @@ function sendByTor ($recipient, $signedPayload) {
     $response = curl_exec($ch);
     curl_close($ch);
     // Return the response from the recipient
-    return json_encode($response);
+    return $response;
 }
 
 function sendEiou($request = null) {
