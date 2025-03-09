@@ -51,6 +51,7 @@ function handleP2pRequest($request) {
         // Save payload to output
     } else {
         // No matching contact, queue p2p request to be forwarded on
+        output("No matching contact, queue p2p request to be forwarded on");
         updateP2pRequest($request, 'queued');
     }
 }
