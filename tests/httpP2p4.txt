@@ -34,4 +34,8 @@ docker exec eioud0http eiou send http://eioud3http 100 USD
 
 docker exec eioud0http cat /var/log/php_errors.log
 
+docker exec -it eioud0http /usr/bin/php /var/www/html/eiou/messages.php
+docker exec -it eioud1http /usr/bin/php /var/www/html/eiou/messages.php
+docker exec -it eioud2http /usr/bin/php /var/www/html/eiou/messages.php
+docker exec -it eioud3http /usr/bin/php /var/www/html/eiou/messages.php
 
