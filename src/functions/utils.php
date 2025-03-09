@@ -211,14 +211,11 @@ function matchContact($request) {
 
 function output($message, $level = 'ECHO') {
     global $user;
-    //overwrite $message, remove after development
-    list($message,$level) = debugMessage($message,debug_backtrace());
     // Check if debug mode is enabled
-    
     if (isset($user['debug']) && $user['debug'] === true) {
         $data = [
             'level' => $level,
-            'message' => trim($message),
+            'message' => trim(debugMessage($message,debug_backtrace())),
             'context' => getContext(),
             'file' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0]['file'],
             'line' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0]['line'],

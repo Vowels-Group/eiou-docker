@@ -15,7 +15,7 @@ function debugColors(){
     return $debugcolors;    
 }
 
-function debugMessage($message,$debugTrace){
+function debugMessage($message,$debugTrace,$databaseDebug = false){
     $debugcolors = debugColors();
     $message = rtrim($message);
     if (preg_match('/\([A-Za-z]+\)/',$message)){
@@ -55,11 +55,29 @@ function debugMessage($message,$debugTrace){
     if(isset($messages[1])){
         if(preg_match('/\{/',$messages[1])){
             $messageparts = preg_split('/\{/',$messages[1]);
-            $messages[1] = $messageparts[0] . "\t" . $debugcolors['WARNING'] . "{" . $messageparts[1] . $debugcolors['DEFAULT'] ;
+            if (preg_match('/([Ww]arning)/',$message)){
+                $messages[1] = "\n" . $debugcolors['WARNING'] . $messageparts[0] . "\t{" . $messageparts[1] . $debugcolors['DEFAULT'] ;
+            }
+            elseif (preg_match('/([Ss]uccess)/',$message)){
+                $messages[1] = "\n" . $debugcolors['OKGREEN'] . $messageparts[0] . "\t{" . $messageparts[1] . $debugcolors['DEFAULT'] ;
+            }
             $messages[1] = rtrim($messages[1]);
         }
         $message = $message . $matches[0] .$messages[1] ."\n";
     }
-    return array($message, 'ECHO');
+    else{
+        if(preg_match('/\{/',$message)){
+            $messageparts = preg_split('/\{/',$message);
+            if (preg_match('/([Ww]arning)/',$message)){
+                $message =  $messageparts[0] . "\n\t" .$debugcolors['WARNING'] . "{" . $messageparts[1] . $debugcolors['DEFAULT'] ;
+            }
+            elseif (preg_match('/([Ss]uccess)/',$message)){
+                $message =  $messageparts[0] . "\n\t" . $debugcolors['OKGREEN'] . "{" . $messageparts[1] . $debugcolors['DEFAULT'] ;
+            }
+            $message = rtrim($message);
+        }
+    }
+    $message = "\n" . $message . "\n";
+    return $message;
 }
 ?>
