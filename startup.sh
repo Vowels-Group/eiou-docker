@@ -13,7 +13,28 @@ while ! mysqladmin ping -h localhost --silent; do
 done
 
 # Start message processing in background
-nohup php /etc/eiou/messages.php > /dev/null 2>&1 &
+# while docker ps | grep -q "messages"; do
+#     echo "Stopping existing message processing..."
+#     docker stop messages
+#     sleep 1
+# done
 
-# Keep container running
-tail -f /dev/null
+
+while true; do
+    # passeD=
+    # echo $passeD
+    if (( $(php -r 'require("//var//www//html//eiou//functions//messageCheck.php"); echo $passed;') )); then
+        echo "Message processing started successfully."      
+        # Start message processing in background
+        nohup php /var/www/html/eiou/messages.php > /dev/null 2>&1 &
+        # Keep container running
+        tail -f /dev/null
+        break
+    else
+        echo "Message processing check failed to complete. Retrying in 5 seconds..."
+        sleep 5
+        continue
+    fi
+done
+
+echo "Startup script completed.";
