@@ -9,8 +9,8 @@ try{
     $pdo = createPDOConnection();
     $pdo = null;
     $passed = true;
-    return true;
+    // return true;
 }catch(Exception $e){
-    return false;
+    // return false;
 }
 ?>
