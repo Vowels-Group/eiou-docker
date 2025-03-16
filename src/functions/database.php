@@ -149,8 +149,7 @@ function checkPendingContactRequests() {
 function getP2pByHash($hash){
     global $pdo;
     try {
-        $query = "SELECT * FROM p2p WHERE hash = :hash";
-        $p2pStmt = $pdo->prepare($query);
+        $p2pStmt = $pdo->prepare("SELECT * FROM p2p WHERE hash = :hash");
         $p2pStmt->bindParam(':hash', $hash);
         $p2pStmt->execute();
         return $p2pStmt->fetch(PDO::FETCH_ASSOC);
@@ -162,10 +161,15 @@ function getP2pByHash($hash){
 
 function checkRP2pExists($hash) {
     global $pdo;
+    try {
     $rP2pCheckStmt = $pdo->prepare("SELECT * FROM rp2p WHERE hash = :hash");
     $rP2pCheckStmt->bindParam(':hash', $hash);
     $rP2pCheckStmt->execute();
     return $rP2pCheckStmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Error checking rp2p request: " . $e->getMessage());
+        return false;
+    }
 }
 
 function deleteContact($data) {
@@ -284,7 +288,6 @@ function getPreviousTxid($senderPublicKey, $receiverPublicKey) {
     $result = $prevTxStmt->fetch(PDO::FETCH_ASSOC);
     return $result ? $result['txid'] : null;
 }
-
 function getTransactionByMemo($memo){
     global $pdo;
     $getTxStmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :memo");
@@ -662,6 +665,7 @@ function updateP2pRequestStatus($hash, $status) {
         $updateStmt->bindParam(':hash', $hash);
         $updateStmt->bindParam(':status', $status);
         $updateStmt->execute();
+        echo "Updated status to '" . $status . "' for message hash: " . $hash . "\n";
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating p2p request status: " . $e->getMessage());

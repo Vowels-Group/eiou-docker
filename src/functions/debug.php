@@ -33,7 +33,7 @@ function debugMessage($message,$debugTrace,$databaseDebug = false){
     $paddedFunctionName = str_pad("(" . $functionName .")",25, " ", STR_PAD_RIGHT);
     $message = $paddedFunctionName . " -> ".$message . "\n";
     //colour good and bad
-    if (preg_match('/([Ff]ailed)|([Nn]o)/',$message)){
+    if (preg_match('/([Ff]ailed)|([Nn]o)|([Ee]rror)/',$message)){
         $message = $debugcolors['FAIL'] . $message . $debugcolors['DEFAULT'];
     }
     elseif (preg_match('/([Ss]uccess)|([Ii]nsert)|([Acc]ept)/',$message)){
@@ -77,7 +77,7 @@ function debugMessage($message,$debugTrace,$databaseDebug = false){
             $message = rtrim($message);
         }
     }
-    $message = "\n" . $message . "\n";
+    $message = "\n" . $message .  "\n";
     return $message;
 }
 ?>
