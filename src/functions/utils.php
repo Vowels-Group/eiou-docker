@@ -209,6 +209,20 @@ function matchContact($request) {
     }
 }
 
+function matchContactMemo($request,$salt) {
+    $contacts = retrieveContacts();
+    foreach ($contacts as $contact) {
+        $contactHash = hash('sha256', $contact['address'] . $salt . $request['time']);
+        output("Calculating contact hash: address=" . $contact['address'] . ", salt=" . $salt . ", time=" . $request['time'], 'SILENT');
+        output("Calculated contact hash: " . $contactHash, 'SILENT');
+        if ($contactHash === $request['memo']) {
+            output("Contact matched!");
+            return $contact;
+        }
+    }
+}
+
+
 function output($message, $level = 'ECHO') {
     global $user;
     // Check if debug mode is enabled
