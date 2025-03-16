@@ -12,6 +12,7 @@ function prepareSendData($request) {
 }
 
 function processTransaction($request) {
+    global $user;
     // Calculate current balance
     $totalSent = calculateTotalSent($request['senderPublicKey']);
     $totalReceived = calculateTotalReceived($request['senderPublicKey']);
@@ -33,7 +34,6 @@ function processTransaction($request) {
     // Check if sender has sufficient balance or credit limit
     $requiredAmount = $request['amount']; 
     $availableFunds = $currentBalance + $creditLimit;  
-
     if ($availableFunds < $requiredAmount) {
         return json_encode([
             "status" => "rejected", 
@@ -43,13 +43,50 @@ function processTransaction($request) {
             "requested_amount" => number_format($requiredAmount / 100, 2) . " USD"     // Convert back to dollars with 2 decimal places and USD
         ]);
     } else {
-        // If p2p type transaction (and it's not for me), prepare the next transaction to send
+        output("REQUEST IN QUESTION: " . print_r($request, true));
+        $memo = $request['memo'];
+        $values = checkRP2pExists($memo);
+        if(isset($values) && $memo === $values['hash']){
+            output("Transaction not for me, forwarding to next peer (RP2P)");
+            $decoded_values = json_decode($values['p2p_array'], true);           
+            $last_item = $decoded_values[count($decoded_values)-1];
+            output("Last item in array: " . print_r($last_item, true));
+            $request['receiverAddress'] = $last_item['address'];
+            $request['receiverPublicKey'] = $last_item['public_key'];
+            $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']);
+            $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
+            $payload = buildSendPayload($request);
+            output("Sending Transaction onwards to: " . $request['receiverAddress']);
+            $response = send($request['receiverAddress'], $payload);
+            $responseData = json_decode($response, true);
+            output("Received response Transaction with status: " . $responseData['status']);
+           //not for me
 
-        // Check if it's for me
-
-
-        // Insert the transaction into the transactions table
-        return insertTransaction($request);
+        } else{  
+            //CHECK if P2P and status is found, then send to next peer which is the contact needed.
+            $memo = $request['memo'];
+            $values = getP2pByHash($memo);
+            if(isset($values) && $memo === $values['hash']){
+                if($values['status'] === 'found'){
+                    output("Transaction not for me, forwarding to next peer (P2P)");
+                    $matchedContact = matchContactMemo($request,$values['salt']);
+                    output("Matched contact: " . print_r($matchedContact, true));
+                    //HOW TO SEND TO CONTACT in question  
+                    $request['receiverAddress'] = $matchedContact['address'];
+                    $request['receiverPublicKey'] = $matchedContact['pubkey'];
+                    $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']);
+                    $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
+                    $payload = buildSendPayload($request);
+                    output("Sending Transaction onwards to: " . $request['receiverAddress']);
+                    $response = send($request['receiverAddress'], $payload);
+                    $responseData = json_decode($response, true);
+                    output("Received response Transaction with status: " . $responseData['status']);      
+                }
+            }else{
+                output("Transaction for me, inserting");
+                return insertTransaction($request);
+            }
+        }  
     }
 }
 
