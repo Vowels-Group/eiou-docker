@@ -73,8 +73,8 @@ function handleRp2pRequest($request) {
         throw new Exception('P2P request not found for the given hash.');
     }
     elseif(isset($result['destination_address'])) {
-        //output("I initiated this request", 'SILENT');
-        //output("My p2p details: " . print_r($result, true), 'SILENT');
+        output("I initiated this request", 'SILENT');
+        output("My p2p details: " . print_r($result, true), 'SILENT');
         //I sent this request, let's check if i am willing to pay the fee
         $p2pAmount = $result['amount'];
         $rP2pAmount = $request['amount'];
@@ -94,22 +94,22 @@ function handleRp2pRequest($request) {
         }
     }
     else{
+        //NOT NEEDED SO REMOVED
         // Forward back to the person who sent it to me
-        output("Got a rp2p and it's not for me", "SILENT");
-        // Forward rp2p back to original sender
-        $rp2pPayload = [
-            'type' => 'rp2p',
-            'hash' => $request['hash'],
-            'time' => $request['time'],
-            'amount' => $request['amount'],
-            'currency' => $request['currency'],
-            'senderPublicKey' => $request['senderPublicKey'],
-            'senderAddress' => $request['senderAddress'],
-            'signature' => $request['signature']
-        ];
-        send($result['sender_address'], $rp2pPayload);
+        // output("Got a rp2p and it's not for me", "SILENT");
+        // // Forward rp2p back to original sender
+        // $rp2pPayload = [
+        //     'type' => 'rp2p',
+        //     'hash' => $request['hash'],
+        //     'time' => $request['time'],
+        //     'amount' => $request['amount'],
+        //     'currency' => $request['currency'],
+        //     'senderPublicKey' => $request['senderPublicKey'],
+        //     'senderAddress' => $request['senderAddress'],
+        //     'signature' => $request['signature']
+        // ];
+        // send($result['sender_address'], $rp2pPayload);       
     }
-
 }
 
 function prepareP2pRequestData($request) {
