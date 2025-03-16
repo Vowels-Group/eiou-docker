@@ -62,11 +62,12 @@ function buildRP2pPayload($data) {
     return array(
         'type' => 'rp2p',
         'hash' => $data['hash'],
-        'time' => time(),
+        'time' => $data['time'],
         'amount' => $data['amount'],
-        'currency' => 'USD',
+        'currency' => $data['currency'],
         'senderPublicKey' => $user['public'],
         'senderAddress' => $userAddress,
+        'signature' => $data['signature'],
         'p2p_array' => $data['p2p_array']
     );
 }
