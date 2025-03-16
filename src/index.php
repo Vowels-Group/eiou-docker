@@ -10,7 +10,8 @@ require_once("/var/www/html/eiou/config.php");
 
 // Accept incoming connection and decode request
 $request = json_decode($_GET['payload'], true);
-//output("index file hit with request data: " . print_r($request, true), 'SILENT');
+
+output("index file hit with request data: " . print_r($request, true), 'SILENT');
 
 // Verify the request signature before processing
 if (!verifyRequest($request)) {
@@ -20,6 +21,7 @@ if (!verifyRequest($request)) {
 // Create PDO (db) connection
 $pdo = createPDOConnection();
 
+output("<index.html> has request: " . print_r($request['type'], TRUE), 'SILENT');
 if ($request['type'] == "create") {
   // Handle contact request
   output("Processing create request", 'SILENT');
@@ -27,16 +29,19 @@ if ($request['type'] == "create") {
 }
 elseif ($request['type'] == "send") {
   // Handle eIOU
+  output("<index.html> accessed send", 'SILENT');
   output("Processing send request", 'SILENT');
   echo processTransaction($request);
 }
 elseif ($request['type'] == "p2p") {
   // Handle Peers of Peers Request
+  output("<index.html> accessed p2p", 'SILENT');
   output("Processing p2p request: " . print_r($request, TRUE), 'SILENT');
   handleP2pRequest($request);
 }
 elseif ($request['type'] == "rp2p") {
   // Handle Peers of Peers Response
+  output("<index.html> accessed rp2p", 'SILENT');
   output("Processing rp2p request: " . print_r($request, TRUE), 'SILENT');
   handleRp2pRequest($request);
 }
