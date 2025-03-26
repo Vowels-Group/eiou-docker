@@ -1,6 +1,6 @@
 <?php
 function acceptP2p($request) {
-    output("Begin processing send p2p request: " . print_r($request, true), 'SILENT');
+    // output("Begin processing send p2p request: " . print_r($request, true), 'SILENT');
     updateP2pRequestStatus($request['memo'], 'sent');
     sendP2pEiou($request);
 }
@@ -92,23 +92,6 @@ function handleRp2pRequest($request) {
         } else {
             output("I reject the fee, ignore really. it will expire. or is there something else i can do?", 'SILENT');
         }
-    }
-    else{
-        //NOT NEEDED SO REMOVED
-        // Forward back to the person who sent it to me
-        // output("Got a rp2p and it's not for me", "SILENT");
-        // // Forward rp2p back to original sender
-        // $rp2pPayload = [
-        //     'type' => 'rp2p',
-        //     'hash' => $request['hash'],
-        //     'time' => $request['time'],
-        //     'amount' => $request['amount'],
-        //     'currency' => $request['currency'],
-        //     'senderPublicKey' => $request['senderPublicKey'],
-        //     'senderAddress' => $request['senderAddress'],
-        //     'signature' => $request['signature']
-        // ];
-        // send($result['sender_address'], $rp2pPayload);       
     }
 }
 

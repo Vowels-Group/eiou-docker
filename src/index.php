@@ -9,9 +9,10 @@ require_once("/var/www/html/eiou/config.php");
 
 
 // Accept incoming connection and decode request
-$request = json_decode($_GET['payload'], true);
 
-output("index file hit with request data: " . print_r($request, true), 'SILENT');
+output("TYPE: " . print_r($_GET['type']), 'SILENT');
+
+$request = json_decode($_GET['payload'], true);
 
 // Verify the request signature before processing
 if (!verifyRequest($request)) {
@@ -21,7 +22,6 @@ if (!verifyRequest($request)) {
 // Create PDO (db) connection
 $pdo = createPDOConnection();
 
-output("<index.html> has request: " . print_r($request['type'], TRUE), 'SILENT');
 if ($request['type'] == "create") {
   // Handle contact request
   output("Processing create request", 'SILENT');

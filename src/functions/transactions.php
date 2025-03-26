@@ -50,21 +50,24 @@ function processTransaction($request) {
             output("Transaction not for me, forwarding to next peer (RP2P)");
             $decoded_values = json_decode($values['p2p_array'], true);           
             $last_item = $decoded_values[count($decoded_values)-1];
-            output("Last item in array: " . print_r($last_item, true));
+            // output("Last item in array: " . print_r($last_item, true));
+            
             $request['receiverAddress'] = $last_item['address'];
-            $request['receiverPublicKey'] = $last_item['public_key'];
+            $request['receiverPublicKey'] = $last_item['pubkey'];
             $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']);
             $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
             $payload = buildSendPayload($request);
+
             output("Sending Transaction onwards to: " . $request['receiverAddress']);
             $response = send($request['receiverAddress'], $payload);
+            output("Response: " . print_r($response, true));
             $responseData = json_decode($response, true);
             output("Received response Transaction with status: " . $responseData['status']);
-           //not for me
-
+            
+            output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true) );
+            return insertTransaction($request); 
         } else{  
             //CHECK if P2P and status is found, then send to next peer which is the contact needed.
-            $memo = $request['memo'];
             $values = getP2pByHash($memo);
             if(isset($values) && $memo === $values['hash']){
                 if($values['status'] === 'found'){
@@ -72,21 +75,27 @@ function processTransaction($request) {
                     $matchedContact = matchContactMemo($request,$values['salt']);
                     output("Matched contact: " . print_r($matchedContact, true));
                     //HOW TO SEND TO CONTACT in question  
+                    
                     $request['receiverAddress'] = $matchedContact['address'];
                     $request['receiverPublicKey'] = $matchedContact['pubkey'];
                     $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']);
                     $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
                     $payload = buildSendPayload($request);
+                    
                     output("Sending Transaction onwards to: " . $request['receiverAddress']);
                     $response = send($request['receiverAddress'], $payload);
+                    output("Response: " . print_r($response, true));
                     $responseData = json_decode($response, true);
-                    output("Received response Transaction with status: " . $responseData['status']);      
+                    output("Received response Transaction with status: " . $responseData['status']);
+                    
+                    output("Accepting Transaction as Intermediate (P2P) : " .  print_r($request,true) );
+                    return insertTransaction($request);     
                 }
             }else{
-                output("Transaction for me, inserting");
-                return insertTransaction($request);
+                output("Transaction for end-recipient, inserting : " . print_r($request,true) );
+                return insertTransaction($request); 
             }
-        }  
+        } 
     }
 }
 
@@ -113,6 +122,7 @@ function sendByHttp ($recipient, $signedPayload) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
     curl_setopt($ch, CURLOPT_POST, true);
     $response = curl_exec($ch);
+    output("RESPONSE SEND :" . print_r($response, true));
     curl_close($ch);
     // Return the response from the recipient
     return $response;
@@ -186,10 +196,9 @@ function sendP2pEiou($request) {
 
     // Prepare transaction payload
     $payload = buildSendPayload($request);
-    $response = json_decode(send($request['receiverAddress'], $payload), true);
-
+    $response = send($request['receiverAddress'], $payload);
     output("Send P2p eIOU result: " . print_r($response, true));
-
+    output("DECODED : " .  print_r(json_decode($response,true), true));
     if (isset($response['status']) && $response['status'] === 'accepted') {
         // Transaction accepted, now insert into database
         insertTransaction($payload);
