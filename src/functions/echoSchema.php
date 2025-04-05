@@ -3,7 +3,7 @@ function returnContactAccepted() {
     return "Contact accepted.";
 }
 
-function returnConctactAcceptanceFailed() {
+function returnContactAcceptanceFailed() {
     return "Failed to accept contact.";
 }
 
