@@ -113,7 +113,8 @@ function prepareP2pRequestData($request) {
     output("Generated p2pHash: " . $data['p2pHash'], 'SILENT'); // Added verbose output
     output("p2pHash components: " . ", receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time'], 'SILENT'); // Detailed verbose output
     $data['randomNumber'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // todo: lower bound should be private (generated in fresh install and put in config file) or generated for each contact
-    $data['maxRequestLevel'] = $data['randomNumber'] + $user['maxP2pLevel'] - 1; // Handle off by 1 in request calculation
+    $data['maxRequestLevel'] = 1000 + $user['maxP2pLevel'] - 1;
+    //$data['maxRequestLevel'] = $data['randomNumber'] + $user['maxP2pLevel'] - 1; // Handle off by 1 in request calculation
 
     return $data;
 }
@@ -129,7 +130,8 @@ function processQueuedP2pMessages() {
 
         if($matchedContact = matchContact($message)){
             echo "Sending p2p request to final recipient:" . $matchedContact['address'] ."\n";
-            send($matchedContact['address'], $p2pPayload);
+            $result = send($matchedContact['address'], $p2pPayload);
+            output("P2P send result for matched contact: " . print_r($result,true),'SILENT');
         }else{
             // Retrieve contacts to send p2p request, excluding the sender
             $contacts = retrieveContactAddresses($message['sender_address']);
@@ -140,7 +142,8 @@ function processQueuedP2pMessages() {
             // Send p2p request to all contacts
             foreach ($contacts as $contactAddress) {
                 echo "Sending p2p request to contact: $contactAddress\n";
-                send($contactAddress, $p2pPayload);
+                $result = send($contactAddress, $p2pPayload);
+                output("P2P send result: " . print_r($result,true) . " for contact: " . print_r($contactAddress,true),'SILENT');
             }
         }
         // Update the p2p request status to sent
