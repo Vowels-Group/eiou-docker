@@ -60,7 +60,7 @@ function handleRp2pRequest($request) {
     }
     $result = getP2pByHash($request['hash']);
     if(!$result){
-        throw new Exception('P2P request not found for the given hash.');
+        throw new Exception('P2P request was not found for the given hash.');
     }
     elseif(isset($result['destination_address'])) {
         output("I initiated this request", 'SILENT');
@@ -160,11 +160,10 @@ function processQueuedRP2pMessages() {
 
             $originalRequest = lookupP2pRequest($message['hash']);
             // Add my info as the new array index
-            $p2pArray = [
+            $rP2pResult['p2p_array'] = [
                 'address' => resolveUserAddressForTransport($originalRequest['sender_address']),
                 'pubkey' => $user['public']
             ];
-            $rP2pResult['p2p_array'] = $p2pArray;
             $rP2pPayload = buildRP2pPayload($rP2pResult);
             send($message['sender_address'], $rP2pPayload);
             // Update the p2p request status to found
