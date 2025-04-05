@@ -14,7 +14,7 @@ done
 
 
 while true; do
-    if (( $(php -r 'require("//var//www//html//eiou//functions//messageCheck.php"); echo $passed;') )); then
+    if (( $(php -r 'require("//etc//eiou//functions//messageCheck.php"); echo $passed;') )); then
         echo "Message processing check completed successfully."  
         break
     else
