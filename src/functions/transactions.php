@@ -65,7 +65,7 @@ function processTransaction($request) {
             
             output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true) );
             return insertTransaction($request); 
-        } elseif(matchYourself($request,resolveUserAddressForTransport($request['senderAddress']))){  
+        } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
             output("Transaction for me, inserting : " . print_r($request,true) );
             return insertTransaction($request); 
         }

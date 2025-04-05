@@ -14,12 +14,14 @@ function handleP2pRequest($request) {
     if(!validateRequestLevel($request)){
         return buildInvalidRequestLevelPayload($request);
     }
-      
-    if(matchYourself($request,resolveUserAddressForTransport($request['senderAddress']))){
-        output("P2P request is for me, starting RP2P");
+    $myAddress = resolveUserAddressForTransport($request['senderAddress']);  
+    if(matchYourselfP2P($request,$myAddress)){
+        output("P2P request is for me, starting RP2P"); 
+        insertP2pRequest($request, $myAddress);
+        updateP2pRequest($request, 'found');
         // $request['amount'] = $requestedAmount;
         $p2pArray = [
-            'address' => resolveUserAddressForTransport($request['senderAddress']),
+            'address' => $myAddress,
             'pubkey' => $user['public']
         ];
         $request['p2p_array'] = $p2pArray;

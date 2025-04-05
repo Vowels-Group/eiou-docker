@@ -209,25 +209,45 @@ function matchContact($request) {
     }
 }
 
-function matchContactMemo($request,$salt) {
-    $contacts = retrieveContacts();
-    foreach ($contacts as $contact) {
-        $contactHash = hash('sha256', $contact['address'] . $salt . $request['time']);
-        output("Calculating contact hash: address=" . $contact['address'] . ", salt=" . $salt . ", time=" . $request['time'], 'SILENT');
-        output("Calculated contact hash: " . $contactHash, 'SILENT');
-        if ($contactHash === $request['memo']) {
-            output("Contact matched!");
-            return $contact;
-        }
-    }
-}
+// function matchContactMemo($request,$salt) {
+//     $contacts = retrieveContacts();
+//     foreach ($contacts as $contact) {
+//         $contactHash = hash('sha256', $contact['address'] . $salt . $request['time']);
+//         output("Calculating contact hash: address=" . $contact['address'] . ", salt=" . $salt . ", time=" . $request['time'], 'SILENT');
+//         output("Calculated contact hash: " . $contactHash, 'SILENT');
+//         if ($contactHash === $request['memo']) {
+//             output("Contact matched!");
+//             return $contact;
+//         }
+//     }
+// }
 
-function matchYourself($request,$address){
+function matchYourselfP2P($request,$address){
     if(hash('sha256', $address . $request['salt'] . $request['time']) === $request['hash']){
+        output("For me");
         return true;
     }
+    output("Not for me!");
     return false;
 }
+
+function matchYourselfTransaction($request,$address){
+    ///
+    $p2pRequest = lookupP2pRequest($request['memo']);
+    output("MATCH p2pRequest: " . print_r($p2pRequest,true));
+    $hash = hash('sha256', $address . $p2pRequest['salt'] . $request['time']);
+    $memo = $request['memo'];
+    output("MATCH address: " . print_r($address,true));
+    output("MATCH HASHED: " . print_r($hash,true));
+    output("MATCH MEMO: " . print_r($memo,true));
+    if( $hash === $memo) {
+        output("For me");
+        return true;
+    }
+    output("Not for me!");
+    return false;
+}
+
 
 
 function output($message, $level = 'ECHO') {
