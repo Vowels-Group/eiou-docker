@@ -139,7 +139,7 @@ function sendEiou($request = null) {
             // Transaction accepted, now insert into database
             insertTransaction($payload);
         } else {
-            output ("Not enough credit with this user, trying p2p with data: " . print_r($request, true));
+            output ("Not enough credit with this user, trying p2p with data: " . print_r($request, true),'SILENT');
             sendP2pRequest($request);
         }
     } else {
@@ -166,9 +166,9 @@ function sendP2pEiou($request) {
     // Prepare transaction payload
     $payload = buildSendPayload($request);
     $response = json_decode(send($request['receiverAddress'], $payload),true);
-    
     if (isset($response['status']) && $response['status'] === 'accepted') {
         // Transaction accepted, now insert into database
+        output("Inserting Transaction",'SILENT');
         insertTransaction($payload);
     } 
 }

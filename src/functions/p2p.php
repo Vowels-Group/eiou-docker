@@ -1,12 +1,12 @@
 <?php
 function acceptP2p($request) {
     // output("Begin processing send p2p request: " . print_r($request, true), 'SILENT');
-    updateP2pRequestStatus($request['memo'], 'sent');
+    //updateP2pRequestStatus($request['memo'], 'found');
     sendP2pEiou($request);
 }
 
 function checkP2p($request) { 
-    output("Check p2p function triggered");
+    output("Check p2p function triggered",'SILENT');
 }
 
 function handleP2pRequest($request) {
@@ -49,40 +49,46 @@ function handleP2pRequest($request) {
 function handleRp2pRequest($request) {
     global $user;
     //output("handleRp2pRequest() triggered", 'SILENT');
-
-    // Save rp2p response 
-    $insertResult = insertRp2pRequest($request);
-    
-    if (!$insertResult) {
-        output("Failed to insert rp2p request: " . print_r($request, true), 'SILENT');
-        output("Failed rp2p insert result: " . print_r($insertResult, true), 'SILENT');
-        return false;
-    }
+ 
     $result = getP2pByHash($request['hash']);
     if(!$result){
         throw new Exception('P2P request was not found for the given hash.');
-    }
-    elseif(isset($result['destination_address'])) {
-        output("I initiated this request", 'SILENT');
-        output("My p2p details: " . print_r($result, true), 'SILENT');
-        //I sent this request, let's check if i am willing to pay the fee
-        $p2pAmount = $result['amount'];
-        $rP2pAmount = $request['amount'];
-        $feeAmount = $rP2pAmount - $p2pAmount;
-        $feePercent = ($feeAmount / $p2pAmount) * 100;
-        //output("They want a fee of " . $feePercent . " percent, my max fee is " . $user['maxFee'], 'SILENT');
+    }else{
+        if(isset($result['destination_address'])) {
+            //update p2p before saving rp2p otherwise it will try sending an rp2p (which will go to itself) before the transaction
+            updateP2pRequestStatus($request['hash'], 'found');
+        }
+        // Save rp2p response 
+        $insertResult = insertRp2pRequest($request);
+        if (!$insertResult) {
+            output("Failed to insert rp2p request: " . print_r($request, true), 'SILENT');
+            output("Failed rp2p insert result: " . print_r($insertResult, true), 'SILENT');
+            return false;
+        }
 
-        if ($feePercent <= $user['maxFee']) {
-            $result['amount'] = $request['amount'];
-            $result['currency'] = $request['currency'];
-            $result['senderPublicKey'] = $request['senderPublicKey'];
-            $result['senderAddress'] = $request['senderAddress'];
-            $result['memo'] = $request['hash'];
-            acceptP2p($result);
-        } else {
-            output("I reject the fee, ignore really. it will expire. or is there something else i can do?", 'SILENT');
+        if(isset($result['destination_address'])) {
+            //output("I initiated this request", 'SILENT');
+            //output("My p2p details: " . print_r($result, true), 'SILENT');
+            //I sent this request, let's check if i am willing to pay the fee
+            $p2pAmount = $result['amount'];
+            $rP2pAmount = $request['amount'];
+            $feeAmount = $rP2pAmount - $p2pAmount;
+            $feePercent = ($feeAmount / $p2pAmount) * 100;
+            //output("They want a fee of " . $feePercent . " percent, my max fee is " . $user['maxFee'], 'SILENT');
+    
+            if ($feePercent <= $user['maxFee']) {
+                $result['amount'] = $request['amount'];
+                $result['currency'] = $request['currency'];
+                $result['senderPublicKey'] = $request['senderPublicKey'];
+                $result['senderAddress'] = $request['senderAddress'];
+                $result['memo'] = $request['hash'];
+                acceptP2p($result);
+            } else {
+                output("I reject the fee, ignore really. it will expire. or is there something else i can do?", 'SILENT');
+            }
         }
     }
+
 }
 
 function prepareP2pRequestData($request) {
