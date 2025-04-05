@@ -16,7 +16,7 @@ function handleP2pRequest($request) {
     }
     $myAddress = resolveUserAddressForTransport($request['senderAddress']);  
     if(matchYourselfP2P($request,$myAddress)){
-        output("P2P request is for me, starting RP2P"); 
+        //output("P2P request is for me, starting RP2P",'SILENT'); 
         insertP2pRequest($request, $myAddress);
         updateP2pRequest($request, 'found');
         // $request['amount'] = $requestedAmount;
@@ -26,9 +26,9 @@ function handleP2pRequest($request) {
         ];
         $request['p2p_array'] = $p2pArray;
         $rP2pPayload = buildRP2pPayload($request);
-        output("rP2p payload: " . print_r($rP2pPayload, true));
+        //output("rP2p payload: " . print_r($rP2pPayload, true),'SILENT');
         $result = send($request['senderAddress'], $rP2pPayload);
-        output("rP2p send result: " . print_r($result, true));
+        //output("rP2p send result: " . print_r($result, true),'SILENT');
     } else{
         $requestedAmount = calculateRequestedAmount($request);
         $availableFunds = calculateAvailableFunds($request);  
@@ -37,18 +37,12 @@ function handleP2pRequest($request) {
             return buildInsufficientBalancePayload($availableFunds, $requestedAmount);
         } 
         // Save request 
-        output("Inserting p2p request"); 
+        //output("Inserting p2p request",'SILENT'); 
         $request['feeAmount'] = $requestedAmount - $request['amount'];
         $request['amount'] = $requestedAmount;
         insertP2pRequest($request, NULL);
-        // if ($matchedContact = matchContact($request)) {
-        //     //CHECKS HERE AND IN processQueuedP2pMessages, REMOVE THIS SOMEHOW (EXTRA WORK WHICH IS DUMB)
-        //     output("Matching contact, queue p2p request to be forwarded on (to contact)");
-        //     updateP2pRequest($request, 'queued');
-        // } else {
-        output("Queue p2p request to be forwarded on");
+        //output("Queue p2p request to be forwarded on",'SILENT');
         updateP2pRequest($request, 'queued');
-        // }
     }
 }
 
@@ -96,7 +90,7 @@ function prepareP2pRequestData($request) {
     output("Prepare send p2p data: " . print_r($request, true), 'SILENT');
     
     if (!isset($request[2])) {
-        output("$request[2] (receiverAddress) is not set: " . print_r($request, true));
+        output("$request[2] (receiverAddress) is not set: " . print_r($request, true),'SILENT');
         die;
     }
 
@@ -145,7 +139,6 @@ function processQueuedP2pMessages() {
         }
         // Update the p2p request status to sent
         updateP2pRequest($message, 'sent');
-     
     }
 }
 
@@ -163,7 +156,7 @@ function processQueuedRP2pMessages() {
         // If matching rp2p found, echo forwarding message
         if ($rP2pResult) {
             output("Found rp2p match for hash: " . $message['hash'], 'SILENT');
-            output("rp2p result: " . print_r ($rP2pResult['p2p_array'], true));  
+            output("rp2p result: " . print_r ($rP2pResult['p2p_array'], true),'SILENT');  
 
             $originalRequest = lookupP2pRequest($message['hash']);
             // Add my info as the new array index
@@ -183,13 +176,13 @@ function processQueuedRP2pMessages() {
 function sendP2pRequest($data) {
     global $user;
     //output("I want to send " . ($data['amount'] / 100) . " USD to " . $data['receiverAddress'], 'SILENT');
-    //output("Full sendP2pRequest data: " . print_r($data, true));
+    //output("Full sendP2pRequest data: " . print_r($data, true),'SILENT');
     // Save the p2p request as a pending p2p transaction
     
     // Prepare p2p request payload
     $p2pPayload = buildP2pPayload(prepareP2pRequestData($data));
-    //output("Trying to insert p2p request: " . print_r($data['receiverAddress'], true));
-    //output("Full P2p request payload: " . print_r($p2pPayload, true));
+    //output("Trying to insert p2p request: " . print_r($data['receiverAddress'], true),'SILENT');
+    //output("Full P2p request payload: " . print_r($p2pPayload, true),'SILENT');
     output("Inserting p2p request with receiverAddress: " . print_r($data[2], TRUE), 'SILENT');
     insertP2pRequest($p2pPayload, $data[2]);
 
