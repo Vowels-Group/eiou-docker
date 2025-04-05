@@ -17,15 +17,12 @@ function handleP2pRequest($request) {
       
     if(matchYourself($request,resolveUserAddressForTransport($request['senderAddress']))){
         output("P2P request is for me, starting RP2P");
-        $myAddress = resolveUserAddressForTransport($request['senderAddress']);
-        $myPubkey = $user['public'];
         // $request['amount'] = $requestedAmount;
-        $request['p2p_array'] = [
-            0 => [
-                'address' => $myAddress,
-                'pubkey' => $myPubkey
-            ]
+        $p2pArray = [
+            'address' => resolveUserAddressForTransport($request['senderAddress']),
+            'pubkey' => $user['public']
         ];
+        $request['p2p_array'] = $p2pArray;
         $rP2pPayload = buildRP2pPayload($request);
         output("rP2p payload: " . print_r($rP2pPayload, true));
         $result = send($request['senderAddress'], $rP2pPayload);
