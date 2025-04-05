@@ -223,7 +223,6 @@ function matchContactMemo($request,$salt) {
 }
 
 function matchYourself($request,$address){
-    global $user;
     if(hash('sha256', $address . $request['salt'] . $request['time']) === $request['hash']){
         return true;
     }

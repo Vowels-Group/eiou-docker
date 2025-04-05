@@ -49,53 +49,26 @@ function processTransaction($request) {
         if(isset($values) && $memo === $values['hash']){
             output("Transaction not for me, forwarding to next peer (RP2P)");
             $decoded_values = json_decode($values['p2p_array'], true);           
-            $last_item = $decoded_values[count($decoded_values)-1];
-            // output("Last item in array: " . print_r($last_item, true));
+            //output("Decoded values: " . print_r($decoded_values, true) . "\n");
             
-            $request['receiverAddress'] = $last_item['address'];
-            $request['receiverPublicKey'] = $last_item['pubkey'];
+            $request['receiverAddress'] = $decoded_values['address'];
+            $request['receiverPublicKey'] = $decoded_values['pubkey'];
             $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']);
             $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
             $payload = buildSendPayload($request);
 
-            output("Sending Transaction onwards to: " . $request['receiverAddress']);
+            output("Sending Transaction onwards to: " . $request['receiverAddress'] . "\n");
             $response = send($request['receiverAddress'], $payload);
-            output("Response: " . print_r($response, true));
+            // output("Response: " . print_r($response, true));
             $responseData = json_decode($response, true);
-            output("Received response Transaction with status: " . $responseData['status']);
+            output("Received response Transaction with status: " . $responseData['status'] . "\n");
             
             output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true) );
             return insertTransaction($request); 
-        } else{  
-            //CHECK if P2P and status is found, then send to next peer which is the contact needed.
-            $values = getP2pByHash($memo);
-            if(isset($values) && $memo === $values['hash']){
-                if($values['status'] === 'found'){
-                    output("Transaction not for me, forwarding to next peer (P2P)");
-                    $matchedContact = matchContactMemo($request,$values['salt']);
-                    output("Matched contact: " . print_r($matchedContact, true));
-                    //HOW TO SEND TO CONTACT in question  
-                    
-                    $request['receiverAddress'] = $matchedContact['address'];
-                    $request['receiverPublicKey'] = $matchedContact['pubkey'];
-                    $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']);
-                    $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
-                    $payload = buildSendPayload($request);
-                    
-                    output("Sending Transaction onwards to: " . $request['receiverAddress']);
-                    $response = send($request['receiverAddress'], $payload);
-                    output("Response: " . print_r($response, true));
-                    $responseData = json_decode($response, true);
-                    output("Received response Transaction with status: " . $responseData['status']);
-                    
-                    output("Accepting Transaction as Intermediate (P2P) : " .  print_r($request,true) );
-                    return insertTransaction($request);     
-                }
-            }else{
-                output("Transaction for end-recipient, inserting : " . print_r($request,true) );
-                return insertTransaction($request); 
-            }
-        } 
+        } elseif(matchYourself($request,resolveUserAddressForTransport($request['senderAddress']))){  
+            output("Transaction for me, inserting : " . print_r($request,true) );
+            return insertTransaction($request); 
+        }
     }
 }
 
@@ -122,7 +95,7 @@ function sendByHttp ($recipient, $signedPayload) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
     curl_setopt($ch, CURLOPT_POST, true);
     $response = curl_exec($ch);
-    output("RESPONSE SEND :" . print_r($response, true));
+    //output("RESPONSE SEND :" . print_r($response, true));
     curl_close($ch);
     // Return the response from the recipient
     return $response;
@@ -198,80 +171,80 @@ function sendP2pEiou($request) {
     $payload = buildSendPayload($request);
     $response = send($request['receiverAddress'], $payload);
     output("Send P2p eIOU result: " . print_r($response, true));
-    output("DECODED : " .  print_r(json_decode($response,true), true));
+    // output("DECODED : " .  print_r(json_decode($response,true), true));
     if (isset($response['status']) && $response['status'] === 'accepted') {
         // Transaction accepted, now insert into database
         insertTransaction($payload);
     } 
 }
-
-function viewBalances($data) {
-    global $pdo, $user;
-    $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
-    if (isset($data[2])) {
-        $address = lookup($data[2]);
-        $query .= " WHERE sender_address = :address OR receiver_address = :address";
-    }
+///issues to fix
+// function viewBalances($data) {
+//     global $pdo, $user;
+//     $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
+//     if (isset($data[2])) {
+//         $address = lookup($data[2]);
+//         $query .= " WHERE sender_address = :address OR receiver_address = :address";
+//     }
     
-    $balances = [];
-    $stmt = $pdo->prepare($query);
+//     $balances = [];
+//     $stmt = $pdo->prepare($query);
     
-    if (isset($data[2])) {
-        $stmt->bindParam(':address', $address);
-    }
+//     if (isset($data[2])) {
+//         $stmt->bindParam(':address', $address);
+//     }
     
-    $stmt->execute();
+//     $stmt->execute();
     
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        // Calculate balance changes
-        $senderAddress = $row['sender_address'];
-        $receiverAddress = $row['receiver_address'];
-        $amount = $row['amount'] / 100;
+//     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+//         // Calculate balance changes
+//         $senderAddress = $row['sender_address'];
+//         $receiverAddress = $row['receiver_address'];
+//         $amount = $row['amount'] / 100;
         
-        // Adjust balances for sender and receiver
-        $balances[$senderAddress] = ($balances[$senderAddress] ?? 0) - $amount;
-        $balances[$receiverAddress] = ($balances[$receiverAddress] ?? 0) + $amount;
-    }
-    $otherBalances = [];
+//         // Adjust balances for sender and receiver
+//         $balances[$senderAddress] = ($balances[$senderAddress] ?? 0) - $amount;
+//         $balances[$receiverAddress] = ($balances[$receiverAddress] ?? 0) + $amount;
+//     }
+//     $otherBalances = [];
     
-    // Pretty print balances
-    foreach ($balances as $address => $balance) {
-        // Check if the address is the user's own address
-        if (isMe($address)) {
-            $displayName = "me";
-            $additionalAddresses = [];
+//     // Pretty print balances
+//     foreach ($balances as $address => $balance) {
+//         // Check if the address is the user's own address
+//         if (isMe($address)) {
+//             $displayName = "me";
+//             $additionalAddresses = [];
             
-            if (isset($user['hostname'])) {
-                $additionalAddresses[] = $user['hostname'];
-            }
+//             if (isset($user['hostname'])) {
+//                 $additionalAddresses[] = $user['hostname'];
+//             }
             
-            if (isset($user['torAddress'])) {
-                $additionalAddresses[] = $user['torAddress'];
-            }
+//             if (isset($user['torAddress'])) {
+//                 $additionalAddresses[] = $user['torAddress'];
+//             }
             
-            $additionalInfo = $additionalAddresses ? '(' . implode(', ', $additionalAddresses) . ')' : '';
+//             $additionalInfo = $additionalAddresses ? '(' . implode(', ', $additionalAddresses) . ')' : '';
             
-            printf("%s %s, Balance: %.2f\n", $displayName, $additionalInfo, $balance);
-        } else {
-            // If it's not the user's own address, add to a list to be sorted
-            // Lookup contact name for the address
-            $contactResult = lookupContactByAddress($address);
-            $contactName = $contactResult ? $contactResult['name'] : $address;
+//             printf("%s %s, Balance: %.2f\n", $displayName, $additionalInfo, $balance);
+//         } else {
+//             // If it's not the user's own address, add to a list to be sorted
+//             // Lookup contact name for the address
+//             $contactResult = lookupContactByAddress($address);
+//             $contactName = $contactResult ? $contactResult['name'] : $address;
             
-            $otherBalances[] = [
-                'address' => $address, 
-                'name' => $contactName, 
-                'balance' => $balance
-            ];
-        }
-    }
+//             $otherBalances[] = [
+//                 'address' => $address, 
+//                 'name' => $contactName, 
+//                 'balance' => $balance
+//             ];
+//         }
+//     }
 
-    // Sort and print other balances
-    usort($otherBalances, function($a, $b) {
-        return $b['balance'] <=> $a['balance'];
-    });
+//     // Sort and print other balances
+//     usort($otherBalances, function($a, $b) {
+//         return $b['balance'] <=> $a['balance'];
+//     });
 
-    foreach ($otherBalances as $contact) {   
-        printf("%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], $contact['balance']);
-    }
-}
+//     foreach ($otherBalances as $contact) {   
+//         printf("%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], $contact['balance']);
+//     }
+// }

@@ -14,10 +14,8 @@ function handleP2pRequest($request) {
     if(!validateRequestLevel($request)){
         return buildInvalidRequestLevelPayload($request);
     }
-    
-    
+      
     if(matchYourself($request,resolveUserAddressForTransport($request['senderAddress']))){
-        //P2P is for ME
         output("P2P request is for me, starting RP2P");
         $myAddress = resolveUserAddressForTransport($request['senderAddress']);
         $myPubkey = $user['public'];
@@ -32,8 +30,6 @@ function handleP2pRequest($request) {
         output("rP2p payload: " . print_r($rP2pPayload, true));
         $result = send($request['senderAddress'], $rP2pPayload);
         output("rP2p send result: " . print_r($result, true));
-        // Update the p2p request status to processed
-        //updateP2pRequestStatus($request['hash'], 'found');
     } else{
         $requestedAmount = calculateRequestedAmount($request);
         $availableFunds = calculateAvailableFunds($request);  
@@ -41,48 +37,20 @@ function handleP2pRequest($request) {
         if ($availableFunds < $requestedAmount) {
             return buildInsufficientBalancePayload($availableFunds, $requestedAmount);
         } 
-
         // Save request 
         output("Inserting p2p request"); 
         $request['feeAmount'] = $requestedAmount - $request['amount'];
         $request['amount'] = $requestedAmount;
         insertP2pRequest($request, NULL);
-        if ($matchedContact = matchContact($request)) {
-        
-            //SEND P2P ONLY TO CONTACT 
-            //  -> If they receive transaction and don't have rp2p but p2p then its for them (or check whatever hash they got is for their adress)
-            //MESSAGE GO FROM INITIAL TO SENT
-            output("Matching contact, queue p2p request to be forwarded on");
-            updateP2pRequest($request, 'queued');
-    
-
-            // Contact found, report back to sender
-            // output("Contact found, report back to sender");
-            // $myAddress = resolveUserAddressForTransport($request['senderAddress']);
-            // $myPubkey = $user['public'];
-            // $request['amount'] = $requestedAmount;
-            // $request['p2p_array'] = [
-            //     // 0 => $matchedContact,
-            //     0 => [
-            //         'address' => $myAddress,
-            //         'pubkey' => $myPubkey
-            //     ]
-            // ];
-            // $rP2pPayload = buildRP2pPayload($request);
-            // output("rP2p payload: " . print_r($rP2pPayload, true));
-            // $result = send($request['senderAddress'], $rP2pPayload);
-            // output("rP2p send result: " . print_r($result, true));
-            // // Update the p2p request status to processed
-            // updateP2pRequestStatus($request['hash'], 'found');
-            
-            // Save payload to output
-        } else {
-            // No matching contact, queue p2p request to be forwarded on
-            output("No matching contact, queue p2p request to be forwarded on");
-            updateP2pRequest($request, 'queued');
-        }
+        // if ($matchedContact = matchContact($request)) {
+        //     //CHECKS HERE AND IN processQueuedP2pMessages, REMOVE THIS SOMEHOW (EXTRA WORK WHICH IS DUMB)
+        //     output("Matching contact, queue p2p request to be forwarded on (to contact)");
+        //     updateP2pRequest($request, 'queued');
+        // } else {
+        output("Queue p2p request to be forwarded on");
+        updateP2pRequest($request, 'queued');
+        // }
     }
-    
 }
 
 function handleRp2pRequest($request) {
@@ -145,7 +113,7 @@ function prepareP2pRequestData($request) {
     $data['p2pHash'] = hash('sha256', $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
     output("Generated p2pHash: " . $data['p2pHash'], 'SILENT'); // Added verbose output
     output("p2pHash components: " . ", receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time'], 'SILENT'); // Detailed verbose output
-    $data['randomNumber'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // todo: lower bound should be private (generated in frehs install and put in config file) or generated for each contact
+    $data['randomNumber'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // todo: lower bound should be private (generated in fresh install and put in config file) or generated for each contact
     $data['maxRequestLevel'] = $data['randomNumber'] + $user['maxP2pLevel'] - 1; // Handle off by 1 in request calculation
 
     return $data;
@@ -161,7 +129,7 @@ function processQueuedP2pMessages() {
         $p2pPayload = createForwardP2pPayload($message);
 
         if($matchedContact = matchContact($message)){
-            echo "Sending p2p request to Recipient:" . $matchedContact['address'] ."\n";
+            echo "Sending p2p request to final recipient:" . $matchedContact['address'] ."\n";
             send($matchedContact['address'], $p2pPayload);
         }else{
             // Retrieve contacts to send p2p request, excluding the sender
@@ -199,24 +167,13 @@ function processQueuedRP2pMessages() {
             output("rp2p result: " . print_r ($rP2pResult['p2p_array'], true));  
 
             $originalRequest = lookupP2pRequest($message['hash']);
-
             // Add my info as the new array index
-            $p2pArray = json_decode($rP2pResult['p2p_array'], true);
-            $myAddress = resolveUserAddressForTransport($originalRequest['sender_address']);
-            $myPubkey = $user['public'];
-            //var_dump($p2pArray);
-            // array_push($p2pArray, [
-            //     'address' => $myAddress,
-            //     'pubkey' => $myPubkey
-            // ]);
-            // output("originalRequest " . print_r($originalRequest,true));
             $p2pArray = [
-                'address' => $myAddress,
-                'pubkey' => $myPubkey
+                'address' => resolveUserAddressForTransport($originalRequest['sender_address']),
+                'pubkey' => $user['public']
             ];
             $rP2pResult['p2p_array'] = $p2pArray;
             $rP2pPayload = buildRP2pPayload($rP2pResult);
-            output("NEW rP2p payload: " . print_r ($rP2pPayload['p2p_array'], true));
             send($message['sender_address'], $rP2pPayload);
             // Update the p2p request status to found
             updateP2pRequestStatus($message['hash'], 'found');
