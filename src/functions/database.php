@@ -357,7 +357,7 @@ function insertDebug($data) {
 function insertP2pRequest($request, $destinationAddress = null) {
     global $pdo;
     // Output and potentially trim the destination address
-    output("Destination Address: " . ($destinationAddress ?? 'None') . "\n");
+    //output("Destination Address: " . ($destinationAddress ?? 'None') . "\n");
     try {
         $stmt = $pdo->prepare("INSERT INTO p2p (
             hash, 
@@ -513,19 +513,12 @@ function insertTransaction($request) {
     try {
         // Execute the insert
         $insertStmt->execute();
-
         // Respond with accepted status
-        return json_encode([
-            "status" => "accepted", 
-            "message" => "Transaction recorded successfully",
-            "txid" => $request['txid']
-        ]);
+        return json_encode(["status" => "accepted", "message" => "Transaction recorded successfully","txid" => $request['txid']]);
     } catch (PDOException $e) {
         // Handle database error
         error_log("Error inserting transaction: " . $e->getMessage());
-        return json_encode([
-            "status" => "rejected", 
-            "message" => "Failed to record transaction: " . $e->getMessage()
+        return json_encode(["status" => "rejected", "message" => "Failed to record transaction: " . $e->getMessage()
         ]);
     }
 }
