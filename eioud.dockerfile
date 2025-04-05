@@ -29,9 +29,9 @@ RUN echo '#!/bin/bash\nphp /usr/local/bin/eiou.php "$@"' > /usr/local/bin/eiou &
     chmod +x /usr/local/bin/eiou
 
 # Copy index.html file to web directory
-COPY src/index.php /etc/eiou/index.html
-RUN chown www-data:www-data /etc/eiou -R
-RUN chmod 755 /etc/eiou
+COPY src/index.php /var/www/html/eiou/index.html
+RUN chown www-data:www-data /var/www/html/eiou -R
+RUN chmod 755 /var/www/html/eiou
 
 # Copy functions.php to a common location
 COPY src/functions.php /etc/eiou/functions.php
