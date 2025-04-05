@@ -25,7 +25,7 @@ while true; do
 done
 
 # Start message processing in background
-nohup php /var/www/html/eiou/messages.php > /dev/null 2>&1 &
+nohup php /etc/eiou/messages.php > /dev/null 2>&1 &
 echo "Message processing started successfully."  
 
 # Keep container running

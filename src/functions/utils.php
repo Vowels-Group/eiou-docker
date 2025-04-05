@@ -82,9 +82,9 @@ function changeSettings() {
             return;
     }
     // Save changes to config file
-    $config_content = file_get_contents('/var/www/html/eiou/config.php');
+    $config_content = file_get_contents('/etc/eiou/config.php');
     $config_content = preg_replace("/\['" . $key . "'\]\s*=\s*[^;]+;/", "['" . $key . "'] = " . (is_bool($value) ? ($value ? 'true' : 'false') : (is_string($value) ? "'" . $value . "'" : $value)) . ";", $config_content);
-    file_put_contents('/var/www/html/eiou/config.php', $config_content);
+    file_put_contents('/etc/eiou/config.php', $config_content);
     echo "Setting updated successfully.\n";
 }
 

@@ -21,7 +21,7 @@ function generateWallet($argv) {
   $publicKey = $keyDetails['key'];
 
   // Save the keys to config.php
-  file_put_contents('/var/www/html/eiou/config.php', "\n" . '$user["public"]="' . addslashes($publicKey) . '";' . "\n" . '$user["private"]="' . addslashes($privateKey) . '";' . "\n", FILE_APPEND | LOCK_EX);
+  file_put_contents('/etc/eiou/config.php', "\n" . '$user["public"]="' . addslashes($publicKey) . '";' . "\n" . '$user["private"]="' . addslashes($privateKey) . '";' . "\n", FILE_APPEND | LOCK_EX);
 
   // Output Tor address
   $torAddress = trim(file_get_contents('/var/lib/tor/hidden_service/hostname'));
@@ -35,9 +35,9 @@ function generateWallet($argv) {
   elseif (isset($argv[2])) {
     if (filter_var($argv[2], FILTER_VALIDATE_URL)) {
         // Save the hostname to the configuration
-        $config_content = file_get_contents('/var/www/html/eiou/config.php');
+        $config_content = file_get_contents('/etc/eiou/config.php');
         $config_content .= "\n" . '$user["hostname"]="' . addslashes($argv[2]) . '";' . "\n";
-        file_put_contents('/var/www/html/eiou/config.php', $config_content, LOCK_EX);
+        file_put_contents('/etc/eiou/config.php', $config_content, LOCK_EX);
 
         echo "Hostname saved: " . $argv[2] . "\n";
     } else {
@@ -76,8 +76,8 @@ function restoreWallet($argv) {
       // Save the keys to the config file
       $publicKeyData = '$user["public"]="' . addslashes($publicKey) . '";' . "\n";
       $privateKeyData = '$user["private"]="' . addslashes($privateKey) . '";' . "\n";
-      file_put_contents('/var/www/html/eiou/config.php', $publicKeyData, FILE_APPEND | LOCK_EX);
-      file_put_contents('/var/www/html/eiou/config.php', $privateKeyData, FILE_APPEND | LOCK_EX);
+      file_put_contents('/etc/eiou/config.php', $publicKeyData, FILE_APPEND | LOCK_EX);
+      file_put_contents('/etc/eiou/config.php', $privateKeyData, FILE_APPEND | LOCK_EX);
       echo "Public and private keys verified and saved successfully.";
   } else {
       echo "Invalid private key provided.";
