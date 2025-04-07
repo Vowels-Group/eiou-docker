@@ -74,19 +74,45 @@ docker exec eioud-0-http eiou add http://eioud-1-http eioud-1-http 0.1 1000 USD
 docker exec eioud-1-http eiou add http://eioud-0-http eioud-0-http 0.1 1000 USD
 docker exec eioud-1-http eiou add http://eioud-2-http eioud-2-http 0.1 1000 USD
 docker exec eioud-2-http eiou add http://eioud-1-http eioud-1-http 0.1 1000 USD
+docker exec eioud-2-http eiou add http://eioud-3-http eioud-3-http 0.1 1000 USD
+docker exec eioud-3-http eiou add http://eioud-2-http eioud-2-http 0.1 1000 USD
+docker exec eioud-3-http eiou add http://eioud-4-http eioud-4-http 0.1 1000 USD
+docker exec eioud-4-http eiou add http://eioud-3-http eioud-3-http 0.1 1000 USD
 
+# Send money
 echo "Sending money..."
 docker exec eioud-0-http eiou send http://eioud-1-http 100 USD
 docker exec eioud-0-http eiou send http://eioud-2-http 100 USD
 docker exec eioud-0-http eiou send http://eioud-3-http 100 USD # first complicated path
 docker exec eioud-0-http eiou send http://eioud-4-http 100 USD
 
-echo "Checking errors..."
-docker exec eioud-0-http cat /var/log/php_errors.log
+echo "Testing other functions..."
 
-echo "Verifying state..."
-docker exec -it eioud-0-http mysql -u root -e "SELECT hash, time, currency, amount, sender_address FROM eiou.rp2p;"
+# Read contacts
+echo "Reading contacts..."
+docker exec eioud-0-http eiou read http://eioud-1-http
+docker exec eioud-1-http eiou read http://eioud-0-http
+docker exec eioud-1-http eiou read http://eioud-2-http
+docker exec eioud-2-http eiou read http://eioud-1-http
+docker exec eioud-2-http eiou read http://eioud-3-http
+docker exec eioud-3-http eiou read http://eioud-2-http
+docker exec eioud-3-http eiou read http://eioud-4-http
+docker exec eioud-4-http eiou read http://eioud-3-http
 
-docker exec -it eioud-0-http /usr/bin/php /etc/eiou/messages.php
+# View balances
+echo "Viewing balances..."
+docker exec eioud-0-http eiou view
+docker exec eioud-1-http eiou view
+docker exec eioud-2-http eiou view
+docker exec eioud-3-http eiou view
+docker exec eioud-4-http eiou view
+
+# View transaction history
+echo "Viewing transaction history..."
+docker exec eioud-0-http eiou history
+docker exec eioud-1-http eiou history
+docker exec eioud-2-http eiou history
+docker exec eioud-3-http eiou history
+docker exec eioud-4-http eiou history
 
 echo "Script completed successfully."
