@@ -249,7 +249,7 @@ function output($message, $level = 'ECHO') {
     if (isset($user['debug']) && $user['debug'] === true) {
         $data = [
             'level' => $level,
-            'message' => trim(debugMessage($message,debug_backtrace())),
+            'message' => trim($message),
             'context' => getContext(),
             'file' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0]['file'],
             'line' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0]['line'],
