@@ -1,0 +1,52 @@
+# create the network (only need to do this once per docker installation)
+#docker network create -d bridge my-net
+
+# Remove any existing containers
+powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+
+# build and start containers
+docker build -f eioud.dockerfile -t eioud .
+docker run -d  --network=my-net --name eioud0http eioud
+docker run -d  --network=my-net --name eioud1http eioud
+docker run -d  --network=my-net --name eioud2http eioud
+docker run -d  --network=my-net --name eioud3http eioud
+sleep 5
+
+# generate pubkeys and set hostname
+docker exec eioud0http eiou generate http://eioud0http
+docker exec eioud1http eiou generate http://eioud1http
+docker exec eioud2http eiou generate http://eioud2http
+docker exec eioud3http eiou generate http://eioud3http
+
+# add contacts
+docker exec eioud0http eiou add http://eioud1http eioud1http 0.1 1000 USD
+docker exec eioud1http eiou add http://eioud0http eioud0http 0.1 1000 USD
+docker exec eioud1http eiou add http://eioud2http eioud2http 0.1 1000 USD
+docker exec eioud2http eiou add http://eioud1http eioud1http 0.1 1000 USD
+docker exec eioud2http eiou add http://eioud3http eioud3http 0.1 1000 USD
+docker exec eioud3http eiou add http://eioud2http eioud2http 0.1 1000 USD
+
+# try to send payment from eioud0http to all others
+docker exec eioud0http eiou send http://eioud1http 100 USD
+docker exec eioud0http eiou send http://eioud2http 100 USD
+docker exec eioud0http eiou send http://eioud3http 100 USD
+
+# start messages.php to process p2p transactions
+docker exec -it eioud0http /usr/bin/php /etc/eiou/messages.php
+docker exec -it eioud1http /usr/bin/php /etc/eiou/messages.php
+docker exec -it eioud2http /usr/bin/php /etc/eiou/messages.php
+docker exec -it eioud3http /usr/bin/php /etc/eiou/messages.php
+
+# view balances
+docker exec eioud-0-http eiou view
+docker exec eioud-1-http eiou view
+docker exec eioud-2-http eiou view
+docker exec eioud-3-http eiou view
+docker exec eioud-4-http eiou view
+
+# view transaction history
+docker exec eioud-0-http eiou history
+docker exec eioud-1-http eiou history
+docker exec eioud-2-http eiou history
+docker exec eioud-3-http eiou history
+docker exec eioud-4-http eiou history
