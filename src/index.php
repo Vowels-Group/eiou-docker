@@ -10,7 +10,7 @@ require_once("/etc/eiou/config.php");
 
 // Accept incoming connection and decode request
 
-output("TYPE: " . print_r($_GET['type']), 'SILENT');
+//output("TYPE: " . print_r($_GET['type']), 'SILENT');
 
 $request = json_decode($_GET['payload'], true);
 
@@ -29,19 +29,19 @@ if ($request['type'] == "create") {
 }
 elseif ($request['type'] == "send") {
   // Handle eIOU
-  output("<index.html> accessed send", 'SILENT');
+  //output("<index.html> accessed send", 'SILENT');
   output("Processing send request", 'SILENT');
   echo processTransaction($request);
 }
 elseif ($request['type'] == "p2p") {
   // Handle Peers of Peers Request
-  output("<index.html> accessed p2p", 'SILENT');
+  //output("<index.html> accessed p2p", 'SILENT');
   output("Processing p2p request: " . print_r($request, TRUE), 'SILENT');
   handleP2pRequest($request);
 }
 elseif ($request['type'] == "rp2p") {
   // Handle Peers of Peers Response
-  output("<index.html> accessed rp2p", 'SILENT');
+  //output("<index.html> accessed rp2p", 'SILENT');
   output("Processing rp2p request: " . print_r($request, TRUE), 'SILENT');
   handleRp2pRequest($request);
 }
