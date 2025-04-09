@@ -124,7 +124,7 @@ function readContact($data) {
 function searchContacts($data) {
     $searchTerm = $data[2] ?? null;
     if ($results = searchContactsQuery($searchTerm)) {
-        output(returnContactSearchResults($data));
+        output(returnContactSearchResults($results));
     }
     else{
         output(returnContactSearchNoResults());
