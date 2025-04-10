@@ -44,10 +44,10 @@ function processTransaction($request) {
         ]);
     } else {
         $memo = $request['memo'];
-        $values = checkRP2pExists($memo);
-        if(isset($values) && $memo === $values['hash']){
+        $rP2pResult  = checkRP2pExists($memo);
+        if(isset($rP2pResult) && $memo === $rP2pResult['hash']){
             output("Transaction not for me, forwarding to next peer (RP2P)",'SILENT');
-            $decoded_values = json_decode($values['p2p_array'], true);           
+            $decoded_values = json_decode($rP2pResult['p2p_array'], true);           
             $request['receiverAddress'] = $decoded_values['address'];
             $request['receiverPublicKey'] = $decoded_values['pubkey'];
             $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']);
@@ -177,6 +177,7 @@ function viewBalances($data) {
     global $pdo, $user;
     $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
     if (isset($data[2])) {
+        //ISSUE: Are you turning a name into an adress? currently function does not exist
         $address = lookup($data[2]);
         $query .= " WHERE sender_address = :address OR receiver_address = :address";
     }
