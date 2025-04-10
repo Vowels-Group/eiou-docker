@@ -1,16 +1,18 @@
 <?php
 $passed =false;
 try{
+    //Checks if config.php exists (needed for messages.php)
     if(!file_exists("/etc/eiou/config.php")){
-        return $passed;
+        return;
     }
     require_once("/etc/eiou/config.php");
     require_once("/etc/eiou/functions/pdo.php");
+    //create PDO connection, will return the connection or raise an exception (check if PDO functions)
     $pdo = createPDOConnection();
     $pdo = null;
     $passed = true;
-    // return true;
+    return;
 }catch(Exception $e){
-    // return false;
+    return;
 }
 ?>
