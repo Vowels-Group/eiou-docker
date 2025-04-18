@@ -50,19 +50,23 @@ function processTransaction($request) {
             $decoded_values = json_decode($rP2pResult['p2p_array'], true);           
             $request['receiverAddress'] = $decoded_values['address'];
             $request['receiverPublicKey'] = $decoded_values['pubkey'];
-            $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']);
+            $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']); 
+            //remove my transaction fee and send remainder onwards
+            $request['amount'] = removeTransactionFee($request);  //check if before or after txid, because amount changed   
             $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
+            
             $payload = buildSendPayload($request);
             output("Sending Transaction onwards to: " . $request['receiverAddress'],'SILENT');
             $response = json_decode(send($request['receiverAddress'], $payload),true);         
             output("Received response Transaction with status: " . $response['status'],'SILENT');
             output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true),'SILENT'); 
             //remove if does not work due to issue output and response
-            if (isset($response['status']) && $response['status'] === 'accepted') {
+            if (isset($response['status']) && $response['status'] === 'accepted' && $response['txid'] === $request['txid']) {
                 return insertTransaction($request); 
             }
         } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
             output("Transaction for me, inserting",'SILENT');
+            $request['previousTxid'] = getPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']); 
             return insertTransaction($request); 
         }
     }
@@ -135,7 +139,7 @@ function sendEiou($request = null) {
         $payload = buildSendPayload($data);
         $response = json_decode(send($data['receiverAddress'], $payload), true);
         output("SendEiou response status: " . print_r($response,true),'SILENT');
-        if (isset($response['status']) && $response['status'] === 'accepted') {
+        if (isset($response['status']) && $response['status'] === 'accepted' && $response['txid'] === $data['txid']) {
             // Transaction accepted, now insert into database
             insertTransaction($payload);
         } else {
