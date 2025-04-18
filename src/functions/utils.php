@@ -17,6 +17,11 @@ function calculateRequestedAmount($request) {
     return $request['amount'] + $request['feeAmount'];
 }
 
+function removeTransactionFee($request){
+    $p2p = getP2pByHash($request['memo']);
+    return $request['amount'] - $p2p['my_fee_amount'];
+}
+
 function changeSettings() {
     global $user;
     
