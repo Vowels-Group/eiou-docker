@@ -61,7 +61,7 @@ function processTransaction($request) {
             output("Received response Transaction with status: " . $response['status'],'SILENT');
             output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true),'SILENT'); 
             //remove if does not work due to issue output and response
-            if (isset($response['status']) && $response['status'] === 'accepted' && $response['txid'] === $request['txid']) {
+            if (isset($response['status']) && $response['status'] === 'accepted') {
                 return insertTransaction($request); 
             }
         } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
@@ -73,6 +73,7 @@ function processTransaction($request) {
 }
 
 function send($recipient, $payload){
+   
     // Encode the payload as JSON
     $signedPayload = json_encode(sign($payload));
     // Determine if tor address, else send by http
@@ -95,7 +96,6 @@ function sendByHttp ($recipient, $signedPayload) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
     curl_setopt($ch, CURLOPT_POST, true);
     $response = curl_exec($ch);
-    //output("RESPONSE SEND :" . print_r($response, true),'SILENT');
     curl_close($ch);
     // Return the response from the recipient
     return $response;
@@ -176,6 +176,10 @@ function sendP2pEiou($request) {
         insertTransaction($payload);
     } 
 }
+
+
+
+
 ///issues to fix
 function viewBalances($data) {
     global $pdo, $user;
