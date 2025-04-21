@@ -295,6 +295,7 @@ function getTransactionByMemo($memo){
     return $getTxStmt->fetch(PDO::FETCH_ASSOC);
 }
 
+
 function insertContact($address, $contactPublicKey, $name, $fee, $credit, $currency) {
     global $pdo;
     $pubkey_hash = hash('sha256', $contactPublicKey);
@@ -372,7 +373,9 @@ function insertP2pRequest($request, $destinationAddress = null) {
             sender_public_key, 
             sender_address,
             sender_signature,
-            destination_address
+            destination_address,
+            incoming_txid,
+            outgoing_txid
         ) VALUES (
             :hash, 
             :salt, 
@@ -386,7 +389,9 @@ function insertP2pRequest($request, $destinationAddress = null) {
             :sender_public_key, 
             :sender_address,
             :sender_signature,
-            :destination_address
+            :destination_address,
+            :incoming_txid,
+            :outgoing_txid
         )");
 
         $my_fee_amount = $request['feeAmount'] ?? null;
@@ -404,13 +409,15 @@ function insertP2pRequest($request, $destinationAddress = null) {
         $stmt->bindParam(':sender_address', $request['senderAddress']);
         $stmt->bindParam(':sender_signature', $request['signature']);
         $stmt->bindParam(':destination_address', $destinationAddress);
+        $stmt->bindParam(':incoming_txid', $request['incoming_txid']);
+        $stmt->bindParam(':outgoing_txid', $request['outgoing_txid']);
         $stmt->execute();
-        return true;
+        return json_encode(["status" => "received", "message" => "p2p sent & received successfully"]);
     } catch (PDOException $e) {
         // Handle database error
         error_log("Error inserting p2p request: " . $e->getMessage());
-        echo "Failed to insert p2p request: " . $e->getMessage() . "\n";
-        return false;
+        //echo "Failed to insert p2p request: " . $e->getMessage() . "\n";
+        return json_encode(["status" => "rejected", "message" => "Failed to have p2p be received: " . $e->getMessage()]);
     }
 }
 
@@ -448,16 +455,18 @@ function insertRp2pRequest ($request){
         $stmt->bindParam(':p2p_array', $p2pArray);
         $stmt->execute();
         //echo "Successfully inserted rp2p request.\n";
-        return true;
+        return json_encode(["status" => "received", "message" => "rp2p sent & received successfully"]);
     } catch (PDOException $e) {
         // Handle database error
         output("Error inserting rp2p request: " . print_r($e->getMessage(), true));
-        return false;
+        return json_encode(["status" => "rejected", "message" => "Failed to have rp2p be received: " . $e->getMessage()]);
     }
 
 }
 
 function insertTransaction($request) {
+    //wait a little to prevent tight access, removes issue duplicate previousTxid
+    usleep(500000);
     global $pdo;
     // Calculate public key hashes
     $senderPublicKeyHash = hash('sha256', $request['senderPublicKey']);
@@ -658,7 +667,7 @@ function updateP2pRequestStatus($hash, $status) {
         $updateStmt->bindParam(':hash', $hash);
         $updateStmt->bindParam(':status', $status);
         $updateStmt->execute();
-        echo "Updated status to '" . $status . "' for message hash: " . $hash . "\n";
+        //echo "Updated status to '" . $status . "' for message hash: " . $hash . "\n";
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating p2p request status: " . $e->getMessage());
@@ -673,7 +682,7 @@ function updateP2pRequest($request, $status) {
         $updateStmt->bindParam(':status', $status);
         $updateStmt->execute();
         
-        echo "Updated status to '" . $status . "' for message hash: " . $request['hash'] . "\n";
+        //echo "Updated status to '" . $status . "' for message hash: " . $request['hash'] . "\n";
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating p2p request status: " . $e->getMessage());

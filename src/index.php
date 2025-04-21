@@ -36,14 +36,14 @@ elseif ($request['type'] == "send") {
 elseif ($request['type'] == "p2p") {
   // Handle Peers of Peers Request
   //output("<index.html> accessed p2p", 'SILENT');
-  output("Processing p2p request: " . print_r($request, TRUE), 'SILENT');
-  handleP2pRequest($request);
+  //output("Processing p2p request: " . print_r($request, TRUE), 'SILENT');
+  echo handleP2pRequest($request);
 }
 elseif ($request['type'] == "rp2p") {
   // Handle Peers of Peers Response
   //output("<index.html> accessed rp2p", 'SILENT');
-  output("Processing rp2p request: " . print_r($request, TRUE), 'SILENT');
-  handleRp2pRequest($request);
+  //output("Processing rp2p request: " . print_r($request, TRUE), 'SILENT');
+  echo handleRp2pRequest($request);
 }
 else {
   output("Processing nonstandard request", 'SILENT');
