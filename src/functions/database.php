@@ -375,7 +375,8 @@ function insertP2pRequest($request, $destinationAddress = null) {
             sender_signature,
             destination_address,
             incoming_txid,
-            outgoing_txid
+            outgoing_txid,
+            status
         ) VALUES (
             :hash, 
             :salt, 
@@ -391,7 +392,8 @@ function insertP2pRequest($request, $destinationAddress = null) {
             :sender_signature,
             :destination_address,
             :incoming_txid,
-            :outgoing_txid
+            :outgoing_txid,
+            :status
         )");
 
         $my_fee_amount = $request['feeAmount'] ?? null;
@@ -411,6 +413,7 @@ function insertP2pRequest($request, $destinationAddress = null) {
         $stmt->bindParam(':destination_address', $destinationAddress);
         $stmt->bindParam(':incoming_txid', $request['incoming_txid']);
         $stmt->bindParam(':outgoing_txid', $request['outgoing_txid']);
+        $stmt->bindParam(':status', $request['status']);
         $stmt->execute();
         return json_encode(["status" => "received", "message" => "p2p sent & received successfully"]);
     } catch (PDOException $e) {
@@ -660,10 +663,14 @@ function updateContact($data) {
     }
 }
 
-function updateP2pRequestStatus($hash, $status) {
+function updateP2pRequestStatus($hash, $status, $completed = false) {
     global $pdo;
     try {
-        $updateStmt = $pdo->prepare("UPDATE p2p SET status = :status, completed_at = CURRENT_TIMESTAMP WHERE hash = :hash");
+        if($completed){
+            $updateStmt = $pdo->prepare("UPDATE p2p SET status = :status, completed_at = CURRENT_TIMESTAMP WHERE hash = :hash");
+        } else {
+            $updateStmt = $pdo->prepare("UPDATE p2p SET status = :status WHERE hash = :hash");
+        }       
         $updateStmt->bindParam(':hash', $hash);
         $updateStmt->bindParam(':status', $status);
         $updateStmt->execute();
@@ -671,23 +678,6 @@ function updateP2pRequestStatus($hash, $status) {
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating p2p request status: " . $e->getMessage());
-    }
-}
-
-function updateP2pRequest($request, $status) {
-    global $pdo;
-    try {
-        $updateStmt = $pdo->prepare("UPDATE p2p SET status = :status WHERE hash = :hash");
-        $updateStmt->bindParam(':hash', $request['hash']);
-        $updateStmt->bindParam(':status', $status);
-        $updateStmt->execute();
-        
-        //echo "Updated status to '" . $status . "' for message hash: " . $request['hash'] . "\n";
-    } catch (PDOException $e) {
-        // Log or handle the error if updating status fails
-        error_log("Error updating p2p request status: " . $e->getMessage());
-        
-        echo "Failed to update status to " . $status . " for message hash: " . $request['hash'] . "\n";
     }
 }
 

@@ -11,8 +11,8 @@ function handleP2pRequest($request) {
     $myAddress = resolveUserAddressForTransport($request['senderAddress']);  
     if(matchYourselfP2P($request,$myAddress)){
         //output("P2P request is for me, starting RP2P",'SILENT'); 
+        $request['status'] = 'found';
         insertP2pRequest($request, $myAddress);
-        updateP2pRequest($request, 'found');
         // $request['amount'] = $requestedAmount;
         $p2pArray = [
             'address' => $myAddress,
@@ -34,8 +34,8 @@ function handleP2pRequest($request) {
         $request['amount'] = $requestedAmount;
         //$request['outgoing_txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']); 
         //$request['incoming_txid'] = $request['outgoing_txid'] ?? NULL;
+        $request['status'] = 'queued';
         insertP2pRequest($request, NULL);
-        updateP2pRequest($request, 'queued');
     }
 }
 
@@ -102,7 +102,7 @@ function processQueuedP2pMessages() {
             // }
         }
         // Update the p2p request status to sent
-        updateP2pRequest($message, 'sent');
+        updateP2pRequestStatus($message['hash'], 'sent');
     }
 }
 
