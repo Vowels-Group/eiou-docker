@@ -72,6 +72,14 @@ function buildRP2pPayload($data) {
     );
 }
 
+function createContactPayload() {
+    global $user;
+    return array(
+        'type' => 'create',
+        'senderPublicKey' => $user['public']
+    );
+}
+
 function createForwardP2pPayload($data) {
     global $user;
     $userAddress = resolveUserAddressForTransport($data['sender_address']);

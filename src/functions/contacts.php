@@ -36,11 +36,7 @@ function addContact($data) {
     }
     else{
         // Build the payload array
-        $payload = array(
-            'type' => 'create',
-            'senderPublicKey' => $senderPublicKey,
-            'name' => $name
-        );
+        $payload = createContactPayload();
         // Determine if tor, else add http hostname
         if (preg_match('/\.onion$/', $address)) {
             $payload['senderAddress'] = $user['torAddress'];
