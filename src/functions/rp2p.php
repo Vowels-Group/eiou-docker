@@ -56,14 +56,6 @@ function processQueuedRP2pMessages() {
         // If matching rp2p found, echo forwarding message
         if ($rP2pResult) {
             output("Found rp2p match for hash: " . $message['hash'], 'SILENT');
-            output("rp2p result: " . print_r ($rP2pResult['p2p_array'], true),'SILENT');  
-
-            $originalRequest = lookupP2pRequest($message['hash']);
-            // Add my info as the new array index
-            $rP2pResult['p2p_array'] = [
-                'address' => resolveUserAddressForTransport($originalRequest['sender_address']),
-                'pubkey' => $user['public']
-            ];
             $rP2pPayload = buildRP2pPayload($rP2pResult);
             $response = json_decode(send($message['sender_address'], $rP2pPayload),true);
             // Update the p2p request status to found

@@ -45,11 +45,9 @@ function processTransaction($request) {
     } else {
         $memo = $request['memo'];
         $rP2pResult  = checkRP2pExists($memo);
-        if(isset($rP2pResult) && $memo === $rP2pResult['hash']){
-            output("Transaction not for me, forwarding to next peer (RP2P)",'SILENT');
-            $decoded_values = json_decode($rP2pResult['p2p_array'], true);           
-            $request['receiverAddress'] = $decoded_values['address'];
-            $request['receiverPublicKey'] = $decoded_values['pubkey'];
+        if(isset($rP2pResult) && $memo === $rP2pResult['hash']){  
+            $request['receiverAddress'] = $rP2pResult['sender_address'];
+            $request['receiverPublicKey'] = $rP2pResult['sender_public_key'];
             $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']); 
             //remove my transaction fee and send remainder onwards
             $request['amount'] = removeTransactionFee($request);  //check if before or after txid, because amount changed   

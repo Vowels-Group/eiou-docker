@@ -20,4 +20,4 @@ SELECT id, hash, time, currency, amount, my_fee_amount, request_level, max_reque
 # rp2p requests output without keys or signatures
 SELECT id, hash, time, currency, amount, sender_address FROM rp2p;
 
-SELECT id, hash, sender_address, p2p_array FROM rp2p;
+SELECT id, hash, sender_address FROM rp2p;

@@ -76,7 +76,6 @@ function getRP2pTableSchema() {
         sender_public_key TEXT NOT NULL,
         sender_address VARCHAR(255) NOT NULL,
         sender_signature TEXT NOT NULL,
-        p2p_array TEXT, /* [0] => [final_recipient_address , final_recipient_public_key], [1] .. [n] */
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )";
 }

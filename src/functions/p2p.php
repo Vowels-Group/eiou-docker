@@ -14,11 +14,6 @@ function handleP2pRequest($request) {
         $request['status'] = 'found';
         insertP2pRequest($request, $myAddress);
         // $request['amount'] = $requestedAmount;
-        $p2pArray = [
-            'address' => $myAddress,
-            'pubkey' => $user['public']
-        ];
-        $request['p2p_array'] = $p2pArray;
         $rP2pPayload = buildRP2pPayload($request);
         $response = json_decode(send($request['senderAddress'], $rP2pPayload),true);
         output("rP2p send result: " . print_r($response, true),'SILENT');

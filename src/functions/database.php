@@ -426,7 +426,6 @@ function insertP2pRequest($request, $destinationAddress = null) {
 
 function insertRp2pRequest ($request){
     global $pdo;
-    $p2pArray = json_encode($request['p2p_array']);
     try {
         $stmt = $pdo->prepare("INSERT INTO rp2p (
             hash, 
@@ -435,8 +434,7 @@ function insertRp2pRequest ($request){
             currency, 
             sender_public_key, 
             sender_address,
-            sender_signature,
-            p2p_array
+            sender_signature
         ) VALUES (
             :hash, 
             :time, 
@@ -444,8 +442,7 @@ function insertRp2pRequest ($request){
             :currency, 
             :sender_public_key, 
             :sender_address,
-            :sender_signature,
-            :p2p_array
+            :sender_signature
         )");
 
         $stmt->bindParam(':hash', $request['hash']);
@@ -455,7 +452,6 @@ function insertRp2pRequest ($request){
         $stmt->bindParam(':sender_public_key', $request['senderPublicKey']);
         $stmt->bindParam(':sender_address', $request['senderAddress']);
         $stmt->bindParam(':sender_signature', $request['signature']);
-        $stmt->bindParam(':p2p_array', $p2pArray);
         $stmt->execute();
         //echo "Successfully inserted rp2p request.\n";
         return json_encode(["status" => "received", "message" => "rp2p sent & received successfully"]);

@@ -67,8 +67,7 @@ function buildRP2pPayload($data) {
         'currency' => $data['currency'],
         'senderPublicKey' => $user['public'],
         'senderAddress' => $userAddress,
-        'signature' => $data['signature'],
-        'p2p_array' => $data['p2p_array']
+        'signature' => $data['signature']
     );
 }
 
@@ -79,9 +78,6 @@ function createContactPayload() {
         'senderPublicKey' => $user['public']
     );
 }
-
-
-
 
 function resolveUserAddressForTransport($address) {
     global $user;
