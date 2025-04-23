@@ -39,17 +39,17 @@ function buildSendPayload($data) {
 
 function buildP2pPayload($data) {
     global $user;
-    $userAddress = resolveUserAddressForTransport($data['receiverAddress']);
+    $userAddress = resolveUserAddressForTransport($data['receiverAddress'] ?? $data['sender_address']); //To whom (either to a contact initial or return to contact based on found end-recipient)
     return array(
         'type' => 'p2p', // Peers of Peers request type
-        'hash' => $data['p2pHash'],
+        'hash' => $data['hash'],
         'salt' => $data['salt'],
         'time' => $data['time'],
-        'expiration' => $data['time'] + $user['p2pExpiration'], // Expiration time based on user's configuration
-        'currency' => 'USD',
+        'expiration' => $data['time'] + $user['p2pExpiration'] ?? $data['expiration'], // Expiration time based on user's configuration (or database version)
+        'currency' => $data['currency'] ?? 'USD',
         'amount' => $data['amount'], // Nominal amount in cents recipient will receive
-        'requestLevel' => $data['randomNumber'], // Initial request level
-        'maxRequestLevel' => $data['maxRequestLevel'], // Maximum number of hops for p2p request
+        'requestLevel' => $data['randomNumber'] ?? $data['request_level'] + 1, // Initial request level (or increment)
+        'maxRequestLevel' => $data['maxRequestLevel'] ?? $data['max_request_level'], // Maximum number of hops for p2p request (or saved database version)
         'senderPublicKey' => $user['public'],
         'senderAddress' => $userAddress
     );
@@ -80,23 +80,7 @@ function createContactPayload() {
     );
 }
 
-function createForwardP2pPayload($data) {
-    global $user;
-    $userAddress = resolveUserAddressForTransport($data['sender_address']);
-    return array(
-        'type' => 'p2p', // Peers of Peers request type
-        'hash' => $data['hash'],
-        'salt' => $data['salt'],
-        'time' => $data['time'],
-        'expiration' => $data['expiration'],
-        'currency' => $data['currency'],
-        'amount' => $data['amount'], // Nominal amount recipient will receive
-        'requestLevel' => $data['request_level'] + 1, // Increment request level
-        'maxRequestLevel' => $data['max_request_level'], // Maximum number of hops for p2p request
-        'senderPublicKey' => $user['public'],
-        'senderAddress' => $userAddress
-    );
-}
+
 
 
 function resolveUserAddressForTransport($address) {

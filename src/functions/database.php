@@ -397,7 +397,7 @@ function insertP2pRequest($request, $destinationAddress = null) {
         )");
 
         $my_fee_amount = $request['feeAmount'] ?? null;
-
+        $status = $request['status'] ?? 'initial';
         $stmt->bindParam(':hash', $request['hash']);
         $stmt->bindParam(':salt', $request['salt']);
         $stmt->bindParam(':time', $request['time']);
@@ -413,7 +413,7 @@ function insertP2pRequest($request, $destinationAddress = null) {
         $stmt->bindParam(':destination_address', $destinationAddress);
         $stmt->bindParam(':incoming_txid', $request['incoming_txid']);
         $stmt->bindParam(':outgoing_txid', $request['outgoing_txid']);
-        $stmt->bindParam(':status', $request['status']);
+        $stmt->bindParam(':status', $status);
         $stmt->execute();
         return json_encode(["status" => "received", "message" => "p2p sent & received successfully"]);
     } catch (PDOException $e) {

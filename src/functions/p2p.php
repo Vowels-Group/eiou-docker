@@ -58,8 +58,8 @@ function prepareP2pRequestData($request) {
 
     // Additional data preparation
     $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
-    $data['p2pHash'] = hash('sha256', $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
-    output("Generated p2pHash: " . $data['p2pHash'], 'SILENT'); // Added verbose output
+    $data['hash'] = hash('sha256', $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
+    output("Generated p2pHash: " . $data['hash'], 'SILENT'); // Added verbose output
     output("p2pHash components: " . ", receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time'], 'SILENT'); // Detailed verbose output
     $data['randomNumber'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // todo: lower bound should be private (generated in fresh install and put in config file) or generated for each contact
     $data['maxRequestLevel'] = 1000 + $user['maxP2pLevel'] - 1; //fix 
@@ -75,7 +75,7 @@ function processQueuedP2pMessages() {
         //echo "Processing p2p message with unique hash: " . $message['hash'] . "\n";
         //echo "Message details - Currency: " . $message['currency'] . ", Amount: " . $message['amount'] . "\n";
         //echo "Current request level: " . $message['request_level'] . " of max " . $message['max_request_level'] . "\n";
-        $p2pPayload = createForwardP2pPayload($message);
+        $p2pPayload = buildP2pPayload($message);
 
         if($matchedContact = matchContact($message)){
             //echo "Sending p2p request to final recipient:" . $matchedContact['address'] ."\n";
