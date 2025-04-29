@@ -55,26 +55,6 @@ function isTorAddress($address) {
     return preg_match('/\.onion$/', $address) === 1;
 }
 
-function truncateInArray($data, $max_length = 50) {
-    if (!is_array($data)) {
-        return $data;
-    }
-
-    foreach ($data as $key => &$value) {
-        if (is_string($value)) {
-            // Truncate long strings
-            if (strlen($value) > $max_length) {
-                $value = substr($value, 0, $max_length) . '... [truncated]';
-            }
-        } elseif (is_array($value)) {
-            // Recursively truncate nested arrays
-            $value = truncateLargeStringsInArray($value, $max_length);
-        }
-    }
-
-    return $data;
-}
-
 function validateRequestLevel($request){
     return $request['requestLevel'] < $request['maxRequestLevel'];
 }
