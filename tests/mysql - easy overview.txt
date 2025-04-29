@@ -3,6 +3,8 @@ mysql -u root
 
 use eiou
 
+SELECT message FROM debug;
+
 SELECT id, hash, amount, my_fee_amount, sender_address, destination_address, incoming_txid, outgoing_txid, status FROM p2p;
 
 SELECT id, hash, amount, sender_address FROM rp2p;
