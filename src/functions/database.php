@@ -1,4 +1,5 @@
 <?php
+# Copyright 2025
 
 function acceptContact($address, $name, $fee, $credit, $currency) {
     global $pdo;
@@ -529,6 +530,15 @@ function insertTransaction($request) {
         return json_encode(["status" => "rejected", "message" => "Failed to record transaction: " . $e->getMessage()
         ]);
     }
+}
+
+function lookup($name) {
+    global $pdo;
+    $nameStmt = $pdo->prepare("SELECT address FROM contacts WHERE LOWER(name) = LOWER(:name)");
+    $nameStmt->bindParam(':name', $name);
+    $nameStmt->execute();
+    $result = $nameStmt->fetch(PDO::FETCH_ASSOC);
+    return $result ? $result : null;
 }
 
 function lookupContactByName($receiverInput) {
