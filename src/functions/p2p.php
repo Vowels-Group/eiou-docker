@@ -16,7 +16,7 @@ function handleP2pRequest($request) {
         // $request['amount'] = $requestedAmount;
         $rP2pPayload = buildRP2pPayload($request);
         $response = json_decode(send($request['senderAddress'], $rP2pPayload),true);
-        output("rP2p send result: " . print_r($response, true),'SILENT');
+        output("Transaction (RP2P) send result: " . print_r($response, true),'SILENT');
     } else{
         $requestedAmount = calculateRequestedAmount($request);
         $availableFunds = calculateAvailableFunds($request);  
@@ -86,6 +86,7 @@ function processQueuedP2pMessages() {
             foreach ($contacts as $contactAddress) {
                 //echo "Sending p2p request to contact: $contactAddress\n";
                 $response = json_decode(send($contactAddress, $p2pPayload),true);
+                output("P2P response status: " . print_r($response,true),'SILENT');
                 //output("P2P send result: " . print_r($response,true) . " for contact: " . print_r($contactAddress,true),'SILENT');
             }
             // if(isset($result['destination_address'])){

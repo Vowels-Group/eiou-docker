@@ -9,6 +9,7 @@ function handleRp2pRequest($request) {
     }else{
         if(isset($result['destination_address'])) {
             //update p2p before saving rp2p otherwise it will try sending an rp2p (which will go to itself) before the transaction
+            //output("Updated hash: " . $request['hash'] . " to status 'found'");
             updateP2pRequestStatus($request['hash'], 'found');
         }
         // Save rp2p response 
@@ -58,6 +59,7 @@ function processQueuedRP2pMessages() {
             output("Found rp2p match for hash: " . $message['hash'], 'SILENT');
             $rP2pPayload = buildRP2pPayload($rP2pResult);
             $response = json_decode(send($message['sender_address'], $rP2pPayload),true);
+            output("RP2P response status: " . print_r($response,true),'SILENT');
             // Update the p2p request status to found
             updateP2pRequestStatus($message['hash'], 'found');
         }

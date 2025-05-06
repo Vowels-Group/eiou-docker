@@ -133,20 +133,6 @@ function checkPendingContactRequests() {
     }
 }
 
-// function checkIsP2pRequestMine($data){
-//     global $pdo;
-//     try {
-//         $query = "SELECT * FROM p2p WHERE hash = :hash AND destination_address IS NOT NULL";
-//         $p2pCheckStmt = $pdo->prepare($query);
-//         $p2pCheckStmt->bindParam(':hash', $data['hash']);
-//         $p2pCheckStmt->execute();
-//         return $p2pCheckStmt->fetch(PDO::FETCH_ASSOC);
-//     } catch (PDOException $e) {
-//         error_log("Error checking p2p request: " . $e->getMessage());
-//         return false;
-//     }
-// }
-
 function getP2pByHash($hash){
     global $pdo;
     try {
@@ -160,19 +146,64 @@ function getP2pByHash($hash){
     }
 }
 
+function checkExistence($request){
+    global $pdo;
+    $type = $request['type'];
+    $receiver = resolveUserAddressForTransport($request['senderAddress']);
+    try {
+        if($type == 'send'){
+            $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :hash");
+            $hash = $request['memo'];
+        } else{           
+            $Stmt = $pdo->prepare("SELECT * FROM $type WHERE hash = :hash");
+            $hash = $request['hash'];
+        }  
+        $Stmt->bindParam(':hash', $hash);
+        $Stmt->execute();
+        $results = $Stmt->fetch(PDO::FETCH_ASSOC);
+        if(!$$results){
+            if($type == 'send'){
+                echo json_encode(["status" => "accepted", "message" => "hash/memo " .  print_r($hash,true) . " for transaction received by " .  print_r($receiver,true)]);            
+            } else{
+                echo json_encode(["status" => "received", "message" => "hash/memo " .  print_r($hash,true) . " for " .  print_r($type,true) ." received by " .  print_r($receiver,true)]);
+            }
+            return false;           
+        } else{
+            echo json_encode(["status" => "rejected", "message" => "hash/memo " . print_r($hash,true) . " for " .  print_r($type,true) ." already exists in database of " .  print_r($receiver,true)]);
+            return true;
+        }
+    } catch (PDOException $e) {
+        error_log("Error retrieving existence of " .  print_r($type,true) .  " by hash/memo" . $e->getMessage());
+        echo json_encode(["status" => "rejected", "message" => "Could not access database of " .  print_r($receiver,true) . ", error: "  . $e->getMessage()]);
+        return true;
+    }
+}
+
 function checkRP2pExists($hash) {
     global $pdo;
     try {
-    $rP2pCheckStmt = $pdo->prepare("SELECT * FROM rp2p WHERE hash = :hash");
-    $rP2pCheckStmt->bindParam(':hash', $hash);
-    $rP2pCheckStmt->execute();
-    return $rP2pCheckStmt->fetch(PDO::FETCH_ASSOC);
+        $rP2pCheckStmt = $pdo->prepare("SELECT * FROM rp2p WHERE hash = :hash");
+        $rP2pCheckStmt->bindParam(':hash', $hash);
+        $rP2pCheckStmt->execute();
+        return $rP2pCheckStmt->fetch(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
-        error_log("Error checking rp2p request: " . $e->getMessage());
+        error_log("Error checking rp2p request by hash: " . $e->getMessage());
         return false;
     }
 }
 
+function checkTransactionExists($memo) {
+    global $pdo;
+    try {
+        $TransactionCheckStmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :memo");
+        $TransactionCheckStmt->bindParam(':memo', $memo);
+        $TransactionCheckStmt->execute();
+        return $TransactionCheckStmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Error checking rp2p request by hash: " . $e->getMessage());
+        return false;
+    }
+}
 function deleteContact($data) {
     global $pdo;
     $address = $data[2];
@@ -416,6 +447,7 @@ function insertP2pRequest($request, $destinationAddress = null) {
         $stmt->bindParam(':outgoing_txid', $request['outgoing_txid']);
         $stmt->bindParam(':status', $status);
         $stmt->execute();
+        output("Iserted P2P with hash: " .print_r($request['hash'],true),'SILENT');
         return json_encode(["status" => "received", "message" => "p2p sent & received successfully"]);
     } catch (PDOException $e) {
         // Handle database error
@@ -455,6 +487,7 @@ function insertRp2pRequest ($request){
         $stmt->bindParam(':sender_signature', $request['signature']);
         $stmt->execute();
         //echo "Successfully inserted rp2p request.\n";
+        output("Iserted RP2P with hash: " .print_r($request['hash'],true),'SILENT');
         return json_encode(["status" => "received", "message" => "rp2p sent & received successfully"]);
     } catch (PDOException $e) {
         // Handle database error
@@ -523,6 +556,7 @@ function insertTransaction($request) {
         // Execute the insert
         $insertStmt->execute();
         // Respond with accepted status
+        output("Iserted Transaction with memo: " .print_r($request['memo'],true),'SILENT');
         return json_encode(["status" => "accepted", "message" => "Transaction recorded successfully","txid" => $request['txid']]);
     } catch (PDOException $e) {
         // Handle database error
@@ -680,7 +714,7 @@ function updateP2pRequestStatus($hash, $status, $completed = false) {
         $updateStmt->bindParam(':hash', $hash);
         $updateStmt->bindParam(':status', $status);
         $updateStmt->execute();
-        //echo "Updated status to '" . $status . "' for message hash: " . $hash . "\n";
+        output("Updated status to '" . $status . "' for message hash: " . $hash,'SILENT');
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating p2p request status: " . $e->getMessage());

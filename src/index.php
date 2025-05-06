@@ -24,26 +24,30 @@ $pdo = createPDOConnection();
 
 if ($request['type'] == "create") {
   // Handle contact request
+  #output("Processing create request " . print_r($request, TRUE), 'SILENT');
   output("Processing create request", 'SILENT');
   echo handleContactCreation($request);  
 }
 elseif ($request['type'] == "send") {
   // Handle eIOU
-  //output("<index.html> accessed send", 'SILENT');
-  output("Processing send request", 'SILENT');
-  echo processTransaction($request);
+  #output("Processing send request " . print_r($request, TRUE), 'SILENT');
+  if(!checkExistence($request)){
+    processTransaction($request);
+  }
 }
 elseif ($request['type'] == "p2p") {
   // Handle Peers of Peers Request
-  //output("<index.html> accessed p2p", 'SILENT');
   //output("Processing p2p request: " . print_r($request, TRUE), 'SILENT');
-  echo handleP2pRequest($request);
+  if(!checkExistence($request)){
+    handleP2pRequest($request);
+  }
 }
 elseif ($request['type'] == "rp2p") {
   // Handle Peers of Peers Response
-  //output("<index.html> accessed rp2p", 'SILENT');
   //output("Processing rp2p request: " . print_r($request, TRUE), 'SILENT');
-  echo handleRp2pRequest($request);
+  if(!checkExistence($request)){
+    handleRp2pRequest($request);
+  }
 }
 else {
   output("Processing nonstandard request", 'SILENT');

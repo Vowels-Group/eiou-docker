@@ -254,7 +254,7 @@ function output($message, $level = 'ECHO') {
     if (isset($user['debug']) && $user['debug'] === true) {
         $data = [
             'level' => $level,
-            'message' => trim($message),
+            'message' => "(".microtime(true) . ") " .trim($message),
             'context' => getContext(),
             'file' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0]['file'],
             'line' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0]['line'],

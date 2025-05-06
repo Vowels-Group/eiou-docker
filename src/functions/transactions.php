@@ -56,8 +56,8 @@ function processTransaction($request) {
             $payload = buildSendPayload($request);
             output("Sending Transaction onwards to: " . $request['receiverAddress'],'SILENT');
             $response = json_decode(send($request['receiverAddress'], $payload),true);         
-            output("Received response Transaction with status: " . $response['status'],'SILENT');
-            output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true),'SILENT'); 
+            output("Received Transaction response Transaction with status: " . $response['status'],'SILENT');
+            //output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true),'SILENT'); 
             //remove if does not work due to issue output and response
             if (isset($response['status']) && $response['status'] === 'accepted') {
                 return insertTransaction($request); 
@@ -83,6 +83,9 @@ function send($recipient, $payload){
 }
 
 function sendByHttp ($recipient, $signedPayload) {
+    $decoded = json_decode($signedPayload,true);
+    $current = ($decoded['hash'] ?? $decoded['memo'] ?? "none");
+    output("curl >openened< now to " . $recipient . " with hash/memo " . $current ,'SILENT');
     $ch = curl_init();
     
     // Determine the protocol based on the recipient format
@@ -95,6 +98,7 @@ function sendByHttp ($recipient, $signedPayload) {
     curl_setopt($ch, CURLOPT_POST, true);
     $response = curl_exec($ch);
     curl_close($ch);
+    output("curl <closed> now to " . $recipient . " with hash/memo " . $current,'SILENT');
     // Return the response from the recipient
     return $response;
 }
@@ -121,7 +125,7 @@ function sendEiou($request = null) {
         global $data;
         $request = $data;
     }
-    output("Getting ready to send eIOU with request: " . print_r($request, true), 'SILENT');
+    //output("Getting ready to send eIOU with request: " . print_r($request, true), 'SILENT');
     validateSendRequest($request);
         
     // If receiver's public key is in contacts, prepare a transaction to send directly to them
@@ -152,7 +156,7 @@ function sendEiou($request = null) {
 
 function sendP2pEiou($request) {
     global $user;
-    output("Getting ready to send P2p eIOU with request: " . print_r($request, true),'SILENT');
+    output("Getting ready to send P2p eIOU with memo: " . print_r($request['memo'], true),'SILENT');
 
     //Add some validation to make sure is a valid rp2p
 
@@ -168,6 +172,7 @@ function sendP2pEiou($request) {
     // Prepare transaction payload
     $payload = buildSendPayload($request);
     $response = json_decode(send($request['receiverAddress'], $payload),true);
+    output("SendP2PEiou response status: " . print_r($response,true),'SILENT');
     if (isset($response['status']) && $response['status'] === 'accepted') {
         // Transaction accepted, now insert into database
         output("Inserting Transaction",'SILENT');

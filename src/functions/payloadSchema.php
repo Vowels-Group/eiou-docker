@@ -90,7 +90,5 @@ function resolveUserAddressForTransport($address) {
         return $user["hostname"];
     }
     // If no specific transport type is detected, return the original address
-    
     return false;
-
 }
