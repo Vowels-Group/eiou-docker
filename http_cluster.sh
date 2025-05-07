@@ -101,60 +101,60 @@ docker run -d --network=eioud-network --name eioud-A422-http eioud
 docker run -d --network=eioud-network --name eioud-A423-http eioud
 
 # Function to wait for a container to be ready
-wait_for_container() {
-    local container_name=$1
-    local max_attempts=10
-    local attempt=0
+# wait_for_container() {
+#     local container_name=$1
+#     local max_attempts=10
+#     local attempt=0
 
-    echo "Waiting for $container_name to be ready..."
-    while ! docker exec "$container_name" eiou generate torAddressOnly >/dev/null 2>&1; do
-        attempt=$((attempt + 1))
-        if [ "$attempt" -ge "$max_attempts" ]; then
-            echo "Error: $container_name did not start in time."
-            exit 1
-        fi
-        sleep 1
-    done
-}
+#     echo "Waiting for $container_name to be ready..."
+#     while ! docker exec "$container_name" eiou generate torAddressOnly >/dev/null 2>&1; do
+#         attempt=$((attempt + 1))
+#         if [ "$attempt" -ge "$max_attempts" ]; then
+#             echo "Error: $container_name did not start in time."
+#             exit 1
+#         fi
+#         sleep 1
+#     done
+# }
 
-echo -e "\nWaiting for containers to be ready..."
-wait_for_container eioud-A-http
-wait_for_container eioud-A1-http
-wait_for_container eioud-A11-http
-wait_for_container eioud-A111-http
-wait_for_container eioud-A112-http
-wait_for_container eioud-A113-http
-wait_for_container eioud-A12-http
-wait_for_container eioud-A121-http
-wait_for_container eioud-A122-http 
-wait_for_container eioud-A123-http
-wait_for_container eioud-A2-http
-wait_for_container eioud-A21-http
-wait_for_container eioud-A211-http
-wait_for_container eioud-A212-http
-wait_for_container eioud-A213-http
-wait_for_container eioud-A22-http
-wait_for_container eioud-A221-http
-wait_for_container eioud-A222-http
-wait_for_container eioud-A223-http
-wait_for_container eioud-A3-http
-wait_for_container eioud-A31-http
-wait_for_container eioud-A311-http
-wait_for_container eioud-A312-http
-wait_for_container eioud-A313-http
-wait_for_container eioud-A32-http
-wait_for_container eioud-A321-http 
-wait_for_container eioud-A322-http
-wait_for_container eioud-A323-http
-wait_for_container eioud-A4-http
-wait_for_container eioud-A41-http
-wait_for_container eioud-A411-http
-wait_for_container eioud-A412-http
-wait_for_container eioud-A413-http
-wait_for_container eioud-A42-http
-wait_for_container eioud-A421-http
-wait_for_container eioud-A422-http
-wait_for_container eioud-A423-http
+# echo -e "\nWaiting for containers to be ready..."
+# wait_for_container eioud-A-http
+# wait_for_container eioud-A1-http
+# wait_for_container eioud-A11-http
+# wait_for_container eioud-A111-http
+# wait_for_container eioud-A112-http
+# wait_for_container eioud-A113-http
+# wait_for_container eioud-A12-http
+# wait_for_container eioud-A121-http
+# wait_for_container eioud-A122-http 
+# wait_for_container eioud-A123-http
+# wait_for_container eioud-A2-http
+# wait_for_container eioud-A21-http
+# wait_for_container eioud-A211-http
+# wait_for_container eioud-A212-http
+# wait_for_container eioud-A213-http
+# wait_for_container eioud-A22-http
+# wait_for_container eioud-A221-http
+# wait_for_container eioud-A222-http
+# wait_for_container eioud-A223-http
+# wait_for_container eioud-A3-http
+# wait_for_container eioud-A31-http
+# wait_for_container eioud-A311-http
+# wait_for_container eioud-A312-http
+# wait_for_container eioud-A313-http
+# wait_for_container eioud-A32-http
+# wait_for_container eioud-A321-http 
+# wait_for_container eioud-A322-http
+# wait_for_container eioud-A323-http
+# wait_for_container eioud-A4-http
+# wait_for_container eioud-A41-http
+# wait_for_container eioud-A411-http
+# wait_for_container eioud-A412-http
+# wait_for_container eioud-A413-http
+# wait_for_container eioud-A42-http
+# wait_for_container eioud-A421-http
+# wait_for_container eioud-A422-http
+# wait_for_container eioud-A423-http
 
 echo -e "\nGenerate pubkeys and set hostnames..."
 docker exec eioud-A-http eiou generate http://eioud-A-http
@@ -323,11 +323,11 @@ docker exec eioud-A-http eiou send http://eioud-A312-http 100 USD
 docker exec eioud-A-http eiou send http://eioud-A2-http 100 USD
 
 
-echo -e "\nTesting other functions..."
+#echo -e "\nTesting other functions..."
 
 # Read contacts
-echo -e "\nReading contacts..."
-docker exec eioud-A-http eiou read http://eioud-A4-http
+#echo -e "\nReading contacts..."
+#ocker exec eioud-A-http eiou read http://eioud-A4-http
 # docker exec eioud-A421-http eiou read http://eioud-A113-http
 # docker exec eioud-1-http eiou read http://eioud-0-http
 # docker exec eioud-1-http eiou read http://eioud-2-http
