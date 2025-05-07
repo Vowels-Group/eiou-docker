@@ -85,7 +85,7 @@ function send($recipient, $payload){
 function sendByHttp ($recipient, $signedPayload) {
     $decoded = json_decode($signedPayload,true);
     $current = ($decoded['hash'] ?? $decoded['memo'] ?? "none");
-    output("curl >openened< now to " . $recipient . " with hash/memo " . $current ,'SILENT');
+    output("curl >> openened now to " . $recipient . " with hash/memo " . $current ,'SILENT');
     $ch = curl_init();
     
     // Determine the protocol based on the recipient format
@@ -98,7 +98,7 @@ function sendByHttp ($recipient, $signedPayload) {
     curl_setopt($ch, CURLOPT_POST, true);
     $response = curl_exec($ch);
     curl_close($ch);
-    output("curl <closed> now to " . $recipient . " with hash/memo " . $current,'SILENT');
+    output("curl << closed now to " . $recipient . " with hash/memo " . $current,'SILENT');
     // Return the response from the recipient
     return $response;
 }
@@ -141,7 +141,7 @@ function sendEiou($request = null) {
         $payload = buildSendPayload($data);
         $response = json_decode(send($data['receiverAddress'], $payload), true);
         output("SendEiou response status: " . print_r($response,true),'SILENT');
-        if (isset($response['status']) && $response['status'] === 'accepted' && $response['txid'] === $data['txid']) {
+        if (isset($response['status']) && $response['status'] === 'accepted' && (isset($response['txid']) && $response['txid'] === $data['txid'])) {
             // Transaction accepted, now insert into database
             insertTransaction($payload);
         } else {

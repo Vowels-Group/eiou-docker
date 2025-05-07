@@ -31,12 +31,14 @@ if ($request['type'] == "create") {
 elseif ($request['type'] == "send") {
   // Handle eIOU
   #output("Processing send request " . print_r($request, TRUE), 'SILENT');
+  output("Processing send request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
   if(!checkExistence($request)){
     processTransaction($request);
   }
 }
 elseif ($request['type'] == "p2p") {
   // Handle Peers of Peers Request
+  output("Processing p2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
   //output("Processing p2p request: " . print_r($request, TRUE), 'SILENT');
   if(!checkExistence($request)){
     handleP2pRequest($request);
@@ -44,7 +46,7 @@ elseif ($request['type'] == "p2p") {
 }
 elseif ($request['type'] == "rp2p") {
   // Handle Peers of Peers Response
-  //output("Processing rp2p request: " . print_r($request, TRUE), 'SILENT');
+  output("Processing rp2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
   if(!checkExistence($request)){
     handleRp2pRequest($request);
   }
