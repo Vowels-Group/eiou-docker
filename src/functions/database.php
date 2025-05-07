@@ -494,7 +494,7 @@ function insertRp2pRequest ($request){
         $stmt->bindParam(':sender_signature', $request['signature']);
         $stmt->execute();
         //echo "Successfully inserted rp2p request.\n";
-        output("Iserted RP2P with hash: " .print_r($request['hash'],true),'SILENT');
+        output("Inserted RP2P with hash: " .print_r($request['hash'],true),'SILENT');
         return json_encode(["status" => "received", "message" => "rp2p sent & received successfully"]);
     } catch (PDOException $e) {
         // Handle database error
