@@ -163,7 +163,7 @@ function checkExistence($request){
         $results = $Stmt->fetch(PDO::FETCH_ASSOC);
         if(!$$results){
             if($type == 'send'){
-                echo json_encode(["status" => "accepted", "message" => "hash/memo " .  print_r($hash,true) . " for transaction received by " .  print_r($receiver,true)]);            
+                echo json_encode(["status" => "accepted", "txid" => $request['txid'], "message" => "hash/memo " .  print_r($hash,true) . " for transaction received by " .  print_r($receiver,true)]);            
             } else{
                 echo json_encode(["status" => "received", "message" => "hash/memo " .  print_r($hash,true) . " for " .  print_r($type,true) ." received by " .  print_r($receiver,true)]);
             }
