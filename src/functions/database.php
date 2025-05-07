@@ -146,7 +146,8 @@ function getP2pByHash($hash){
     }
 }
 
-function checkExistence($request){
+
+function checkExistence($request, $echo = true){
     global $pdo;
     $type = $request['type'];
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
@@ -161,20 +162,26 @@ function checkExistence($request){
         $Stmt->bindParam(':hash', $hash);
         $Stmt->execute();
         $results = $Stmt->fetch(PDO::FETCH_ASSOC);
-        if(!$$results){
-            if($type == 'send'){
-                echo json_encode(["status" => "accepted", "txid" => $request['txid'], "message" => "hash/memo " .  print_r($hash,true) . " for transaction received by " .  print_r($receiver,true)]);            
-            } else{
-                echo json_encode(["status" => "received", "message" => "hash/memo " .  print_r($hash,true) . " for " .  print_r($type,true) ." received by " .  print_r($receiver,true)]);
-            }
+        if(!$results){
+            if($echo){
+                if($type == 'send'){
+                    echo json_encode(["status" => "accepted", "txid" => $request['txid'], "message" => "hash/memo " .  print_r($hash,true) . " for transaction received by " .  print_r($receiver,true)]);            
+                } else{
+                    echo json_encode(["status" => "received", "message" => "hash/memo " .  print_r($hash,true) . " for " .  print_r($type,true) ." received by " .  print_r($receiver,true)]);
+                }
+            }    
             return false;           
         } else{
-            echo json_encode(["status" => "rejected", "message" => "hash/memo " . print_r($hash,true) . " for " .  print_r($type,true) ." already exists in database of " .  print_r($receiver,true)]);
+            if($echo){
+                echo json_encode(["status" => "rejected", "message" => "hash/memo " . print_r($hash,true) . " for " .  print_r($type,true) ." already exists in database of " .  print_r($receiver,true)]);
+            }
             return true;
         }
     } catch (PDOException $e) {
         error_log("Error retrieving existence of " .  print_r($type,true) .  " by hash/memo" . $e->getMessage());
-        echo json_encode(["status" => "rejected", "message" => "Could not access database of " .  print_r($receiver,true) . ", error: "  . $e->getMessage()]);
+        if($echo){
+            echo json_encode(["status" => "rejected", "message" => "Could not access database of " .  print_r($receiver,true) . ", error: "  . $e->getMessage()]);
+        }
         return true;
     }
 }
@@ -459,6 +466,9 @@ function insertP2pRequest($request, $destinationAddress = null) {
 
 function insertRp2pRequest ($request){
     global $pdo;
+    // if(!checkExistence($request,false)){
+
+    // }
     try {
         $stmt = $pdo->prepare("INSERT INTO rp2p (
             hash, 
