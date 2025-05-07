@@ -20,9 +20,9 @@ function handleP2pRequest($request) {
     } else{
         $requestedAmount = calculateRequestedAmount($request);
         $availableFunds = calculateAvailableFunds($request);  
-
+        $creditLimit = getCreditLimit($request['senderPublicKey']);
         if ($availableFunds < $requestedAmount) {
-            return buildInsufficientBalancePayload($availableFunds, $requestedAmount);
+            return buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit);
         } 
         // Save request 
         $request['feeAmount'] = $requestedAmount - $request['amount'];

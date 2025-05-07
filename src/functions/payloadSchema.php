@@ -1,11 +1,12 @@
 <?php
 
-function buildInsufficientBalancePayload($availableFunds, $requestedAmount) {
-    return json_encode([
+function buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit) {
+        return json_encode([
             "status" => "rejected", 
             "message" => "Insufficient balance or credit", 
-            "availableFunds" => number_format($availableFunds / 100, 2) . " USD",           // Convert back to dollars with 2 decimal places and USD
-            "requestedAmount" => number_format($requestedAmount / 100, 2) . " USD"     // Convert back to dollars with 2 decimal places and USD
+            "current_balance" => number_format($availableFunds / 100, 2) . " USD",     // Convert back to dollars with 2 decimal places and USD
+            "credit_limit" => number_format($creditLimit / 100, 2) . " USD",           // Convert back to dollars with 2 decimal places and USD
+            "requested_amount" => number_format($requestedAmount / 100, 2) . " USD"     // Convert back to dollars with 2 decimal places and USD
         ]);
 }
 

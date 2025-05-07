@@ -35,13 +35,7 @@ function processTransaction($request) {
     $requiredAmount = $request['amount']; 
     $availableFunds = $currentBalance + $creditLimit;  
     if ($availableFunds < $requiredAmount) {
-        return json_encode([
-            "status" => "rejected", 
-            "message" => "Insufficient balance or credit", 
-            "current_balance" => number_format($currentBalance / 100, 2) . " USD",     // Convert back to dollars with 2 decimal places and USD
-            "credit_limit" => number_format($creditLimit / 100, 2) . " USD",           // Convert back to dollars with 2 decimal places and USD
-            "requested_amount" => number_format($requiredAmount / 100, 2) . " USD"     // Convert back to dollars with 2 decimal places and USD
-        ]);
+        return buildInsufficientBalancePayload($availableFunds, $requiredAmount, $creditLimit);
     } else {
         $memo = $request['memo'];
         $rP2pResult  = checkRP2pExists($memo);
