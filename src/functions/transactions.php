@@ -186,6 +186,7 @@ function sendP2pEiou($request) {
     else{
         // maybe not 'cancelled' if no response, try again?
         updateP2pRequestStatus($payload['memo'],'cancelled');
+        updateTransactionStatus($payload['memo'],'rejected');
     }
 }
 
