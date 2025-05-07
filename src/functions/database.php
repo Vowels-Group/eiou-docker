@@ -466,9 +466,6 @@ function insertP2pRequest($request, $destinationAddress = null) {
 
 function insertRp2pRequest ($request){
     global $pdo;
-    // if(!checkExistence($request,false)){
-
-    // }
     try {
         $stmt = $pdo->prepare("INSERT INTO rp2p (
             hash, 
@@ -724,10 +721,24 @@ function updateP2pRequestStatus($hash, $status, $completed = false) {
         $updateStmt->bindParam(':hash', $hash);
         $updateStmt->bindParam(':status', $status);
         $updateStmt->execute();
-        output("Updated status to '" . $status . "' for message hash: " . $hash,'SILENT');
+        output("Updated status to '" . $status . "' for p2p hash: " . $hash,'SILENT');
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating p2p request status: " . $e->getMessage());
+    }
+}
+
+function updateTransactionStatus($memo, $status,) {
+    global $pdo;
+    try {
+        $updateStmt = $pdo->prepare("UPDATE transactions SET status = :status WHERE memo = :memo");     
+        $updateStmt->bindParam(':memo', $memo);
+        $updateStmt->bindParam(':status', $status);
+        $updateStmt->execute();
+        output("Updated status to '" . $status . "' for transaction hash: " . $memo,'SILENT');
+    } catch (PDOException $e) {
+        // Log or handle the error if updating status fails
+        error_log("Error updating transaction status: " . $e->getMessage());
     }
 }
 

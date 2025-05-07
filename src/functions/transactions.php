@@ -54,18 +54,24 @@ function processTransaction($request) {
             $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
             
             $payload = buildSendPayload($request);
+            updateP2pRequestStatus($memo,'paid');
             output("Sending Transaction onwards to: " . $request['receiverAddress'],'SILENT');
             $response = json_decode(send($request['receiverAddress'], $payload),true);         
             output("Received Transaction response Transaction with status: " . $response['status'],'SILENT');
             //output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true),'SILENT'); 
-            //remove if does not work due to issue output and response
             if (isset($response['status']) && $response['status'] === 'accepted') {
-                return insertTransaction($request); 
+                updateP2pRequestStatus($memo,'completed');
+                $insertTransactionResponse = insertTransaction($request);
+                updateTransactionStatus($memo,'completed');
+                return $insertTransactionResponse;
             }
         } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
             output("Transaction for me, inserting",'SILENT');
             $request['previousTxid'] = getPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']); 
-            return insertTransaction($request); 
+            updateP2pRequestStatus($memo,'completed');
+            $insertTransactionResponse = insertTransaction($request);
+            updateTransactionStatus($memo,'completed');
+            return $insertTransactionResponse;
         }
     }
 }
@@ -144,6 +150,7 @@ function sendEiou($request = null) {
         if (isset($response['status']) && $response['status'] === 'accepted' && (isset($response['txid']) && $response['txid'] === $data['txid'])) {
             // Transaction accepted, now insert into database
             insertTransaction($payload);
+            updateTransactionStatus($payload['memo'],'completed');
         } else {
             output ("Not enough credit with this user, trying p2p with data: " . print_r($request, true),'SILENT');
             sendP2pRequest($request);
@@ -171,24 +178,30 @@ function sendP2pEiou($request) {
 
     // Prepare transaction payload
     $payload = buildSendPayload($request);
+    updateP2pRequestStatus($payload['memo'],'paid');
     $response = json_decode(send($request['receiverAddress'], $payload),true);
     output("SendP2PEiou response status: " . print_r($response,true),'SILENT');
     if (isset($response['status']) && $response['status'] === 'accepted') {
         // Transaction accepted, now insert into database
         output("Inserting Transaction",'SILENT');
         insertTransaction($payload);
+        updateP2pRequestStatus($payload['memo'],'completed');
+        // 'memo' here is by definition "standard", so we need the 'hash'
+        updateTransactionStatus($payload['memo'],'completed');
     } 
+    else{
+        // maybe not 'cancelled' if no response, try again?
+        updateP2pRequestStatus($payload['memo'],'cancelled');
+    }
 }
 
 
 
 
-///issues to fix
 function viewBalances($data) {
     global $pdo, $user;
     $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
     if (isset($data[2])) {
-        //ISSUE: Are you turning a name into an adress? currently function does not exist
         $address = lookup($data[2]);
         $query .= " WHERE sender_address = :address OR receiver_address = :address";
     }
