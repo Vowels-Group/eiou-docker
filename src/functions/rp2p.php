@@ -58,10 +58,11 @@ function processQueuedRP2pMessages() {
         if ($rP2pResult) {
             output("Found rp2p match for hash: " . $message['hash'], 'SILENT');
             $rP2pPayload = buildRP2pPayload($rP2pResult);
+            updateP2pRequestStatus($message['hash'], 'found');
             $response = json_decode(send($message['sender_address'], $rP2pPayload),true);
             output("RP2P response status: " . print_r($response,true),'SILENT');
             // Update the p2p request status to found
-            updateP2pRequestStatus($message['hash'], 'found');
+
         }
     }
 }
