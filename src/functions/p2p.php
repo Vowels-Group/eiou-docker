@@ -1,41 +1,38 @@
 <?php
-function checkP2p($request) { 
-    output("Check p2p function triggered",'SILENT');
-}
 
 function handleP2pRequest($request) {
     global $user;
+    // Validate request
     if(!validateRequestLevel($request)){
         return buildInvalidRequestLevelPayload($request);
     }
     $myAddress = resolveUserAddressForTransport($request['senderAddress']);  
+    // Check if p2p's destination is to user
     if(matchYourselfP2P($request,$myAddress)){
-        //output("P2P request is for me, starting RP2P",'SILENT'); 
         $request['status'] = 'found';
-        insertP2pRequest($request, $myAddress);
-        // $request['amount'] = $requestedAmount;
+        insertP2pRequest($request, $myAddress); // Insert p2p request
+        // Build and send corresponding rp2p request payload to sender of p2p
         $rP2pPayload = buildRP2pPayload($request);
         $response = json_decode(send($request['senderAddress'], $rP2pPayload),true);
         output("Transaction (RP2P) send result: " . print_r($response, true),'SILENT');
     } else{
+        // Check if sender has enough 'credit' to facilitate IOU
         $requestedAmount = calculateRequestedAmount($request);
         $availableFunds = calculateAvailableFunds($request);  
         $creditLimit = getCreditLimit($request['senderPublicKey']);
         if ($availableFunds < $requestedAmount) {
             return buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit);
         } 
-        // Save request 
         $request['feeAmount'] = $requestedAmount - $request['amount'];
-        $request['amount'] = $requestedAmount;
-        //$request['outgoing_txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']); 
-        //$request['incoming_txid'] = $request['outgoing_txid'] ?? NULL;
-        insertP2pRequest($request, NULL);
-        updateP2pRequestStatus($request['hash'], 'queued');
+        $request['amount'] = $requestedAmount; 
+        insertP2pRequest($request, NULL);  // Insert p2p request
+        updateP2pRequestStatus($request['hash'], 'queued'); // Update the p2p request status to queued
     }
 }
 
 
 function prepareP2pRequestData($request) {
+    // Build initial p2p request payload
     global $user;
     output("Prepare send p2p data: " . print_r($request, true), 'SILENT');
     
@@ -57,8 +54,7 @@ function prepareP2pRequestData($request) {
     output("Generated p2pHash: " . $data['hash'], 'SILENT'); // Added verbose output
     output("p2pHash components: " . ", receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time'], 'SILENT'); // Detailed verbose output
     $data['randomNumber'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // todo: lower bound should be private (generated in fresh install and put in config file) or generated for each contact
-    $data['maxRequestLevel'] = 1000 + $user['maxP2pLevel'] - 1; //Currently much bigger than 6 hops to test big clusters (with loops and dead ends, divergence etc.) 
-    //$data['maxRequestLevel'] = $data['randomNumber'] + $user['maxP2pLevel'] - 1; // Handle off by 1 in request calculation
+    $data['maxRequestLevel'] = $data['randomNumber'] + $user['maxP2pLevel'] - 1; // Handle off by 1 in request calculation
     
     return $data;
 }
@@ -67,52 +63,42 @@ function processQueuedP2pMessages() {
     global $user;
     // Select queued messages from the p2p table
     foreach (retrieveQueuedP2pMessages() as $message) {
-        //echo "Processing p2p message with unique hash: " . $message['hash'] . "\n";
-        //echo "Message details - Currency: " . $message['currency'] . ", Amount: " . $message['amount'] . "\n";
-        //echo "Current request level: " . $message['request_level'] . " of max " . $message['max_request_level'] . "\n";
+        // Build p2p request payload
         $p2pPayload = buildP2pPayload($message);
-
+        // If recipient is a contact send p2p directly
         if($matchedContact = matchContact($message)){
-            //echo "Sending p2p request to final recipient:" . $matchedContact['address'] ."\n";
+            
             $response = json_decode(send($matchedContact['address'], $p2pPayload),true);
             output("P2P send result for matched contact: " . print_r($response,true),'SILENT');            
         }else{
             // Retrieve contacts to send p2p request, excluding the sender
             $contacts = retrieveContactAddresses($message['sender_address']);
-            //$contactsCount = countTorAndHttpAddresses($contacts);
-            //echo "Found " . count($contacts) . " contacts to send p2p request\n";
+            
+            // Count amount of contacts to send p2p request
+            $contactsCount = countTorAndHttpAddresses($contacts);
 
             // Send p2p request to all contacts
             foreach ($contacts as $contactAddress) {
-                //echo "Sending p2p request to contact: $contactAddress\n";
                 $response = json_decode(send($contactAddress, $p2pPayload),true);
                 output("P2P response status: " . print_r($response,true),'SILENT');
-                //output("P2P send result: " . print_r($response,true) . " for contact: " . print_r($contactAddress,true),'SILENT');
             }
-            // if(isset($result['destination_address'])){
-            //     output("Sent Peers of Peers request to " . $contactsCount['tor'] . " tor contacts and " . $contactsCount['http'] . " http(s) contacts.", 'SILENT');
-            //     //Inform user about expected response time
-            //     $httpExpectedResponseTime = $user['maxP2pLevel']; // Use maxP2pLevel seconds for http
-            //     $torExpectedResponseTime = 5 * 2 * $user['maxP2pLevel']; //5 seconds for a tor request, 2 times for a round trip, multiplied by maxP2pLevel
-            //     output("You should expect a response within " . $httpExpectedResponseTime . " seconds for http and " . $torExpectedResponseTime . " seconds for tor.", 'SILENT');
-            // }
+            if(isset($result['destination_address'])){
+                output("Sent Peers of Peers request to " . $contactsCount['tor'] . " tor contacts and " . $contactsCount['http'] . " http(s) contacts.", 'SILENT');
+                //Inform user about expected response time
+                $httpExpectedResponseTime = $user['maxP2pLevel']; // Use maxP2pLevel seconds for http
+                $torExpectedResponseTime = 5 * 2 * $user['maxP2pLevel']; //5 seconds for a tor request, 2 times for a round trip, multiplied by maxP2pLevel
+                output("You should expect a response within " . $httpExpectedResponseTime . " seconds for http and " . $torExpectedResponseTime . " seconds for tor.", 'SILENT');
+            }
         }
-        // Update the p2p request status to sent
-        updateP2pRequestStatus($message['hash'], 'sent');
+        updateP2pRequestStatus($message['hash'], 'sent'); // Update the p2p request status to sent
     }
 }
 
 function sendP2pRequest($data) {
     global $user;
-    //output("I want to send " . ($data['amount'] / 100) . " USD to " . $data['receiverAddress'], 'SILENT');
-    //output("Full sendP2pRequest data: " . print_r($data, true),'SILENT');
-    // Save the p2p request as a pending p2p transaction
-    
     // Prepare p2p request payload
     $p2pPayload = buildP2pPayload(prepareP2pRequestData($data));
-    //output("Trying to insert p2p request: " . print_r($data['receiverAddress'], true),'SILENT');
-    //output("Full P2p request payload: " . print_r($p2pPayload, true),'SILENT');
     output("Inserting p2p request with receiverAddress: " . print_r($data[2], TRUE), 'SILENT');
-    insertP2pRequest($p2pPayload, $data[2]);
-    updateP2pRequestStatus($p2pPayload['hash'], 'queued');
+    insertP2pRequest($p2pPayload, $data[2]); // Save the p2p request 
+    updateP2pRequestStatus($p2pPayload['hash'], 'queued'); // Update the p2p request status to queued
 }

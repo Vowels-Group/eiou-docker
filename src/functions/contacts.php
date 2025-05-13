@@ -102,6 +102,7 @@ function lookupContactInfo ($request) {
 }
 
 function readContact($data) {
+    // Read out contact information
     if (count($data) >= 3) {
         if ($result = readContactQuery($data[2])) {
             output(returnContactDetails($result));
@@ -115,6 +116,7 @@ function readContact($data) {
 }
 
 function searchContacts($data) {
+    // Lookup contact based on their name
     $searchTerm = $data[2] ?? null;
     if ($results = searchContactsQuery($searchTerm)) {
         output(returnContactSearchResults($results));

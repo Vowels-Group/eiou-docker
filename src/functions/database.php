@@ -396,8 +396,7 @@ function insertDebug($data) {
 
 function insertP2pRequest($request, $destinationAddress = null) {
     global $pdo;
-    // Output and potentially trim the destination address
-    //output("Destination Address: " . ($destinationAddress ?? 'None') . "\n");
+
     try {
         $stmt = $pdo->prepare("INSERT INTO p2p (
             hash, 
@@ -459,7 +458,6 @@ function insertP2pRequest($request, $destinationAddress = null) {
     } catch (PDOException $e) {
         // Handle database error
         error_log("Error inserting p2p request: " . $e->getMessage());
-        //echo "Failed to insert p2p request: " . $e->getMessage() . "\n";
         return json_encode(["status" => "rejected", "message" => "Failed to have p2p be received: " . $e->getMessage()]);
     }
 }
@@ -505,7 +503,7 @@ function insertRp2pRequest ($request){
 }
 
 function insertTransaction($request) {
-    //wait a little to prevent tight access, removes issue duplicate previousTxid
+    //wait a little to prevent tight access
     usleep(500000);
     global $pdo;
     // Calculate public key hashes
