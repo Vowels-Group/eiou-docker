@@ -93,7 +93,7 @@ function changeSettings() {
     $config_content = file_get_contents('/etc/eiou/config.php');
     $config_content = preg_replace("/\['" . $key . "'\]\s*=\s*[^;]+;/", "['" . $key . "'] = " . (is_bool($value) ? ($value ? 'true' : 'false') : (is_string($value) ? "'" . $value . "'" : $value)) . ";", $config_content);
     file_put_contents('/etc/eiou/config.php', $config_content);
-    require_once("/etc/eiou/config.php"); // reload config TODO check if works
+    require_once("/etc/eiou/config.php"); // reload config 
     echo "Setting updated successfully.\n";
 }
 
