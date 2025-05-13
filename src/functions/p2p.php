@@ -83,7 +83,7 @@ function processQueuedP2pMessages() {
             // Send p2p request to all contacts
             foreach ($contacts as $contactAddress) {
                 $response = json_decode(send($contactAddress, $p2pPayload),true);
-                output("P2P response status: " . print_r($response,true),'SILENT');
+                output("P2P response status: " . print_r($response['status'],true),'SILENT');
             }
             if(isset($result['destination_address'])){
                 output("Sent Peers of Peers request to " . $contactsCount['tor'] . " tor contacts and " . $contactsCount['http'] . " http(s) contacts.", 'SILENT');
