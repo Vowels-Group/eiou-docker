@@ -21,6 +21,7 @@ function returnContactCreationWarning($message) {
 }
 
 function returnContactDetails($data) {
+    // Return contact details in a nice format
     return "Contact Details:\n" .
            "---------------\n" .
            "Address: " . $data['address'] . "\n" .
@@ -71,6 +72,7 @@ function returnContactSearchNoResults() {
 }
 
 function returnContactSearchResults ($data) {
+    // Return contact information in a nice format
     return "Search Results:\n" .
             "--------------------------------------------\n" .
             str_pad("Address", 56, ' ') . " | " . 
