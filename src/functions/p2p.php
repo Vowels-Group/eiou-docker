@@ -21,7 +21,6 @@ function checkAvailableFunds($request){
             echo buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit);
             return false;
         } 
-        return true;
     }
     return true;
 }
