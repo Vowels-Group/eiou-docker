@@ -9,6 +9,22 @@ function checkRequestLevel($request){
     return true;
 }
 
+function checkAvailableFunds($request){
+    // Check if p2p's destination is to user
+    if(!matchYourselfP2P($request, resolveUserAddressForTransport($request['senderAddress']))){
+        // Check if sender has enough 'credit' to facilitate eIOU
+        $requestedAmount = calculateRequestedAmount($request);
+        $availableFunds = calculateAvailableFunds($request);  
+        $creditLimit = getCreditLimit($request['senderPublicKey']);
+        if ($availableFunds < $requestedAmount) {
+            echo buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit);
+            return false;
+        } 
+        return true;
+    }
+    return true;
+}
+
 function handleP2pRequest($request) {
     global $user;
     $myAddress = resolveUserAddressForTransport($request['senderAddress']);  
@@ -21,13 +37,8 @@ function handleP2pRequest($request) {
         $response = json_decode(send($request['senderAddress'], $rP2pPayload),true);
         output("Transaction (RP2P) send result: " . print_r($response, true),'SILENT');
     } else{
-        // Check if sender has enough 'credit' to facilitate eIOU
+        // Calculate fees
         $requestedAmount = calculateRequestedAmount($request);
-        $availableFunds = calculateAvailableFunds($request);  
-        $creditLimit = getCreditLimit($request['senderPublicKey']);
-        if ($availableFunds < $requestedAmount) {
-            return buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit);
-        } 
         $request['feeAmount'] = $requestedAmount - $request['amount'];
         $request['amount'] = $requestedAmount; 
         insertP2pRequest($request, NULL);  // Insert p2p request
