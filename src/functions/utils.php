@@ -29,7 +29,7 @@ function changeSettings() {
     global $user;
     
     // Display current settings
-    displayCurrentSettings($user);
+    displayCurrentSettings();
     
     // Prompt user for which setting they want to change
     echo "Select the setting you want to change:\n";
@@ -93,11 +93,13 @@ function changeSettings() {
     $config_content = file_get_contents('/etc/eiou/config.php');
     $config_content = preg_replace("/\['" . $key . "'\]\s*=\s*[^;]+;/", "['" . $key . "'] = " . (is_bool($value) ? ($value ? 'true' : 'false') : (is_string($value) ? "'" . $value . "'" : $value)) . ";", $config_content);
     file_put_contents('/etc/eiou/config.php', $config_content);
+    require_once("/etc/eiou/config.php"); // reload config TODO check if works
     echo "Setting updated successfully.\n";
 }
 
-function displayCurrentSettings($user) {
+function displayCurrentSettings() {
     // Display current settings of user
+    global $user;
     echo "Current Settings:\n";
     echo "Default fees: " . $user['defaultFee'] . "\n";
     echo "Default currency: " . $user['defaultCurrency'] . "\n";
@@ -246,7 +248,7 @@ function output($message, $level = 'ECHO') {
     if (isset($user['debug']) && $user['debug'] === true) {
         $data = [
             'level' => $level,
-            'message' => "(".microtime(true) . ") " .trim($message),
+            'message' => trim($message),
             'context' => getContext(),
             'file' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0]['file'],
             'line' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1)[0]['line'],
