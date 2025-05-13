@@ -56,7 +56,7 @@ function isTorAddress($address) {
 }
 
 function validateRequestLevel($request){
-    return $request['requestLevel'] < $request['maxRequestLevel'];
+    return $request['requestLevel'] <= $request['maxRequestLevel'];
 }
 
 function validateSendRequest($data) {
