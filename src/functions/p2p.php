@@ -16,7 +16,7 @@ function handleP2pRequest($request) {
         $response = json_decode(send($request['senderAddress'], $rP2pPayload),true);
         output("Transaction (RP2P) send result: " . print_r($response, true),'SILENT');
     } else{
-        // Check if sender has enough 'credit' to facilitate IOU
+        // Check if sender has enough 'credit' to facilitate eIOU
         $requestedAmount = calculateRequestedAmount($request);
         $availableFunds = calculateAvailableFunds($request);  
         $creditLimit = getCreditLimit($request['senderPublicKey']);
@@ -36,6 +36,7 @@ function prepareP2pRequestData($request) {
     global $user;
     output("Prepare send p2p data: " . print_r($request, true), 'SILENT');
     
+    // Check if the address of the recipient was supplied
     if (!isset($request[2])) {
         output("$request[2] (receiverAddress) is not set: " . print_r($request, true),'SILENT');
         die;
@@ -53,21 +54,23 @@ function prepareP2pRequestData($request) {
     $data['hash'] = hash('sha256', $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
     output("Generated p2pHash: " . $data['hash'], 'SILENT'); // Added verbose output
     output("p2pHash components: " . ", receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time'], 'SILENT'); // Detailed verbose output
-    $data['randomNumber'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // todo: lower bound should be private (generated in fresh install and put in config file) or generated for each contact
+    $data['randomNumber'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // TODO: lower bound should be private (generated in fresh install and put in config file) or generated for each contact
     $data['maxRequestLevel'] = $data['randomNumber'] + $user['maxP2pLevel'] - 1; // Handle off by 1 in request calculation
-    
     return $data;
 }
 
 function processQueuedP2pMessages() {
     global $user;
-    // Select queued messages from the p2p table
-    foreach (retrieveQueuedP2pMessages() as $message) {
-        // Build p2p request payload
-        $p2pPayload = buildP2pPayload($message);
+    // Select queued messages from the p2p table (with status queued)
+    $queuedMessages = retrieveQueuedP2pMessages();
+
+    //echo "Found " . count($queuedMessages) . "p2p 'sent' messages to check\n";
+
+    // Process each queued message
+    foreach ($queuedMessages as $message) {     
+        $p2pPayload = buildP2pPayload($message); // Build p2p request payload
         // If recipient is a contact send p2p directly
-        if($matchedContact = matchContact($message)){
-            
+        if($matchedContact = matchContact($message)){  
             $response = json_decode(send($matchedContact['address'], $p2pPayload),true);
             output("P2P send result for matched contact: " . print_r($response,true),'SILENT');            
         }else{
@@ -96,8 +99,7 @@ function processQueuedP2pMessages() {
 
 function sendP2pRequest($data) {
     global $user;
-    // Prepare p2p request payload
-    $p2pPayload = buildP2pPayload(prepareP2pRequestData($data));
+    $p2pPayload = buildP2pPayload(prepareP2pRequestData($data));     // Prepare p2p request payload
     output("Inserting p2p request with receiverAddress: " . print_r($data[2], TRUE), 'SILENT');
     insertP2pRequest($p2pPayload, $data[2]); // Save the p2p request 
     updateP2pRequestStatus($p2pPayload['hash'], 'queued'); // Update the p2p request status to queued

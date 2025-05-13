@@ -12,7 +12,7 @@ while ! mysqladmin ping -h localhost --silent; do
     sleep 1
 done
 
-
+# Check if all precursors to messages.php are available and working
 while true; do
     if (( $(php -r 'require("//etc//eiou//functions//messageCheck.php"); echo $passed;') )); then
         echo "Message processing check completed successfully."  

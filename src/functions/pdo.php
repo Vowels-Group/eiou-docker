@@ -7,6 +7,7 @@ function createPDOConnection() {
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         return $pdo;
     } catch (PDOException $e) {
+        // Handle PDO connection failure
         echo json_encode(["status" => "error", "message" => "Database connection failed: " . $e->getMessage()]);
         exit();
     }

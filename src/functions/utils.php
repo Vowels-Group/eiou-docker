@@ -1,23 +1,26 @@
 <?php
 
 function calculateAvailableFunds($request){
-    $totalSent = calculateTotalSent($request['senderPublicKey']);
-    $totalReceived = calculateTotalReceived($request['senderPublicKey']);
-    $theirCurrentBalance = $totalSent - $totalReceived;
+    // Calculate funds request's sender has available with user
+    $totalSent = calculateTotalSent($request['senderPublicKey']);   // Calculate IOUs sent to sender
+    $totalReceived = calculateTotalReceived($request['senderPublicKey']); // Calulcate IOUs received from sender
+    $theirCurrentBalance = $totalSent - $totalReceived; 
     $senderContact = lookupContactByAddress($request['senderAddress']);
-    $creditLimit = getCreditLimit($senderContact['pubkey']);
+    $creditLimit = getCreditLimit($senderContact['pubkey']);    // Get senders credit limit with user
     return $theirCurrentBalance + $creditLimit;
 }
 
 function calculateRequestedAmount($request) {
+    // Calculate total amount needed for p2p through user
     global $user;
     $senderContact = lookupContactByAddress($request['senderAddress']);
     $fee = ($senderContact ? $senderContact['fee_percent'] : $user['defaultFee']) / 10000; //convert back to percent for math
-    $request['feeAmount'] = round($request['amount'] * $fee);
+    $request['feeAmount'] = round($request['amount'] * $fee);   // Caculate fee on the amount sender wants sent
     return $request['amount'] + $request['feeAmount'];
 }
 
 function removeTransactionFee($request){
+    // Remove users transaction fee from request
     $p2p = getP2pByHash($request['memo']);
     return $request['amount'] - $p2p['my_fee_amount'];
 }
@@ -94,6 +97,7 @@ function changeSettings() {
 }
 
 function displayCurrentSettings($user) {
+    // Display current settings of user
     echo "Current Settings:\n";
     echo "Default fees: " . $user['defaultFee'] . "\n";
     echo "Default currency: " . $user['defaultCurrency'] . "\n";
@@ -104,6 +108,7 @@ function displayCurrentSettings($user) {
 }
 
 function displayHelp() {
+    // Display available commands to user in the CLI
     echo "\n\nAvailable commands:\n";
     echo "add [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
     echo "read [address] - Read contact information.\n";
@@ -122,6 +127,7 @@ function displayHelp() {
 }
 
 function displayUserInfo($user) {
+    // Display user information
     echo "User Information:\n";
     
     // Locators array
@@ -203,46 +209,32 @@ function getContext(){
 
 function matchContact($request) {
     $contacts = retrieveContacts();
+    // Check if end recipient of request in contacts
     foreach ($contacts as $contact) {
         $contactHash = hash('sha256', $contact['address'] . $request['salt'] . $request['time']);
-        output("Calculating contact hash: address=" . $contact['address'] . ", salt=" . $request['salt'] . ", time=" . $request['time'], 'SILENT');
-        output("Calculated contact hash: " . $contactHash, 'SILENT');
+        // output("Calculating contact hash: address=" . $contact['address'] . ", salt=" . $request['salt'] . ", time=" . $request['time'], 'SILENT');
+        // output("Calculated contact hash: " . $contactHash, 'SILENT');
         if ($contactHash === $request['hash']) {
-            output("Contact matched!",'SILENT');
+            output("Contact matched with hash: " . $contactHash, 'SILENT');
             return $contact;
         }
     }
 }
 
-// function matchContactMemo($request,$salt) {
-//     $contacts = retrieveContacts();
-//     foreach ($contacts as $contact) {
-//         $contactHash = hash('sha256', $contact['address'] . $salt . $request['time']);
-//         output("Calculating contact hash: address=" . $contact['address'] . ", salt=" . $salt . ", time=" . $request['time'], 'SILENT');
-//         output("Calculated contact hash: " . $contactHash, 'SILENT');
-//         if ($contactHash === $request['memo']) {
-//             output("Contact matched!",'SILENT');
-//             return $contact;
-//         }
-//     }
-// }
-
 function matchYourselfP2P($request,$address){
+    // Check if p2p end recipient is user
     if(hash('sha256', $address . $request['salt'] . $request['time']) === $request['hash']){
-        //output("For me",'SILENT');
         return true;
     }
-    //output("Not for me!",'SILENT');
     return false;
 }
 
 function matchYourselfTransaction($request,$address){
+    // Check if transaction end recipient is user
     $p2pRequest = lookupP2pRequest($request['memo']);
     if( hash('sha256', $address . $p2pRequest['salt'] . $request['time']) === $request['memo']) {
-        //output("For me",'SILENT');
         return true;
     }
-    //output("Not for me!",'SILENT');
     return false;
 }
 
@@ -290,6 +282,7 @@ function setupErrorLogging() {
 }
 
 function sign($payload){
+  // Add signature to payload
   global $user;
   $privateKey = $user['private'];
   // Step 1: Get the private key resource
@@ -308,6 +301,7 @@ function sign($payload){
 }
 
 function verifyRequest($request) {
+    // Check if request is valid based on signature
     $publicKeyResource = openssl_pkey_get_public($request['senderPublicKey']);
     $verified = openssl_verify($request['message'], base64_decode($request['signature']), $publicKeyResource);
     

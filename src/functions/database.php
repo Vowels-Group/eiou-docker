@@ -504,7 +504,7 @@ function insertRp2pRequest ($request){
 
 function insertTransaction($request) {
     //wait a little to prevent tight access
-    usleep(500000);
+    usleep(500000); // Sleep for 500ms (0.5 seconds)
     global $pdo;
     // Calculate public key hashes
     $senderPublicKeyHash = hash('sha256', $request['senderPublicKey']);

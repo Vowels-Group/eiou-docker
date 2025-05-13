@@ -9,9 +9,6 @@ require_once("/etc/eiou/config.php");
 
 
 // Accept incoming connection and decode request
-
-//output("TYPE: " . print_r($_GET['type']), 'SILENT');
-
 $request = json_decode($_GET['payload'], true);
 
 // Verify the request signature before processing
@@ -24,13 +21,11 @@ $pdo = createPDOConnection();
 
 if ($request['type'] == "create") {
   // Handle contact request
-  #output("Processing create request " . print_r($request, TRUE), 'SILENT');
-  output("Processing create request", 'SILENT');
+  output("Processing create request from " . print_r($request['senderAddress'],true) , 'SILENT');
   echo handleContactCreation($request);  
 }
 elseif ($request['type'] == "send") {
   // Handle eIOU
-  #output("Processing send request " . print_r($request, TRUE), 'SILENT');
   output("Processing send request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
   if(!checkExistence($request)){
     processTransaction($request);
@@ -52,6 +47,7 @@ elseif ($request['type'] == "rp2p") {
   }
 }
 else {
+  // Handle unknown request type
   output("Processing nonstandard request", 'SILENT');
   echo json_encode([
       'error' => 2,

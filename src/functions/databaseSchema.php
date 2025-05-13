@@ -89,7 +89,7 @@ function getTransactionsTableSchema() {
             'p2p'
         ) DEFAULT 'standard',
         status ENUM(
-            'pending',  /* Transaction has been created */
+            'pending',  /* Transaction has been created (NOTE: not in use currently)*/ 
             'accepted', /* Transaction has been accepted by peer */
             'rejected', /* Transaction has been rejected by peer */
             'completed' /* Transaction has been accepted by final recipient */
