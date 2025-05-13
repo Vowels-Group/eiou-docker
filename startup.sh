@@ -1,6 +1,6 @@
-# Copyright 2025
-
 #!/bin/bash
+
+# Copyright 2025
 
 # Start services
 service cron start
