@@ -1,8 +1,8 @@
 <?php
 
 function prepareSendData($request) {
+    // Prepare initial request payload for direct transaction
     output("Prepare send data: " . print_r($request, true), 'SILENT');
-
     $data['txType'] = 'standard';
     $data['time'] = time();
     $data['amount'] = round($request[3] * 100); // Convert to cents
@@ -39,39 +39,43 @@ function processTransaction($request) {
     } else {
         $memo = $request['memo'];
         $rP2pResult  = checkRP2pExists($memo);
+
+        // Check if rp2p exists and corresponds to transaction
         if(isset($rP2pResult) && $memo === $rP2pResult['hash']){  
             $request['receiverAddress'] = $rP2pResult['sender_address'];
             $request['receiverPublicKey'] = $rP2pResult['sender_public_key'];
             $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']); 
-            //remove my transaction fee and send remainder onwards
+            
+            // Remove my transaction fee
             $request['amount'] = removeTransactionFee($request); 
+            
+            // Add previousTxid reflecting whom sent the transaction
             $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
             
             $payload = buildSendPayload($request);
-            updateP2pRequestStatus($memo,'paid');
+            updateP2pRequestStatus($memo,'paid'); // Update p2p status to paid
             output("Sending Transaction onwards to: " . $request['receiverAddress'],'SILENT');
             $response = json_decode(send($request['receiverAddress'], $payload),true);         
-            output("Received Transaction response Transaction with status: " . $response['status'],'SILENT');
+            output("Received Transaction response with status: " . $response['status'],'SILENT');
             //output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true),'SILENT'); 
             if (isset($response['status']) && $response['status'] === 'accepted') {
-                updateP2pRequestStatus($memo,'completed');
+                updateP2pRequestStatus($memo,'completed'); // Update p2p status to completed
                 $insertTransactionResponse = insertTransaction($request);
-                updateTransactionStatus($memo,'completed');
+                updateTransactionStatus($memo,'completed'); // Update transaction status to completed
                 return $insertTransactionResponse;
             }
         } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
             output("Transaction for me, inserting",'SILENT');
             $request['previousTxid'] = getPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']); 
-            updateP2pRequestStatus($memo,'completed');
+            updateP2pRequestStatus($memo,'completed'); // Update p2p status to completed
             $insertTransactionResponse = insertTransaction($request);
-            updateTransactionStatus($memo,'completed');
+            updateTransactionStatus($memo,'completed'); // Update transaction status to completed
             return $insertTransactionResponse;
         }
     }
 }
 
 function send($recipient, $payload){
-   
     // Encode the payload as JSON
     $signedPayload = json_encode(sign($payload));
     // Determine if tor address, else send by http
@@ -87,7 +91,7 @@ function sendByHttp ($recipient, $signedPayload) {
     
     // Determine the protocol based on the recipient format
     $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'http://';
-    
+
     curl_setopt($ch, CURLOPT_URL, $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
@@ -136,11 +140,11 @@ function sendEiou($request = null) {
         // Prepare transaction payload
         $payload = buildSendPayload($data);
         $response = json_decode(send($data['receiverAddress'], $payload), true);
-        output("SendEiou response status: " . print_r($response,true),'SILENT');
+        output("SendEiou response status: " . print_r($response['status'],true),'SILENT');
         if (isset($response['status']) && $response['status'] === 'accepted' && (isset($response['txid']) && $response['txid'] === $data['txid'])) {
             // Transaction accepted, now insert into database
             insertTransaction($payload);
-            updateTransactionStatus($payload['memo'],'completed');
+            updateTransactionStatus($payload['memo'],'completed'); // Update transaction status to completed
         } else {
             output ("Not enough credit with this user, trying p2p with data: " . print_r($request, true),'SILENT');
             sendP2pRequest($request);
@@ -155,11 +159,6 @@ function sendP2pEiou($request) {
     global $user;
     output("Getting ready to send P2p eIOU with memo: " . print_r($request['memo'], true),'SILENT');
 
-    //Add some validation to make sure is a valid rp2p
-    // TODO
-
-
-
     $request['receiverAddress'] = $request['senderAddress'];
     $request['receiverPublicKey'] = $request['senderPublicKey'];
 
@@ -168,21 +167,21 @@ function sendP2pEiou($request) {
 
     // Prepare transaction payload
     $payload = buildSendPayload($request);
-    updateP2pRequestStatus($payload['memo'],'paid');
+    updateP2pRequestStatus($payload['memo'],'paid'); // Update p2p status to paid
     $response = json_decode(send($request['receiverAddress'], $payload),true);
-    output("SendP2PEiou response status: " . print_r($response,true),'SILENT');
+    output("SendP2PEiou response status: " . print_r($response['status'],true),'SILENT');
     if (isset($response['status']) && $response['status'] === 'accepted') {
         // Transaction accepted, now insert into database
         output("Inserting Transaction",'SILENT');
         insertTransaction($payload);
-        updateP2pRequestStatus($payload['memo'],'completed');
-        // 'memo' here is by definition "standard", so we need the 'hash'
-        updateTransactionStatus($payload['memo'],'completed');
+        updateP2pRequestStatus($payload['memo'],'completed'); // Update p2p status to completed
+        // Note 'memo' here is by definition "standard", so we need the 'hash'
+        updateTransactionStatus($payload['memo'],'completed'); // Update transaction status to completed
     } 
     else{
-        // maybe not 'cancelled' if no response, try again?
-        updateP2pRequestStatus($payload['memo'],'cancelled');
-        updateTransactionStatus($payload['memo'],'rejected');
+        // TODO maybe not 'cancelled' if no response, try again?
+        updateP2pRequestStatus($payload['memo'],'cancelled'); // Update p2p status to cancelled
+        updateTransactionStatus($payload['memo'],'rejected'); // Update transaction status to rejected
     }
 }
 
