@@ -59,7 +59,7 @@ function processTransaction($request) {
             output("Received Transaction response with status: " . $response['status'],'SILENT');
             //output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true),'SILENT'); 
             if (isset($response['status']) && $response['status'] === 'accepted') {
-                updateP2pRequestStatus($memo,'completed'); // Update p2p status to completed
+                updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
                 $insertTransactionResponse = insertTransaction($request);
                 updateTransactionStatus($memo,'completed'); // Update transaction status to completed
                 return $insertTransactionResponse;
@@ -67,7 +67,7 @@ function processTransaction($request) {
         } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
             output("Transaction for me, inserting",'SILENT');
             $request['previousTxid'] = getPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']); 
-            updateP2pRequestStatus($memo,'completed'); // Update p2p status to completed
+            updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
             $insertTransactionResponse = insertTransaction($request);
             updateTransactionStatus($memo,'completed'); // Update transaction status to completed
             return $insertTransactionResponse;
@@ -174,7 +174,7 @@ function sendP2pEiou($request) {
         // Transaction accepted, now insert into database
         output("Inserting Transaction",'SILENT');
         insertTransaction($payload);
-        updateP2pRequestStatus($payload['memo'],'completed'); // Update p2p status to completed
+        updateP2pRequestStatus($payload['memo'],'completed',true); // Update p2p status to completed
         // Note 'memo' here is by definition "standard", so we need the 'hash'
         updateTransactionStatus($payload['memo'],'completed'); // Update transaction status to completed
     } 
