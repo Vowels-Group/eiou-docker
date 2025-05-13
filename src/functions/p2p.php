@@ -1,5 +1,15 @@
 <?php
 
+function checkRequestLevel($request){
+    // Check validatity of p2p request
+    if(!validateRequestLevel($request)){
+        echo buildInvalidRequestLevelPayload($request);
+        return true; // true to refer it as a problem   
+    } else{
+        return false;
+    }
+}
+
 function handleP2pRequest($request) {
     global $user;
     $myAddress = resolveUserAddressForTransport($request['senderAddress']);  
