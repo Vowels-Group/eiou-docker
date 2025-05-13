@@ -152,6 +152,11 @@ function checkExistence($request, $echo = true){
     $type = $request['type'];
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     try {       
+        if($type == 'p2p'){
+            if(!checkRequestLevel($request) || !checkAvailableFunds($request)){
+                return true; 
+            }
+        }
         if($type == 'send'){
             $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :hash");
             $hash = $request['memo'];
