@@ -51,6 +51,7 @@ docker exec eioud8http eiou add http://eioud7http eioud7http 0.1 1000 USD
 docker exec eioud8http eiou add http://eioud9http eioud9http 0.1 1000 USD
 docker exec eioud9http eiou add http://eioud8http eioud8http 0.1 1000 USD
 
+
 # try to send payment from eioud0http to all others
 docker exec eioud0http eiou send http://eioud1http 100 USD
 docker exec eioud0http eiou send http://eioud2http 100 USD
