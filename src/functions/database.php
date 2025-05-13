@@ -241,7 +241,7 @@ function freshInstall(){
         $defaultConfig .= "\$user['defaultCurrency'] = 'USD'; // Default currency\n";
         $defaultConfig .= "\$user['localhostOnly'] = true; // Network connection limited to localhost only\n";
         $defaultConfig .= "\$user['maxFee'] = 5; // Maximum total fee for a transaction in percent\n";
-        $defaultConfig .= "\$user['maxP2pLevel'] = 6; // Default maximum level for Peer of Peer propagation\n";
+        $defaultConfig .= "\$user['maxP2pLevel'] = 1; // Default maximum level for Peer of Peer propagation\n";
         $defaultConfig .= "\$user['p2pExpiration'] = 300; // Default expiration time for Peer of Peer requests in seconds\n";
         $defaultConfig .= "\$user['debug'] = true; // Enable debug mode\n";
 
@@ -453,7 +453,7 @@ function insertP2pRequest($request, $destinationAddress = null) {
         $stmt->bindParam(':outgoing_txid', $request['outgoing_txid']);
         $stmt->bindParam(':status', $status);
         $stmt->execute();
-        output("Iserted P2P with hash: " .print_r($request['hash'],true),'SILENT');
+        output("Inserted P2P with hash: " .print_r($request['hash'],true),'SILENT');
         return json_encode(["status" => "received", "message" => "p2p sent & received successfully"]);
     } catch (PDOException $e) {
         // Handle database error
@@ -561,7 +561,7 @@ function insertTransaction($request) {
         // Execute the insert
         $insertStmt->execute();
         // Respond with accepted status
-        output("Iserted Transaction with memo: " .print_r($request['memo'],true),'SILENT');
+        output("Inserted Transaction with memo: " .print_r($request['memo'],true),'SILENT');
         return json_encode(["status" => "accepted", "message" => "Transaction recorded successfully","txid" => $request['txid']]);
     } catch (PDOException $e) {
         // Handle database error
