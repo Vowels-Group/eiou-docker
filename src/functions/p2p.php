@@ -2,10 +2,6 @@
 
 function handleP2pRequest($request) {
     global $user;
-    // Validate request
-    if(!validateRequestLevel($request)){
-        return buildInvalidRequestLevelPayload($request);
-    }
     $myAddress = resolveUserAddressForTransport($request['senderAddress']);  
     // Check if p2p's destination is to user
     if(matchYourselfP2P($request,$myAddress)){
@@ -83,9 +79,9 @@ function processQueuedP2pMessages() {
             // Send p2p request to all contacts
             foreach ($contacts as $contactAddress) {
                 $response = json_decode(send($contactAddress, $p2pPayload),true);
-                output("P2P response status: " . print_r($response['status'],true),'SILENT');
+                output("P2P response status: " . print_r($response['status'],true) . " for contact " . print_r($contactAddress,true),'SILENT');
             }
-            if(isset($result['destination_address'])){
+            if(isset($message['destination_address'])){
                 output("Sent Peers of Peers request to " . $contactsCount['tor'] . " tor contacts and " . $contactsCount['http'] . " http(s) contacts.", 'SILENT');
                 //Inform user about expected response time
                 $httpExpectedResponseTime = $user['maxP2pLevel']; // Use maxP2pLevel seconds for http
