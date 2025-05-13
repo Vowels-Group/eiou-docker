@@ -151,7 +151,7 @@ function checkExistence($request, $echo = true){
     global $pdo;
     $type = $request['type'];
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
-    try {
+    try {       
         if($type == 'send'){
             $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :hash");
             $hash = $request['memo'];
@@ -241,7 +241,7 @@ function freshInstall(){
         $defaultConfig .= "\$user['defaultCurrency'] = 'USD'; // Default currency\n";
         $defaultConfig .= "\$user['localhostOnly'] = true; // Network connection limited to localhost only\n";
         $defaultConfig .= "\$user['maxFee'] = 5; // Maximum total fee for a transaction in percent\n";
-        $defaultConfig .= "\$user['maxP2pLevel'] = 1; // Default maximum level for Peer of Peer propagation\n";
+        $defaultConfig .= "\$user['maxP2pLevel'] = 6; // Default maximum level for Peer of Peer propagation\n";
         $defaultConfig .= "\$user['p2pExpiration'] = 300; // Default expiration time for Peer of Peer requests in seconds\n";
         $defaultConfig .= "\$user['debug'] = true; // Enable debug mode\n";
 
