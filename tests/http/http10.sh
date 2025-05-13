@@ -63,16 +63,16 @@ wait_for_container() {
     done
 }
 
-wait_for_container eioud-0-http
-wait_for_container eioud-1-http
-wait_for_container eioud-2-http
-wait_for_container eioud-3-http
-wait_for_container eioud-4-http
-wait_for_container eioud-5-http
-wait_for_container eioud-6-http
-wait_for_container eioud-7-http
-wait_for_container eioud-8-http
-wait_for_container eioud-9-http
+# wait_for_container eioud-0-http
+# wait_for_container eioud-1-http
+# wait_for_container eioud-2-http
+# wait_for_container eioud-3-http
+# wait_for_container eioud-4-http
+# wait_for_container eioud-5-http
+# wait_for_container eioud-6-http
+# wait_for_container eioud-7-http
+# wait_for_container eioud-8-http
+# wait_for_container eioud-9-http
 
 echo "Generate pubkeys and set hostnames..."
 docker exec eioud-0-http eiou generate http://eioud-0-http
@@ -94,6 +94,21 @@ docker exec eioud-0-http eiou add http://eioud-1-http eioud-1-http 0.1 1000 USD
 docker exec eioud-1-http eiou add http://eioud-0-http eioud-0-http 0.1 1000 USD
 docker exec eioud-1-http eiou add http://eioud-2-http eioud-2-http 0.1 1000 USD
 docker exec eioud-2-http eiou add http://eioud-1-http eioud-1-http 0.1 1000 USD
+docker exec eioud-2-http eiou add http://eioud-3-http eioud-3-http 0.1 1000 USD
+docker exec eioud-3-http eiou add http://eioud-2-http eioud-2-http 0.1 1000 USD
+docker exec eioud-3-http eiou add http://eioud-4-http eioud-4-http 0.1 1000 USD
+docker exec eioud-4-http eiou add http://eioud-3-http eioud-3-http 0.1 1000 USD
+docker exec eioud-4-http eiou add http://eioud-5-http eioud-5-http 0.1 1000 USD
+docker exec eioud-5-http eiou add http://eioud-4-http eioud-4-http 0.1 1000 USD
+docker exec eioud-5-http eiou add http://eioud-6-http eioud-6-http 0.1 1000 USD
+docker exec eioud-6-http eiou add http://eioud-5-http eioud-5-http 0.1 1000 USD
+docker exec eioud-6-http eiou add http://eioud-7-http eioud-7-http 0.1 1000 USD
+docker exec eioud-7-http eiou add http://eioud-6-http eioud-6-http 0.1 1000 USD
+docker exec eioud-7-http eiou add http://eioud-8-http eioud-8-http 0.1 1000 USD
+docker exec eioud-8-http eiou add http://eioud-7-http eioud-7-http 0.1 1000 USD
+docker exec eioud-8-http eiou add http://eioud-9-http eioud-9-http 0.1 1000 USD
+docker exec eioud-9-http eiou add http://eioud-8-http eioud-8-http 0.1 1000 USD
+
 
 echo "Sending money..."
 docker exec eioud-0-http eiou send http://eioud-1-http 100 USD
@@ -103,6 +118,7 @@ docker exec eioud-0-http eiou send http://eioud-4-http 100 USD
 docker exec eioud-0-http eiou send http://eioud-5-http 100 USD
 docker exec eioud-0-http eiou send http://eioud-6-http 100 USD
 docker exec eioud-0-http eiou send http://eioud-7-http 100 USD # payment should fail - too far
+
 
 echo "Checking errors..."
 docker exec eioud-0-http cat /var/log/php_errors.log
