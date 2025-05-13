@@ -60,12 +60,11 @@ function processQueuedRP2pMessages() {
             $rP2pPayload = buildRP2pPayload($rP2pResult); // Build rp2p payload
             updateP2pRequestStatus($message['hash'], 'found'); // Update the p2p request status to found
             $response = json_decode(send($message['sender_address'], $rP2pPayload),true);
-            output("RP2P response status: " . print_r($response['status'],true),'SILENT');
+            output("RP2P response: " . print_r($response,true),'SILENT');
         } elseif(time() > $message['expiration']){
             // If no response after set amount of time, expire the p2p request
             updateP2pRequestStatus($message['hash'], 'expired');
             output("P2P request with hash: " . print_r($message['hash'],true) . " has expired",'SILENT');
-        }
-                  
+        }              
     }
 }

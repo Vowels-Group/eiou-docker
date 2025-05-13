@@ -36,7 +36,7 @@ function handleP2pRequest($request) {
         // Build and send corresponding rp2p request payload to sender of p2p
         $rP2pPayload = buildRP2pPayload($request);
         $response = json_decode(send($request['senderAddress'], $rP2pPayload),true);
-        output("Transaction (RP2P) send result: " . print_r($response, true),'SILENT');
+        output("Transaction (RP2P) send response: " . print_r($response, true),'SILENT');
     } else{
         // Calculate fees
         $requestedAmount = calculateRequestedAmount($request);
@@ -100,7 +100,7 @@ function processQueuedP2pMessages() {
             // Send p2p request to all contacts
             foreach ($contacts as $contactAddress) {
                 $response = json_decode(send($contactAddress, $p2pPayload),true);
-                output("P2P response status: " . print_r($response['status'],true) . " for contact " . print_r($contactAddress,true),'SILENT');
+                output("P2P response: " . print_r($response,true) . " for contact " . print_r($contactAddress,true),'SILENT');
             }
             if(isset($message['destination_address'])){
                 output("Sent Peers of Peers request to " . $contactsCount['tor'] . " tor contacts and " . $contactsCount['http'] . " http(s) contacts.", 'SILENT');

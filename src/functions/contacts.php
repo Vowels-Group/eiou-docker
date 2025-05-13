@@ -1,4 +1,5 @@
 <?php
+# Copyright 2025
 
 function addContact($data) {
     global $user;

@@ -57,7 +57,7 @@ function processTransaction($request) {
             updateP2pRequestStatus($memo,'paid'); // Update p2p status to paid
             output("Sending Transaction onwards to: " . $request['receiverAddress'],'SILENT');
             $response = json_decode(send($request['receiverAddress'], $payload),true);         
-            output("Received Transaction response with status: " . $response['status'],'SILENT');
+            output("Received Transaction response: " . $response,'SILENT');
             //output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true),'SILENT'); 
             if (isset($response['status']) && $response['status'] === 'accepted') {
                 updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
@@ -141,7 +141,7 @@ function sendEiou($request = null) {
         // Prepare transaction payload
         $payload = buildSendPayload($data);
         $response = json_decode(send($data['receiverAddress'], $payload), true);
-        output("SendEiou response status: " . print_r($response['status'],true),'SILENT');
+        output("SendEiou response: " . print_r($response,true),'SILENT');
         if (isset($response['status']) && $response['status'] === 'accepted' && (isset($response['txid']) && $response['txid'] === $data['txid'])) {
             // Transaction accepted, now insert into database
             insertTransaction($payload);
@@ -170,7 +170,7 @@ function sendP2pEiou($request) {
     $payload = buildSendPayload($request);
     updateP2pRequestStatus($payload['memo'],'paid'); // Update p2p status to paid
     $response = json_decode(send($request['receiverAddress'], $payload),true);
-    output("SendP2PEiou response status: " . print_r($response['status'],true),'SILENT');
+    output("SendP2PEiou response: " . print_r($response,true),'SILENT');
     if (isset($response['status']) && $response['status'] === 'accepted') {
         // Transaction accepted, now insert into database
         output("Inserting Transaction",'SILENT');

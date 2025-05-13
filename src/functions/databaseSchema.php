@@ -1,4 +1,5 @@
 <?php
+# Copyright 2025
 
 // Contacts table
 function getContactsTableSchema() {
