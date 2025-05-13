@@ -4,7 +4,7 @@ function checkRequestLevel($request){
     // Check validatity of p2p request
     if(!validateRequestLevel($request)){
         echo buildInvalidRequestLevelPayload($request);
-        return false; // true to refer it as a problem   
+        return false;   
     } 
     return true;
 }
