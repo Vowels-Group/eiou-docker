@@ -152,18 +152,21 @@ function checkExistence($request, $echo = true){
     $type = $request['type'];
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     try {       
-        if($type == 'p2p'){
-            if(!checkRequestLevel($request) || !checkAvailableFunds($request)){
-                return true; 
-            }
-        }
         if($type == 'send'){
+            if(!checkPreviousTxid($request)){
+                return true;
+            }
             $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :hash");
             $hash = $request['memo'];
-        } else{           
+        }else{
+            if($type == 'p2p'){
+                if(!checkRequestLevel($request) || !checkAvailableFunds($request)){
+                    return true; 
+                }
+            } 
             $Stmt = $pdo->prepare("SELECT * FROM $type WHERE hash = :hash");
             $hash = $request['hash'];
-        }  
+        }
         $Stmt->bindParam(':hash', $hash);
         $Stmt->execute();
         $results = $Stmt->fetch(PDO::FETCH_ASSOC);

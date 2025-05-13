@@ -1,6 +1,20 @@
 <?php
 # Copyright 2025
 
+function checkPreviousTxid($request){
+    // If a previous transaction exists, verify the previousTxid matches
+    if (isset($request['previousTxid']) && $previousTxResult = getPreviousTxid($request['senderPublicKey'], $request['receiverAddress'])) {
+        if ($previousTxResult !== $request['previousTxid']) {
+            echo json_encode([
+                "status" => "rejected", 
+                "message" => "Previous transaction ID does not match. Expecting: " . $previousTxResult['txid'] . " Received: " . $request['previousTxid']
+            ]);
+            return false;
+        }
+    }
+    return true;
+}
+
 function prepareSendData($request) {
     // Prepare initial request payload for direct transaction
     output("Prepare send data: " . print_r($request, true), 'SILENT');
@@ -18,16 +32,6 @@ function processTransaction($request) {
     $totalSent = calculateTotalSent($request['senderPublicKey']);
     $totalReceived = calculateTotalReceived($request['senderPublicKey']);
     $currentBalance = $totalReceived - $totalSent; 
-    
-    // If a previous transaction exists, verify the previousTxid matches
-    if (isset($request['previousTxid']) && $previousTxResult = getPreviousTxid($request['senderPublicKey'], $request['receiverAddress'])) {
-        if ($previousTxResult !== $request['previousTxid']) {
-            return json_encode([
-                "status" => "rejected", 
-                "message" => "Previous transaction ID does not match. Expecting: " . $previousTxResult['txid'] . " Received: " . $request['previousTxid']
-            ]);
-        }
-    }
 
     // Get credit limit of sender
     $creditLimit = getCreditLimit($request['senderPublicKey']);
