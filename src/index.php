@@ -34,7 +34,6 @@ elseif ($request['type'] == "send") {
 elseif ($request['type'] == "p2p") {
   // Handle Peers of Peers Request
   output("Processing p2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
-  //output("Processing p2p request: " . print_r($request, TRUE), 'SILENT');
   if(!checkExistence($request)){
     handleP2pRequest($request);
   }
