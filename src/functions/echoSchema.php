@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025
+
 function returnContactAccepted() {
     return "Contact accepted.";
 }

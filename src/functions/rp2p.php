@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025
+
 function handleRp2pRequest($request) {
     global $user;
     

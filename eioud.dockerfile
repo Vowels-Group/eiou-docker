@@ -1,3 +1,5 @@
+# Copyright 2025
+
 FROM debian:latest
 
 # Install required packages for a LAMP server

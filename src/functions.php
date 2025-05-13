@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025
+
 // Require all files in the functions directory
 require_once 'functions/pdo.php';
 require_once 'functions/contacts.php';

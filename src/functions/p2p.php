@@ -1,4 +1,5 @@
 <?php
+# Copyright 2025
 
 function checkRequestLevel($request){
     // Check validatity of p2p request

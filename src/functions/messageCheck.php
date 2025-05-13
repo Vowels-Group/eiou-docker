@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025
+
 // Check if all needed precursors to messages.php are available and working
 $passed = false;
 try{

@@ -1,4 +1,5 @@
 <?php
+# Copyright 2025
 
 function buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit) {
     // Build rejection payload when balance is insufficient

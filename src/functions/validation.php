@@ -1,8 +1,5 @@
 <?php
-
-function checkP2pForContact($request) {
-    
-}
+# Copyright 2025
 
 function checkSingleInstance($lockfile = '/tmp/messages_lock.pid') {
     if (file_exists($lockfile)) {

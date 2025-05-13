@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025
+
 // This file accepts incoming messages from the eIOU network
 require_once("/etc/eiou/functions.php");
 if (!file_exists("/etc/eiou/config.php")) {

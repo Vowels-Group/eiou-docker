@@ -1,4 +1,5 @@
 <?php
+# Copyright 2025
 
 function calculateAvailableFunds($request){
     // Calculate funds request's sender has available with user

@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025
+
 function createPDOConnection() {
     global $user;
     try {

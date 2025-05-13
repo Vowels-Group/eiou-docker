@@ -1,4 +1,5 @@
 <?php
+# Copyright 2025
 
 function checkWalletExists($user, $request) {
     if ((!isset($user['public']) || !isset($user['private'])) && $request != 'generate' && $request != 'restore') {

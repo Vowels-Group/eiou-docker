@@ -1,4 +1,5 @@
 <?php
+# Copyright 2025
 
 function prepareSendData($request) {
     // Prepare initial request payload for direct transaction
