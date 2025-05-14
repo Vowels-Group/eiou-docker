@@ -178,7 +178,6 @@ function sendP2pEiou($request) {
     output("SendP2PEiou response: " . print_r($response,true),'SILENT');
     if (isset($response['status']) && $response['status'] === 'accepted') {
         // Transaction accepted, now insert into database
-        output("Inserting Transaction",'SILENT');
         insertTransaction($payload);
         updateP2pRequestStatus($payload['memo'],'completed',true); // Update p2p status to completed
         // Note 'memo' here is by definition "standard", so we need the 'hash'

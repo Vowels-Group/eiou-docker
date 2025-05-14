@@ -33,7 +33,7 @@ function handleRp2pRequest($request) {
             $rP2pAmount = $request['amount'];
             $feeAmount = $rP2pAmount - $p2pAmount;
             $feePercent = ($feeAmount / $p2pAmount) * 100;
-            output("They want a fee of " . $feePercent . " percent, for transaction with hash " . $request['hash'] .  ", my max fee is " . $user['maxFee'], 'SILENT');
+            output("They want a fee of " . $feePercent . " percent, for transaction with hash " . $request['hash'] .  ", my max fee is " . $user['maxFee'] . " percent", 'SILENT');
             
             // Check if the fee percent is below the set maximum fee percent the user would pay
             if ($feePercent <= $user['maxFee']) {

@@ -69,7 +69,7 @@ function prepareP2pRequestData($request) {
     $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
     $data['hash'] = hash('sha256', $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
     output("Generated p2pHash: " . $data['hash'], 'SILENT'); // Added verbose output
-    output("p2pHash components: " . ", receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time'], 'SILENT'); // Detailed verbose output
+    output("p2pHash components: " . "receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time'], 'SILENT'); // Detailed verbose output
     $data['randomNumber'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // TODO: lower bound should be private (generated in fresh install and put in config file) or generated for each contact
     $data['maxRequestLevel'] = $data['randomNumber'] + $user['maxP2pLevel'];    // Add upper bound to request level, using users max 
     return $data;
@@ -97,7 +97,7 @@ function processQueuedP2pMessages() {
             // Send p2p request to all contacts
             foreach ($contacts as $contactAddress) {
                 $response = json_decode(send($contactAddress, $p2pPayload),true);
-                output("P2P response: " . print_r($response,true) . " for contact " . print_r($contactAddress,true),'SILENT');
+                output("P2P response: " . print_r($response,true),'SILENT');
             }
             if(isset($message['destination_address'])){
                 output("Sent Peers of Peers request to " . $contactsCount['tor'] . " tor contacts and " . $contactsCount['http'] . " http(s) contacts.", 'SILENT');
