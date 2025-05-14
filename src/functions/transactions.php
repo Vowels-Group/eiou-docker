@@ -164,6 +164,7 @@ function sendP2pEiou($request) {
     global $user;
     output("Getting ready to send P2p eIOU with memo: " . print_r($request['memo'], true),'SILENT');
 
+    // Send transaction back to rp2p sender
     $request['receiverAddress'] = $request['senderAddress'];
     $request['receiverPublicKey'] = $request['senderPublicKey'];
 
@@ -190,10 +191,8 @@ function sendP2pEiou($request) {
     }
 }
 
-
-
-
 function viewBalances($data) {
+    // View balance information based on transactions
     global $pdo, $user;
     $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
     if (isset($data[2])) {

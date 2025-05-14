@@ -58,7 +58,7 @@ function processQueuedRP2pMessages() {
 
     //echo "Found " . count($queuedMessages) . "p2p 'sent' messages to check\n";
 
-    // Process each queued message
+    // Process each 'sent' or 'paid' message
     foreach ($queuedMessages as $message) {
         // Is message  'sent' or 'paid'
         if($message['status'] == 'sent'){

@@ -2,6 +2,7 @@
 # Copyright 2025
 
 function checkSingleInstance($lockfile = '/tmp/messages_lock.pid') {
+    // Handle single instance of lockfile
     if (file_exists($lockfile)) {
         $pid = file_get_contents($lockfile);
         if (posix_kill($pid, 0)) {
@@ -15,6 +16,7 @@ function checkSingleInstance($lockfile = '/tmp/messages_lock.pid') {
 }
 
 function countTorAndHttpAddresses($data){
+    // Count how many tor and http addresses
     $result = [
         'tor' => count(array_filter($data, 'isTorAddress')),
         'http' => count(array_filter($data, 'isHttpAddress')),
@@ -39,20 +41,24 @@ function determineTransportType($address) {
 }
 
 function isHttpAddress($address) {
+    // Check if is http address
     return preg_match('/^https?:\/\//', $address) === 1;
 }
 
 function isMe($address){
+    // Check if address is mine
     global $user;
     return (isset($user['torAddress']) && $user['torAddress'] === $address) || 
            (isset($user['hostname']) && $user['hostname'] === $address);
 }
 
 function isTorAddress($address) {
+    // Check if is tor address
     return preg_match('/\.onion$/', $address) === 1;
 }
 
 function validateRequestLevel($request){
+    // Check if request level is valid
     return $request['requestLevel'] <= $request['maxRequestLevel'];
 }
 
