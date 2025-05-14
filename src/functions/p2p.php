@@ -113,7 +113,7 @@ function processQueuedP2pMessages() {
 
 function sendP2pRequest($data) {
     global $user;
-    $p2pPayload = buildP2pPayload(prepareP2pRequestData($data));     // Prepare p2p request payload
+    $p2pPayload = buildP2pPayload(prepareP2pRequestData($data)); // Prepare p2p request payload
     output("Inserting p2p request with receiverAddress: " . print_r($data[2], TRUE), 'SILENT');
     insertP2pRequest($p2pPayload, $data[2]); // Save the p2p request 
     updateP2pRequestStatus($p2pPayload['hash'], 'queued'); // Update the p2p request status to queued

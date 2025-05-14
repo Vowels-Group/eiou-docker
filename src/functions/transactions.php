@@ -181,8 +181,7 @@ function sendP2pEiou($request) {
         insertTransaction($payload);
         updateP2pRequestStatus($payload['memo'],'completed',true); // Update p2p status to completed
         updateTransactionStatus($payload['memo'],'completed'); // Update transaction status to completed
-    } 
-    else{
+    } else{
         // TODO maybe not 'cancelled' if no response, try again?
         updateP2pRequestStatus($payload['memo'],'cancelled'); // Update p2p status to cancelled
         updateTransactionStatus($payload['memo'],'rejected'); // Update transaction status to rejected
