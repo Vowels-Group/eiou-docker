@@ -80,8 +80,6 @@ function processQueuedP2pMessages() {
     // Select queued messages from the p2p table (with status queued)
     $queuedMessages = retrieveQueuedP2pMessages();
 
-    //echo "Found " . count($queuedMessages) . "p2p 'sent' messages to check\n";
-
     // Process each queued message
     foreach ($queuedMessages as $message) {     
         $p2pPayload = buildP2pPayload($message); // Build p2p request payload

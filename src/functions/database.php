@@ -3,6 +3,7 @@
 
 function acceptContact($address, $name, $fee, $credit, $currency) {
     global $pdo;
+    // Accept Contact request
     $insertStmt = $pdo->prepare("UPDATE contacts SET name = :name, fee_percent = :fee, credit_limit = :credit, currency = :currency WHERE address = :address");
     $insertStmt->bindParam(':address', $address);
     $insertStmt->bindParam(':name', $name);
@@ -17,6 +18,7 @@ function acceptContact($address, $name, $fee, $credit, $currency) {
             return false;
         }
     } catch (PDOException $e) {
+        // Handle database error
         error_log("Error updating contact: " . $e->getMessage());
         return false;
     }
@@ -24,8 +26,10 @@ function acceptContact($address, $name, $fee, $credit, $currency) {
 
 function addPendingContact($address, $senderPublicKey) {
     global $pdo, $user;
+    // Add Contact that was pending
     $myPublicKey = $user['public'];
     $pubkey_hash = hash('sha256', $senderPublicKey);
+
     $insertStmt = $pdo->prepare("INSERT INTO contacts (address, pubkey, pubkey_hash, name, fee_percent, credit_limit, currency) VALUES (:address, :pubkey, :pubkey_hash, NULL, NULL, NULL, NULL)");
     $insertStmt->bindParam(':address', $address);
     $insertStmt->bindParam(':pubkey', $senderPublicKey);
@@ -38,6 +42,7 @@ function addPendingContact($address, $senderPublicKey) {
             return json_encode(["status" => "rejected", "message" => "Failed to add contact to database"]);
         }
     } catch (PDOException $e) {
+        // Handle database error
         error_log("Error adding contact: " . $e->getMessage());
         return json_encode(["status" => "error", "message" => "Failed to add contact due to a database error"]);
     }
@@ -45,16 +50,16 @@ function addPendingContact($address, $senderPublicKey) {
 
 function calculateTotalSent($publicKey) {
     global $pdo;
+    // Calculate total amount sent through transcations to publickey 
     try {
         $publicKeyHash = hash('sha256', $publicKey);
-        $receivedStmt = $pdo->prepare("SELECT SUM(amount) as total_sent 
-            FROM transactions 
-            WHERE receiver_public_key_hash = :publicKeyHash");
+        $receivedStmt = $pdo->prepare("SELECT SUM(amount) as total_sent FROM transactions WHERE receiver_public_key_hash = :publicKeyHash");
         $receivedStmt->bindParam(':publicKeyHash', $publicKeyHash);
         $receivedStmt->execute();
         $result = $receivedStmt->fetch(PDO::FETCH_ASSOC);
         return $result['total_sent'] ?: 0;
     } catch (PDOException $e) {
+        // Handle database error
         error_log("Error calculating total received: " . $e->getMessage());
         return 0;
     }
@@ -62,6 +67,7 @@ function calculateTotalSent($publicKey) {
 
 function calculateTotalReceived($publicKey) {
     global $pdo;
+    // Calculate total amount sent through transactions based on public key hash
     try {
         $publicKeyHash = hash('sha256', $publicKey);
         $balanceStmt = $pdo->prepare("SELECT SUM(amount) as total_received 
@@ -72,6 +78,7 @@ function calculateTotalReceived($publicKey) {
         $result = $balanceStmt->fetch(PDO::FETCH_ASSOC);
         return $result['total_received'] ?: 0;
     } catch (PDOException $e) {
+        // Handle database error
         error_log("Error calculating total sent: " . $e->getMessage());
         return 0;
     }
@@ -91,6 +98,7 @@ function checkAcceptedContact($address, $name) {
 
 function checkContactExists($address) {
     global $pdo;
+    // Check if contact exists in database
     $checkStmt = $pdo->prepare("SELECT * FROM contacts WHERE address = :address");
     $checkStmt->bindParam(':address', $address);
     $checkStmt->execute();
@@ -100,7 +108,7 @@ function checkContactExists($address) {
 
 function checkPendingContact($address) {
     global $pdo;
-    // Check if contact already exists in the database with a pending request
+    // Check if contact already exists in the database but is not yet accepted
     $checkQuery = "SELECT * FROM contacts WHERE address = :address AND name IS NULL";
     $stmt = $pdo->prepare($checkQuery);
     $stmt->bindParam(':address', $address);
@@ -129,29 +137,33 @@ function checkPendingContactRequests() {
             }
         }
     } catch (PDOException $e) {
+        // Handle database error
         error_log("Error checking pending contact requests: " . $e->getMessage());
     }
 }
 
 function getP2pByHash($hash){
     global $pdo;
+    // Get p2p from database based on hash
     try {
         $p2pStmt = $pdo->prepare("SELECT * FROM p2p WHERE hash = :hash");
         $p2pStmt->bindParam(':hash', $hash);
         $p2pStmt->execute();
         return $p2pStmt->fetch(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
+        // Handle database error
         error_log("Error retrieving p2p request by hash: " . $e->getMessage());
         return false;
     }
 }
 
-
 function checkExistence($request, $echo = true){
     global $pdo;
-    $type = $request['type'];
+    // Check if p2p/rp2p/transaction already exists in the database based on hash/memo
+    $type = $request['type']; // Get the type of request
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
-    try {       
+    try {    
+        // Check if request is a transaction   
         if($type == 'send'){
             if(!checkPreviousTxid($request)){
                 return true;
@@ -159,7 +171,9 @@ function checkExistence($request, $echo = true){
             $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :hash");
             $hash = $request['memo'];
         }else{
+            // Check if request is p2p
             if($type == 'p2p'){
+                // Check if p2p is valid and able to be accepted
                 if(!checkRequestLevel($request) || !checkAvailableFunds($request)){
                     return true; 
                 }
@@ -172,6 +186,7 @@ function checkExistence($request, $echo = true){
         $results = $Stmt->fetch(PDO::FETCH_ASSOC);
         if(!$results){
             if($echo){
+                // Return acceptance of request
                 if($type == 'send'){
                     echo json_encode(["status" => "accepted", "txid" => $request['txid'], "message" => "hash/memo " .  print_r($hash,true) . " for transaction received by " .  print_r($receiver,true)]);            
                 } else{
@@ -180,12 +195,14 @@ function checkExistence($request, $echo = true){
             }    
             return false;           
         } else{
+            // Return rejection of request
             if($echo){
                 echo json_encode(["status" => "rejected", "message" => "hash/memo " . print_r($hash,true) . " for " .  print_r($type,true) ." already exists in database of " .  print_r($receiver,true)]);
             }
             return true;
         }
     } catch (PDOException $e) {
+        // Handle database error
         error_log("Error retrieving existence of " .  print_r($type,true) .  " by hash/memo" . $e->getMessage());
         if($echo){
             echo json_encode(["status" => "rejected", "message" => "Could not access database of " .  print_r($receiver,true) . ", error: "  . $e->getMessage()]);
@@ -196,31 +213,22 @@ function checkExistence($request, $echo = true){
 
 function checkRP2pExists($hash) {
     global $pdo;
+    // Get rp2p request from database based on hash
     try {
         $rP2pCheckStmt = $pdo->prepare("SELECT * FROM rp2p WHERE hash = :hash");
         $rP2pCheckStmt->bindParam(':hash', $hash);
         $rP2pCheckStmt->execute();
         return $rP2pCheckStmt->fetch(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
+        // Handle database error
         error_log("Error checking rp2p request by hash: " . $e->getMessage());
         return false;
     }
 }
 
-function checkTransactionExists($memo) {
-    global $pdo;
-    try {
-        $TransactionCheckStmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :memo");
-        $TransactionCheckStmt->bindParam(':memo', $memo);
-        $TransactionCheckStmt->execute();
-        return $TransactionCheckStmt->fetch(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        error_log("Error checking rp2p request by hash: " . $e->getMessage());
-        return false;
-    }
-}
 function deleteContact($data) {
     global $pdo;
+    // Delete a contact
     $address = $data[2];
     $query = "DELETE FROM contacts WHERE address = :address";
     $stmt = $pdo->prepare($query);
@@ -292,6 +300,7 @@ function freshInstall(){
             $defaultConfig .= "\$user['dbPass'] = '$dbPass';\n";
 
         } catch (PDOException $e) {
+            // Handle database error
             error_log("Database setup error: " . $e->getMessage());
             echo "An error occurred during database setup. Please check the error log for details.\n";
             echo "Database setup error: " . $e->getMessage();
@@ -335,16 +344,10 @@ function getPreviousTxid($senderPublicKey, $receiverPublicKey) {
     $result = $prevTxStmt->fetch(PDO::FETCH_ASSOC);
     return $result ? $result['txid'] : null;
 }
-function getTransactionByMemo($memo){
-    global $pdo;
-    $getTxStmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :memo");
-    $getTxStmt->bindParam(':memo', $memo);
-    return $getTxStmt->fetch(PDO::FETCH_ASSOC);
-}
-
 
 function insertContact($address, $contactPublicKey, $name, $fee, $credit, $currency) {
     global $pdo;
+    // Insert a contact into database
     $pubkey_hash = hash('sha256', $contactPublicKey);
     
     $insertStmt = $pdo->prepare("INSERT INTO contacts (address, pubkey, pubkey_hash, name, fee_percent, credit_limit, currency) VALUES (:address, :pubkey, :pubkey_hash, :name, :fee, :credit, :currency)");
@@ -362,6 +365,7 @@ function insertContact($address, $contactPublicKey, $name, $fee, $credit, $curre
             return false;
         }
     } catch (PDOException $e) {
+        // Handle database error
         error_log("Error adding contact: " . $e->getMessage());
         return false;
     }
@@ -369,7 +373,8 @@ function insertContact($address, $contactPublicKey, $name, $fee, $credit, $curre
 
 function insertDebug($data) {
     global $pdo;
-    
+    // Add debug messages to database
+
     // If PDO connection is not established, use error_log as fallback
     if (!$pdo) {
         $errorMessage = "Debug: " . ($data['message'] ?? 'No message');
@@ -404,7 +409,7 @@ function insertDebug($data) {
 
 function insertP2pRequest($request, $destinationAddress = null) {
     global $pdo;
-
+    // Insert p2p request in database
     try {
         $stmt = $pdo->prepare("INSERT INTO p2p (
             hash, 
@@ -444,6 +449,8 @@ function insertP2pRequest($request, $destinationAddress = null) {
 
         $my_fee_amount = $request['feeAmount'] ?? null;
         $status = $request['status'] ?? 'initial';
+
+        // Bind parameters
         $stmt->bindParam(':hash', $request['hash']);
         $stmt->bindParam(':salt', $request['salt']);
         $stmt->bindParam(':time', $request['time']);
@@ -460,18 +467,21 @@ function insertP2pRequest($request, $destinationAddress = null) {
         $stmt->bindParam(':incoming_txid', $request['incoming_txid']);
         $stmt->bindParam(':outgoing_txid', $request['outgoing_txid']);
         $stmt->bindParam(':status', $status);
+        // Execute the insert
         $stmt->execute();
+        // Respond with received status
         output("Inserted P2P with hash: " .print_r($request['hash'],true),'SILENT');
-        return json_encode(["status" => "received", "message" => "p2p sent & received successfully"]);
+        return json_encode(["status" => "received", "message" => "p2p recorded successfully"]);
     } catch (PDOException $e) {
         // Handle database error
         error_log("Error inserting p2p request: " . $e->getMessage());
-        return json_encode(["status" => "rejected", "message" => "Failed to have p2p be received: " . $e->getMessage()]);
+        return json_encode(["status" => "rejected", "message" => "Failed to record p2p: " . $e->getMessage()]);
     }
 }
 
 function insertRp2pRequest ($request){
     global $pdo;
+    // Insert rp2p request in database
     try {
         $stmt = $pdo->prepare("INSERT INTO rp2p (
             hash, 
@@ -490,7 +500,7 @@ function insertRp2pRequest ($request){
             :sender_address,
             :sender_signature
         )");
-
+        // Bind parameters
         $stmt->bindParam(':hash', $request['hash']);
         $stmt->bindParam(':time', $request['time']);
         $stmt->bindParam(':amount', $request['amount']);
@@ -498,22 +508,23 @@ function insertRp2pRequest ($request){
         $stmt->bindParam(':sender_public_key', $request['senderPublicKey']);
         $stmt->bindParam(':sender_address', $request['senderAddress']);
         $stmt->bindParam(':sender_signature', $request['signature']);
+        // Execute the insert
         $stmt->execute();
-        //echo "Successfully inserted rp2p request.\n";
+        // Respond with received status
         output("Inserted RP2P with hash: " .print_r($request['hash'],true),'SILENT');
-        return json_encode(["status" => "received", "message" => "rp2p sent & received successfully"]);
+        return json_encode(["status" => "received", "message" => "rp2p recorded successfully"]);
     } catch (PDOException $e) {
         // Handle database error
         output("Error inserting rp2p request: " . print_r($e->getMessage(), true));
-        return json_encode(["status" => "rejected", "message" => "Failed to have rp2p be received: " . $e->getMessage()]);
+        return json_encode(["status" => "rejected", "message" => "Failed to record rp2p: " . $e->getMessage()]);
     }
 
 }
 
-function insertTransaction($request) {
-    //wait a little to prevent tight access
-    usleep(500000); // Sleep for 500ms (0.5 seconds)
+function insertTransaction($request) {  
     global $pdo;
+    // Insert transaction request in database
+    usleep(500000); // //wait a little to prevent tight access (Sleep for 500ms )
     // Calculate public key hashes
     $senderPublicKeyHash = hash('sha256', $request['senderPublicKey']);
     $receiverPublicKeyHash = hash('sha256', $request['receiverPublicKey']);
@@ -581,6 +592,7 @@ function insertTransaction($request) {
 
 function lookup($name) {
     global $pdo;
+    // Lookup address of contact based on name
     $nameStmt = $pdo->prepare("SELECT address FROM contacts WHERE LOWER(name) = LOWER(:name)");
     $nameStmt->bindParam(':name', $name);
     $nameStmt->execute();
@@ -590,6 +602,7 @@ function lookup($name) {
 
 function lookupContactByName($receiverInput) {
     global $pdo;
+    // Lookup general contact information based on name
     $nameStmt = $pdo->prepare("SELECT name, address, pubkey FROM contacts WHERE LOWER(name) = LOWER(:name)");
     $nameStmt->bindParam(':name', $receiverInput);
     $nameStmt->execute();
@@ -599,6 +612,7 @@ function lookupContactByName($receiverInput) {
 
 function lookupContactByAddress($address) {
     global $pdo;
+    // Lookup contact information for messaging based on address
     $addressStmt = $pdo->prepare("SELECT name, address, pubkey, fee_percent FROM contacts WHERE address = :address");
     $addressStmt->bindParam(':address', $address);
     $addressStmt->execute();
@@ -608,6 +622,7 @@ function lookupContactByAddress($address) {
 
 function lookupP2pRequest($hash) {
     global $pdo;
+    // Lookup p2p request based on hash
     $p2pRequest = $pdo->prepare("SELECT * FROM p2p WHERE hash = :hash");
     $p2pRequest->bindParam(':hash', $hash);
     $p2pRequest->execute();
@@ -616,6 +631,7 @@ function lookupP2pRequest($hash) {
 
 function readContactQuery($address) {
     global $pdo;
+    // Retrieve all contact information based on address
     $query = "SELECT * FROM contacts WHERE address = :address";
     $stmt = $pdo->prepare($query);
     $stmt->bindParam(':address', $address, PDO::PARAM_STR);
@@ -625,6 +641,7 @@ function readContactQuery($address) {
 
 function retrieveContactAddresses($exclude = null) {
     global $pdo;
+    // Retrieve all contact addresses
     if ($exclude) {
         $contactsStmt = $pdo->prepare("SELECT address FROM contacts WHERE address != :exclude");
         $contactsStmt->bindParam(':exclude', $exclude);
@@ -637,6 +654,7 @@ function retrieveContactAddresses($exclude = null) {
 
 function retrieveContacts() {
     global $pdo;
+    // Retrieve all contacts
     $contactsStmt = $pdo->prepare("SELECT address, pubkey FROM contacts");
     $contactsStmt->execute();
     return $contactsStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -644,6 +662,7 @@ function retrieveContacts() {
 
 function retrieveQueuedP2pMessages($status = 'queued', $status2 = '') {
     global $pdo;
+    // Retrieve all p2p messages that are queued (default) or by specific status(es) 
     if($status2 != ''){
         $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status = :status OR status = :status2 ORDER BY created_at ASC LIMIT 5");
         $queuedStmt->bindParam(':status', $status);
@@ -656,13 +675,19 @@ function retrieveQueuedP2pMessages($status = 'queued', $status2 = '') {
     $queuedStmt->execute();
     $queuedMessages = $queuedStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    echo "Found " . count($queuedMessages) . " queued messages to process\n";
+    if($status2 == ''){
+         echo "Found " . count($queuedMessages) . " " . $status . " messages to process\n";
+    } else{
+        echo "Found " . count($queuedMessages) . " " . $status . " & " . $status2 . " messages to process\n";
+    }
+   
 
     return $queuedMessages;
 }
 
 function searchContactsQuery($name = null) {
     global $pdo;
+    // Search for possible contacts based on name, return all (possible) changeable information if found
     $query = "SELECT address, name, fee_percent, credit_limit, currency FROM contacts";
     if($name !== null){
         $query .= " WHERE LOWER(name) LIKE LOWER(:name)";
@@ -678,6 +703,7 @@ function searchContactsQuery($name = null) {
 
 function updateContact($data) {
     global $pdo;
+    // Update contact information
     $address = $data[2];
     $field = strtolower($data[3]);
     $value = $data[4];
@@ -687,6 +713,7 @@ function updateContact($data) {
     
     $params = [];
     
+    // Depending on supplied argument update specific (or all) items
     if($field == 'name'){
         $query .= "name = :name";
         $params[':name'] = $value;
@@ -708,6 +735,7 @@ function updateContact($data) {
         $params[':currency'] = 'USD';
     }
     else{
+        // If no proper field update parameter
         output(returnContactUpdateInvalidInput());
     }
     
@@ -716,16 +744,19 @@ function updateContact($data) {
     
     $stmt = $pdo->prepare($query);
     if ($stmt->execute($params)) {
+        // If succesful update, respond of success
         output(returnContactUpdate());
-    }
-    else{
+    } else{
+        // If unsuccesful update with correct parameters, implies not an existing contact, respond of this fact
         output(returnContactNotFound());
     }
 }
 
 function updateP2pRequestStatus($hash, $status, $completed = false) {
     global $pdo;
+    // Update p2p request status
     try {
+        // Add completed time if needed
         if($completed){
             $updateStmt = $pdo->prepare("UPDATE p2p SET status = :status, completed_at = CURRENT_TIMESTAMP WHERE hash = :hash");
         } else {
@@ -741,8 +772,9 @@ function updateP2pRequestStatus($hash, $status, $completed = false) {
     }
 }
 
-function updateTransactionStatus($memo, $status,) {
+function updateTransactionStatus($memo, $status) {
     global $pdo;
+    // Update transaction request status
     try {
         $updateStmt = $pdo->prepare("UPDATE transactions SET status = :status WHERE memo = :memo");     
         $updateStmt->bindParam(':memo', $memo);
@@ -756,7 +788,8 @@ function updateTransactionStatus($memo, $status,) {
 }
 
 function viewTransactionHistory($data) {
-    global $pdo, $user;
+    global $pdo;
+    // View all transaction history in pretty print 'table'
     $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
     $address = null;
 
@@ -791,6 +824,7 @@ function viewTransactionHistory($data) {
     $stmt->execute();
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
+    // Pretty print results in 'table'
     if ($results) {
         echo "Transaction History:\n";
         echo "-------------------------------------------\n";
