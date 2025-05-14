@@ -642,10 +642,17 @@ function retrieveContacts() {
     return $contactsStmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function retrieveQueuedP2pMessages($status = 'queued') {
+function retrieveQueuedP2pMessages($status = 'queued', $status2 = '') {
     global $pdo;
-    $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status = :status ORDER BY created_at ASC LIMIT 5");
-    $queuedStmt->bindParam(':status', $status);
+    if($status2 != ''){
+        $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status = :status OR status = :status2 ORDER BY created_at ASC LIMIT 5");
+        $queuedStmt->bindParam(':status', $status);
+        $queuedStmt->bindParam(':status2', $status2);
+    }else{
+        $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status = :status ORDER BY created_at ASC LIMIT 5");
+        $queuedStmt->bindParam(':status', $status);
+    }
+    
     $queuedStmt->execute();
     $queuedMessages = $queuedStmt->fetchAll(PDO::FETCH_ASSOC);
 
