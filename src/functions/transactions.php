@@ -180,7 +180,6 @@ function sendP2pEiou($request) {
         // Transaction accepted, now insert into database
         insertTransaction($payload);
         updateP2pRequestStatus($payload['memo'],'completed',true); // Update p2p status to completed
-        // Note 'memo' here is by definition "standard", so we need the 'hash'
         updateTransactionStatus($payload['memo'],'completed'); // Update transaction status to completed
     } 
     else{
