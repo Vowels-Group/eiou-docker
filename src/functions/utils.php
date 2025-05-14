@@ -312,7 +312,7 @@ function verifyRequest($request) {
     if ($verified == 1) {
         return true; // continue
     } elseif ($verified == 0) {
-        echo json_encode(["status" => "error", "message" => "Signature is invalid"]);
+        echo json_encode(["status" => "rejected", "message" => "Signature is invalid"]);
         return false;
     } else {
         echo json_encode(["status" => "error", "message" => "Error occurred during verification"]);
