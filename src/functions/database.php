@@ -590,21 +590,11 @@ function insertTransaction($request) {
     }
 }
 
-function lookup($name) {
-    global $pdo;
-    // Lookup address of contact based on name
-    $nameStmt = $pdo->prepare("SELECT address FROM contacts WHERE LOWER(name) = LOWER(:name)");
-    $nameStmt->bindParam(':name', $name);
-    $nameStmt->execute();
-    $result = $nameStmt->fetch(PDO::FETCH_ASSOC);
-    return $result ? $result : null;
-}
-
-function lookupContactByName($receiverInput) {
+function lookupContactByName($name) {
     global $pdo;
     // Lookup general contact information based on name
     $nameStmt = $pdo->prepare("SELECT name, address, pubkey FROM contacts WHERE LOWER(name) = LOWER(:name)");
-    $nameStmt->bindParam(':name', $receiverInput);
+    $nameStmt->bindParam(':name', $name);
     $nameStmt->execute();
     $result = $nameStmt->fetch(PDO::FETCH_ASSOC);
     return $result ? $result : null;
