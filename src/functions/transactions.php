@@ -211,7 +211,7 @@ function viewBalances($data) {
     $balances = [];
     $stmt = $pdo->prepare($query);
     
-    if (isset($data[2])) {
+    if (isset($data[2]) && $address) {
         $stmt->bindParam(':address', $address);
     }
     
