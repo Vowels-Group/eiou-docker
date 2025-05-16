@@ -134,7 +134,7 @@ function sendEiou($request = null) {
     validateSendRequest($request);
         
     // If receiver's public key is in contacts, prepare a transaction to send directly to them
-    if ($contactInfo = lookupContactInfo ($request[2])) {
+    if ($contactInfo = lookupContactInfo($request[2])) {
         output("Looked up contact info: " . print_r($contactInfo, true), 'SILENT');
         $data = prepareSendData($request);
         $data['receiverAddress'] = $contactInfo['receiverAddress'];
@@ -192,9 +192,20 @@ function viewBalances($data) {
     // View balance information based on transactions
     global $pdo, $user;
     $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
+    // Check if an address or name is provided
     if (isset($data[2])) {
-        $address = lookup($data[2]);
-        $query .= " WHERE sender_address = :address OR receiver_address = :address";
+        // Check if it's a HTTP or Tor address
+        if (isHttpAddress($data[2]) || isTorAddress($data[2])) {
+            $address = $data[2];
+        } else{
+             // Check if the name yields an address
+            $contactResult = lookupContactByName($data[2]);
+            $address = $contactResult['address'] ?? null;
+        }
+        // Add WHERE clause if a valid address is found
+        if ($address) {
+            $query .= " WHERE sender_address = :address OR receiver_address = :address";
+        }
     }
     
     $balances = [];
