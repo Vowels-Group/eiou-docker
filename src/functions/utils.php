@@ -114,7 +114,7 @@ function displayHelp() {
     // Display available commands to user in the CLI
     echo "\n\nAvailable commands:\n";
     echo "add [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
-    echo "read [address] - Read contact information.\n";
+    echo "read [address/name] - Read contact information.\n";
     echo "update [type] [address/name] [(name)] [(fee)] [(credit)] - Update a contact.\n";
     echo "delete [address/name] - Delete a contact.\n";
     echo "send [address/name] [amount] [currency] - Send an eIOU.\n";

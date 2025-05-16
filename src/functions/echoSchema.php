@@ -28,7 +28,7 @@ function returnContactDetails($data) {
            "---------------\n" .
            "Address: " . $data['address'] . "\n" .
            "Name: " . ($data['name'] ?? 'N/A') . "\n" .
-           "Public Key: " . substr($data['pubkey'], 0, 50) . "...\n" .
+           "Public Key: " . substr($data['pubkey'], 0, 50) . "...\n" .              // TODO FIX SO LOOKS BETTER
            "Fee: " . (($data['fee_percent'] ?? '0.00') / 100) . "%\n" .
            "Credit Limit: " . (($data['credit_limit'] ?? '0.00') / 100) . "\n" .
            "Currency: " . ($data['currency'] ?? 'USD');
@@ -62,7 +62,7 @@ function returnContactUpdateInvalidInput() {
 }
 
 function returnContactReadInvalidInput() {
-    return "Invalid input. Example command: eiou read [address]";       
+    return "Invalid input. Example command: eiou read [address/name]";       
 }
 
 function returnContactRejected($data) {
