@@ -82,7 +82,7 @@ function handleContactCreation($request) {
     }
 }
 
-function lookupContactInfo ($request) {
+function lookupContactInfo($request) {
     // Lookup information
     $lookupResultByName = lookupContactByName($request);
     $lookupResultByAddress = lookupContactByAddress($request);
