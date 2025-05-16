@@ -88,6 +88,5 @@ function validateSendRequest($data) {
             return false;
         }
     }
-
     return true;
 }
