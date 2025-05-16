@@ -105,7 +105,15 @@ function lookupContactInfo($request) {
 function readContact($data) {
     // Read out contact information
     if (count($data) >= 3) {
-        if ($result = readContactQuery($data[2])) {
+        // Check if is a HTTP or TOR address
+        if (isHttpAddress($data[2]) || isTorAddress($data[2])) {
+            $address = $data[2];
+        } else{
+             // Check if the name yields an address
+            $contactResult = lookupContactByName($data[2]);
+            $address = $contactResult['address'] ?? null;
+        }
+        if ($result = readContactQuery($address)) {
             output(returnContactDetails($result));
         } else {
             output(returnContactNotFound());
