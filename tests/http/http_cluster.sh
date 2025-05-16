@@ -327,7 +327,7 @@ echo -e "\nTesting other functions..."
 
 # Read contacts
 echo -e "\nReading contacts..."
-ocker exec eioud-A-http eiou read http://eioud-A4-http
+docker exec eioud-A-http eiou read http://eioud-A4-http
 docker exec eioud-A421-http eiou read http://eioud-A113-http
 
 
@@ -337,7 +337,7 @@ sleep 5
 
 # View balances
 echo -e "\nViewing balances..."
-docker exec eioud-A-http eiou view
+docker exec eioud-A-http eiou view 
 docker exec eioud-A42-http eiou view
 docker exec eioud-A422-http eiou view
 docker exec eioud-A312-http eiou view
