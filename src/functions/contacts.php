@@ -102,8 +102,19 @@ function lookupContactInfo($request) {
     return isset($data) ? $data : null;
 }
 
-function readContact($data) {
-    // Read out contact information
+function searchContacts($data) {
+    // Lookup contact based on their name
+    $searchTerm = $data[2] ?? null;
+    if ($results = searchContactsQuery($searchTerm)) {
+        output(returnContactSearchResults($results));
+    }
+    else{
+        output(returnContactSearchNoResults());
+    }
+}
+
+function viewContact($data) {
+    // View contact information
     if (count($data) >= 3) {
         // Check if is a HTTP or TOR address
         if (isHttpAddress($data[2]) || isTorAddress($data[2])) {
@@ -113,7 +124,7 @@ function readContact($data) {
             $contactResult = lookupContactByName($data[2]);
             $address = $contactResult['address'] ?? null;
         }
-        if ($result = readContactQuery($address)) {
+        if ($result = retrieveContactQuery($address)) {
             output(returnContactDetails($result));
         } else {
             output(returnContactNotFound());
@@ -121,16 +132,5 @@ function readContact($data) {
     } else {
         output(returnContactReadInvalidInput());
         exit(1);
-    }
-}
-
-function searchContacts($data) {
-    // Lookup contact based on their name
-    $searchTerm = $data[2] ?? null;
-    if ($results = searchContactsQuery($searchTerm)) {
-        output(returnContactSearchResults($results));
-    }
-    else{
-        output(returnContactSearchNoResults());
     }
 }
