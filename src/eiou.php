@@ -31,10 +31,10 @@ checkWalletExists($user, $request);
     output("Executing add contact request", 'SILENT');
     addContact($argv);
   }
-  elseif($request == "read"){
-    //Read Contact
+  elseif($request == "viewcontact"){
+    //View Contact
     output("Executing read contact request", 'SILENT');
-    readContact($argv);
+    viewContact($argv);
   }
   elseif($request == "update"){
     //Update Contact
@@ -57,7 +57,7 @@ checkWalletExists($user, $request);
     output("Executing send eIOU request", 'SILENT');
     sendEiou($argv);
   }
-  elseif($request == "view"){
+  elseif($request == "viewbalances"){
     //View eIOUs
     output("Executing view balances request", 'SILENT');
     viewBalances($argv);
