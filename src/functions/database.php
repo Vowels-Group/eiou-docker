@@ -619,16 +619,6 @@ function lookupP2pRequest($hash) {
     return $p2pRequest->fetch(PDO::FETCH_ASSOC);
 }
 
-function retrieveContactQuery($address) {
-    global $pdo;
-    // Retrieve all contact information based on address
-    $query = "SELECT * FROM contacts WHERE address = :address";
-    $stmt = $pdo->prepare($query);
-    $stmt->bindParam(':address', $address, PDO::PARAM_STR);
-    $stmt->execute();
-    return $stmt->fetch(PDO::FETCH_ASSOC);
-}
-
 function retrieveContactAddresses($exclude = null) {
     global $pdo;
     // Retrieve all contact addresses
@@ -640,6 +630,16 @@ function retrieveContactAddresses($exclude = null) {
     }
     $contactsStmt->execute();
     return $contactsStmt->fetchAll(PDO::FETCH_COLUMN);
+}
+
+function retrieveContactQuery($address) {
+    global $pdo;
+    // Retrieve all contact information based on address
+    $query = "SELECT * FROM contacts WHERE address = :address";
+    $stmt = $pdo->prepare($query);
+    $stmt->bindParam(':address', $address, PDO::PARAM_STR);
+    $stmt->execute();
+    return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
 function retrieveContacts() {
