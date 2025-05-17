@@ -114,19 +114,16 @@ function displayHelp() {
     // Display available commands to user in the CLI
     echo "\n\nAvailable commands:\n";
     echo "add [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
-    echo "read [address/name] - Read contact information.\n";
+    echo "viewcontact [address/name] - Read contact information.\n";
     echo "update [type] [address/name] [(name)] [(fee)] [(credit)] - Update a contact.\n";
     echo "delete [address/name] - Delete a contact.\n";
     echo "send [address/name] [amount] [currency] - Send an eIOU.\n";
-    echo "view ([address/name]) - View eIOU balance(s).\n";
+    echo "viewbalances ([address/name]) - View eIOU balance(s).\n";
     echo "history ([address/name]) - View transaction history for contacts, (default: all contacts).\n";
     echo "help - Display this help information.\n";
     echo "viewsettings - View current settings.\n";
     echo "changesettings - Change settings.\n";
     echo "generate - Generate a new wallet.\n";
-    echo "restore [filepath/passphrase] - Restore an existing wallet.\n";
-    echo "resign - Send a resignation transaction to all contacts.\n";
-    echo "succeed [new wallet address] - Assign a succession note to a new wallet.\n";
 }
 
 function displayUserInfo($user) {
