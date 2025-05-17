@@ -619,7 +619,7 @@ function lookupP2pRequest($hash) {
     return $p2pRequest->fetch(PDO::FETCH_ASSOC);
 }
 
-function readContactQuery($address) {
+function retrieveContactQuery($address) {
     global $pdo;
     // Retrieve all contact information based on address
     $query = "SELECT * FROM contacts WHERE address = :address";
