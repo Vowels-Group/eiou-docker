@@ -325,10 +325,10 @@ docker exec eioud-A-http eiou send http://eioud-A2-http 100 USD
 
 echo -e "\nTesting other functions..."
 
-# Read contacts
-echo -e "\nReading contacts..."
-docker exec eioud-A-http eiou read http://eioud-A4-http
-docker exec eioud-A421-http eiou read http://eioud-A113-http
+# View contacts
+echo -e "\nViewing contacts..."
+docker exec eioud-A-http eiou viewcontact http://eioud-A4-http
+docker exec eioud-A421-http eiou viewcontact http://eioud-A113-http
 
 
 echo -e "\nSleeping for 5 seconds..."

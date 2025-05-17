@@ -59,7 +59,7 @@ wait_for_container eioud-2-http
 wait_for_container eioud-3-http
 wait_for_container eioud-4-http
 
-echo "Generate pubkeys and set hostnames..."
+echo -e "\nGenerate pubkeys and set hostnames..."
 docker exec eioud-0-http eiou generate http://eioud-0-http
 docker exec eioud-1-http eiou generate http://eioud-1-http
 docker exec eioud-2-http eiou generate http://eioud-2-http
@@ -69,7 +69,7 @@ docker exec eioud-4-http eiou generate http://eioud-4-http
 # Add friends
 # (NOTE that names are NOT arbitrary)
 
-echo "Adding friends..."
+echo -e "\nAdding friends..."
 docker exec eioud-0-http eiou add http://eioud-1-http eioud-1-http 0.1 1000 USD
 docker exec eioud-1-http eiou add http://eioud-0-http eioud-0-http 0.1 1000 USD
 docker exec eioud-1-http eiou add http://eioud-2-http eioud-2-http 0.1 1000 USD
@@ -80,27 +80,27 @@ docker exec eioud-3-http eiou add http://eioud-4-http eioud-4-http 0.1 1000 USD
 docker exec eioud-4-http eiou add http://eioud-3-http eioud-3-http 0.1 1000 USD
 
 # Send money
-echo "Sending money..."
+echo -e "\nSending money..."
 docker exec eioud-0-http eiou send http://eioud-1-http 100 USD
 docker exec eioud-0-http eiou send http://eioud-2-http 100 USD
 docker exec eioud-0-http eiou send http://eioud-3-http 100 USD # first complicated path
 docker exec eioud-0-http eiou send http://eioud-4-http 100 USD
 
-echo "Testing other functions..."
+echo -e "\nTesting other functions..."
 
-# Read contacts
-echo "Reading contacts..."
-docker exec eioud-0-http eiou read http://eioud-1-http
-docker exec eioud-1-http eiou read http://eioud-0-http
-docker exec eioud-1-http eiou read http://eioud-2-http
-docker exec eioud-2-http eiou read http://eioud-1-http
-docker exec eioud-2-http eiou read http://eioud-3-http
-docker exec eioud-3-http eiou read http://eioud-2-http
-docker exec eioud-3-http eiou read http://eioud-4-http
-docker exec eioud-4-http eiou read http://eioud-3-http
+# View contacts
+echo -e "\nViewing contacts..."
+docker exec eioud-0-http eiou viewcontact http://eioud-1-http
+docker exec eioud-1-http eiou viewcontact http://eioud-0-http
+docker exec eioud-1-http eiou viewcontact http://eioud-2-http
+docker exec eioud-2-http eiou viewcontact http://eioud-1-http
+docker exec eioud-2-http eiou viewcontact http://eioud-3-http
+docker exec eioud-3-http eiou viewcontact http://eioud-2-http
+docker exec eioud-3-http eiou viewcontact http://eioud-4-http
+docker exec eioud-4-http eiou viewcontact http://eioud-3-http
 
 # View balances
-echo "Viewing balances..."
+echo -e "\nViewing balances..."
 docker exec eioud-0-http eiou view
 docker exec eioud-1-http eiou view
 docker exec eioud-2-http eiou view
@@ -108,11 +108,11 @@ docker exec eioud-3-http eiou view
 docker exec eioud-4-http eiou view
 
 # View transaction history
-echo "Viewing transaction history..."
+echo -e "\nViewing transaction history..."
 docker exec eioud-0-http eiou history
 docker exec eioud-1-http eiou history
 docker exec eioud-2-http eiou history
 docker exec eioud-3-http eiou history
 docker exec eioud-4-http eiou history
 
-echo "Script completed successfully."
+echo -e "\nScript completed successfully."

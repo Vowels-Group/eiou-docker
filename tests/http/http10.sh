@@ -74,7 +74,7 @@ wait_for_container() {
 # wait_for_container eioud-8-http
 # wait_for_container eioud-9-http
 
-echo "Generate pubkeys and set hostnames..."
+echo -e "\nGenerate pubkeys and set hostnames..."
 docker exec eioud-0-http eiou generate http://eioud-0-http
 docker exec eioud-1-http eiou generate http://eioud-1-http
 docker exec eioud-2-http eiou generate http://eioud-2-http
@@ -89,7 +89,7 @@ docker exec eioud-9-http eiou generate http://eioud-9-http
 # Add friends
 # (NOTE that names are NOT arbitrary)
 
-echo "Adding friends..."
+echo -e "\nAdding friends..."
 docker exec eioud-0-http eiou add http://eioud-1-http eioud-1-http 0.1 1000 USD
 docker exec eioud-1-http eiou add http://eioud-0-http eioud-0-http 0.1 1000 USD
 docker exec eioud-1-http eiou add http://eioud-2-http eioud-2-http 0.1 1000 USD
@@ -110,7 +110,7 @@ docker exec eioud-8-http eiou add http://eioud-9-http eioud-9-http 0.1 1000 USD
 docker exec eioud-9-http eiou add http://eioud-8-http eioud-8-http 0.1 1000 USD
 
 
-echo "Sending money..."
+echo -e "\nSending money..."
 docker exec eioud-0-http eiou send http://eioud-1-http 100 USD
 docker exec eioud-0-http eiou send http://eioud-2-http 100 USD
 docker exec eioud-0-http eiou send http://eioud-3-http 100 USD # first complicated path
@@ -120,12 +120,12 @@ docker exec eioud-0-http eiou send http://eioud-6-http 100 USD
 docker exec eioud-0-http eiou send http://eioud-7-http 100 USD # payment should fail - too far
 
 
-echo "Checking errors..."
+echo -e "\nChecking errors..."
 docker exec eioud-0-http cat /var/log/php_errors.log
 
-echo "Verifying state..."
+echo -e "\nVerifying state..."
 docker exec -it eioud-0-http mysql -u root -e "SELECT hash, time, currency, amount, sender_address FROM eiou.rp2p;"
 
 docker exec -it eioud-0-http /usr/bin/php /etc/eiou/messages.php
 
-echo "Script completed successfully."
+echo -e "\nScript completed successfully."

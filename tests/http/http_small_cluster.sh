@@ -128,9 +128,9 @@ docker exec eioud-A-http eiou send http://eioud-A2-http 100 USD
 
 echo -e "\nTesting other functions..."
 
-# Read contacts
-echo -e "\nReading contacts..."
-docker exec eioud-A-http eiou read http://eioud-A4-http
+# View contacts
+echo -e "\nViewing contacts..."
+docker exec eioud-A-http eiou viewcontact http://eioud-A4-http
 
 # need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances/transaction history)
 echo -e "\nSleeping for 5 seconds..."
