@@ -3,7 +3,7 @@ Contacts
 My Info
 Add Contact
 Accept Contact
-Read Contact
+View Contact
 Update Contact
 Delete Contact
 Search Contacts
@@ -23,9 +23,6 @@ Help
 View Settings
 Update Settings
 Generate Wallet
-Restore Wallet
-Suicide
-Assign Succession
 
 
 Functions Detail
@@ -66,12 +63,11 @@ Main Nominal Credit
 Main Currency (Should be USD until ‘Foreign Currencies’ feature)
 
 View Contact
-Read contact information from the local database
+View contact information from the local database
 
-Example command: eiou read 123pubkey
-Example command: eiou read adrien
-Example command: eiou view 123pubkey
-Example command: eiou view adrien
+Example command: eiou viewcontact 123pubkey
+Example command: eiou viewcontact adrien
+
 
 Parameters:
 Address/URI
@@ -222,19 +218,3 @@ Generate Wallet
 Create a new passphrase and generate a keypair for it, then provide a passphrase to the user. Using composer: bitwasp/bitcoin
 
 Example command: eiou generate
-
-Restore Wallet
-Use passphrase to regenerate keypair.
-
-Example command: eiou restore passphrase
-
-Resign
-Send a resignation transaction to all contacts, this is to disable further damage from a compromised wallet.
-
-Example command: eiou resign
-(will be asked to confirm twice with “yes”)
-
-Assign Succession
-Once a wallet has resigned, it can sign a succession note. When a user adds a contact with a succession note, they will associate the resigned wallet’s transactions with the new one.
-
-Example command: eiou succeed newWalletAddress
