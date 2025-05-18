@@ -70,8 +70,8 @@ function prepareP2pRequestData($request) {
     $data['hash'] = hash('sha256', $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
     output("Generated p2pHash: " . $data['hash'], 'SILENT'); // Added verbose output
     output("p2pHash components: " . "receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time'], 'SILENT'); // Detailed verbose output
-    $data['randomNumber'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // TODO: lower bound should be private (generated in fresh install and put in config file) or generated for each contact
-    $data['maxRequestLevel'] = $data['randomNumber'] + $user['maxP2pLevel'];    // Add upper bound to request level, using users max 
+    $data['minRequestLevel'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // Caculate 'random' lower bound for request level
+    $data['maxRequestLevel'] = $data['minRequestLevel'] + $user['maxP2pLevel'];    // Add upper bound to request level, using users max 
     return $data;
 }
 
