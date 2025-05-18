@@ -62,7 +62,7 @@ function returnContactUpdateInvalidInput() {
 }
 
 function returnContactReadInvalidInput() {
-    return "Invalid input. Example command: eiou read [address/name]";       
+    return "Invalid input. Example command: eiou viewcontact [address/name]";       
 }
 
 function returnContactRejected($data) {

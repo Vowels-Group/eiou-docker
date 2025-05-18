@@ -138,12 +138,12 @@ sleep 5
 
 # View balances
 echo -e "\nViewing balances..."
-docker exec eioud-A-http eiou view
-docker exec eioud-A4-http eiou view
-docker exec eioud-A42-http eiou view
-docker exec eioud-A3-http eiou view
-docker exec eioud-A31-http eiou view
-docker exec eioud-A2-http eiou view
+docker exec eioud-A-http eiou viewbalances
+docker exec eioud-A4-http eiou viewbalances
+docker exec eioud-A42-http eiou viewbalances
+docker exec eioud-A3-http eiou viewbalances
+docker exec eioud-A31-http eiou viewbalances
+docker exec eioud-A2-http eiou viewbalances
 
 
 # View transaction history

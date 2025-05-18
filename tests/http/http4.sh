@@ -101,11 +101,11 @@ docker exec eioud-4-http eiou viewcontact http://eioud-3-http
 
 # View balances
 echo -e "\nViewing balances..."
-docker exec eioud-0-http eiou view
-docker exec eioud-1-http eiou view
-docker exec eioud-2-http eiou view
-docker exec eioud-3-http eiou view
-docker exec eioud-4-http eiou view
+docker exec eioud-0-http eiou viewbalances
+docker exec eioud-1-http eiou viewbalances
+docker exec eioud-2-http eiou viewbalances
+docker exec eioud-3-http eiou viewbalances
+docker exec eioud-4-http eiou viewbalances
 
 # View transaction history
 echo -e "\nViewing transaction history..."

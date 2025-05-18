@@ -33,10 +33,10 @@ docker exec -it eioud2http /usr/bin/php /etc/eiou/messages.php
 docker exec -it eioud3http /usr/bin/php /etc/eiou/messages.php
 
 # view balances
-docker exec eioud0http eiou view
-docker exec eioud1http eiou view
-docker exec eioud2http eiou view
-docker exec eioud3http eiou view
+docker exec eioud0http eiou viewbalances
+docker exec eioud1http eiou viewbalances
+docker exec eioud2http eiou viewbalances
+docker exec eioud3http eiou viewbalances
 
 # view transaction history
 docker exec eioud0http eiou history

@@ -164,9 +164,9 @@ Queries the local database for eIOUs, and returns the total for any outstanding 
 If query is submitted, search by that before returning eIOU totals
 Else, return all eIOU totals
 
-Example command: eiou total
-Example command: eiou total adrien
-Example command: eiou total 123pubkey 
+Example command: eiou viewbalances
+Example command: eiou viewbalances adrien
+Example command: eiou viewbalances 123pubkey 
 
 View Transaction History
 Queries the local database for eIOUs, can search by address, nickname, date; or return all. Results can be sorted by address, date, amount. Default sort order is date descending. 
