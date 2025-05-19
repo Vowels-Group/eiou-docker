@@ -464,8 +464,8 @@ function insertP2pRequest($request, $destinationAddress = null) {
         $stmt->bindParam(':sender_address', $request['senderAddress']);
         $stmt->bindParam(':sender_signature', $request['signature']);
         $stmt->bindParam(':destination_address', $destinationAddress);
-        $stmt->bindParam(':incoming_txid', $request['incoming_txid']);
-        $stmt->bindParam(':outgoing_txid', $request['outgoing_txid']);
+        $stmt->bindParam(':incoming_txid', $request['incomingTxid']);
+        $stmt->bindParam(':outgoing_txid', $request['outgoingTxid']);
         $stmt->bindParam(':status', $status);
         // Execute the insert
         $stmt->execute();
@@ -642,6 +642,16 @@ function retrieveContactQuery($address) {
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
+function retrieveContactPubkey($address){
+    global $pdo;
+    // Retrieve all contact information based on address
+    $query = "SELECT pubkey FROM contacts WHERE address = :address";
+    $stmt = $pdo->prepare($query);
+    $stmt->bindParam(':address', $address, PDO::PARAM_STR);
+    $stmt->execute();
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
 function retrieveContacts() {
     global $pdo;
     // Retrieve all contacts
@@ -759,6 +769,24 @@ function updateP2pRequestStatus($hash, $status, $completed = false) {
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating p2p request status: " . $e->getMessage());
+    }
+}
+
+function updateP2pTxid($hash, $txid, $incoming = false){
+    global $pdo;
+    // Update p2p txid
+    try{
+        if($incoming){
+            $updateStmt = $pdo->prepare("UPDATE p2p SET incoming_txid = :txid WHERE hash = :hash");
+        } else{
+            $updateStmt = $pdo->prepare("UPDATE p2p SET outgoing_txid = :txid WHERE hash = :hash");
+        }
+        $updateStmt->bindParam(':hash', $hash);
+        $updateStmt->bindParam(':txid', $txid);
+        $updateStmt->execute();
+    } catch (PDOException $e) {
+        // Log or handle the error if updating txid fails
+        error_log("Error updating p2p txid : " . $e->getMessage());
     }
 }
 
