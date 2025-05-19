@@ -267,6 +267,6 @@ function viewBalances($data) {
     });
 
     foreach ($otherBalances as $contact) {   
-        printf("%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], $contact['balance']);
+        printf("\t%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], $contact['balance']);
     }
 }
