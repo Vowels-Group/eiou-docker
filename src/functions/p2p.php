@@ -29,8 +29,8 @@ function handleP2pRequest($request) {
     global $user;
     $myAddress = resolveUserAddressForTransport($request['senderAddress']);  
     // Check if p2p's destination is to user
-    $request['incomingTxid'] = $request['outgoingTxid'];
-    $request['outgoingTxid'] =  null;
+    // $request['incomingTxid'] = $request['outgoingTxid'];
+    // $request['outgoingTxid'] =  null;
     if(matchYourselfP2P($request,$myAddress)){
         $request['status'] = 'found';
         insertP2pRequest($request, $myAddress); // Insert p2p request
@@ -87,7 +87,7 @@ function processQueuedP2pMessages() {
         $p2pPayload = buildP2pPayload($message); // Build p2p request payload
         // If recipient is a contact send p2p directly
         if($matchedContact = matchContact($message)){ 
-            $p2pPayload['outgoingTxid'] = hash('sha256', $user['public'] . $matchedContact['pubkey'] . $message['amount'] . $message['time']); 
+            #$p2pPayload['outgoingTxid'] = hash('sha256', $user['public'] . $matchedContact['pubkey'] . $message['amount'] . $message['time']); 
             $response = json_decode(send($matchedContact['address'], $p2pPayload),true);
             output("P2P send result for matched contact: " . print_r($response,true),'SILENT');            
         }else{
@@ -98,7 +98,7 @@ function processQueuedP2pMessages() {
 
             // Send p2p request to all contacts
             foreach ($contacts as $contact) {
-                $p2pPayload['outgoingTxid'] = hash('sha256', $user['public'] . retrieveContactPubkey($contact) . $message['amount'] . $message['time']); 
+                #$p2pPayload['outgoingTxid'] = hash('sha256', $user['public'] . retrieveContactPubkey($contact) . $message['amount'] . $message['time']); 
                 $response = json_decode(send($contact, $p2pPayload),true);
                 output("P2P response: " . print_r($response,true),'SILENT');
             }
