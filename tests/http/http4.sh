@@ -29,7 +29,7 @@ remove_container_if_exists eioud-4-http
 echo "Building base image..."
 docker build -f eioud.dockerfile -t eioud .
 
-echo "Creating containers..."
+echo -e "\nCreating containers..."
 docker run -d --network=eioud-network --name eioud-0-http eioud
 docker run -d --network=eioud-network --name eioud-1-http eioud
 docker run -d --network=eioud-network --name eioud-2-http eioud
@@ -53,11 +53,11 @@ wait_for_container() {
     done
 }
 
-wait_for_container eioud-0-http
-wait_for_container eioud-1-http
-wait_for_container eioud-2-http
-wait_for_container eioud-3-http
-wait_for_container eioud-4-http
+# wait_for_container eioud-0-http
+# wait_for_container eioud-1-http
+# wait_for_container eioud-2-http
+# wait_for_container eioud-3-http
+# wait_for_container eioud-4-http
 
 echo -e "\nGenerate pubkeys and set hostnames..."
 docker exec eioud-0-http eiou generate http://eioud-0-http

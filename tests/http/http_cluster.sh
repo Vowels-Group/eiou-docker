@@ -61,7 +61,7 @@ remove_container_if_exists eioud-A423-http
 echo "Building base image..."
 docker build -f eioud.dockerfile -t eioud .
 
-echo "Creating containers..."
+echo -e "\nCreating containers..."
 docker run -d --network=eioud-network --name eioud-A-http eioud
 docker run -d --network=eioud-network --name eioud-A1-http eioud
 docker run -d --network=eioud-network --name eioud-A11-http eioud
@@ -321,6 +321,9 @@ echo -e "\nSending money..."
 docker exec eioud-A-http eiou send http://eioud-A422-http 100 USD
 docker exec eioud-A-http eiou send http://eioud-A312-http 100 USD
 docker exec eioud-A-http eiou send http://eioud-A2-http 100 USD
+docker exec eioud-A-http eiou send http://eioud-A21-http 100 USD
+docker exec eioud-A-http eiou send http://eioud-A412-http 100 USD
+docker exec eioud-A-http eiou send http://eioud-A121-http 100 USD
 
 
 echo -e "\nTesting other functions..."

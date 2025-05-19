@@ -38,7 +38,7 @@ remove_container_if_exists eioud-A42-http
 echo "Building base image..."
 docker build -f eioud.dockerfile -t eioud .
 
-echo "Creating containers..."
+echo -e "\nCreating containers..."
 docker run -d --network=eioud-network --name eioud-A-http eioud
 docker run -d --network=eioud-network --name eioud-A1-http eioud
 docker run -d --network=eioud-network --name eioud-A11-http eioud
