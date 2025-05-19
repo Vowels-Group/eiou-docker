@@ -28,10 +28,10 @@ function returnContactDetails($data) {
            "---------------\n" .
            "Address: " . $data['address'] . "\n" .
            "Name: " . ($data['name'] ?? 'N/A') . "\n" .
-           "Public Key: " . substr($data['pubkey'], 0, 50) . "...\n" .              // TODO FIX SO LOOKS BETTER
+           "Public Key: " . "..." . substr($data['pubkey'], 51, 25) . "...\n" .              // TODO FIX SO LOOKS BETTER
            "Fee: " . (($data['fee_percent'] ?? '0.00') / 100) . "%\n" .
            "Credit Limit: " . (($data['credit_limit'] ?? '0.00') / 100) . "\n" .
-           "Currency: " . ($data['currency'] ?? 'USD');
+           "Currency: " . ($data['currency'] ?? 'USD') . "\n";
 }
 
 function returnContactExists() {
@@ -55,10 +55,10 @@ function returnContactUpdateInvalidInput() {
     return "Incorrect field given. Please provide a valid field to update.\n" .
            "Example command: eiou update [type] [address/name] [(name)] [(fee)] [(credit)]\n" .
            "Valid fields include:\n" .
-           "• 'name' - Update contact name (e.g., eiou update name 123abc.onion John)\n" .
-           "• 'fee' - Update fee percentage (e.g., eiou update 123abc.onion 1.5)\n" .
-           "• 'credit' - Update credit limit (e.g., eiou update 123abc.onion 500)\n" .
-           "• 'all' - Update all fields at once (e.g., eiou update 123abc.onion NewName 1.5 500)";
+           "• 'name' - Update contact name (e.g., eiou update name 123abc.onion name John)\n" .
+           "• 'fee' - Update fee percentage (e.g., eiou update 123abc.onion fee 1.5)\n" .
+           "• 'credit' - Update credit limit (e.g., eiou update 123abc.onion credit 500)\n" .
+           "• 'all' - Update all fields at once (e.g., eiou update 123abc.onion all NewName 1.5 500)";
 }
 
 function returnContactReadInvalidInput() {
