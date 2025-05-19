@@ -54,7 +54,7 @@ function buildP2pPayload($data) {
         'expiration' => $data['time'] + $user['p2pExpiration'] ?? $data['expiration'], // Expiration time based on user's configuration (or database version)
         'currency' => $data['currency'] ?? 'USD',
         'amount' => $data['amount'], // Nominal amount in cents recipient will receive
-        'requestLevel' => $data['randomNumber'] ?? $data['request_level'] + 1, // Initial request level (or increment)
+        'requestLevel' => $data['minRequestLevel'] ?? $data['request_level'] + 1, // Initial request level (or increment)
         'maxRequestLevel' => $data['maxRequestLevel'] ?? $data['max_request_level'], // Maximum number of hops for p2p request (or saved database version)
         'senderPublicKey' => $user['public'],
         'senderAddress' => $userAddress
