@@ -26,7 +26,8 @@ function handleRp2pRequest($request) {
             output("Failed to insert rp2p request: " . print_r($request, true), 'SILENT');
             return false;
         }
-
+        $outgoingTxid = hash('sha256', $user['public'] . $request['senderPublicKey'] . $result['amount'] . $result['time']);
+        updateP2pTxid($request['hash'], $outgoingTxid);
         // Check if original p2p was sent by user
         if(isset($result['destination_address'])) {
             $p2pAmount = $result['amount'];
