@@ -253,7 +253,7 @@ function freshInstall(){
         
         // Create a default configuration file
         $defaultConfig = "<?php\n";
-        $defaultConfig .= "\$user['defaultFee'] = 1; // Default transaction fee in percent\n";
+        $defaultConfig .= "\$user['defaultFee'] = 0.1; // Default transaction fee in percent\n";
         $defaultConfig .= "\$user['defaultCurrency'] = 'USD'; // Default currency\n";
         $defaultConfig .= "\$user['localhostOnly'] = true; // Network connection limited to localhost only\n";
         $defaultConfig .= "\$user['maxFee'] = 5; // Maximum total fee for a transaction in percent\n";

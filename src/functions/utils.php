@@ -102,7 +102,7 @@ function displayCurrentSettings() {
     // Display current settings of user
     global $user;
     echo "Current Settings:\n";
-    echo "Default fees: " . $user['defaultFee'] . "\n";
+    echo "Default fees: " . $user['defaultFee'] ."%\n";
     echo "Default currency: " . $user['defaultCurrency'] . "\n";
     echo "Access Mode: " . ($user['localhostOnly'] ? "Local Access Only" : "Network Authorized") . "\n";
     echo "Maximum Fee: " . $user['maxFee'] . "%\n";
