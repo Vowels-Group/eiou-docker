@@ -81,7 +81,7 @@ checkWalletExists($user, $request);
   elseif($request == "changesettings"){
     //Change settings
     output("Executing change settings request", 'SILENT');
-    changeSettings();
+    changeSettings($argv);
   }
   elseif($request == "generate"){
     //Generate Wallet

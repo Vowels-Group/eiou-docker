@@ -26,69 +26,97 @@ function removeTransactionFee($request){
     return $request['amount'] - $p2p['my_fee_amount'];
 }
 
-function changeSettings() {
+function changeSettings($argv) {
     global $user;
-    
-    // Display current settings
-    displayCurrentSettings();
-    
-    // Prompt user for which setting they want to change
-    echo "Select the setting you want to change:\n";
-    echo "1. Default Fees\n";
-    echo "2. Default Currency\n";
-    echo "3. Access Mode\n";
-    echo "4. Maximum Fee\n";
-    echo "5. Maximum Peer of Peer Level\n";
-    echo "6. Default Peer of Peer Expiration\n";
-    echo "7. Cancel\n";
-    
-    // Read user input
-    $setting_choice = trim(fgets(STDIN));
-    
-    switch($setting_choice) {
-        case '1':
-            echo "Enter new default fee percentage: ";
+
+    // Check if command line based or user input based
+    if(isset($argv[2])){
+        if(strtolower($argv[2]) == 'defaultfee'){
             $key = 'defaultFee';
-            $value = floatval(trim(fgets(STDIN)));
-            break;
-        
-        case '2':
-            echo "Enter new default currency (e.g., USD): ";
+            $value = floatval($argv[3]);
+        }elseif(strtolower($argv[2]) == 'defaultcurrency'){
+            // To do: when more currencies added, check if valid currency
             $key = 'defaultCurrency';
-            $value = strtoupper(trim(fgets(STDIN)));
-            break;
-        
-        case '3':
-            echo "Enter access mode (0 for Network Enabled, 1 for LocalHost Only): ";
+            $value = strtoupper($argv[3]);
+        }elseif(strtolower($argv[2]) == 'localhostonly'){
             $key = 'localhostOnly';
-            $value = (trim(fgets(STDIN)) == '1');
-            break;
-        
-        case '4':
-            echo "Enter new maximum fee percentage: ";
+            $value = ($argv[3] == '1');
+        }elseif(strtolower($argv[2]) == 'maxfee'){
             $key = 'maxFee';
-            $value = floatval(trim(fgets(STDIN)));
-            break;
-        
-        case '5':
-            echo "Enter new Maximum Peer of Peer Level: ";
+            $value = floatval($argv[3]);
+        }elseif(strtolower($argv[2]) == 'maxp2pLevel'){
             $key = 'maxP2pLevel';
-            $value = intval(trim(fgets(STDIN)));
-            break;
-        
-        case '6':
-            echo "Enter new Peer of Peer Expiration (in seconds): ";
+            $value = intval($argv[3]);
+        }elseif(strtolower($argv[2]) == 'p2pexpiration'){
             $key = 'p2pExpiration';
-            $value = intval(trim(fgets(STDIN)));
-            break;
-        
-        case '7':
-            echo "Setting change cancelled.\n";
+            $value = intval($argv[3]);
+        }else{
+            echo "Setting provided does not exist. No changes made.\n";
             return;
+        }        
+    } else{
+
+        // Display current settings
+        displayCurrentSettings();
         
-        default:
-            echo "Invalid selection. No changes made.\n";
-            return;
+        // Prompt user for which setting they want to change
+        echo "Select the setting you want to change:\n";
+        echo "1. Default Fees\n";
+        echo "2. Default Currency\n";
+        echo "3. Access Mode\n";
+        echo "4. Maximum Fee\n";
+        echo "5. Maximum Peer of Peer Level\n";
+        echo "6. Default Peer of Peer Expiration\n";
+        echo "7. Cancel\n";
+
+        // Read user input
+        $setting_choice = trim(fgets(STDIN));
+        
+        switch($setting_choice) {
+            case '1':
+                echo "Enter new default fee percentage: ";
+                $key = 'defaultFee';
+                $value = floatval(trim(fgets(STDIN)));
+                break;
+            
+            case '2':
+                echo "Enter new default currency (e.g., USD): ";
+                $key = 'defaultCurrency';
+                $value = strtoupper(trim(fgets(STDIN)));
+                break;
+            
+            case '3':
+                echo "Enter access mode (0 for Network Enabled, 1 for LocalHost Only): ";
+                $key = 'localhostOnly';
+                $value = (trim(fgets(STDIN)) == '1');
+                break;
+            
+            case '4':
+                echo "Enter new maximum fee percentage: ";
+                $key = 'maxFee';
+                $value = floatval(trim(fgets(STDIN)));
+                break;
+            
+            case '5':
+                echo "Enter new Maximum Peer of Peer Level: ";
+                $key = 'maxP2pLevel';
+                $value = intval(trim(fgets(STDIN)));
+                break;
+            
+            case '6':
+                echo "Enter new Peer of Peer Expiration (in seconds): ";
+                $key = 'p2pExpiration';
+                $value = intval(trim(fgets(STDIN)));
+                break;
+            
+            case '7':
+                echo "Setting change cancelled.\n";
+                return;
+            
+            default:
+                echo "Invalid selection. No changes made.\n";
+                return;
+        }
     }
     // Save changes to config file
     $config_content = file_get_contents('/etc/eiou/config.php');
@@ -96,6 +124,7 @@ function changeSettings() {
     file_put_contents('/etc/eiou/config.php', $config_content);
     require_once("/etc/eiou/config.php"); // reload config 
     echo "Setting updated successfully.\n";
+    
 }
 
 function displayCurrentSettings() {
@@ -237,8 +266,6 @@ function matchYourselfTransaction($request,$address){
     }
     return false;
 }
-
-
 
 function output($message, $level = 'ECHO') {
     global $user;
