@@ -44,6 +44,7 @@ function changeSettings($argv) {
         }elseif(strtolower($argv[2]) == 'maxfee'){
             $key = 'maxFee';
             $value = floatval($argv[3]);
+
         }elseif(strtolower($argv[2]) == 'maxp2pLevel'){
             $key = 'maxP2pLevel';
             $value = intval($argv[3]);
@@ -61,13 +62,13 @@ function changeSettings($argv) {
         
         // Prompt user for which setting they want to change
         echo "Select the setting you want to change:\n";
-        echo "1. Default Fees\n";
-        echo "2. Default Currency\n";
-        echo "3. Access Mode\n";
-        echo "4. Maximum Fee\n";
-        echo "5. Maximum Peer of Peer Level\n";
-        echo "6. Default Peer of Peer Expiration\n";
-        echo "7. Cancel\n";
+        echo "\t1. Default Fees\n";
+        echo "\t2. Default Currency\n";
+        echo "\t3. Access Mode\n";
+        echo "\t4. Maximum Fee\n";
+        echo "\t5. Maximum Peer of Peer Level\n";
+        echo "\t6. Default Peer of Peer Expiration\n";
+        echo "\t7. Cancel\n";
 
         // Read user input
         $setting_choice = trim(fgets(STDIN));
@@ -118,6 +119,13 @@ function changeSettings($argv) {
                 return;
         }
     }
+
+    // Check for zero value due to typecasting actual text to number or using zero where not possible
+    if($value < 0 || ($value == 0 && $key != 'defaultFee')){
+        echo "Value is invalid for setting. No changes made.\n";
+        return;
+    }
+
     // Save changes to config file
     $config_content = file_get_contents('/etc/eiou/config.php');
     $config_content = preg_replace("/\['" . $key . "'\]\s*=\s*[^;]+;/", "['" . $key . "'] = " . (is_bool($value) ? ($value ? 'true' : 'false') : (is_string($value) ? "'" . $value . "'" : $value)) . ";", $config_content);
@@ -131,12 +139,12 @@ function displayCurrentSettings() {
     // Display current settings of user
     global $user;
     echo "Current Settings:\n";
-    echo "Default fees: " . $user['defaultFee'] ."%\n";
-    echo "Default currency: " . $user['defaultCurrency'] . "\n";
-    echo "Access Mode: " . ($user['localhostOnly'] ? "Local Access Only" : "Network Authorized") . "\n";
-    echo "Maximum Fee: " . $user['maxFee'] . "%\n";
-    echo "Maximum Peer of Peer Level: " . $user['maxP2pLevel'] . "\n";
-    echo "Default Peer of Peer Expiration: " . $user['p2pExpiration'] . " seconds\n";
+    echo "\tDefault fees: " . $user['defaultFee'] ."%\n";
+    echo "\tDefault currency: " . $user['defaultCurrency'] . "\n";
+    echo "\tAccess Mode: " . ($user['localhostOnly'] ? "Local Access Only" : "Network Authorized") . "\n";
+    echo "\tMaximum Fee: " . $user['maxFee'] . "%\n";
+    echo "\tMaximum Peer of Peer Level: " . $user['maxP2pLevel'] . "\n";
+    echo "\tDefault Peer of Peer Expiration: " . $user['p2pExpiration'] . " seconds\n";
 }
 
 function displayHelp() {
