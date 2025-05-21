@@ -3,10 +3,8 @@
 
 function expireMessage($message){
     // Expire the p2p request
-    if(time() > $message['expiration']){
-        updateP2pRequestStatus($message['hash'], 'expired');
-        output("P2P request with hash: " . print_r($message['hash'],true) . " has expired",'SILENT');
-    }
+    updateP2pRequestStatus($message['hash'], 'expired');
+    output("P2P request with hash: " . print_r($message['hash'],true) . " has expired",'SILENT');
 }
 
 function handleRp2pRequest($request) {
