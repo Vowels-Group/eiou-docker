@@ -18,6 +18,8 @@ function handleRp2pRequest($request) {
         if(isset($result['destination_address'])) {
             updateP2pRequestStatus($request['hash'], 'found');
         }
+        // Add users fee to request
+        $request['amount'] += $result['my_fee_amount'];
         // Save rp2p response 
         $insertResult = insertRp2pRequest($request);
         if (!$insertResult) {
