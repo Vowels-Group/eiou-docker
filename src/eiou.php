@@ -23,7 +23,7 @@ checkWalletExists($user, $request);
   // Call the function in the info section
   if ($request == "info") {
       output("Executing info request",  'SILENT');
-      displayUserInfo($user);
+      displayUserInfo($argv);
   }
 // Contacts
   elseif($request == "add"){
