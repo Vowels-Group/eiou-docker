@@ -39,7 +39,6 @@ function handleP2pRequest($request) {
         // Calculate fees
         $requestedAmount = calculateRequestedAmount($request);
         $request['feeAmount'] = $requestedAmount - $request['amount'];
-        $request['amount'] = $requestedAmount; 
         insertP2pRequest($request, NULL);  // Insert p2p request
         updateP2pRequestStatus($request['hash'], 'queued'); // Update the p2p request status to queued
     }
