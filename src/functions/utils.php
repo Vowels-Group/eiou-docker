@@ -163,7 +163,9 @@ function displayHelp() {
     echo "generate - Generate a new wallet.\n";
 }
 
-function displayUserInfo($user) {
+function displayUserInfo($argv) {
+    global $user;
+
     // Display user information
     echo "User Information:\n";
     
@@ -186,11 +188,15 @@ function displayUserInfo($user) {
     echo "Public Key: " . $user['public'] . "\n";
     
     // Calculate total sent and received
-    $totalSent = calculateTotalSent($user['public']);
-    $totalReceived = calculateTotalReceived($user['public']);
+    $totalReceived = calculateTotalReceivedUser(); // Received by user
+    $totalSent = calculateTotalSentUser(); // Sent by user
     $balance = ($totalReceived - $totalSent) / 100;
     
     echo "Balance: " . number_format($balance, 2) . "\n";
+
+    if(isset($argv[2]) && $argv[2] == 'detail'){
+        // TO DO: balance detail
+    }
 }
 
 function getContext(){
