@@ -65,14 +65,50 @@ function calculateTotalSent($publicKey) {
     }
 }
 
+function calculateTotalSentUser() {
+    global $pdo;
+    global $user;
+    // Calculate total amount received through transactions based on public key hash
+    try {
+        $publicKeyHash = hash('sha256', $user['public']);
+        $balanceStmt = $pdo->prepare("SELECT SUM(amount) as total_sent FROM transactions WHERE sender_public_key_hash = :publicKeyHash");  
+        $balanceStmt->bindParam(':publicKeyHash', $publicKeyHash);
+        $balanceStmt->execute();
+        $result = $balanceStmt->fetch(PDO::FETCH_ASSOC);
+        return $result['total_sent'] ?: 0;
+    } catch (PDOException $e) {
+        // Handle database error
+        error_log("Error calculating total sent: " . $e->getMessage());
+        return 0;
+    }
+}
+
 function calculateTotalReceived($publicKey) {
     global $pdo;
-    // Calculate total amount sent through transactions based on public key hash
+    // Calculate total amount received through transactions based on public key hash
     try {
         $publicKeyHash = hash('sha256', $publicKey);
+        $balanceStmt = $pdo->prepare("SELECT SUM(amount) as total_received FROM transactions WHERE sender_public_key_hash = :publicKeyHash");  
+        $balanceStmt->bindParam(':publicKeyHash', $publicKeyHash);
+        $balanceStmt->execute();
+        $result = $balanceStmt->fetch(PDO::FETCH_ASSOC);
+        return $result['total_received'] ?: 0;
+    } catch (PDOException $e) {
+        // Handle database error
+        error_log("Error calculating total sent: " . $e->getMessage());
+        return 0;
+    }
+}
+
+function calculateTotalReceivedUser() {
+    global $pdo;
+    global $user;
+    // Calculate total amount received through transactions based on public key hash
+    try {
+        $publicKeyHash = hash('sha256', $user['public']);
         $balanceStmt = $pdo->prepare("SELECT SUM(amount) as total_received 
             FROM transactions 
-            WHERE sender_public_key_hash = :publicKeyHash");  
+            WHERE sender_public_key_hash != :publicKeyHash");  
         $balanceStmt->bindParam(':publicKeyHash', $publicKeyHash);
         $balanceStmt->execute();
         $result = $balanceStmt->fetch(PDO::FETCH_ASSOC);
@@ -464,8 +500,8 @@ function insertP2pRequest($request, $destinationAddress = null) {
         $stmt->bindParam(':sender_address', $request['senderAddress']);
         $stmt->bindParam(':sender_signature', $request['signature']);
         $stmt->bindParam(':destination_address', $destinationAddress);
-        $stmt->bindParam(':incoming_txid', $request['incomingTxid']);
-        $stmt->bindParam(':outgoing_txid', $request['outgoingTxid']);
+        $stmt->bindParam(':incoming_txid', $request['incoming_txid']);
+        $stmt->bindParam(':outgoing_txid', $request['outgoing_txid']);
         $stmt->bindParam(':status', $status);
         // Execute the insert
         $stmt->execute();
