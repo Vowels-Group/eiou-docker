@@ -1,14 +1,15 @@
 <?php
 # Copyright 2025
 
-function buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit) {
+function buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit, $fundsOnHold) {
     // Build rejection payload when balance is insufficient
     return json_encode([
         "status" => "rejected", 
         "message" => "Insufficient balance or credit", 
-        "current_balance" => number_format($availableFunds / 100, 2) . " USD",      // Convert back to dollars with 2 decimal places and USD
         "credit_limit" => number_format($creditLimit / 100, 2) . " USD",            // Convert back to dollars with 2 decimal places and USD
-        "requested_amount" => number_format($requestedAmount / 100, 2) . " USD"     // Convert back to dollars with 2 decimal places and USD
+        "current_balance" => number_format($availableFunds / 100, 2) . " USD",      // Convert back to dollars with 2 decimal places and USD
+        "funds_on_hold" => "-".number_format($fundsOnHold / 100, 2) . " USD",           // Convert back to dollars with 2 decimal places and USD
+        "requested_amount" => "-".number_format($requestedAmount / 100, 2) . " USD"     // Convert back to dollars with 2 decimal places and USD
     ]);
 }
 
