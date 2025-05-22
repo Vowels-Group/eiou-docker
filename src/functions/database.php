@@ -646,6 +646,16 @@ function lookupContactByAddress($address) {
     return $result ? $result : null;
 }
 
+function lookupContactNameByAddress($address){
+     global $pdo;
+    // Lookup contact name based on address
+    $nameStmt = $pdo->prepare("SELECT name FROM contacts WHERE address = :address");
+    $nameStmt->bindParam(':address', $address);
+    $nameStmt->execute();
+    $result = $nameStmt->fetchColumn();
+    return $result ? $result : null;
+}
+
 function lookupP2pRequest($hash) {
     global $pdo;
     // Lookup p2p request based on hash
