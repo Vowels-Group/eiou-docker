@@ -16,9 +16,10 @@ function checkAvailableFunds($request){
         // Check if sender has enough 'credit' to facilitate eIOU
         $requestedAmount = calculateRequestedAmount($request);
         $availableFunds = calculateAvailableFunds($request);  
+        $fundsOnHold =  retrieveCreditInP2p($request['senderAddress']);
         $creditLimit = getCreditLimit($request['senderPublicKey']);
-        if ($availableFunds < $requestedAmount) {
-            echo buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit);
+        if ($availableFunds < ($requestedAmount + $fundsOnHold)) {
+            echo buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit, $fundsOnHold);
             return false;
         } 
     }
