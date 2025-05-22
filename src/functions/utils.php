@@ -164,7 +164,7 @@ function displayHelp() {
 }
 
 function displayUserInfo($argv) {
-    global $user;
+    global $pdo, $user;
 
     // Display user information
     echo "User Information:\n";
@@ -176,6 +176,9 @@ function displayUserInfo($argv) {
 
     if(isset($user['hostname'])){
         $locators['Http'] = $user['hostname'];
+        $userAddress = $user['hostname'];
+    } else{
+        $userAddress = $user['torAddress'];
     }
     
     // Output locators
@@ -192,10 +195,35 @@ function displayUserInfo($argv) {
     $totalSent = calculateTotalSentUser(); // Sent by user
     $balance = ($totalReceived - $totalSent) / 100;
     
-    echo "Balance: " . number_format($balance, 2) . "\n";
+    echo "Total Balance: " . number_format($balance, 2) . "\n";
 
     if(isset($argv[2]) && $argv[2] == 'detail'){
-        // TO DO: balance detail
+         // View balance information based on transactions
+        $queryToMe = "SELECT sender_address, amount, currency, timestamp FROM transactions WHERE receiver_address = :userAddress ORDER BY timestamp DESC";
+        $queryFromMe = "SELECT receiver_address, amount, currency, timestamp FROM transactions WHERE sender_address = :userAddress ORDER BY timestamp DESC";
+
+        if(!(isset($argv[3]) && $argv[3] == 'all')){
+            $queryToMe .= " LIMIT 5";
+            $queryFromMe .= " LIMIT 5";
+        } 
+
+        $stmtToMe = $pdo->prepare($queryToMe);  
+        $stmtToMe->bindParam(':userAddress', $userAddress);
+        $stmtToMe->execute();
+        echo "Balance received from:\n";
+        while ($row = $stmtToMe->fetch(PDO::FETCH_ASSOC)) {
+            $amount = $row['amount'] / 100;
+            printf("\t%s (%s) %s, %.2f %s\n", $row['sender_address'], lookupContactNameByAddress($row['sender_address']), $row['timestamp'], $amount, $row['currency']);
+        }
+
+        $stmtFromMe = $pdo->prepare($queryFromMe);
+        $stmtFromMe->bindParam(':userAddress', $userAddress);
+        $stmtFromMe->execute();
+        echo "Balance sent to:\n";
+        while ($row = $stmtFromMe->fetch(PDO::FETCH_ASSOC)) {
+            $amount = $row['amount'] / 100;  
+            printf("\t%s (%s) %s, %.2f %s\n", $row['receiver_address'], lookupContactNameByAddress($row['receiver_address']), $row['timestamp'], "-" . $amount, $row['currency']);
+        }
     }
 }
 
