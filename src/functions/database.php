@@ -66,8 +66,7 @@ function calculateTotalSent($publicKey) {
 }
 
 function calculateTotalSentUser() {
-    global $pdo;
-    global $user;
+    global $pdo, $user;
     // Calculate total amount received through transactions based on public key hash
     try {
         $publicKeyHash = hash('sha256', $user['public']);
@@ -101,14 +100,11 @@ function calculateTotalReceived($publicKey) {
 }
 
 function calculateTotalReceivedUser() {
-    global $pdo;
-    global $user;
+    global $pdo, $user;
     // Calculate total amount received through transactions based on public key hash
     try {
         $publicKeyHash = hash('sha256', $user['public']);
-        $balanceStmt = $pdo->prepare("SELECT SUM(amount) as total_received 
-            FROM transactions 
-            WHERE sender_public_key_hash != :publicKeyHash");  
+        $balanceStmt = $pdo->prepare("SELECT SUM(amount) as total_received FROM transactions WHERE sender_public_key_hash != :publicKeyHash");  
         $balanceStmt->bindParam(':publicKeyHash', $publicKeyHash);
         $balanceStmt->execute();
         $result = $balanceStmt->fetch(PDO::FETCH_ASSOC);
