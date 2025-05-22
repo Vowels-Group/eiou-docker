@@ -40,7 +40,7 @@ function processTransaction($request) {
     $requiredAmount = $request['amount']; 
     $availableFunds = $currentBalance + $creditLimit;  
     if ($availableFunds < $requiredAmount) {
-        return buildInsufficientBalancePayload($availableFunds, $requiredAmount, $creditLimit);
+        return buildInsufficientBalancePayload($availableFunds, $requiredAmount, $creditLimit, 0);
     } else {
         $memo = $request['memo'];
         $rP2pResult  = checkRP2pExists($memo);
