@@ -727,6 +727,16 @@ function retrieveQueuedP2pMessages($status = 'queued', $status2 = '') {
     return $queuedMessages;
 }
 
+function retrieveCreditInP2p($address){
+    global $pdo;
+    // Calculate how much credit is on hold in current processing p2p
+    $P2pStmt = $pdo->prepare("SELECT SUM(amount) as total_amount FROM p2p WHERE sender_address = :address AND status IN ('initial','queued','sent','found')");
+    $P2pStmt->bindParam(':address', $address);
+    $P2pStmt->execute();
+    $result = $P2pStmt->fetch(PDO::FETCH_ASSOC);
+    return $result['total_amount'] ?? 0;
+}
+
 function searchContactsQuery($name = null) {
     global $pdo;
     // Search for possible contacts based on name, return all (possible) changeable information if found
