@@ -13,11 +13,11 @@ Request eIOU
 Accept eIOU
 View eIOUs
 View Transaction History
-Peers of Peers
-Request Peers of Peers
-Receive Peers of Peers Request
-Respond Peers of Peers
-Receive Peers of Peers Response
+Peers to peers
+Request Peers to peers
+Receive Peers to peers Request
+Respond Peers to peers
+Receive Peers to peers Response
 Settings
 Help
 View Settings
@@ -51,7 +51,7 @@ Main Nominal Credit
 Main Currency (Should be USD until ‘Foreign Currencies’ feature)
 
 Accept Contact
-Accept a create contact request and add the contact back. Users can send funds to non contacts (from trusted contacts) but can not accept each other’s credit, or interact directly in Peer of Peer requests
+Accept a create contact request and add the contact back. Users can send funds to non contacts (from trusted contacts) but can not accept each other’s credit, or interact directly in Peer to Peer requests
 
 Example command: eiou accept 123pubkey Bob 0.2 20 USD
 
@@ -119,12 +119,12 @@ If the user is a contact
 Check in the database for contacts credit limit with the user, subtract the outstanding eIOUs and add outstanding eIOUs from contact.
 If credit limit is greater than amount, prompt the user to confirm
 On confirm, sign the "send" transaction and send it
-If no, send a peer of peer request
+If no, send a peer to peer request
 Wait for response
 Prompt user to confirm
 On Confirm, sign the "send" transaction and send it
 If the user is not a contact
-Send a peer of peer request
+Send a peer to peer request
 Wait for response
 
 Example command: eiou send Adrien 100 USD
@@ -141,12 +141,12 @@ If the user is a contact
 Check the local database to see if user will accept the amount in a direct eIOU
 If yes, prompt the user to confirm
 On confirm, sign the "request" transaction and send it
-If no, send a peer of peer request
+If no, send a peer to peer request
 Wait for response
 Prompt user to confirm
 On Confirm, sign the "request" transaction and send it
 If the user is not a contact
-Send a peer of peer request
+Send a peer to peer request
 Wait for response
 
 Example command: eiou request Adrien 100 USD
@@ -177,18 +177,18 @@ Example command: eiou history
 Example command: eiou history adrien
 Example command: eiou history 123pubkey
 
-Peers of Peers
-Request Peers of Peers
+Peers to peers
+Request Peers to peers
 Hash(pubkey + salt + time). Send hash, salt, time, currency, nominal amount (the amount the recipient will receive), and request level (set to 0) to all contacts.
-Receive Peers of Peers Request
+Receive Peers to peers Request
 Perform Hash(contact + salt + time) with all contacts. 
 If there is a match, check if the user would accept that much credit to send that much as an eIOU
 If there is no match, increment the request level by 1 and forward the request to all contacts
-Respond Peers of Peers
+Respond Peers to peers
 Respond to peer to let them know you would accept the credit, and give an expiration
-Hold the credit until peer of peer request is completed
-Receive Peers of Peers Response
-Receive peer of peer response
+Hold the credit until peer to peer request is completed
+Receive Peers to peers Response
+Receive peer to peer response
 Show it to user
 On confirm, sign transaction and send it forward
 Settings
@@ -204,8 +204,8 @@ Default fees
 Default currency (currently hardcoded to USD)
 LocalHost/Network Connection Only (API / GUI version, respectively)
 Disable Token (API only)
-Default Peer of Peer Expiration
-Maximum Peer of Peer Level (default 6)
+Default Peer to Peer Expiration
+Maximum Peer to Peer Level (default 6)
 
 Example command: eiou settings
 Update Settings

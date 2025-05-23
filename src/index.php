@@ -34,14 +34,14 @@ elseif ($request['type'] == "send") {
   }
 }
 elseif ($request['type'] == "p2p") {
-  // Handle Peers of Peers Request
+  // Handle Peers to peers Request
   output("Processing p2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
   if(!checkExistence($request)){
     handleP2pRequest($request);
   }
 }
 elseif ($request['type'] == "rp2p") {
-  // Handle Peers of Peers Response
+  // Handle Peers to peers Response
   output("Processing rp2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
   if(!checkExistence($request)){
     handleRp2pRequest($request);

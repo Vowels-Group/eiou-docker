@@ -66,8 +66,8 @@ function changeSettings($argv) {
         echo "\t2. Default Currency\n";
         echo "\t3. Access Mode\n";
         echo "\t4. Maximum Fee\n";
-        echo "\t5. Maximum Peer of Peer Level\n";
-        echo "\t6. Default Peer of Peer Expiration\n";
+        echo "\t5. Maximum Peer to Peer Level\n";
+        echo "\t6. Default Peer to Peer Expiration\n";
         echo "\t7. Cancel\n";
 
         // Read user input
@@ -99,13 +99,13 @@ function changeSettings($argv) {
                 break;
             
             case '5':
-                echo "Enter new Maximum Peer of Peer Level: ";
+                echo "Enter new Maximum Peer to Peer Level: ";
                 $key = 'maxP2pLevel';
                 $value = intval(trim(fgets(STDIN)));
                 break;
             
             case '6':
-                echo "Enter new Peer of Peer Expiration (in seconds): ";
+                echo "Enter new Peer to Peer Expiration (in seconds): ";
                 $key = 'p2pExpiration';
                 $value = intval(trim(fgets(STDIN)));
                 break;
@@ -143,8 +143,8 @@ function displayCurrentSettings() {
     echo "\tDefault currency: " . $user['defaultCurrency'] . "\n";
     echo "\tAccess Mode: " . ($user['localhostOnly'] ? "Local Access Only" : "Network Authorized") . "\n";
     echo "\tMaximum Fee: " . $user['maxFee'] . "%\n";
-    echo "\tMaximum Peer of Peer Level: " . $user['maxP2pLevel'] . "\n";
-    echo "\tDefault Peer of Peer Expiration: " . $user['p2pExpiration'] . " seconds\n";
+    echo "\tMaximum Peer to Peer Level: " . $user['maxP2pLevel'] . "\n";
+    echo "\tDefault Peer to Peer Expiration: " . $user['p2pExpiration'] . " seconds\n";
 }
 
 function displayHelp() {

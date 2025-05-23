@@ -48,7 +48,7 @@ function buildP2pPayload($data) {
     global $user;
     $userAddress = resolveUserAddressForTransport($data['receiverAddress'] ?? $data['sender_address']); //To whom: either to a contact (initial sending) or return to contact based on found end-recipient)
     return array(
-        'type' => 'p2p', // Peers of Peers request type
+        'type' => 'p2p', // Peers to peers request type
         'hash' => $data['hash'],
         'salt' => $data['salt'],
         'time' => $data['time'],
@@ -68,7 +68,7 @@ function buildRP2pPayload($data) {
     output("Building rP2p payload: " . print_r($data, true),'SILENT');
     $userAddress = resolveUserAddressForTransport($data['senderAddress'] ?? $data['sender_address']);
     return array(
-        'type' => 'rp2p', // Return Peers of Peers request type
+        'type' => 'rp2p', // Return Peers to peers request type
         'hash' => $data['hash'],
         'time' => $data['time'],
         'amount' => $data['amount'],
