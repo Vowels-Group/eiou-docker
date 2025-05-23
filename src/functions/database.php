@@ -292,6 +292,7 @@ function freshInstall(){
         $defaultConfig .= "\$user['maxP2pLevel'] = 6; // Default maximum level for Peer to Peer propagation\n";
         $defaultConfig .= "\$user['p2pExpiration'] = 300; // Default expiration time for Peer to Peer requests in seconds\n";
         $defaultConfig .= "\$user['debug'] = true; // Enable debug mode\n";
+        $defaultConfig .= "\$user['maxOutput'] = 5; // Maximum lines of output for multi-line output\n";
 
         // Create MySQL user, database, and tables
         $dbHost = 'localhost';
@@ -369,7 +370,7 @@ function getPreviousTxid($senderPublicKey, $receiverPublicKey) {
     $senderPublicKeyHash = hash('sha256', $senderPublicKey);
     $receiverPublicKeyHash = hash('sha256', $receiverPublicKey);
     
-    $prevTxStmt = $pdo->prepare("SELECT txid FROM transactions WHERE sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash ORDER BY timestamp DESC LIMIT 1");
+    $prevTxStmt = $pdo->prepare("SELECT txid FROM transactions WHERE (sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash) OR (sender_public_key_hash = :receiver_public_key_hash AND receiver_public_key_hash = :sender_public_key_hash) ORDER BY timestamp DESC LIMIT 1");
     $prevTxStmt->bindParam(':sender_public_key_hash', $senderPublicKeyHash);
     $prevTxStmt->bindParam(':receiver_public_key_hash', $receiverPublicKeyHash);
     $prevTxStmt->execute();
@@ -857,34 +858,61 @@ function updateTransactionStatus($memo, $status) {
     }
 }
 
-function viewTransactionHistory($data) {
+function viewBalanceQuery($address1, $address2, $userAddress, $limit, $direction){
     global $pdo;
+    // View balance information based on transactions
+    $query = "SELECT $address1, amount, currency, timestamp FROM transactions WHERE $address2 = :userAddress ORDER BY timestamp DESC";
+    $stmt = $pdo->prepare($query);  
+    $stmt->bindParam(':userAddress', $userAddress);
+    $stmt->execute();
+
+    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $countResults = count($results);
+    
+    echo "Balance $direction from:\n";
+    $countrows = 1;
+    foreach ($results as $res) {
+        $amount = $res['amount'] / 100;
+        printf("\t%s (%s) %s, %.2f %s\n", lookupContactNameByAddress($res[$address1]), $res[$address1], $res['timestamp'], $amount, $res['currency']);
+        if($limit !== 'all' && ($countrows >= $limit)){
+            break;
+        } 
+        $countrows += 1;
+    }
+    if($limit == 'all' || $limit > $countResults){
+        $limit = $countResults;
+    } 
+    echo "Displaying $limit out of $countResults $direction balance(s).\n";
+}
+
+function viewTransactionHistory($argv) {
+    global $pdo, $user;
     // View all transaction history in pretty print 'table'
     $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
     $address = null;
-
+    $displayLimit = $user['maxOutput'];
     // Check if an address or name is provided
-    if (isset($data[2])) {
-        // First check if it's an HTTP address
-        if (isHttpAddress($data[2])) {
-            $address = $data[2];
-        } 
-        // Then check if it's a Tor address
-        elseif (isTorAddress($data[2])) {
-            $address = $data[2];
+    if (isset($argv[2])) {
+        // First if it's an HTTP or Tor address
+        if (isHttpAddress($argv[2]) || isTorAddress($argv[2])) {
+            $address = $argv[2];
+        } else {
+            // Check if the name yields an address
+            $contactResult = lookupContactByName($argv[2]);
+            $address = $contactResult ? $contactResult['address'] : $argv[2];
         }
-        // If not, try to look up by name
-        else {
-            $contactResult = lookupContactByName($data[2]);
-            $address = $contactResult ? $contactResult['address'] : $data[2];
-        }
-
         // Add WHERE clause if a valid address is found
         if ($address) {
             $query .= " WHERE sender_address = :address OR receiver_address = :address";
-        }
+        } 
     }
-
+    // Add ordering
+    $query .= " ORDER BY timestamp DESC";
+    // Add limit depending on passed parameter
+    if(isset($argv[3]) && ($argv[3] == 'all' || intval($argv[3]) > 0)){
+        $displayLimit = $argv[3];
+    }
+    
     $stmt = $pdo->prepare($query);
     
     if ($address) {
@@ -904,7 +932,8 @@ function viewTransactionHistory($data) {
              str_pad("Currency", 10, ' ') . " | " . 
              "Timestamp\n";
         echo "-------------------------------------------\n";
-        
+        $countResults = count($results);
+        $countrows = 1;
         foreach ($results as $transaction) {
             // Lookup sender name
             $senderResult = lookupContactByAddress($transaction['sender_address']);
@@ -923,10 +952,18 @@ function viewTransactionHistory($data) {
                  str_pad(number_format($transaction['amount'] / 100, 2), 10, ' ') . " | " . 
                  str_pad($transaction['currency'], 10, ' ') . " | " . 
                  $transaction['timestamp'] . "\n";
+            if($displayLimit !== 'all' && ($countrows >= $displayLimit)){
+                break;
+            } 
+            $countrows += 1;        
         }
-        
         echo "-------------------------------------------\n";
-        echo "Total transactions: " . count($results) . "\n";
+        if($displayLimit == 'all'){
+            $displayLimit = $countResults;
+        } elseif($displayLimit > $countResults){
+            $displayLimit = $countResults;
+        }
+        echo "Displaying " . $displayLimit .  " out of " . $countResults . " total transactions.\n";
     } else {
         echo "No transaction history found.\n";
     }
