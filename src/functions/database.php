@@ -864,9 +864,11 @@ function viewBalanceQuery($direction, $userAddress, $limit){
     if($direction == "received"){
          $query = "SELECT sender_address, amount, currency, timestamp FROM transactions WHERE receiver_address = :userAddress ORDER BY timestamp DESC";
          $address = "sender_address";
+         $where = "from";
     } else{
          $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions WHERE sender_address = :userAddress ORDER BY timestamp DESC";
          $address = "receiver_address";
+         $where = "to";
     }
    
     $stmt = $pdo->prepare($query);  
@@ -876,7 +878,7 @@ function viewBalanceQuery($direction, $userAddress, $limit){
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $countResults = count($results);
     
-    echo "Balance $direction from:\n";
+    echo "Balance $direction $where:\n";
     $countrows = 1;
     foreach ($results as $res) {
         $amount = $res['amount'] / 100;
