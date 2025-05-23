@@ -204,10 +204,13 @@ function viewBalances($data) {
         }
         // Add WHERE clause if a valid address is found
         if ($address) {
-            $query .= " WHERE sender_address = :address OR receiver_address = :address";
-        }
+            $query .= " WHERE sender_address = :address OR receiver_address = :address ORDER BY timestamp DESC";
+        } else{
+            echo "Address/Name unknown, displaying all balances";
+            $query .= " ORDER BY timestamp DESC";   
+        }    
     }
-    
+
     $balances = [];
     $stmt = $pdo->prepare($query);
     
