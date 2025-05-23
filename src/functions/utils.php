@@ -74,7 +74,7 @@ function changeSettings($argv) {
         echo "\t4. Maximum Fee\n";
         echo "\t5. Maximum Peer to Peer Level\n";
         echo "\t6. Default Peer to Peer Expiration\n";
-        echo "\t7. Maximum lines of Balance output\n";
+        echo "\t7. Maximum lines of Balance/Transaction output\n";
         echo "\t8. Cancel\n";
 
         // Read user input
@@ -223,8 +223,8 @@ function displayUserInfo($argv) {
         } else{
             $limit = $user['maxOutput'];
         }
-        viewBalanceQuery("sender_address","receiver_address",$userAddress,$limit,"received");
-        viewBalanceQuery("receiver_address","sender_address",$userAddress,$limit,"sent");
+        viewBalanceQuery("received",$userAddress,$limit); // Received Balances
+        viewBalanceQuery("sent",$userAddress,$limit); // Sent Balances
     }
 }
 

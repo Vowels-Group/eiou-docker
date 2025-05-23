@@ -858,10 +858,17 @@ function updateTransactionStatus($memo, $status) {
     }
 }
 
-function viewBalanceQuery($address1, $address2, $userAddress, $limit, $direction){
+function viewBalanceQuery($direction, $userAddress, $limit){
     global $pdo;
     // View balance information based on transactions
-    $query = "SELECT $address1, amount, currency, timestamp FROM transactions WHERE $address2 = :userAddress ORDER BY timestamp DESC";
+    if($direction == "received"){
+         $query = "SELECT sender_address, amount, currency, timestamp FROM transactions WHERE receiver_address = :userAddress ORDER BY timestamp DESC";
+         $address = "sender_address";
+    } else{
+         $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions WHERE sender_address = :userAddress ORDER BY timestamp DESC";
+         $address = "receiver_address";
+    }
+   
     $stmt = $pdo->prepare($query);  
     $stmt->bindParam(':userAddress', $userAddress);
     $stmt->execute();
@@ -873,7 +880,7 @@ function viewBalanceQuery($address1, $address2, $userAddress, $limit, $direction
     $countrows = 1;
     foreach ($results as $res) {
         $amount = $res['amount'] / 100;
-        printf("\t%s (%s) %s, %.2f %s\n", lookupContactNameByAddress($res[$address1]), $res[$address1], $res['timestamp'], $amount, $res['currency']);
+        printf("\t%s (%s) %s, %.2f %s\n", lookupContactNameByAddress($res[$address]), $res[$address], $res['timestamp'], $amount, $res['currency']);
         if($limit !== 'all' && ($countrows >= $limit)){
             break;
         } 
