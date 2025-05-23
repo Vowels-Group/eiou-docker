@@ -44,13 +44,19 @@ function changeSettings($argv) {
         }elseif(strtolower($argv[2]) == 'maxfee'){
             $key = 'maxFee';
             $value = floatval($argv[3]);
-
         }elseif(strtolower($argv[2]) == 'maxp2pLevel'){
             $key = 'maxP2pLevel';
             $value = intval($argv[3]);
         }elseif(strtolower($argv[2]) == 'p2pexpiration'){
             $key = 'p2pExpiration';
             $value = intval($argv[3]);
+        }elseif(strtolower($argv[2]) == 'maxoutput'){
+            $key = 'maxOutput';
+            if($argv[3] == 'all'){
+                $value = 'all';
+            } else{
+                $value = intval($argv[3]);
+            }    
         }else{
             echo "Setting provided does not exist. No changes made.\n";
             return;
@@ -68,7 +74,8 @@ function changeSettings($argv) {
         echo "\t4. Maximum Fee\n";
         echo "\t5. Maximum Peer to Peer Level\n";
         echo "\t6. Default Peer to Peer Expiration\n";
-        echo "\t7. Cancel\n";
+        echo "\t7. Maximum lines of Balance output\n";
+        echo "\t8. Cancel\n";
 
         // Read user input
         $setting_choice = trim(fgets(STDIN));
@@ -109,8 +116,19 @@ function changeSettings($argv) {
                 $key = 'p2pExpiration';
                 $value = intval(trim(fgets(STDIN)));
                 break;
-            
+
             case '7':
+                echo "Enter new Maximum of Balance/Transaction output lines to display: ";
+                $key = 'maxOutput';
+                $read = trim(fgets(STDIN));
+                if($read == 'all'){
+                    $value = 'all';
+                } else{
+                    $value = intval($read);
+                } 
+                break;
+            
+            case '8':
                 echo "Setting change cancelled.\n";
                 return;
             
@@ -120,7 +138,7 @@ function changeSettings($argv) {
         }
     }
 
-    // Check for zero value due to typecasting actual text to number or using zero where not possible
+    // Check for zero value due to typecasting actual text to number or using zero (or less than) where not possible
     if($value < 0 || ($value == 0 && $key != 'defaultFee')){
         echo "Value is invalid for setting. No changes made.\n";
         return;
@@ -145,6 +163,7 @@ function displayCurrentSettings() {
     echo "\tMaximum Fee: " . $user['maxFee'] . "%\n";
     echo "\tMaximum Peer to Peer Level: " . $user['maxP2pLevel'] . "\n";
     echo "\tDefault Peer to Peer Expiration: " . $user['p2pExpiration'] . " seconds\n";
+    echo "\tDefault Maximum lines of balance output: " . $user['maxOutput'] . "\n";
 }
 
 function displayHelp() {
@@ -164,8 +183,8 @@ function displayHelp() {
 }
 
 function displayUserInfo($argv) {
-    global $pdo, $user;
-
+    global $user;
+    
     // Display user information
     echo "User Information:\n";
     
@@ -198,32 +217,14 @@ function displayUserInfo($argv) {
     echo "Total Balance: " . number_format($balance, 2) . "\n";
 
     if(isset($argv[2]) && $argv[2] == 'detail'){
-         // View balance information based on transactions
-        $queryToMe = "SELECT sender_address, amount, currency, timestamp FROM transactions WHERE receiver_address = :userAddress ORDER BY timestamp DESC";
-        $queryFromMe = "SELECT receiver_address, amount, currency, timestamp FROM transactions WHERE sender_address = :userAddress ORDER BY timestamp DESC";
-
-        if(!(isset($argv[3]) && $argv[3] == 'all')){
-            $queryToMe .= " LIMIT 5";
-            $queryFromMe .= " LIMIT 5";
-        } 
-
-        $stmtToMe = $pdo->prepare($queryToMe);  
-        $stmtToMe->bindParam(':userAddress', $userAddress);
-        $stmtToMe->execute();
-        echo "Balance received from:\n";
-        while ($row = $stmtToMe->fetch(PDO::FETCH_ASSOC)) {
-            $amount = $row['amount'] / 100;
-            printf("\t%s (%s) %s, %.2f %s\n", $row['sender_address'], lookupContactNameByAddress($row['sender_address']), $row['timestamp'], $amount, $row['currency']);
+        // Define limit of output displayed
+        if(isset($argv[3]) && ($argv[3] == 'all' || intval($argv[3]) > 0)){
+            $limit = $argv[3];                   
+        } else{
+            $limit = $user['maxOutput'];
         }
-
-        $stmtFromMe = $pdo->prepare($queryFromMe);
-        $stmtFromMe->bindParam(':userAddress', $userAddress);
-        $stmtFromMe->execute();
-        echo "Balance sent to:\n";
-        while ($row = $stmtFromMe->fetch(PDO::FETCH_ASSOC)) {
-            $amount = $row['amount'] / 100;  
-            printf("\t%s (%s) %s, %.2f %s\n", $row['receiver_address'], lookupContactNameByAddress($row['receiver_address']), $row['timestamp'], "-" . $amount, $row['currency']);
-        }
+        viewBalanceQuery("sender_address","receiver_address",$userAddress,$limit,"received");
+        viewBalanceQuery("receiver_address","sender_address",$userAddress,$limit,"sent");
     }
 }
 
