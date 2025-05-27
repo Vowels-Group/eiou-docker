@@ -20,6 +20,15 @@ function handleRp2pRequest($request) {
         }
         // Add users fee to request
         $request['amount'] += $result['my_fee_amount'];
+
+
+        // Check if destination user of rp2p can afford to send eIOU with fees
+        $availableFunds = calculateAvailableFunds($result);
+        if($availableFunds < $request['amount']){
+            output("P2P sender cannot afford RP2P with " . $result['my_fee_amount'] . " " . $result['currency'] . " worth of fees added: " . print_r($request, true), 'SILENT');
+            return false;
+        }
+
         // Save rp2p response 
         $insertResult = insertRp2pRequest($request);
         if (!$insertResult) {
@@ -51,7 +60,6 @@ function handleRp2pRequest($request) {
 
 
 function processQueuedRP2pMessages() {
-    global $user;
     // Select queued messages from the p2p table with sent status
     $queuedMessages = retrieveQueuedP2pMessages($status = 'sent', $status2 = 'paid');
 
