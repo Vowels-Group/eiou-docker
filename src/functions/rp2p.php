@@ -22,12 +22,14 @@ function handleRp2pRequest($request) {
         $request['amount'] += $result['my_fee_amount'];
 
 
-        // Check if destination user of rp2p can afford to send eIOU with fees
-        // $availableFunds = calculateAvailableFunds($result);
-        // if($availableFunds < $request['amount']){
-        //     output("P2P sender cannot afford RP2P with " . $result['my_fee_amount'] . " " . $result['currency'] . " worth of fees added: " . print_r($request, true), 'SILENT');
-        //     return false;
-        // }
+        //Check if intermediary sender of p2p can afford to send eIOU with fees
+        if(!isset($result['destination_address'])) {
+            $availableFunds = calculateAvailableFunds($result);
+            if($availableFunds < $request['amount']){
+                output("P2P sender cannot afford RP2P with " . $result['my_fee_amount'] . " " . $result['currency'] . " worth of fees added: " . print_r($request, true), 'SILENT');
+                return false;
+            }
+        }
 
         // Save rp2p response 
         $insertResult = insertRp2pRequest($request);
