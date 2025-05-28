@@ -363,6 +363,14 @@ function getCreditLimit($senderPublicKey) {
     
     return $creditResult['credit_limit'] ?? 0;
 }
+function getExistingPreviousTxid($previousTxid){
+    global $pdo;
+    $prevTxStmt = $pdo->prepare("SELECT txid FROM transactions WHERE previous_txid = :previous_txid ORDER BY timestamp DESC LIMIT 1");
+    $prevTxStmt->bindParam(':previous_txid', $previousTxid);
+    $prevTxStmt->execute();
+    $result = $prevTxStmt->fetch(PDO::FETCH_ASSOC);
+    return $result ? true : false;
+}
 
 function getPreviousTxid($senderPublicKey, $receiverPublicKey) {
     global $pdo;
