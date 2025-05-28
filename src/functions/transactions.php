@@ -15,6 +15,14 @@ function checkPreviousTxid($request){
     return true;
 }
 
+function fixPreviousTxid($senderPubKey,$receiverPubKey){
+    $prevID = getPreviousTxid($senderPubKey, $receiverPubKey);
+    while(getExistingPreviousTxid($prevID)){
+        $prevID = getPreviousTxid($senderPubKey, $receiverPubKey);
+    }
+    return $prevID;
+}
+
 function prepareSendData($request) {
     // Prepare initial request payload for direct transaction
     output("Prepare send data: " . print_r($request, true), 'SILENT');
@@ -55,8 +63,9 @@ function processTransaction($request) {
             $request['amount'] = removeTransactionFee($request); 
             
             // Add previousTxid reflecting whom sent the transaction
-            $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
-            
+            $request['previousTxid'] = fixPreviousTxid($user['public'], $request['receiverPublicKey']);
+            $insertTransactionResponse = insertTransaction($request);
+
             $payload = buildSendPayload($request);
             updateP2pRequestStatus($memo,'paid'); // Update p2p status to paid
             output("Sending Transaction onwards to: " . $request['receiverAddress'],'SILENT');
@@ -65,13 +74,13 @@ function processTransaction($request) {
             //output("Accepting Transaction as Intermediate (RP2P) : " .  print_r($request,true),'SILENT'); 
             if (isset($response['status']) && $response['status'] === 'accepted') {
                 updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
-                $insertTransactionResponse = insertTransaction($request);
+                //$insertTransactionResponse = insertTransaction($request);
                 updateTransactionStatus($memo,'completed'); // Update transaction status to completed
                 return $insertTransactionResponse;
             }
         } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
             output("Transaction for me, inserting",'SILENT');
-            $request['previousTxid'] = getPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']); 
+            $request['previousTxid'] = fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']); 
             updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
             $insertTransactionResponse = insertTransaction($request);
             updateTransactionStatus($memo,'completed'); // Update transaction status to completed
