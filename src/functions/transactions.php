@@ -149,7 +149,7 @@ function sendEiou($request = null) {
         $data['receiverAddress'] = $contactInfo['receiverAddress'];
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
         $data['txid'] = hash('sha256', $user['public'] . $contactInfo['receiverPublicKey'] . $data['amount'] . $data['time']);
-        $data['previousTxid'] = getPreviousTxid($user['public'], $contactInfo['receiverPublicKey']);
+        $data['previousTxid'] = fixPreviousTxid($user['public'], $contactInfo['receiverPublicKey']);
         
         // Prepare transaction payload
         $payload = buildSendPayload($data);
