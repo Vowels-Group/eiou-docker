@@ -94,7 +94,7 @@ function getTransactionsTableSchema() {
             'accepted', /* Transaction has been accepted by peer */
             'rejected', /* Transaction has been rejected by peer */
             'completed' /* Transaction has been accepted by final recipient */
-        ) DEFAULT 'accepted',
+        ) DEFAULT 'pending',
         sender_address VARCHAR(255) NOT NULL,
         sender_public_key TEXT NOT NULL,
         sender_public_key_hash VARCHAR(64),
