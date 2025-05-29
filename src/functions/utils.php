@@ -169,7 +169,7 @@ function displayCurrentSettings() {
 function displayHelp($argv) {
     // Display available commands to user in the CLI
     if(isset($argv[2])){
-        echo "\n\nCommand:\n";
+        echo "Command:\n";
         if(strtolower($argv[2]) == 'defaultfee'){
         } elseif(strtolower($argv[2]) == 'add'){
             echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
@@ -197,7 +197,7 @@ function displayHelp($argv) {
             echo "\tcommand does not exist.\n";
         }
     } else{
-        echo "\n\nAvailable commands:\n";
+        echo "Available commands:\n";
         echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
         echo "\tviewcontact [address/name] - View contact information.\n";
         echo "\tupdate [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
