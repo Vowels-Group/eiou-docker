@@ -169,45 +169,46 @@ function displayCurrentSettings() {
 function displayHelp($argv) {
     // Display available commands to user in the CLI
     if(isset($argv[2])){
+        echo "\n\nCommand:\n";
         if(strtolower($argv[2]) == 'defaultfee'){
         } elseif(strtolower($argv[2]) == 'add'){
-            echo "add [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
+            echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
         } elseif(strtolower($argv[2]) == 'viewcontact'){
-            echo "viewcontact [address/name] - Read contact information.\n";
+            echo "\tviewcontact [address/name] - View contact information.\n";
         } elseif(strtolower($argv[2]) == 'update'){
-            echo "update [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
+            echo "\tupdate [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
         } elseif(strtolower($argv[2]) == 'delete'){
-            echo "delete [address/name] - Delete a contact.\n";
+            echo "\tdelete [address/name] - Delete a contact.\n";
         } elseif(strtolower($argv[2]) == 'send'){
-            echo "send [address/name] [amount] [currency] - Send an eIOU.\n";
+            echo "\tsend [address/name] [amount] [currency] - Send an eIOU.\n";
         } elseif(strtolower($argv[2]) == 'viewbalances'){
-            echo "viewbalances ([address/name]) - View eIOU balance(s).\n";
+            echo "\tviewbalances ([address/name]) - View eIOU balance(s).\n";
         } elseif(strtolower($argv[2]) == 'history'){
-            echo "history ([address/name]) - View transaction history for contacts, (default: all contacts).\n";
+            echo "\thistory ([address/name]) - View transaction history for contacts, (default: all contacts).\n";
         } elseif(strtolower($argv[2]) == 'help'){
-            echo "help - Display this help information.\n";
+            echo "\thelp - Display this help information.\n";
         } elseif(strtolower($argv[2]) == 'viewsettings'){
-            echo "viewsettings - View current settings.\n";
+            echo "\tviewsettings - View current settings.\n";
         } elseif(strtolower($argv[2]) == 'changesettings'){
-            echo "changesettings - Change settings.\n";
+            echo "\tchangesettings - Change settings.\n";
         } elseif(strtolower($argv[2]) == 'generate'){
-            echo "generate - Generate a new wallet.\n";
+            echo "\tgenerate - Generate a new wallet.\n";
         } else{
-            echo "command does not exist.\n";
+            echo "\tcommand does not exist.\n";
         }
     } else{
         echo "\n\nAvailable commands:\n";
-        echo "add [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
-        echo "viewcontact [address/name] - Read contact information.\n";
-        echo "update [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
-        echo "delete [address/name] - Delete a contact.\n";
-        echo "send [address/name] [amount] [currency] - Send an eIOU.\n";
-        echo "viewbalances ([address/name]) - View eIOU balance(s).\n";
-        echo "history ([address/name]) - View transaction history for contacts, (default: all contacts).\n";
-        echo "help - Display this help information.\n";
-        echo "viewsettings - View current settings.\n";
-        echo "changesettings - Change settings.\n";
-        echo "generate - Generate a new wallet.\n";
+        echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
+        echo "\tviewcontact [address/name] - View contact information.\n";
+        echo "\tupdate [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
+        echo "\tdelete [address/name] - Delete a contact.\n";
+        echo "\tsend [address/name] [amount] [currency] - Send an eIOU.\n";
+        echo "\tviewbalances ([address/name]) - View eIOU balance(s).\n";
+        echo "\thistory ([address/name]) - View transaction history for contacts, (default: all contacts).\n";
+        echo "\thelp - Display this help information.\n";
+        echo "\tviewsettings - View current settings.\n";
+        echo "\tchangesettings - Change settings.\n";
+        echo "\tgenerate - Generate a new wallet.\n";
     }
     
 }
