@@ -71,7 +71,7 @@ checkWalletExists($user, $request);
   elseif($request == "help"){
     //Help
     output("Executing help request", 'SILENT');
-    displayHelp();
+    displayHelp($argv);
   }
   elseif($request == "viewsettings"){
     //View Settings
@@ -94,7 +94,7 @@ checkWalletExists($user, $request);
     restoreWallet($argv);
   }
   else{
-    displayHelp();
+    displayHelp($argv);
     echo $request . " not found, displaying help above\n";
   }
 

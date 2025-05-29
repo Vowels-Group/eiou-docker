@@ -166,20 +166,50 @@ function displayCurrentSettings() {
     echo "\tDefault Maximum lines of balance output: " . $user['maxOutput'] . "\n";
 }
 
-function displayHelp() {
+function displayHelp($argv) {
     // Display available commands to user in the CLI
-    echo "\n\nAvailable commands:\n";
-    echo "add [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
-    echo "viewcontact [address/name] - Read contact information.\n";
-    echo "update [type] [address/name] [(name)] [(fee)] [(credit)] - Update a contact.\n";
-    echo "delete [address/name] - Delete a contact.\n";
-    echo "send [address/name] [amount] [currency] - Send an eIOU.\n";
-    echo "viewbalances ([address/name]) - View eIOU balance(s).\n";
-    echo "history ([address/name]) - View transaction history for contacts, (default: all contacts).\n";
-    echo "help - Display this help information.\n";
-    echo "viewsettings - View current settings.\n";
-    echo "changesettings - Change settings.\n";
-    echo "generate - Generate a new wallet.\n";
+    if(isset($argv[2])){
+        if(strtolower($argv[2]) == 'defaultfee'){
+        } elseif(strtolower($argv[2]) == 'add'){
+            echo "add [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
+        } elseif(strtolower($argv[2]) == 'viewcontact'){
+            echo "viewcontact [address/name] - Read contact information.\n";
+        } elseif(strtolower($argv[2]) == 'update'){
+            echo "update [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
+        } elseif(strtolower($argv[2]) == 'delete'){
+            echo "delete [address/name] - Delete a contact.\n";
+        } elseif(strtolower($argv[2]) == 'send'){
+            echo "send [address/name] [amount] [currency] - Send an eIOU.\n";
+        } elseif(strtolower($argv[2]) == 'viewbalances'){
+            echo "viewbalances ([address/name]) - View eIOU balance(s).\n";
+        } elseif(strtolower($argv[2]) == 'history'){
+            echo "history ([address/name]) - View transaction history for contacts, (default: all contacts).\n";
+        } elseif(strtolower($argv[2]) == 'help'){
+            echo "help - Display this help information.\n";
+        } elseif(strtolower($argv[2]) == 'viewsettings'){
+            echo "viewsettings - View current settings.\n";
+        } elseif(strtolower($argv[2]) == 'changesettings'){
+            echo "changesettings - Change settings.\n";
+        } elseif(strtolower($argv[2]) == 'generate'){
+            echo "generate - Generate a new wallet.\n";
+        } else{
+            echo "command does not exist.\n";
+        }
+    } else{
+        echo "\n\nAvailable commands:\n";
+        echo "add [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
+        echo "viewcontact [address/name] - Read contact information.\n";
+        echo "update [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
+        echo "delete [address/name] - Delete a contact.\n";
+        echo "send [address/name] [amount] [currency] - Send an eIOU.\n";
+        echo "viewbalances ([address/name]) - View eIOU balance(s).\n";
+        echo "history ([address/name]) - View transaction history for contacts, (default: all contacts).\n";
+        echo "help - Display this help information.\n";
+        echo "viewsettings - View current settings.\n";
+        echo "changesettings - Change settings.\n";
+        echo "generate - Generate a new wallet.\n";
+    }
+    
 }
 
 function displayUserInfo($argv) {
