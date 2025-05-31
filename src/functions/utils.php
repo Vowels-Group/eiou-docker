@@ -232,20 +232,22 @@ function displayUserInfo($argv) {
     }
     
     // Output locators
-    echo "Locators:\n";
+    echo "\tLocators:\n";
     foreach ($locators as $type => $address) {
-        echo "• $type: $address\n";
+        printf("\t\t• %-5s: %s\n",$type,$address);
     }
     
     // Public key is from the config file
-    echo "Public Key: " . $user['public'] . "\n";
+    $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$user['public']);
+    echo "\tPublic Key:" . $readablePubKey . "\n";
+
     
     // Calculate total sent and received
     $totalReceived = calculateTotalReceivedUser(); // Received by user
     $totalSent = calculateTotalSentUser(); // Sent by user
     $balance = ($totalReceived - $totalSent) / 100;
     
-    echo "Total Balance: " . number_format($balance, 2) . "\n";
+    echo "\tTotal Balance: " . number_format($balance, 2) . "\n";
 
     if(isset($argv[2]) && $argv[2] == 'detail'){
         // Define limit of output displayed

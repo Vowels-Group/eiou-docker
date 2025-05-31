@@ -886,11 +886,11 @@ function viewBalanceQuery($direction, $userAddress, $limit){
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $countResults = count($results);
     
-    echo "Balance $direction $where:\n";
+    echo "\t\tBalance $direction $where:\n";
     $countrows = 1;
     foreach ($results as $res) {
         $amount = $res['amount'] / 100;
-        printf("\t%s (%s) %s, %.2f %s\n", lookupContactNameByAddress($res[$address]), $res[$address], $res['timestamp'], $amount, $res['currency']);
+        printf("\t\t\t%s (%s) %s, %.2f %s\n", lookupContactNameByAddress($res[$address]), $res[$address], $res['timestamp'], $amount, $res['currency']);
         if($limit !== 'all' && ($countrows >= $limit)){
             break;
         } 
@@ -899,7 +899,7 @@ function viewBalanceQuery($direction, $userAddress, $limit){
     if($limit == 'all' || $limit > $countResults){
         $limit = $countResults;
     } 
-    echo "Displaying $limit out of $countResults $direction balance(s).\n";
+    echo "\t\t\t----- Displaying $limit out of $countResults $direction balance(s) -----\n";
 }
 
 function viewTransactionHistory($argv) {
