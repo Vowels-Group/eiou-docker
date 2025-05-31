@@ -94,7 +94,7 @@ echo -e "\n\t-> eioud-2-tor befriends eioud-3-tor, eioud-3-tor befriends eioud-2
 docker exec eioud-2-tor eiou add "$addr3" eioud-3-tor-name 1 1000 USD
 docker exec eioud-3-tor eiou add "$addr2" eioud-2-tor-name 1 1000 USD
 
-echo -e "\n\t-> eioud-3-tor befriends eioud-4-tor, eioud-4-tor befriends eioud-4-tor"
+echo -e "\n\t-> eioud-3-tor befriends eioud-4-tor, eioud-4-tor befriends eioud-3-tor"
 docker exec eioud-3-tor eiou add "$addr4" eioud-4-tor-name 1 1000 USD
 docker exec eioud-4-tor eiou add "$addr3" eioud-3-tor-name 1 1000 USD
 
@@ -106,6 +106,10 @@ echo -e "\n\t-> eioud-5-tor befriends eioud-6-tor, eioud-6-tor befriends eioud-5
 docker exec eioud-5-tor eiou add "$addr6" eioud-6-tor-name 1 1000 USD
 docker exec eioud-6-tor eiou add "$addr5" eioud-5-tor-name 1 1000 USD
 
+echo -e "\n\t-> eioud-6-tor befriends eioud-7-tor, eioud-7-tor befriends eioud-6-tor"
+docker exec eioud-6-tor eiou add "$addr7" eioud-7-tor-name 1 1000 USD
+docker exec eioud-7-tor eiou add "$addr6" eioud-6-tor-name 1 1000 USD
+
 echo -e "\n\t-> eioud-7-tor befriends eioud-8-tor, eioud-8-tor befriends eioud-7-tor"
 docker exec eioud-7-tor eiou add "$addr8" eioud-8-tor-name 1 1000 USD
 docker exec eioud-8-tor eiou add "$addr7" eioud-7-tor-name 1 1000 USD
@@ -115,24 +119,4 @@ docker exec eioud-8-tor eiou add "$addr9" eioud-9-tor-name 1 1000 USD
 docker exec eioud-9-tor eiou add "$addr8" eioud-8-tor-name 1 1000 USD
 
 
-echo -e "\nSending money:"
-echo -e "\t-> eioud-0-tor sends money to eioud-1-tor, directly"
-docker exec eioud-0-tor eiou send "$addr1" 100 USD
-
-echo -e "\t-> eioud-0-tor sends money to eioud-2-tor, through eioud-1-tor"
-docker exec eioud-0-tor eiou send "$addr2" 10 USD
-
-echo -e "\t-> eioud-0-tor sends money to eioud-3-tor, through eioud-1&2-tor"
-docker exec eioud-0-tor eiou send "$addr3" 20 USD
-
-echo -e "\t-> eioud-4-tor sends money to eioud-0-tor, through eioud-3&2&1-tor"
-docker exec eioud-4-tor eiou send "$addr0" 100 USD
-
-echo -e "\t-> eioud-0-tor sends money to eioud-9-tor, through eioud-8&7&6&5&4&3&2&1-tor"
-echo -e "\t\t-> This will fail due to default hop limit of 6"
-docker exec eioud-0-tor eiou send "$addr9" 100 USD
-
-echo -e "\t-> eioud-0-tor sends money to eioud-1-tor, using name"
-docker exec eioud-0-tor eiou send eioud-1-tor-name 12 USD
-
-echo -e "\nScript completed successfully."
+echo -e "\nBasic Setup Script completed successfully."
