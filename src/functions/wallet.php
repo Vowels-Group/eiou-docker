@@ -28,7 +28,7 @@ function generateWallet($argv) {
   $torAddress = trim(file_get_contents('/var/lib/tor/hidden_service/hostname'));
   
   // Check if torAddressOnly flag is set
-  if (isset($argv[2]) && $argv[2] === 'torAddressOnly') {
+  if (isset($argv[2]) && strtolower($argv[2]) === 'toraddressonly') {
       echo $torAddress . "\n";
       return;
   }
