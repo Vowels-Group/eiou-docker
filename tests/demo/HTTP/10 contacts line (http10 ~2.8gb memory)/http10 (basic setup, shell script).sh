@@ -22,44 +22,44 @@ remove_container_if_exists() {
 declare -A containerAddresses
 
 declare -a containers=(
-    "http0" 
-    "http1" 
-    "http2" 
-    "http3"
-    "http4"
-    "http5"
-    "http6"
-    "http7"
-    "http8"
-    "http9")
+    "httpA" 
+    "httpB" 
+    "httpC" 
+    "httpD"
+    "httpE"
+    "httpF"
+    "httpG"
+    "httpH"
+    "httpI"
+    "httpJ")
 
 # Setup of simple fees and credit, easy edit for every person
 readonly defaultFee=0.1
 readonly defaultCredit=1000
 
 # Define contacts, direction ->
-# example: [http0,http1] defines http1 as a contact of http0
+# example: [httpA,httpB] defines httpB as a contact of httpA
 #          must be accepted in reverse that is to say: 
-#          [http0,http1] needs to be followed by [http1,http0]
+#          [httpA,httpB] needs to be followed by [httpB,httpA]
 declare -A containersLinks=(
-    [http0,http1]="$defaultFee $defaultCredit USD"
-    [http1,http0]="$defaultFee $defaultCredit USD"
-    [http1,http2]="$defaultFee $defaultCredit USD"
-    [http2,http1]="$defaultFee $defaultCredit USD"
-    [http2,http3]="$defaultFee $defaultCredit USD"
-    [http3,http2]="$defaultFee $defaultCredit USD"
-    [http3,http4]="$defaultFee $defaultCredit USD"
-    [http4,http3]="$defaultFee $defaultCredit USD"
-    [http4,http5]="$defaultFee $defaultCredit USD"
-    [http5,http4]="$defaultFee $defaultCredit USD"
-    [http5,http6]="$defaultFee $defaultCredit USD"
-    [http6,http5]="$defaultFee $defaultCredit USD"
-    [http6,http7]="$defaultFee $defaultCredit USD"
-    [http7,http6]="$defaultFee $defaultCredit USD"
-    [http7,http8]="$defaultFee $defaultCredit USD"
-    [http8,http7]="$defaultFee $defaultCredit USD"
-    [http8,http9]="$defaultFee $defaultCredit USD"
-    [http9,http8]="$defaultFee $defaultCredit USD"
+    [httpA,httpB]="$defaultFee $defaultCredit USD"
+    [httpB,httpA]="$defaultFee $defaultCredit USD"
+    [httpB,httpC]="$defaultFee $defaultCredit USD"
+    [httpC,httpB]="$defaultFee $defaultCredit USD"
+    [httpC,httpD]="$defaultFee $defaultCredit USD"
+    [httpD,httpC]="$defaultFee $defaultCredit USD"
+    [httpD,httpE]="$defaultFee $defaultCredit USD"
+    [httpE,httpD]="$defaultFee $defaultCredit USD"
+    [httpE,httpF]="$defaultFee $defaultCredit USD"
+    [httpF,httpE]="$defaultFee $defaultCredit USD"
+    [httpF,httpG]="$defaultFee $defaultCredit USD"
+    [httpG,httpF]="$defaultFee $defaultCredit USD"
+    [httpG,httpH]="$defaultFee $defaultCredit USD"
+    [httpH,httpG]="$defaultFee $defaultCredit USD"
+    [httpH,httpI]="$defaultFee $defaultCredit USD"
+    [httpI,httpH]="$defaultFee $defaultCredit USD"
+    [httpI,httpJ]="$defaultFee $defaultCredit USD"
+    [httpJ,httpI]="$defaultFee $defaultCredit USD"
 )
 
 echo "Removing existing containers (if any)..."

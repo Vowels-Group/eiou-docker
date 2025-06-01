@@ -103,7 +103,7 @@ docker exec torA eiou send "${containerAddresses[torB]}" 12 USD
 echo -e "\t-> torA sends money to torC, through torB"
 docker exec torA eiou send "${containerAddresses[torC]}" 43 USD
 
-echo -e "\t-> torA sends money to torD, through eioud-1&2-tor"
+echo -e "\t-> torA sends money to torD, through torB/C"
 docker exec torA eiou send "${containerAddresses[torD]}" 110 USD
 
 echo -e "\t-> torA sends money to torB, using name"

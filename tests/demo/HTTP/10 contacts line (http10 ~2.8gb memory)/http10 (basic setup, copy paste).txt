@@ -7,46 +7,46 @@ powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else {
 
 # build and start containers
 docker build -f .\eioud.dockerfile -t eioud .
-docker run -d  --network=demo-net --name http0 eioud
-docker run -d  --network=demo-net --name http1 eioud
-docker run -d  --network=demo-net --name http2 eioud
-docker run -d  --network=demo-net --name http3 eioud
-docker run -d  --network=demo-net --name http4 eioud
-docker run -d  --network=demo-net --name http5 eioud
-docker run -d  --network=demo-net --name http6 eioud
-docker run -d  --network=demo-net --name http7 eioud
-docker run -d  --network=demo-net --name http8 eioud
-docker run -d  --network=demo-net --name http9 eioud
+docker run -d  --network=demo-net --name httpA eioud
+docker run -d  --network=demo-net --name httpB eioud
+docker run -d  --network=demo-net --name httpC eioud
+docker run -d  --network=demo-net --name httpD eioud
+docker run -d  --network=demo-net --name httpE eioud
+docker run -d  --network=demo-net --name httpF eioud
+docker run -d  --network=demo-net --name httpG eioud
+docker run -d  --network=demo-net --name httpH eioud
+docker run -d  --network=demo-net --name httpI eioud
+docker run -d  --network=demo-net --name httpJ eioud
 sleep 5
 
 # generate pubkeys and set hostname
-docker exec http0 eiou generate http://http0
-docker exec http1 eiou generate http://http1
-docker exec http2 eiou generate http://http2
-docker exec http3 eiou generate http://http3
-docker exec http4 eiou generate http://http4
-docker exec http5 eiou generate http://http5
-docker exec http6 eiou generate http://http6
-docker exec http7 eiou generate http://http7
-docker exec http8 eiou generate http://http8
-docker exec http9 eiou generate http://http9
+docker exec httpA eiou generate http://httpA
+docker exec httpB eiou generate http://httpB
+docker exec httpC eiou generate http://httpC
+docker exec httpD eiou generate http://httpD
+docker exec httpE eiou generate http://httpE
+docker exec httpF eiou generate http://httpF
+docker exec httpG eiou generate http://httpG
+docker exec httpH eiou generate http://httpH
+docker exec httpI eiou generate http://httpI
+docker exec httpJ eiou generate http://httpJ
 
 # add contacts
-docker exec http0 eiou add http://http1 http1 0.1 1000 USD
-docker exec http1 eiou add http://http0 http0 0.1 1000 USD
-docker exec http1 eiou add http://http2 http2 0.1 1000 USD
-docker exec http2 eiou add http://http1 http1 0.1 1000 USD
-docker exec http2 eiou add http://http3 http3 0.1 1000 USD
-docker exec http3 eiou add http://http2 http2 0.1 1000 USD
-docker exec http3 eiou add http://http4 http4 0.1 1000 USD
-docker exec http4 eiou add http://http3 http3 0.1 1000 USD
-docker exec http4 eiou add http://http5 http5 0.1 1000 USD
-docker exec http5 eiou add http://http4 http4 0.1 1000 USD
-docker exec http5 eiou add http://http6 http6 0.1 1000 USD
-docker exec http6 eiou add http://http5 http5 0.1 1000 USD
-docker exec http6 eiou add http://http7 http7 0.1 1000 USD
-docker exec http7 eiou add http://http6 http6 0.1 1000 USD
-docker exec http7 eiou add http://http8 http8 0.1 1000 USD
-docker exec http8 eiou add http://http7 http7 0.1 1000 USD
-docker exec http8 eiou add http://http9 http9 0.1 1000 USD
-docker exec http9 eiou add http://http8 http8 0.1 1000 USD
+docker exec httpA eiou add http://httpB httpB 0.1 1000 USD
+docker exec httpB eiou add http://httpA httpA 0.1 1000 USD
+docker exec httpB eiou add http://httpC httpC 0.1 1000 USD
+docker exec httpC eiou add http://httpB httpB 0.1 1000 USD
+docker exec httpC eiou add http://httpD httpD 0.1 1000 USD
+docker exec httpD eiou add http://httpC httpC 0.1 1000 USD
+docker exec httpD eiou add http://httpE httpE 0.1 1000 USD
+docker exec httpE eiou add http://httpD httpD 0.1 1000 USD
+docker exec httpE eiou add http://httpF httpF 0.1 1000 USD
+docker exec httpF eiou add http://httpE httpE 0.1 1000 USD
+docker exec httpF eiou add http://httpG httpG 0.1 1000 USD
+docker exec httpG eiou add http://httpF httpF 0.1 1000 USD
+docker exec httpG eiou add http://httpH httpH 0.1 1000 USD
+docker exec httpH eiou add http://httpG httpG 0.1 1000 USD
+docker exec httpH eiou add http://httpI httpI 0.1 1000 USD
+docker exec httpI eiou add http://httpH httpH 0.1 1000 USD
+docker exec httpI eiou add http://httpJ httpJ 0.1 1000 USD
+docker exec httpJ eiou add http://httpI httpI 0.1 1000 USD

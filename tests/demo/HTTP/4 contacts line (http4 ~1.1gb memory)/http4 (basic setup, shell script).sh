@@ -22,26 +22,26 @@ remove_container_if_exists() {
 declare -A containerAddresses
 
 declare -a containers=(
-    "http0" 
-    "http1" 
-    "http2" 
-    "http3")
+    "httpA" 
+    "httpB" 
+    "httpC" 
+    "httpD")
 
 # Setup of simple fees and credit, easy edit for every person
 readonly defaultFee=0.1
 readonly defaultCredit=1000
 
 # Define contacts, direction ->
-# example: [http0,http1] defines http1 as a contact of http0
+# example: [httpA,httpB] defines httpB as a contact of httpA
 #          must be accepted in reverse that is to say: 
-#          [http0,http1] needs to be followed by [http1,http0]
+#          [httpA,httpB] needs to be followed by [httpB,httpA]
 declare -A containersLinks=(
-    [http0,http1]="$defaultFee $defaultCredit USD"
-    [http1,http0]="$defaultFee $defaultCredit USD"
-    [http1,http2]="$defaultFee $defaultCredit USD"
-    [http2,http1]="$defaultFee $defaultCredit USD"
-    [http2,http3]="$defaultFee $defaultCredit USD"
-    [http3,http2]="$defaultFee $defaultCredit USD"
+    [httpA,httpB]="$defaultFee $defaultCredit USD"
+    [httpB,httpA]="$defaultFee $defaultCredit USD"
+    [httpB,httpC]="$defaultFee $defaultCredit USD"
+    [httpC,httpB]="$defaultFee $defaultCredit USD"
+    [httpC,httpD]="$defaultFee $defaultCredit USD"
+    [httpD,httpC]="$defaultFee $defaultCredit USD"
 )
 
 echo "Removing existing containers (if any)..."

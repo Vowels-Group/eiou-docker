@@ -22,26 +22,26 @@ remove_container_if_exists() {
 declare -A containerAddresses
 
 declare -a containers=(
-    "http0" 
-    "http1" 
-    "http2" 
-    "http3")
+    "httpA" 
+    "httpB" 
+    "httpC" 
+    "httpD")
 
 # Setup of simple fees and credit, easy edit for every person
 readonly defaultFee=0.1
 readonly defaultCredit=1000
 
 # Define contacts, direction ->
-# example: [http0,http1] defines http1 as a contact of http0
+# example: [httpA,httpB] defines httpB as a contact of httpA
 #          must be accepted in reverse that is to say: 
-#          [http0,http1] needs to be followed by [http1,http0]
+#          [httpA,httpB] needs to be followed by [httpB,httpA]
 declare -A containersLinks=(
-    [http0,http1]="$defaultFee $defaultCredit USD"
-    [http1,http0]="$defaultFee $defaultCredit USD"
-    [http1,http2]="$defaultFee $defaultCredit USD"
-    [http2,http1]="$defaultFee $defaultCredit USD"
-    [http2,http3]="$defaultFee $defaultCredit USD"
-    [http3,http2]="$defaultFee $defaultCredit USD"
+    [httpA,httpB]="$defaultFee $defaultCredit USD"
+    [httpB,httpA]="$defaultFee $defaultCredit USD"
+    [httpB,httpC]="$defaultFee $defaultCredit USD"
+    [httpC,httpB]="$defaultFee $defaultCredit USD"
+    [httpC,httpD]="$defaultFee $defaultCredit USD"
+    [httpD,httpC]="$defaultFee $defaultCredit USD"
 )
 
 echo "Removing existing containers (if any)..."
@@ -78,33 +78,33 @@ done
 
 # Send money
 echo -e "\nSending money..."
-docker exec http0 eiou send ${containerAddresses[http1]} 100 USD
-docker exec http0 eiou send ${containerAddresses[http2]} 100 USD
-docker exec http0 eiou send ${containerAddresses[http3]} 100 USD # first complicated path
+docker exec httpA eiou send ${containerAddresses[httpB]} 100 USD
+docker exec httpA eiou send ${containerAddresses[httpC]} 100 USD
+docker exec httpA eiou send ${containerAddresses[httpD]} 100 USD # first complicated path
 
 echo -e "\nTesting other functions..."
 
 # View contacts
 echo -e "\nViewing contacts..."
-docker exec http0 eiou viewcontact ${containerAddresses[http1]}
-docker exec http1 eiou viewcontact ${containerAddresses[http0]}
-docker exec http1 eiou viewcontact ${containerAddresses[http2]}
-docker exec http2 eiou viewcontact ${containerAddresses[http1]}
-docker exec http2 eiou viewcontact ${containerAddresses[http3]}
-docker exec http3 eiou viewcontact ${containerAddresses[http2]}
+docker exec httpA eiou viewcontact ${containerAddresses[httpB]}
+docker exec httpB eiou viewcontact ${containerAddresses[httpA]}
+docker exec httpB eiou viewcontact ${containerAddresses[httpC]}
+docker exec httpC eiou viewcontact ${containerAddresses[httpB]}
+docker exec httpC eiou viewcontact ${containerAddresses[httpD]}
+docker exec httpD eiou viewcontact ${containerAddresses[httpC]}
 
 # View balances
 echo -e "\nViewing balances..."
-docker exec http0 eiou viewbalances
-docker exec http1 eiou viewbalances
-docker exec http2 eiou viewbalances
-docker exec http3 eiou viewbalances
+docker exec httpA eiou viewbalances
+docker exec httpB eiou viewbalances
+docker exec httpC eiou viewbalances
+docker exec httpD eiou viewbalances
 
 # View transaction history
 echo -e "\nViewing transaction history..."
-docker exec http0 eiou history
-docker exec http1 eiou history
-docker exec http2 eiou history
-docker exec http3 eiou history
+docker exec httpA eiou history
+docker exec httpB eiou history
+docker exec httpC eiou history
+docker exec httpD eiou history
 
 echo -e "\nScript completed successfully."
