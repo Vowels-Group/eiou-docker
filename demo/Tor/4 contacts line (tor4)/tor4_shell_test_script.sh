@@ -2,29 +2,44 @@
 
 set -e # Stop script on failure
 
+# Check if network exists and create it if necessary
+if docker network inspect eioud-network >/dev/null 2>&1; then
+    echo "Network already exists."
+else
+    echo "Creating network..."
+    docker network create --driver bridge eioud-network
+fi
+
 # Function to remove a container if it exists
 remove_container_if_exists() {
     local container_name=$1
     if docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
-        echo "Removing existing container: $container_name..."
+        echo -e "\tRemoving existing container: $container_name..."
         docker rm -f "$container_name"
     fi
 }
 
+declare -A containerAddresses
+
+declare -a containers=(
+    "eioud-0-tor"
+    "eioud-1-tor"
+    "eioud-2-tor"
+    "eioud-3-tor")
+
 echo "Removing existing containers (if any)..."
-remove_container_if_exists eioud-0-tor
-remove_container_if_exists eioud-1-tor
-remove_container_if_exists eioud-2-tor
-remove_container_if_exists eioud-3-tor
+for container in "${containers[@]}"; do
+    remove_container_if_exists $container
+done
 
 echo "Building base image..."
 docker build -f eioud.dockerfile -t eioud .
 
 echo -e "\nCreating containers..."
-docker run -d --name eioud-0-tor eioud
-docker run -d --name eioud-1-tor eioud
-docker run -d --name eioud-2-tor eioud
-docker run -d --name eioud-3-tor eioud
+for container in "${containers[@]}"; do
+    docker run -d --network=eioud-network --name $container eioud
+done
+
 
 # Function to wait for a container to be ready
 wait_for_container() {
@@ -43,42 +58,44 @@ wait_for_container() {
     done
 }
 
-wait_for_container eioud-0-tor
-wait_for_container eioud-1-tor
-wait_for_container eioud-2-tor
-wait_for_container eioud-3-tor
+for container in "${containers[@]}"; do
+    wait_for_container $container
+done
 
 echo -e "\nGetting Tor addresses..."
-addr0=$(docker exec eioud-0-tor eiou generate torAddressOnly | tr -d '\n')
-addr1=$(docker exec eioud-1-tor eiou generate torAddressOnly | tr -d '\n')
-addr2=$(docker exec eioud-2-tor eiou generate torAddressOnly | tr -d '\n')
-addr3=$(docker exec eioud-3-tor eiou generate torAddressOnly | tr -d '\n')
+for container in "${containers[@]}"; do
+    containerAddresses[$container]=$(docker exec $container eiou generate torAddressOnly | tr -d '\n')
+done
+
+# Setup of simple fees and credit, easy edit for every person
+readonly defaultFee=0.1
+readonly defaultCredit=1000
 
 # Add friends
 # (Note that the names are arbitrary)
 
 echo -e "\nAdding friends (This might take a moment):"
 echo -e "\t-> eioud-0-tor befriends eioud-1-tor, eioud-1-tor befriends eioud-0-tor"
-docker exec eioud-0-tor eiou add "$addr1" eioud-1-tor-name 1 1000 USD
-docker exec eioud-1-tor eiou add "$addr0" eioud-0-tor-name 1 1000 USD
+docker exec eioud-0-tor eiou add "${containerAddresses[eioud-1-tor]}" eioud-1-tor-name $defaultFee $defaultCredit USD
+docker exec eioud-1-tor eiou add "${containerAddresses[eioud-0-tor]}" eioud-0-tor-name $defaultFee $defaultCredit USD
 
 echo -e "\n\t-> eioud-1-tor befriends eioud-2-tor, eioud-2-tor befriends eioud-1-tor"
-docker exec eioud-1-tor eiou add "$addr2" eioud-2-tor-name 1 1000 USD
-docker exec eioud-2-tor eiou add "$addr1" eioud-1-tor-name 1 1000 USD
+docker exec eioud-1-tor eiou add "${containerAddresses[eioud-2-tor]}" eioud-2-tor-name $defaultFee $defaultCredit USD
+docker exec eioud-2-tor eiou add "${containerAddresses[eioud-1-tor]}" eioud-1-tor-name $defaultFee $defaultCredit USD
 
 echo -e "\n\t-> eioud-2-tor befriends eioud-3-tor, eioud-3-tor befriends eioud-2-tor"
-docker exec eioud-2-tor eiou add "$addr3" eioud-3-tor-name 1 1000 USD
-docker exec eioud-3-tor eiou add "$addr2" eioud-2-tor-name 1 1000 USD
+docker exec eioud-2-tor eiou add "${containerAddresses[eioud-3-tor]}" eioud-3-tor-name $defaultFee $defaultCredit USD
+docker exec eioud-3-tor eiou add "${containerAddresses[eioud-2-tor]}" eioud-2-tor-name $defaultFee $defaultCredit USD
 
 echo -e "\nSending money:"
 echo -e "\t-> eioud-0-tor sends money to eioud-1-tor, directly"
-docker exec eioud-0-tor eiou send "$addr1" 1 USD
+docker exec eioud-0-tor eiou send "${containerAddresses[eioud-1-tor]}" 1 USD
 
 echo -e "\t-> eioud-0-tor sends money to eioud-2-tor, through eioud-1-tor"
-docker exec eioud-0-tor eiou send "$addr2" 1 USD
+docker exec eioud-0-tor eiou send "${containerAddresses[eioud-2-tor]}" 1 USD
 
-echo -e "\t-> eioud-0-tor sends money to eioud-3-tor, through eioud-1-tor & eioud-2-tor"
-docker exec eioud-0-tor eiou send "$addr3" 1 USD
+echo -e "\t-> eioud-0-tor sends money to eioud-3-tor, through eioud-1&2-tor"
+docker exec eioud-0-tor eiou send "${containerAddresses[eioud-3-tor]}" 1 USD
 
 echo -e "\t-> eioud-0-tor sends money to eioud-1-tor, using name"
 docker exec eioud-0-tor eiou send eioud-1-tor-name 1 USD

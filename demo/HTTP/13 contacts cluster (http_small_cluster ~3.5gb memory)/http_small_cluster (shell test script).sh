@@ -3,11 +3,11 @@
 set -e # Stop script on failure
 
 # Check if network exists and create it if necessary
-if docker network inspect demo-net >/dev/null 2>&1; then
+if docker network inspect eioud-network >/dev/null 2>&1; then
     echo "Network already exists."
 else
     echo "Creating network..."
-    docker network create --driver bridge demo-net
+    docker network create --driver bridge eioud-network
 fi
 
 # Function to remove a container if it exists
@@ -19,39 +19,33 @@ remove_container_if_exists() {
     fi
 }
 
-echo "Removing existing containers (if any)..."
-remove_container_if_exists eioud-A-http
-remove_container_if_exists eioud-A1-http
-remove_container_if_exists eioud-A11-http
-remove_container_if_exists eioud-A12-http
-remove_container_if_exists eioud-A2-http
-remove_container_if_exists eioud-A21-http
-remove_container_if_exists eioud-A22-http
-remove_container_if_exists eioud-A3-http
-remove_container_if_exists eioud-A31-http
-remove_container_if_exists eioud-A32-http
-remove_container_if_exists eioud-A4-http
-remove_container_if_exists eioud-A41-http
-remove_container_if_exists eioud-A42-http
+declare -a containers=(
+    "eioud-A-http" 
+    "eioud-A1-http" 
+    "eioud-A11-http" 
+    "eioud-A12-http"
+    "eioud-A2-http"
+    "eioud-A21-http"
+    "eioud-A22-http"
+    "eioud-A3-http"
+    "eioud-A31-http"
+    "eioud-A32-http"
+    "eioud-A4-http"
+    "eioud-A41-http"
+    "eioud-A42-http")
 
+echo "Removing existing containers (if any)..."
+for container in "${containers[@]}"; do
+    remove_container_if_exists $container
+done
 
 echo "Building base image..."
 docker build -f eioud.dockerfile -t eioud .
 
 echo -e "\nCreating containers..."
-docker run -d --network=demo-net --name eioud-A-http eioud
-docker run -d --network=demo-net --name eioud-A1-http eioud
-docker run -d --network=demo-net --name eioud-A11-http eioud
-docker run -d --network=demo-net --name eioud-A12-http eioud
-docker run -d --network=demo-net --name eioud-A2-http eioud
-docker run -d --network=demo-net --name eioud-A21-http eioud
-docker run -d --network=demo-net --name eioud-A22-http eioud
-docker run -d --network=demo-net --name eioud-A3-http eioud
-docker run -d --network=demo-net --name eioud-A31-http eioud
-docker run -d --network=demo-net --name eioud-A32-http eioud
-docker run -d --network=demo-net --name eioud-A4-http eioud
-docker run -d --network=demo-net --name eioud-A41-http eioud
-docker run -d --network=demo-net --name eioud-A42-http eioud
+for container in "${containers[@]}"; do
+    docker run -d --network=eioud-network --name $container eioud
+done
 
 
 # Function to wait for a container to be ready
@@ -71,64 +65,47 @@ wait_for_container() {
     done
 }
 
-# wait_for_container eioud-A-http
-# wait_for_container eioud-A1-http
-# wait_for_container eioud-A11-http
-# wait_for_container eioud-A12-http
-# wait_for_container eioud-A2-http
-# wait_for_container eioud-A21-http
-# wait_for_container eioud-A22-http
-# wait_for_container eioud-A3-http
-# wait_for_container eioud-A31-http
-# wait_for_container eioud-A32-http
-# wait_for_container eioud-A4-http
-# wait_for_container eioud-A41-http
-# wait_for_container eioud-A42-http
+# for container in "${containers[@]}"; do
+#     wait_for_container $container
+# done
 
 echo -e "\nGenerate pubkeys and set hostnames..."
-docker exec eioud-A-http eiou generate http://eioud-A-http
-docker exec eioud-A1-http eiou generate http://eioud-A1-http
-docker exec eioud-A11-http eiou generate http://eioud-A11-http
-docker exec eioud-A12-http eiou generate http://eioud-A12-http
-docker exec eioud-A2-http eiou generate http://eioud-A2-http
-docker exec eioud-A21-http eiou generate http://eioud-A21-http
-docker exec eioud-A22-http eiou generate http://eioud-A22-http
-docker exec eioud-A3-http eiou generate http://eioud-A3-http
-docker exec eioud-A31-http eiou generate http://eioud-A31-http
-docker exec eioud-A32-http eiou generate http://eioud-A32-http
-docker exec eioud-A4-http eiou generate http://eioud-A4-http
-docker exec eioud-A41-http eiou generate http://eioud-A41-http
-docker exec eioud-A42-http eiou generate http://eioud-A42-http
+for container in "${containers[@]}"; do
+    docker exec $container eiou generate "http://"$container
+done
 
+# Setup of simple fees and credit, easy edit for every person
+readonly defaultFee=0.1
+readonly defaultCredit=1000
 
 # Add friends
 # (NOTE that names are NOT arbitrary)
 
 echo -e "\nAdding friends..."
-docker exec eioud-A-http eiou add http://eioud-A1-http eioud-A1-http 0.1 1000 USD
-docker exec eioud-A1-http eiou add http://eioud-A-http eioud-A-http 0.1 1000 USD
-docker exec eioud-A-http eiou add http://eioud-A2-http eioud-A2-http 0.1 1000 USD
-docker exec eioud-A2-http eiou add http://eioud-A-http eioud-A-http 0.1 1000 USD
-docker exec eioud-A-http eiou add http://eioud-A3-http eioud-A3-http 0.1 1000 USD
-docker exec eioud-A3-http eiou add http://eioud-A-http eioud-A-http 0.1 1000 USD
-docker exec eioud-A-http eiou add http://eioud-A4-http eioud-A4-http 0.1 1000 USD
-docker exec eioud-A4-http eiou add http://eioud-A-http eioud-A-http 0.1 1000 USD
-docker exec eioud-A1-http eiou add http://eioud-A11-http eioud-A11-http 0.1 1000 USD
-docker exec eioud-A11-http eiou add http://eioud-A1-http eioud-A1-http 0.1 1000 USD
-docker exec eioud-A1-http eiou add http://eioud-A12-http eioud-A12-http 0.1 1000 USD
-docker exec eioud-A12-http eiou add http://eioud-A1-http eioud-A1-http 0.1 1000 USD
-docker exec eioud-A2-http eiou add http://eioud-A21-http eioud-A21-http 0.1 1000 USD
-docker exec eioud-A21-http eiou add http://eioud-A2-http eioud-A2-http 0.1 1000 USD
-docker exec eioud-A2-http eiou add http://eioud-A22-http eioud-A22-http 0.1 1000 USD
-docker exec eioud-A22-http eiou add http://eioud-A2-http eioud-A2-http 0.1 1000 USD
-docker exec eioud-A3-http eiou add http://eioud-A31-http eioud-A31-http 0.1 1000 USD
-docker exec eioud-A31-http eiou add http://eioud-A3-http eioud-A3-http 0.1 1000 USD
-docker exec eioud-A3-http eiou add http://eioud-A32-http eioud-A32-http 0.1 1000 USD
-docker exec eioud-A32-http eiou add http://eioud-A3-http eioud-A3-http 0.1 1000 USD
-docker exec eioud-A4-http eiou add http://eioud-A41-http eioud-A41-http 0.1 1000 USD
-docker exec eioud-A41-http eiou add http://eioud-A4-http eioud-A4-http 0.1 1000 USD
-docker exec eioud-A4-http eiou add http://eioud-A42-http eioud-A42-http 0.1 1000 USD
-docker exec eioud-A42-http eiou add http://eioud-A4-http eioud-A4-http 0.1 1000 USD
+docker exec eioud-A-http eiou add http://eioud-A1-http eioud-A1-http $defaultFee $defaultCredit USD
+docker exec eioud-A1-http eiou add http://eioud-A-http eioud-A-http $defaultFee $defaultCredit USD
+docker exec eioud-A-http eiou add http://eioud-A2-http eioud-A2-http $defaultFee $defaultCredit USD
+docker exec eioud-A2-http eiou add http://eioud-A-http eioud-A-http $defaultFee $defaultCredit USD
+docker exec eioud-A-http eiou add http://eioud-A3-http eioud-A3-http $defaultFee $defaultCredit USD
+docker exec eioud-A3-http eiou add http://eioud-A-http eioud-A-http $defaultFee $defaultCredit USD
+docker exec eioud-A-http eiou add http://eioud-A4-http eioud-A4-http $defaultFee $defaultCredit USD
+docker exec eioud-A4-http eiou add http://eioud-A-http eioud-A-http $defaultFee $defaultCredit USD
+docker exec eioud-A1-http eiou add http://eioud-A11-http eioud-A11-http $defaultFee $defaultCredit USD
+docker exec eioud-A11-http eiou add http://eioud-A1-http eioud-A1-http $defaultFee $defaultCredit USD
+docker exec eioud-A1-http eiou add http://eioud-A12-http eioud-A12-http $defaultFee $defaultCredit USD
+docker exec eioud-A12-http eiou add http://eioud-A1-http eioud-A1-http $defaultFee $defaultCredit USD
+docker exec eioud-A2-http eiou add http://eioud-A21-http eioud-A21-http $defaultFee $defaultCredit USD
+docker exec eioud-A21-http eiou add http://eioud-A2-http eioud-A2-http $defaultFee $defaultCredit USD
+docker exec eioud-A2-http eiou add http://eioud-A22-http eioud-A22-http $defaultFee $defaultCredit USD
+docker exec eioud-A22-http eiou add http://eioud-A2-http eioud-A2-http $defaultFee $defaultCredit USD
+docker exec eioud-A3-http eiou add http://eioud-A31-http eioud-A31-http $defaultFee $defaultCredit USD
+docker exec eioud-A31-http eiou add http://eioud-A3-http eioud-A3-http $defaultFee $defaultCredit USD
+docker exec eioud-A3-http eiou add http://eioud-A32-http eioud-A32-http $defaultFee $defaultCredit USD
+docker exec eioud-A32-http eiou add http://eioud-A3-http eioud-A3-http $defaultFee $defaultCredit USD
+docker exec eioud-A4-http eiou add http://eioud-A41-http eioud-A41-http $defaultFee $defaultCredit USD
+docker exec eioud-A41-http eiou add http://eioud-A4-http eioud-A4-http $defaultFee $defaultCredit USD
+docker exec eioud-A4-http eiou add http://eioud-A42-http eioud-A42-http $defaultFee $defaultCredit USD
+docker exec eioud-A42-http eiou add http://eioud-A4-http eioud-A4-http $defaultFee $defaultCredit USD
 
 
 

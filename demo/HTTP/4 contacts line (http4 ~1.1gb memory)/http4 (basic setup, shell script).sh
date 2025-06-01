@@ -19,22 +19,25 @@ remove_container_if_exists() {
     fi
 }
 
+declare -a containers=(
+    "eioud-0-http" 
+    "eioud-1-http" 
+    "eioud-2-http" 
+    "eioud-3-http")
+
 echo "Removing existing containers (if any)..."
-remove_container_if_exists eioud-0-http
-remove_container_if_exists eioud-1-http
-remove_container_if_exists eioud-2-http
-remove_container_if_exists eioud-3-http
-remove_container_if_exists eioud-4-http
+for container in "${containers[@]}"; do
+    remove_container_if_exists $container
+done
 
 echo "Building base image..."
 docker build -f eioud.dockerfile -t eioud .
 
 echo -e "\nCreating containers..."
-docker run -d --network=eioud-network --name eioud-0-http eioud
-docker run -d --network=eioud-network --name eioud-1-http eioud
-docker run -d --network=eioud-network --name eioud-2-http eioud
-docker run -d --network=eioud-network --name eioud-3-http eioud
-docker run -d --network=eioud-network --name eioud-4-http eioud
+for container in "${containers[@]}"; do
+    docker run -d --network=eioud-network --name $container eioud
+done
+
 
 # Function to wait for a container to be ready
 wait_for_container() {
@@ -53,30 +56,29 @@ wait_for_container() {
     done
 }
 
-# wait_for_container eioud-0-http
-# wait_for_container eioud-1-http
-# wait_for_container eioud-2-http
-# wait_for_container eioud-3-http
-# wait_for_container eioud-4-http
+# for container in "${containers[@]}"; do
+#     wait_for_container $container
+# done
 
 echo -e "\nGenerate pubkeys and set hostnames..."
-docker exec eioud-0-http eiou generate http://eioud-0-http
-docker exec eioud-1-http eiou generate http://eioud-1-http
-docker exec eioud-2-http eiou generate http://eioud-2-http
-docker exec eioud-3-http eiou generate http://eioud-3-http
-docker exec eioud-4-http eiou generate http://eioud-4-http
+for container in "${containers[@]}"; do
+    docker exec $container eiou generate "http://"$container
+done
+
+# Setup of simple fees and credit, easy edit for every person
+readonly defaultFee=0.1
+readonly defaultCredit=1000
 
 # Add friends
 # (NOTE that names are NOT arbitrary)
 
 echo -e "\nAdding friends..."
-docker exec eioud-0-http eiou add http://eioud-1-http eioud-1-http 0.1 1000 USD
-docker exec eioud-1-http eiou add http://eioud-0-http eioud-0-http 0.1 1000 USD
-docker exec eioud-1-http eiou add http://eioud-2-http eioud-2-http 0.1 1000 USD
-docker exec eioud-2-http eiou add http://eioud-1-http eioud-1-http 0.1 1000 USD
-docker exec eioud-2-http eiou add http://eioud-3-http eioud-3-http 0.1 1000 USD
-docker exec eioud-3-http eiou add http://eioud-2-http eioud-2-http 0.1 1000 USD
-docker exec eioud-3-http eiou add http://eioud-4-http eioud-4-http 0.1 1000 USD
-docker exec eioud-4-http eiou add http://eioud-3-http eioud-3-http 0.1 1000 USD
+docker exec eioud-0-http eiou add http://eioud-1-http eioud-1-http $defaultFee $defaultCredit USD
+docker exec eioud-1-http eiou add http://eioud-0-http eioud-0-http $defaultFee $defaultCredit USD
+docker exec eioud-1-http eiou add http://eioud-2-http eioud-2-http $defaultFee $defaultCredit USD
+docker exec eioud-2-http eiou add http://eioud-1-http eioud-1-http $defaultFee $defaultCredit USD
+docker exec eioud-2-http eiou add http://eioud-3-http eioud-3-http $defaultFee $defaultCredit USD
+docker exec eioud-3-http eiou add http://eioud-2-http eioud-2-http $defaultFee $defaultCredit USD
+
 
 echo -e "\nBasic Setup completed successfully."
