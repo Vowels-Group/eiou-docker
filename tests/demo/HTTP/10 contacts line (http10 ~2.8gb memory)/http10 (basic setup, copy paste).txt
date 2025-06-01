@@ -1,0 +1,52 @@
+# create the network (only need to do this once per docker)
+docker network create -d bridge demo-net
+
+# Remove any existing containers
+powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+
+
+# build and start containers
+docker build -f .\eioud.dockerfile -t eioud .
+docker run -d  --network=demo-net --name http0 eioud
+docker run -d  --network=demo-net --name http1 eioud
+docker run -d  --network=demo-net --name http2 eioud
+docker run -d  --network=demo-net --name http3 eioud
+docker run -d  --network=demo-net --name http4 eioud
+docker run -d  --network=demo-net --name http5 eioud
+docker run -d  --network=demo-net --name http6 eioud
+docker run -d  --network=demo-net --name http7 eioud
+docker run -d  --network=demo-net --name http8 eioud
+docker run -d  --network=demo-net --name http9 eioud
+sleep 5
+
+# generate pubkeys and set hostname
+docker exec http0 eiou generate http://http0
+docker exec http1 eiou generate http://http1
+docker exec http2 eiou generate http://http2
+docker exec http3 eiou generate http://http3
+docker exec http4 eiou generate http://http4
+docker exec http5 eiou generate http://http5
+docker exec http6 eiou generate http://http6
+docker exec http7 eiou generate http://http7
+docker exec http8 eiou generate http://http8
+docker exec http9 eiou generate http://http9
+
+# add contacts
+docker exec http0 eiou add http://http1 http1 0.1 1000 USD
+docker exec http1 eiou add http://http0 http0 0.1 1000 USD
+docker exec http1 eiou add http://http2 http2 0.1 1000 USD
+docker exec http2 eiou add http://http1 http1 0.1 1000 USD
+docker exec http2 eiou add http://http3 http3 0.1 1000 USD
+docker exec http3 eiou add http://http2 http2 0.1 1000 USD
+docker exec http3 eiou add http://http4 http4 0.1 1000 USD
+docker exec http4 eiou add http://http3 http3 0.1 1000 USD
+docker exec http4 eiou add http://http5 http5 0.1 1000 USD
+docker exec http5 eiou add http://http4 http4 0.1 1000 USD
+docker exec http5 eiou add http://http6 http6 0.1 1000 USD
+docker exec http6 eiou add http://http5 http5 0.1 1000 USD
+docker exec http6 eiou add http://http7 http7 0.1 1000 USD
+docker exec http7 eiou add http://http6 http6 0.1 1000 USD
+docker exec http7 eiou add http://http8 http8 0.1 1000 USD
+docker exec http8 eiou add http://http7 http7 0.1 1000 USD
+docker exec http8 eiou add http://http9 http9 0.1 1000 USD
+docker exec http9 eiou add http://http8 http8 0.1 1000 USD
