@@ -205,7 +205,7 @@ for container in "${containers[@]}"; do
 done
 
 # Add friends
-echo -e "\nAdding friends..."
+echo -e "\nAdding friends (this might take a moment)..."
 containersLinkKeys=($(for x in ${!containersLinks[@]}; do echo $x; done | sort))
 for containersLinkKey in "${containersLinkKeys[@]}"; do
     values=${containersLinks[${containersLinkKey}]}

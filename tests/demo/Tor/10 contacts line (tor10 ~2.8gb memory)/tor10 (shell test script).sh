@@ -109,7 +109,7 @@ readonly defaultFee=0.1
 readonly defaultCredit=1000
 
 # Add friends
-echo -e "\nAdding friends..."
+echo -e "\nAdding friends (this might take a moment)..."
 containersLinkKeys=($(for x in ${!containersLinks[@]}; do echo $x; done | sort))
 for containersLinkKey in "${containersLinkKeys[@]}"; do
     values=${containersLinks[${containersLinkKey}]}
@@ -137,5 +137,9 @@ docker exec torA eiou send "${containerAddresses[torJ]}" 100 USD
 
 echo -e "\t-> torA sends money to torB, using name"
 docker exec torA eiou send torB 12 USD
+
+# need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances)
+#echo -e "\nSleeping for 10 seconds..."
+#sleep 10
 
 echo -e "\nScript completed successfully."

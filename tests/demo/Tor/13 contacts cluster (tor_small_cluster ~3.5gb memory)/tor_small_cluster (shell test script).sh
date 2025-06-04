@@ -114,7 +114,7 @@ for container in "${containers[@]}"; do
 done
 
 # Add friends
-echo -e "\nAdding friends..."
+echo -e "\nAdding friends (this might take a moment)..."
 containersLinkKeys=($(for x in ${!containersLinks[@]}; do echo $x; done | sort))
 for containersLinkKey in "${containersLinkKeys[@]}"; do
     values=${containersLinks[${containersLinkKey}]}
@@ -138,8 +138,8 @@ echo -e "\nViewing contacts..."
 docker exec torA eiou viewcontact ${containerAddresses[torA4]}
 
 # need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances/transaction history)
-echo -e "\nSleeping for 5 seconds..."
-sleep 5 
+echo -e "\nSleeping for 10 seconds..."
+sleep 10 
 
 # View balances
 echo -e "\nViewing balances..."
