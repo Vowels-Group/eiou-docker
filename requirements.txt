@@ -13,11 +13,11 @@ Request eIOU
 Accept eIOU
 View eIOUs
 View Transaction History
-Peers to peers
-Request Peers to peers
-Receive Peers to peers Request
-Respond Peers to peers
-Receive Peers to peers Response
+Peer to peer
+Request Peer to peer
+Receive Peer to peer Request
+Respond Peer to peer
+Receive Peer to peer Response
 Settings
 Help
 View Settings
@@ -177,17 +177,17 @@ Example command: eiou history
 Example command: eiou history adrien
 Example command: eiou history 123pubkey
 
-Peers to peers
-Request Peers to peers
+Peer to peer
+Request Peer to peer
 Hash(pubkey + salt + time). Send hash, salt, time, currency, nominal amount (the amount the recipient will receive), and request level (set to 0) to all contacts.
-Receive Peers to peers Request
+Receive Peer to peer Request
 Perform Hash(contact + salt + time) with all contacts. 
 If there is a match, check if the user would accept that much credit to send that much as an eIOU
 If there is no match, increment the request level by 1 and forward the request to all contacts
-Respond Peers to peers
+Respond Peer to peer
 Respond to peer to let them know you would accept the credit, and give an expiration
 Hold the credit until peer to peer request is completed
-Receive Peers to peers Response
+Receive Peer to peer Response
 Receive peer to peer response
 Show it to user
 On confirm, sign transaction and send it forward

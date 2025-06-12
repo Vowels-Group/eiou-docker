@@ -98,7 +98,7 @@ function processQueuedP2pMessages() {
                 output("P2P response: " . print_r($response,true),'SILENT');
             }
             if(isset($message['destination_address'])){
-                output("Sent Peers to peers request to " . $contactsCount['tor'] . " tor contacts and " . $contactsCount['http'] . " http(s) contacts.", 'SILENT');
+                output("Sent Peer to peer request to " . $contactsCount['tor'] . " tor contacts and " . $contactsCount['http'] . " http(s) contacts.", 'SILENT');
                 //Inform user about expected response time
                 $httpExpectedResponseTime = $user['maxP2pLevel']; // Use maxP2pLevel seconds for http
                 $torExpectedResponseTime = 5 * 2 * $user['maxP2pLevel']; //5 seconds for a tor request, 2 times for a round trip, multiplied by maxP2pLevel
