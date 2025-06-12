@@ -37,6 +37,7 @@ function prepareSendData($request) {
 function processTransaction($request) {
     global $user;
 
+    // Check if direct Transaction
     if($request['memo'] === 'standard'){
         $insertTransactionResponse = insertTransaction($request);
         updateTransactionStatus($request['txid'],'completed',true); // Update transaction status to completed
@@ -165,7 +166,7 @@ function sendEiou($request = null) {
         if (isset($response['status']) && $response['status'] === 'accepted' && (isset($response['txid']) && $response['txid'] === $data['txid'])) {
             // Transaction accepted, now insert into database
             insertTransaction($payload);
-            updateTransactionStatus($payload['txid'],'completed',true); // Update transaction status to completed
+            updateTransactionStatus($payload['txid'],'accepted',true); // Update transaction status to accepted
         } else {
             output ("Not enough credit with this user, trying p2p with data: " . print_r($request, true),'SILENT');
             sendP2pRequest($request);
