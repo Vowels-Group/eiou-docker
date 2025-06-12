@@ -1,6 +1,25 @@
 <?php
 # Copyright 2025
 
+function createContactPayload() {
+    // Create payload for contact request
+    global $user;
+    return array(
+        'type' => 'create', // create request type
+        'senderPublicKey' => $user['public']
+    );
+}
+
+function buildContactAlreadyExistsPayload() {
+    // Build warning payload when contact already exists
+    global $user;
+    return json_encode([
+        "status" => "warning",
+        "message" => "Contact already exists",
+        'myPublicKey' => $user['public']
+    ]);
+}
+
 function buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit, $fundsOnHold) {
     // Build rejection payload when balance is insufficient
     return json_encode([
@@ -23,6 +42,25 @@ function buildInvalidRequestLevelPayload($request) {
     ]);
 }
 
+function buildP2pPayload($data) {
+    // Build p2p payload 
+    global $user;
+    $userAddress = resolveUserAddressForTransport($data['receiverAddress'] ?? $data['sender_address']); //To whom: either to a contact (initial sending) or return to contact based on found end-recipient)
+    return array(
+        'type' => 'p2p', // Peers to peers request type
+        'hash' => $data['hash'],
+        'salt' => $data['salt'],
+        'time' => $data['time'],
+        'expiration' => $data['time'] + $user['p2pExpiration'] ?? $data['expiration'], // Expiration time based on user's configuration (or database version)
+        'currency' => $data['currency'] ?? 'USD',
+        'amount' => $data['amount'], // Nominal amount in cents recipient will receive
+        'requestLevel' => $data['minRequestLevel'] ?? $data['request_level'] + 1, // Initial request level (or increment)
+        'maxRequestLevel' => $data['maxRequestLevel'] ?? $data['max_request_level'], // Maximum number of hops for p2p request (or saved database version)
+        'senderPublicKey' => $user['public'],
+        'senderAddress' => $userAddress
+    );
+}
+
 function buildSendPayload($data) {
     // Build send (Transaction/eIOU) payload 
     global $user;
@@ -43,25 +81,6 @@ function buildSendPayload($data) {
     );
 }
 
-function buildP2pPayload($data) {
-    // Build p2p payload 
-    global $user;
-    $userAddress = resolveUserAddressForTransport($data['receiverAddress'] ?? $data['sender_address']); //To whom: either to a contact (initial sending) or return to contact based on found end-recipient)
-    return array(
-        'type' => 'p2p', // Peers to peers request type
-        'hash' => $data['hash'],
-        'salt' => $data['salt'],
-        'time' => $data['time'],
-        'expiration' => $data['time'] + $user['p2pExpiration'] ?? $data['expiration'], // Expiration time based on user's configuration (or database version)
-        'currency' => $data['currency'] ?? 'USD',
-        'amount' => $data['amount'], // Nominal amount in cents recipient will receive
-        'requestLevel' => $data['minRequestLevel'] ?? $data['request_level'] + 1, // Initial request level (or increment)
-        'maxRequestLevel' => $data['maxRequestLevel'] ?? $data['max_request_level'], // Maximum number of hops for p2p request (or saved database version)
-        'senderPublicKey' => $user['public'],
-        'senderAddress' => $userAddress
-    );
-}
-
 function buildRP2pPayload($data) {
     // Build rp2p payload 
     global $user;
@@ -79,14 +98,6 @@ function buildRP2pPayload($data) {
     );
 }
 
-function createContactPayload() {
-    // Create payload for contact request
-    global $user;
-    return array(
-        'type' => 'create', // create request type
-        'senderPublicKey' => $user['public']
-    );
-}
 
 function resolveUserAddressForTransport($address) {
     global $user;
