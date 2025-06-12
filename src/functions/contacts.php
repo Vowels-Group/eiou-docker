@@ -75,7 +75,7 @@ function handleContactCreation($request) {
 
     // Check if contact already exists
     if (checkContactExists($address)) {
-        return json_encode(["status" => "warning", "message" => "Contact already exists"]);
+        return buildContactAlreadyExistsPayload();
     }
     else{
         return addPendingContact($address, $senderPublicKey);
