@@ -565,7 +565,7 @@ function insertRp2pRequest ($request){
 function insertTransaction($request) {  
     global $pdo;
     // Insert transaction request in database
-    usleep(500000); // //wait a little to prevent tight access (Sleep for 500ms )
+    usleep(500000); // wait a little to prevent tight access (Sleep for 500ms)
     // Calculate public key hashes
     $senderPublicKeyHash = hash('sha256', $request['senderPublicKey']);
     $receiverPublicKeyHash = hash('sha256', $request['receiverPublicKey']);
@@ -851,15 +851,22 @@ function updateP2pTxid($hash, $txid, $incoming = false){
     }
 }
 
-function updateTransactionStatus($memo, $status) {
+function updateTransactionStatus($memo, $status, $txid=false) {
     global $pdo;
     // Update transaction request status
     try {
-        $updateStmt = $pdo->prepare("UPDATE transactions SET status = :status WHERE memo = :memo");     
+        $what = "hash";
+        if($txid){
+            // Update only for direct transactions (no p2p)
+            $updateStmt = $pdo->prepare("UPDATE transactions SET status = :status WHERE txid = :memo");   
+            $what = "txid";  
+        } else{
+            $updateStmt = $pdo->prepare("UPDATE transactions SET status = :status WHERE memo = :memo");     
+        }
         $updateStmt->bindParam(':memo', $memo);
         $updateStmt->bindParam(':status', $status);
         $updateStmt->execute();
-        output("Updated status to '" . $status . "' for transaction hash: " . $memo,'SILENT');
+        output("Updated status to '" . $status . "' for transaction $what: " . $memo,'SILENT');
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating transaction status: " . $e->getMessage());

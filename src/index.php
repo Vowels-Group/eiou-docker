@@ -28,7 +28,7 @@ if ($request['type'] == "create") {
 }
 elseif ($request['type'] == "send") {
   // Handle eIOU
-  output("Processing send request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
+  output("Processing send request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'] ?? $request['memo'], TRUE), 'SILENT');
   if(!checkExistence($request)){
     processTransaction($request);
   }

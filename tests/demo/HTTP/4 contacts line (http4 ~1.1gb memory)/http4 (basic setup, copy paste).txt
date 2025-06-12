@@ -26,4 +26,3 @@ docker exec http2 eiou add http://http1 http1 0.1 1000 USD
 docker exec http2 eiou add http://http3 http3 0.1 1000 USD
 docker exec http3 eiou add http://http2 http2 0.1 1000 USD
 
-
