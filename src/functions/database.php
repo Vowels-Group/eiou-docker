@@ -189,61 +189,110 @@ function getP2pByHash($hash){
     }
 }
 
-function checkExistence($request, $echo = true){
+function checkExistenceP2p($request, $echo = true){
     global $pdo;
-    // Check if p2p/rp2p/transaction already exists in the database based on hash/memo
-    $type = $request['type']; // Get the type of request
-    $receiver = resolveUserAddressForTransport($request['senderAddress']);
-    try {    
-        // Check if request is a transaction   
-        if($type == 'send'){
-            if(!checkPreviousTxid($request)){
-                return true;
-            }
-            $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :hash");
-            $hash = $request['memo'];
-        }else{
-            // Check if request is p2p
-            if($type == 'p2p'){
-                // Check if p2p is valid and able to be accepted
-                if(!checkRequestLevel($request) || !checkAvailableFunds($request)){
-                    return true; 
-                }
-            } 
-            $Stmt = $pdo->prepare("SELECT * FROM $type WHERE hash = :hash");
-            $hash = $request['hash'];
-        }
+    if(!checkRequestLevel($request) || !checkAvailableFunds($request)){
+        return true; 
+    }
+    try{
+        $Stmt = $pdo->prepare("SELECT * FROM p2p WHERE hash = :hash");
+        $hash = $request['hash'];
         $Stmt->bindParam(':hash', $hash);
         $Stmt->execute();
         $results = $Stmt->fetch(PDO::FETCH_ASSOC);
         if(!$results){
             if($echo){
-                // Return acceptance of request
-                if($type == 'send'){
-                    echo json_encode(["status" => "accepted", "txid" => $request['txid'], "message" => "hash/memo " .  print_r($hash,true) . " for transaction received by " .  print_r($receiver,true)]);            
-                } else{
-                    echo json_encode(["status" => "received", "message" => "hash/memo " .  print_r($hash,true) . " for " .  print_r($type,true) ." received by " .  print_r($receiver,true)]);
-                }
-            }    
-            return false;           
+                echo buildP2pAcceptancePayload($request);
+            }
+            return false;  
         } else{
-            // Return rejection of request
             if($echo){
-                echo json_encode(["status" => "rejected", "message" => "hash/memo " . print_r($hash,true) . " for " .  print_r($type,true) ." already exists in database of " .  print_r($receiver,true)]);
+                echo buildP2pRejectionPayload($request);
             }
             return true;
         }
     } catch (PDOException $e) {
         // Handle database error
-        error_log("Error retrieving existence of " .  print_r($type,true) .  " by hash/memo" . $e->getMessage());
+        error_log("Error retrieving existence of P2P by hash" . $e->getMessage());
         if($echo){
-            echo json_encode(["status" => "rejected", "message" => "Could not access database of " .  print_r($receiver,true) . ", error: "  . $e->getMessage()]);
+            echo json_encode([
+                "status" => "rejected",
+                "message" => "Could not retrieve existence of P2P with receiver"
+            ]);
         }
         return true;
     }
 }
 
-function checkRP2pExists($hash) {
+function checkExistenceRp2p($request, $echo = true){
+    global $pdo;
+    try{
+        $Stmt = $pdo->prepare("SELECT * FROM rp2p WHERE hash = :hash");
+        $hash = $request['hash'];
+        $Stmt->bindParam(':hash', $hash);
+        $Stmt->execute();
+        $results = $Stmt->fetch(PDO::FETCH_ASSOC);
+        if(!$results){
+            if($echo){
+                echo buildRp2pAcceptancePayload($request);
+            }
+            return false;  
+        } else{
+            if($echo){
+                echo buildRp2pRejectionPayload($request);
+            }
+            return true;
+        }
+    } catch (PDOException $e) {
+        // Handle database error
+        error_log("Error retrieving existence of RP2P by hash" . $e->getMessage());
+        if($echo){
+            echo json_encode([
+                "status" => "rejected",
+                "message" => "Could not retrieve existence of RP2P with receiver"
+            ]);
+        }
+        return true;
+    }
+    
+}
+
+function checkExistenceTransaction($request, $echo = true){
+    global $pdo;
+    if(!checkPreviousTxid($request)){
+        return true;
+    }
+    try{
+        $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :memo");
+        $memo = $request['memo'];
+        $Stmt->bindParam(':memo', $memo);
+        $Stmt->execute();
+        $results = $Stmt->fetch(PDO::FETCH_ASSOC);
+        if(!$results){
+            if($echo){
+                echo buildSendAcceptancePayload($request);
+            }
+            return false;  
+        } else{
+            if($echo){
+                echo buildSendRejectionPayload($request);
+            }
+            return true;
+        }
+    } catch (PDOException $e) {
+        // Handle database error
+        error_log("Error retrieving existence of Transaction by memo" . $e->getMessage());
+        if($echo){
+            echo json_encode([
+                "status" => "rejected",
+                "message" => "Could not retrieve existence of Transaction with receiver"
+            ]);
+        }
+        return true;
+    }
+}
+
+function checkRp2pExists($hash) {
     global $pdo;
     // Get rp2p request from database based on hash
     try {
@@ -324,7 +373,7 @@ function freshInstall(){
             $dbConn->exec(getContactsTableSchema());
             $dbConn->exec(getTransactionsTableSchema());
             $dbConn->exec(getP2pTableSchema());
-            $dbConn->exec(getRP2pTableSchema());
+            $dbConn->exec(getRp2pTableSchema());
 
             // Append database configuration to the config file
             $defaultConfig .= "\$user['dbHost'] = '$dbHost';\n";

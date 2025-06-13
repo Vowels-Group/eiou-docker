@@ -29,21 +29,21 @@ if ($request['type'] == "create") {
 elseif ($request['type'] == "send") {
   // Handle eIOU
   output("Processing send request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'] ?? $request['memo'], TRUE), 'SILENT');
-  if(!checkExistence($request)){
+  if(!checkExistenceTransaction($request)){
     processTransaction($request);
   }
 }
 elseif ($request['type'] == "p2p") {
   // Handle Peer to peer Request
   output("Processing p2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
-  if(!checkExistence($request)){
+  if(!checkExistenceP2p($request)){
     handleP2pRequest($request);
   }
 }
 elseif ($request['type'] == "rp2p") {
   // Handle Peer to peer Response
   output("Processing rp2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
-  if(!checkExistence($request)){
+  if(!checkExistenceRp2p($request)){
     handleRp2pRequest($request);
   }
 }
