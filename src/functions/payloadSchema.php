@@ -61,6 +61,20 @@ function buildP2pPayload($data) {
     );
 }
 
+function buildP2pAcceptancePayload($request){
+    $receiver = resolveUserAddressForTransport($request['senderAddress']);
+    echo json_encode([
+        "status" => "received",
+        "message" => "hash " .  print_r($request['hash'],true) . " for P2P received by " .  print_r($receiver,true)]);
+}
+function buildP2pRejectionPayload($request){
+    $receiver = resolveUserAddressForTransport($request['senderAddress']);
+    return json_encode([
+        "status" => "rejected",
+        "message" => "hash " . print_r($request['hash'],true) . " for P2P already exists in database of " .  print_r($receiver,true)
+    ]);
+}
+
 function buildSendPayload($data) {
     // Build send (Transaction/eIOU) payload 
     global $user;
@@ -81,7 +95,24 @@ function buildSendPayload($data) {
     );
 }
 
-function buildRP2pPayload($data) {
+function buildSendAcceptancePayload($request){
+    $receiver = resolveUserAddressForTransport($request['senderAddress']);
+    return json_encode([
+        "status" => "accepted",
+        "txid" => $request['txid'],
+        "message" => "memo " .  print_r($request['memo'],true) . " for transaction received by " .  print_r($receiver,true)
+    ]);  
+}
+
+function buildSendRejectionPayload($request){
+    $receiver = resolveUserAddressForTransport($request['senderAddress']);
+    return json_encode([
+        "status" => "rejected",
+        "message" => "hash " . print_r($request['hash'],true) . " for Transaction already exists in database of " .  print_r($receiver,true)
+    ]);
+}
+
+function buildRp2pPayload($data) {
     // Build rp2p payload 
     global $user;
     output("Building rP2p payload: " . print_r($data, true),'SILENT');
@@ -98,6 +129,19 @@ function buildRP2pPayload($data) {
     );
 }
 
+function buildRp2pAcceptancePayload($request){
+    $receiver = resolveUserAddressForTransport($request['senderAddress']);
+    echo json_encode([
+        "status" => "received",
+        "message" => "hash " .  print_r($request['hash'],true) . " for RP2P received by " .  print_r($receiver,true)]);
+}
+function buildRp2pRejectionPayload($request){
+    $receiver = resolveUserAddressForTransport($request['senderAddress']);
+    return json_encode([
+        "status" => "rejected",
+        "message" => "hash " . print_r($request['hash'],true) . " for RP2P already exists in database of " .  print_r($receiver,true)
+    ]);
+}
 
 function resolveUserAddressForTransport($address) {
     global $user;
