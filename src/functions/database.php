@@ -190,10 +190,13 @@ function getP2pByHash($hash){
 }
 
 function checkExistenceP2p($request, $echo = true){
+    // Check if P2P already exists for hash in database, is valid and can be completed
     global $pdo;
+    // Check if P2P is valid and can be completed given credit of user requesting
     if(!checkRequestLevel($request) || !checkAvailableFunds($request)){
         return true; 
     }
+    // Check if P2P already exists for hash in database
     try{
         $Stmt = $pdo->prepare("SELECT * FROM p2p WHERE hash = :hash");
         $hash = $request['hash'];
@@ -225,6 +228,7 @@ function checkExistenceP2p($request, $echo = true){
 }
 
 function checkExistenceRp2p($request, $echo = true){
+    // Check if RP2P already exists for hash in database
     global $pdo;
     try{
         $Stmt = $pdo->prepare("SELECT * FROM rp2p WHERE hash = :hash");
@@ -258,10 +262,13 @@ function checkExistenceRp2p($request, $echo = true){
 }
 
 function checkExistenceTransaction($request, $echo = true){
+    // Check if Transaction already exists for memo in database and is a valid successor of previous txids
     global $pdo;
+    // Check if Transaction is a valid successor of previous txids
     if(!checkPreviousTxid($request)){
         return true;
     }
+    // Check if Transaction already exists for memo in database
     try{
         $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :memo");
         $memo = $request['memo'];
