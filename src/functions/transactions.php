@@ -59,7 +59,7 @@ function processTransaction($request) {
         return buildInsufficientBalancePayload($availableFunds, $requiredAmount, $creditLimit, 0);
     } else {
         $memo = $request['memo'];
-        $rP2pResult  = checkRP2pExists($memo);
+        $rP2pResult  = checkRp2pExists($memo);
 
         // Check if rp2p exists and corresponds to transaction
         if(isset($rP2pResult) && $memo === $rP2pResult['hash']){  

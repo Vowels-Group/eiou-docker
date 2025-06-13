@@ -33,7 +33,7 @@ function handleP2pRequest($request) {
         $request['status'] = 'found';
         insertP2pRequest($request, $myAddress); // Insert p2p request
         // Build and send corresponding rp2p request payload to sender of p2p
-        $rP2pPayload = buildRP2pPayload($request);
+        $rP2pPayload = buildRp2pPayload($request);
         $response = json_decode(send($request['senderAddress'], $rP2pPayload),true);
         output("Transaction (RP2P) send response: " . print_r($response, true),'SILENT');
     } else{

@@ -61,7 +61,7 @@ function handleRp2pRequest($request) {
 }
 
 
-function processQueuedRP2pMessages() {
+function processQueuedRp2pMessages() {
     // Select queued messages from the p2p table with sent status
     $queuedMessages = retrieveQueuedP2pMessages($status = 'sent', $status2 = 'paid');
 
@@ -70,11 +70,11 @@ function processQueuedRP2pMessages() {
         // Is message  'sent' or 'paid'
         if($message['status'] == 'sent'){
             // Check if the message hash exists in the rp2p table
-            $rP2pResult = checkRP2pExists($message['hash']);
+            $rP2pResult = checkRp2pExists($message['hash']);
             // If matching rp2p found for 'sent' message, echo forwarding message, otherwise check if p2p is expired
             if ($rP2pResult) {
                 output("Found rp2p match for hash: " . $message['hash'], 'SILENT');
-                $rP2pPayload = buildRP2pPayload($rP2pResult); // Build rp2p payload
+                $rP2pPayload = buildRp2pPayload($rP2pResult); // Build rp2p payload
                 updateP2pRequestStatus($message['hash'], 'found'); // Update the p2p request status to found
                 $response = json_decode(send($message['sender_address'], $rP2pPayload),true);
                 output("RP2P response: " . print_r($response,true),'SILENT');

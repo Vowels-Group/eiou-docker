@@ -67,7 +67,7 @@ function getP2pTableSchema() {
 }
 
 // Response to peer to peer request table
-function getRP2pTableSchema() {
+function getRp2pTableSchema() {
     return "CREATE TABLE rp2p (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         hash VARCHAR(255) NOT NULL UNIQUE, /*This is the hash of the final recipient address + salt + time*/
