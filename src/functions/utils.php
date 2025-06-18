@@ -408,7 +408,7 @@ function returnconvertedMicroTime($time){
 }
 
 function returnMicroTime(){
-    return microtime(true)*10000;
+    return returnconvertedMicroTime(microtime(true));
 }
 
 function verifyRequest($request) {
