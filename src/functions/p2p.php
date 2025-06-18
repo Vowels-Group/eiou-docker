@@ -58,9 +58,11 @@ function prepareP2pRequestData($request) {
     }
 
     $data = $request;
+
+    // TO DO if address = name?
     $data['receiverAddress'] = $request[2];
     $data['txType'] = 'p2p';
-    $data['time'] = time();
+    $data['time'] = returnMicroTime();
     $data['amount'] = round($request[3] * 100); // Convert to cents 100 
     $data['currency'] = 'USD';
 
@@ -82,8 +84,11 @@ function processQueuedP2pMessages() {
     // Process each queued message
     foreach ($queuedMessages as $message) {     
         $p2pPayload = buildP2pPayload($message); // Build p2p request payload
-        // If recipient is a contact send p2p directly
-        if($matchedContact = matchContact($message)){ 
+
+
+        // Check if user is NOT the original sender of the p2p and has a direct contact link to end-recipient
+        // If this is the case then send p2p directly
+        if(!isset($message['destination_address']) && $matchedContact = matchContact($message)){ 
             $response = json_decode(send($matchedContact['address'], $p2pPayload),true);
             output("P2P send result for matched contact: " . print_r($response,true),'SILENT');            
         }else{
@@ -94,6 +99,16 @@ function processQueuedP2pMessages() {
 
             // Send p2p request to all contacts
             foreach ($contacts as $contact) {
+                // Do not send p2p to contact (end-recipient), if direct transaction failed due to insufficient funds
+                if(isset($message['destination_address']) && $contact == $message['destination_address']){
+                    if(isTorAddress($message['destination_address'])){
+                        $contactsCount['tor'] -= 1;
+                    } else{
+                        $contactsCount['http'] -= 1;
+                    }
+                    continue;
+                }
+
                 $response = json_decode(send($contact, $p2pPayload),true);
                 output("P2P response: " . print_r($response,true),'SILENT');
             }
@@ -110,8 +125,22 @@ function processQueuedP2pMessages() {
 }
 
 function sendP2pRequest($data) {
+    // Check if a valid address format was supplied, if not look up the address in the case of a contact re-routing
+    if (isHttpAddress($data[2]) || isTorAddress($data[2])) {
+        $address = $data[2];
+    } else{
+        // This is only necessary in the case that a direct transaction to a contact (send NAME) was rejected based on insufficient credit
+        $contactAddress = lookupContactAddressByName($data[2]);
+        if($contactAddress){
+            $address = $contactAddress;
+            $data[2] = $address; // check if fixed issue with blank sender_address
+        } else{
+            output("No existing contact with name: " . $data[2],'SILENT');
+            die;
+        }
+    }   
     $p2pPayload = buildP2pPayload(prepareP2pRequestData($data)); // Prepare p2p request payload
-    output("Inserting p2p request with receiverAddress: " . print_r($data[2], TRUE), 'SILENT');
-    insertP2pRequest($p2pPayload, $data[2]); // Save the p2p request 
+    output("Inserting p2p request with receiverAddress: " . $address, 'SILENT');
+    insertP2pRequest($p2pPayload, $address); // Save the p2p request 
     updateP2pRequestStatus($p2pPayload['hash'], 'queued'); // Update the p2p request status to queued
 }
