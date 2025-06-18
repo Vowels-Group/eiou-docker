@@ -51,7 +51,7 @@ function buildP2pPayload($data) {
         'hash' => $data['hash'],
         'salt' => $data['salt'],
         'time' => $data['time'],
-        'expiration' => $data['time'] + $user['p2pExpiration'] ?? $data['expiration'], // Expiration time based on user's configuration (or database version)
+        'expiration' => $data['time'] + returnconvertedMicroTime($user['p2pExpiration']) ?? $data['expiration'], // Expiration time based on user's configuration (or database version)
         'currency' => $data['currency'] ?? 'USD',
         'amount' => $data['amount'], // Nominal amount in cents recipient will receive
         'requestLevel' => $data['minRequestLevel'] ?? $data['request_level'] + 1, // Initial request level (or increment)

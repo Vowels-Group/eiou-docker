@@ -36,8 +36,8 @@ function getP2pTableSchema() {
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         hash VARCHAR(255) NOT NULL UNIQUE, /* This is the hash of the final recipient address + salt + time*/
         salt VARCHAR(255) NOT NULL,
-        time INTEGER NOT NULL,
-        expiration INTEGER NOT NULL, /* unix epoch seconds */
+        time BIGINT NOT NULL,
+        expiration BIGINT NOT NULL, /* unix epoch seconds */
         currency VARCHAR(10) NOT NULL,
         amount INTEGER NOT NULL,
         my_fee_amount INTEGER,
@@ -71,7 +71,7 @@ function getRp2pTableSchema() {
     return "CREATE TABLE rp2p (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         hash VARCHAR(255) NOT NULL UNIQUE, /*This is the hash of the final recipient address + salt + time*/
-        time INTEGER NOT NULL,
+        time BIGINT NOT NULL,
         amount INTEGER NOT NULL,
         currency VARCHAR(10) NOT NULL,
         sender_public_key TEXT NOT NULL,

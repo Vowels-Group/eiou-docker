@@ -403,6 +403,14 @@ function sign($payload){
   return $payload;
 }
 
+function returnconvertedMicroTime($time){
+    return $time*10000;
+}
+
+function returnMicroTime(){
+    return microtime(true)*10000;
+}
+
 function verifyRequest($request) {
     // Check if request is valid based on signature
     $publicKeyResource = openssl_pkey_get_public($request['senderPublicKey']);
