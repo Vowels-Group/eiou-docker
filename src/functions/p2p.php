@@ -135,7 +135,7 @@ function sendP2pRequest($data) {
             $address = $contactAddress;
             $data[2] = $address; // check if fixed issue with blank sender_address
         } else{
-            output("No existing contact with name: " . $data[2],'SILENT');
+            output("Not an address nor existing contact with name: " . $data[2],'SILENT');
             die;
         }
     }   
