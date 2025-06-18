@@ -19,15 +19,28 @@ function fixPreviousTxid($senderPubKey,$receiverPubKey){
     $prevID = getPreviousTxid($senderPubKey, $receiverPubKey);
     while(getExistingPreviousTxid($prevID)){
         $prevID = getPreviousTxid($senderPubKey, $receiverPubKey);
+        usleep(1000); // Sleep for 1ms
     }
     return $prevID;
+}
+
+function createUniqueTxid($data){
+    global $user;
+    // Make sure that every txid will be unique based on time, if all other values are the same 
+    $txid = hash('sha256', $user['public'] . $data['receiverPublicKey'] . $data['amount'] . $data['time']);
+    // Create new txid if transactions are generated to close together to the same person for the same amount
+    while(getExistingTxid($txid)){
+        $txid = hash('sha256', $user['public'] . $data['receiverPublicKey'] . $data['amount'] . $data['time']);
+        usleep(1000); // Sleep for 1ms
+    }
+    return $txid;
 }
 
 function prepareSendData($request) {
     // Prepare initial request payload for direct transaction
     output("Prepare send data: " . print_r($request, true), 'SILENT');
     $data['txType'] = 'standard';
-    $data['time'] = time();
+    $data['time'] = returnMicroTime();
     $data['amount'] = round($request[3] * 100); // Convert to cents
     $data['currency'] = 'USD';
     $data['memo'] = 'standard';
@@ -65,8 +78,8 @@ function processTransaction($request) {
         if(isset($rP2pResult) && $memo === $rP2pResult['hash']){  
             $request['receiverAddress'] = $rP2pResult['sender_address'];
             $request['receiverPublicKey'] = $rP2pResult['sender_public_key'];
-            $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']); 
-            
+            $request['txid'] = createUniqueTxid($request);
+
             // Remove my transaction fee
             $request['amount'] = removeTransactionFee($request); 
             
@@ -156,7 +169,10 @@ function sendEiou($request = null) {
         $data = prepareSendData($request);
         $data['receiverAddress'] = $contactInfo['receiverAddress'];
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
-        $data['txid'] = hash('sha256', $user['public'] . $contactInfo['receiverPublicKey'] . $data['amount'] . $data['time']);
+        
+        $data['txid'] = createUniqueTxid($data);
+        
+
         $data['previousTxid'] = fixPreviousTxid($user['public'], $contactInfo['receiverPublicKey']);
         
         // Prepare transaction payload

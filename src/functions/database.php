@@ -268,13 +268,23 @@ function checkExistenceTransaction($request, $echo = true){
     if(!checkPreviousTxid($request)){
         return true;
     }
-    // Check if Transaction already exists for memo in database
+    // Check if Transaction already exists for txid or memo in database
     try{
-        $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :memo");
         $memo = $request['memo'];
-        $Stmt->bindParam(':memo', $memo);
-        $Stmt->execute();
-        $results = $Stmt->fetch(PDO::FETCH_ASSOC);
+        if($memo = "standard"){
+            // If direct transaction
+            $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE txid = :txid");
+            $txid = $request['txid'];
+            $Stmt->bindParam(':txid', $txid);
+            $Stmt->execute();
+            $results = $Stmt->fetch(PDO::FETCH_ASSOC);
+        } else{
+            // If p2p based transaction
+            $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :memo");
+            $Stmt->bindParam(':memo', $memo);
+            $Stmt->execute();
+            $results = $Stmt->fetch(PDO::FETCH_ASSOC);
+        }
         if(!$results){
             if($echo){
                 echo buildSendAcceptancePayload($request);
@@ -313,6 +323,7 @@ function checkRp2pExists($hash) {
         return false;
     }
 }
+
 
 function deleteContact($data) {
     global $pdo;
@@ -423,6 +434,15 @@ function getExistingPreviousTxid($previousTxid){
     global $pdo;
     $prevTxStmt = $pdo->prepare("SELECT txid FROM transactions WHERE previous_txid = :previous_txid ORDER BY timestamp DESC LIMIT 1");
     $prevTxStmt->bindParam(':previous_txid', $previousTxid);
+    $prevTxStmt->execute();
+    $result = $prevTxStmt->fetch(PDO::FETCH_ASSOC);
+    return $result ? true : false;
+}
+
+function getExistingTxid($txid){
+    global $pdo;
+    $prevTxStmt = $pdo->prepare("SELECT txid FROM transactions WHERE txid = :txid ORDER BY timestamp DESC LIMIT 1");
+    $prevTxStmt->bindParam(':txid', $txid);
     $prevTxStmt->execute();
     $result = $prevTxStmt->fetch(PDO::FETCH_ASSOC);
     return $result ? true : false;
@@ -677,7 +697,11 @@ function insertTransaction($request) {
         // Execute the insert
         $insertStmt->execute();
         // Respond with accepted status
-        output("Inserted Transaction with memo: " .print_r($request['memo'],true),'SILENT');
+        if($request['memo'] != "standard"){
+            output("Inserted Transaction with memo: " .print_r($request['memo'],true),'SILENT');
+        } else{
+            output("Inserted Transaction with txid: " .print_r($request['txid'],true),'SILENT');
+        }
         return json_encode(["status" => "accepted", "message" => "Transaction recorded successfully","txid" => $request['txid']]);
     } catch (PDOException $e) {
         // Handle database error
@@ -704,6 +728,16 @@ function lookupContactByAddress($address) {
     $addressStmt->bindParam(':address', $address);
     $addressStmt->execute();
     $result = $addressStmt->fetch(PDO::FETCH_ASSOC);
+    return $result ? $result : null;
+}
+
+function lookupContactAddressByName($name){
+     global $pdo;
+    // Lookup contact address based on name
+    $nameStmt = $pdo->prepare("SELECT address FROM contacts WHERE LOWER(name) = LOWER(:name)");
+    $nameStmt->bindParam(':name', $name);
+    $nameStmt->execute();
+    $result = $nameStmt->fetchColumn();
     return $result ? $result : null;
 }
 
