@@ -61,26 +61,27 @@ function generateWallet($argv) {
   }
 }
 
-function restoreWallet($argv) {
-  echo "Enter the file name containing the private key: ";
-  $privateKeyFile = trim(fgets(STDIN));
-  $privateKey = trim(file_get_contents($privateKeyFile));
+// For Future version
+// function restoreWallet($argv) {
+//   echo "Enter the file name containing the private key: ";
+//   $privateKeyFile = trim(fgets(STDIN));
+//   $privateKey = trim(file_get_contents($privateKeyFile));
   
-  // Verify the private key
-  $privateKeyResource = openssl_pkey_get_private($privateKey);
+//   // Verify the private key
+//   $privateKeyResource = openssl_pkey_get_private($privateKey);
 
-  if ($privateKeyResource) {
-      // Extract the public key from the private key
-      $keyDetails = openssl_pkey_get_details($privateKeyResource);
-      $publicKey = $keyDetails['key'];
+//   if ($privateKeyResource) {
+//       // Extract the public key from the private key
+//       $keyDetails = openssl_pkey_get_details($privateKeyResource);
+//       $publicKey = $keyDetails['key'];
 
-      // Save the keys to the config file
-      $publicKeyData = '$user["public"]="' . addslashes($publicKey) . '";' . "\n";
-      $privateKeyData = '$user["private"]="' . addslashes($privateKey) . '";' . "\n";
-      file_put_contents('/etc/eiou/config.php', $publicKeyData, FILE_APPEND | LOCK_EX);
-      file_put_contents('/etc/eiou/config.php', $privateKeyData, FILE_APPEND | LOCK_EX);
-      echo "Public and private keys verified and saved successfully.";
-  } else {
-      echo "Invalid private key provided.";
-  }
-}
+//       // Save the keys to the config file
+//       $publicKeyData = '$user["public"]="' . addslashes($publicKey) . '";' . "\n";
+//       $privateKeyData = '$user["private"]="' . addslashes($privateKey) . '";' . "\n";
+//       file_put_contents('/etc/eiou/config.php', $publicKeyData, FILE_APPEND | LOCK_EX);
+//       file_put_contents('/etc/eiou/config.php', $privateKeyData, FILE_APPEND | LOCK_EX);
+//       echo "Public and private keys verified and saved successfully.";
+//   } else {
+//       echo "Invalid private key provided.";
+//   }
+// }

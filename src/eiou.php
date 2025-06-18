@@ -88,11 +88,12 @@ checkWalletExists($user, $request);
     output("Executing generate wallet request", 'SILENT');
     generateWallet($argv);
   }
-  elseif($request == "restore"){
-    //Restore Wallet
-    output("Executing restore wallet request", 'SILENT');
-    restoreWallet($argv);
-  }
+  // For Future version
+  // elseif($request == "restore"){
+  //   //Restore Wallet
+  //   output("Executing restore wallet request", 'SILENT');
+  //   restoreWallet($argv);
+  // }
   else{
     displayHelp($argv);
     echo $request . " not found, displaying help above\n";
