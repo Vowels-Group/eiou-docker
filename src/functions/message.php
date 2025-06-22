@@ -53,7 +53,6 @@ function handleTransactionMessageInquiryRequest($decodedMessage){
 // odd thought if say txid is actually the hash but it's not for this transaction (since lucky guess)
 
 function handleTransactionMessageRequest($decodedMessage){
-    
     if($decodedMessage['status'] === 'completed'){
         $hash = $decodedMessage['hash']; // for direct transaction is equivalent to txid, otherwise equivalent to memo
         // check if hash exists for p2p and check if hash exists for transaction
