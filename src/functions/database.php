@@ -124,7 +124,7 @@ function checkAcceptedContact($address, $name) {
     $stmt->bindParam(':address', $address);
     $stmt->bindParam(':name', $name);
     $stmt->execute();
-    
+
     return $stmt->rowCount() > 0;
 }
 
@@ -174,35 +174,42 @@ function checkPendingContactRequests() {
     }
 }
 
-function getP2pByHash($hash){
-    global $pdo;
-    // Get p2p from database based on hash
-    try {
-        $p2pStmt = $pdo->prepare("SELECT * FROM p2p WHERE hash = :hash");
-        $p2pStmt->bindParam(':hash', $hash);
-        $p2pStmt->execute();
-        return $p2pStmt->fetch(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        // Handle database error
-        error_log("Error retrieving p2p request by hash: " . $e->getMessage());
-        return false;
-    }
+function checkCompletionP2pByHash($hash){
+    // Check if P2P was already completed
+    $results = getP2pByHash($hash);
+    if($results['status'] == 'completed'){
+        return true;
+    } 
+    return false;
+}
+
+function checkCompletionTransactionByMemo($memo){
+    // Check if transaction was already completed
+    $results = getTransactionByMemo($memo);
+    if($results['status'] == 'completed'){
+        return true;
+    } 
+    return false;
+}
+
+function checkCompletionTransactionByTxid($txid){
+     // Check if transaction was already completed
+    $results =  getTransactionByTxid($txid);
+    if($results['status'] == 'completed'){
+        return true;
+    } 
+    return false;
 }
 
 function checkExistenceP2p($request, $echo = true){
     // Check if P2P already exists for hash in database, is valid and can be completed
-    global $pdo;
     // Check if P2P is valid and can be completed given credit of user requesting
     if(!checkRequestLevel($request) || !checkAvailableFunds($request)){
         return true; 
     }
     // Check if P2P already exists for hash in database
     try{
-        $Stmt = $pdo->prepare("SELECT * FROM p2p WHERE hash = :hash");
-        $hash = $request['hash'];
-        $Stmt->bindParam(':hash', $hash);
-        $Stmt->execute();
-        $results = $Stmt->fetch(PDO::FETCH_ASSOC);
+        $results = getP2pByHash($request['hash']);
         if(!$results){
             if($echo){
                 echo buildP2pAcceptancePayload($request);
@@ -263,7 +270,6 @@ function checkExistenceRp2p($request, $echo = true){
 
 function checkExistenceTransaction($request, $echo = true){
     // Check if Transaction already exists for memo in database and is a valid successor of previous txids
-    global $pdo;
     // Check if Transaction is a valid successor of previous txids
     if(!checkPreviousTxid($request)){
         return true;
@@ -273,17 +279,10 @@ function checkExistenceTransaction($request, $echo = true){
         $memo = $request['memo'];
         if($memo = "standard"){
             // If direct transaction
-            $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE txid = :txid");
-            $txid = $request['txid'];
-            $Stmt->bindParam(':txid', $txid);
-            $Stmt->execute();
-            $results = $Stmt->fetch(PDO::FETCH_ASSOC);
+            $results = getTransactionByTxid($request['txid']);
         } else{
             // If p2p based transaction
-            $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :memo");
-            $Stmt->bindParam(':memo', $memo);
-            $Stmt->execute();
-            $results = $Stmt->fetch(PDO::FETCH_ASSOC);
+            $results = getTransactionByMemo($memo);
         }
         if(!$results){
             if($echo){
@@ -323,7 +322,6 @@ function checkRp2pExists($hash) {
         return false;
     }
 }
-
 
 function deleteContact($data) {
     global $pdo;
@@ -430,6 +428,7 @@ function getCreditLimit($senderPublicKey) {
     
     return $creditResult['credit_limit'] ?? 0;
 }
+
 function getExistingPreviousTxid($previousTxid){
     global $pdo;
     $prevTxStmt = $pdo->prepare("SELECT txid FROM transactions WHERE previous_txid = :previous_txid ORDER BY timestamp DESC LIMIT 1");
@@ -460,6 +459,51 @@ function getPreviousTxid($senderPublicKey, $receiverPublicKey) {
     $prevTxStmt->execute();
     $result = $prevTxStmt->fetch(PDO::FETCH_ASSOC);
     return $result ? $result['txid'] : null;
+}
+
+function getP2pByHash($hash){
+    global $pdo;
+    // Get p2p from database based on hash
+    try {
+        $p2pStmt = $pdo->prepare("SELECT * FROM p2p WHERE hash = :hash");
+        $p2pStmt->bindParam(':hash', $hash);
+        $p2pStmt->execute();
+        return $p2pStmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // Handle database error
+        error_log("Error retrieving p2p request by hash: " . $e->getMessage());
+        return false;
+    }
+}
+
+function getTransactionByMemo($memo){
+    global $pdo;
+    // Get transaction from database based on memo
+    try {
+        $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE memo = :memo");
+        $Stmt->bindParam(':memo', $memo);
+        $Stmt->execute();
+        return $Stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // Handle database error
+        error_log("Error retrieving transaction request by memo: " . $e->getMessage());
+        return false;
+    }
+}
+
+function getTransactionByTxid($txid){
+    global $pdo;
+    // Get transaction from database based on txid
+    try {
+        $Stmt = $pdo->prepare("SELECT * FROM transactions WHERE txid = :txid");
+        $Stmt->bindParam(':txid', $txid);
+        $Stmt->execute();
+        return $Stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // Handle database error
+        error_log("Error retrieving transaction request by txid: " . $e->getMessage());
+        return false;
+    }
 }
 
 function insertContact($address, $contactPublicKey, $name, $fee, $credit, $currency) {
