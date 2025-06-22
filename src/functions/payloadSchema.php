@@ -42,6 +42,14 @@ function buildInvalidRequestLevelPayload($request) {
     ]);
 }
 
+function buildMessageInvalidSourcePayload($message){
+    $receiver = resolveUserAddressForTransport($message['senderAddress']);
+    return json_encode([
+        "status" => "rejected",
+        "message" => "message rejeceted due to being from unknown source to receiver " .  print_r($receiver,true)
+    ]);
+}
+
 function buildP2pPayload($data) {
     // Build p2p payload 
     global $user;
@@ -67,6 +75,7 @@ function buildP2pAcceptancePayload($request){
         "status" => "received",
         "message" => "hash " .  print_r($request['hash'],true) . " for P2P received by " .  print_r($receiver,true)]);
 }
+
 function buildP2pRejectionPayload($request){
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     return json_encode([
@@ -96,6 +105,7 @@ function buildSendPayload($data) {
 }
 
 function buildSendAcceptancePayload($request){
+    // Build send (Transaction/eIOU) was accepted payload 
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     return json_encode([
         "status" => "accepted",
@@ -104,7 +114,64 @@ function buildSendAcceptancePayload($request){
     ]);  
 }
 
+function buildSendCompletedPayload($request){
+    global $user;
+    $receiver = resolveUserAddressForTransport($request['senderAddress']);
+    // for direct transaction hash is equivalent to txid, otherwise hash is equivalent to memo (only for initialisation)
+    if(isset($request['memo'])){
+        if($request['memo'] == 'standard'){
+            $hash = $request['txid'];
+            $hashType = 'txid';
+        } else{
+            $hash = $request['memo'];
+            $hashType = 'memo';
+        }
+    } else{
+        $hash = $request['hash'];
+        $hashType = 'memo';
+    } 
+    
+    return array(
+        'type' => "message", // message request type
+        'typeMessage' => "transaction", // type of message
+        'inquiry' => false, // request for information
+        "status" => "completed",
+        "hash" => $hash,
+        "hashType" => $hashType,
+        "senderAddress" => $receiver,
+        'senderPublicKey' => $user['public'],
+        "message" => "transaction for hash " . print_r($hash,true) . " was succesfully completed through intermediary"
+    );
+}
+
+function buildSendCompletedCorrectlyPayload($message){
+    $hash = $message['hash'];
+    return json_encode([
+        "status" => "completed",
+        "hash" => $hash,
+        "message" => "Transaction with hash " . print_r($hash,true) . " was received succesfully by end-recipient"
+    ]);
+}
+
+function buildSendCompletedInquiryPayload($message){
+    global $user;
+    $hash = $message['hash'];
+    $myAddress = resolveUserAddressForTransport($message['senderAddress']);
+    return array(
+        'type' => "message", // message request type
+        'typeMessage' => "transaction", // type of message
+        'inquiry' => true, // request for information
+        "status" => "completed",
+        "hash" => $hash,
+        "hashType" => 'memo',
+        "senderAddress" => $myAddress,
+        'senderPublicKey' => $user['public'],
+        "message" => print_r($myAddress,true) . " is requesting information about transaction with memo " . print_r($hash,true) 
+    );
+}
+
 function buildSendRejectionPayload($request){
+    // Build send (Transaction/eIOU) was rejected payload 
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     return json_encode([
         "status" => "rejected",
@@ -130,12 +197,15 @@ function buildRp2pPayload($data) {
 }
 
 function buildRp2pAcceptancePayload($request){
+    // Build rp2p was accepted payload 
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     echo json_encode([
         "status" => "received",
         "message" => "hash " .  print_r($request['hash'],true) . " for RP2P received by " .  print_r($receiver,true)]);
 }
+
 function buildRp2pRejectionPayload($request){
+    // Build rp2p was rejected payload 
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     return json_encode([
         "status" => "rejected",
