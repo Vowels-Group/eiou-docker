@@ -177,7 +177,7 @@ function checkPendingContactRequests() {
 function checkCompletionP2pByHash($hash){
     // Check if P2P was already completed
     $results = getP2pByHash($hash);
-    if($results['status'] == 'completed'){
+    if($results['status'] === 'completed'){
         return true;
     } 
     return false;
@@ -186,7 +186,7 @@ function checkCompletionP2pByHash($hash){
 function checkCompletionTransactionByMemo($memo){
     // Check if transaction was already completed
     $results = getTransactionByMemo($memo);
-    if($results['status'] == 'completed'){
+    if($results['status'] === 'completed'){
         return true;
     } 
     return false;
@@ -195,7 +195,7 @@ function checkCompletionTransactionByMemo($memo){
 function checkCompletionTransactionByTxid($txid){
      // Check if transaction was already completed
     $results =  getTransactionByTxid($txid);
-    if($results['status'] == 'completed'){
+    if($results['status'] === 'completed'){
         return true;
     } 
     return false;
@@ -860,7 +860,7 @@ function retrieveQueuedP2pMessages($status = 'queued', $status2 = '') {
     $queuedStmt->execute();
     $queuedMessages = $queuedStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    if($status2 == ''){
+    if($status2 === ''){
          echo "Found " . count($queuedMessages) . " " . $status . " messages to process\n";
     } else{
         echo "Found " . count($queuedMessages) . " " . $status . " & " . $status2 . " messages to process\n";
@@ -909,20 +909,20 @@ function updateContact($data) {
     $params = [];
     
     // Depending on supplied argument update specific (or all) items
-    if($field == 'name'){
+    if($field === 'name'){
         $query .= "name = :name";
         $params[':name'] = $value;
     }
-    elseif($field == 'fee'){
+    elseif($field === 'fee'){
         $query .= "fee_percent = :fee";
         $params[':fee'] = $value * 100; // Convert percentage
     }
-    elseif($field == 'credit'){
+    elseif($field === 'credit'){
         $query .= "credit_limit = :credit, currency = :currency";
         $params[':credit'] = $value * 100; // Convert to cents
         $params[':currency'] = 'USD';
     }
-    elseif($field == 'all'){
+    elseif($field === 'all'){
         $query .= "name = :name, fee_percent = :fee, credit_limit = :credit, currency = :currency";
         $params[':name'] = $value;
         $params[':fee'] = $value2 * 100; // Convert percentage
@@ -1010,7 +1010,7 @@ function updateTransactionStatus($memo, $status, $txid=false) {
 function viewBalanceQuery($direction, $userAddress, $limit){
     global $pdo;
     // View balance information based on transactions
-    if($direction == "received"){
+    if($direction === "received"){
          $query = "SELECT sender_address, amount, currency, timestamp FROM transactions WHERE receiver_address = :userAddress ORDER BY timestamp DESC";
          $address = "sender_address";
          $where = "from";
@@ -1037,7 +1037,7 @@ function viewBalanceQuery($direction, $userAddress, $limit){
         } 
         $countrows += 1;
     }
-    if($limit == 'all' || $limit > $countResults){
+    if($limit === 'all' || $limit > $countResults){
         $limit = $countResults;
     } 
     echo "\t\t\t----- Displaying $limit out of $countResults $direction balance(s) -----\n";
@@ -1067,7 +1067,7 @@ function viewTransactionHistory($argv) {
     // Add ordering
     $query .= " ORDER BY timestamp DESC";
     // Add limit depending on passed parameter
-    if(isset($argv[3]) && ($argv[3] == 'all' || intval($argv[3]) > 0)){
+    if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
         $displayLimit = $argv[3];
     }
     
@@ -1116,7 +1116,7 @@ function viewTransactionHistory($argv) {
             $countrows += 1;        
         }
         echo "-------------------------------------------\n";
-        if($displayLimit == 'all'){
+        if($displayLimit === 'all'){
             $displayLimit = $countResults;
         } elseif($displayLimit > $countResults){
             $displayLimit = $countResults;

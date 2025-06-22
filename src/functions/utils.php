@@ -31,28 +31,28 @@ function changeSettings($argv) {
 
     // Check if command line based or user input based
     if(isset($argv[2])){
-        if(strtolower($argv[2]) == 'defaultfee'){
+        if(strtolower($argv[2]) === 'defaultfee'){
             $key = 'defaultFee';
             $value = floatval($argv[3]);
-        }elseif(strtolower($argv[2]) == 'defaultcurrency'){
+        }elseif(strtolower($argv[2]) === 'defaultcurrency'){
             // To do: when more currencies added, check if valid currency
             $key = 'defaultCurrency';
             $value = strtoupper($argv[3]);
-        }elseif(strtolower($argv[2]) == 'localhostonly'){
+        }elseif(strtolower($argv[2]) === 'localhostonly'){
             $key = 'localhostOnly';
-            $value = ($argv[3] == '1');
-        }elseif(strtolower($argv[2]) == 'maxfee'){
+            $value = ($argv[3] === '1');
+        }elseif(strtolower($argv[2]) === 'maxfee'){
             $key = 'maxFee';
             $value = floatval($argv[3]);
-        }elseif(strtolower($argv[2]) == 'maxp2pLevel'){
+        }elseif(strtolower($argv[2]) === 'maxp2pLevel'){
             $key = 'maxP2pLevel';
             $value = intval($argv[3]);
-        }elseif(strtolower($argv[2]) == 'p2pexpiration'){
+        }elseif(strtolower($argv[2]) === 'p2pexpiration'){
             $key = 'p2pExpiration';
             $value = intval($argv[3]);
-        }elseif(strtolower($argv[2]) == 'maxoutput'){
+        }elseif(strtolower($argv[2]) === 'maxoutput'){
             $key = 'maxOutput';
-            if($argv[3] == 'all'){
+            if($argv[3] === 'all'){
                 $value = 'all';
             } else{
                 $value = intval($argv[3]);
@@ -96,7 +96,7 @@ function changeSettings($argv) {
             case '3':
                 echo "Enter access mode (0 for Network Enabled, 1 for LocalHost Only): ";
                 $key = 'localhostOnly';
-                $value = (trim(fgets(STDIN)) == '1');
+                $value = (trim(fgets(STDIN)) === '1');
                 break;
             
             case '4':
@@ -121,7 +121,7 @@ function changeSettings($argv) {
                 echo "Enter new Maximum of Balance/Transaction output lines to display: ";
                 $key = 'maxOutput';
                 $read = trim(fgets(STDIN));
-                if($read == 'all'){
+                if($read === 'all'){
                     $value = 'all';
                 } else{
                     $value = intval($read);
@@ -139,7 +139,7 @@ function changeSettings($argv) {
     }
 
     // Check for zero value due to typecasting actual text to number or using zero (or less than) where not possible
-    if($value < 0 || ($value == 0 && $key != 'defaultFee')){
+    if($value < 0 || ($value === 0 && $key != 'defaultFee')){
         echo "Value is invalid for setting. No changes made.\n";
         return;
     }
@@ -170,28 +170,28 @@ function displayHelp($argv) {
     // Display available commands to user in the CLI
     if(isset($argv[2])){
         echo "Command:\n";
-        if(strtolower($argv[2]) == 'defaultfee'){
-        } elseif(strtolower($argv[2]) == 'add'){
+        if(strtolower($argv[2]) === 'defaultfee'){
+        } elseif(strtolower($argv[2]) === 'add'){
             echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
-        } elseif(strtolower($argv[2]) == 'viewcontact'){
+        } elseif(strtolower($argv[2]) === 'viewcontact'){
             echo "\tviewcontact [address/name] - View contact information.\n";
-        } elseif(strtolower($argv[2]) == 'update'){
+        } elseif(strtolower($argv[2]) === 'update'){
             echo "\tupdate [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
-        } elseif(strtolower($argv[2]) == 'delete'){
+        } elseif(strtolower($argv[2]) === 'delete'){
             echo "\tdelete [address/name] - Delete a contact.\n";
-        } elseif(strtolower($argv[2]) == 'send'){
+        } elseif(strtolower($argv[2]) === 'send'){
             echo "\tsend [address/name] [amount] [currency] - Send an eIOU.\n";
-        } elseif(strtolower($argv[2]) == 'viewbalances'){
+        } elseif(strtolower($argv[2]) === 'viewbalances'){
             echo "\tviewbalances ([address/name]) - View eIOU balance(s).\n";
-        } elseif(strtolower($argv[2]) == 'history'){
+        } elseif(strtolower($argv[2]) === 'history'){
             echo "\thistory ([address/name]) - View transaction history for contacts, (default: all contacts).\n";
-        } elseif(strtolower($argv[2]) == 'help'){
+        } elseif(strtolower($argv[2]) === 'help'){
             echo "\thelp - Display this help information.\n";
-        } elseif(strtolower($argv[2]) == 'viewsettings'){
+        } elseif(strtolower($argv[2]) === 'viewsettings'){
             echo "\tviewsettings - View current settings.\n";
-        } elseif(strtolower($argv[2]) == 'changesettings'){
+        } elseif(strtolower($argv[2]) === 'changesettings'){
             echo "\tchangesettings - Change settings.\n";
-        } elseif(strtolower($argv[2]) == 'generate'){
+        } elseif(strtolower($argv[2]) === 'generate'){
             echo "\tgenerate - Generate a new wallet.\n";
         } else{
             echo "\tcommand does not exist.\n";
@@ -249,9 +249,9 @@ function displayUserInfo($argv) {
     
     echo "\tTotal Balance: " . number_format($balance, 2) . "\n";
 
-    if(isset($argv[2]) && $argv[2] == 'detail'){
+    if(isset($argv[2]) && $argv[2] === 'detail'){
         // Define limit of output displayed
-        if(isset($argv[3]) && ($argv[3] == 'all' || intval($argv[3]) > 0)){
+        if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
             $limit = $argv[3];                   
         } else{
             $limit = $user['maxOutput'];
@@ -417,9 +417,9 @@ function verifyRequest($request) {
     $verified = openssl_verify($request['message'], base64_decode($request['signature']), $publicKeyResource);
     
     // Step 3: Output the verification result
-    if ($verified == 1) {
+    if ($verified === 1) {
         return true; // continue
-    } elseif ($verified == 0) {
+    } elseif ($verified === 0) {
         echo json_encode(["status" => "rejected", "message" => "Signature is invalid"]);
         return false;
     } else {

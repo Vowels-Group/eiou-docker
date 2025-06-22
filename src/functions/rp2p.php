@@ -68,7 +68,7 @@ function processQueuedRp2pMessages() {
     // Process each 'sent' or 'paid' message
     foreach ($queuedMessages as $message) {
         // Is message  'sent' or 'paid'
-        if($message['status'] == 'sent'){
+        if($message['status'] === 'sent'){
             // Check if the message hash exists in the rp2p table
             $rP2pResult = checkRp2pExists($message['hash']);
             // If matching rp2p found for 'sent' message, echo forwarding message, otherwise check if p2p is expired

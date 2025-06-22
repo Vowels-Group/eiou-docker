@@ -87,7 +87,7 @@ function processTransaction($request) {
             $request['previousTxid'] = fixPreviousTxid($user['public'], $request['receiverPublicKey']);
             $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
             // If transaction succesfully inserted
-            if($insertTransactionResponse['status'] == 'accepted'){
+            if($insertTransactionResponse['status'] === 'accepted'){
                 $payload = buildSendPayload($request);
                 updateP2pRequestStatus($memo,'paid'); // Update p2p status to paid
                 output("Sending Transaction onwards to: " . $request['receiverAddress'],'SILENT');
@@ -109,10 +109,12 @@ function processTransaction($request) {
             
             $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
             // If transaction succesfully inserted
-            if($insertTransactionResponse['status'] == 'accepted'){
+            if($insertTransactionResponse['status'] === 'accepted'){
+                // Check if p2p was already completed
                 if(!checkCompletionP2pByHash($memo)){
                     updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
                 }
+                // Check if transaction was already completed
                 if(!checkCompletionTransactionByMemo($memo)){
                     updateTransactionStatus($memo,'completed'); // Update transaction status to completed
                 }

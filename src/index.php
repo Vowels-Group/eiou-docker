@@ -21,33 +21,33 @@ if (!verifyRequest($request)) {
 // Create PDO (db) connection
 $pdo = createPDOConnection();
 
-if ($request['type'] == "create") {
+if ($request['type'] === "create") {
   // Handle contact request
   output("Processing create request from " . print_r($request['senderAddress'],true) , 'SILENT');
   echo handleContactCreation($request);  
 }
-elseif ($request['type'] == "send") {
+elseif ($request['type'] === "send") {
   // Handle eIOU
   output("Processing send request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'] ?? $request['memo'], TRUE), 'SILENT');
   if(!checkExistenceTransaction($request)){
     processTransaction($request);
   }
 }
-elseif ($request['type'] == "p2p") {
+elseif ($request['type'] === "p2p") {
   // Handle Peer to peer Request
   output("Processing p2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
   if(!checkExistenceP2p($request)){
     handleP2pRequest($request);
   }
 }
-elseif ($request['type'] == "rp2p") {
+elseif ($request['type'] === "rp2p") {
   // Handle Peer to peer Response
   output("Processing rp2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
   if(!checkExistenceRp2p($request)){
     handleRp2pRequest($request);
   }
 }
-elseif ($request['type'] == "message") {
+elseif ($request['type'] === "message") {
   // Handle Peer to peer Response
   output("Processing message from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
   handleMessageRequest($request);

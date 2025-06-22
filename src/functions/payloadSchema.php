@@ -119,7 +119,7 @@ function buildSendCompletedPayload($request){
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     // for direct transaction hash is equivalent to txid, otherwise hash is equivalent to memo (only for initialisation)
     if(isset($request['memo'])){
-        if($request['memo'] == 'standard'){
+        if($request['memo'] === 'standard'){
             $hash = $request['txid'];
             $hashType = 'txid';
         } else{

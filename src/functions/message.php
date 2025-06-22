@@ -10,7 +10,7 @@ function checkMessageValidity($decodedMessage){
             $p2p = getP2pByHash($hash);
             if($p2p){
                 // Check if source is original sender for any messages related to transactions
-                if($hash == hash('sha256', resolveUserAddressForTransport($decodedMessage['senderAddress']) . $p2p['salt'] . $p2p['time'])){
+                if($hash === hash('sha256', resolveUserAddressForTransport($decodedMessage['senderAddress']) . $p2p['salt'] . $p2p['time'])){
                     return true;
                 } 
                 return false;
@@ -33,7 +33,7 @@ function handleMessageRequest($message){
         die;
     }
 
-    if($decodedMessage['typeMessage'] == "transaction"){
+    if($decodedMessage['typeMessage'] === "transaction"){
         if(isset($decodedMessage['inquiry']) && $decodedMessage['inquiry']){
             handleTransactionMessageInquiryRequest($decodedMessage);
         } else{
@@ -54,10 +54,10 @@ function handleTransactionMessageInquiryRequest($decodedMessage){
 
 function handleTransactionMessageRequest($decodedMessage){
     
-    if($decodedMessage['status'] == 'completed'){
+    if($decodedMessage['status'] === 'completed'){
         $hash = $decodedMessage['hash']; // for direct transaction is equivalent to txid, otherwise equivalent to memo
         // check if hash exists for p2p and check if hash exists for transaction
-        if($decodedMessage['hashType'] == 'memo'){
+        if($decodedMessage['hashType'] === 'memo'){
             $p2p = getP2pByHash($hash);
             $transaction = getTransactionByMemo($hash);
             if($p2p && $transaction){
@@ -67,7 +67,7 @@ function handleTransactionMessageRequest($decodedMessage){
                     $completedTransactionInquiry = buildSendCompletedInquiryPayload($decodedMessage);
                     $response = json_decode(send($p2p['destination_address'],$completedTransactionInquiry),true);
                     output("Transaction Inquiry response: " . print_r($response, true),'SILENT');
-                    if($response['status'] == 'completed'){
+                    if($response['status'] === 'completed'){
                         updateP2pRequestStatus($hash,'completed',true); // Update p2p status to completed
                         updateTransactionStatus($hash,'completed'); // Update transaction status to completed
                     }
