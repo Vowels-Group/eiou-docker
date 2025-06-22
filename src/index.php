@@ -47,6 +47,11 @@ elseif ($request['type'] == "rp2p") {
     handleRp2pRequest($request);
   }
 }
+elseif ($request['type'] == "message") {
+  // Handle Peer to peer Response
+  output("Processing message from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
+  handleMessageRequest($request);
+}
 else {
   // Handle unknown request type
   output("Processing nonstandard request", 'SILENT');
