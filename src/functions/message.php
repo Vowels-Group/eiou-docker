@@ -16,7 +16,7 @@ function checkMessageValidity($decodedMessage){
                 return false;
             } 
             // Potential Spam (hash is unknown)
-            // TO DO handle different message types in future versions
+            // TO DO: handle different message types in future versions
             return false;
     }
     // Not a contact nor able to match source
@@ -24,7 +24,7 @@ function checkMessageValidity($decodedMessage){
 }
 
 function handleMessageRequest($message){
-    // TO DO build a lock that cannot be sent more than x messages in a span of time, rest ignore untill handled previous (counter potential spam / overload)
+    // TO DO: build a lock that cannot be sent more than x messages in a span of time, rest ignore untill handled previous (counter potential spam / overload)
 
     $decodedMessage = json_decode($message['message'],true);
     // Check if message is from a known or logical source
@@ -38,21 +38,21 @@ function handleMessageRequest($message){
             handleTransactionMessageInquiryRequest($decodedMessage);
         } else{
             handleTransactionMessageRequest($decodedMessage);
-        }
-       
+        }    
     }   
 }
 
 function handleTransactionMessageInquiryRequest($decodedMessage){
-    // Inquiry about transaction
+    // Handle inquiry about transaction status
     echo buildSendCompletedCorrectlyPayload($decodedMessage);
 }
 
 
-// CHECK what happens if someone says txid when it's not txid
+// TO DO: Check what happens if someone says txid when it's not txid
 // odd thought if say txid is actually the hash but it's not for this transaction (since lucky guess)
 
 function handleTransactionMessageRequest($decodedMessage){
+    // Handle incoming transaction messages
     if($decodedMessage['status'] === 'completed'){
         $hash = $decodedMessage['hash']; // for direct transaction is equivalent to txid, otherwise equivalent to memo
         // check if hash exists for p2p and check if hash exists for transaction
