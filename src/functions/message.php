@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025
+
 
 function checkMessageValidity($decodedMessage){
     // Check if message from a valid source
@@ -30,7 +32,7 @@ function handleMessageRequest($message){
     // Check if message is from a known or logical source
     if(!checkMessageValidity($decodedMessage)){
         echo buildMessageInvalidSourcePayload($message);
-        die;
+        exit();
     }
 
     if($decodedMessage['typeMessage'] === "transaction"){
@@ -53,12 +55,13 @@ function handleTransactionMessageInquiryRequest($decodedMessage){
 
 function handleTransactionMessageRequest($decodedMessage){
     // Handle incoming transaction messages
+    $hash = $decodedMessage['hash']; // for direct transaction is equivalent to txid, otherwise equivalent to memo
     if($decodedMessage['status'] === 'completed'){
-        $hash = $decodedMessage['hash']; // for direct transaction is equivalent to txid, otherwise equivalent to memo
         // check if hash exists for p2p and check if hash exists for transaction
         if($decodedMessage['hashType'] === 'memo'){
             $p2p = getP2pByHash($hash);
             $transaction = getTransactionByMemo($hash);
+
             if($p2p && $transaction){
                 // Check if user was original sender of transaction
                 if(isset($p2p['destination_address'])){
@@ -75,16 +78,29 @@ function handleTransactionMessageRequest($decodedMessage){
                     updateTransactionStatus($hash,'completed'); // Update transaction status to completed
                     // Send transaction completion message onwards
                     $payloadTransactionCompleted = buildSendCompletedPayload($decodedMessage);
-                    output("Sending Transaction completion message onwards " . print_r($payloadTransactionCompleted,true) . " to " . print_r($decodedMessage['senderAddress'],true),'SILENT');
+                    output("Sending Transaction completion message onwards " . print_r($payloadTransactionCompleted,true) . " to " . print_r($p2p['senderAddress'],true),'SILENT');
                     $response = send($p2p['sender_address'],$payloadTransactionCompleted);
                 }
             }
-        } else{
+        } elseif($decodedMessage['hashType'] === 'txid'){
             // End recipient (contact) sent us direct confirmation, thus transaction completed succesfully
+
+            // DOUBLE CHECK FOR DIRECT TRANSACTION ACCEPTANCE ALSO RIGHT?
+
             $transaction = getTransactionByTxid($hash);
             if($transaction){
-                updateTransactionStatus($hash,'completed'); // Update transaction status to completed
+                updateTransactionStatus($hash,'completed',true); // Update transaction status to completed
             }
         }        
+    } elseif($decodedMessage['status'] === 'accepted'){
+        if($decodedMessage['hashType'] === 'memo'){
+            $p2p = getP2pByHash($hash);
+            $transaction = getTransactionByMemo($hash);
+            if($p2p && $transaction){
+                updateTransactionStatus($hash,'accepted'); // Update transaction status to accepted
+            }
+        } elseif($decodedMessage['hashType'] === 'txid'){
+            updateTransactionStatus($hash,'accepted',true); // Update transaction status to accepted
+        }
     }
 }

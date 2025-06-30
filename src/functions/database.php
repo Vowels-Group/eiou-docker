@@ -287,6 +287,9 @@ function checkExistenceTransaction($request, $echo = true){
         if(!$results){
             if($echo){
                 echo buildSendAcceptancePayload($request);
+                output("Sending Accepting Transaction message for memo/txid " . print_r($memo,true)  ."/" . print_r($request['txid'],true) . " to " . print_r($request['senderAddress'],true),'SILENT');
+                send($request['senderAddress'],buildSendAcceptancePayload2($request));
+                
             }
             return false;  
         } else{

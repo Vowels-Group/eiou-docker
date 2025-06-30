@@ -15,7 +15,7 @@ $request = json_decode($_GET['payload'], true);
 
 // Verify the request signature before processing
 if (!verifyRequest($request)) {
-    exit();
+    die;
 }
 
 // Create PDO (db) connection
@@ -48,8 +48,8 @@ elseif ($request['type'] === "rp2p") {
   }
 }
 elseif ($request['type'] === "message") {
-  // Handle Peer to peer Response
-  output("Processing message from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
+  // Handle messages
+  output("Processing message from " . print_r($request['senderAddress'],true), 'SILENT');
   handleMessageRequest($request);
 }
 else {
