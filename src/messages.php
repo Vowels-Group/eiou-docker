@@ -15,6 +15,7 @@ $pdo = createPDOConnection();
 while (TRUE) {
     processQueuedP2pMessages();
     processQueuedRp2pMessages();
+    processPendingTransactions();
     // Sleep to prevent tight looping
     usleep(500000); // Sleep for 500ms (0.5 seconds)
 }

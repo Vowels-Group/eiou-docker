@@ -144,3 +144,4 @@ function sendP2pRequest($data) {
     insertP2pRequest($p2pPayload, $address); // Save the p2p request 
     updateP2pRequestStatus($p2pPayload['hash'], 'queued'); // Update the p2p request status to queued
 }
+

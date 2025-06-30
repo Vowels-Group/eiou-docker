@@ -104,6 +104,26 @@ function buildSendPayload($data) {
     );
 }
 
+function buildSendDatabasePayload($data) {
+    // Build send (Transaction/eIOU) payload 
+    global $user;
+    $userAddress = resolveUserAddressForTransport($data['receiver_address']);
+    $memo = $data['memo'] ?? 'standard';
+    return array(
+        'type' => 'send', // send request type
+        'time' => $data['time'],
+        'senderPublicKey' => $user['public'],
+        'senderAddress' => $userAddress,
+        'receiverPublicKey' => $data['receiver_public_key'],
+        'receiverAddress' => $data['receiver_address'],
+        'amount' => $data['amount'],
+        'currency' => $data['currency'],
+        'txid' => $data['txid'],
+        'previousTxid' => $data['previousTxid'],
+        'memo' => $memo
+    );
+}
+
 function buildSendAcceptancePayload($request){
     // Build send (Transaction/eIOU) was accepted payload 
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
@@ -144,10 +164,9 @@ function buildSendAcceptancePayload2($request){
     );
 }
 
-
 function buildSendCompletedPayload($request){
     global $user;
-    $receiver = resolveUserAddressForTransport($request['senderAddress']);
+    $receiver = resolveUserAddressForTransport($request['senderAddress'] ?? $request['sender_address']);
     // for direct transaction hash is equivalent to txid, otherwise hash is equivalent to memo (only for initialisation)
     if(isset($request['memo'])){
         if($request['memo'] === 'standard'){
@@ -213,7 +232,7 @@ function buildSendRejectionPayload($request){
 function buildRp2pPayload($data) {
     // Build rp2p payload 
     global $user;
-    output("Building rP2p payload: " . print_r($data, true),'SILENT');
+    //output("Building rP2p payload: " . print_r($data, true),'SILENT');
     $userAddress = resolveUserAddressForTransport($data['senderAddress'] ?? $data['sender_address']);
     return array(
         'type' => 'rp2p', // Return Peer to peer request type

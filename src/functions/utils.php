@@ -337,7 +337,7 @@ function matchYourselfP2P($request,$address){
 function matchYourselfTransaction($request,$address){
     // Check if transaction end recipient is user
     $p2pRequest = lookupP2pRequest($request['memo']);
-    if( hash('sha256', $address . $p2pRequest['salt'] . $request['time']) === $request['memo']) {
+    if( hash('sha256', $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
         return true;
     }
     return false;

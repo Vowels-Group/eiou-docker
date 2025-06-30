@@ -288,6 +288,7 @@ function checkExistenceTransaction($request, $echo = true){
             if($echo){
                 echo buildSendAcceptancePayload($request);
                 output("Sending Accepting Transaction message for memo/txid " . print_r($memo,true)  ."/" . print_r($request['txid'],true) . " to " . print_r($request['senderAddress'],true),'SILENT');
+                // TO DO FIX
                 send($request['senderAddress'],buildSendAcceptancePayload2($request));
                 
             }
@@ -864,14 +865,23 @@ function retrieveQueuedP2pMessages($status = 'queued', $status2 = '') {
     $queuedMessages = $queuedStmt->fetchAll(PDO::FETCH_ASSOC);
 
     if($status2 === ''){
-         echo "Found " . count($queuedMessages) . " " . $status . " messages to process\n";
+        echo "Found " . count($queuedMessages) . " " . $status . " messages to process\n";
     } else{
         echo "Found " . count($queuedMessages) . " " . $status . " & " . $status2 . " messages to process\n";
     }
-   
-
     return $queuedMessages;
 }
+
+function retrievePendingTransactionMessages(){
+    global $pdo;
+    // Retrieve all transaction messages that are pending (default)
+    $queuedStmt = $pdo->prepare("SELECT * FROM transactions WHERE status = 'pending' ORDER BY timestamp ASC LIMIT 5");
+    $queuedStmt->execute();
+    $queuedMessages = $queuedStmt->fetchAll(PDO::FETCH_ASSOC);
+    echo "Found " . count($queuedMessages) . " pending transaction messages to process\n";
+    return $queuedMessages;
+}
+
 
 function retrieveCreditInP2p($address){
     global $pdo;
