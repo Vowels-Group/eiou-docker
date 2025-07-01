@@ -99,9 +99,9 @@ function processTransaction($request) {
    
 function processPendingTransactions(){
     // Select pending messages from the transaction table (with status pending)
-    $queuedMessages = retrievePendingTransactionMessages();
+    $pendingMessages = retrievePendingTransactionMessages();
     // Process each pending message
-    foreach ($queuedMessages as $message) {   
+    foreach ($pendingMessages as $message) {   
         $memo = $message['memo'];  
         // If direct transaction
         if($memo == 'standard'){
@@ -133,7 +133,7 @@ function processPendingTransactions(){
                 $response = json_decode(send($message['receiver_address'], $payload),true);
                 output("Received transaction message response: " . print_r($response,true),'SILENT');
                 if($response['status'] === 'accepted'){
-                     updateTransactionStatus($memo['txid'],'accepted'); // Update transaction status to accepted
+                    updateTransactionStatus($memo,'accepted'); // Update transaction status to accepted
                 } elseif($response['status'] === 'rejected'){
                     updateP2pRequestStatus($memo,'cancelled'); // Update transaction status to cancelled
                     updateTransactionStatus($memo,'rejected'); // Update transaction status to rejected

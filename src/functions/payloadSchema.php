@@ -127,10 +127,23 @@ function buildSendDatabasePayload($data) {
 function buildSendAcceptancePayload($request){
     // Build send (Transaction/eIOU) was accepted payload 
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
+    if(isset($request['memo'])){
+        if($request['memo'] === 'standard'){
+            $hash = $request['txid'];
+            $hashType = 'txid';
+        } else{
+            $hash = $request['memo'];
+            $hashType = 'memo';
+        }
+    } else{
+        $hash = $request['hash'];
+        $hashType = 'memo';
+    } 
     return json_encode([
         "status" => "accepted",
         "txid" => $request['txid'],
-        "message" => "memo " .  print_r($request['memo'],true) . " for transaction received by " .  print_r($receiver,true)
+        'memo' => $request['memo'],
+        "message" => print_r($hashType,true) . " " .  print_r($hash,true) . " for transaction received by " .  print_r($receiver,true)
     ]);  
 }
 
@@ -193,9 +206,23 @@ function buildSendCompletedInquiryPayload($message){
 function buildSendRejectionPayload($request){
     // Build send (Transaction/eIOU) was rejected payload 
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
+    if(isset($request['memo'])){
+        if($request['memo'] === 'standard'){
+            $hash = $request['txid'];
+            $hashType = 'txid';
+        } else{
+            $hash = $request['memo'];
+            $hashType = 'memo';
+        }
+    } else{
+        $hash = $request['hash'];
+        $hashType = 'memo';
+    } 
     return json_encode([
         "status" => "rejected",
-        "message" => "hash " . print_r($request['hash'],true) . " for Transaction already exists in database of " .  print_r($receiver,true)
+        "txid" => $request['txid'],
+        'memo' => $request['memo'],
+        "message" =>  print_r($hashType,true) . " ". print_r($hash,true) . " for Transaction already exists in database of " .  print_r($receiver,true)
     ]);
 }
 
