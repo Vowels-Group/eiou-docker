@@ -271,7 +271,7 @@ function checkExistenceRp2p($request, $echo = true){
 function checkExistenceTransaction($request, $echo = true){
     // Check if Transaction already exists for memo in database and is a valid successor of previous txids
     // Check if Transaction is a valid successor of previous txids
-    if(!checkPreviousTxid($request)){
+    if(!checkPreviousTxid($request) || !checkAvailableFundsTransaction($request)){
         return true;
     }
     // Check if Transaction already exists for txid or memo in database
@@ -286,11 +286,7 @@ function checkExistenceTransaction($request, $echo = true){
         }
         if(!$results){
             if($echo){
-                echo buildSendAcceptancePayload($request);
-                output("Sending Accepting Transaction message for memo/txid " . print_r($memo,true)  ."/" . print_r($request['txid'],true) . " to " . print_r($request['senderAddress'],true),'SILENT');
-                // TO DO FIX
-                send($request['senderAddress'],buildSendAcceptancePayload2($request));
-                
+                echo buildSendAcceptancePayload($request);            
             }
             return false;  
         } else{
