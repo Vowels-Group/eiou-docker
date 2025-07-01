@@ -134,36 +134,6 @@ function buildSendAcceptancePayload($request){
     ]);  
 }
 
-function buildSendAcceptancePayload2($request){
-    global $user;
-    $receiver = resolveUserAddressForTransport($request['senderAddress']);
-    // for direct transaction hash is equivalent to txid, otherwise hash is equivalent to memo (only for initialisation)
-    if(isset($request['memo'])){
-        if($request['memo'] === 'standard'){
-            $hash = $request['txid'];
-            $hashType = 'txid';
-        } else{
-            $hash = $request['memo'];
-            $hashType = 'memo';
-        }
-    } else{
-        $hash = $request['hash'];
-        $hashType = 'memo';
-    } 
-    
-    return array(
-        'type' => "message", // message request type
-        'typeMessage' => "transaction", // type of message
-        'inquiry' => false, // request for information
-        "status" => "accepted",
-        "hash" => $hash,
-        "hashType" => $hashType,
-        "senderAddress" => $receiver,
-        'senderPublicKey' => $user['public'],
-        "message" => "transaction for hash " . print_r($hash,true) . " was succesfully completed through intermediary"
-    );
-}
-
 function buildSendCompletedPayload($request){
     global $user;
     $receiver = resolveUserAddressForTransport($request['senderAddress'] ?? $request['sender_address']);
