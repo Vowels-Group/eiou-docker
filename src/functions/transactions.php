@@ -15,6 +15,25 @@ function checkPreviousTxid($request){
     return true;
 }
 
+function checkAvailableFundsTransaction($request){
+    $totalSent = calculateTotalSent($request['senderPublicKey']);
+    $totalReceived = calculateTotalReceived($request['senderPublicKey']);
+    $currentBalance = $totalReceived - $totalSent; 
+    // Get credit limit of sender
+    $creditLimit = getCreditLimit($request['senderPublicKey']);
+
+    // Check if sender has sufficient balance or credit limit
+    $requiredAmount = $request['amount']; 
+    $availableFunds = $currentBalance + $creditLimit;  
+
+    if ($availableFunds > $requiredAmount) {
+        return true;
+    } else{
+        echo buildInsufficientBalancePayload($availableFunds, $requiredAmount, $creditLimit, 0);
+        return false;
+    }   
+}
+
 function fixPreviousTxid($senderPubKey,$receiverPubKey){
     $prevID = getPreviousTxid($senderPubKey, $receiverPubKey);
     while(getExistingPreviousTxid($prevID)){
@@ -47,70 +66,55 @@ function prepareSendData($request) {
     return $data;
 }
 
-
-// fix if transaction is standard, insert as pending, then handle the whole shennanigans 
-//  figure out idea of lock on transaction so not pulled again during same cycle of handling 5 messages
-
 function processTransaction($request) {
     global $user;
+    // Process incoming transactions
     if($request['memo'] === 'standard'){
+        // If direct transaction
         $insertTransactionResponse = insertTransaction($request);    
     } else{
-        $totalSent = calculateTotalSent($request['senderPublicKey']);
-        $totalReceived = calculateTotalReceived($request['senderPublicKey']);
-        $currentBalance = $totalReceived - $totalSent; 
+        // If p2p type transaction
+        $memo = $request['memo'];
+        $rP2pResult  = checkRp2pExists($memo);
+        // Check if precursors to transactions exist and correspond
+        if(isset($rP2pResult) && $memo === $rP2pResult['hash']){  
+            $request['receiverAddress'] = $rP2pResult['sender_address'];
+            $request['receiverPublicKey'] = $rP2pResult['sender_public_key'];
+            $request['txid'] = createUniqueTxid($request);
 
-        // Get credit limit of sender
-        $creditLimit = getCreditLimit($request['senderPublicKey']);
+            // Remove my transaction fee
+            $request['amount'] = removeTransactionFee($request); 
+            
+            // Add previousTxid reflecting whom sent the transaction
+            $request['previousTxid'] = fixPreviousTxid($user['public'], $request['receiverPublicKey']);
+            $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
 
-        // Check if sender has sufficient balance or credit limit
-        $requiredAmount = $request['amount']; 
-        $availableFunds = $currentBalance + $creditLimit;  
-        if ($availableFunds < $requiredAmount) {
-            // TO DO: SEND CURL BAD >FIX<, send message insufficient balance
-            return buildInsufficientBalancePayload($availableFunds, $requiredAmount, $creditLimit, 0);
-
-
-        } else{
-            $memo = $request['memo'];
-            $rP2pResult  = checkRp2pExists($memo);
-            if(isset($rP2pResult) && $memo === $rP2pResult['hash']){  
-                $request['receiverAddress'] = $rP2pResult['sender_address'];
-                $request['receiverPublicKey'] = $rP2pResult['sender_public_key'];
-                $request['txid'] = createUniqueTxid($request);
-
-                // Remove my transaction fee
-                $request['amount'] = removeTransactionFee($request); 
-                
-                // Add previousTxid reflecting whom sent the transaction
-                $request['previousTxid'] = fixPreviousTxid($user['public'], $request['receiverPublicKey']);
-                $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
-
-            } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
-                $request['previousTxid'] = fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']); 
-                $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
-            }
-        } 
+        } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
+            // If Transaction is for end-recipient
+            $request['previousTxid'] = fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']); 
+            $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
+        }
     }
 }
    
-
 function processPendingTransactions(){
     // Select pending messages from the transaction table (with status pending)
     $queuedMessages = retrievePendingTransactionMessages();
+    // Process each pending message
     foreach ($queuedMessages as $message) {   
         $memo = $message['memo'];  
         // If direct transaction
         if($memo == 'standard'){
-            if($message['receiver_address'] != resolveUserAddressForTransport($message['sender_address'])){
+            if($message['sender_address'] == resolveUserAddressForTransport($message['sender_address'])){
                 $payload = buildSendDatabasePayload($message);
+                updateTransactionStatus($message['txid'],'sent',true); // Update transaction status to sent
                 $response = json_decode(send($message['receiver_address'], $payload),true);
-                if($response['status'] === 'rejected'){
-                    updateTransactionStatus($memo,'rejected');
-                    //sendP2pRequest($message);
-                    // TO DO redirect to p2p, and create new hash for p2p version of transaction
-                } else{
-                    updateTransactionStatus($memo,'sent');
+                output("Received transaction message response: " . print_r($response,true),'SILENT');
+                if($response['status'] === 'accepted'){
+                    updateTransactionStatus($message['txid'],'accepted',true); // Update transaction status to accepted
+                } elseif($response['status'] === 'rejected'){
+                    updateTransactionStatus($message['txid'],'rejected',true); // Update transaction status to rejected
+                    sendP2pRequestFromFailedDirectTransaction($message);
                 }
             } else{
                 updateTransactionStatus($message['txid'],'completed',true); // Update transaction status to completed
@@ -118,25 +122,26 @@ function processPendingTransactions(){
                 output("Sending Transaction completion of message with txid " . print_r($message['txid'],true) . " to " . print_r($message['sender_address'],true),'SILENT');
                 $response = send($message['sender_address'],$payloadTransactionCompleted);
             }      
-
         } else{
             // If p2p transaction
             if(!matchYourselfTransaction($message,resolveUserAddressForTransport($message['sender_address']))) {
-                // If not end-recipient
+                // If not end-recipient of transaction
                 $payload = buildSendDatabasePayload($message);
                 updateP2pRequestStatus($memo,'paid'); // Update p2p status to paid
+                updateTransactionStatus($memo,'sent'); // Update transaction status to sent
                 output("Sending Transaction onwards to: " . $message['receiver_address'],'SILENT');
                 $response = json_decode(send($message['receiver_address'], $payload),true);
-                if($response['status'] === 'rejected'){
-                    updateP2pRequestStatus($memo,'rejected');
-                    updateTransactionStatus($memo,'rejected');
-                } else{
-                    updateTransactionStatus($memo,'sent');
+                output("Received transaction message response: " . print_r($response,true),'SILENT');
+                if($response['status'] === 'accepted'){
+                     updateTransactionStatus($memo['txid'],'accepted'); // Update transaction status to accepted
+                } elseif($response['status'] === 'rejected'){
+                    updateP2pRequestStatus($memo,'cancelled'); // Update transaction status to cancelled
+                    updateTransactionStatus($memo,'rejected'); // Update transaction status to rejected
                 }
             } else{
-                // If end-recipient
-                updateP2pRequestStatus($memo,'completed',true);
-                updateTransactionStatus($memo,'completed');
+                // If end-recipient of transaction
+                updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
+                updateTransactionStatus($memo,'completed'); // Update transaction status to completed
                 $payloadTransactionCompleted = buildSendCompletedPayload($message);
                 output("Sending Transaction completion of message with memo " . print_r($memo,true) . " to " . print_r($message['sender_address'],true),'SILENT');
                 send($message['sender_address'],$payloadTransactionCompleted);
@@ -231,7 +236,6 @@ function sendP2pEiou($request) {
 
     // Prepare transaction payload
     $payload = buildSendPayload($request);
-    updateP2pRequestStatus($payload['memo'],'paid'); // Update p2p status to paid
     insertTransaction($payload); // Insert transaction as pending
 }
 
