@@ -92,15 +92,5 @@ function handleTransactionMessageRequest($decodedMessage){
                 updateTransactionStatus($hash,'completed',true); // Update transaction status to completed
             }
         }        
-    } elseif($decodedMessage['status'] === 'accepted'){
-        if($decodedMessage['hashType'] === 'memo'){
-            $p2p = getP2pByHash($hash);
-            $transaction = getTransactionByMemo($hash);
-            if($p2p && $transaction){
-                updateTransactionStatus($hash,'accepted'); // Update transaction status to accepted
-            }
-        } elseif($decodedMessage['hashType'] === 'txid'){
-            updateTransactionStatus($hash,'accepted',true); // Update transaction status to accepted
-        }
-    }
+    } 
 }
