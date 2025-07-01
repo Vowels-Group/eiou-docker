@@ -19,10 +19,10 @@ remove_container_if_exists() {
     fi
 }
 
-declare -A containerAddresses
+declare -A0 containerAddresses
 
 declare -a containers=(
-    "A"
+    "A0"
     "A1"
     "A11"
     "A111"
@@ -69,27 +69,27 @@ readonly defaultCredit=1000
 # example: [eioud-0-http,eioud-1-http] defines eioud-1-http as a contact of eioud-0-http
 #          must be accepted in reverse that is to say: 
 #          [eioud-0-http,eioud-1-http] needs to be followed by [eioud-1-http,eioud-0-http]
-declare -A containersLinks=(
-    [A,A1]="$defaultFee $defaultCredit USD"
-    [A1,A]="$defaultFee $defaultCredit USD"
-    [A,A2]="$defaultFee $defaultCredit USD"
-    [A2,A]="$defaultFee $defaultCredit USD"
-    [A,A3]="$defaultFee $defaultCredit USD"
-    [A3,A]="$defaultFee $defaultCredit USD"
-    [A,A4]="$defaultFee $defaultCredit USD"
-    [A4,A]="$defaultFee $defaultCredit USD"
-    [A,A321]="$defaultFee $defaultCredit USD"
-    [A321,A]="$defaultFee $defaultCredit USD"
-    [A,A322]="$defaultFee $defaultCredit USD"
-    [A322,A]="$defaultFee $defaultCredit USD"
-    [A,A323]="$defaultFee $defaultCredit USD"
-    [A323,A]="$defaultFee $defaultCredit USD"
-    [A,A411]="$defaultFee $defaultCredit USD"
-    [A411,A]="$defaultFee $defaultCredit USD"
-    [A,A412]="$defaultFee $defaultCredit USD"
-    [A412,A]="$defaultFee $defaultCredit USD"
-    [A,A413]="$defaultFee $defaultCredit USD"
-    [A413,A]="$defaultFee $defaultCredit USD"
+declare -A0 containersLinks=(
+    [A0,A1]="$defaultFee $defaultCredit USD"
+    [A1,A0]="$defaultFee $defaultCredit USD"
+    [A0,A2]="$defaultFee $defaultCredit USD"
+    [A2,A0]="$defaultFee $defaultCredit USD"
+    [A0,A3]="$defaultFee $defaultCredit USD"
+    [A3,A0]="$defaultFee $defaultCredit USD"
+    [A0,A4]="$defaultFee $defaultCredit USD"
+    [A4,A0]="$defaultFee $defaultCredit USD"
+    [A0,A321]="$defaultFee $defaultCredit USD"
+    [A321,A0]="$defaultFee $defaultCredit USD"
+    [A0,A322]="$defaultFee $defaultCredit USD"
+    [A322,A0]="$defaultFee $defaultCredit USD"
+    [A0,A323]="$defaultFee $defaultCredit USD"
+    [A323,A0]="$defaultFee $defaultCredit USD"
+    [A0,A411]="$defaultFee $defaultCredit USD"
+    [A411,A0]="$defaultFee $defaultCredit USD"
+    [A0,A412]="$defaultFee $defaultCredit USD"
+    [A412,A0]="$defaultFee $defaultCredit USD"
+    [A0,A413]="$defaultFee $defaultCredit USD"
+    [A413,A0]="$defaultFee $defaultCredit USD"
     [A1,A11]="$defaultFee $defaultCredit USD"
     [A11,A1]="$defaultFee $defaultCredit USD"
     [A1,A12]="$defaultFee $defaultCredit USD"
@@ -212,7 +212,7 @@ containersLinkKeys=($(for x in ${!containersLinks[@]}; do echo $x; done | sort))
 for containersLinkKey in "${containersLinkKeys[@]}"; do
     values=${containersLinks[${containersLinkKey}]}
     containerKeys=(${containersLinkKey//,/ })    
-    echo -e "\n\t-> Adding ${containerKeys[0]} To ${containerKeys[1]} as a contact: "
+    echo -e "\n\t-> Adding ${containerKeys[0]} To ${containerKeys[1]} as A0 contact: "
     docker exec ${containerKeys[0]} eiou add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} ${values[0]} ${values[1]} ${values[2]}
 done
 

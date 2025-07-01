@@ -8,7 +8,7 @@ powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else {
 docker build -f eioud.dockerfile -t eioud .
 
 # start containers
-docker run -d --network=demo-net --name A eioud
+docker run -d --network=demo-net --name A0 eioud
 docker run -d --network=demo-net --name A1 eioud
 docker run -d --network=demo-net --name A11 eioud
 docker run -d --network=demo-net --name A111 eioud
@@ -48,7 +48,7 @@ docker run -d --network=demo-net --name A423 eioud
 
 
 # Generate pubkeys and set hostnames
-docker exec A eiou generate http://A
+docker exec A0 eiou generate http://A0
 docker exec A1 eiou generate http://A1
 docker exec A11 eiou generate http://A11
 docker exec A111 eiou generate http://A111
@@ -87,26 +87,26 @@ docker exec A422 eiou generate http://A422
 docker exec A423 eiou generate http://A423
 
 # Add friends (NOTE that names are NOT arbitrary)
-docker exec A eiou add http://A1 A1 0.1 1000 USD
-docker exec A1 eiou add http://A A 0.1 1000 USD
-docker exec A eiou add http://A2 A2 0.1 1000 USD
-docker exec A2 eiou add http://A A 0.1 1000 USD
-docker exec A eiou add http://A3 A3 0.1 1000 USD
-docker exec A3 eiou add http://A A 0.1 1000 USD
-docker exec A eiou add http://A4 A4 0.1 1000 USD
-docker exec A4 eiou add http://A A 0.1 1000 USD
-docker exec A eiou add http://A321 A321 0.1 1000 USD
-docker exec A321 eiou add http://A A 0.1 1000 USD
-docker exec A eiou add http://A322 A322 0.1 1000 USD
-docker exec A322 eiou add http://A A 0.1 1000 USD
-docker exec A eiou add http://A323 A323 0.1 1000 USD
-docker exec A323 eiou add http://A A 0.1 1000 USD
-docker exec A eiou add http://A411 A411 0.1 1000 USD
-docker exec A411 eiou add http://A A 0.1 1000 USD
-docker exec A eiou add http://A412 A412 0.1 1000 USD
-docker exec A412 eiou add http://A A 0.1 1000 USD
-docker exec A eiou add http://A413 A413 0.1 1000 USD
-docker exec A413 eiou add http://A A 0.1 1000 USD
+docker exec A0 eiou add http://A1 A1 0.1 1000 USD
+docker exec A1 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A2 A2 0.1 1000 USD
+docker exec A2 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A3 A3 0.1 1000 USD
+docker exec A3 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A4 A4 0.1 1000 USD
+docker exec A4 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A321 A321 0.1 1000 USD
+docker exec A321 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A322 A322 0.1 1000 USD
+docker exec A322 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A323 A323 0.1 1000 USD
+docker exec A323 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A411 A411 0.1 1000 USD
+docker exec A411 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A412 A412 0.1 1000 USD
+docker exec A412 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A413 A413 0.1 1000 USD
+docker exec A413 eiou add http://A0 A0 0.1 1000 USD
 docker exec A1 eiou add http://A11 A11 0.1 1000 USD
 docker exec A11 eiou add http://A1 A1 0.1 1000 USD
 docker exec A1 eiou add http://A12 A12 0.1 1000 USD

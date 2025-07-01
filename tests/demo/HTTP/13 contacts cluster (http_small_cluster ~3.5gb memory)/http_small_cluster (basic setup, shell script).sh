@@ -22,7 +22,7 @@ remove_container_if_exists() {
 declare -A containerAddresses
 
 declare -a containers=(
-    "A" 
+    "A0" 
     "A1" 
     "A11" 
     "A12"
@@ -45,14 +45,14 @@ readonly defaultCredit=1000
 #          must be accepted in reverse that is to say: 
 #          [eioud-0-http,eioud-1-http] needs to be followed by [eioud-1-http,eioud-0-http]
 declare -A containersLinks=(
-    [A,A1]="$defaultFee $defaultCredit USD"
-    [A1,A]="$defaultFee $defaultCredit USD"
-    [A,A2]="$defaultFee $defaultCredit USD"
-    [A2,A]="$defaultFee $defaultCredit USD"
-    [A,A3]="$defaultFee $defaultCredit USD"
-    [A3,A]="$defaultFee $defaultCredit USD"
-    [A,A4]="$defaultFee $defaultCredit USD"
-    [A4,A]="$defaultFee $defaultCredit USD"
+    [A0,A1]="$defaultFee $defaultCredit USD"
+    [A1,A0]="$defaultFee $defaultCredit USD"
+    [A0,A2]="$defaultFee $defaultCredit USD"
+    [A2,A0]="$defaultFee $defaultCredit USD"
+    [A0,A3]="$defaultFee $defaultCredit USD"
+    [A3,A0]="$defaultFee $defaultCredit USD"
+    [A0,A4]="$defaultFee $defaultCredit USD"
+    [A4,A0]="$defaultFee $defaultCredit USD"
     [A1,A11]="$defaultFee $defaultCredit USD"
     [A11,A1]="$defaultFee $defaultCredit USD"
     [A1,A12]="$defaultFee $defaultCredit USD"
