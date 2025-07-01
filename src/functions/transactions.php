@@ -47,19 +47,14 @@ function prepareSendData($request) {
     return $data;
 }
 
+
+// fix if transaction is standard, insert as pending, then handle the whole shennanigans 
+//  figure out idea of lock on transaction so not pulled again during same cycle of handling 5 messages
+
 function processTransaction($request) {
     global $user;
     if($request['memo'] === 'standard'){
-        $insertTransactionResponse = insertTransaction($request);
-        if($insertTransactionResponse == 'accepted'){
-            updateTransactionStatus($request['txid'],'completed',true); // Update transaction status to completed
-            $payloadTransactionCompleted = buildSendCompletedPayload($request);
-            //output("Sending Transaction completion message" . print_r($payloadTransactionCompleted,true) . " to " . print_r($request['senderAddress'],true),'SILENT');
-            output("Sending Transaction completion of message with txid " . print_r($request['txid'],true) . " to " . print_r($request['senderAddress'],true),'SILENT');
-            $response = send($request['senderAddress'],$payloadTransactionCompleted);
-            // TO DO: HANDLE RESPONSE if none
-        }
-       
+        $insertTransactionResponse = insertTransaction($request);    
     } else{
         $totalSent = calculateTotalSent($request['senderPublicKey']);
         $totalReceived = calculateTotalReceived($request['senderPublicKey']);
@@ -105,14 +100,27 @@ function processPendingTransactions(){
     $queuedMessages = retrievePendingTransactionMessages();
     foreach ($queuedMessages as $message) {   
         $memo = $message['memo'];  
+        // If direct transaction
         if($memo == 'standard'){
-            $payload = buildSendDatabasePayload($message);
-            $response = json_decode(send($message['receiver_address'], $payload),true);
-            if($response['status'] === 'rejected'){
-                //sendP2pRequest($message);
-                // TO DO redirect to p2p, and create new hash for p2p version of transaction
-            }
+            if($message['receiver_address'] != resolveUserAddressForTransport($message['sender_address'])){
+                $payload = buildSendDatabasePayload($message);
+                $response = json_decode(send($message['receiver_address'], $payload),true);
+                if($response['status'] === 'rejected'){
+                    updateTransactionStatus($memo,'rejected');
+                    //sendP2pRequest($message);
+                    // TO DO redirect to p2p, and create new hash for p2p version of transaction
+                } else{
+                    updateTransactionStatus($memo,'sent');
+                }
+            } else{
+                updateTransactionStatus($message['txid'],'completed',true); // Update transaction status to completed
+                $payloadTransactionCompleted = buildSendCompletedPayload($message);
+                output("Sending Transaction completion of message with txid " . print_r($message['txid'],true) . " to " . print_r($message['sender_address'],true),'SILENT');
+                $response = send($message['sender_address'],$payloadTransactionCompleted);
+            }      
+
         } else{
+            // If p2p transaction
             if(!matchYourselfTransaction($message,resolveUserAddressForTransport($message['sender_address']))) {
                 // If not end-recipient
                 $payload = buildSendDatabasePayload($message);
@@ -122,13 +130,14 @@ function processPendingTransactions(){
                 if($response['status'] === 'rejected'){
                     updateP2pRequestStatus($memo,'rejected');
                     updateTransactionStatus($memo,'rejected');
+                } else{
+                    updateTransactionStatus($memo,'sent');
                 }
             } else{
                 // If end-recipient
                 updateP2pRequestStatus($memo,'completed',true);
                 updateTransactionStatus($memo,'completed');
                 $payloadTransactionCompleted = buildSendCompletedPayload($message);
-                //output("Sending Transaction completion message " . print_r($payloadTransactionCompleted,true) . " to " . print_r($message['sender_address'],true),'SILENT');
                 output("Sending Transaction completion of message with memo " . print_r($memo,true) . " to " . print_r($message['sender_address'],true),'SILENT');
                 send($message['sender_address'],$payloadTransactionCompleted);
             }
