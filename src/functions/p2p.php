@@ -45,7 +45,6 @@ function handleP2pRequest($request) {
     }
 }
 
-
 function prepareP2pRequestData($request) {
     // Build initial p2p request payload
     global $user;
@@ -65,6 +64,25 @@ function prepareP2pRequestData($request) {
     $data['time'] = returnMicroTime();
     $data['amount'] = round($request[3] * 100); // Convert to cents 100 
     $data['currency'] = 'USD';
+
+    // Additional data preparation
+    $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
+    $data['hash'] = hash('sha256', $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
+    output("Generated p2pHash: " . $data['hash'], 'SILENT'); // Added verbose output
+    output("p2pHash components: " . "receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time'], 'SILENT'); // Detailed verbose output
+    $data['minRequestLevel'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // Caculate 'random' lower bound for request level
+    $data['maxRequestLevel'] = $data['minRequestLevel'] + $user['maxP2pLevel'];    // Add upper bound to request level, using users max 
+    return $data;
+}
+
+function prepareP2pRequestFromFailedTransactionData($message){
+    // Build initial p2p payload from Failed direct Transaction
+    global $user;
+    $data['receiverAddress'] = $message['receiver_address'];
+    $data['txType'] = 'p2p';
+    $data['time'] = returnMicroTime();
+    $data['amount'] = $message['amount'];
+    $data['currency'] = $message['currency'];
 
     // Additional data preparation
     $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
@@ -145,3 +163,10 @@ function sendP2pRequest($data) {
     updateP2pRequestStatus($p2pPayload['hash'], 'queued'); // Update the p2p request status to queued
 }
 
+function sendP2pRequestFromFailedDirectTransaction($message) {
+    // Create p2p version of failed direct transaction
+    $p2pPayload = buildP2pPayload(prepareP2pRequestFromFailedTransactionData($message)); // Prepare p2p request payload
+    output("Inserting p2p request with receiverAddress: " . $message['receiver_address'], 'SILENT');
+    insertP2pRequest($p2pPayload, $message['receiver_address']); // Save the p2p request 
+    updateP2pRequestStatus($p2pPayload['hash'], 'queued'); // Update the p2p request status to queued
+}
