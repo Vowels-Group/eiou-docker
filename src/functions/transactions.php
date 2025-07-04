@@ -109,17 +109,18 @@ function processPendingTransactions(){
                 $payload = buildSendDatabasePayload($message);
                 updateTransactionStatus($message['txid'],'sent',true); // Update transaction status to sent
                 $response = json_decode(send($message['receiver_address'], $payload),true);
-                output("Received transaction message response: " . print_r($response,true),'SILENT');
+                output(outputTransactionResponse($response),'SILENT');
                 if($response['status'] === 'accepted'){
                     updateTransactionStatus($message['txid'],'accepted',true); // Update transaction status to accepted
                 } elseif($response['status'] === 'rejected'){
                     updateTransactionStatus($message['txid'],'rejected',true); // Update transaction status to rejected
+                    output(outputIssueTransactionTryP2p($response),'SILENT'); // TO DO also not silent for people?
                     sendP2pRequestFromFailedDirectTransaction($message);
                 }
             } else{
                 updateTransactionStatus($message['txid'],'completed',true); // Update transaction status to completed
                 $payloadTransactionCompleted = buildSendCompletedPayload($message);
-                output("Sending Transaction completion of message with txid " . print_r($message['txid'],true) . " to " . print_r($message['sender_address'],true),'SILENT');
+                output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
                 $response = send($message['sender_address'],$payloadTransactionCompleted);
             }      
         } else{
@@ -129,9 +130,9 @@ function processPendingTransactions(){
                 $payload = buildSendDatabasePayload($message);
                 updateP2pRequestStatus($memo,'paid'); // Update p2p status to paid
                 updateTransactionStatus($memo,'sent'); // Update transaction status to sent
-                output("Sending Transaction onwards to: " . $message['receiver_address'],'SILENT');
+                output(outputSendTransactionOnwards($message),'SILENT');
                 $response = json_decode(send($message['receiver_address'], $payload),true);
-                output("Received transaction message response: " . print_r($response,true),'SILENT');
+                output(outputTransactionResponse($response),'SILENT');
                 if($response['status'] === 'accepted'){
                     updateTransactionStatus($memo,'accepted'); // Update transaction status to accepted
                 } elseif($response['status'] === 'rejected'){
@@ -143,7 +144,7 @@ function processPendingTransactions(){
                 updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
                 updateTransactionStatus($memo,'completed'); // Update transaction status to completed
                 $payloadTransactionCompleted = buildSendCompletedPayload($message);
-                output("Sending Transaction completion of message with memo " . print_r($memo,true) . " to " . print_r($message['sender_address'],true),'SILENT');
+                output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
                 send($message['sender_address'],$payloadTransactionCompleted);
             }
         }  
@@ -205,7 +206,7 @@ function sendEiou($request = null) {
         
     // If receiver's public key is in contacts, prepare a transaction to send directly to them
     if ($contactInfo = lookupContactInfo($request[2])) {
-        output("Looked up contact info: " . print_r($contactInfo, true), 'SILENT');
+        output(outputLookedUpContactInfo($contactInfo), 'SILENT');
         $data = prepareSendData($request);
         $data['receiverAddress'] = $contactInfo['receiverAddress'];
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
@@ -218,7 +219,7 @@ function sendEiou($request = null) {
         
         insertTransaction($payload); // Insert transaction as pending       
     } else {
-        output ("Contact not found, trying p2p with data: " . print_r($request, true), 'SILENT');
+        output(outputContactNotFoundTryP2p($request), 'SILENT');
         sendP2pRequest($request);
     }
 }

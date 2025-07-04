@@ -317,10 +317,10 @@ function matchContact($request) {
     // Check if end recipient of request in contacts
     foreach ($contacts as $contact) {
         $contactHash = hash('sha256', $contact['address'] . $request['salt'] . $request['time']);
-        // output("Calculating contact hash: address=" . $contact['address'] . ", salt=" . $request['salt'] . ", time=" . $request['time'], 'SILENT');
-        // output("Calculated contact hash: " . $contactHash, 'SILENT');
+        // output(outputCalculateContactHash($contact,$request), 'SILENT');
+        // output(outputCalculatedContactHash($contactHash), 'SILENT');
         if ($contactHash === $request['hash']) {
-            output("Contact matched with hash: " . $contactHash, 'SILENT');
+            output(outputContactMatched($contactHash), 'SILENT');
             return $contact;
         }
     }

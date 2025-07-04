@@ -631,7 +631,7 @@ function insertP2pRequest($request, $destinationAddress = null) {
         // Execute the insert
         $stmt->execute();
         // Respond with received status
-        output("Inserted P2P with hash: " .print_r($request['hash'],true),'SILENT');
+        output(outputInsertedP2p($request),'SILENT');
         return json_encode(["status" => "received", "message" => "p2p recorded successfully"]);
     } catch (PDOException $e) {
         // Handle database error
@@ -672,7 +672,7 @@ function insertRp2pRequest ($request){
         // Execute the insert
         $stmt->execute();
         // Respond with received status
-        output("Inserted RP2P with hash: " .print_r($request['hash'],true),'SILENT');
+        output(outputInsertedRp2p($request),'SILENT');
         return json_encode(["status" => "received", "message" => "rp2p recorded successfully"]);
     } catch (PDOException $e) {
         // Handle database error
@@ -742,9 +742,9 @@ function insertTransaction($request) {
         $insertStmt->execute();
         // Respond with accepted status
         if($request['memo'] != "standard"){
-            output("Inserted Transaction with memo: " .print_r($request['memo'],true),'SILENT');
+            output(outputInsertedTransactionMemo($request),'SILENT');
         } else{
-            output("Inserted Transaction with txid: " .print_r($request['txid'],true),'SILENT');
+            output(outputInsertedTransactionTxid($request),'SILENT');
         }
         return json_encode(["status" => "accepted", "message" => "Transaction recorded successfully","txid" => $request['txid']]);
     } catch (PDOException $e) {
@@ -878,7 +878,6 @@ function retrievePendingTransactionMessages(){
     return $queuedMessages;
 }
 
-
 function retrieveCreditInP2p($address){
     global $pdo;
     // Calculate how much credit is on hold in current processing p2p
@@ -969,7 +968,7 @@ function updateP2pRequestStatus($hash, $status, $completed = false) {
         $updateStmt->bindParam(':hash', $hash);
         $updateStmt->bindParam(':status', $status);
         $updateStmt->execute();
-        output("Updated status to '" . $status . "' for p2p hash: " . $hash,'SILENT');
+        output(outputP2pStatusUpdated($status,$hash),'SILENT');
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating p2p request status: " . $e->getMessage());
@@ -980,14 +979,17 @@ function updateP2pTxid($hash, $txid, $incoming = false){
     global $pdo;
     // Update p2p txid
     try{
+        $what = 'incoming_txid';
         if($incoming){
             $updateStmt = $pdo->prepare("UPDATE p2p SET incoming_txid = :txid WHERE hash = :hash");
         } else{
             $updateStmt = $pdo->prepare("UPDATE p2p SET outgoing_txid = :txid WHERE hash = :hash");
+            $what = 'outgoing_txid';
         }
         $updateStmt->bindParam(':hash', $hash);
         $updateStmt->bindParam(':txid', $txid);
         $updateStmt->execute();
+        //output(outputUpdatedTxid($txid,$what,$hash),'SILENT');
     } catch (PDOException $e) {
         // Log or handle the error if updating txid fails
         error_log("Error updating p2p txid : " . $e->getMessage());
@@ -1009,7 +1011,7 @@ function updateTransactionStatus($memo, $status, $txid=false) {
         $updateStmt->bindParam(':memo', $memo);
         $updateStmt->bindParam(':status', $status);
         $updateStmt->execute();
-        output("Updated status to '" . $status . "' for transaction $what: " . $memo,'SILENT');
+        output(outputTransactionStatusUpdated($status,$what,$memo),'SILENT');
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating transaction status: " . $e->getMessage());
