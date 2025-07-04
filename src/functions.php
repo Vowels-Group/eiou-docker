@@ -8,6 +8,7 @@ require_once 'functions/database.php';
 require_once 'functions/databaseSchema.php';
 require_once 'functions/echoSchema.php';
 require_once 'functions/message.php';
+require_once 'functions/outputSchema.php';
 require_once 'functions/payloadSchema.php';
 require_once 'functions/p2p.php';
 require_once 'functions/rp2p.php';
