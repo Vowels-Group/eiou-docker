@@ -109,7 +109,7 @@ function processPendingTransactions(){
                 $payload = buildSendDatabasePayload($message);
                 updateTransactionStatus($message['txid'],'sent',true); // Update transaction status to sent
                 $response = json_decode(send($message['receiver_address'], $payload),true);
-                output(outputTransactionResponse($response),'SILENT');
+                output(outputTransactionInquiryResponse($response),'SILENT');
                 if($response['status'] === 'accepted'){
                     updateTransactionStatus($message['txid'],'accepted',true); // Update transaction status to accepted
                 } elseif($response['status'] === 'rejected'){
@@ -119,10 +119,11 @@ function processPendingTransactions(){
                 }
             } else{
                 updateTransactionStatus($message['txid'],'completed',true); // Update transaction status to completed
+                output(outputTransactionAmountReceived($message),'SILENT');
                 $payloadTransactionCompleted = buildSendCompletedPayload($message);
                 output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
                 $response = send($message['sender_address'],$payloadTransactionCompleted);
-                output(outputTransactionAmountReceived($message));
+               
             }      
         } else{
             // If p2p transaction
@@ -144,10 +145,11 @@ function processPendingTransactions(){
                 // If end-recipient of transaction
                 updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
                 updateTransactionStatus($memo,'completed'); // Update transaction status to completed
+                output(outputTransactionAmountReceived($message),'SILENT');
                 $payloadTransactionCompleted = buildSendCompletedPayload($message);
                 output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
                 send($message['sender_address'],$payloadTransactionCompleted);
-                output(outputTransactionAmountReceived($message));
+                
             }
         }  
     }
