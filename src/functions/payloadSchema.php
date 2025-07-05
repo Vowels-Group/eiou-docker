@@ -176,6 +176,8 @@ function buildSendCompletedPayload($request){
         "hashType" => $hashType,
         "senderAddress" => $receiver,
         'senderPublicKey' => $user['public'],
+        "amount" => $request['amount'],
+        "currency" => $request['currency'],
         "message" => "transaction for hash " . print_r($hash,true) . " was succesfully completed through intermediary"
     );
 }
