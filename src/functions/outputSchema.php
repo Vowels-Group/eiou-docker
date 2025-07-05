@@ -145,7 +145,7 @@ function outputTransactionAmountReceived($message){
 }
 
 function outputTransactionSentSuccesfully($data){
-    return "Sent " . $data['amount'] . " to " . $data['receiver_address'];
+    return "Sent " . $data['amount'] . " " . $data['currency'] . " to " . $data['receiver_address'] . " succesfully";
 }
 
 function outputTransactionStatusUpdated($status,$what,$memo){
