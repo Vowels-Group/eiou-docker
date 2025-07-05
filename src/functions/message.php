@@ -70,7 +70,6 @@ function handleTransactionMessageRequest($decodedMessage){
                     $response = json_decode(send($p2p['destination_address'],$completedTransactionInquiry),true);
                     output("Transaction Inquiry response: " . print_r($response, true),'SILENT');
                     if($response['status'] === 'completed'){
-                        
                         updateP2pRequestStatus($hash,'completed',true); // Update p2p status to completed
                         updateTransactionStatus($hash,'completed'); // Update transaction status to completed
                         output(outputTransactionSentSuccesfully($p2p));
@@ -86,12 +85,10 @@ function handleTransactionMessageRequest($decodedMessage){
             }
         } elseif($decodedMessage['hashType'] === 'txid'){
             // End recipient (contact) sent us direct confirmation, thus transaction completed succesfully
-
-            // DOUBLE CHECK FOR DIRECT TRANSACTION ACCEPTANCE ALSO RIGHT?
-
             $transaction = getTransactionByTxid($hash);
             if($transaction){
                 updateTransactionStatus($hash,'completed',true); // Update transaction status to completed
+                output(outputTransactionSentSuccesfully($decodedMessage));
             }
         }        
     } 
