@@ -68,18 +68,18 @@ function handleTransactionMessageRequest($decodedMessage){
                     // Send direct message inquiry to end recipient double checking if completion of transaction correct 
                     $completedTransactionInquiry = buildSendCompletedInquiryPayload($decodedMessage);
                     $response = json_decode(send($p2p['destination_address'],$completedTransactionInquiry),true);
-                    output("Transaction Inquiry response: " . print_r($response, true),'SILENT');
+                    output(outputTransactionInquiryRepsonse($repsone),'SILENT');
                     if($response['status'] === 'completed'){
                         updateP2pRequestStatus($hash,'completed',true); // Update p2p status to completed
                         updateTransactionStatus($hash,'completed'); // Update transaction status to completed
-                        output(outputTransactionSentSuccesfully($p2p));
+                        echo outputTransactionSentSuccesfully($p2p);
                     }
                 } else{
                     updateP2pRequestStatus($hash,'completed',true); // Update p2p status to completed
                     updateTransactionStatus($hash,'completed'); // Update transaction status to completed
                     // Send transaction completion message onwards
                     $payloadTransactionCompleted = buildSendCompletedPayload($decodedMessage);
-                    output("Sending Transaction completion message onwards " . print_r($payloadTransactionCompleted,true) . " to " . print_r($p2p['senderAddress'],true),'SILENT');
+                    output(outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$p2p['sender_address']),'SILENT');
                     $response = send($p2p['sender_address'],$payloadTransactionCompleted);
                 }
             }
@@ -88,7 +88,7 @@ function handleTransactionMessageRequest($decodedMessage){
             $transaction = getTransactionByTxid($hash);
             if($transaction){
                 updateTransactionStatus($hash,'completed',true); // Update transaction status to completed
-                output(outputTransactionSentSuccesfully($decodedMessage));
+                echo outputTransactionSentSuccesfully($decodedMessage);
             }
         }        
     } 

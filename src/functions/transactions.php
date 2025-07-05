@@ -122,7 +122,7 @@ function processPendingTransactions(){
                 $payloadTransactionCompleted = buildSendCompletedPayload($message);
                 output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
                 $response = send($message['sender_address'],$payloadTransactionCompleted);
-                output(outputTransactionAmountReceived($message));
+                echo outputTransactionAmountReceived($message);
             }      
         } else{
             // If p2p transaction
@@ -147,7 +147,7 @@ function processPendingTransactions(){
                 $payloadTransactionCompleted = buildSendCompletedPayload($message);
                 output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
                 send($message['sender_address'],$payloadTransactionCompleted);
-                output(outputTransactionAmountReceived($message));
+                echo outputTransactionAmountReceived($message);
             }
         }  
     }

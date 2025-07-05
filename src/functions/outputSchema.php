@@ -132,6 +132,10 @@ function outputSendTransactionCompletionMessageMemo($message){
     return "Sending Transaction completion of message with memo " . $message['memo'] . " to " . $message['sender_address'];
 }
 
+function outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$senderAddress){
+    return "Sending Transaction completion message onwards " . print_r($payloadTransactionCompleted,true) . " to " . $senderAddress;
+}
+
 function outputSendTransactionCompletionMessageTxid($message){
     return "Sending Transaction completion of message with txid " . $message['txid'] . " to " . $message['sender_address'];
 }
@@ -142,6 +146,10 @@ function outputSendTransactionOnwards($message){
 
 function outputTransactionAmountReceived($message){
     return "Received " . $message['amount'] . " " . $message['currency'] . " from " . $message['sender_address'];
+}
+
+function outputTransactionInquiryRepsonse($repsone){
+    return "Transaction Inquiry response: " . print_r($response, true);
 }
 
 function outputTransactionSentSuccesfully($data){
