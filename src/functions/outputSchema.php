@@ -44,8 +44,8 @@ function outputFoundRp2pMatch($message){
     return "Found rp2p match for hash: " . $message['hash'];
 }
 
-function outputGeneratedP2pHash($data){
-    return "Generated p2pHash: " . $data['hash'];
+function outputGeneratedP2pHash($hash){
+    return "Generated p2pHash: " . $hash;
 }
 
 function outputInsertedP2p($request){
@@ -138,6 +138,10 @@ function outputSendTransactionCompletionMessageTxid($message){
 
 function outputSendTransactionOnwards($message){
     return "Sending Transaction onwards to: " . $message['receiver_address'];
+}
+
+function outputTransactionAmountReceived($message){
+    return "Received " . $message['amount'] . " " . $message['currency'] . " from " . $message['sender_address'];
 }
 
 function outputTransactionSentSuccesfully($data){
