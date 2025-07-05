@@ -148,7 +148,7 @@ function outputTransactionAmountReceived($message){
     return "Received " . $message['amount']/100 . " " . $message['currency'] . " from " . $message['sender_address'];
 }
 
-function outputTransactionInquiryResponse($respone){
+function outputTransactionInquiryResponse($response){
     return "Transaction Inquiry response: " . print_r($response, true);
 }
 
