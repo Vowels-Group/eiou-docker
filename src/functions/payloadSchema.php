@@ -201,10 +201,10 @@ function buildSendCompletedInquiryPayload($message){
         'inquiry' => true, // request for information
         "status" => "completed",
         "hash" => $hash,
-        "hashType" => 'memo',
+        "hashType" => $message['hashType'],
         "senderAddress" => $myAddress,
         'senderPublicKey' => $user['public'],
-        "message" => print_r($myAddress,true) . " is requesting information about transaction with memo " . print_r($hash,true) 
+        "message" => $myAddress . " is requesting information about transaction with memo " . $hash 
     );
 }
 
