@@ -71,7 +71,7 @@ function handleTransactionMessageRequest($decodedMessage){
                     if($response['status'] === 'completed'){
                         updateP2pRequestStatus($hash,'completed',true); // Update p2p status to completed
                         updateTransactionStatus($hash,'completed'); // Update transaction status to completed
-                        output(outputTransactionSentSuccesfully($decodedMessage),'SILENT');
+                        output(outputTransactionP2pSentSuccesfully($p2p),'SILENT');
                     }
                 } else{
                     updateP2pRequestStatus($hash,'completed',true); // Update p2p status to completed
@@ -87,7 +87,7 @@ function handleTransactionMessageRequest($decodedMessage){
             $transaction = getTransactionByTxid($hash);
             if($transaction){
                 updateTransactionStatus($hash,'completed',true); // Update transaction status to completed
-                output(outputTransactionSentSuccesfully($decodedMessage),'SILENT');
+                output(outputTransactionDirectSentSuccesfully($decodedMessage),'SILENT');
             }
         }        
     } 

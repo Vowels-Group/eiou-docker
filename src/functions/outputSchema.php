@@ -152,8 +152,12 @@ function outputTransactionInquiryResponse($respone){
     return "Transaction Inquiry response: " . print_r($response, true);
 }
 
-function outputTransactionSentSuccesfully($data){
-    return "Sent " . $data['amount']/100 . " " . $data['currency'] . " to " . $data['receiver_address'] . " succesfully";
+function outputTransactionP2pSentSuccesfully($p2p){
+    return "Sent " . $p2p['amount']/100 . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully";
+}
+
+function outputTransactionDirectSentSuccesfully($data){
+     return "Sent " . $data['amount']/100 . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully";
 }
 
 function outputTransactionStatusUpdated($status,$what,$memo){
