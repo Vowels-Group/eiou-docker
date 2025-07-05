@@ -15,12 +15,20 @@ while ! mysqladmin ping -h localhost --silent; do
 done
 
 # Check if all precursors to messages.php are available and working
+first=true
 while true; do
     if (( $(php -r 'require("//etc//eiou//functions//messageCheck.php"); echo $passed;') )); then
         echo "Message processing check completed successfully."  
         break
     else
-        echo "Message processing check failed to complete. Retrying in 5 seconds..."
+        if ($first); then
+            echo "Message processing check failed to complete. Retrying every 5 seconds..."
+            echo "Please run the generate command to generate a new wallet and setup message processing"
+            echo -e "\t 'docker exec [containerName] eiou generate (torAddressOnly)'"
+            echo -e "\t or 'eiou generate (torAddressOnly)' from within the container"
+            echo -e "\t where (torAddressOnly) is an optional parameter"
+            first=false
+        fi
         sleep 5
         continue
     fi
