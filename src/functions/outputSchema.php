@@ -145,15 +145,15 @@ function outputSendTransactionOnwards($message){
 }
 
 function outputTransactionAmountReceived($message){
-    return "Received " . $message['amount'] . " " . $message['currency'] . " from " . $message['sender_address'];
+    return "Received " . $message['amount']/100 . " " . $message['currency'] . " from " . $message['sender_address'];
 }
 
-function outputTransactionInquiryRepsonse($repsone){
+function outputTransactionInquiryResponse($respone){
     return "Transaction Inquiry response: " . print_r($response, true);
 }
 
 function outputTransactionSentSuccesfully($data){
-    return "Sent " . $data['amount'] . " " . $data['currency'] . " to " . $data['receiver_address'] . " succesfully";
+    return "Sent " . $data['amount']/100 . " " . $data['currency'] . " to " . $data['receiver_address'] . " succesfully";
 }
 
 function outputTransactionStatusUpdated($status,$what,$memo){

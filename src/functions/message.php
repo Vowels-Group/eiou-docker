@@ -61,18 +61,17 @@ function handleTransactionMessageRequest($decodedMessage){
         if($decodedMessage['hashType'] === 'memo'){
             $p2p = getP2pByHash($hash);
             $transaction = getTransactionByMemo($hash);
-
             if($p2p && $transaction){
                 // Check if user was original sender of transaction
                 if(isset($p2p['destination_address'])){
                     // Send direct message inquiry to end recipient double checking if completion of transaction correct 
                     $completedTransactionInquiry = buildSendCompletedInquiryPayload($decodedMessage);
                     $response = json_decode(send($p2p['destination_address'],$completedTransactionInquiry),true);
-                    output(outputTransactionInquiryRepsonse($repsone),'SILENT');
+                    output(outputTransactionInquiryResponse($response),'SILENT');
                     if($response['status'] === 'completed'){
                         updateP2pRequestStatus($hash,'completed',true); // Update p2p status to completed
                         updateTransactionStatus($hash,'completed'); // Update transaction status to completed
-                        output(outputTransactionSentSuccesfully($p2p));
+                        output(outputTransactionSentSuccesfully($decodedMessage),'SILENT');
                     }
                 } else{
                     updateP2pRequestStatus($hash,'completed',true); // Update p2p status to completed
@@ -88,7 +87,7 @@ function handleTransactionMessageRequest($decodedMessage){
             $transaction = getTransactionByTxid($hash);
             if($transaction){
                 updateTransactionStatus($hash,'completed',true); // Update transaction status to completed
-                output(outputTransactionSentSuccesfully($decodedMessage));
+                output(outputTransactionSentSuccesfully($decodedMessage),'SILENT');
             }
         }        
     } 
