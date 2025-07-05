@@ -23,7 +23,7 @@ while true; do
     else
         if ($first); then
             echo "Message processing check failed to complete. Retrying every 5 seconds..."
-            echo "Please run the generate command to generate a new wallet and setup message processing"
+            echo "Please run the 'generate' command to generate a new wallet and setup message processing"
             echo -e "\t 'docker exec [containerName] eiou generate (torAddressOnly)'"
             echo -e "\t or 'eiou generate (torAddressOnly)' from within the container"
             echo -e "\t where (torAddressOnly) is an optional parameter"
