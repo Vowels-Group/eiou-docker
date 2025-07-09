@@ -1,6 +1,6 @@
 # Copyright 2025
 
-FROM debian:latest
+FROM debian:12-slim
 
 # Install required packages for a LAMP server
 RUN apt-get update && apt-get install -y \
