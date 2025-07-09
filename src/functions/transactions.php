@@ -148,8 +148,7 @@ function processPendingTransactions(){
                 output(outputTransactionAmountReceived($message),'SILENT');
                 $payloadTransactionCompleted = buildSendCompletedPayload($message);
                 output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
-                send($message['sender_address'],$payloadTransactionCompleted);
-                
+                send($message['sender_address'],$payloadTransactionCompleted);     
             }
         }  
     }
@@ -222,9 +221,11 @@ function sendEiou($request = null) {
         $payload = buildSendPayload($data);
         
         insertTransaction($payload); // Insert transaction as pending       
+        output(outputSendTransaction($payload));
     } else {
         output(outputContactNotFoundTryP2p($request), 'SILENT');
         sendP2pRequest($request);
+        output(outputSendP2p($request));
     }
 }
 

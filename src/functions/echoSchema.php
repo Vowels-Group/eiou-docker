@@ -19,7 +19,7 @@ function returnContactCreationFailed() {
 
 function returnContactCreationWarning($message) {
     return "Warning: " . $message . "\n" .
-           "Contact was previously deleted and has been added again.";
+           "Contact was previously deleted and has been added again.\n";
 }
 
 function returnContactDetails($data) {

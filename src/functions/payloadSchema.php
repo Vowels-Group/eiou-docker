@@ -53,7 +53,7 @@ function buildMessageInvalidSourcePayload($message){
 function buildP2pPayload($data) {
     // Build p2p payload 
     global $user;
-    //output(outputBuildingP2pPayload($data),'SILENT');
+    output(outputBuildingP2pPayload($data),'SILENT');
     $userAddress = resolveUserAddressForTransport($data['receiverAddress'] ?? $data['sender_address']); //To whom: either to a contact (initial sending) or return to contact based on found end-recipient)
     return array(
         'type' => 'p2p', // Peer to peer request type
@@ -88,7 +88,7 @@ function buildP2pRejectionPayload($request){
 function buildSendPayload($data) {
     // Build send (Transaction/eIOU) payload 
     global $user;
-    //output(outputBuildingTransactionPayload($data),'SILENT');
+    output(outputBuildingTransactionPayload($data),'SILENT');
     $userAddress = resolveUserAddressForTransport($data['receiverAddress']);
     $memo = $data['memo'] ?? 'standard';
     return array(
@@ -109,7 +109,7 @@ function buildSendPayload($data) {
 function buildSendDatabasePayload($data) {
     // Build send (Transaction/eIOU) payload 
     global $user;
-    //output(outputBuildingTransactionPayload($data),'SILENT');
+    output(outputBuildingTransactionPayload($data),'SILENT');
     $userAddress = resolveUserAddressForTransport($data['receiver_address']);
     $memo = $data['memo'] ?? 'standard';
     return array(
@@ -234,7 +234,7 @@ function buildSendRejectionPayload($request){
 function buildRp2pPayload($data) {
     // Build rp2p payload 
     global $user;
-    //output(outputBuildingRp2pPayload($data),'SILENT');
+    output(outputBuildingRp2pPayload($data),'SILENT');
     $userAddress = resolveUserAddressForTransport($data['senderAddress'] ?? $data['sender_address']);
     return array(
         'type' => 'rp2p', // Return Peer to peer request type

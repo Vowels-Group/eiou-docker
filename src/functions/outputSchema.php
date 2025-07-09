@@ -128,6 +128,14 @@ function outputRp2pResponse($response){
     return "RP2P response: " . print_r($response,true);
 }
 
+function outputSendP2p($request){
+    return "Sending " . $request[3] . " " . $request[4] . " to " . $request[2];
+}
+
+function outputSendTransaction($payload){
+    return "Sending " . $payload['amount']/100 . " " . $payload['currency'] . " to " . $payload['receiverAddress'];
+}
+
 function outputSendTransactionCompletionMessageMemo($message){
     return "Sending Transaction completion of message with memo " . $message['memo'] . " to " . $message['sender_address'];
 }
@@ -157,7 +165,7 @@ function outputTransactionP2pSentSuccesfully($p2p){
 }
 
 function outputTransactionDirectSentSuccesfully($data){
-     return "Sent " . $data['amount']/100 . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully";
+    return "Sent " . $data['amount']/100 . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully";
 }
 
 function outputTransactionStatusUpdated($status,$what,$memo){
