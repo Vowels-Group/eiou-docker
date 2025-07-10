@@ -22,6 +22,9 @@ RUN  chmod o-w /etc/tor/torrc
 # Expose Tor hidden service port
 EXPOSE 80
 
+# Create volume for persistent MariaDB data
+VOLUME ["/var/lib/mysql"]
+
 # Set up Apache2 to accept php in .html files
 RUN echo "AddType application/x-httpd-php .html" | tee -a /etc/apache2/apache2.conf
 
