@@ -1,0 +1,161 @@
+# Copyright 2025
+
+version: '3.8'
+
+services:
+  node-a:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: node-a
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=node-a
+    volumes:
+      - node-a-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  node-b:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: node-b
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=node-b
+    volumes:
+      - node-b-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  node-c:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: node-c
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=node-c
+    volumes:
+      - node-c-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  node-d:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: node-d
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=node-d
+    volumes:
+      - node-d-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  node-e:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: node-e
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=node-e
+    volumes:
+      - node-e-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  node-f:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: node-f
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=node-f
+    volumes:
+      - node-f-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  node-g:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: node-g
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=node-g
+    volumes:
+      - node-g-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  node-h:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: node-h
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=node-h
+    volumes:
+      - node-h-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  node-i:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: node-i
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=node-i
+    volumes:
+      - node-i-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  node-j:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: node-j
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=node-j
+    volumes:
+      - node-j-mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+networks:
+  eiou-network-compose:
+    driver: bridge
+    name: eiou-network-compose
+
+volumes:
+  node-a-mysql-data:
+    name: node-a-mysql-data
+  node-b-mysql-data:
+    name: node-b-mysql-data
+  node-c-mysql-data:
+    name: node-c-mysql-data
+  node-d-mysql-data:
+    name: node-d-mysql-data
+  node-e-mysql-data:
+    name: node-e-mysql-data
+  node-f-mysql-data:
+    name: node-f-mysql-data
+  node-g-mysql-data:
+    name: node-g-mysql-data
+  node-h-mysql-data:
+    name: node-h-mysql-data
+  node-i-mysql-data:
+    name: node-i-mysql-data
+  node-j-mysql-data:
+    name: node-j-mysql-data
