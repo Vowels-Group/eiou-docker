@@ -10,6 +10,7 @@ services:
       - QUICKSTART=node-a
     volumes:
       - node-a-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
     restart: unless-stopped
 
   node-b:
@@ -23,6 +24,7 @@ services:
       - QUICKSTART=node-b
     volumes:
       - node-b-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
     restart: unless-stopped
 
   node-c:
@@ -36,6 +38,7 @@ services:
       - QUICKSTART=node-c
     volumes:
       - node-c-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
     restart: unless-stopped
 
   node-d:
@@ -49,6 +52,7 @@ services:
       - QUICKSTART=node-d
     volumes:
       - node-d-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
     restart: unless-stopped
 
   node-e:
@@ -62,6 +66,7 @@ services:
       - QUICKSTART=node-e
     volumes:
       - node-e-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
     restart: unless-stopped
 
   node-f:
@@ -75,6 +80,7 @@ services:
       - QUICKSTART=node-f
     volumes:
       - node-f-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
     restart: unless-stopped
 
   node-g:
@@ -88,6 +94,7 @@ services:
       - QUICKSTART=node-g
     volumes:
       - node-g-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
     restart: unless-stopped
 
   node-h:
@@ -101,6 +108,7 @@ services:
       - QUICKSTART=node-h
     volumes:
       - node-h-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
     restart: unless-stopped
 
   node-i:
@@ -114,6 +122,7 @@ services:
       - QUICKSTART=node-i
     volumes:
       - node-i-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
     restart: unless-stopped
 
   node-j:
@@ -127,6 +136,7 @@ services:
       - QUICKSTART=node-j
     volumes:
       - node-j-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
     restart: unless-stopped
 
 networks:
