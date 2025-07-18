@@ -68,7 +68,7 @@ function changeSettings($argv) {
         
         // Prompt user for which setting they want to change
         echo "Select the setting you want to change:\n";
-        echo "\t1. Default Fees\n";
+        echo "\t1. Default Fee\n";
         echo "\t2. Default Currency\n";
         echo "\t3. Access Mode\n";
         echo "\t4. Maximum Fee\n";
@@ -157,7 +157,7 @@ function displayCurrentSettings() {
     // Display current settings of user
     global $user;
     echo "Current Settings:\n";
-    echo "\tDefault fees: " . $user['defaultFee'] ."%\n";
+    echo "\tDefault fee: " . $user['defaultFee'] ."%\n";
     echo "\tDefault currency: " . $user['defaultCurrency'] . "\n";
     echo "\tAccess Mode: " . ($user['localhostOnly'] ? "Local Access Only" : "Network Authorized") . "\n";
     echo "\tMaximum Fee: " . $user['maxFee'] . "%\n";
