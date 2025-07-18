@@ -48,6 +48,10 @@ function outputGeneratedP2pHash($hash){
     return "Generated p2pHash: " . $hash;
 }
 
+function handleTransactionMessageResponse($decodedMessage){
+    return "Responding to Transaction message inquiry from: " . $decodedMessage['senderAddress'];
+}
+
 function outputInsertedP2p($request){
     return "Inserted P2P with hash: " .print_r($request['hash'],true);
 }
@@ -69,7 +73,7 @@ function outputInsertingP2pRequest($address){
 }
 
 function outputIssueTransactionTryP2p($response){
-    return "Direct Transaction not succesfull, trying P2P. Error: " . print_r($reponse,true);
+    return "Direct Transaction not succesfull, trying P2P. Error: " . print_r($response,true);
 }
 
 function outputLookedUpContactInfo($contactInfo){
@@ -120,7 +124,7 @@ function outputRp2pInsertionFailure($request){
     return "Failed to insert rp2p request: " . print_r($request, true);
 }
 
-function outputRp2pTransactionResponse($request){
+function outputRp2pTransactionResponse($response){
     return "Transaction (RP2P) send response: " . print_r($response, true);  
 }
 
