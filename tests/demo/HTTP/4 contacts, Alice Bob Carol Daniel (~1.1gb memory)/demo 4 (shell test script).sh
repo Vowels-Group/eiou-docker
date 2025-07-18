@@ -95,6 +95,10 @@ docker exec Carol eiou viewcontact ${containerAddresses[Bob]}
 docker exec Carol eiou viewcontact ${containerAddresses[Daniel]}
 docker exec Daniel eiou viewcontact ${containerAddresses[Carol]}
 
+# need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances/transaction history)
+echo -e "\nSleeping for 5 seconds..."
+sleep 5 
+
 # View balances
 echo -e "\nViewing balances..."
 docker exec Alice eiou viewbalances
