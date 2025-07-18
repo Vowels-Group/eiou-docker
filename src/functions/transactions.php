@@ -81,9 +81,6 @@ function processTransaction($request) {
             $request['receiverAddress'] = $rP2pResult['sender_address'];
             $request['receiverPublicKey'] = $rP2pResult['sender_public_key'];
             $request['txid'] = createUniqueTxid($request);
-
-            // Remove my transaction fee
-            $request['amount'] = removeTransactionFee($request); 
             
             // Add previousTxid reflecting whom sent the transaction
             $request['previousTxid'] = fixPreviousTxid($user['public'], $request['receiverPublicKey']);
@@ -129,6 +126,7 @@ function processPendingTransactions(){
             // If p2p transaction
             if(!matchYourselfTransaction($message,resolveUserAddressForTransport($message['sender_address']))) {
                 // If not end-recipient of transaction
+                $message['amount'] = removeTransactionFee($message); // Remove my transaction fee
                 $payload = buildSendDatabasePayload($message);
                 updateP2pRequestStatus($memo,'paid'); // Update p2p status to paid
                 updateTransactionStatus($memo,'sent'); // Update transaction status to sent
