@@ -2,6 +2,9 @@
 
 # Copyright 2025
 
+# Check for quickstart flag
+QUICKSTART=${QUICKSTART:-false}
+
 # Start services
 service cron start
 service tor start
@@ -14,6 +17,13 @@ while ! mysqladmin ping -h localhost --silent; do
     sleep 1
 done
 
+# If quickstart flag is set, automatically run generate command
+if [ "$QUICKSTART" != "false" ]; then
+    echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
+    eiou generate http://$QUICKSTART
+    echo "Generate command completed."
+fi
+
 # Check if all precursors to messages.php are available and working
 first=true
 while true; do
@@ -23,10 +33,15 @@ while true; do
     else
         if ($first); then
             echo "Message processing check failed to complete. Retrying every 5 seconds..."
-            echo "Please run the 'generate' command to generate a new wallet and setup message processing"
-            echo -e "\t 'docker exec [containerName] eiou generate (torAddressOnly) from thr CLI'"
-            echo -e "\t or 'eiou generate (torAddressOnly)' from within the container"
-            echo -e "\t where (torAddressOnly) is an optional parameter"
+            if [ "$QUICKSTART" = "false" ]; then
+                echo "Please run the 'generate' command to generate a new wallet and setup message processing"
+                echo -e "\t 'docker exec [containerName] eiou generate (torAddressOnly) from thr CLI'"
+                echo -e "\t or 'eiou generate (torAddressOnly)' from within the container"
+                echo -e "\t where (torAddressOnly) is an optional parameter"
+                echo -e "\t or use QUICKSTART=[name] environment variable for automatic setup"
+            else
+                echo "Quickstart mode: generate command was already run with parameter $QUICKSTART, but message processing still not ready. Retrying..."
+            fi
             first=false
         fi
         sleep 5

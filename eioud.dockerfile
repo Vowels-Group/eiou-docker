@@ -25,6 +25,9 @@ EXPOSE 80
 # Set up Apache2 to accept php in .html files
 RUN echo "AddType application/x-httpd-php .html" | tee -a /etc/apache2/apache2.conf
 
+# Set ServerName to suppress Apache warning
+RUN echo "ServerName localhost" | tee -a /etc/apache2/apache2.conf
+
 # Copy eiou.php file to /usr/local/bin and create a wrapper script
 COPY src/eiou.php /usr/local/bin/eiou.php
 RUN echo '#!/bin/bash\nphp /usr/local/bin/eiou.php "$@"' > /usr/local/bin/eiou && \

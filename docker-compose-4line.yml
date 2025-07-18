@@ -1,0 +1,71 @@
+services:
+  alice:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: alice
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=alice
+    volumes:
+      - alice-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  bob:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: bob
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=bob
+    volumes:
+      - bob-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  carol:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: carol
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=carol
+    volumes:
+      - carol-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  daniel:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: daniel
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=daniel
+    volumes:
+      - daniel-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+networks:
+  eiou-network-compose:
+    driver: bridge
+    name: eiou-network-compose
+
+volumes:
+  alice-mysql-data:
+    name: alice-mysql-data
+  bob-mysql-data:
+    name: bob-mysql-data
+  carol-mysql-data:
+    name: carol-mysql-data
+  daniel-mysql-data:
+    name: daniel-mysql-data

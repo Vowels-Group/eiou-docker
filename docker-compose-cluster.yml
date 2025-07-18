@@ -1,0 +1,218 @@
+services:
+  # Root node
+  cluster-a:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a
+    volumes:
+      - cluster-a-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  # Level 1 nodes
+  cluster-a1:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a1
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a1
+    volumes:
+      - cluster-a1-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  cluster-a2:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a2
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a2
+    volumes:
+      - cluster-a2-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  cluster-a3:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a3
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a3
+    volumes:
+      - cluster-a3-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  cluster-a4:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a4
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a4
+    volumes:
+      - cluster-a4-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  # Level 2 nodes
+  cluster-a11:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a11
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a11
+    volumes:
+      - cluster-a11-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  cluster-a12:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a12
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a12
+    volumes:
+      - cluster-a12-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  cluster-a21:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a21
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a21
+    volumes:
+      - cluster-a21-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  cluster-a22:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a22
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a22
+    volumes:
+      - cluster-a22-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  cluster-a31:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a31
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a31
+    volumes:
+      - cluster-a31-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  cluster-a32:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a32
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a32
+    volumes:
+      - cluster-a32-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  cluster-a41:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a41
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a41
+    volumes:
+      - cluster-a41-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+  cluster-a42:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: cluster-a42
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=cluster-a42
+    volumes:
+      - cluster-a42-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+    restart: unless-stopped
+
+networks:
+  eiou-network-compose:
+    driver: bridge
+    name: eiou-network-compose
+
+volumes:
+  cluster-a-mysql-data:
+    name: cluster-a-mysql-data
+  cluster-a1-mysql-data:
+    name: cluster-a1-mysql-data
+  cluster-a2-mysql-data:
+    name: cluster-a2-mysql-data
+  cluster-a3-mysql-data:
+    name: cluster-a3-mysql-data
+  cluster-a4-mysql-data:
+    name: cluster-a4-mysql-data
+  cluster-a11-mysql-data:
+    name: cluster-a11-mysql-data
+  cluster-a12-mysql-data:
+    name: cluster-a12-mysql-data
+  cluster-a21-mysql-data:
+    name: cluster-a21-mysql-data
+  cluster-a22-mysql-data:
+    name: cluster-a22-mysql-data
+  cluster-a31-mysql-data:
+    name: cluster-a31-mysql-data
+  cluster-a32-mysql-data:
+    name: cluster-a32-mysql-data
+  cluster-a41-mysql-data:
+    name: cluster-a41-mysql-data
+  cluster-a42-mysql-data:
+    name: cluster-a42-mysql-data
