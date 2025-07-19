@@ -128,7 +128,7 @@ function processQueuedP2pMessages() {
                 }
 
                 $response = json_decode(send($contact, $p2pPayload),true);
-                output(outputP2pResponse($repsonse),'SILENT');
+                output(outputP2pResponse($response),'SILENT');
             }
             if(isset($message['destination_address'])){
                 output(outputSendP2PToAmountContacts($contactsCount), 'SILENT');
