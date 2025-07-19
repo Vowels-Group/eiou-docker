@@ -117,6 +117,9 @@ function processQueuedP2pMessages() {
 
             // Send p2p request to all contacts
             foreach ($contacts as $contact) {
+                synchContact($contact);
+                // TO DO: IF NOT SYNCHABLE THEN NOT SEND????
+
                 // Do not send p2p to contact (end-recipient), if direct transaction failed due to insufficient funds
                 if(isset($message['destination_address']) && $contact === $message['destination_address']){
                     if(isTorAddress($message['destination_address'])){

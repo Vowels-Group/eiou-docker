@@ -12,6 +12,7 @@ require_once 'functions/outputSchema.php';
 require_once 'functions/payloadSchema.php';
 require_once 'functions/p2p.php';
 require_once 'functions/rp2p.php';
+require_once 'functions/synch.php';
 require_once 'functions/transactions.php';
 require_once 'functions/utils.php';
 require_once 'functions/validation.php';
