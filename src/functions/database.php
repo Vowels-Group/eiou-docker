@@ -155,6 +155,34 @@ function checkContactExists($address) {
     return $checkStmt->rowCount() > 0;
 }
 
+function checkContactBlockedStatus($request){
+    global $pdo;
+    // Check if contact has no bad status i.e. blocked
+    $checkStmt = $pdo->prepare("SELECT * FROM contacts WHERE address = :address AND status = 'blocked'");
+    $checkStmt->bindParam(':address', $request['senderAddress']);
+    $checkStmt->execute();
+    if($checkStmt->rowCount() > 0){
+        return false;
+    } else{
+        return true;
+    }
+}
+
+function checkContactStatus($request){
+    global $pdo;
+    // Check if contact has no bad status i.e. blocked
+    $checkStmt = $pdo->prepare("SELECT * FROM contacts WHERE address = :address AND status != 'accepted'");
+    $checkStmt->bindParam(':address', $request['senderAddress']);
+    $checkStmt->execute();
+    if($checkStmt->rowCount() > 0){
+        return true;
+    } else{
+        return false;
+    }
+}
+
+
+
 function checkPendingContact($address) {
     global $pdo;
     // Check if contact already exists in the database but is not yet accepted
@@ -221,9 +249,10 @@ function checkCompletionTransactionByTxid($txid){
 function checkExistenceP2p($request, $echo = true){
     // Check if P2P already exists for hash in database, is valid and can be completed
     // Check if P2P is valid and can be completed given credit of user requesting
-    if(!checkRequestLevel($request) || !checkAvailableFunds($request)){
+    if(!checkContactBlockedStatus($request) || !checkRequestLevel($request) || !checkAvailableFunds($request)){
         return true; 
     }
+    output("PASSED CHECKS",'SILENT');
     // Check if P2P already exists for hash in database
     try{
         $results = getP2pByHash($request['hash']);
@@ -288,7 +317,7 @@ function checkExistenceRp2p($request, $echo = true){
 function checkExistenceTransaction($request, $echo = true){
     // Check if Transaction already exists for memo in database and is a valid successor of previous txids
     // Check if Transaction is a valid successor of previous txids
-    if(!checkPreviousTxid($request) || !checkAvailableFundsTransaction($request)){
+    if(!checkContactBlockedStatus($request) || !checkPreviousTxid($request) || !checkAvailableFundsTransaction($request)){
         return true;
     }
     // Check if Transaction already exists for txid or memo in database
