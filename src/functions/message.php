@@ -43,7 +43,8 @@ function handleMessageRequest($message){
     }   
     // Handle Contact messages
     elseif($decodedMessage['typeMessage'] === "contact"){
-         if(isset($decodedMessage['inquiry']) && $decodedMessage['inquiry']){
+        
+        if(isset($decodedMessage['inquiry']) && $decodedMessage['inquiry']){
             handleContactMessageInquiryRequest($decodedMessage);
         } else{
             handleContactMessageRequest($decodedMessage);
@@ -59,9 +60,9 @@ function handleContactMessageInquiryRequest($decodedMessage){
     if(checkAcceptedContact($address, $name)){
         echo buildContactIsAcceptedPayload($address);
     } elseif(checkPendingContact($address)){
-        echo buildContactIsNotYetAcceptedPayload($decodedMessage);
+        echo buildContactIsNotYetAcceptedPayload($address);
     } else{
-        echo buildContactIsUnknownPayload($decodedMessage);
+        echo buildContactIsUnknownPayload($address);
     }
 }
 
