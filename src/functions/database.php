@@ -4,7 +4,7 @@
 function acceptContact($address, $name, $fee, $credit, $currency) {
     global $pdo;
     // Accept Contact request
-    $insertStmt = $pdo->prepare("UPDATE contacts SET name = :name, fee_percent = :fee, credit_limit = :credit, currency = :currency WHERE address = :address");
+    $insertStmt = $pdo->prepare("UPDATE contacts SET name = :name, status = 'accepted', fee_percent = :fee, credit_limit = :credit, currency = :currency WHERE address = :address");
     $insertStmt->bindParam(':address', $address);
     $insertStmt->bindParam(':name', $name);
     $insertStmt->bindParam(':fee', $fee);
@@ -30,7 +30,7 @@ function addPendingContact($address, $senderPublicKey) {
     $myPublicKey = $user['public'];
     $pubkey_hash = hash('sha256', $senderPublicKey);
 
-    $insertStmt = $pdo->prepare("INSERT INTO contacts (address, pubkey, pubkey_hash, name, fee_percent, credit_limit, currency) VALUES (:address, :pubkey, :pubkey_hash, NULL, NULL, NULL, NULL)");
+    $insertStmt = $pdo->prepare("INSERT INTO contacts (address, pubkey, pubkey_hash, name, status, fee_percent, credit_limit, currency) VALUES (:address, :pubkey, :pubkey_hash, NULL, 'pending', NULL, NULL, NULL)");
     $insertStmt->bindParam(':address', $address);
     $insertStmt->bindParam(':pubkey', $senderPublicKey);
     $insertStmt->bindParam(':pubkey_hash', $pubkey_hash);
@@ -45,6 +45,23 @@ function addPendingContact($address, $senderPublicKey) {
         // Handle database error
         error_log("Error adding contact: " . $e->getMessage());
         return json_encode(["status" => "error", "message" => "Failed to add contact due to a database error"]);
+    }
+}
+
+function blockContact($data) {
+    global $pdo;
+    // Block a contact
+    $address = $data[2];
+    $query = "UPDATE contacts SET status = 'blocked' WHERE address = :address";
+    $stmt = $pdo->prepare($query);
+    $stmt->bindParam(':address', $address);
+
+    if ($stmt->execute() && $stmt->rowCount() > 0) {
+        echo "Contact blocked successfully.\n";
+        return true;
+    } else {
+        echo "Contact not found, no action taken.\n";
+        return false;
     }
 }
 
@@ -119,7 +136,7 @@ function calculateTotalReceivedUser() {
 function checkAcceptedContact($address, $name) {
     global $pdo;
     // Check if contact is already an accepted contact in the database
-    $checkQuery = "SELECT * FROM contacts WHERE (address = :address OR name = :name) AND name IS NOT NULL";
+    $checkQuery = "SELECT * FROM contacts WHERE (address = :address OR name = :name) AND status = 'accepted'";
     $stmt = $pdo->prepare($checkQuery);
     $stmt->bindParam(':address', $address);
     $stmt->bindParam(':name', $name);
@@ -141,7 +158,7 @@ function checkContactExists($address) {
 function checkPendingContact($address) {
     global $pdo;
     // Check if contact already exists in the database but is not yet accepted
-    $checkQuery = "SELECT * FROM contacts WHERE address = :address AND name IS NULL";
+    $checkQuery = "SELECT * FROM contacts WHERE address = :address AND name IS NULL AND status = 'pending'";
     $stmt = $pdo->prepare($checkQuery);
     $stmt->bindParam(':address', $address);
     $stmt->execute();
@@ -153,7 +170,7 @@ function checkPendingContactRequests() {
     global $pdo;
     try {
         // Get all contacts with null default fee
-        $stmt = $pdo->prepare("SELECT * FROM contacts WHERE name IS NULL");
+        $stmt = $pdo->prepare("SELECT * FROM contacts WHERE name IS NULL AND status = 'pending'");
         $stmt->execute();
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $pending_count = count($results);
@@ -508,10 +525,10 @@ function getTransactionByTxid($txid){
 
 function insertContact($address, $contactPublicKey, $name, $fee, $credit, $currency) {
     global $pdo;
-    // Insert a contact into database
+    // Insert a contact into database (status 'pending' awaiting acceptance from contact in question)
     $pubkey_hash = hash('sha256', $contactPublicKey);
     
-    $insertStmt = $pdo->prepare("INSERT INTO contacts (address, pubkey, pubkey_hash, name, fee_percent, credit_limit, currency) VALUES (:address, :pubkey, :pubkey_hash, :name, :fee, :credit, :currency)");
+    $insertStmt = $pdo->prepare("INSERT INTO contacts (address, pubkey, pubkey_hash, name, status, fee_percent, credit_limit, currency) VALUES (:address, :pubkey, :pubkey_hash, :name, 'pending', :fee, :credit, :currency)");
     $insertStmt->bindParam(':address', $address);
     $insertStmt->bindParam(':pubkey', $contactPublicKey);
     $insertStmt->bindParam(':pubkey_hash', $pubkey_hash);
@@ -904,6 +921,23 @@ function searchContactsQuery($name = null) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+function unblockContact($data) {
+    global $pdo;
+    // Block a contact
+    $address = $data[2];
+    $query = "UPDATE contacts SET status = 'accepted' WHERE address = :address";
+    $stmt = $pdo->prepare($query);
+    $stmt->bindParam(':address', $address);
+
+    if ($stmt->execute() && $stmt->rowCount() > 0) {
+        echo "Contact unblocked successfully.\n";
+        return true;
+    } else {
+        echo "Contact not found, no action taken.\n";
+        return false;
+    }
+}
+
 function updateContact($data) {
     global $pdo;
     // Update contact information
@@ -952,6 +986,20 @@ function updateContact($data) {
     } else{
         // If unsuccesful update with correct parameters, implies not an existing contact, respond of this fact
         output(returnContactNotFound());
+    }
+}
+
+function updateContactStatus($address,$status) {
+    global $pdo;
+    // Update contact request status
+    try {     
+        $updateStmt = $pdo->prepare("UPDATE contacts SET status = :status WHERE address = :address");     
+        $updateStmt->bindParam(':status', $status);
+        $updateStmt->bindParam(':address', $address);
+        $updateStmt->execute();
+    } catch (PDOException $e) {
+        // Log or handle the error if updating status fails
+        error_log("Error updating contact request status: " . $e->getMessage());
     }
 }
 

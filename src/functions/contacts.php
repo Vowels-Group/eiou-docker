@@ -27,6 +27,9 @@ function addContact($data) {
     elseif (checkPendingContact($address)) {
         // If contact already exists with an address, it's a contact request, skip sending a message
         if (acceptContact($address, $name, $fee, $credit, $currency)) {
+            // Semd message of succesfull contact acceptance back to original contact requester
+            send($address,buildContactIsAcceptedPayload($address));
+            output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
             output(returnContactAccepted());
             exit(0);    
         }

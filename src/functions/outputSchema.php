@@ -1,5 +1,7 @@
 <?php
 
+# Copyright 2025
+
 function outputAdressOrContactIssue($data){
     return "Not an address nor existing contact with name: " . $data[2];
 }
@@ -26,6 +28,10 @@ function outputCalculatedContactHash($contactHash){
 
 function outputContactMatched($contactHash){
     return "Contact matched with hash: " . $contactHash;
+}
+
+function outputContactRequestWasAccepted($address){
+    return "Contact request was accepted by " . $address;
 }
 
 function outputContactNotFoundTryP2p($request){
@@ -130,6 +136,10 @@ function outputRp2pTransactionResponse($response){
 
 function outputRp2pResponse($response){
     return "RP2P response: " . print_r($response,true);
+}
+
+function outputSendContactAcceptedSuccesfullyMessage($address){
+    return "Sending Contact accepted succesfully message to " . $address;
 }
 
 function outputSendP2p($request){

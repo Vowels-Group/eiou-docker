@@ -1,7 +1,6 @@
 <?php
 # Copyright 2025
 
-
 function checkMessageValidity($decodedMessage){
     // Check if message from a valid source
     if(retrieveContactQuery($decodedMessage['senderAddress'])){
@@ -34,7 +33,7 @@ function handleMessageRequest($message){
         echo buildMessageInvalidSourcePayload($message);
         exit();
     }
-
+    // Handle Transaction messages
     if($decodedMessage['typeMessage'] === "transaction"){
         if(isset($decodedMessage['inquiry']) && $decodedMessage['inquiry']){
             handleTransactionMessageInquiryRequest($decodedMessage);
@@ -42,7 +41,40 @@ function handleMessageRequest($message){
             handleTransactionMessageRequest($decodedMessage);
         }    
     }   
+    // Handle Contact messages
+    elseif($decodedMessage['typeMessage'] === "contact"){
+         if(isset($decodedMessage['inquiry']) && $decodedMessage['inquiry']){
+            handleContactMessageInquiryRequest($decodedMessage);
+        } else{
+            handleContactMessageRequest($decodedMessage);
+        }   
+    }
 }
+
+function handleContactMessageInquiryRequest($decodedMessage){
+    // Handle inquiry about contact request status
+    $address = $decodedMessage['senderAddress'];
+    $name = $decodedMessage['senderName'];
+    // NO ECHOS?
+    if(checkAcceptedContact($address, $name)){
+        echo buildContactIsAcceptedPayload($address);
+    } elseif(checkPendingContact($address)){
+        echo buildContactIsNotYetAcceptedPayload($decodedMessage);
+    } else{
+        echo buildContactIsUnknownPayload($decodedMessage);
+    }
+}
+
+function handleContactMessageRequest($decodedMessage){
+     // Handle contact request status update messages
+    $address = $decodedMessage['senderAddress'];
+    $status = $decodedMessage['status'];
+    if($status === 'accepted'){
+        output(outputContactRequestWasAccepted($address),'SILENT');
+        updateContactStatus($address, $status);
+    }
+}
+
 
 function handleTransactionMessageInquiryRequest($decodedMessage){
     // Handle inquiry about transaction status

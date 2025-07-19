@@ -31,60 +31,70 @@ checkWalletExists($user, $request);
     output("Executing add contact request", 'SILENT');
     addContact($argv);
   }
+  elseif($request === "block"){
+    // Block Contact
+    output("Executing block contact request", 'SILENT');
+    blockContact($argv);
+  }
+  elseif($request === "unblock"){
+    // Unblock Contact
+    output("Executing unblock contact request", 'SILENT');
+    unblockContact($argv);
+  }
   elseif($request === "viewcontact"){
-    //View Contact
+    // View Contact
     output("Executing read contact request", 'SILENT');
     viewContact($argv);
   }
   elseif($request === "update"){
-    //Update Contact
+    // Update Contact
     output("Executing update contact request", 'SILENT');
     updateContact($argv);
   }
   elseif($request === "delete"){
-    //Delete Contact
+    // Delete Contact
     output("Executing delete contact request", 'SILENT');
     deleteContact($argv);
   }
   elseif($request === "search"){
-    //Search Contacts
+    // Search Contacts
     output("Executing search contacts request", 'SILENT');
     searchContacts($argv);
   }
-//Transactions
+// Transactions
   elseif($request === "send"){
-    //Send eIOU
+    // Send eIOU
     output("Executing send eIOU request", 'SILENT');
     sendEiou($argv);
   }
   elseif($request === "viewbalances"){
-    //View eIOUs
+    // View eIOUs
     output("Executing view balances request", 'SILENT');
     viewBalances($argv);
   }
   elseif($request === "history"){
-    //View Transaction History
+    // View Transaction History
     output("Executing transaction history request", 'SILENT');
     viewTransactionHistory($argv);
   }
-//Settings
+// Settings
   elseif($request === "help"){
-    //Help
+    // Help
     output("Executing help request", 'SILENT');
     displayHelp($argv);
   }
   elseif($request === "viewsettings"){
-    //View Settings
+    // View Settings
     output("Executing view settings request", 'SILENT');
     displayCurrentSettings();
   }
   elseif($request === "changesettings"){
-    //Change settings
+    // Change settings
     output("Executing change settings request", 'SILENT');
     changeSettings($argv);
   }
   elseif($request === "generate"){
-    //Generate Wallet
+    // Generate Wallet
     output("Executing generate wallet request", 'SILENT');
     generateWallet($argv);
   }

@@ -9,6 +9,7 @@ function getContactsTableSchema() {
         pubkey TEXT NOT NULL,
         pubkey_hash VARCHAR(64),
         name VARCHAR(255),
+        status TEXT,
         fee_percent INT,
         credit_limit INT,
         currency VARCHAR(10),
