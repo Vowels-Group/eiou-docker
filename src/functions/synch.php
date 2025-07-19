@@ -2,6 +2,33 @@
 
 # Copyright 2025
 
+function sych($argv){
+    if(isset($argv[2])){
+        $argument = strtolower($argv[2]);
+        if($argument === 'contacts'){
+            synchAllContacts();
+        } elseif($argument === 'transactions'){
+            synchAllTransactions();
+        }
+    } else{
+        synchAll();
+    }
+
+}
+
+function synchAll(){
+    synchAllContacts();
+    synchAllTransactions();
+}
+
+function synchAllContacts(){
+    //output synching all contacts
+    $contacts = retrieveContactAddresses();
+    foreach ($contacts as $contact) {
+        synchContact($contact);
+    }
+}
+
 function synchContact($contactAddress){
     // Synch contact
     $contact = retrieveContactQuery($contactAddress); // Get contact from database
@@ -34,3 +61,14 @@ function synchContact($contactAddress){
         }
     }
 }
+
+
+function synchAllTransactions(){
+    // To Do: synch transactions
+}
+
+function synchTransaction(){
+    // To Do: synch single transaction
+}
+
+

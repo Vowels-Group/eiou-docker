@@ -98,6 +98,11 @@ checkWalletExists($user, $request);
     output("Executing generate wallet request", 'SILENT');
     generateWallet($argv);
   }
+  elseif($request === "synch"){
+    // Synch
+    output("Executing synch request", 'SILENT');
+    sych($argv);
+  }
   // For Future version
   // elseif($request === "restore"){
   //   //Restore Wallet
