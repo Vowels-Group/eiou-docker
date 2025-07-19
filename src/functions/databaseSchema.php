@@ -92,7 +92,7 @@ function getTransactionsTableSchema() {
         ) DEFAULT 'standard',
         status ENUM(
             'pending',  /* Transaction has been created */ 
-            'sent', /* Transaction has been sent onwards*/ 
+            'sent',     /* Transaction has been sent onwards*/ 
             'accepted', /* Transaction has been accepted by peer */
             'rejected', /* Transaction has been rejected by peer */
             'completed' /* Transaction has been accepted by final recipient */
