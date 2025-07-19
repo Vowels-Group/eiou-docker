@@ -30,6 +30,10 @@ function outputContactMatched($contactHash){
     return "Contact matched with hash: " . $contactHash;
 }
 
+function outputContactSuccesfullySynched($address){
+    return "Contact " . $address . " was succesfully synched";
+}
+
 function outputContactRequestWasAccepted($address){
     return "Contact request was accepted by " . $address;
 }
@@ -164,6 +168,10 @@ function outputSendTransactionCompletionMessageTxid($message){
 
 function outputSendTransactionOnwards($message){
     return "Sending Transaction onwards to: " . $message['receiver_address'];
+}
+
+function outputSynchContactDueToPendingStatus($address){
+    return "Contact " . $address . " is being synched due to pending contact request status";
 }
 
 function outputTransactionAmountReceived($message){
