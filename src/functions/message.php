@@ -56,7 +56,6 @@ function handleContactMessageInquiryRequest($decodedMessage){
     // Handle inquiry about contact request status
     $address = $decodedMessage['senderAddress'];
     $name = $decodedMessage['senderName'];
-    // NO ECHOS?
     if(checkAcceptedContact($address, $name)){
         echo buildContactIsAcceptedPayload($address);
     } elseif(checkPendingContact($address)){
