@@ -18,7 +18,6 @@ function buildContactIsAcceptedInquiryPayload($address){
         'type' => "message", // message request type
         'typeMessage' => "contact", // type of message
         'inquiry' => true, // request for information
-        "status" => "accepted",
         "senderAddress" => $myAddress,
         'senderPublicKey' => $user['public'],
         "message" => $myAddress . " wants to know if we are contacts" 
@@ -68,9 +67,6 @@ function buildContactIsUnknownPayload($address){
         "message" => $myAddress . " and you are not contacts" 
     ]);
 }
-
-
-
 
 function buildContactAlreadyExistsPayload() {
     // Build warning payload when contact already exists
