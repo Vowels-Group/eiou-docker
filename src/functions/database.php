@@ -252,7 +252,6 @@ function checkExistenceP2p($request, $echo = true){
     if(!checkContactBlockedStatus($request) || !checkRequestLevel($request) || !checkAvailableFunds($request)){
         return true; 
     }
-    output("PASSED CHECKS",'SILENT');
     // Check if P2P already exists for hash in database
     try{
         $results = getP2pByHash($request['hash']);
