@@ -45,13 +45,20 @@ function fixPreviousTxid($senderPubKey,$receiverPubKey){
 
 function createUniqueTxid($data){
     global $user;
-    // Make sure that every txid will be unique based on time, if all other values are the same 
+    // Create Txid for transactions
     $txid = hash('sha256', $user['public'] . $data['receiverPublicKey'] . $data['amount'] . $data['time']);
-    // Create new txid if transactions are generated to close together to the same person for the same amount
-    while(getExistingTxid($txid)){
-        $txid = hash('sha256', $user['public'] . $data['receiverPublicKey'] . $data['amount'] . $data['time']);
-        usleep(1000); // Sleep for 1ms
-    }
+    return $txid;
+}
+
+function createUniqueDatabaseTxid($data){
+    global $user;
+    // Create unique Txid for transactions (from database)
+    $txid = hash('sha256', $user['public'] . $data['receiver_public_key'] . $data['amount'] . $data['time']);
+    // while(getExistingTxid($txid)){   
+    //     $data['time'] = $data['time'] + 1000;  
+    //     $txid = hash('sha256', $user['public'] . $data['receiver_public_key'] . $data['amount'] . $data['time']);
+    //     usleep(1000); // Sleep for 1ms
+    // }
     return $txid;
 }
 
@@ -78,14 +85,10 @@ function processTransaction($request) {
         $rP2pResult  = checkRp2pExists($memo);
         // Check if precursors to transactions exist and correspond
         if(isset($rP2pResult) && $memo === $rP2pResult['hash']){  
-            $request['receiverAddress'] = $rP2pResult['sender_address'];
-            $request['receiverPublicKey'] = $rP2pResult['sender_public_key'];
             $request['txid'] = createUniqueTxid($request);
-            
             // Add previousTxid reflecting whom sent the transaction
-            $request['previousTxid'] = fixPreviousTxid($user['public'], $request['receiverPublicKey']);
+            $request['previousTxid'] = fixPreviousTxid($user['public'], $request['senderPublicKey']);
             $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
-
         } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
             // If Transaction is for end-recipient
             $request['previousTxid'] = fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']); 
@@ -95,59 +98,74 @@ function processTransaction($request) {
 }
    
 function processPendingTransactions(){
+    global $user;
     // Select pending messages from the transaction table (with status pending)
     $pendingMessages = retrievePendingTransactionMessages();
     // Process each pending message
     foreach ($pendingMessages as $message) {   
         $memo = $message['memo'];  
+        $txid = $message['txid'];
         // If direct transaction
         if($memo == 'standard'){
             if($message['sender_address'] == resolveUserAddressForTransport($message['sender_address'])){
                 $payload = buildSendDatabasePayload($message);
-                updateTransactionStatus($message['txid'],'sent',true); // Update transaction status to sent
+                updateTransactionStatus($txid,'sent',true);  // Update transaction status to sent
                 $response = json_decode(send($message['receiver_address'], $payload),true);
                 output(outputTransactionInquiryResponse($response),'SILENT');
                 if($response['status'] === 'accepted'){
-                    updateTransactionStatus($message['txid'],'accepted',true); // Update transaction status to accepted
+                    updateTransactionStatus($txid,'accepted',true); // Update transaction status to accepted
                 } elseif($response['status'] === 'rejected'){
-                    updateTransactionStatus($message['txid'],'rejected',true); // Update transaction status to rejected
+                    updateTransactionStatus($txid,'rejected',true); // Update transaction status to rejected
                     output(outputIssueTransactionTryP2p($response),'SILENT'); // TO DO also not silent for people?
                     sendP2pRequestFromFailedDirectTransaction($message);
                 }
             } else{
-                updateTransactionStatus($message['txid'],'completed',true); // Update transaction status to completed
+                updateTransactionStatus($txid,'completed',true); // Update transaction status to completed
                 output(outputTransactionAmountReceived($message),'SILENT');
                 $payloadTransactionCompleted = buildSendCompletedPayload($message);
                 output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
-                $response = send($message['sender_address'],$payloadTransactionCompleted);
-               
+                $response = send($message['sender_address'],$payloadTransactionCompleted);              
             }      
         } else{
             // If p2p transaction
-            if(!matchYourselfTransaction($message,resolveUserAddressForTransport($message['sender_address']))) {
-                // If not end-recipient of transaction
-                $message['amount'] = removeTransactionFee($message); // Remove my transaction fee
+            if($message['sender_address'] == resolveUserAddressForTransport($message['sender_address'])){
+                // If sending transaction forwards
                 $payload = buildSendDatabasePayload($message);
                 updateP2pRequestStatus($memo,'paid'); // Update p2p status to paid
-                updateTransactionStatus($memo,'sent'); // Update transaction status to sent
+                updateTransactionStatus($txid,'sent',true); // Update transaction status to sent
                 output(outputSendTransactionOnwards($message),'SILENT');
                 $response = json_decode(send($message['receiver_address'], $payload),true);
                 output(outputTransactionResponse($response),'SILENT');
                 if($response['status'] === 'accepted'){
-                    updateTransactionStatus($memo,'accepted'); // Update transaction status to accepted
+                    updateTransactionStatus($txid,'accepted',true); // Update transaction status to accepted
                 } elseif($response['status'] === 'rejected'){
                     updateP2pRequestStatus($memo,'cancelled'); // Update transaction status to cancelled
-                    updateTransactionStatus($memo,'rejected'); // Update transaction status to rejected
+                    updateTransactionStatus($txid,'rejected',true); // Update transaction status to rejected
                 }
             } else{
-                // If end-recipient of transaction
-                updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
-                updateTransactionStatus($memo,'completed'); // Update transaction status to completed
-                output(outputTransactionAmountReceived($message),'SILENT');
-                $payloadTransactionCompleted = buildSendCompletedPayload($message);
-                output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
-                send($message['sender_address'],$payloadTransactionCompleted);     
-            }
+                // If receiving transaction
+                if(!matchYourselfTransaction($message,resolveUserAddressForTransport($message['sender_address']))) {
+                    // If not end-recipient of transaction
+                    updateTransactionStatus($memo,'accepted'); // Update received transaction status to accepted
+                    $message['amount'] = removeTransactionFee($message); // Remove my transaction fee
+                    $message['txid'] = createUniqueDatabaseTxid($message); // Create new txid for new Transaction
+                    $rp2p = checkRp2pExists($memo);
+                    $message['time'] = $rp2p['time'];
+                    $message['receiver_address'] = $rp2p['sender_address']; // Send new transaction onwards to sender of rp2p
+                    $message['receiver_public_key'] = $rp2p['sender_public_key'];
+                    $message['previous_txid'] = fixPreviousTxid($user['public'], $message['receiver_public_key']);
+                    $payload = buildSendDatabasePayload($message);
+                    $insertTransactionResponse = json_decode(insertTransaction($payload),true); // Insert to be sent onwards Transaction as pending     
+                } else{
+                    // If end-recipient of transaction
+                    updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
+                    updateTransactionStatus($memo,'completed'); // Update transaction status to completed
+                    output(outputTransactionAmountReceived($message),'SILENT');
+                    $payloadTransactionCompleted = buildSendCompletedPayload($message);
+                    output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
+                    send($message['sender_address'],$payloadTransactionCompleted);     
+                }
+            }   
         }  
     }
 }
