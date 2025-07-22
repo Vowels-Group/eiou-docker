@@ -118,7 +118,7 @@ function buildMessageInvalidSourcePayload($message){
     $receiver = resolveUserAddressForTransport($message['senderAddress']);
     return json_encode([
         "status" => "rejected",
-        "message" => "message rejeceted due to being from unknown source to receiver " .  print_r($receiver,true)
+        "message" => "message rejected due to being from unknown source to receiver " .  print_r($receiver,true)
     ]);
 }
 
@@ -179,7 +179,7 @@ function buildSendPayload($data) {
 }
 
 function buildSendDatabasePayload($data) {
-    // Build send (Transaction/eIOU) payload 
+    // Build send (Transaction/eIOU) payload (from database information)
     global $user;
     output(outputBuildingTransactionPayload($data),'SILENT');
     $userAddress = resolveUserAddressForTransport($data['receiver_address']);
@@ -194,7 +194,7 @@ function buildSendDatabasePayload($data) {
         'amount' => $data['amount'],
         'currency' => $data['currency'],
         'txid' => $data['txid'],
-        'previousTxid' => $data['previousTxid'],
+        'previousTxid' => $data['previous_txid'],
         'memo' => $memo
     );
 }
