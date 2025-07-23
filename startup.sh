@@ -22,16 +22,38 @@ if [ "$QUICKSTART" != "false" ]; then
     echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
     eiou generate http://$QUICKSTART
     echo "Generate command completed."
+    # Display all user info for quick access
+    http=$(php -r 'require("//etc//eiou//config.php"); if(isset($user["hostname"])){echo $user["hostname"];}')
+    tor=$(php -r 'require("//etc//eiou//config.php"); echo $user["torAddress"];')
+    pubkey=$(php -r 'require("//etc//eiou//config.php"); echo $user["public"];')
+    echo "User Information: "
+    if [[ ! -z ${http} ]]; then
+        echo -e "\t HTTP address: $http"
+    fi
+    echo -e "\t Tor address: $tor"
+    readable="${pubkey//$'\n'/$'\n\t\t'}"
+    echo -e "\t Public Key: \n\t\t $readable"
 fi
 
 # Check if all precursors to messages.php are available and working
 first=true
 while true; do
-    if (( $(php -r 'require("//etc//eiou//functions//messageCheck.php"); echo $passed;') )); then
+    if [[ $(php -r 'require("//etc//eiou//functions//messageCheck.php"); echo $passed;') ]]; then
         echo "Message processing check completed successfully."  
+        # Display all user info for quick access
+        http=$(php -r 'require("//etc//eiou//config.php"); if(isset($user["hostname"])){echo $user["hostname"];}')
+        tor=$(php -r 'require("//etc//eiou//config.php"); echo $user["torAddress"];')
+        pubkey=$(php -r 'require("//etc//eiou//config.php"); echo $user["public"];')
+        echo "User Information: "
+        if [[ ! -z ${http} ]]; then
+            echo -e "\t HTTP address: $http"
+        fi
+        echo -e "\t Tor address: $tor"
+        readable="${pubkey//$'\n'/$'\n\t\t'}"
+        echo -e "\t Public Key: \n\t\t $readable"
         break
     else
-        if ($first); then
+        if [ $first ]; then
             echo "Message processing check failed to complete. Retrying every 5 seconds..."
             if [ "$QUICKSTART" = "false" ]; then
                 echo "Please run the 'generate' command to generate a new wallet and setup message processing"
