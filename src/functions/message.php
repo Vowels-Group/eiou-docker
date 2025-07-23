@@ -75,13 +75,11 @@ function handleContactMessageRequest($decodedMessage){
     }
 }
 
-
 function handleTransactionMessageInquiryRequest($decodedMessage){
     // Handle inquiry about transaction status
     output(handleTransactionMessageResponse($decodedMessage),'SILENT');
     echo buildSendCompletedCorrectlyPayload($decodedMessage);
 }
-
 
 // TO DO: Check what happens if someone says txid when it's not txid
 // odd thought if say txid is actually the hash but it's not for this transaction (since lucky guess)
