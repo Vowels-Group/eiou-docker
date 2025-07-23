@@ -54,11 +54,6 @@ function createUniqueDatabaseTxid($data){
     global $user;
     // Create unique Txid for transactions (from database)
     $txid = hash('sha256', $user['public'] . $data['receiver_public_key'] . $data['amount'] . $data['time']);
-    // while(getExistingTxid($txid)){   
-    //     $data['time'] = $data['time'] + 1000;  
-    //     $txid = hash('sha256', $user['public'] . $data['receiver_public_key'] . $data['amount'] . $data['time']);
-    //     usleep(1000); // Sleep for 1ms
-    // }
     return $txid;
 }
 
@@ -86,7 +81,6 @@ function processTransaction($request) {
         // Check if precursors to transactions exist and correspond
         if(isset($rP2pResult) && $memo === $rP2pResult['hash']){  
             $request['txid'] = createUniqueTxid($request);
-            // Add previousTxid reflecting whom sent the transaction
             $request['previousTxid'] = fixPreviousTxid($user['public'], $request['senderPublicKey']);
             $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
         } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
@@ -129,32 +123,37 @@ function processPendingTransactions(){
         } else{
             // If p2p transaction
             if($message['sender_address'] == resolveUserAddressForTransport($message['sender_address'])){
+                $rp2p = checkRp2pExists($memo);
+                $message['time'] = $rp2p['time'];
                 // If sending transaction forwards
                 $payload = buildSendDatabasePayload($message);
                 updateP2pRequestStatus($memo,'paid'); // Update p2p status to paid
                 updateTransactionStatus($txid,'sent',true); // Update transaction status to sent
                 output(outputSendTransactionOnwards($message),'SILENT');
-                $response = json_decode(send($message['receiver_address'], $payload),true);
-                output(outputTransactionResponse($response),'SILENT');
+                $response = json_decode(send($message['receiver_address'], $payload),true);     
                 if($response['status'] === 'accepted'){
                     updateTransactionStatus($txid,'accepted',true); // Update transaction status to accepted
                 } elseif($response['status'] === 'rejected'){
                     updateP2pRequestStatus($memo,'cancelled'); // Update transaction status to cancelled
                     updateTransactionStatus($txid,'rejected',true); // Update transaction status to rejected
                 }
+                output(outputTransactionResponse($response),'SILENT');
             } else{
                 // If receiving transaction
                 if(!matchYourselfTransaction($message,resolveUserAddressForTransport($message['sender_address']))) {
                     // If not end-recipient of transaction
                     updateTransactionStatus($memo,'accepted'); // Update received transaction status to accepted
+                    
+                    // Splice old transaction into new transaction for sending onwards
                     $message['amount'] = removeTransactionFee($message); // Remove my transaction fee
-                    $message['txid'] = createUniqueDatabaseTxid($message); // Create new txid for new Transaction
                     $rp2p = checkRp2pExists($memo);
                     $message['time'] = $rp2p['time'];
+                    $message['txid'] = createUniqueDatabaseTxid($message); // Create new txid for new Transaction
                     $message['receiver_address'] = $rp2p['sender_address']; // Send new transaction onwards to sender of rp2p
                     $message['receiver_public_key'] = $rp2p['sender_public_key'];
                     $message['previous_txid'] = fixPreviousTxid($user['public'], $message['receiver_public_key']);
                     $payload = buildSendDatabasePayload($message);
+                    
                     $insertTransactionResponse = json_decode(insertTransaction($payload),true); // Insert to be sent onwards Transaction as pending     
                 } else{
                     // If end-recipient of transaction
