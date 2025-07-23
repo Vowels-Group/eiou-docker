@@ -83,10 +83,12 @@ function processTransaction($request) {
             $request['txid'] = createUniqueTxid($request);
             $request['previousTxid'] = fixPreviousTxid($user['public'], $request['senderPublicKey']);
             $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
+            output(outputTransactionInsertion($insertTransactionResponse));
         } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
             // If Transaction is for end-recipient
             $request['previousTxid'] = fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']); 
             $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
+            output(outputTransactionInsertion($insertTransactionResponse));
         }
     }
 }
@@ -118,7 +120,7 @@ function processPendingTransactions(){
                 output(outputTransactionAmountReceived($message),'SILENT');
                 $payloadTransactionCompleted = buildSendCompletedPayload($message);
                 output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
-                $response = send($message['sender_address'],$payloadTransactionCompleted);              
+                $response = send($message['sender_address'],$payloadTransactionCompleted);          
             }      
         } else{
             // If p2p transaction
@@ -152,9 +154,9 @@ function processPendingTransactions(){
                     $message['receiver_address'] = $rp2p['sender_address']; // Send new transaction onwards to sender of rp2p
                     $message['receiver_public_key'] = $rp2p['sender_public_key'];
                     $message['previous_txid'] = fixPreviousTxid($user['public'], $message['receiver_public_key']);
-                    $payload = buildSendDatabasePayload($message);
-                    
+                    $payload = buildSendDatabasePayload($message); 
                     $insertTransactionResponse = json_decode(insertTransaction($payload),true); // Insert to be sent onwards Transaction as pending     
+                    output(outputTransactionInsertion($insertTransactionResponse));
                 } else{
                     // If end-recipient of transaction
                     updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
@@ -162,7 +164,7 @@ function processPendingTransactions(){
                     output(outputTransactionAmountReceived($message),'SILENT');
                     $payloadTransactionCompleted = buildSendCompletedPayload($message);
                     output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
-                    send($message['sender_address'],$payloadTransactionCompleted);     
+                    $response = send($message['sender_address'],$payloadTransactionCompleted); 
                 }
             }   
         }  
