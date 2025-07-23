@@ -786,7 +786,7 @@ function insertTransaction($request) {
         // Execute the insert
         $insertStmt->execute();
         // Respond with accepted status
-        if($request['memo'] != "standard"){
+        if($request['memo'] !== "standard"){
             output(outputInsertedTransactionMemo($request),'SILENT');
         } else{
             output(outputInsertedTransactionTxid($request),'SILENT');
