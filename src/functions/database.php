@@ -322,7 +322,7 @@ function checkExistenceTransaction($request, $echo = true){
     // Check if Transaction already exists for txid or memo in database
     try{
         $memo = $request['memo'];
-        if($memo = "standard"){
+        if($memo === "standard"){
             // If direct transaction
             $results = getTransactionByTxid($request['txid']);
         } else{
