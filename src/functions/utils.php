@@ -177,6 +177,10 @@ function displayHelp($argv) {
             echo "\tviewcontact [address/name] - View contact information.\n";
         } elseif(strtolower($argv[2]) === 'update'){
             echo "\tupdate [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
+        } elseif(strtolower($argv[2]) === 'block'){
+            echo "\block [address/name] - Block a contact.\n";
+        } elseif(strtolower($argv[2]) === 'delete'){
+            echo "\unblock [address/name] - Unblock a contact.\n";
         } elseif(strtolower($argv[2]) === 'delete'){
             echo "\tdelete [address/name] - Delete a contact.\n";
         } elseif(strtolower($argv[2]) === 'send'){
@@ -201,6 +205,8 @@ function displayHelp($argv) {
         echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
         echo "\tviewcontact [address/name] - View contact information.\n";
         echo "\tupdate [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
+        echo "\tblock [address/name] - Block a contact.\n";
+        echo "\tunblock [address/name] - Unblock a contact.\n";
         echo "\tdelete [address/name] - Delete a contact.\n";
         echo "\tsend [address/name] [amount] [currency] - Send an eIOU.\n";
         echo "\tviewbalances ([address/name]) - View eIOU balance(s).\n";

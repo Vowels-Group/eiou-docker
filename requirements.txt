@@ -5,6 +5,8 @@ Add Contact
 Accept Contact
 View Contact
 Update Contact
+Block Contact
+Unblock Contact
 Delete Contact
 Search Contacts
 Transactions
@@ -88,13 +90,32 @@ Fee (percent)
 Main Nominal Credit
 All
 
+Block Contact
+Block contact in the local database, and block any incoming eIOUs from them.
+
+Example command: eiou block Adrien
+Example command: eiou block 123pubkey
+
+Parameters:
+Name or Address/URI
+
+Unblock Contact
+Unblock contact in the local database, and remove block from any incoming eIOUs from them.
+
+Example command: eiou unblock Adrien
+Example command: eiou unblock 123pubkey
+
+Parameters:
+Name or Address/URI
+
 Delete Contact
 Remove contact from the local database, and delete any eIOUs associated with them.
 
+Example command: eiou delete Adrien
 Example command: eiou delete 123pubkey
 
 Parameters:
-Address/URI
+Name or Address/URI
 
 Search Contacts
 Lookup contact by name, or return all contacts.
