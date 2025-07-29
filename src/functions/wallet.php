@@ -21,7 +21,7 @@ function generateWallet($argv) {
   $keyDetails = openssl_pkey_get_details($res);
   $publicKey = $keyDetails['key'];
 
-  // Generate random authentication  code of length 20 
+  // Generate random authentication code of length 20 
   $authCode = bin2hex(random_bytes(10));
 
   // Save the keys to config.php
