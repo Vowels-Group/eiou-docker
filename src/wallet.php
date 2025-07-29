@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eIOU Wallet</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            text-align: center;
+            font-size: 2rem;
+        }
+
+        /* Wallet Dashboard */
+        .wallet-dashboard {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .wallet-info {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .wallet-info h2 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+
+        .info-item {
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .balance-display {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .balance-amount {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .balance-currency {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        /* Command Interface */
+        .command-interface {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .command-input {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .command-input input {
+            flex: 1;
+            padding: 0.8rem;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: 'Courier New', monospace;
+        }
+
+        .command-input button {
+            padding: 0.8rem 1.5rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .command-input button:hover {
+            background: #5a6fd8;
+        }
+
+        .command-output {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 1rem;
+            min-height: 200px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .action-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1.5rem;
+            border-radius: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .action-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .action-card i {
+            font-size: 2rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .action-card h3 {
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .action-card p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* Contacts Section */
+        .contacts-section {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .contacts-section h2 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+
+        .contacts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .contact-card {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .contact-name {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .contact-details {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        /* Transaction History */
+        .transactions-section {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .transactions-section h2 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+
+        .transaction-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .transaction-item:last-child {
+            border-bottom: none;
+        }
+
+        .transaction-info {
+            flex: 1;
+        }
+
+        .transaction-amount {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .transaction-sent {
+            color: #dc3545;
+        }
+
+        .transaction-received {
+            color: #28a745;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .wallet-dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .command-input {
+                flex-direction: column;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in-up {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: rgba(255, 255, 255, 0.95);
+            margin: 5% auto;
+            padding: 2rem;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            animation: fadeInUp 0.3s ease-out;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .modal-header h2 {
+            color: #667eea;
+            margin: 0;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .close:hover {
+            color: #667eea;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.8rem;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        /* Add Contact Button */
+        .add-contact-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            transition: background 0.3s ease;
+        }
+
+        .add-contact-btn:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header fade-in-up">
+            <h1><i class="fas fa-wallet"></i> eIOU Wallet</h1>
+        </div>
+
+        <!-- Wallet Dashboard -->
+        <div class="wallet-dashboard">
+            <!-- Wallet Info -->
+            <div class="wallet-info fade-in-up">
+                <h2><i class="fas fa-info-circle"></i> Wallet Information</h2>
+                
+                <div class="balance-display">
+                    <div class="balance-amount">$1,250.00</div>
+                    <div class="balance-currency">Total Balance</div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">Address:</div>
+                    <div>123address.tor</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Public Key:</div>
+                    <div>0x1234567890abcdef...</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Status:</div>
+                    <div style="color: #28a745;">Active</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <div class="action-card" onclick="quickAction('info')">
+                <i class="fas fa-info-circle"></i>
+                <h3>Wallet Info</h3>
+                <p>View your wallet details</p>
+            </div>
+            <div class="action-card" onclick="openModal('sendModal')">
+                <i class="fas fa-paper-plane"></i>
+                <h3>Send eIOU</h3>
+                <p>Transfer value to contacts</p>
+            </div>
+            <div class="action-card" onclick="openModal('viewContactModal')">
+                <i class="fas fa-address-book"></i>
+                <h3>View Contacts</h3>
+                <p>Manage your contacts</p>
+            </div>
+            <div class="action-card" onclick="quickAction('history')">
+                <i class="fas fa-history"></i>
+                <h3>Transaction History</h3>
+                <p>View past transactions</p>
+            </div>
+            <div class="action-card" onclick="openModal('settingsModal')">
+                <i class="fas fa-cog"></i>
+                <h3>Settings</h3>
+                <p>Configure wallet settings</p>
+            </div>
+        </div>
+
+        <!-- Contacts Section -->
+        <div class="contacts-section fade-in-up">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
+                <button class="add-contact-btn" onclick="openModal('addContactModal')">
+                    <i class="fas fa-plus"></i> Add Contact
+                </button>
+            </div>
+            <div class="contacts-grid" id="contactsGrid">
+                <div class="contact-card" onclick="viewContact('Alice')">
+                    <div class="contact-name">Alice</div>
+                    <div class="contact-details">
+                        Address: 123address.tor<br>
+                        Balance: +$500.00<br>
+                        Fee: 0.1%
+                    </div>
+                </div>
+                <div class="contact-card" onclick="viewContact('Bob')">
+                    <div class="contact-name">Bob</div>
+                    <div class="contact-details">
+                        Address: 456address.tor<br>
+                        Balance: -$250.00<br>
+                        Fee: 0.2%
+                    </div>
+                </div>
+                <div class="contact-card" onclick="viewContact('Charlie')">
+                    <div class="contact-name">Charlie</div>
+                    <div class="contact-details">
+                        Address: 789address.tor<br>
+                        Balance: +$1,000.00<br>
+                        Fee: 0.15%
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transaction History -->
+        <div class="transactions-section fade-in-up">
+            <h2><i class="fas fa-history"></i> Recent Transactions</h2>
+            <div id="transactionsList">
+                <div class="transaction-item">
+                    <div class="transaction-info">
+                        <div><strong>Sent to Alice</strong></div>
+                        <div style="font-size: 0.9rem; color: #666;">2025-01-15 14:30:15</div>
+                    </div>
+                    <div class="transaction-amount transaction-sent">-$100.00</div>
+                </div>
+                <div class="transaction-item">
+                    <div class="transaction-info">
+                        <div><strong>Received from Charlie</strong></div>
+                        <div style="font-size: 0.9rem; color: #666;">2025-01-14 09:15:22</div>
+                    </div>
+                    <div class="transaction-amount transaction-received">+$1,000.00</div>
+                </div>
+                <div class="transaction-item">
+                    <div class="transaction-info">
+                        <div><strong>Sent to Bob</strong></div>
+                        <div style="font-size: 0.9rem; color: #666;">2025-01-13 16:45:33</div>
+                    </div>
+                    <div class="transaction-amount transaction-sent">-$250.00</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Command Interface -->
+        <div class="command-interface fade-in-up">
+            <h2><i class="fas fa-terminal"></i> Command Interface</h2>
+            
+            <div class="command-input">
+                <input type="text" id="commandInput" placeholder="Enter eIOU command (e.g., eiou info)" />
+                <button onclick="executeCommand()">Execute</button>
+            </div>
+            
+            <div class="command-output" id="commandOutput">
+Welcome to eIOU Wallet!
+Type a command above to interact with your wallet.
+
+Available commands:
+- eiou info - View wallet information
+- eiou add [address] [name] [fee] [credit] [currency] - Add contact
+- eiou viewcontact [name] - View contact details
+- eiou send [name] [amount] [currency] - Send eIOU
+- eiou viewbalances - Check balances
+- eiou history - View transaction history
+- eiou help - Show all commands</div>
+        </div>
+    </div>
+
+    <!-- Add Contact Modal -->
+    <div id="addContactModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-user-plus"></i> Add New Contact</h2>
+                <span class="close" onclick="closeModal('addContactModal')">&times;</span>
+            </div>
+            <form id="addContactForm">
+                <div class="form-group">
+                    <label for="contactAddress">Address:</label>
+                    <input type="text" id="contactAddress" placeholder="Enter .tor address" required>
+                </div>
+                <div class="form-group">
+                    <label for="contactName">Name:</label>
+                    <input type="text" id="contactName" placeholder="Enter contact name" required>
+                </div>
+                <div class="form-group">
+                    <label for="contactFee">Fee (%):</label>
+                    <input type="number" id="contactFee" placeholder="0.1" step="0.1" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="contactCredit">Credit Limit:</label>
+                    <input type="number" id="contactCredit" placeholder="100" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="contactCurrency">Currency:</label>
+                    <select id="contactCurrency" required>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="BTC">BTC</option>
+                        <option value="ETH">ETH</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('addContactModal')">Cancel</button>
+                    <button type="submit" class="btn btn-success">Add Contact</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Send eIOU Modal -->
+    <div id="sendModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-paper-plane"></i> Send eIOU</h2>
+                <span class="close" onclick="closeModal('sendModal')">&times;</span>
+            </div>
+            <form id="sendForm">
+                <div class="form-group">
+                    <label for="sendRecipient">Recipient:</label>
+                    <select id="sendRecipient" required>
+                        <option value="">Select recipient</option>
+                        <option value="Alice">Alice</option>
+                        <option value="Bob">Bob</option>
+                        <option value="Charlie">Charlie</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="sendAmount">Amount:</label>
+                    <input type="number" id="sendAmount" placeholder="100" min="0" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="sendCurrency">Currency:</label>
+                    <select id="sendCurrency" required>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="BTC">BTC</option>
+                        <option value="ETH">ETH</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('sendModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Send eIOU</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- View Contact Modal -->
+    <div id="viewContactModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-user"></i> Contact Details</h2>
+                <span class="close" onclick="closeModal('viewContactModal')">&times;</span>
+            </div>
+            <div id="contactDetails">
+                <!-- Contact details will be populated here -->
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('viewContactModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-cog"></i> Wallet Settings</h2>
+                <span class="close" onclick="closeModal('settingsModal')">&times;</span>
+            </div>
+            <form id="settingsForm">
+                <div class="form-group">
+                    <label for="defaultCurrency">Default Currency:</label>
+                    <select id="defaultCurrency" required>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="BTC">BTC</option>
+                        <option value="ETH">ETH</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="autoConfirm">Auto-confirm transactions:</label>
+                    <select id="autoConfirm" required>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="notifications">Enable notifications:</label>
+                    <select id="notifications" required>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('settingsModal')">Cancel</button>
+                    <button type="submit" class="btn btn-success">Save Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Command execution
+        function executeCommand() {
+            const input = document.getElementById('commandInput').value.trim();
+            const output = document.getElementById('commandOutput');
+            
+            if (!input) {
+                output.textContent = 'Please enter a command.';
+                return;
+            }
+
+            const command = input.toLowerCase();
+            let result = '';
+
+            if (command === 'eiou info') {
+                result = `Wallet Information:
+==================
+Address: 123address.tor
+Public Key: 0x1234567890abcdef...
+Status: Active
+
+Balance Summary:
+Total Balance: $1,250.00 USD
+
+Individual Balances:
+- Alice: +$500.00 USD
+- Bob: -$250.00 USD
+- Charlie: +$1,000.00 USD`;
+            } else if (command.startsWith('eiou add')) {
+                const parts = input.split(' ');
+                if (parts.length >= 6) {
+                    result = `Contact added successfully!
+Address: ${parts[2]}
+Name: ${parts[3]}
+Fee: ${parts[4]}%
+Credit: ${parts[5]} ${parts[6]}
+
+Contact request sent. Waiting for acceptance...`;
+                } else {
+                    result = `Error: Invalid command format.
+Usage: eiou add [address] [name] [fee] [credit] [currency]
+Example: eiou add 123address.tor Alice 0.1 10 USD`;
+                }
+            } else if (command.startsWith('eiou viewcontact')) {
+                const name = input.split(' ')[2];
+                if (name) {
+                    result = `Contact Details for ${name}:
+===============================
+Name: ${name}
+Address: ${name === 'Alice' ? '123address.tor' : name === 'Bob' ? '456address.tor' : '789address.tor'}
+Fee: ${name === 'Alice' ? '0.1%' : name === 'Bob' ? '0.2%' : '0.15%'}
+Credit Limit: ${name === 'Alice' ? '10 USD' : name === 'Bob' ? '20 USD' : '50 USD'}
+Current Balance: ${name === 'Alice' ? '+$500.00 USD' : name === 'Bob' ? '-$250.00 USD' : '+$1,000.00 USD'}
+Status: Active`;
+                } else {
+                    result = `Error: Please specify a contact name.
+Usage: eiou viewcontact [name]
+Example: eiou viewcontact Alice`;
+                }
+            } else if (command.startsWith('eiou send')) {
+                const parts = input.split(' ');
+                if (parts.length >= 4) {
+                    const recipient = parts[2];
+                    const amount = parts[3];
+                    const currency = parts[4] || 'USD';
+                    result = `Transaction initiated!
+Sending: ${amount} ${currency}
+To: ${recipient}
+Status: Processing...
+
+Transaction completed successfully!
+New balance: $1,150.00 USD`;
+                } else {
+                    result = `Error: Invalid command format.
+Usage: eiou send [name/address] [amount] [currency]
+Example: eiou send Alice 100 USD`;
+                }
+            } else if (command === 'eiou viewbalances') {
+                result = `Current Balances:
+==================
+Total Balance: $1,250.00 USD
+
+Individual Balances:
+- Alice: +$500.00 USD
+- Bob: -$250.00 USD
+- Charlie: +$1,000.00 USD
+
+Outstanding eIOUs:
+- Owed to Bob: $250.00 USD
+- Owed by Alice: $500.00 USD
+- Owed by Charlie: $1,000.00 USD`;
+            } else if (command === 'eiou history') {
+                result = `Transaction History:
+====================
+2025-01-15 14:30:15 | SENT | Alice | 100.00 USD
+2025-01-14 09:15:22 | RECEIVED | Charlie | 1,000.00 USD
+2025-01-13 16:45:33 | SENT | Bob | 250.00 USD
+2025-01-12 11:20:45 | RECEIVED | Alice | 600.00 USD
+2025-01-11 08:30:12 | SENT | Charlie | 50.00 USD
+2025-01-10 15:45:28 | RECEIVED | Bob | 300.00 USD`;
+            } else if (command === 'eiou help') {
+                result = `Available Commands:
+===================
+Contacts:
+- eiou info - View wallet information
+- eiou add [address] [name] [fee] [credit] [currency] - Add new contact
+- eiou viewcontact [name] - View contact details
+- eiou update [address] [field] [value] - Update contact info
+- eiou delete [address] - Remove contact
+- eiou search [name] - Search contacts
+
+Transactions:
+- eiou send [name/address] [amount] [currency] - Send eIOU
+- eiou viewbalances - Check balances
+- eiou history - View transaction history
+
+Settings:
+- eiou help - Show this help
+- eiou viewsettings - View settings
+- eiou changesettings - Update settings
+- eiou generate [address] - Generate wallet`;
+            } else {
+                result = `Unknown command: ${input}
+Type 'eiou help' for available commands.`;
+            }
+
+            output.textContent = result;
+        }
+
+        // Modal functions
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+            // Focus first input if it exists
+            const firstInput = document.querySelector(`#${modalId} input`);
+            if (firstInput) {
+                firstInput.focus();
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            // Reset form if it exists
+            const form = document.querySelector(`#${modalId} form`);
+            if (form) {
+                form.reset();
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        }
+
+        // Form submissions
+        document.getElementById('addContactForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const address = document.getElementById('contactAddress').value;
+            const name = document.getElementById('contactName').value;
+            const fee = document.getElementById('contactFee').value;
+            const credit = document.getElementById('contactCredit').value;
+            const currency = document.getElementById('contactCurrency').value;
+            
+            // Simulate adding contact
+            const command = `eiou add ${address} ${name} ${fee} ${credit} ${currency}`;
+            document.getElementById('commandInput').value = command;
+            executeCommand();
+            
+            closeModal('addContactModal');
+        });
+
+        document.getElementById('sendForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const recipient = document.getElementById('sendRecipient').value;
+            const amount = document.getElementById('sendAmount').value;
+            const currency = document.getElementById('sendCurrency').value;
+            
+            // Simulate sending eIOU
+            const command = `eiou send ${recipient} ${amount} ${currency}`;
+            document.getElementById('commandInput').value = command;
+            executeCommand();
+            
+            closeModal('sendModal');
+        });
+
+        document.getElementById('settingsForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const defaultCurrency = document.getElementById('defaultCurrency').value;
+            const autoConfirm = document.getElementById('autoConfirm').value;
+            const notifications = document.getElementById('notifications').value;
+            
+            // Show success message
+            const output = document.getElementById('commandOutput');
+            output.textContent = `Settings updated successfully!
+Default Currency: ${defaultCurrency}
+Auto-confirm: ${autoConfirm}
+Notifications: ${notifications}`;
+            
+            closeModal('settingsModal');
+        });
+
+        // Quick actions
+        function quickAction(action) {
+            const input = document.getElementById('commandInput');
+            const output = document.getElementById('commandOutput');
+            
+            switch(action) {
+                case 'info':
+                    input.value = 'eiou info';
+                    break;
+                case 'history':
+                    input.value = 'eiou history';
+                    break;
+            }
+            
+            executeCommand();
+        }
+
+        // Handle Enter key in command input
+        document.getElementById('commandInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                executeCommand();
+            }
+        });
+
+        // View contact function
+        function viewContact(name) {
+            const contactDetails = document.getElementById('contactDetails');
+            let details = '';
+            
+            switch(name) {
+                case 'Alice':
+                    details = `
+                        <div class="info-item">
+                            <div class="info-label">Name:</div>
+                            <div>Alice</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Address:</div>
+                            <div>123address.tor</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Fee:</div>
+                            <div>0.1%</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Credit Limit:</div>
+                            <div>10 USD</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Current Balance:</div>
+                            <div style="color: #28a745;">+$500.00 USD</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Status:</div>
+                            <div style="color: #28a745;">Active</div>
+                        </div>
+                    `;
+                    break;
+                case 'Bob':
+                    details = `
+                        <div class="info-item">
+                            <div class="info-label">Name:</div>
+                            <div>Bob</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Address:</div>
+                            <div>456address.tor</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Fee:</div>
+                            <div>0.2%</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Credit Limit:</div>
+                            <div>20 USD</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Current Balance:</div>
+                            <div style="color: #dc3545;">-$250.00 USD</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Status:</div>
+                            <div style="color: #28a745;">Active</div>
+                        </div>
+                    `;
+                    break;
+                case 'Charlie':
+                    details = `
+                        <div class="info-item">
+                            <div class="info-label">Name:</div>
+                            <div>Charlie</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Address:</div>
+                            <div>789address.tor</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Fee:</div>
+                            <div>0.15%</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Credit Limit:</div>
+                            <div>50 USD</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Current Balance:</div>
+                            <div style="color: #28a745;">+$1,000.00 USD</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Status:</div>
+                            <div style="color: #28a745;">Active</div>
+                        </div>
+                    `;
+                    break;
+            }
+            
+            contactDetails.innerHTML = details;
+            openModal('viewContactModal');
+        }
+
+        // Auto-focus command input
+        document.getElementById('commandInput').focus();
+    </script>
+</body>
+</html> 
