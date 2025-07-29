@@ -31,16 +31,6 @@ checkWalletExists($user, $request);
     output("Executing add contact request", 'SILENT');
     addContact($argv);
   }
-  elseif($request === "block"){
-    // Block Contact
-    output("Executing block contact request", 'SILENT');
-    blockContact($argv);
-  }
-  elseif($request === "unblock"){
-    // Unblock Contact
-    output("Executing unblock contact request", 'SILENT');
-    unblockContact($argv);
-  }
   elseif($request === "viewcontact"){
     // View Contact
     output("Executing read contact request", 'SILENT');
@@ -50,6 +40,16 @@ checkWalletExists($user, $request);
     // Update Contact
     output("Executing update contact request", 'SILENT');
     updateContact($argv);
+  }
+  elseif($request === "block"){
+    // Block Contact
+    output("Executing block contact request", 'SILENT');
+    blockContact($argv);
+  }
+  elseif($request === "unblock"){
+    // Unblock Contact
+    output("Executing unblock contact request", 'SILENT');
+    unblockContact($argv);
   }
   elseif($request === "delete"){
     // Delete Contact
