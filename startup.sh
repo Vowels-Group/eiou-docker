@@ -22,17 +22,6 @@ if [ "$QUICKSTART" != "false" ]; then
     echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
     eiou generate http://$QUICKSTART
     echo "Generate command completed."
-    # Display all user info for quick access
-    http=$(php -r 'require("//etc//eiou//config.php"); if(isset($user["hostname"])){echo $user["hostname"];}')
-    tor=$(php -r 'require("//etc//eiou//config.php"); echo $user["torAddress"];')
-    pubkey=$(php -r 'require("//etc//eiou//config.php"); echo $user["public"];')
-    echo "User Information: "
-    if [[ ! -z ${http} ]]; then
-        echo -e "\t HTTP address: $http"
-    fi
-    echo -e "\t Tor address: $tor"
-    readable="${pubkey//$'\n'/$'\n\t\t'}"
-    echo -e "\t Public Key: \n\t\t $readable"
 fi
 
 # Check if all precursors to messages.php are available and working
