@@ -1,3 +1,148 @@
+<?php
+# Copyright 2025
+
+// This file accepts incoming messages from the eIOU network
+require_once("/etc/eiou/functions.php");
+if (!file_exists("/etc/eiou/config.php")) {
+  echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
+  die;
+}
+require_once("/etc/eiou/config.php");
+
+// Check if auth code is provided
+$authCode = $_GET['authcode'] ?? $_POST['authcode'] ?? '';
+
+// If no auth code provided, show authentication form
+if (empty($authCode)) {
+    // Set content type for HTML
+    header('Content-Type: text/html; charset=UTF-8');
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eIOU Wallet - Authentication</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 3rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .auth-container h1 {
+            color: #667eea;
+            margin-bottom: 1.5rem;
+            font-size: 2rem;
+        }
+
+        .auth-container p {
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .auth-input {
+            padding: 1rem;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        .auth-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .auth-button {
+            padding: 1rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: background 0.3s ease;
+        }
+
+        .auth-button:hover {
+            background: #5a6fd8;
+        }
+
+        .error-message {
+            color: #dc3545;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <h1><i class="fas fa-wallet"></i> eIOU Wallet</h1>
+        <p>Please enter your authentication code to access your wallet</p>
+        
+        <form class="auth-form" method="POST">
+            <input type="password" name="authcode" class="auth-input" placeholder="Enter auth code" required autocomplete="off">
+            <button type="submit" class="auth-button">
+                <i class="fas fa-unlock"></i> Access Wallet
+            </button>
+        </form>
+        
+        <?php if (isset($_POST['authcode']) && !empty($_POST['authcode'])): ?>
+            <div class="error-message">
+                Invalid authentication code. Please try again.
+            </div>
+        <?php endif; ?>
+    </div>
+</body>
+</html>
+<?php
+    exit;
+}
+
+// Verify auth code
+if (!isset($user['authcode']) || !hash_equals($user['authcode'], $authCode)) {
+    // Redirect back to auth form with error
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?error=invalid');
+    exit;
+}
+
+// If we get here, authentication is successful
+// Set content type for HTML
+header('Content-Type: text/html; charset=UTF-8');
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,12 +179,29 @@
             border-radius: 15px;
             margin-bottom: 2rem;
             box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .header h1 {
             color: #667eea;
-            text-align: center;
             font-size: 2rem;
+        }
+
+        .logout-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: #c82333;
         }
 
         /* Wallet Dashboard */
@@ -450,6 +612,9 @@
         <!-- Header -->
         <div class="header fade-in-up">
             <h1><i class="fas fa-wallet"></i> eIOU Wallet</h1>
+            <button class="logout-btn" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
         </div>
 
         <!-- Wallet Dashboard -->
@@ -465,11 +630,11 @@
 
                 <div class="info-item">
                     <div class="info-label">Address:</div>
-                    <div>1234567890address.tor</div>
+                    <div><?php echo isset($user['torAddress']) ? $user['torAddress'] : 'Not available'; ?></div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Public Key:</div>
-                    <div>0x1234567890abcdef...</div>
+                    <div><?php echo isset($user['public']) ? substr($user['public'], 0, 20) . '...' : 'Not available'; ?></div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Status:</div>
@@ -733,6 +898,14 @@ Available commands:
     </div>
 
     <script>
+        // Store auth code for API calls
+        const authCode = '<?php echo $authCode; ?>';
+        
+        // Logout function
+        function logout() {
+            window.location.href = window.location.pathname;
+        }
+
         // Command execution
         function executeCommand() {
             const input = document.getElementById('commandInput').value.trim();
@@ -749,17 +922,12 @@ Available commands:
             if (command === 'eiou info') {
                 result = `Wallet Information:
 ==================
-Address: 123address.tor
-Public Key: 0x1234567890abcdef...
+Address: <?php echo isset($user['torAddress']) ? $user['torAddress'] : 'Not available'; ?>
+Public Key: <?php echo isset($user['public']) ? substr($user['public'], 0, 20) . '...' : 'Not available'; ?>
 Status: Active
 
 Balance Summary:
-Total Balance: $1,250.00 USD
-
-Individual Balances:
-- Alice: +$500.00 USD
-- Bob: -$250.00 USD
-- Charlie: +$1,000.00 USD`;
+Total Balance: $1,250.00 USD`;
             } else if (command.startsWith('eiou add')) {
                 const parts = input.split(' ');
                 if (parts.length >= 6) {
@@ -1060,4 +1228,6 @@ Notifications: ${notifications}`;
         // Command input is ready for use
     </script>
 </body>
-</html> 
+</html>
+<?php
+?> 
