@@ -21,16 +21,19 @@ function generateWallet($argv) {
   $keyDetails = openssl_pkey_get_details($res);
   $publicKey = $keyDetails['key'];
 
+  // Generate random authentication  code of length 20 
+  $authCode = bin2hex(random_bytes(10));
+
   // Save the keys to config.php
-  file_put_contents('/etc/eiou/config.php', "\n" . '$user["public"]="' . addslashes($publicKey) . '";' . "\n" . '$user["private"]="' . addslashes($privateKey) . '";' . "\n", FILE_APPEND | LOCK_EX);
+  file_put_contents('/etc/eiou/config.php', "\n" . '$user["public"]="' . addslashes($publicKey) . '";' . "\n". '$user["private"]="' . addslashes($privateKey) . '";' . "\n" . '$user["authcode"]="' . addslashes($authCode) . '";' . "\n", FILE_APPEND | LOCK_EX);
 
   // Output Tor address
   $torAddress = trim(file_get_contents('/var/lib/tor/hidden_service/hostname'));
   
   // Check if torAddressOnly flag is set
   if (isset($argv[2]) && strtolower($argv[2]) === 'toraddressonly') {
-      echo $torAddress . "\n";
-      return;
+    echo $torAddress . "\n";
+    return;
   }
   // Else argv2 is the (http/s) hostname of the container
   elseif (isset($argv[2])) {
@@ -39,7 +42,6 @@ function generateWallet($argv) {
         $config_content = file_get_contents('/etc/eiou/config.php');
         $config_content .= "\n" . '$user["hostname"]="' . addslashes($argv[2]) . '";' . "\n";
         file_put_contents('/etc/eiou/config.php', $config_content, LOCK_EX);
-
         echo "Hostname saved: " . $argv[2] . "\n";
     } else {
         echo "Invalid hostname format. Please provide a valid URL.\n";
@@ -48,9 +50,10 @@ function generateWallet($argv) {
     return;
   }
   
-
+  // TO DO: Unreachable code, to use when not testing?
   echo "Public key: $publicKey\n";
   echo "Private key: $privateKey\n";
+  echo "Authentication Code: $authCode\n";
   echo "Tor Address: $torAddress\n";
   echo "Please save these keys securely, or write the name of a file to output to (leave blank for none): \n";
   $privateKeyFile = trim(fgets(STDIN));

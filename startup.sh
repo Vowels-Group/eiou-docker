@@ -33,6 +33,7 @@ while true; do
         http=$(php -r 'require("//etc//eiou//config.php"); if(isset($user["hostname"])){echo $user["hostname"];}')
         tor=$(php -r 'require("//etc//eiou//config.php"); echo $user["torAddress"];')
         pubkey=$(php -r 'require("//etc//eiou//config.php"); echo $user["public"];')
+        authcode=$(php -r 'require("//etc//eiou//config.php"); echo $user["authcode"];')
         echo "User Information: "
         if [[ ! -z ${http} ]]; then
             echo -e "\t HTTP address: $http"
@@ -40,6 +41,7 @@ while true; do
         echo -e "\t Tor address: $tor"
         readable="${pubkey//$'\n'/$'\n\t\t'}"
         echo -e "\t Public Key: \n\t\t $readable"
+        echo -e "\t Authentication Code: $authcode"
         break
     else
         if [ $first ]; then
