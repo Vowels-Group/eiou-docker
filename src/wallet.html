@@ -139,6 +139,144 @@ if (!isset($user['authcode']) || !hash_equals($user['authcode'], $authCode)) {
     exit;
 }
 
+// Create PDO connection
+$pdo = createPDOConnection();
+
+// Helper function to get user's total balance
+function getUserTotalBalance() {
+    global $pdo, $user;
+    
+    try {
+        $totalReceived = calculateTotalReceivedUser();
+        $totalSent = calculateTotalSentUser();
+        $balance = ($totalReceived - $totalSent) / 100; // Convert from cents
+        return number_format($balance, 2);
+    } catch (Exception $e) {
+        return "0.00";
+    }
+}
+
+// Helper function to get contacts with balances
+function getContactsWithBalances() {
+    global $pdo, $user;
+    
+    try {
+        // Get all accepted contacts
+        $stmt = $pdo->prepare("SELECT address, name, pubkey, fee_percent, credit_limit, currency FROM contacts WHERE status = 'accepted'");
+        $stmt->execute();
+        $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $contactsWithBalances = [];
+        foreach ($contacts as $contact) {
+            // Calculate balance for this contact
+            $balance = getContactBalance($user['public'], $contact['pubkey']);
+            
+            $contactsWithBalances[] = [
+                'name' => $contact['name'],
+                'address' => $contact['address'],
+                'balance' => $balance / 100, // Convert from cents
+                'fee' => $contact['fee_percent'] / 100, // Convert from cents
+                'currency' => $contact['currency']
+            ];
+        }
+        
+        return $contactsWithBalances;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Helper function to get contact balance
+function getContactBalance($userPubkey, $contactPubkey) {
+    global $pdo;
+    
+    try {
+        // Calculate sent to this contact
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as sent FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?");
+        $stmt->execute([hash('sha256', $userPubkey), hash('sha256', $contactPubkey)]);
+        $sent = $stmt->fetch()['sent'];
+        
+        // Calculate received from this contact
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as received FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?");
+        $stmt->execute([hash('sha256', $contactPubkey), hash('sha256', $userPubkey)]);
+        $received = $stmt->fetch()['received'];
+        
+        return $received - $sent;
+    } catch (Exception $e) {
+        return 0;
+    }
+}
+
+// Helper function to get transaction history
+function getTransactionHistory($limit = 10) {
+    global $pdo, $user;
+    
+    try {
+        $userAddresses = [];
+        if (isset($user['hostname'])) {
+            $userAddresses[] = $user['hostname'];
+        }
+        if (isset($user['torAddress'])) {
+            $userAddresses[] = $user['torAddress'];
+        }
+        
+        if (empty($userAddresses)) {
+            return [];
+        }
+        
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions 
+                  WHERE sender_address IN ($placeholders) OR receiver_address IN ($placeholders) 
+                  ORDER BY timestamp DESC LIMIT ?";
+        
+        $params = array_merge($userAddresses, $userAddresses, [$limit]);
+        $stmt = $pdo->prepare($query);
+        $stmt->execute($params);
+        
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $formattedTransactions = [];
+        
+        foreach ($transactions as $tx) {
+            $isSent = in_array($tx['sender_address'], $userAddresses);
+            $counterpartyAddress = $isSent ? $tx['receiver_address'] : $tx['sender_address'];
+            
+            // Get contact name for counterparty
+            $contactName = getContactNameByAddress($counterpartyAddress);
+            
+            $formattedTransactions[] = [
+                'date' => $tx['timestamp'],
+                'type' => $isSent ? 'sent' : 'received',
+                'amount' => $tx['amount'] / 100, // Convert from cents
+                'currency' => $tx['currency'],
+                'counterparty' => $contactName ?: $counterpartyAddress
+            ];
+        }
+        
+        return $formattedTransactions;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Helper function to get contact name by address
+function getContactNameByAddress($address) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("SELECT name FROM contacts WHERE address = ?");
+        $stmt->execute([$address]);
+        $result = $stmt->fetch();
+        return $result ? $result['name'] : null;
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
+// Get actual data
+$totalBalance = getUserTotalBalance();
+$contacts = getContactsWithBalances();
+$transactions = getTransactionHistory(10);
+
 // If we get here, authentication is successful
 // Set content type for HTML
 header('Content-Type: text/html; charset=UTF-8');
@@ -374,6 +512,12 @@ header('Content-Type: text/html; charset=UTF-8');
             padding: 1rem;
             border-radius: 10px;
             border-left: 4px solid #667eea;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .contact-card:hover {
+            transform: translateY(-2px);
         }
 
         .contact-name {
@@ -385,6 +529,14 @@ header('Content-Type: text/html; charset=UTF-8');
         .contact-details {
             font-size: 0.9rem;
             color: #666;
+        }
+
+        .balance-positive {
+            color: #28a745;
+        }
+
+        .balance-negative {
+            color: #dc3545;
         }
 
         /* Transaction History */
@@ -605,6 +757,19 @@ header('Content-Type: text/html; charset=UTF-8');
         .add-contact-btn:hover {
             background: #218838;
         }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            color: #dee2e6;
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -624,7 +789,7 @@ header('Content-Type: text/html; charset=UTF-8');
                 <h2><i class="fas fa-info-circle"></i> Wallet Information</h2>
                 
                 <div class="balance-display">
-                    <div class="balance-amount">$1,250.00</div>
+                    <div class="balance-amount">$<?php echo $totalBalance; ?></div>
                     <div class="balance-currency">Total Balance</div>
                 </div>
 
@@ -681,30 +846,26 @@ header('Content-Type: text/html; charset=UTF-8');
                 </button>
             </div>
             <div class="contacts-grid" id="contactsGrid">
-                <div class="contact-card" onclick="viewContact('Alice')">
-                    <div class="contact-name">Alice</div>
-                    <div class="contact-details">
-                        Address: 123address.tor<br>
-                        Balance: +$500.00<br>
-                        Fee: 0.1%
+                <?php if (empty($contacts)): ?>
+                    <div class="empty-state">
+                        <i class="fas fa-users"></i>
+                        <h3>No Contacts Yet</h3>
+                        <p>Add your first contact to start using eIOU</p>
                     </div>
-                </div>
-                <div class="contact-card" onclick="viewContact('Bob')">
-                    <div class="contact-name">Bob</div>
-                    <div class="contact-details">
-                        Address: 456address.tor<br>
-                        Balance: -$250.00<br>
-                        Fee: 0.2%
-                    </div>
-                </div>
-                <div class="contact-card" onclick="viewContact('Charlie')">
-                    <div class="contact-name">Charlie</div>
-                    <div class="contact-details">
-                        Address: 789address.tor<br>
-                        Balance: +$1,000.00<br>
-                        Fee: 0.15%
-                    </div>
-                </div>
+                <?php else: ?>
+                    <?php foreach ($contacts as $contact): ?>
+                        <div class="contact-card" onclick="viewContact('<?php echo htmlspecialchars($contact['name']); ?>')">
+                            <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
+                            <div class="contact-details">
+                                Address: <?php echo htmlspecialchars($contact['address']); ?><br>
+                                Balance: <span class="<?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>">
+                                    <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?>
+                                </span><br>
+                                Fee: <?php echo number_format($contact['fee'], 2); ?>%
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -712,27 +873,25 @@ header('Content-Type: text/html; charset=UTF-8');
         <div class="transactions-section fade-in-up">
             <h2><i class="fas fa-history"></i> Recent Transactions</h2>
             <div id="transactionsList">
-                <div class="transaction-item">
-                    <div class="transaction-info">
-                        <div><strong>Sent to Alice</strong></div>
-                        <div style="font-size: 0.9rem; color: #666;">2025-01-15 14:30:15</div>
+                <?php if (empty($transactions)): ?>
+                    <div class="empty-state">
+                        <i class="fas fa-receipt"></i>
+                        <h3>No Transactions Yet</h3>
+                        <p>Your transaction history will appear here</p>
                     </div>
-                    <div class="transaction-amount transaction-sent">-$100.00</div>
-                </div>
-                <div class="transaction-item">
-                    <div class="transaction-info">
-                        <div><strong>Received from Charlie</strong></div>
-                        <div style="font-size: 0.9rem; color: #666;">2025-01-14 09:15:22</div>
-                    </div>
-                    <div class="transaction-amount transaction-received">+$1,000.00</div>
-                </div>
-                <div class="transaction-item">
-                    <div class="transaction-info">
-                        <div><strong>Sent to Bob</strong></div>
-                        <div style="font-size: 0.9rem; color: #666;">2025-01-13 16:45:33</div>
-                    </div>
-                    <div class="transaction-amount transaction-sent">-$250.00</div>
-                </div>
+                <?php else: ?>
+                    <?php foreach ($transactions as $tx): ?>
+                        <div class="transaction-item">
+                            <div class="transaction-info">
+                                <div><strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars($tx['counterparty']); ?></strong></div>
+                                <div style="font-size: 0.9rem; color: #666;"><?php echo $tx['date']; ?></div>
+                            </div>
+                            <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
+                                <?php echo ($tx['type'] === 'sent' ? '-' : '+') . '$' . number_format($tx['amount'], 2); ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -814,9 +973,9 @@ Available commands:
                     <label for="sendRecipient">Recipient:</label>
                     <select id="sendRecipient" required>
                         <option value="">Select recipient</option>
-                        <option value="Alice">Alice</option>
-                        <option value="Bob">Bob</option>
-                        <option value="Charlie">Charlie</option>
+                        <?php foreach ($contacts as $contact): ?>
+                            <option value="<?php echo htmlspecialchars($contact['name']); ?>"><?php echo htmlspecialchars($contact['name']); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
@@ -901,6 +1060,10 @@ Available commands:
         // Store auth code for API calls
         const authCode = '<?php echo $authCode; ?>';
         
+        // Store contact data for JavaScript
+        const contacts = <?php echo json_encode($contacts); ?>;
+        const transactions = <?php echo json_encode($transactions); ?>;
+        
         // Logout function
         function logout() {
             window.location.href = window.location.pathname;
@@ -927,7 +1090,7 @@ Public Key: <?php echo isset($user['public']) ? substr($user['public'], 0, 20) .
 Status: Active
 
 Balance Summary:
-Total Balance: $1,250.00 USD`;
+Total Balance: $<?php echo $totalBalance; ?> USD`;
             } else if (command.startsWith('eiou add')) {
                 const parts = input.split(' ');
                 if (parts.length >= 6) {
@@ -946,14 +1109,19 @@ Example: eiou add 123address.tor Alice 0.1 10 USD`;
             } else if (command.startsWith('eiou viewcontact')) {
                 const name = input.split(' ')[2];
                 if (name) {
-                    result = `Contact Details for ${name}:
+                    const contact = contacts.find(c => c.name.toLowerCase() === name.toLowerCase());
+                    if (contact) {
+                        result = `Contact Details for ${name}:
 ===============================
-Name: ${name}
-Address: ${name === 'Alice' ? '123address.tor' : name === 'Bob' ? '456address.tor' : '789address.tor'}
-Fee: ${name === 'Alice' ? '0.1%' : name === 'Bob' ? '0.2%' : '0.15%'}
-Credit Limit: ${name === 'Alice' ? '10 USD' : name === 'Bob' ? '20 USD' : '50 USD'}
-Current Balance: ${name === 'Alice' ? '+$500.00 USD' : name === 'Bob' ? '-$250.00 USD' : '+$1,000.00 USD'}
+Name: ${contact.name}
+Address: ${contact.address}
+Fee: ${contact.fee}%
+Currency: ${contact.currency}
+Current Balance: ${contact.balance >= 0 ? '+' : ''}$${contact.balance.toFixed(2)} ${contact.currency}
 Status: Active`;
+                    } else {
+                        result = `Error: Contact '${name}' not found.`;
+                    }
                 } else {
                     result = `Error: Please specify a contact name.
 Usage: eiou viewcontact [name]
@@ -971,7 +1139,7 @@ To: ${recipient}
 Status: Processing...
 
 Transaction completed successfully!
-New balance: $1,150.00 USD`;
+New balance: $<?php echo number_format(floatval($totalBalance) - floatval($amount), 2); ?> USD`;
                 } else {
                     result = `Error: Invalid command format.
 Usage: eiou send [name/address] [amount] [currency]
@@ -980,26 +1148,27 @@ Example: eiou send Alice 100 USD`;
             } else if (command === 'eiou viewbalances') {
                 result = `Current Balances:
 ==================
-Total Balance: $1,250.00 USD
+Total Balance: $<?php echo $totalBalance; ?> USD
 
-Individual Balances:
-- Alice: +$500.00 USD
-- Bob: -$250.00 USD
-- Charlie: +$1,000.00 USD
-
-Outstanding eIOUs:
-- Owed to Bob: $250.00 USD
-- Owed by Alice: $500.00 USD
-- Owed by Charlie: $1,000.00 USD`;
+Individual Balances:`;
+                
+                contacts.forEach(contact => {
+                    const sign = contact.balance >= 0 ? '+' : '';
+                    result += `\n- ${contact.name}: ${sign}$${contact.balance.toFixed(2)} ${contact.currency}`;
+                });
             } else if (command === 'eiou history') {
                 result = `Transaction History:
-====================
-2025-01-15 14:30:15 | SENT | Alice | 100.00 USD
-2025-01-14 09:15:22 | RECEIVED | Charlie | 1,000.00 USD
-2025-01-13 16:45:33 | SENT | Bob | 250.00 USD
-2025-01-12 11:20:45 | RECEIVED | Alice | 600.00 USD
-2025-01-11 08:30:12 | SENT | Charlie | 50.00 USD
-2025-01-10 15:45:28 | RECEIVED | Bob | 300.00 USD`;
+====================`;
+                
+                transactions.forEach(tx => {
+                    const type = tx.type.toUpperCase();
+                    const amount = tx.amount.toFixed(2);
+                    result += `\n${tx.date} | ${type} | ${tx.counterparty} | ${amount} ${tx.currency}`;
+                });
+                
+                if (transactions.length === 0) {
+                    result += `\nNo transactions found.`;
+                }
             } else if (command === 'eiou help') {
                 result = `Available Commands:
 ===================
@@ -1134,91 +1303,36 @@ Notifications: ${notifications}`;
             const contactDetails = document.getElementById('contactDetails');
             let details = '';
             
-            switch(name) {
-                case 'Alice':
-                    details = `
-                        <div class="info-item">
-                            <div class="info-label">Name:</div>
-                            <div>Alice</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Address:</div>
-                            <div>123address.tor</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Fee:</div>
-                            <div>0.1%</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Credit Limit:</div>
-                            <div>10 USD</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Current Balance:</div>
-                            <div style="color: #28a745;">+$500.00 USD</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Status:</div>
-                            <div style="color: #28a745;">Active</div>
-                        </div>
-                    `;
-                    break;
-                case 'Bob':
-                    details = `
-                        <div class="info-item">
-                            <div class="info-label">Name:</div>
-                            <div>Bob</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Address:</div>
-                            <div>456address.tor</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Fee:</div>
-                            <div>0.2%</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Credit Limit:</div>
-                            <div>20 USD</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Current Balance:</div>
-                            <div style="color: #dc3545;">-$250.00 USD</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Status:</div>
-                            <div style="color: #28a745;">Active</div>
-                        </div>
-                    `;
-                    break;
-                case 'Charlie':
-                    details = `
-                        <div class="info-item">
-                            <div class="info-label">Name:</div>
-                            <div>Charlie</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Address:</div>
-                            <div>789address.tor</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Fee:</div>
-                            <div>0.15%</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Credit Limit:</div>
-                            <div>50 USD</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Current Balance:</div>
-                            <div style="color: #28a745;">+$1,000.00 USD</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Status:</div>
-                            <div style="color: #28a745;">Active</div>
-                        </div>
-                    `;
-                    break;
+            const contact = contacts.find(c => c.name.toLowerCase() === name.toLowerCase());
+            if (contact) {
+                details = `
+                    <div class="info-item">
+                        <div class="info-label">Name:</div>
+                        <div>${contact.name}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Address:</div>
+                        <div>${contact.address}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Fee:</div>
+                        <div>${contact.fee}%</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Credit Limit:</div>
+                        <div>${contact.credit} ${contact.currency}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Current Balance:</div>
+                        <div style="color: ${contact.balance >= 0 ? '#28a745' : '#dc3545'}">${contact.balance >= 0 ? '+' : ''}$${contact.balance.toFixed(2)} ${contact.currency}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Status:</div>
+                        <div style="color: #28a745;">Active</div>
+                    </div>
+                `;
+            } else {
+                details = `Contact '${name}' not found.`;
             }
             
             contactDetails.innerHTML = details;
