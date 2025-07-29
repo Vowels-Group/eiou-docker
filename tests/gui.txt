@@ -1,0 +1,2 @@
+# This links C:\Users\adrie\OneDrive\Public\Documents\GitHub\eiou-org\src\wallet.html with /var/www/html/index.html
+docker run -d --name Bob --network eiou-network -v "C:\Users\adrie\OneDrive\Public\Documents\GitHub\eiou-org\src\wallet.html:/var/www/html/index.html" -e QUICKSTART=Bob eioud

@@ -34,8 +34,8 @@ RUN echo '#!/bin/bash\nphp /usr/local/bin/eiou.php "$@"' > /usr/local/bin/eiou &
     chmod +x /usr/local/bin/eiou
 
 # Copy wallet and index files to web directory
-COPY src/wallet.php /var/www/html/index.html
-COPY src/index.php /var/www/html/eiou/index.html
+COPY src/wallet.html /var/www/html/index.html
+COPY src/index.html /var/www/html/eiou/index.html
 RUN chown www-data:www-data /var/www/html/eiou -R
 RUN chmod 755 /var/www/html/eiou
 
