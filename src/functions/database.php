@@ -51,7 +51,12 @@ function addPendingContact($address, $senderPublicKey) {
 function blockContact($data) {
     global $pdo;
     // Block a contact
-    $address = $data[2];
+    $addressFromName = lookupContactAddressByName($data[2]);
+    if(isset($addressFromName)){
+        $address = $addressFromName;
+    } else{
+        $address = $data[2];
+    }
     $query = "UPDATE contacts SET status = 'blocked' WHERE address = :address";
     $stmt = $pdo->prepare($query);
     $stmt->bindParam(':address', $address);
@@ -371,7 +376,12 @@ function checkRp2pExists($hash) {
 function deleteContact($data) {
     global $pdo;
     // Delete a contact
-    $address = $data[2];
+    $addressFromName = lookupContactAddressByName($data[2]);
+    if(isset($addressFromName)){
+        $address = $addressFromName;
+    } else{
+        $address = $data[2];
+    }
     $query = "DELETE FROM contacts WHERE address = :address";
     $stmt = $pdo->prepare($query);
     $stmt->bindParam(':address', $address);
@@ -821,7 +831,7 @@ function lookupContactByAddress($address) {
 }
 
 function lookupContactAddressByName($name){
-     global $pdo;
+    global $pdo;
     // Lookup contact address based on name
     $nameStmt = $pdo->prepare("SELECT address FROM contacts WHERE LOWER(name) = LOWER(:name)");
     $nameStmt->bindParam(':name', $name);
@@ -952,7 +962,12 @@ function searchContactsQuery($name = null) {
 function unblockContact($data) {
     global $pdo;
     // Block a contact
-    $address = $data[2];
+    $addressFromName = lookupContactAddressByName($data[2]);
+    if(isset($addressFromName)){
+        $address = $addressFromName;
+    } else{
+        $address = $data[2];
+    }
     $query = "UPDATE contacts SET status = 'accepted' WHERE address = :address";
     $stmt = $pdo->prepare($query);
     $stmt->bindParam(':address', $address);
