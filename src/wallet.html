@@ -22,7 +22,7 @@ if (empty($authCode)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>eIOU Wallet - Authentication</title>
+    <title>₳ Wallet - Authentication</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -110,7 +110,7 @@ if (empty($authCode)) {
 </head>
 <body>
     <div class="auth-container">
-        <h1><i class="fas fa-wallet"></i> eIOU Wallet</h1>
+        <h1><i class="fas fa-wallet"></i> ₳ Wallet</h1>
         <p>Please enter your authentication code to access your wallet</p>
         
         <form class="auth-form" method="POST">
@@ -181,6 +181,22 @@ function getContactsWithBalances() {
         }
         
         return $contactsWithBalances;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Helper function to get pending contacts
+function getPendingContacts() {
+    global $pdo;
+    
+    try {
+        // Get all pending contact requests (where name IS NULL and status = 'pending')
+        $stmt = $pdo->prepare("SELECT address, pubkey, status FROM contacts WHERE name IS NULL AND status = 'pending'");
+        $stmt->execute();
+        $pendingContacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        return $pendingContacts;
     } catch (Exception $e) {
         return [];
     }
@@ -275,6 +291,7 @@ function getContactNameByAddress($address) {
 // Get actual data
 $totalBalance = getUserTotalBalance();
 $contacts = getContactsWithBalances();
+$pendingContacts = getPendingContacts();
 $transactions = getTransactionHistory(10);
 
 // If we get here, authentication is successful
@@ -436,7 +453,7 @@ function parseTransactionHistoryOutput($output) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>eIOU Wallet</title>
+    <title>₳ Wallet</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -710,6 +727,18 @@ function parseTransactionHistoryOutput($output) {
             animation: fadeInUp 0.6s ease-out;
         }
 
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid transparent;
+        }
+
+        .alert-info {
+            background-color: #e3f2fd;
+            border-color: #bbdefb;
+            color: #0277bd;
+        }
+
         /* Modal Styles */
         .modal {
             display: none;
@@ -920,11 +949,31 @@ function parseTransactionHistoryOutput($output) {
     <div class="container">
         <!-- Header -->
         <div class="header fade-in-up">
-            <h1><i class="fas fa-wallet"></i> eIOU Wallet</h1>
+            <h1><i class="fas fa-wallet"></i> ₳ Wallet</h1>
             <button class="logout-btn" onclick="logout()">
                 <i class="fas fa-sign-out-alt"></i> Logout
             </button>
         </div>
+
+        <!-- Pending Contact Requests Notification -->
+        <?php if (!empty($pendingContacts)): ?>
+        <div class="alert alert-info fade-in-up" style="margin-bottom: 2rem;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <i class="fas fa-user-clock" style="font-size: 1.5rem; color: #007bff;"></i>
+                <div style="flex: 1;">
+                    <h4 style="margin: 0; color: #007bff;">
+                        <?php echo count($pendingContacts); ?> Pending Contact Request<?php echo count($pendingContacts) > 1 ? 's' : ''; ?>
+                    </h4>
+                    <p style="margin: 0.5rem 0 0 0; color: #666;">
+                        You have contact requests waiting for your approval.
+                    </p>
+                </div>
+                <button class="btn btn-primary" onclick="showPendingContacts()" style="padding: 0.5rem 1rem;">
+                    <i class="fas fa-eye"></i> View Requests
+                </button>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Quick Actions - MOVED ABOVE WALLET INFO -->
         <div class="quick-actions">
@@ -1635,6 +1684,194 @@ ${data.message}`;
             showToast('Settings saved successfully!', 'success');
             closeModal('settingsModal');
         });
+
+        // Copy to clipboard functionality with Tor Browser compatibility
+        function copyToClipboard(text, label) {
+            // Try modern clipboard API first (may be blocked in Tor Browser)
+            if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(function() {
+                    showToast(`${label} copied to clipboard!`, 'success');
+                }).catch(function(err) {
+                    // If modern API fails, try fallback methods
+                    fallbackCopyToClipboard(text, label);
+                });
+            } else {
+                // Use fallback methods for Tor Browser and older browsers
+                fallbackCopyToClipboard(text, label);
+            }
+        }
+
+        // Enhanced fallback copy function for Tor Browser compatibility
+        function fallbackCopyToClipboard(text, label) {
+            // Try document.execCommand first
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            textArea.style.opacity = '0';
+            textArea.setAttribute('readonly', '');
+            document.body.appendChild(textArea);
+            
+            try {
+                textArea.focus();
+                textArea.select();
+                textArea.setSelectionRange(0, 99999); // For mobile devices
+                
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                if (successful) {
+                    showToast(`${label} copied to clipboard!`, 'success');
+                    return;
+                }
+            } catch (err) {
+                console.log('Copy command failed:', err);
+            }
+            
+            // If all automated methods fail, show manual copy modal
+            showManualCopyModal(text, label);
+        }
+
+        // Manual copy modal for when all automated methods fail (Tor Browser fallback)
+        function showManualCopyModal(text, label) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+            `;
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                background: white;
+                padding: 2rem;
+                border-radius: 8px;
+                max-width: 90%;
+                max-height: 80%;
+                overflow: auto;
+                text-align: center;
+            `;
+            
+            content.innerHTML = `
+                <h3>Manual Copy Required</h3>
+                <p>Please manually copy the ${label} below:</p>
+                <textarea readonly style="width: 100%; height: 100px; margin: 1rem 0; font-family: monospace; font-size: 12px;">${text}</textarea>
+                <div>
+                    <button onclick="this.parentElement.parentElement.parentElement.remove(); document.body.style.overflow=''" style="padding: 0.5rem 1rem; margin: 0.5rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+                </div>
+            `;
+            
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+            document.body.style.overflow = 'hidden';
+            
+            // Auto-select the text in the textarea
+            const textarea = content.querySelector('textarea');
+            textarea.focus();
+            textarea.select();
+            
+            showToast(`Please manually copy the ${label} from the popup`, 'info');
+        }
+
+        // Share data functionality with Tor Browser compatibility
+        function shareData(text, label) {
+            // In Tor Browser, Web Share API is likely disabled for privacy
+            // So we'll primarily rely on copy functionality with a message
+            if (navigator.share && !navigator.userAgent.includes('Tor')) {
+                navigator.share({
+                    title: `eIOU ${label}`,
+                    text: text
+                }).then(() => {
+                    showToast(`${label} shared successfully!`, 'success');
+                }).catch((error) => {
+                    // If share fails, fall back to copy
+                    if (error.name !== 'AbortError') {
+                        copyToClipboard(text, label);
+                        showToast('Share failed, copied to clipboard instead', 'info');
+                    }
+                });
+            } else {
+                // For Tor Browser and browsers without Web Share API, copy to clipboard
+                copyToClipboard(text, label);
+                showToast(`${label} ready to share - copied to clipboard`, 'info');
+            }
+        }
+
+        // Show pending contacts modal
+        function showPendingContacts() {
+            const pendingContacts = <?php echo json_encode($pendingContacts); ?>;
+            
+            if (pendingContacts.length === 0) {
+                showToast('No pending contact requests', 'info');
+                return;
+            }
+            
+            let contactsHtml = '<h3><i class="fas fa-user-clock"></i> Pending Contact Requests</h3>';
+            contactsHtml += '<div style="margin-bottom: 1rem;">';
+            contactsHtml += '<p style="color: #666;">The following contacts have requested to connect with you:</p>';
+            contactsHtml += '</div>';
+            
+            pendingContacts.forEach((contact, index) => {
+                contactsHtml += `
+                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid #007bff;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <strong style="color: #007bff;">Contact Request #${index + 1}</strong>
+                            <span style="background: #ffc107; color: #333; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending</span>
+                        </div>
+                        <div style="margin-bottom: 0.5rem;">
+                            <div class="info-label">Address:</div>
+                            <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px;">
+                                ${contact.address}
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <div class="info-label">Public Key:</div>
+                            <div style="font-family: monospace; font-size: 0.8rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px; max-height: 100px; overflow-y: auto;">
+                                ${contact.pubkey}
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="btn btn-sm btn-outline" onclick="copyToClipboard('${contact.address}', 'contact address')" title="Copy address">
+                                <i class="fas fa-copy"></i> Copy Address
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="copyToClipboard('${contact.pubkey}', 'public key')" title="Copy public key">
+                                <i class="fas fa-copy"></i> Copy Key
+                            </button>
+                        </div>
+                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
+                            <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">
+                                <i class="fas fa-info-circle"></i> To accept this contact request, use the command line:
+                            </p>
+                            <code style="background: #343a40; color: #fff; padding: 0.5rem; border-radius: 4px; display: block; font-size: 0.8rem; word-break: break-all;">
+                                eiou add ${contact.address} [name] [fee_percent] [credit_limit] [currency]
+                            </code>
+                            <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">
+                                Example: <code style="background: #e9ecef; padding: 0.2rem 0.4rem; border-radius: 3px;">eiou add ${contact.address} Alice 0.1 100 USD</code>
+                            </p>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            contactsHtml += `
+                <div style="text-align: center; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
+                    <p style="color: #666; font-size: 0.9rem;">
+                        <i class="fas fa-lightbulb"></i> Once you accept a contact via command line, they will appear in your contacts list and you can send/receive eIOUs.
+                    </p>
+                </div>
+            `;
+            
+            document.getElementById('contactDetails').innerHTML = contactsHtml;
+            openModal('viewContactModal');
+        }
     </script>
 </body>
 </html>
