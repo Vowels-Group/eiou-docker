@@ -280,6 +280,156 @@ $transactions = getTransactionHistory(10);
 // If we get here, authentication is successful
 // Set content type for HTML
 header('Content-Type: text/html; charset=UTF-8');
+
+// Add this after the existing PHP code, before the HTML starts
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'addContact') {
+    // Verify auth code
+    if (!isset($user['authcode']) || !hash_equals($user['authcode'], $_POST['authcode'])) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        exit;
+    }
+    
+    // Validate required fields
+    $address = $_POST['address'] ?? '';
+    $name = $_POST['name'] ?? '';
+    $fee = $_POST['fee'] ?? '';
+    $credit = $_POST['credit'] ?? '';
+    $currency = $_POST['currency'] ?? '';
+    
+    if (empty($address) || empty($name) || empty($fee) || empty($credit) || empty($currency)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'All fields are required']);
+        exit;
+    }
+    
+    // Create argv array for addContact function
+    $argv = ['add', 'contact', $address, $name, $fee, $credit, $currency];
+    
+    // Capture output to return to frontend
+    ob_start();
+    
+    try {
+        addContact($argv);
+        $output = ob_get_clean();
+        
+        // Check if the output contains error indicators
+        if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
+            http_response_code(400);
+            echo json_encode(['error' => trim($output)]);
+        } else {
+            echo json_encode(['success' => true, 'message' => trim($output)]);
+        }
+    } catch (Exception $e) {
+        ob_end_clean();
+        http_response_code(500);
+        echo json_encode(['error' => 'Internal server error: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
+// Add transaction history API endpoint
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'getTransactionHistory') {
+    // Verify auth code
+    if (!isset($user['authcode']) || !hash_equals($user['authcode'], $_POST['authcode'])) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        exit;
+    }
+    
+    // Get parameters
+    $address = $_POST['address'] ?? null;
+    $limit = $_POST['limit'] ?? 10;
+    
+    // Create argv array for viewTransactionHistory function
+    $argv = ['history'];
+    if ($address) {
+        $argv[] = $address;
+    }
+    if ($limit && $limit !== '10') {
+        $argv[] = $limit;
+    }
+    
+    // Capture output to return to frontend
+    ob_start();
+    
+    try {
+        viewTransactionHistory($argv);
+        $output = ob_get_clean();
+        
+        // Parse the output to extract transaction data
+        $transactions = parseTransactionHistoryOutput($output);
+        
+        echo json_encode(['success' => true, 'transactions' => $transactions, 'raw_output' => $output]);
+    } catch (Exception $e) {
+        ob_end_clean();
+        http_response_code(500);
+        echo json_encode(['error' => 'Internal server error: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
+// Helper function to parse transaction history output
+function parseTransactionHistoryOutput($output) {
+    global $user;
+    $lines = explode("\n", $output);
+    $transactions = [];
+    $inTable = false;
+    
+    foreach ($lines as $line) {
+        $line = trim($line);
+        
+        // Skip header lines and empty lines
+        if (empty($line) || strpos($line, 'Transaction History:') !== false || 
+            strpos($line, '----') !== false || strpos($line, 'Sender name') !== false ||
+            strpos($line, 'Displaying') !== false) {
+            continue;
+        }
+        
+        // Check if we're in the table section
+        if (strpos($line, '|') !== false) {
+            $inTable = true;
+            
+            // Parse table row
+            $parts = array_map('trim', explode('|', $line));
+            if (count($parts) >= 5) {
+                // Extract sender info
+                $senderPart = $parts[0];
+                $senderName = trim(substr($senderPart, 0, strpos($senderPart, '(')));
+                $senderAddress = trim(substr($senderPart, strpos($senderPart, '(') + 1, strpos($senderPart, ')') - strpos($senderPart, '(') - 1));
+                
+                // Extract receiver info
+                $receiverPart = $parts[1];
+                $receiverName = trim(substr($receiverPart, 0, strpos($receiverPart, '(')));
+                $receiverAddress = trim(substr($receiverPart, strpos($receiverPart, '(') + 1, strpos($receiverPart, ')') - strpos($receiverPart, '(') - 1));
+                
+                // Extract amount and currency
+                $amount = floatval(trim($parts[2]));
+                $currency = trim($parts[3]);
+                $timestamp = trim($parts[4]);
+                
+                // Determine transaction type (sent or received)
+                $isSent = ($senderName === 'me' || $senderAddress === $user['torAddress'] || $senderAddress === $user['hostname']);
+                $counterparty = $isSent ? $receiverName : $senderName;
+                
+                $transactions[] = [
+                    'date' => $timestamp,
+                    'type' => $isSent ? 'sent' : 'received',
+                    'amount' => $amount,
+                    'currency' => $currency,
+                    'counterparty' => $counterparty,
+                    'sender_address' => $senderAddress,
+                    'receiver_address' => $receiverAddress
+                ];
+            }
+        } else if ($inTable) {
+            // We've reached the end of the table
+            break;
+        }
+    }
+    
+    return $transactions;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -394,56 +544,6 @@ header('Content-Type: text/html; charset=UTF-8');
         .balance-currency {
             font-size: 1.2rem;
             opacity: 0.9;
-        }
-
-        /* Command Interface */
-        .command-interface {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 2rem;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
-        }
-
-        .command-input {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .command-input input {
-            flex: 1;
-            padding: 0.8rem;
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-family: 'Courier New', monospace;
-        }
-
-        .command-input button {
-            padding: 0.8rem 1.5rem;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: background 0.3s ease;
-        }
-
-        .command-input button:hover {
-            background: #5a6fd8;
-        }
-
-        .command-output {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 1rem;
-            min-height: 200px;
-            font-family: 'Courier New', monospace;
-            white-space: pre-wrap;
-            overflow-y: auto;
-            max-height: 400px;
         }
 
         /* Quick Actions */
@@ -587,10 +687,6 @@ header('Content-Type: text/html; charset=UTF-8');
         @media (max-width: 768px) {
             .wallet-dashboard {
                 grid-template-columns: 1fr;
-            }
-
-            .command-input {
-                flex-direction: column;
             }
 
             .quick-actions {
@@ -782,6 +878,30 @@ header('Content-Type: text/html; charset=UTF-8');
             </button>
         </div>
 
+        <!-- Quick Actions - MOVED ABOVE WALLET INFO -->
+        <div class="quick-actions">
+            <div class="action-card" onclick="openModal('sendModal')">
+                <i class="fas fa-paper-plane"></i>
+                <h3>Send eIOU</h3>
+                <p>Transfer value to contacts</p>
+            </div>
+            <div class="action-card" onclick="openModal('viewContactModal')">
+                <i class="fas fa-address-book"></i>
+                <h3>View Contacts</h3>
+                <p>Manage your contacts</p>
+            </div>
+            <div class="action-card" onclick="refreshTransactions()">
+                <i class="fas fa-history"></i>
+                <h3>Transaction History</h3>
+                <p>View past transactions</p>
+            </div>
+            <div class="action-card" onclick="openModal('settingsModal')">
+                <i class="fas fa-cog"></i>
+                <h3>Settings</h3>
+                <p>Configure wallet settings</p>
+            </div>
+        </div>
+
         <!-- Wallet Dashboard -->
         <div class="wallet-dashboard">
             <!-- Wallet Info -->
@@ -808,35 +928,6 @@ header('Content-Type: text/html; charset=UTF-8');
             </div>
         </div>
 
-        <!-- Quick Actions -->
-        <div class="quick-actions">
-            <div class="action-card" onclick="quickAction('info')">
-                <i class="fas fa-info-circle"></i>
-                <h3>Wallet Info</h3>
-                <p>View your wallet details</p>
-            </div>
-            <div class="action-card" onclick="openModal('sendModal')">
-                <i class="fas fa-paper-plane"></i>
-                <h3>Send eIOU</h3>
-                <p>Transfer value to contacts</p>
-            </div>
-            <div class="action-card" onclick="openModal('viewContactModal')">
-                <i class="fas fa-address-book"></i>
-                <h3>View Contacts</h3>
-                <p>Manage your contacts</p>
-            </div>
-            <div class="action-card" onclick="quickAction('history')">
-                <i class="fas fa-history"></i>
-                <h3>Transaction History</h3>
-                <p>View past transactions</p>
-            </div>
-            <div class="action-card" onclick="openModal('settingsModal')">
-                <i class="fas fa-cog"></i>
-                <h3>Settings</h3>
-                <p>Configure wallet settings</p>
-            </div>
-        </div>
-
         <!-- Contacts Section -->
         <div class="contacts-section fade-in-up">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -860,7 +951,7 @@ header('Content-Type: text/html; charset=UTF-8');
                                 Address: <?php echo htmlspecialchars($contact['address']); ?><br>
                                 Balance: <span class="<?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>">
                                     <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?>
-                                </span><br>
+                                </span> <?php echo $contact['currency']; ?><br>
                                 Fee: <?php echo number_format($contact['fee'], 2); ?>%
                             </div>
                         </div>
@@ -871,7 +962,12 @@ header('Content-Type: text/html; charset=UTF-8');
 
         <!-- Transaction History -->
         <div class="transactions-section fade-in-up">
-            <h2><i class="fas fa-history"></i> Recent Transactions</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2><i class="fas fa-history"></i> Recent Transactions</h2>
+                <button class="btn btn-primary" onclick="refreshTransactions()" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
             <div id="transactionsList">
                 <?php if (empty($transactions)): ?>
                     <div class="empty-state">
@@ -887,7 +983,7 @@ header('Content-Type: text/html; charset=UTF-8');
                                 <div style="font-size: 0.9rem; color: #666;"><?php echo $tx['date']; ?></div>
                             </div>
                             <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
-                                <?php echo ($tx['type'] === 'sent' ? '-' : '+') . '$' . number_format($tx['amount'], 2); ?>
+                                <?php echo ($tx['type'] === 'sent' ? '-' : '+') . '$' . number_format($tx['amount'], 2); ?> <?php echo $tx['currency']; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -895,31 +991,7 @@ header('Content-Type: text/html; charset=UTF-8');
             </div>
         </div>
 
-        <!-- Command Interface -->
-        <div class="command-interface fade-in-up">
-            <h2><i class="fas fa-terminal"></i> Command Interface</h2>
-            
-            <div class="command-input">
-                <input type="text" id="commandInput" placeholder="Enter eIOU command (e.g., eiou info)" />
-                <button onclick="executeCommand()">Execute</button>
-            </div>
-            
-            <div class="command-output" id="commandOutput">
-Welcome to eIOU Wallet!
-Type a command above to interact with your wallet.
-
-Available commands:
-- eiou info - View wallet information
-- eiou add [address] [name] [fee] [credit] [currency] - Add contact
-- eiou viewcontact [name] - View contact details
-- eiou send [name] [amount] [currency] - Send eIOU
-- eiou viewbalances - Check balances
-- eiou history - View transaction history
-- eiou help - Show all commands</div>
-        </div>
-    </div>
-
-    <!-- Add Contact Modal -->
+        <!-- Add Contact Modal -->
     <div id="addContactModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1069,135 +1141,6 @@ Available commands:
             window.location.href = window.location.pathname;
         }
 
-        // Command execution
-        function executeCommand() {
-            const input = document.getElementById('commandInput').value.trim();
-            const output = document.getElementById('commandOutput');
-            
-            if (!input) {
-                output.textContent = 'Please enter a command.';
-                return;
-            }
-
-            const command = input.toLowerCase();
-            let result = '';
-
-            if (command === 'eiou info') {
-                result = `Wallet Information:
-==================
-Address: <?php echo isset($user['torAddress']) ? $user['torAddress'] : 'Not available'; ?>
-Public Key: <?php echo isset($user['public']) ? substr($user['public'], 0, 20) . '...' : 'Not available'; ?>
-Status: Active
-
-Balance Summary:
-Total Balance: $<?php echo $totalBalance; ?> USD`;
-            } else if (command.startsWith('eiou add')) {
-                const parts = input.split(' ');
-                if (parts.length >= 6) {
-                    result = `Contact added successfully!
-Address: ${parts[2]}
-Name: ${parts[3]}
-Fee: ${parts[4]}%
-Credit: ${parts[5]} ${parts[6]}
-
-Contact request sent. Waiting for acceptance...`;
-                } else {
-                    result = `Error: Invalid command format.
-Usage: eiou add [address] [name] [fee] [credit] [currency]
-Example: eiou add 123address.tor Alice 0.1 10 USD`;
-                }
-            } else if (command.startsWith('eiou viewcontact')) {
-                const name = input.split(' ')[2];
-                if (name) {
-                    const contact = contacts.find(c => c.name.toLowerCase() === name.toLowerCase());
-                    if (contact) {
-                        result = `Contact Details for ${name}:
-===============================
-Name: ${contact.name}
-Address: ${contact.address}
-Fee: ${contact.fee}%
-Currency: ${contact.currency}
-Current Balance: ${contact.balance >= 0 ? '+' : ''}$${contact.balance.toFixed(2)} ${contact.currency}
-Status: Active`;
-                    } else {
-                        result = `Error: Contact '${name}' not found.`;
-                    }
-                } else {
-                    result = `Error: Please specify a contact name.
-Usage: eiou viewcontact [name]
-Example: eiou viewcontact Alice`;
-                }
-            } else if (command.startsWith('eiou send')) {
-                const parts = input.split(' ');
-                if (parts.length >= 4) {
-                    const recipient = parts[2];
-                    const amount = parts[3];
-                    const currency = parts[4] || 'USD';
-                    result = `Transaction initiated!
-Sending: ${amount} ${currency}
-To: ${recipient}
-Status: Processing...
-
-Transaction completed successfully!
-New balance: $<?php echo number_format(floatval($totalBalance) - floatval($amount), 2); ?> USD`;
-                } else {
-                    result = `Error: Invalid command format.
-Usage: eiou send [name/address] [amount] [currency]
-Example: eiou send Alice 100 USD`;
-                }
-            } else if (command === 'eiou viewbalances') {
-                result = `Current Balances:
-==================
-Total Balance: $<?php echo $totalBalance; ?> USD
-
-Individual Balances:`;
-                
-                contacts.forEach(contact => {
-                    const sign = contact.balance >= 0 ? '+' : '';
-                    result += `\n- ${contact.name}: ${sign}$${contact.balance.toFixed(2)} ${contact.currency}`;
-                });
-            } else if (command === 'eiou history') {
-                result = `Transaction History:
-====================`;
-                
-                transactions.forEach(tx => {
-                    const type = tx.type.toUpperCase();
-                    const amount = tx.amount.toFixed(2);
-                    result += `\n${tx.date} | ${type} | ${tx.counterparty} | ${amount} ${tx.currency}`;
-                });
-                
-                if (transactions.length === 0) {
-                    result += `\nNo transactions found.`;
-                }
-            } else if (command === 'eiou help') {
-                result = `Available Commands:
-===================
-Contacts:
-- eiou info - View wallet information
-- eiou add [address] [name] [fee] [credit] [currency] - Add new contact
-- eiou viewcontact [name] - View contact details
-- eiou update [address] [field] [value] - Update contact info
-- eiou delete [address] - Remove contact
-- eiou search [name] - Search contacts
-
-Transactions:
-- eiou send [name/address] [amount] [currency] - Send eIOU
-- eiou viewbalances - Check balances
-- eiou history - View transaction history
-
-Settings:
-- eiou help - Show this help
-- eiou viewsettings - View settings
-- eiou changesettings - Update settings
-- eiou generate [address] - Generate wallet`;
-            } else {
-                result = `Unknown command: ${input}
-Type 'eiou help' for available commands.`;
-            }
-
-            output.textContent = result;
-        }
-
         // Modal functions
         function openModal(modalId) {
             document.getElementById(modalId).style.display = 'block';
@@ -1227,21 +1170,73 @@ Type 'eiou help' for available commands.`;
             });
         }
 
-        // Form submissions
+        // Update the form submission for add contact
         document.getElementById('addContactForm').addEventListener('submit', function(e) {
             e.preventDefault();
+            
             const address = document.getElementById('contactAddress').value;
             const name = document.getElementById('contactName').value;
             const fee = document.getElementById('contactFee').value;
             const credit = document.getElementById('contactCredit').value;
             const currency = document.getElementById('contactCurrency').value;
             
-            // Simulate adding contact
-            const command = `eiou add ${address} ${name} ${fee} ${credit} ${currency}`;
-            document.getElementById('commandInput').value = command;
-            executeCommand();
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            submitBtn.disabled = true;
             
-            closeModal('addContactModal');
+            // Create form data
+            const formData = new FormData();
+            formData.append('action', 'addContact');
+            formData.append('authcode', authCode);
+            formData.append('address', address);
+            formData.append('name', name);
+            formData.append('fee', fee);
+            formData.append('credit', credit);
+            formData.append('currency', currency);
+            
+            // Make API call
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    const output = document.getElementById('commandOutput');
+                    output.textContent = `Contact added successfully!
+Address: ${address}
+Name: ${name}
+Fee: ${fee}%
+Credit: ${credit} ${currency}
+
+${data.message}`;
+                    
+                    // Close modal
+                    closeModal('addContactModal');
+                    
+                    // Refresh the page to show updated contacts
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    // Show error message
+                    const output = document.getElementById('commandOutput');
+                    output.textContent = `Error adding contact: ${data.error}`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                const output = document.getElementById('commandOutput');
+                output.textContent = `Error adding contact: ${error.message}`;
+            })
+            .finally(() => {
+                // Reset button state
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
         });
 
         document.getElementById('sendForm').addEventListener('submit', function(e) {
@@ -1250,10 +1245,8 @@ Type 'eiou help' for available commands.`;
             const amount = document.getElementById('sendAmount').value;
             const currency = document.getElementById('sendCurrency').value;
             
-            // Simulate sending eIOU
-            const command = `eiou send ${recipient} ${amount} ${currency}`;
-            document.getElementById('commandInput').value = command;
-            executeCommand();
+            // Instead, implement actual send functionality here
+            // TODO: Implement actual send eIOU functionality
             
             closeModal('sendModal');
         });
@@ -1276,27 +1269,13 @@ Notifications: ${notifications}`;
 
         // Quick actions
         function quickAction(action) {
-            const input = document.getElementById('commandInput');
-            const output = document.getElementById('commandOutput');
-            
             switch(action) {
-                case 'info':
-                    input.value = 'eiou info';
+                case 'refresh':
+                    refreshTransactions();
                     break;
-                case 'history':
-                    input.value = 'eiou history';
-                    break;
+                // Remove 'info' and 'history' cases since they used executeCommand
             }
-            
-            executeCommand();
         }
-
-        // Handle Enter key in command input
-        document.getElementById('commandInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                executeCommand();
-            }
-        });
 
         // View contact function
         function viewContact(name) {
