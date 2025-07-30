@@ -11,3 +11,4 @@ docker run -d --name Bob --network eiou-network -v "$(pwd)/src/wallet.html:/var/
 # Windows: -v "C:\path\to\your\eiou\src\wallet.html:/var/www/html/index.html"
 # Linux: -v "/home/user/eiou/src/wallet.html:/var/www/html/index.html"
 # macOS: -v "/Users/user/eiou/src/wallet.html:/var/www/html/index.html"
+
