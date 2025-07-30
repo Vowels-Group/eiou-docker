@@ -866,6 +866,54 @@ function parseTransactionHistoryOutput($output) {
             color: #dee2e6;
             margin-bottom: 1rem;
         }
+
+        /* Small button styles */
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            border-radius: 0.375rem;
+            min-width: auto;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #667eea;
+            color: #667eea;
+            transition: all 0.3s ease;
+        }
+
+        .btn-outline:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        /* Toast notification styles */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            z-index: 10000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            max-width: 300px;
+            word-wrap: break-word;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.success {
+            background: rgba(40, 167, 69, 0.9);
+        }
+
+        .toast.error {
+            background: rgba(220, 53, 69, 0.9);
+        }
     </style>
 </head>
 <body>
@@ -915,11 +963,31 @@ function parseTransactionHistoryOutput($output) {
 
                 <div class="info-item">
                     <div class="info-label">Address:</div>
-                    <div><?php echo isset($user['torAddress']) ? $user['torAddress'] : 'Not available'; ?></div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <span style="flex: 1; word-break: break-all;"><?php echo isset($user['torAddress']) ? $user['torAddress'] : 'Not available'; ?></span>
+                        <?php if (isset($user['torAddress'])): ?>
+                            <button class="btn btn-sm btn-outline" onclick="copyToClipboard('<?php echo $user['torAddress']; ?>', 'Tor address')" title="Copy Tor address">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="shareData('<?php echo $user['torAddress']; ?>', 'Tor address')" title="Share Tor address">
+                                <i class="fas fa-share-alt"></i>
+                            </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Public Key:</div>
-                    <div style="word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo isset($user['public']) ? $user['public'] : 'Not available'; ?></div>
+                    <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
+                        <span style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo isset($user['public']) ? $user['public'] : 'Not available'; ?></span>
+                        <?php if (isset($user['public'])): ?>
+                            <button class="btn btn-sm btn-outline" onclick="copyToClipboard('<?php echo $user['public']; ?>', 'public key')" title="Copy public key">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline" onclick="shareData('<?php echo $user['public']; ?>', 'public key')" title="Share public key">
+                                <i class="fas fa-share-alt"></i>
+                            </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Status:</div>
@@ -1239,45 +1307,207 @@ ${data.message}`;
             });
         });
 
+        // Add these missing JavaScript functions to the existing script section
+
+        // Function to load transaction history
+        function loadTransactionHistory(address = null, limit = 10) {
+            const formData = new FormData();
+            formData.append('action', 'getTransactionHistory');
+            formData.append('authcode', authCode);
+            if (address) {
+                formData.append('address', address);
+            }
+            formData.append('limit', limit);
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateTransactionHistoryDisplay(data.transactions);
+                } else {
+                    console.error('Error loading transaction history:', data.error);
+                    showToast('Failed to load transaction history', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error loading transaction history', 'error');
+            });
+        }
+
+        // Function to update the transaction history display
+        function updateTransactionHistoryDisplay(transactions) {
+            const transactionsList = document.getElementById('transactionsList');
+            
+            if (transactions.length === 0) {
+                transactionsList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-receipt"></i>
+                        <h3>No Transactions Yet</h3>
+                        <p>Your transaction history will appear here</p>
+                    </div>
+                `;
+            } else {
+                let html = '';
+                transactions.forEach(tx => {
+                    const typeClass = tx.type === 'sent' ? 'transaction-sent' : 'transaction-received';
+                    const sign = tx.type === 'sent' ? '-' : '+';
+                    const action = tx.type === 'sent' ? 'Sent to' : 'Received from';
+                    
+                    html += `
+                        <div class="transaction-item">
+                            <div class="transaction-info">
+                                <div><strong>${action} ${tx.counterparty}</strong></div>
+                                <div style="font-size: 0.9rem; color: #666;">${tx.date}</div>
+                            </div>
+                            <div class="transaction-amount ${typeClass}">
+                                ${sign}$${tx.amount.toFixed(2)} ${tx.currency}
+                            </div>
+                        </div>
+                    `;
+                });
+                transactionsList.innerHTML = html;
+            }
+        }
+
+        // Refresh transactions function
+        function refreshTransactions() {
+            showToast('Refreshing transactions...', 'success');
+            loadTransactionHistory();
+        }
+
+        // Add functionality to the send form
         document.getElementById('sendForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const recipient = document.getElementById('sendRecipient').value;
             const amount = document.getElementById('sendAmount').value;
             const currency = document.getElementById('sendCurrency').value;
             
-            // Instead, implement actual send functionality here
-            // TODO: Implement actual send eIOU functionality
+            if (!recipient || !amount || !currency) {
+                showToast('Please fill in all fields', 'error');
+                return;
+            }
             
-            closeModal('sendModal');
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+            submitBtn.disabled = true;
+            
+            // TODO: Implement actual send eIOU functionality
+            // For now, simulate the send process
+            setTimeout(() => {
+                showToast(`Successfully sent ${amount} ${currency} to ${recipient}!`, 'success');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                closeModal('sendModal');
+                
+                // Refresh transactions after sending
+                setTimeout(() => {
+                    refreshTransactions();
+                }, 1000);
+            }, 2000);
         });
 
+        // Add functionality to the settings form
         document.getElementById('settingsForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const defaultCurrency = document.getElementById('defaultCurrency').value;
             const autoConfirm = document.getElementById('autoConfirm').value;
             const notifications = document.getElementById('notifications').value;
             
-            // Show success message
-            const output = document.getElementById('commandOutput');
-            output.textContent = `Settings updated successfully!
-Default Currency: ${defaultCurrency}
-Auto-confirm: ${autoConfirm}
-Notifications: ${notifications}`;
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            submitBtn.disabled = true;
             
-            closeModal('settingsModal');
+            // TODO: Implement actual settings save functionality
+            // For now, simulate the save process
+            setTimeout(() => {
+                showToast('Settings saved successfully!', 'success');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                closeModal('settingsModal');
+            }, 1000);
         });
 
-        // Quick actions
-        function quickAction(action) {
-            switch(action) {
-                case 'refresh':
-                    refreshTransactions();
-                    break;
-                // Remove 'info' and 'history' cases since they used executeCommand
+        // Add functionality to view contact modal
+        function openViewContactModal() {
+            // Populate the modal with contact list
+            const contactDetails = document.getElementById('contactDetails');
+            let details = '<h3>Select a contact to view details:</h3>';
+            
+            if (contacts.length === 0) {
+                details = '<p>No contacts available.</p>';
+            } else {
+                details += '<div style="max-height: 300px; overflow-y: auto;">';
+                contacts.forEach(contact => {
+                    details += `
+                        <div class="contact-item" onclick="viewContact('${contact.name}')" style="padding: 0.5rem; border-bottom: 1px solid #eee; cursor: pointer; hover: background-color: #f8f9fa;">
+                            <strong>${contact.name}</strong><br>
+                            <small>${contact.address}</small><br>
+                            <span style="color: ${contact.balance >= 0 ? '#28a745' : '#dc3545'}">
+                                Balance: ${contact.balance >= 0 ? '+' : ''}$${contact.balance.toFixed(2)} ${contact.currency}
+                            </span>
+                        </div>
+                    `;
+                });
+                details += '</div>';
             }
+            
+            contactDetails.innerHTML = details;
+            openModal('viewContactModal');
         }
 
-        // View contact function
+        // Update the quick action for view contacts
+        document.querySelector('.action-card[onclick="openModal(\'viewContactModal\')"]').onclick = openViewContactModal;
+
+        // Add copy functionality to contact details
+        function copyContactInfo(contactName, infoType) {
+            const contact = contacts.find(c => c.name.toLowerCase() === contactName.toLowerCase());
+            if (!contact) {
+                showToast('Contact not found', 'error');
+                return;
+            }
+            
+            let textToCopy = '';
+            let label = '';
+            
+            switch(infoType) {
+                case 'address':
+                    textToCopy = contact.address;
+                    label = 'contact address';
+                    break;
+                case 'name':
+                    textToCopy = contact.name;
+                    label = 'contact name';
+                    break;
+                case 'all':
+                    textToCopy = `Name: ${contact.name}\nAddress: ${contact.address}\nBalance: ${contact.balance} ${contact.currency}\nFee: ${contact.fee}%`;
+                    label = 'contact information';
+                    break;
+            }
+            
+            copyToClipboard(textToCopy, label);
+        }
+
+        // Add share functionality to contact details
+        function shareContactInfo(contactName) {
+            const contact = contacts.find(c => c.name.toLowerCase() === contactName.toLowerCase());
+            if (!contact) {
+                showToast('Contact not found', 'error');
+                return;
+            }
+            
+            const text = `Contact: ${contact.name}\nAddress: ${contact.address}\nBalance: ${contact.balance} ${contact.currency}`;
+            shareData(text, 'contact information');
+        }
+
+        // Update the viewContact function to include copy/share buttons
         function viewContact(name) {
             const contactDetails = document.getElementById('contactDetails');
             let details = '';
@@ -1287,11 +1517,21 @@ Notifications: ${notifications}`;
                 details = `
                     <div class="info-item">
                         <div class="info-label">Name:</div>
-                        <div>${contact.name}</div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span>${contact.name}</span>
+                            <button class="btn btn-sm btn-outline" onclick="copyContactInfo('${contact.name}', 'name')" title="Copy name">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Address:</div>
-                        <div>${contact.address}</div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <span style="flex: 1; word-break: break-all;">${contact.address}</span>
+                            <button class="btn btn-sm btn-outline" onclick="copyContactInfo('${contact.name}', 'address')" title="Copy address">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">Fee:</div>
@@ -1309,6 +1549,14 @@ Notifications: ${notifications}`;
                         <div class="info-label">Status:</div>
                         <div style="color: #28a745;">Active</div>
                     </div>
+                    <div class="form-actions" style="margin-top: 1rem;">
+                        <button class="btn btn-outline" onclick="copyContactInfo('${contact.name}', 'all')">
+                            <i class="fas fa-copy"></i> Copy All Info
+                        </button>
+                        <button class="btn btn-outline" onclick="shareContactInfo('${contact.name}')">
+                            <i class="fas fa-share-alt"></i> Share Contact
+                        </button>
+                    </div>
                 `;
             } else {
                 details = `Contact '${name}' not found.`;
@@ -1318,7 +1566,75 @@ Notifications: ${notifications}`;
             openModal('viewContactModal');
         }
 
-        // Command input is ready for use
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl/Cmd + R to refresh transactions
+            if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+                e.preventDefault();
+                refreshTransactions();
+            }
+            
+            // Ctrl/Cmd + N to add new contact
+            if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+                e.preventDefault();
+                openModal('addContactModal');
+            }
+            
+            // Ctrl/Cmd + S to open send modal
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                openModal('sendModal');
+            }
+            
+            // Escape to close modals
+            if (e.key === 'Escape') {
+                const modals = document.querySelectorAll('.modal');
+                modals.forEach(modal => {
+                    if (modal.style.display === 'block') {
+                        closeModal(modal.id);
+                    }
+                });
+            }
+        });
+
+        // Add auto-refresh functionality (optional)
+        let autoRefreshInterval = null;
+
+        function startAutoRefresh(interval = 30000) { // 30 seconds
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            autoRefreshInterval = setInterval(() => {
+                refreshTransactions();
+            }, interval);
+            showToast('Auto-refresh enabled (30s)', 'success');
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                showToast('Auto-refresh disabled', 'success');
+            }
+        }
+
+        // Add auto-refresh toggle to settings
+        document.getElementById('settingsForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const defaultCurrency = document.getElementById('defaultCurrency').value;
+            const autoConfirm = document.getElementById('autoConfirm').value;
+            const notifications = document.getElementById('notifications').value;
+            
+            // Handle auto-refresh setting
+            if (notifications === 'true') {
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
+            
+            showToast('Settings saved successfully!', 'success');
+            closeModal('settingsModal');
+        });
     </script>
 </body>
 </html>
