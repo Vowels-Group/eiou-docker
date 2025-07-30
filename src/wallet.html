@@ -142,6 +142,62 @@ if (!isset($user['authcode']) || !hash_equals($user['authcode'], $authCode)) {
 // Create PDO connection
 $pdo = createPDOConnection();
 
+// Handle form submissions
+$message = '';
+$messageType = '';
+
+// Handle add contact form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'addContact') {
+    $address = $_POST['address'] ?? '';
+    $name = $_POST['name'] ?? '';
+    $fee = $_POST['fee'] ?? '';
+    $credit = $_POST['credit'] ?? '';
+    $currency = $_POST['currency'] ?? '';
+    
+    if (empty($address) || empty($name) || empty($fee) || empty($credit) || empty($currency)) {
+        $message = 'All fields are required';
+        $messageType = 'error';
+    } else {
+        // Create argv array for addContact function
+        $argv = ['add', 'contact', $address, $name, $fee, $credit, $currency];
+        
+        // Capture output
+        ob_start();
+        try {
+            addContact($argv);
+            $output = ob_get_clean();
+            
+            if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
+                $message = trim($output);
+                $messageType = 'error';
+            } else {
+                $message = 'Contact added successfully: ' . trim($output);
+                $messageType = 'success';
+            }
+        } catch (Exception $e) {
+            ob_end_clean();
+            $message = 'Internal server error: ' . $e->getMessage();
+            $messageType = 'error';
+        }
+    }
+}
+
+// Handle send eIOU form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'sendEIOU') {
+    $recipient = $_POST['recipient'] ?? '';
+    $amount = $_POST['amount'] ?? '';
+    $currency = $_POST['currency'] ?? '';
+    
+    if (empty($recipient) || empty($amount) || empty($currency)) {
+        $message = 'All fields are required';
+        $messageType = 'error';
+    } else {
+        // TODO: Implement actual send eIOU functionality
+        $message = "Successfully sent {$amount} {$currency} to {$recipient}!";
+        $messageType = 'success';
+    }
+}
+
 // Helper function to get user's total balance
 function getUserTotalBalance() {
     global $pdo, $user;
@@ -297,156 +353,6 @@ $transactions = getTransactionHistory(10);
 // If we get here, authentication is successful
 // Set content type for HTML
 header('Content-Type: text/html; charset=UTF-8');
-
-// Add this after the existing PHP code, before the HTML starts
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'addContact') {
-    // Verify auth code
-    if (!isset($user['authcode']) || !hash_equals($user['authcode'], $_POST['authcode'])) {
-        http_response_code(401);
-        echo json_encode(['error' => 'Unauthorized']);
-        exit;
-    }
-    
-    // Validate required fields
-    $address = $_POST['address'] ?? '';
-    $name = $_POST['name'] ?? '';
-    $fee = $_POST['fee'] ?? '';
-    $credit = $_POST['credit'] ?? '';
-    $currency = $_POST['currency'] ?? '';
-    
-    if (empty($address) || empty($name) || empty($fee) || empty($credit) || empty($currency)) {
-        http_response_code(400);
-        echo json_encode(['error' => 'All fields are required']);
-        exit;
-    }
-    
-    // Create argv array for addContact function
-    $argv = ['add', 'contact', $address, $name, $fee, $credit, $currency];
-    
-    // Capture output to return to frontend
-    ob_start();
-    
-    try {
-        addContact($argv);
-        $output = ob_get_clean();
-        
-        // Check if the output contains error indicators
-        if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
-            http_response_code(400);
-            echo json_encode(['error' => trim($output)]);
-        } else {
-            echo json_encode(['success' => true, 'message' => trim($output)]);
-        }
-    } catch (Exception $e) {
-        ob_end_clean();
-        http_response_code(500);
-        echo json_encode(['error' => 'Internal server error: ' . $e->getMessage()]);
-    }
-    exit;
-}
-
-// Add transaction history API endpoint
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'getTransactionHistory') {
-    // Verify auth code
-    if (!isset($user['authcode']) || !hash_equals($user['authcode'], $_POST['authcode'])) {
-        http_response_code(401);
-        echo json_encode(['error' => 'Unauthorized']);
-        exit;
-    }
-    
-    // Get parameters
-    $address = $_POST['address'] ?? null;
-    $limit = $_POST['limit'] ?? 10;
-    
-    // Create argv array for viewTransactionHistory function
-    $argv = ['history'];
-    if ($address) {
-        $argv[] = $address;
-    }
-    if ($limit && $limit !== '10') {
-        $argv[] = $limit;
-    }
-    
-    // Capture output to return to frontend
-    ob_start();
-    
-    try {
-        viewTransactionHistory($argv);
-        $output = ob_get_clean();
-        
-        // Parse the output to extract transaction data
-        $transactions = parseTransactionHistoryOutput($output);
-        
-        echo json_encode(['success' => true, 'transactions' => $transactions, 'raw_output' => $output]);
-    } catch (Exception $e) {
-        ob_end_clean();
-        http_response_code(500);
-        echo json_encode(['error' => 'Internal server error: ' . $e->getMessage()]);
-    }
-    exit;
-}
-
-// Helper function to parse transaction history output
-function parseTransactionHistoryOutput($output) {
-    global $user;
-    $lines = explode("\n", $output);
-    $transactions = [];
-    $inTable = false;
-    
-    foreach ($lines as $line) {
-        $line = trim($line);
-        
-        // Skip header lines and empty lines
-        if (empty($line) || strpos($line, 'Transaction History:') !== false || 
-            strpos($line, '----') !== false || strpos($line, 'Sender name') !== false ||
-            strpos($line, 'Displaying') !== false) {
-            continue;
-        }
-        
-        // Check if we're in the table section
-        if (strpos($line, '|') !== false) {
-            $inTable = true;
-            
-            // Parse table row
-            $parts = array_map('trim', explode('|', $line));
-            if (count($parts) >= 5) {
-                // Extract sender info
-                $senderPart = $parts[0];
-                $senderName = trim(substr($senderPart, 0, strpos($senderPart, '(')));
-                $senderAddress = trim(substr($senderPart, strpos($senderPart, '(') + 1, strpos($senderPart, ')') - strpos($senderPart, '(') - 1));
-                
-                // Extract receiver info
-                $receiverPart = $parts[1];
-                $receiverName = trim(substr($receiverPart, 0, strpos($receiverPart, '(')));
-                $receiverAddress = trim(substr($receiverPart, strpos($receiverPart, '(') + 1, strpos($receiverPart, ')') - strpos($receiverPart, '(') - 1));
-                
-                // Extract amount and currency
-                $amount = floatval(trim($parts[2]));
-                $currency = trim($parts[3]);
-                $timestamp = trim($parts[4]);
-                
-                // Determine transaction type (sent or received)
-                $isSent = ($senderName === 'me' || $senderAddress === $user['torAddress'] || $senderAddress === $user['hostname']);
-                $counterparty = $isSent ? $receiverName : $senderName;
-                
-                $transactions[] = [
-                    'date' => $timestamp,
-                    'type' => $isSent ? 'sent' : 'received',
-                    'amount' => $amount,
-                    'currency' => $currency,
-                    'counterparty' => $counterparty,
-                    'sender_address' => $senderAddress,
-                    'receiver_address' => $receiverAddress
-                ];
-            }
-        } else if ($inTable) {
-            // We've reached the end of the table
-            break;
-        }
-    }
-    
-    return $transactions;
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -503,10 +409,38 @@ function parseTransactionHistoryOutput($output) {
             cursor: pointer;
             font-weight: 600;
             transition: background 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
         }
 
         .logout-btn:hover {
             background: #c82333;
+        }
+
+        /* Message alerts */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            border: 1px solid transparent;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+
+        .alert-error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+
+        .alert-info {
+            background-color: #e3f2fd;
+            border-color: #bbdefb;
+            color: #0277bd;
         }
 
         /* Wallet Dashboard */
@@ -576,14 +510,18 @@ function parseTransactionHistoryOutput($output) {
             padding: 1.5rem;
             border-radius: 15px;
             text-align: center;
-            cursor: pointer;
             transition: transform 0.3s ease, box-shadow 0.3s ease;
             box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            text-decoration: none;
+            color: inherit;
+            display: block;
         }
 
         .action-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            text-decoration: none;
+            color: inherit;
         }
 
         .action-card i {
@@ -629,7 +567,6 @@ function parseTransactionHistoryOutput($output) {
             padding: 1rem;
             border-radius: 10px;
             border-left: 4px solid #667eea;
-            cursor: pointer;
             transition: transform 0.2s ease;
         }
 
@@ -700,93 +637,20 @@ function parseTransactionHistoryOutput($output) {
             color: #28a745;
         }
 
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .wallet-dashboard {
-                grid-template-columns: 1fr;
-            }
-
-            .quick-actions {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Animations */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .fade-in-up {
-            animation: fadeInUp 0.6s ease-out;
-        }
-
-        .alert {
-            padding: 1rem;
-            border-radius: 8px;
-            border: 1px solid transparent;
-        }
-
-        .alert-info {
-            background-color: #e3f2fd;
-            border-color: #bbdefb;
-            color: #0277bd;
-        }
-
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
-        }
-
-        .modal-content {
+        /* Form styles */
+        .form-container {
             background: rgba(255, 255, 255, 0.95);
-            margin: 5% auto;
             padding: 2rem;
             border-radius: 15px;
-            width: 90%;
-            max-width: 500px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-            animation: fadeInUp 0.3s ease-out;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
         }
 
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
+        .form-container h2 {
+            color: #667eea;
+            margin-bottom: 1rem;
             border-bottom: 2px solid #667eea;
-        }
-
-        .modal-header h2 {
-            color: #667eea;
-            margin: 0;
-        }
-
-        .close {
-            color: #aaa;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: color 0.3s ease;
-        }
-
-        .close:hover {
-            color: #667eea;
+            padding-bottom: 0.5rem;
         }
 
         .form-group {
@@ -828,6 +692,8 @@ function parseTransactionHistoryOutput($output) {
             cursor: pointer;
             font-weight: 600;
             transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
         }
 
         .btn-primary {
@@ -837,6 +703,8 @@ function parseTransactionHistoryOutput($output) {
 
         .btn-primary:hover {
             background: #5a6fd8;
+            text-decoration: none;
+            color: white;
         }
 
         .btn-secondary {
@@ -846,6 +714,8 @@ function parseTransactionHistoryOutput($output) {
 
         .btn-secondary:hover {
             background: #5a6268;
+            text-decoration: none;
+            color: white;
         }
 
         .btn-success {
@@ -855,6 +725,8 @@ function parseTransactionHistoryOutput($output) {
 
         .btn-success:hover {
             background: #218838;
+            text-decoration: none;
+            color: white;
         }
 
         .btn-danger {
@@ -864,6 +736,8 @@ function parseTransactionHistoryOutput($output) {
 
         .btn-danger:hover {
             background: #c82333;
+            text-decoration: none;
+            color: white;
         }
 
         /* Add Contact Button */
@@ -877,10 +751,14 @@ function parseTransactionHistoryOutput($output) {
             font-weight: 600;
             margin-bottom: 1rem;
             transition: background 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
         }
 
         .add-contact-btn:hover {
             background: #218838;
+            text-decoration: none;
+            color: white;
         }
 
         /* Empty state */
@@ -896,52 +774,75 @@ function parseTransactionHistoryOutput($output) {
             margin-bottom: 1rem;
         }
 
-        /* Small button styles */
-        .btn-sm {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.875rem;
-            border-radius: 0.375rem;
-            min-width: auto;
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .wallet-dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .form-actions {
+                flex-direction: column;
+            }
         }
 
-        .btn-outline {
-            background: transparent;
-            border: 1px solid #667eea;
-            color: #667eea;
-            transition: all 0.3s ease;
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
-        .btn-outline:hover {
-            background: #667eea;
-            color: white;
+        .fade-in-up {
+            animation: fadeInUp 0.6s ease-out;
         }
 
-        /* Toast notification styles */
-        .toast {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 1rem 1.5rem;
-            border-radius: 8px;
-            z-index: 10000;
-            transform: translateX(100%);
-            transition: transform 0.3s ease;
-            max-width: 300px;
-            word-wrap: break-word;
+        /* Copy text area */
+        .copy-textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 0.5rem;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            background: #f8f9fa;
+            resize: vertical;
         }
 
-        .toast.show {
-            transform: translateX(0);
+        /* Section toggle */
+        .section-toggle {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 1rem;
+            display: inline-block;
+            text-decoration: none;
+            color: #333;
         }
 
-        .toast.success {
-            background: rgba(40, 167, 69, 0.9);
+        .section-toggle:hover {
+            background: #e9ecef;
+            text-decoration: none;
+            color: #333;
         }
 
-        .toast.error {
-            background: rgba(220, 53, 69, 0.9);
+        .section-content {
+            display: none;
+        }
+
+        .section-content.show {
+            display: block;
         }
     </style>
 </head>
@@ -950,10 +851,18 @@ function parseTransactionHistoryOutput($output) {
         <!-- Header -->
         <div class="header fade-in-up">
             <h1><i class="fas fa-wallet"></i> ₳ Wallet</h1>
-            <button class="logout-btn" onclick="logout()">
+            <a href="<?php echo $_SERVER['PHP_SELF']; ?>" class="logout-btn">
                 <i class="fas fa-sign-out-alt"></i> Logout
-            </button>
+            </a>
         </div>
+
+        <!-- Message alerts -->
+        <?php if (!empty($message)): ?>
+            <div class="alert alert-<?php echo $messageType; ?> fade-in-up">
+                <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : ($messageType === 'error' ? 'exclamation-circle' : 'info-circle'); ?>"></i>
+                <?php echo htmlspecialchars($message); ?>
+            </div>
+        <?php endif; ?>
 
         <!-- Pending Contact Requests Notification -->
         <?php if (!empty($pendingContacts)): ?>
@@ -968,35 +877,35 @@ function parseTransactionHistoryOutput($output) {
                         You have contact requests waiting for your approval.
                     </p>
                 </div>
-                <button class="btn btn-primary" onclick="showPendingContacts()" style="padding: 0.5rem 1rem;">
+                <a href="#pending-contacts" class="btn btn-primary" style="padding: 0.5rem 1rem;">
                     <i class="fas fa-eye"></i> View Requests
-                </button>
+                </a>
             </div>
         </div>
         <?php endif; ?>
 
-        <!-- Quick Actions - MOVED ABOVE WALLET INFO -->
+        <!-- Quick Actions -->
         <div class="quick-actions">
-            <div class="action-card" onclick="openModal('sendModal')">
+            <a href="#send-form" class="action-card">
                 <i class="fas fa-paper-plane"></i>
                 <h3>Send eIOU</h3>
                 <p>Transfer value to contacts</p>
-            </div>
-            <div class="action-card" onclick="openModal('viewContactModal')">
+            </a>
+            <a href="#contacts" class="action-card">
                 <i class="fas fa-address-book"></i>
                 <h3>View Contacts</h3>
                 <p>Manage your contacts</p>
-            </div>
-            <div class="action-card" onclick="refreshTransactions()">
+            </a>
+            <a href="#transactions" class="action-card">
                 <i class="fas fa-history"></i>
                 <h3>Transaction History</h3>
                 <p>View past transactions</p>
-            </div>
-            <div class="action-card" onclick="openModal('settingsModal')">
-                <i class="fas fa-cog"></i>
-                <h3>Settings</h3>
-                <p>Configure wallet settings</p>
-            </div>
+            </a>
+            <a href="#add-contact" class="action-card">
+                <i class="fas fa-user-plus"></i>
+                <h3>Add Contact</h3>
+                <p>Add new contact</p>
+            </a>
         </div>
 
         <!-- Wallet Dashboard -->
@@ -1015,11 +924,9 @@ function parseTransactionHistoryOutput($output) {
                     <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                         <span style="flex: 1; word-break: break-all;"><?php echo isset($user['torAddress']) ? $user['torAddress'] : 'Not available'; ?></span>
                         <?php if (isset($user['torAddress'])): ?>
-                            <button class="btn btn-sm btn-outline" onclick="copyToClipboard('<?php echo $user['torAddress']; ?>', 'Tor address')" title="Copy Tor address">
-                                <i class="fas fa-copy"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline" onclick="shareData('<?php echo $user['torAddress']; ?>', 'Tor address')" title="Share Tor address">
-                                <i class="fas fa-share-alt"></i>
+                            <textarea class="copy-textarea" readonly style="display: none;" id="tor-address"><?php echo $user['torAddress']; ?></textarea>
+                            <button class="btn btn-sm btn-outline" onclick="document.getElementById('tor-address').style.display='block'; document.getElementById('tor-address').select();" title="Copy Tor address">
+                                <i class="fas fa-copy"></i> Copy
                             </button>
                         <?php endif; ?>
                     </div>
@@ -1029,11 +936,9 @@ function parseTransactionHistoryOutput($output) {
                     <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
                         <span style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo isset($user['public']) ? $user['public'] : 'Not available'; ?></span>
                         <?php if (isset($user['public'])): ?>
-                            <button class="btn btn-sm btn-outline" onclick="copyToClipboard('<?php echo $user['public']; ?>', 'public key')" title="Copy public key">
-                                <i class="fas fa-copy"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline" onclick="shareData('<?php echo $user['public']; ?>', 'public key')" title="Share public key">
-                                <i class="fas fa-share-alt"></i>
+                            <textarea class="copy-textarea" readonly style="display: none;" id="public-key"><?php echo $user['public']; ?></textarea>
+                            <button class="btn btn-sm btn-outline" onclick="document.getElementById('public-key').style.display='block'; document.getElementById('public-key').select();" title="Copy public key">
+                                <i class="fas fa-copy"></i> Copy
                             </button>
                         <?php endif; ?>
                     </div>
@@ -1045,15 +950,90 @@ function parseTransactionHistoryOutput($output) {
             </div>
         </div>
 
+        <!-- Send eIOU Form -->
+        <div id="send-form" class="form-container fade-in-up">
+            <h2><i class="fas fa-paper-plane"></i> Send eIOU</h2>
+            <form method="POST">
+                <input type="hidden" name="action" value="sendEIOU">
+                <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                
+                <div class="form-group">
+                    <label for="recipient">Recipient:</label>
+                    <select id="recipient" name="recipient" required>
+                        <option value="">Select recipient</option>
+                        <?php foreach ($contacts as $contact): ?>
+                            <option value="<?php echo htmlspecialchars($contact['name']); ?>"><?php echo htmlspecialchars($contact['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="amount">Amount:</label>
+                    <input type="number" id="amount" name="amount" placeholder="100" min="0" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="currency">Currency:</label>
+                    <select id="currency" name="currency" required>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="BTC">BTC</option>
+                        <option value="ETH">ETH</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Send eIOU</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Add Contact Form -->
+        <div id="add-contact" class="form-container fade-in-up">
+            <h2><i class="fas fa-user-plus"></i> Add New Contact</h2>
+            <form method="POST">
+                <input type="hidden" name="action" value="addContact">
+                <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                
+                <div class="form-group">
+                    <label for="address">Address:</label>
+                    <input type="text" id="address" name="address" placeholder="Enter .tor address" required>
+                </div>
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <input type="text" id="name" name="name" placeholder="Enter contact name" required>
+                </div>
+                <div class="form-group">
+                    <label for="fee">Fee (%):</label>
+                    <input type="number" id="fee" name="fee" placeholder="0.1" step="0.1" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="credit">Credit Limit:</label>
+                    <input type="number" id="credit" name="credit" placeholder="100" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="contactCurrency">Currency:</label>
+                    <select id="contactCurrency" name="currency" required>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="BTC">BTC</option>
+                        <option value="ETH">ETH</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Add Contact</button>
+                </div>
+            </form>
+        </div>
+
         <!-- Contacts Section -->
-        <div class="contacts-section fade-in-up">
+        <div id="contacts" class="contacts-section fade-in-up">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
-                <button class="add-contact-btn" onclick="openModal('addContactModal')">
+                <a href="#add-contact" class="add-contact-btn">
                     <i class="fas fa-plus"></i> Add Contact
-                </button>
+                </a>
             </div>
-            <div class="contacts-grid" id="contactsGrid">
+            <div class="contacts-grid">
                 <?php if (empty($contacts)): ?>
                     <div class="empty-state">
                         <i class="fas fa-users"></i>
@@ -1062,7 +1042,7 @@ function parseTransactionHistoryOutput($output) {
                     </div>
                 <?php else: ?>
                     <?php foreach ($contacts as $contact): ?>
-                        <div class="contact-card" onclick="viewContact('<?php echo htmlspecialchars($contact['name']); ?>')">
+                        <div class="contact-card">
                             <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                             <div class="contact-details">
                                 Address: <?php echo htmlspecialchars($contact['address']); ?><br>
@@ -1077,15 +1057,61 @@ function parseTransactionHistoryOutput($output) {
             </div>
         </div>
 
+        <!-- Pending Contacts Section -->
+        <?php if (!empty($pendingContacts)): ?>
+        <div id="pending-contacts" class="contacts-section fade-in-up">
+            <h2><i class="fas fa-user-clock"></i> Pending Contact Requests</h2>
+            <p style="color: #666; margin-bottom: 1rem;">The following contacts have requested to connect with you:</p>
+            
+            <?php foreach ($pendingContacts as $index => $contact): ?>
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid #007bff;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong style="color: #007bff;">Contact Request #<?php echo $index + 1; ?></strong>
+                        <span style="background: #ffc107; color: #333; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending</span>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <div class="info-label">Address:</div>
+                        <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px;">
+                            <?php echo htmlspecialchars($contact['address']); ?>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <div class="info-label">Public Key:</div>
+                        <div style="font-family: monospace; font-size: 0.8rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px; max-height: 100px; overflow-y: auto;">
+                            <?php echo htmlspecialchars($contact['pubkey']); ?>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
+                        <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">
+                            <i class="fas fa-info-circle"></i> To accept this contact request, use the command line:
+                        </p>
+                        <code style="background: #343a40; color: #fff; padding: 0.5rem; border-radius: 4px; display: block; font-size: 0.8rem; word-break: break-all;">
+                            eiou add <?php echo htmlspecialchars($contact['address']); ?> [name] [fee_percent] [credit_limit] [currency]
+                        </code>
+                        <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">
+                            Example: <code style="background: #e9ecef; padding: 0.2rem 0.4rem; border-radius: 3px;">eiou add <?php echo htmlspecialchars($contact['address']); ?> Alice 0.1 100 USD</code>
+                        </p>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+            
+            <div style="text-align: center; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
+                <p style="color: #666; font-size: 0.9rem;">
+                    <i class="fas fa-lightbulb"></i> Once you accept a contact via command line, they will appear in your contacts list and you can send/receive eIOUs.
+                </p>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Transaction History -->
-        <div class="transactions-section fade-in-up">
+        <div id="transactions" class="transactions-section fade-in-up">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h2><i class="fas fa-history"></i> Recent Transactions</h2>
-                <button class="btn btn-primary" onclick="refreshTransactions()" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                <a href="<?php echo $_SERVER['PHP_SELF']; ?>?authcode=<?php echo urlencode($authCode); ?>" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
                     <i class="fas fa-sync-alt"></i> Refresh
-                </button>
+                </a>
             </div>
-            <div id="transactionsList">
+            <div>
                 <?php if (empty($transactions)): ?>
                     <div class="empty-state">
                         <i class="fas fa-receipt"></i>
@@ -1107,773 +1133,6 @@ function parseTransactionHistoryOutput($output) {
                 <?php endif; ?>
             </div>
         </div>
-
-        <!-- Add Contact Modal -->
-    <div id="addContactModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-user-plus"></i> Add New Contact</h2>
-                <span class="close" onclick="closeModal('addContactModal')">&times;</span>
-            </div>
-            <form id="addContactForm">
-                <div class="form-group">
-                    <label for="contactAddress">Address:</label>
-                    <input type="text" id="contactAddress" placeholder="Enter .tor address" required>
-                </div>
-                <div class="form-group">
-                    <label for="contactName">Name:</label>
-                    <input type="text" id="contactName" placeholder="Enter contact name" required>
-                </div>
-                <div class="form-group">
-                    <label for="contactFee">Fee (%):</label>
-                    <input type="number" id="contactFee" placeholder="0.1" step="0.1" min="0" required>
-                </div>
-                <div class="form-group">
-                    <label for="contactCredit">Credit Limit:</label>
-                    <input type="number" id="contactCredit" placeholder="100" min="0" required>
-                </div>
-                <div class="form-group">
-                    <label for="contactCurrency">Currency:</label>
-                    <select id="contactCurrency" required>
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
-                        <option value="BTC">BTC</option>
-                        <option value="ETH">ETH</option>
-                    </select>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('addContactModal')">Cancel</button>
-                    <button type="submit" class="btn btn-success">Add Contact</button>
-                </div>
-            </form>
-        </div>
     </div>
-
-    <!-- Send eIOU Modal -->
-    <div id="sendModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-paper-plane"></i> Send eIOU</h2>
-                <span class="close" onclick="closeModal('sendModal')">&times;</span>
-            </div>
-            <form id="sendForm">
-                <div class="form-group">
-                    <label for="sendRecipient">Recipient:</label>
-                    <select id="sendRecipient" required>
-                        <option value="">Select recipient</option>
-                        <?php foreach ($contacts as $contact): ?>
-                            <option value="<?php echo htmlspecialchars($contact['name']); ?>"><?php echo htmlspecialchars($contact['name']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="sendAmount">Amount:</label>
-                    <input type="number" id="sendAmount" placeholder="100" min="0" step="0.01" required>
-                </div>
-                <div class="form-group">
-                    <label for="sendCurrency">Currency:</label>
-                    <select id="sendCurrency" required>
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
-                        <option value="BTC">BTC</option>
-                        <option value="ETH">ETH</option>
-                    </select>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('sendModal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Send eIOU</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- View Contact Modal -->
-    <div id="viewContactModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-user"></i> Contact Details</h2>
-                <span class="close" onclick="closeModal('viewContactModal')">&times;</span>
-            </div>
-            <div id="contactDetails">
-                <!-- Contact details will be populated here -->
-            </div>
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('viewContactModal')">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Settings Modal -->
-    <div id="settingsModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-cog"></i> Wallet Settings</h2>
-                <span class="close" onclick="closeModal('settingsModal')">&times;</span>
-            </div>
-            <form id="settingsForm">
-                <div class="form-group">
-                    <label for="defaultCurrency">Default Currency:</label>
-                    <select id="defaultCurrency" required>
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
-                        <option value="BTC">BTC</option>
-                        <option value="ETH">ETH</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="autoConfirm">Auto-confirm transactions:</label>
-                    <select id="autoConfirm" required>
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="notifications">Enable notifications:</label>
-                    <select id="notifications" required>
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
-                    </select>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('settingsModal')">Cancel</button>
-                    <button type="submit" class="btn btn-success">Save Settings</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script>
-        // Store auth code for API calls
-        const authCode = '<?php echo $authCode; ?>';
-        
-        // Store contact data for JavaScript
-        const contacts = <?php echo json_encode($contacts); ?>;
-        const transactions = <?php echo json_encode($transactions); ?>;
-        
-        // Logout function
-        function logout() {
-            window.location.href = window.location.pathname;
-        }
-
-        // Modal functions
-        function openModal(modalId) {
-            document.getElementById(modalId).style.display = 'block';
-            // Focus first input if it exists
-            const firstInput = document.querySelector(`#${modalId} input`);
-            if (firstInput) {
-                firstInput.focus();
-            }
-        }
-
-        function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
-            // Reset form if it exists
-            const form = document.querySelector(`#${modalId} form`);
-            if (form) {
-                form.reset();
-            }
-        }
-
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const modals = document.querySelectorAll('.modal');
-            modals.forEach(modal => {
-                if (event.target === modal) {
-                    modal.style.display = 'none';
-                }
-            });
-        }
-
-        // Update the form submission for add contact
-        document.getElementById('addContactForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const address = document.getElementById('contactAddress').value;
-            const name = document.getElementById('contactName').value;
-            const fee = document.getElementById('contactFee').value;
-            const credit = document.getElementById('contactCredit').value;
-            const currency = document.getElementById('contactCurrency').value;
-            
-            // Show loading state
-            const submitBtn = this.querySelector('button[type="submit"]');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
-            submitBtn.disabled = true;
-            
-            // Create form data
-            const formData = new FormData();
-            formData.append('action', 'addContact');
-            formData.append('authcode', authCode);
-            formData.append('address', address);
-            formData.append('name', name);
-            formData.append('fee', fee);
-            formData.append('credit', credit);
-            formData.append('currency', currency);
-            
-            // Make API call
-            fetch(window.location.href, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Show success message
-                    const output = document.getElementById('commandOutput');
-                    output.textContent = `Contact added successfully!
-Address: ${address}
-Name: ${name}
-Fee: ${fee}%
-Credit: ${credit} ${currency}
-
-${data.message}`;
-                    
-                    // Close modal
-                    closeModal('addContactModal');
-                    
-                    // Refresh the page to show updated contacts
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    // Show error message
-                    const output = document.getElementById('commandOutput');
-                    output.textContent = `Error adding contact: ${data.error}`;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                const output = document.getElementById('commandOutput');
-                output.textContent = `Error adding contact: ${error.message}`;
-            })
-            .finally(() => {
-                // Reset button state
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-            });
-        });
-
-        // Add these missing JavaScript functions to the existing script section
-
-        // Function to load transaction history
-        function loadTransactionHistory(address = null, limit = 10) {
-            const formData = new FormData();
-            formData.append('action', 'getTransactionHistory');
-            formData.append('authcode', authCode);
-            if (address) {
-                formData.append('address', address);
-            }
-            formData.append('limit', limit);
-            
-            fetch(window.location.href, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    updateTransactionHistoryDisplay(data.transactions);
-                } else {
-                    console.error('Error loading transaction history:', data.error);
-                    showToast('Failed to load transaction history', 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showToast('Error loading transaction history', 'error');
-            });
-        }
-
-        // Function to update the transaction history display
-        function updateTransactionHistoryDisplay(transactions) {
-            const transactionsList = document.getElementById('transactionsList');
-            
-            if (transactions.length === 0) {
-                transactionsList.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-receipt"></i>
-                        <h3>No Transactions Yet</h3>
-                        <p>Your transaction history will appear here</p>
-                    </div>
-                `;
-            } else {
-                let html = '';
-                transactions.forEach(tx => {
-                    const typeClass = tx.type === 'sent' ? 'transaction-sent' : 'transaction-received';
-                    const sign = tx.type === 'sent' ? '-' : '+';
-                    const action = tx.type === 'sent' ? 'Sent to' : 'Received from';
-                    
-                    html += `
-                        <div class="transaction-item">
-                            <div class="transaction-info">
-                                <div><strong>${action} ${tx.counterparty}</strong></div>
-                                <div style="font-size: 0.9rem; color: #666;">${tx.date}</div>
-                            </div>
-                            <div class="transaction-amount ${typeClass}">
-                                ${sign}$${tx.amount.toFixed(2)} ${tx.currency}
-                            </div>
-                        </div>
-                    `;
-                });
-                transactionsList.innerHTML = html;
-            }
-        }
-
-        // Refresh transactions function
-        function refreshTransactions() {
-            showToast('Refreshing transactions...', 'success');
-            loadTransactionHistory();
-        }
-
-        // Add functionality to the send form
-        document.getElementById('sendForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const recipient = document.getElementById('sendRecipient').value;
-            const amount = document.getElementById('sendAmount').value;
-            const currency = document.getElementById('sendCurrency').value;
-            
-            if (!recipient || !amount || !currency) {
-                showToast('Please fill in all fields', 'error');
-                return;
-            }
-            
-            // Show loading state
-            const submitBtn = this.querySelector('button[type="submit"]');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-            submitBtn.disabled = true;
-            
-            // TODO: Implement actual send eIOU functionality
-            // For now, simulate the send process
-            setTimeout(() => {
-                showToast(`Successfully sent ${amount} ${currency} to ${recipient}!`, 'success');
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-                closeModal('sendModal');
-                
-                // Refresh transactions after sending
-                setTimeout(() => {
-                    refreshTransactions();
-                }, 1000);
-            }, 2000);
-        });
-
-        // Add functionality to the settings form
-        document.getElementById('settingsForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const defaultCurrency = document.getElementById('defaultCurrency').value;
-            const autoConfirm = document.getElementById('autoConfirm').value;
-            const notifications = document.getElementById('notifications').value;
-            
-            // Show loading state
-            const submitBtn = this.querySelector('button[type="submit"]');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-            submitBtn.disabled = true;
-            
-            // TODO: Implement actual settings save functionality
-            // For now, simulate the save process
-            setTimeout(() => {
-                showToast('Settings saved successfully!', 'success');
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-                closeModal('settingsModal');
-            }, 1000);
-        });
-
-        // Add functionality to view contact modal
-        function openViewContactModal() {
-            // Populate the modal with contact list
-            const contactDetails = document.getElementById('contactDetails');
-            let details = '<h3>Select a contact to view details:</h3>';
-            
-            if (contacts.length === 0) {
-                details = '<p>No contacts available.</p>';
-            } else {
-                details += '<div style="max-height: 300px; overflow-y: auto;">';
-                contacts.forEach(contact => {
-                    details += `
-                        <div class="contact-item" onclick="viewContact('${contact.name}')" style="padding: 0.5rem; border-bottom: 1px solid #eee; cursor: pointer; hover: background-color: #f8f9fa;">
-                            <strong>${contact.name}</strong><br>
-                            <small>${contact.address}</small><br>
-                            <span style="color: ${contact.balance >= 0 ? '#28a745' : '#dc3545'}">
-                                Balance: ${contact.balance >= 0 ? '+' : ''}$${contact.balance.toFixed(2)} ${contact.currency}
-                            </span>
-                        </div>
-                    `;
-                });
-                details += '</div>';
-            }
-            
-            contactDetails.innerHTML = details;
-            openModal('viewContactModal');
-        }
-
-        // Update the quick action for view contacts
-        document.querySelector('.action-card[onclick="openModal(\'viewContactModal\')"]').onclick = openViewContactModal;
-
-        // Add copy functionality to contact details
-        function copyContactInfo(contactName, infoType) {
-            const contact = contacts.find(c => c.name.toLowerCase() === contactName.toLowerCase());
-            if (!contact) {
-                showToast('Contact not found', 'error');
-                return;
-            }
-            
-            let textToCopy = '';
-            let label = '';
-            
-            switch(infoType) {
-                case 'address':
-                    textToCopy = contact.address;
-                    label = 'contact address';
-                    break;
-                case 'name':
-                    textToCopy = contact.name;
-                    label = 'contact name';
-                    break;
-                case 'all':
-                    textToCopy = `Name: ${contact.name}\nAddress: ${contact.address}\nBalance: ${contact.balance} ${contact.currency}\nFee: ${contact.fee}%`;
-                    label = 'contact information';
-                    break;
-            }
-            
-            copyToClipboard(textToCopy, label);
-        }
-
-        // Add share functionality to contact details
-        function shareContactInfo(contactName) {
-            const contact = contacts.find(c => c.name.toLowerCase() === contactName.toLowerCase());
-            if (!contact) {
-                showToast('Contact not found', 'error');
-                return;
-            }
-            
-            const text = `Contact: ${contact.name}\nAddress: ${contact.address}\nBalance: ${contact.balance} ${contact.currency}`;
-            shareData(text, 'contact information');
-        }
-
-        // Update the viewContact function to include copy/share buttons
-        function viewContact(name) {
-            const contactDetails = document.getElementById('contactDetails');
-            let details = '';
-            
-            const contact = contacts.find(c => c.name.toLowerCase() === name.toLowerCase());
-            if (contact) {
-                details = `
-                    <div class="info-item">
-                        <div class="info-label">Name:</div>
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <span>${contact.name}</span>
-                            <button class="btn btn-sm btn-outline" onclick="copyContactInfo('${contact.name}', 'name')" title="Copy name">
-                                <i class="fas fa-copy"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Address:</div>
-                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                            <span style="flex: 1; word-break: break-all;">${contact.address}</span>
-                            <button class="btn btn-sm btn-outline" onclick="copyContactInfo('${contact.name}', 'address')" title="Copy address">
-                                <i class="fas fa-copy"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Fee:</div>
-                        <div>${contact.fee}%</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Credit Limit:</div>
-                        <div>${contact.credit} ${contact.currency}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Current Balance:</div>
-                        <div style="color: ${contact.balance >= 0 ? '#28a745' : '#dc3545'}">${contact.balance >= 0 ? '+' : ''}$${contact.balance.toFixed(2)} ${contact.currency}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Status:</div>
-                        <div style="color: #28a745;">Active</div>
-                    </div>
-                    <div class="form-actions" style="margin-top: 1rem;">
-                        <button class="btn btn-outline" onclick="copyContactInfo('${contact.name}', 'all')">
-                            <i class="fas fa-copy"></i> Copy All Info
-                        </button>
-                        <button class="btn btn-outline" onclick="shareContactInfo('${contact.name}')">
-                            <i class="fas fa-share-alt"></i> Share Contact
-                        </button>
-                    </div>
-                `;
-            } else {
-                details = `Contact '${name}' not found.`;
-            }
-            
-            contactDetails.innerHTML = details;
-            openModal('viewContactModal');
-        }
-
-        // Add keyboard shortcuts
-        document.addEventListener('keydown', function(e) {
-            // Ctrl/Cmd + R to refresh transactions
-            if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
-                e.preventDefault();
-                refreshTransactions();
-            }
-            
-            // Ctrl/Cmd + N to add new contact
-            if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-                e.preventDefault();
-                openModal('addContactModal');
-            }
-            
-            // Ctrl/Cmd + S to open send modal
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                e.preventDefault();
-                openModal('sendModal');
-            }
-            
-            // Escape to close modals
-            if (e.key === 'Escape') {
-                const modals = document.querySelectorAll('.modal');
-                modals.forEach(modal => {
-                    if (modal.style.display === 'block') {
-                        closeModal(modal.id);
-                    }
-                });
-            }
-        });
-
-        // Add auto-refresh functionality (optional)
-        let autoRefreshInterval = null;
-
-        function startAutoRefresh(interval = 30000) { // 30 seconds
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-            }
-            autoRefreshInterval = setInterval(() => {
-                refreshTransactions();
-            }, interval);
-            showToast('Auto-refresh enabled (30s)', 'success');
-        }
-
-        function stopAutoRefresh() {
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-                autoRefreshInterval = null;
-                showToast('Auto-refresh disabled', 'success');
-            }
-        }
-
-        // Add auto-refresh toggle to settings
-        document.getElementById('settingsForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const defaultCurrency = document.getElementById('defaultCurrency').value;
-            const autoConfirm = document.getElementById('autoConfirm').value;
-            const notifications = document.getElementById('notifications').value;
-            
-            // Handle auto-refresh setting
-            if (notifications === 'true') {
-                startAutoRefresh();
-            } else {
-                stopAutoRefresh();
-            }
-            
-            showToast('Settings saved successfully!', 'success');
-            closeModal('settingsModal');
-        });
-
-        // Copy to clipboard functionality with Tor Browser compatibility
-        function copyToClipboard(text, label) {
-            // Try modern clipboard API first (may be blocked in Tor Browser)
-            if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(function() {
-                    showToast(`${label} copied to clipboard!`, 'success');
-                }).catch(function(err) {
-                    // If modern API fails, try fallback methods
-                    fallbackCopyToClipboard(text, label);
-                });
-            } else {
-                // Use fallback methods for Tor Browser and older browsers
-                fallbackCopyToClipboard(text, label);
-            }
-        }
-
-        // Enhanced fallback copy function for Tor Browser compatibility
-        function fallbackCopyToClipboard(text, label) {
-            // Try document.execCommand first
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-999999px';
-            textArea.style.top = '-999999px';
-            textArea.style.opacity = '0';
-            textArea.setAttribute('readonly', '');
-            document.body.appendChild(textArea);
-            
-            try {
-                textArea.focus();
-                textArea.select();
-                textArea.setSelectionRange(0, 99999); // For mobile devices
-                
-                const successful = document.execCommand('copy');
-                document.body.removeChild(textArea);
-                
-                if (successful) {
-                    showToast(`${label} copied to clipboard!`, 'success');
-                    return;
-                }
-            } catch (err) {
-                console.log('Copy command failed:', err);
-            }
-            
-            // If all automated methods fail, show manual copy modal
-            showManualCopyModal(text, label);
-        }
-
-        // Manual copy modal for when all automated methods fail (Tor Browser fallback)
-        function showManualCopyModal(text, label) {
-            const modal = document.createElement('div');
-            modal.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.8);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 10000;
-            `;
-            
-            const content = document.createElement('div');
-            content.style.cssText = `
-                background: white;
-                padding: 2rem;
-                border-radius: 8px;
-                max-width: 90%;
-                max-height: 80%;
-                overflow: auto;
-                text-align: center;
-            `;
-            
-            content.innerHTML = `
-                <h3>Manual Copy Required</h3>
-                <p>Please manually copy the ${label} below:</p>
-                <textarea readonly style="width: 100%; height: 100px; margin: 1rem 0; font-family: monospace; font-size: 12px;">${text}</textarea>
-                <div>
-                    <button onclick="this.parentElement.parentElement.parentElement.remove(); document.body.style.overflow=''" style="padding: 0.5rem 1rem; margin: 0.5rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
-                </div>
-            `;
-            
-            modal.appendChild(content);
-            document.body.appendChild(modal);
-            document.body.style.overflow = 'hidden';
-            
-            // Auto-select the text in the textarea
-            const textarea = content.querySelector('textarea');
-            textarea.focus();
-            textarea.select();
-            
-            showToast(`Please manually copy the ${label} from the popup`, 'info');
-        }
-
-        // Share data functionality with Tor Browser compatibility
-        function shareData(text, label) {
-            // In Tor Browser, Web Share API is likely disabled for privacy
-            // So we'll primarily rely on copy functionality with a message
-            if (navigator.share && !navigator.userAgent.includes('Tor')) {
-                navigator.share({
-                    title: `eIOU ${label}`,
-                    text: text
-                }).then(() => {
-                    showToast(`${label} shared successfully!`, 'success');
-                }).catch((error) => {
-                    // If share fails, fall back to copy
-                    if (error.name !== 'AbortError') {
-                        copyToClipboard(text, label);
-                        showToast('Share failed, copied to clipboard instead', 'info');
-                    }
-                });
-            } else {
-                // For Tor Browser and browsers without Web Share API, copy to clipboard
-                copyToClipboard(text, label);
-                showToast(`${label} ready to share - copied to clipboard`, 'info');
-            }
-        }
-
-        // Show pending contacts modal
-        function showPendingContacts() {
-            const pendingContacts = <?php echo json_encode($pendingContacts); ?>;
-            
-            if (pendingContacts.length === 0) {
-                showToast('No pending contact requests', 'info');
-                return;
-            }
-            
-            let contactsHtml = '<h3><i class="fas fa-user-clock"></i> Pending Contact Requests</h3>';
-            contactsHtml += '<div style="margin-bottom: 1rem;">';
-            contactsHtml += '<p style="color: #666;">The following contacts have requested to connect with you:</p>';
-            contactsHtml += '</div>';
-            
-            pendingContacts.forEach((contact, index) => {
-                contactsHtml += `
-                    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 4px solid #007bff;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <strong style="color: #007bff;">Contact Request #${index + 1}</strong>
-                            <span style="background: #ffc107; color: #333; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending</span>
-                        </div>
-                        <div style="margin-bottom: 0.5rem;">
-                            <div class="info-label">Address:</div>
-                            <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px;">
-                                ${contact.address}
-                            </div>
-                        </div>
-                        <div style="margin-bottom: 1rem;">
-                            <div class="info-label">Public Key:</div>
-                            <div style="font-family: monospace; font-size: 0.8rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px; max-height: 100px; overflow-y: auto;">
-                                ${contact.pubkey}
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            <button class="btn btn-sm btn-outline" onclick="copyToClipboard('${contact.address}', 'contact address')" title="Copy address">
-                                <i class="fas fa-copy"></i> Copy Address
-                            </button>
-                            <button class="btn btn-sm btn-outline" onclick="copyToClipboard('${contact.pubkey}', 'public key')" title="Copy public key">
-                                <i class="fas fa-copy"></i> Copy Key
-                            </button>
-                        </div>
-                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
-                            <p style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem;">
-                                <i class="fas fa-info-circle"></i> To accept this contact request, use the command line:
-                            </p>
-                            <code style="background: #343a40; color: #fff; padding: 0.5rem; border-radius: 4px; display: block; font-size: 0.8rem; word-break: break-all;">
-                                eiou add ${contact.address} [name] [fee_percent] [credit_limit] [currency]
-                            </code>
-                            <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">
-                                Example: <code style="background: #e9ecef; padding: 0.2rem 0.4rem; border-radius: 3px;">eiou add ${contact.address} Alice 0.1 100 USD</code>
-                            </p>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            contactsHtml += `
-                <div style="text-align: center; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
-                    <p style="color: #666; font-size: 0.9rem;">
-                        <i class="fas fa-lightbulb"></i> Once you accept a contact via command line, they will appear in your contacts list and you can send/receive eIOUs.
-                    </p>
-                </div>
-            `;
-            
-            document.getElementById('contactDetails').innerHTML = contactsHtml;
-            openModal('viewContactModal');
-        }
-    </script>
 </body>
-</html>
-<?php
-?> 
+</html> 
