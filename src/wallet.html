@@ -844,6 +844,51 @@ header('Content-Type: text/html; charset=UTF-8');
         .section-content.show {
             display: block;
         }
+
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            text-decoration: none;
+        }
+
+        .fab:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
+            text-decoration: none;
+            color: white;
+        }
+
+        .fab:active {
+            transform: translateY(-1px);
+        }
+
+        /* Hide FAB when at top of page */
+        .fab.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(20px);
+        }
+
+        /* Smooth scrolling for the page */
+        html {
+            scroll-behavior: smooth;
+        }
     </style>
 </head>
 <body>
@@ -1134,5 +1179,29 @@ header('Content-Type: text/html; charset=UTF-8');
             </div>
         </div>
     </div>
+
+    <!-- Floating Action Button -->
+    <a href="#top" class="fab" id="backToTop" title="Back to top">
+        <i class="fas fa-arrow-up"></i>
+    </a>
+
+    <script>
+        // Simple script to show/hide the floating action button
+        // This is minimal JavaScript that should work in Tor Browser
+        window.addEventListener('scroll', function() {
+            const fab = document.getElementById('backToTop');
+            if (window.pageYOffset > 300) {
+                fab.classList.remove('hidden');
+            } else {
+                fab.classList.add('hidden');
+            }
+        });
+
+        // Hide FAB initially
+        document.addEventListener('DOMContentLoaded', function() {
+            const fab = document.getElementById('backToTop');
+            fab.classList.add('hidden');
+        });
+    </script>
 </body>
 </html> 
