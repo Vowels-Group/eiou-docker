@@ -919,7 +919,7 @@ function parseTransactionHistoryOutput($output) {
                 </div>
                 <div class="info-item">
                     <div class="info-label">Public Key:</div>
-                    <div><?php echo isset($user['public']) ? substr($user['public'], 0, 20) . '...' : 'Not available'; ?></div>
+                    <div style="word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo isset($user['public']) ? $user['public'] : 'Not available'; ?></div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Status:</div>
