@@ -159,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $messageType = 'error';
     } else {
         // Create argv array for addContact function
-        $argv = ['add', 'contact', $address, $name, $fee, $credit, $currency];
+        $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency];
         
         // Capture output
         ob_start();
@@ -192,9 +192,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $message = 'All fields are required';
         $messageType = 'error';
     } else {
-        // TODO: Implement actual send eIOU functionality
-        $message = "Successfully sent {$amount} {$currency} to {$recipient}!";
-        $messageType = 'success';
+        // Create argv array for sendEiou function
+        $argv = ['eiou','send', $recipient, $amount, $currency];
+
+        // Capture output
+        ob_start();
+        try {
+            sendEiou($argv);
+            $output = ob_get_clean();
+            
+            if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
+                $message = trim($output);
+                $messageType = 'error';
+            } else {
+                // TODO: NOTE cannot ascertain completion from this one, comes through message system from end-recipient
+                $message = "Sending {$amount} {$currency} to {$recipient}!";
+                //$message = "Successfully sent {$amount} {$currency} to {$recipient}!";
+                $messageType = 'success';
+            }
+        } catch (Exception $e) {
+            ob_end_clean();
+            $message = 'Internal server error: ' . $e->getMessage();
+            $messageType = 'error';
+        }
     }
 }
 
@@ -218,7 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     $messageType = 'error';
                 } else {
                     // Create argv array for addContact function
-                    $argv = ['add', 'contact', $contactAddress, $contactName, $contactFee, $contactCredit, $contactCurrency];
+                    $argv = ['eiou', 'add', $contactAddress, $contactName, $contactFee, $contactCredit, $contactCurrency];
                     
                     // Capture output
                     ob_start();
@@ -242,15 +262,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                 break;
                 
             case 'deleteContact':
-                // TODO: Implement delete contact functionality
-                $message = "Contact request from {$contactAddress} deleted successfully!";
-                $messageType = 'success';
-                break;
+                // Create argv array for deleteContact function
+                $argv = ['eiou', 'delete', $contactAddress];
                 
+                // Capture output
+                ob_start();
+                try {
+                    deleteContact($argv);
+                    $output = ob_get_clean();
+                    
+                    if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
+                        $message = trim($output);
+                        $messageType = 'error';
+                    } else {
+                        $message = "Contact request from {$contactAddress} deleted successfully!";
+                        $messageType = 'success';
+                    }
+                } catch (Exception $e) {
+                    ob_end_clean();
+                    $message = 'Internal server error: ' . $e->getMessage();
+                    $messageType = 'error';
+                }
+                break;
+
+
             case 'blockContact':
-                // TODO: Implement block contact functionality
-                $message = "Contact {$contactAddress} has been blocked!";
-                $messageType = 'success';
+                $argv = ['eiou', 'block', $contactAddress];
+                
+                // Capture output
+                ob_start();
+                try {
+                    blockContact($argv);
+                    $output = ob_get_clean();
+                    
+                    if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
+                        $message = trim($output);
+                        $messageType = 'error';
+                    } else {
+                        $message = "Contact {$contactAddress} has been blocked!";
+                        $messageType = 'success';
+                    }
+                } catch (Exception $e) {
+                    ob_end_clean();
+                    $message = 'Internal server error: ' . $e->getMessage();
+                    $messageType = 'error';
+                }
                 break;
         }
     }
