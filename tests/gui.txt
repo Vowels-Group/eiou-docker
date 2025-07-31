@@ -1,5 +1,19 @@
 # GUI Integration Instructions for All Systems
+# This document provides instructions for building and running EIOU containers with GUI access
+
+## Build Instructions
+
+# Build the Docker image (run this first)
+docker build -f eioud.dockerfile -t eioud .
+
+# Create the network (only need to do this once per docker installation)
+docker network create -d bridge eiou-network
+
+## Container Setup Options
+
+### Option 1: Bob with Volume Mount (for development/testing)
 # This links the local src/wallet.html with the container's /var/www/html/index.html
+# Use this when you want to modify the GUI locally and see changes immediately
 
 # Windows (PowerShell/Command Prompt)
 docker run -d --name Bob --network eiou-network -v "${PWD}\src\wallet.html:/var/www/html/index.html" -e QUICKSTART=Bob eioud
@@ -11,4 +25,41 @@ docker run -d --name Bob --network eiou-network -v "$(pwd)/src/wallet.html:/var/
 # Windows: -v "C:\path\to\your\eiou\src\wallet.html:/var/www/html/index.html"
 # Linux: -v "/home/user/eiou/src/wallet.html:/var/www/html/index.html"
 # macOS: -v "/Users/user/eiou/src/wallet.html:/var/www/html/index.html"
+
+### Option 2: Alice, Carol, and Daniel (standard containers)
+# These containers use the built-in wallet.html from the Docker image
+# No volume mounting needed - they use the default GUI
+
+# Windows (PowerShell/Command Prompt)
+docker run -d --name Alice --network eiou-network -e QUICKSTART=Alice eioud
+docker run -d --name Carol --network eiou-network -e QUICKSTART=Carol eioud
+docker run -d --name Daniel --network eiou-network -e QUICKSTART=Daniel eioud
+
+# Linux/macOS (Bash/Zsh)
+docker run -d --name Alice --network eiou-network -e QUICKSTART=Alice eioud
+docker run -d --name Carol --network eiou-network -e QUICKSTART=Carol eioud
+docker run -d --name Daniel --network eiou-network -e QUICKSTART=Daniel eioud
+
+## Accessing the GUI
+
+# After containers are running, access the GUI via:
+# - Bob (with volume mount): http://localhost:8080 (if port mapping is added)
+# - Alice, Carol, Daniel: Use the HTTP addresses shown in container logs
+
+# To see container information and HTTP addresses:
+docker logs Alice
+docker logs Bob
+docker logs Carol
+docker logs Daniel
+
+# To access the GUI directly from within a container:
+docker exec -it Bob bash
+# Then navigate to /var/www/html/ and view index.html
+
+## Notes
+
+# - Bob's container with volume mount is ideal for GUI development
+# - Alice, Carol, and Daniel use the standard built-in GUI
+# - All containers automatically generate wallets and setup when QUICKSTART is used
+# - The network 'eiou-network' allows containers to communicate with each other
 
