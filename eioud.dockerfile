@@ -59,6 +59,9 @@ RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.lo
 RUN touch /var/log/php_errors.log
 RUN chmod 666 /var/log/php_errors.log
 
+# Declare volumes for data persistence
+VOLUME ["/var/lib/mysql", "/etc/eiou"]
+
 # Copy and set up startup script
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh
