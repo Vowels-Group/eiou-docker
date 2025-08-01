@@ -224,6 +224,12 @@ function sendEiou($request = null) {
     //output("Getting ready to send eIOU with request: " . print_r($request, true), 'SILENT');
     validateSendRequest($request);
         
+    // Check if any contacts for eIOU
+    if(!retrieveContactAddresses()){
+        output(outputNoContactsForTransaction($request));
+        exit(0);
+    }
+
     // If receiver's public key is in contacts, prepare a transaction to send directly to them
     if ($contactInfo = lookupContactInfo($request[2])) {
         output(outputLookedUpContactInfo($contactInfo), 'SILENT');
