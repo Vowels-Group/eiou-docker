@@ -182,15 +182,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // Handle send eIOU form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'sendEIOU') {
     $recipient = $_POST['recipient'] ?? '';
+    $manualRecipient = $_POST['manual_recipient'] ?? '';
     $amount = $_POST['amount'] ?? '';
     $currency = $_POST['currency'] ?? '';
     
-    if (empty($recipient) || empty($amount) || empty($currency)) {
+    // Use manual recipient if provided, otherwise use selected recipient
+    $finalRecipient = !empty($manualRecipient) ? $manualRecipient : $recipient;
+    
+    if (empty($finalRecipient) || empty($amount) || empty($currency)) {
         $message = 'All fields are required';
         $messageType = 'error';
     } else {
         // Create argv array for sendEiou function
-        $argv = ['eiou','send', $recipient, $amount, $currency];
+        $argv = ['eiou','send', $finalRecipient, $amount, $currency];
 
         // Capture output
         ob_start();
@@ -202,9 +206,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $message = trim($output);
                 $messageType = 'error';
             } else {
+                // Determine if this was a P2P transaction
+                $isP2P = empty($recipient) && !empty($manualRecipient);
+                $transactionType = $isP2P ? 'P2P' : 'Direct';
+                
                 // TODO: NOTE cannot ascertain completion from this one, comes through message system from end-recipient
-                $message = "Sending {$amount} {$currency} to {$recipient}!";
-                //$message = "Successfully sent {$amount} {$currency} to {$recipient}!";
+                $message = "Sending {$amount} {$currency} to {$finalRecipient} via {$transactionType} transaction!";
+                if ($isP2P) {
+                    $message .= " The transaction will be routed through your network of contacts.";
+                }
                 $messageType = 'success';
             }
         } catch (Exception $e) {
@@ -1197,7 +1207,7 @@ header('Content-Type: text/html; charset=UTF-8');
             <a href="#send-form" class="action-card">
                 <i class="fas fa-paper-plane"></i>
                 <h3>Send eIOU</h3>
-                <p>Transfer value to contacts</p>
+                <p>Transfer value to contacts or anyone via P2P</p>
             </a>
             <a href="#add-contact" class="action-card">
                 <i class="fas fa-user-plus"></i>
@@ -1271,6 +1281,20 @@ header('Content-Type: text/html; charset=UTF-8');
         <!-- Send eIOU Form -->
         <div id="send-form" class="form-container fade-in-up">
             <h2><i class="fas fa-paper-plane"></i> Send eIOU</h2>
+            
+            <!-- P2P Information Alert -->
+            <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 4px; padding: 1rem; margin-bottom: 1.5rem;">
+                <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
+                    <i class="fas fa-info-circle" style="color: #0066cc; margin-top: 0.2rem;"></i>
+                    <div>
+                        <strong style="color: #0066cc;">Peer-to-Peer Routing Available</strong>
+                        <p style="margin: 0.5rem 0 0 0; color: #333; font-size: 0.9rem;">
+                            You can send eIOUs to anyone, even if they're not in your contacts! The system will automatically route the transaction through your network of contacts to reach the recipient.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
             <form method="POST">
                 <input type="hidden" name="action" value="sendEIOU">
                 <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
@@ -1278,12 +1302,27 @@ header('Content-Type: text/html; charset=UTF-8');
                 <div class="form-group">
                     <label for="recipient">Recipient:</label>
                     <select id="recipient" name="recipient" required>
-                        <option value="">Select recipient</option>
+                        <option value="">Select from contacts or enter address manually</option>
                         <?php foreach ($contacts as $contact): ?>
-                            <option value="<?php echo htmlspecialchars($contact['name']); ?>"><?php echo htmlspecialchars($contact['name']); ?></option>
+                            <option value="<?php echo htmlspecialchars($contact['name']); ?>"><?php echo htmlspecialchars($contact['name']); ?> (Contact)</option>
                         <?php endforeach; ?>
                     </select>
+                    <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                        <i class="fas fa-lightbulb"></i> 
+                        <strong>Tip:</strong> You can also enter a .onion address or HTTP address directly to send to non-contacts via P2P routing.
+                    </small>
                 </div>
+                
+                <!-- Manual Address Input (initially hidden) -->
+                <div class="form-group" id="manual-address-group" style="display: none;">
+                    <label for="manual-address">Recipient Address:</label>
+                    <input type="text" id="manual-address" name="manual_recipient" placeholder="Enter .onion address or HTTP address" style="font-family: 'Courier New', monospace;">
+                    <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                        <i class="fas fa-shield-alt"></i> 
+                        <strong>Security:</strong> P2P transactions are routed through your trusted contacts for security.
+                    </small>
+                </div>
+                
                 <div class="form-group">
                     <label for="amount">Amount:</label>
                     <input type="number" id="amount" name="amount" placeholder="100" min="0" step="0.01" required>
@@ -1294,8 +1333,19 @@ header('Content-Type: text/html; charset=UTF-8');
                         <option value="USD">USD</option>
                     </select>
                 </div>
+                
+                <!-- Transaction Type Indicator -->
+                <div id="transaction-type-indicator" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 1rem; margin-bottom: 1rem; display: none;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-exchange-alt" style="color: #28a745;"></i>
+                        <span id="transaction-type-text" style="font-weight: 600; color: #28a745;"></span>
+                    </div>
+                </div>
+                
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Send eIOU</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Send eIOU
+                    </button>
                 </div>
             </form>
         </div>
@@ -1620,23 +1670,80 @@ header('Content-Type: text/html; charset=UTF-8');
                 });
             }
             
-            // Start polling initially
-            startPolling();
+                    // Start polling initially
+        startPolling();
+    }
+    
+    // Manual refresh function (Tor Browser compatible)
+    function refreshWalletData() {
+        const refreshBtn = document.getElementById('manualRefresh');
+        const icon = refreshBtn.querySelector('i');
+        
+        // Show loading state
+        icon.className = 'fas fa-spinner fa-spin';
+        refreshBtn.disabled = true;
+        
+        // Preserve auth code when refreshing
+        const url = new URL(window.location.href);
+        window.location.href = url.toString();
+    }
+    
+    // Send eIOU form handling
+    function initializeSendForm() {
+        const recipientSelect = document.getElementById('recipient');
+        const manualAddressGroup = document.getElementById('manual-address-group');
+        const manualAddressInput = document.getElementById('manual-address');
+        const transactionTypeIndicator = document.getElementById('transaction-type-indicator');
+        const transactionTypeText = document.getElementById('transaction-type-text');
+        
+        if (recipientSelect) {
+            recipientSelect.addEventListener('change', function() {
+                const selectedValue = this.value;
+                
+                if (selectedValue === '') {
+                    // Show manual address input
+                    manualAddressGroup.style.display = 'block';
+                    manualAddressInput.required = true;
+                    recipientSelect.required = false;
+                    transactionTypeIndicator.style.display = 'block';
+                    transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
+                    transactionTypeText.style.color = '#ffc107';
+                } else {
+                    // Hide manual address input
+                    manualAddressGroup.style.display = 'none';
+                    manualAddressInput.required = false;
+                    recipientSelect.required = true;
+                    transactionTypeIndicator.style.display = 'block';
+                    transactionTypeText.textContent = 'Direct Transaction (to contact)';
+                    transactionTypeText.style.color = '#28a745';
+                }
+            });
         }
         
-        // Manual refresh function (Tor Browser compatible)
-        function refreshWalletData() {
-            const refreshBtn = document.getElementById('manualRefresh');
-            const icon = refreshBtn.querySelector('i');
-            
-            // Show loading state
-            icon.className = 'fas fa-spinner fa-spin';
-            refreshBtn.disabled = true;
-            
-            // Preserve auth code when refreshing
-            const url = new URL(window.location.href);
-            window.location.href = url.toString();
+        // Handle manual address input
+        if (manualAddressInput) {
+            manualAddressInput.addEventListener('input', function() {
+                const address = this.value.trim();
+                if (address) {
+                    transactionTypeIndicator.style.display = 'block';
+                    if (address.includes('.onion') || address.startsWith('http')) {
+                        transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
+                        transactionTypeText.style.color = '#ffc107';
+                    } else {
+                        transactionTypeText.textContent = 'P2P Transaction (address format detected)';
+                        transactionTypeText.style.color = '#ffc107';
+                    }
+                } else {
+                    transactionTypeIndicator.style.display = 'none';
+                }
+            });
         }
+    }
+    
+    // Initialize send form when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeSendForm();
+    });
     </script>
     
     <style>
