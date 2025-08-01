@@ -77,7 +77,7 @@ function handleContactMessageRequest($decodedMessage){
 
 function handleTransactionMessageInquiryRequest($decodedMessage){
     // Handle inquiry about transaction status
-    output(handleTransactionMessageResponse($decodedMessage),'SILENT');
+    output(outputHandleTransactionMessageResponse($decodedMessage),'SILENT');
     echo buildSendCompletedCorrectlyPayload($decodedMessage);
 }
 

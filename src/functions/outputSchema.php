@@ -58,7 +58,7 @@ function outputGeneratedP2pHash($hash){
     return "Generated p2pHash: " . $hash;
 }
 
-function handleTransactionMessageResponse($decodedMessage){
+function outputHandleTransactionMessageResponse($decodedMessage){
     return "Responding to Transaction message inquiry from: " . $decodedMessage['senderAddress'];
 }
 
@@ -88,6 +88,10 @@ function outputIssueTransactionTryP2p($response){
 
 function outputLookedUpContactInfo($contactInfo){
     return "Looked up contact info: " . print_r($contactInfo, true);
+}
+
+function outputNoContactsForTransaction($request){
+    return "No contacts exist in database for transaction.";
 }
 
 function outputPrepareP2pData($request){
