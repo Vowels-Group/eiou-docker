@@ -416,14 +416,13 @@ function getTransactionHistory($limit = 10) {
             return [];
         }
         
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $placeholders = sprintf("'%s'", implode("','", $userAddresses ) );
         $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions 
-                  WHERE sender_address IN ($placeholders) OR receiver_address IN ($placeholders) 
-                  ORDER BY timestamp DESC LIMIT ?";
-        
-        $params = array_merge($userAddresses, $userAddresses, [$limit]);
+                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders)) 
+                  ORDER BY timestamp DESC LIMIT $limit";
         $stmt = $pdo->prepare($query);
-        $stmt->execute($params);
+        $stmt->execute();
+
         
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $formattedTransactions = [];
@@ -481,14 +480,13 @@ function checkForNewTransactions($lastCheckTime) {
             return false;
         }
         
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $placeholders = sprintf("'%s'", implode("','", $userAddresses ) );
         $query = "SELECT COUNT(*) as count FROM transactions 
                   WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders)) 
-                  AND timestamp > ?";
-        
-        $params = array_merge($userAddresses, $userAddresses, [$lastCheckTime]);
+                  AND timestamp > $lastCheckTime";
         $stmt = $pdo->prepare($query);
-        $stmt->execute($params);
+        $stmt->execute();
+
         
         $result = $stmt->fetch();
         return $result['count'] > 0;
