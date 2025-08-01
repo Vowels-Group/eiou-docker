@@ -16,10 +16,16 @@ docker network create -d bridge eiou-network
 # Use this when you want to modify the GUI locally and see changes immediately
 
 # Windows (PowerShell/Command Prompt)
+docker run -d --name Alice --network eiou-network -v "${PWD}\src\wallet.html:/var/www/html/index.html" -e QUICKSTART=Alice eioud
 docker run -d --name Bob --network eiou-network -v "${PWD}\src\wallet.html:/var/www/html/index.html" -e QUICKSTART=Bob eioud
+docker run -d --name Carol --network eiou-network -v "${PWD}\src\wallet.html:/var/www/html/index.html" -e QUICKSTART=Carol eioud
+docker run -d --name Daniel --network eiou-network -v "${PWD}\src\wallet.html:/var/www/html/index.html" -e QUICKSTART=Daniel eioud
 
 # Linux/macOS (Bash/Zsh)
+docker run -d --name Alice --network eiou-network -v "$(pwd)/src/wallet.html:/var/www/html/index.html" -e QUICKSTART=Alice eioud
 docker run -d --name Bob --network eiou-network -v "$(pwd)/src/wallet.html:/var/www/html/index.html" -e QUICKSTART=Bob eioud
+docker run -d --name Carol --network eiou-network -v "$(pwd)/src/wallet.html:/var/www/html/index.html" -e QUICKSTART=Carol eioud
+docker run -d --name Daniel --network eiou-network -v "$(pwd)/src/wallet.html:/var/www/html/index.html" -e QUICKSTART=Daniel eioud
 
 # Alternative absolute path examples:
 # Windows: -v "C:\path\to\your\eiou\src\wallet.html:/var/www/html/index.html"
