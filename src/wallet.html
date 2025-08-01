@@ -830,24 +830,57 @@ header('Content-Type: text/html; charset=UTF-8');
         .contact-card {
             background: #f8f9fa;
             padding: 1rem;
-            border-radius: 4px;
+            border-radius: 8px;
             border-left: 4px solid #0d6efd;
             transition: transform 0.2s ease;
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
         }
 
         .contact-card:hover {
             transform: translateY(-2px);
         }
 
+        .contact-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .contact-info {
+            flex: 1;
+            min-width: 0; /* Allows text to wrap properly */
+        }
+
         .contact-name {
             font-weight: bold;
             color: #0d6efd;
             margin-bottom: 0.5rem;
+            font-size: 1.1rem;
         }
 
         .contact-details {
             font-size: 0.9rem;
             color: #6c757d;
+        }
+
+        .contact-address {
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            word-break: break-all;
+            background: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            margin: 0.25rem 0;
+            border: 1px solid #dee2e6;
         }
 
         .balance-positive {
@@ -1306,8 +1339,8 @@ header('Content-Type: text/html; charset=UTF-8');
                 
                 <div class="form-group">
                     <label for="recipient">Recipient:</label>
-                    <select id="recipient" name="recipient" required>
-                        <option value="">Select from contacts or enter address manually</option>
+                    <select id="recipient" name="recipient">
+                        <option value="">Or select from contacts below</option>
                         <?php foreach ($contacts as $contact): ?>
                             <option value="<?php echo htmlspecialchars($contact['name']); ?>"><?php echo htmlspecialchars($contact['name']); ?> (Contact)</option>
                         <?php endforeach; ?>
@@ -1318,8 +1351,8 @@ header('Content-Type: text/html; charset=UTF-8');
                     </small>
                 </div>
                 
-                <!-- Manual Address Input (initially hidden) -->
-                <div class="form-group" id="manual-address-group" style="display: none;">
+                <!-- Manual Address Input (visible by default) -->
+                <div class="form-group" id="manual-address-group">
                     <label for="manual-address">Recipient Address:</label>
                     <input type="text" id="manual-address" name="manual_recipient" placeholder="Enter .onion address or HTTP address" style="font-family: 'Courier New', monospace;">
                     <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
@@ -1763,12 +1796,19 @@ header('Content-Type: text/html; charset=UTF-8');
         const transactionTypeIndicator = document.getElementById('transaction-type-indicator');
         const transactionTypeText = document.getElementById('transaction-type-text');
         
+        // Set initial state - manual address is visible by default
+        manualAddressInput.required = true;
+        recipientSelect.required = false;
+        transactionTypeIndicator.style.display = 'block';
+        transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
+        transactionTypeText.style.color = '#ffc107';
+        
         if (recipientSelect) {
             recipientSelect.addEventListener('change', function() {
                 const selectedValue = this.value;
                 
                 if (selectedValue === '') {
-                    // Show manual address input
+                    // Show manual address input (default state)
                     manualAddressGroup.style.display = 'block';
                     manualAddressInput.required = true;
                     recipientSelect.required = false;
@@ -1776,7 +1816,7 @@ header('Content-Type: text/html; charset=UTF-8');
                     transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
                     transactionTypeText.style.color = '#ffc107';
                 } else {
-                    // Hide manual address input
+                    // Hide manual address input when contact is selected
                     manualAddressGroup.style.display = 'none';
                     manualAddressInput.required = false;
                     recipientSelect.required = true;
