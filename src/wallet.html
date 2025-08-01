@@ -613,11 +613,13 @@ header('Content-Type: text/html; charset=UTF-8');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo isset($user['hostname']) ? htmlspecialchars(parse_url($user['hostname'], PHP_URL_HOST) ?: $user['hostname']) . ' - ' : ''; ?>₳ Wallet</title>
     <!-- Auto-refresh for users with JavaScript disabled (Tor Browser compatible) -->
-    <?php if (!empty($authCode)): ?>
-    <meta http-equiv="refresh" content="10;url=<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>">
-    <?php else: ?>
-    <meta http-equiv="refresh" content="10">
-    <?php endif; ?>
+    <noscript>
+        <?php if (!empty($authCode)): ?>
+        <meta http-equiv="refresh" content="10;url=<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>">
+        <?php else: ?>
+        <meta http-equiv="refresh" content="10">
+        <?php endif; ?>
+    </noscript>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -1237,6 +1239,9 @@ header('Content-Type: text/html; charset=UTF-8');
                     <i class="fas fa-clock"></i> Last updated: <?php echo date('M j, Y g:i:s A'); ?>
                     <br>
                     <small id="refresh-status">Auto-refresh every 10 seconds • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>" style="color: #0d6efd;">Refresh now</a></small>
+                    <div id="polling-status" style="margin-top: 0.25rem; font-size: 0.8rem; color: #28a745;">
+                        <i class="fas fa-sync-alt fa-spin"></i> Auto-refresh active
+                    </div>
                     <noscript>
                         <br><small style="color: #dc3545;"><i class="fas fa-exclamation-triangle"></i> JavaScript disabled - page refreshes every 10 seconds automatically</small>
                     </noscript>
@@ -1581,13 +1586,15 @@ header('Content-Type: text/html; charset=UTF-8');
             // Only poll if user is actively using the page
             let isPageActive = true;
             let pollInterval = null;
+            let isUserInteracting = false;
+            let interactionTimeout = null;
             
             // Start polling when page becomes visible
             function startPolling() {
                 if (pollInterval) return; // Already polling
                 
                 pollInterval = setInterval(function() {
-                    if (isPageActive) {
+                    if (isPageActive && !isUserInteracting) {
                         checkForUpdates();
                     }
                 }, 10000); // Poll every 10 seconds
@@ -1598,6 +1605,37 @@ header('Content-Type: text/html; charset=UTF-8');
                 if (pollInterval) {
                     clearInterval(pollInterval);
                     pollInterval = null;
+                }
+            }
+            
+            // Pause polling when user is interacting with forms
+            function pausePollingForInteraction() {
+                isUserInteracting = true;
+                updatePollingStatus();
+                
+                // Clear existing timeout
+                if (interactionTimeout) {
+                    clearTimeout(interactionTimeout);
+                }
+                
+                // Resume polling after 30 seconds of no interaction
+                interactionTimeout = setTimeout(function() {
+                    isUserInteracting = false;
+                    updatePollingStatus();
+                }, 30000);
+            }
+            
+            // Update the polling status indicator
+            function updatePollingStatus() {
+                const statusElement = document.getElementById('polling-status');
+                if (statusElement) {
+                    if (isUserInteracting) {
+                        statusElement.innerHTML = '<i class="fas fa-pause"></i> Auto-refresh paused (form interaction detected)';
+                        statusElement.style.color = '#ffc107';
+                    } else {
+                        statusElement.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Auto-refresh active';
+                        statusElement.style.color = '#28a745';
+                    }
                 }
             }
             
@@ -1670,9 +1708,38 @@ header('Content-Type: text/html; charset=UTF-8');
                 });
             }
             
-                    // Start polling initially
-        startPolling();
-    }
+                                // Add event listeners for form interactions
+            function addFormInteractionListeners() {
+                // Listen for form input events
+                const formInputs = document.querySelectorAll('input, select, textarea');
+                formInputs.forEach(input => {
+                    input.addEventListener('focus', pausePollingForInteraction);
+                    input.addEventListener('input', pausePollingForInteraction);
+                    input.addEventListener('change', pausePollingForInteraction);
+                });
+                
+                // Listen for form submission
+                const forms = document.querySelectorAll('form');
+                forms.forEach(form => {
+                    form.addEventListener('submit', function() {
+                        isUserInteracting = true; // Keep paused during submission
+                    });
+                });
+                
+                // Listen for mouse clicks on form elements
+                document.addEventListener('click', function(e) {
+                    if (e.target.matches('input, select, textarea, button, .btn')) {
+                        pausePollingForInteraction();
+                    }
+                });
+            }
+            
+            // Start polling initially
+            startPolling();
+            
+            // Add form interaction listeners
+            addFormInteractionListeners();
+        }
     
     // Manual refresh function (Tor Browser compatible)
     function refreshWalletData() {
