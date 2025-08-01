@@ -22,7 +22,7 @@ if (empty($authCode)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>₳ Wallet - Authentication</title>
+    <title><?php echo isset($user['hostname']) ? htmlspecialchars(parse_url($user['hostname'], PHP_URL_HOST) ?: $user['hostname']) . ' - ' : ''; ?>₳ Wallet - Authentication</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -454,6 +454,58 @@ function getContactNameByAddress($address) {
     }
 }
 
+// Helper function to check for new transactions since last check
+function checkForNewTransactions($lastCheckTime) {
+    global $pdo, $user;
+    
+    try {
+        $userAddresses = [];
+        if (isset($user['hostname'])) {
+            $userAddresses[] = $user['hostname'];
+        }
+        if (isset($user['torAddress'])) {
+            $userAddresses[] = $user['torAddress'];
+        }
+        
+        if (empty($userAddresses)) {
+            return false;
+        }
+        
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $query = "SELECT COUNT(*) as count FROM transactions 
+                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders)) 
+                  AND timestamp > ?";
+        
+        $params = array_merge($userAddresses, $userAddresses, [$lastCheckTime]);
+        $stmt = $pdo->prepare($query);
+        $stmt->execute($params);
+        
+        $result = $stmt->fetch();
+        return $result['count'] > 0;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+// Helper function to check for new contact requests since last check
+function checkForNewContactRequests($lastCheckTime) {
+    global $pdo;
+    
+    try {
+        $query = "SELECT COUNT(*) as count FROM contacts 
+                  WHERE name IS NULL AND status = 'pending' 
+                  AND created_at > ?";
+        
+        $stmt = $pdo->prepare($query);
+        $stmt->execute([$lastCheckTime]);
+        
+        $result = $stmt->fetch();
+        return $result['count'] > 0;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
 // Helper function to parse contact function output and determine message type
 function parseContactOutput($output) {
     $output = trim($output);
@@ -515,6 +567,25 @@ function parseContactOutput($output) {
     return ['message' => $output, 'type' => 'success'];
 }
 
+// Handle update checking requests (for Tor Browser polling)
+if (isset($_GET['check_updates']) && $_GET['check_updates'] === '1') {
+    // Check for new transactions or contact requests since last check
+    $lastCheckTime = $_GET['last_check'] ?? 0;
+    
+    // Check for new transactions
+    $newTransactions = checkForNewTransactions($lastCheckTime);
+    $newContactRequests = checkForNewContactRequests($lastCheckTime);
+    
+    if ($newTransactions || $newContactRequests) {
+        echo "new_transaction:" . ($newTransactions ? '1' : '0') . "\n";
+        echo "new_contact_request:" . ($newContactRequests ? '1' : '0') . "\n";
+        echo "timestamp:" . time() . "\n";
+    } else {
+        echo "no_updates\n";
+    }
+    exit;
+}
+
 // Get actual data
 $totalBalance = getUserTotalBalance();
 $contacts = getContactsWithBalances();
@@ -530,7 +601,13 @@ header('Content-Type: text/html; charset=UTF-8');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>₳ Wallet</title>
+    <title><?php echo isset($user['hostname']) ? htmlspecialchars(parse_url($user['hostname'], PHP_URL_HOST) ?: $user['hostname']) . ' - ' : ''; ?>₳ Wallet</title>
+    <!-- Auto-refresh for users with JavaScript disabled (Tor Browser compatible) -->
+    <?php if (!empty($authCode)): ?>
+    <meta http-equiv="refresh" content="10;url=<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>">
+    <?php else: ?>
+    <meta http-equiv="refresh" content="10">
+    <?php endif; ?>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -1145,6 +1222,16 @@ header('Content-Type: text/html; charset=UTF-8');
             <div class="wallet-info fade-in-up">
                 <h2><i class="fas fa-info-circle"></i> Wallet Information</h2>
                 
+                <!-- Last Updated Status -->
+                <div style="text-align: center; margin-bottom: 1rem; padding: 0.5rem; background: #e9ecef; border-radius: 4px; font-size: 0.9rem; color: #6c757d;">
+                    <i class="fas fa-clock"></i> Last updated: <?php echo date('M j, Y g:i:s A'); ?>
+                    <br>
+                    <small id="refresh-status">Auto-refresh every 10 seconds • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>" style="color: #0d6efd;">Refresh now</a></small>
+                    <noscript>
+                        <br><small style="color: #dc3545;"><i class="fas fa-exclamation-triangle"></i> JavaScript disabled - page refreshes every 10 seconds automatically</small>
+                    </noscript>
+                </div>
+                
                 <div class="balance-display">
                     <div class="balance-amount">$<?php echo $totalBalance; ?></div>
                     <div class="balance-currency">Total Balance</div>
@@ -1380,7 +1467,7 @@ header('Content-Type: text/html; charset=UTF-8');
         <div id="transactions" class="transactions-section fade-in-up">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h2><i class="fas fa-history"></i> Recent Transactions</h2>
-                <a href="<?php echo $_SERVER['PHP_SELF']; ?>?authcode=<?php echo urlencode($authCode); ?>" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
                     <i class="fas fa-sync-alt"></i> Refresh
                 </a>
             </div>
@@ -1408,10 +1495,15 @@ header('Content-Type: text/html; charset=UTF-8');
         </div>
     </div>
 
-    <!-- Floating Action Button -->
+    <!-- Floating Action Buttons -->
     <a href="#top" class="fab" id="backToTop" title="Back to top">
         <i class="fas fa-arrow-up"></i>
     </a>
+    
+    <!-- Manual Refresh Button (Tor Browser friendly) -->
+    <button class="manual-refresh" id="manualRefresh" title="Refresh wallet data" onclick="refreshWalletData()">
+        <i class="fas fa-sync-alt"></i>
+    </button>
 
     <script>
         // Simple script to show/hide the floating action button
@@ -1429,7 +1521,170 @@ header('Content-Type: text/html; charset=UTF-8');
         document.addEventListener('DOMContentLoaded', function() {
             const fab = document.getElementById('backToTop');
             fab.classList.add('hidden');
+            
+            // Initialize polling for updates (Tor Browser compatible)
+            initializePolling();
         });
+
+        // Simple polling mechanism that works with Tor Browser
+        function initializePolling() {
+            // Only poll if user is actively using the page
+            let isPageActive = true;
+            let pollInterval = null;
+            
+            // Start polling when page becomes visible
+            function startPolling() {
+                if (pollInterval) return; // Already polling
+                
+                pollInterval = setInterval(function() {
+                    if (isPageActive) {
+                        checkForUpdates();
+                    }
+                }, 10000); // Poll every 10 seconds
+            }
+            
+            // Stop polling when page is hidden
+            function stopPolling() {
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+            }
+            
+            // Check for updates using a simple fetch
+            function checkForUpdates() {
+                const currentUrl = window.location.href;
+                
+                // Create a simple request to check for updates
+                fetch(currentUrl + '&check_updates=1', {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.text())
+                .then(data => {
+                    // Parse the response for updates
+                    if (data.includes('new_transaction') || data.includes('new_contact_request')) {
+                        // Show notification and refresh page
+                        showUpdateNotification();
+                        setTimeout(() => {
+                            // Preserve auth code when refreshing
+                            const url = new URL(window.location.href);
+                            window.location.href = url.toString();
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    // Silently fail - don't show errors to user
+                    console.log('Update check failed (normal in Tor)');
+                });
+            }
+            
+            // Show a simple notification
+            function showUpdateNotification() {
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #0d6efd;
+                    color: white;
+                    padding: 1rem;
+                    border-radius: 4px;
+                    z-index: 10000;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                    animation: slideIn 0.3s ease-out;
+                `;
+                notification.innerHTML = '<i class="fas fa-sync-alt"></i> New updates available! Refreshing...';
+                document.body.appendChild(notification);
+                
+                // Remove after 3 seconds
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 3000);
+            }
+            
+            // Page visibility API (works in Tor Browser)
+            if (typeof document.hidden !== "undefined") {
+                document.addEventListener("visibilitychange", function() {
+                    if (document.hidden) {
+                        isPageActive = false;
+                        stopPolling();
+                    } else {
+                        isPageActive = true;
+                        startPolling();
+                    }
+                });
+            }
+            
+            // Start polling initially
+            startPolling();
+        }
+        
+        // Manual refresh function (Tor Browser compatible)
+        function refreshWalletData() {
+            const refreshBtn = document.getElementById('manualRefresh');
+            const icon = refreshBtn.querySelector('i');
+            
+            // Show loading state
+            icon.className = 'fas fa-spinner fa-spin';
+            refreshBtn.disabled = true;
+            
+            // Preserve auth code when refreshing
+            const url = new URL(window.location.href);
+            window.location.href = url.toString();
+        }
     </script>
+    
+    <style>
+        /* Animation for notification */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Manual refresh button styling */
+        .manual-refresh {
+            position: fixed;
+            bottom: 100px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            text-decoration: none;
+        }
+        
+        .manual-refresh:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
+            text-decoration: none;
+            color: white;
+            background: #218838;
+        }
+        
+        .manual-refresh:active {
+            transform: translateY(-1px);
+        }
+    </style>
 </body>
 </html> 
