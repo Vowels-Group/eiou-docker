@@ -167,13 +167,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             addContact($argv);
             $output = ob_get_clean();
             
-            if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
-                $message = trim($output);
-                $messageType = 'error';
-            } else {
-                $message = 'Contact added successfully: ' . trim($output);
-                $messageType = 'success';
-            }
+            // Parse the output to determine message type and content
+            $messageInfo = parseContactOutput($output);
+            $message = $messageInfo['message'];
+            $messageType = $messageInfo['type'];
         } catch (Exception $e) {
             ob_end_clean();
             $message = 'Internal server error: ' . $e->getMessage();
@@ -250,7 +247,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                             $message = trim($output);
                             $messageType = 'error';
                         } else {
-                            $message = 'Contact accepted successfully: ' . trim($output);
+                            // Check if the output contains "Contact accepted." and format it properly
+                            if (strpos($output, 'Contact accepted.') !== false) {
+                                $message = 'Contact accepted successfully!';
+                            } else {
+                                $message = 'Contact accepted successfully: ' . trim($output);
+                            }
                             $messageType = 'success';
                         }
                     } catch (Exception $e) {
@@ -271,13 +273,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     deleteContact($argv);
                     $output = ob_get_clean();
                     
-                    if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
-                        $message = trim($output);
-                        $messageType = 'error';
-                    } else {
-                        $message = "Contact request from {$contactAddress} deleted successfully!";
-                        $messageType = 'success';
-                    }
+                    // Parse the output to determine message type and content
+                    $messageInfo = parseContactOutput($output);
+                    $message = $messageInfo['message'];
+                    $messageType = $messageInfo['type'];
                 } catch (Exception $e) {
                     ob_end_clean();
                     $message = 'Internal server error: ' . $e->getMessage();
@@ -295,13 +294,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     blockContact($argv);
                     $output = ob_get_clean();
                     
-                    if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
-                        $message = trim($output);
-                        $messageType = 'error';
-                    } else {
-                        $message = "Contact {$contactAddress} has been blocked!";
-                        $messageType = 'success';
-                    }
+                    // Parse the output to determine message type and content
+                    $messageInfo = parseContactOutput($output);
+                    $message = $messageInfo['message'];
+                    $messageType = $messageInfo['type'];
                 } catch (Exception $e) {
                     ob_end_clean();
                     $message = 'Internal server error: ' . $e->getMessage();
@@ -458,6 +454,67 @@ function getContactNameByAddress($address) {
     }
 }
 
+// Helper function to parse contact function output and determine message type
+function parseContactOutput($output) {
+    $output = trim($output);
+    
+    // Success messages
+    if (strpos($output, 'Contact accepted.') !== false) {
+        return ['message' => 'Contact accepted successfully!', 'type' => 'success'];
+    }
+    if (strpos($output, 'Contact created successfully.') !== false) {
+        return ['message' => 'Contact added successfully!', 'type' => 'success'];
+    }
+    if (strpos($output, 'Contact updated successfully.') !== false) {
+        return ['message' => 'Contact updated successfully!', 'type' => 'success'];
+    }
+    if (strpos($output, 'Contact deleted successfully.') !== false) {
+        return ['message' => 'Contact deleted successfully!', 'type' => 'success'];
+    }
+    if (strpos($output, 'Contact blocked successfully.') !== false) {
+        return ['message' => 'Contact blocked successfully!', 'type' => 'success'];
+    }
+    if (strpos($output, 'Contact unblocked successfully.') !== false) {
+        return ['message' => 'Contact unblocked successfully!', 'type' => 'success'];
+    }
+    
+    // Warning messages
+    if (strpos($output, 'This contact has already been added or accepted.') !== false) {
+        return ['message' => 'This contact has already been added or accepted.', 'type' => 'warning'];
+    }
+    if (strpos($output, 'Warning:') !== false) {
+        return ['message' => $output, 'type' => 'warning'];
+    }
+    
+    // Error messages
+    if (strpos($output, 'Invalid input. Please provide a valid address, name, fee, credit, and currency.') !== false) {
+        return ['message' => 'Invalid input. Please provide a valid address, name, fee, credit, and currency.', 'type' => 'error'];
+    }
+    if (strpos($output, 'Failed to accept contact.') !== false) {
+        return ['message' => 'Failed to accept contact. Please try again.', 'type' => 'error'];
+    }
+    if (strpos($output, 'Failed to create contact.') !== false) {
+        return ['message' => 'Failed to create contact. Please try again.', 'type' => 'error'];
+    }
+    if (strpos($output, 'Contact creation was not accepted by the recipient') !== false) {
+        return ['message' => 'Contact creation was not accepted by the recipient. Please try again or contact the recipient directly.', 'type' => 'error'];
+    }
+    if (strpos($output, 'Contact not found.') !== false) {
+        return ['message' => 'Contact not found.', 'type' => 'error'];
+    }
+    if (strpos($output, 'No results found.') !== false) {
+        return ['message' => 'No contacts found matching your search.', 'type' => 'error'];
+    }
+    
+    // Generic error detection
+    if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
+        return ['message' => $output, 'type' => 'error'];
+    }
+    
+    // Default success case
+    return ['message' => $output, 'type' => 'success'];
+}
+
 // Get actual data
 $totalBalance = getUserTotalBalance();
 $contacts = getContactsWithBalances();
@@ -554,6 +611,12 @@ header('Content-Type: text/html; charset=UTF-8');
             background-color: #cff4fc;
             border-color: #b6effb;
             color: #055160;
+        }
+
+        .alert-warning {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+            color: #856404;
         }
 
         /* Wallet Dashboard */
@@ -1019,8 +1082,16 @@ header('Content-Type: text/html; charset=UTF-8');
         <!-- Message alerts -->
         <?php if (!empty($message)): ?>
             <div class="alert alert-<?php echo $messageType; ?> fade-in-up">
-                <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : ($messageType === 'error' ? 'exclamation-circle' : 'info-circle'); ?>"></i>
+                <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : ($messageType === 'error' ? 'exclamation-circle' : ($messageType === 'warning' ? 'exclamation-triangle' : 'info-circle')); ?>"></i>
                 <?php echo htmlspecialchars($message); ?>
+            </div>
+        <?php endif; ?>
+
+        <!-- Contact Creation Warning -->
+        <?php if (isset($_GET['contact_failed']) && $_GET['contact_failed'] === '1'): ?>
+            <div class="alert alert-warning fade-in-up">
+                <i class="fas fa-exclamation-triangle"></i>
+                Contact creation was not accepted by the recipient. Please try again or contact the recipient directly.
             </div>
         <?php endif; ?>
 
