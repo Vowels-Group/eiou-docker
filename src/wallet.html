@@ -12,6 +12,22 @@ require_once("/etc/eiou/config.php");
 // Check if auth code is provided
 $authCode = $_GET['authcode'] ?? $_POST['authcode'] ?? '';
 
+// Check for messages from redirects
+if (empty($authCode) && isset($_GET['message'])) {
+    // If no auth code but there's a message, redirect to auth page
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+// Get message from URL parameters (for redirects)
+if (isset($_GET['message']) && isset($_GET['type'])) {
+    $message = $_GET['message'];
+    $messageType = $_GET['type'];
+} else {
+    $message = '';
+    $messageType = '';
+}
+
 // If no auth code provided, show authentication form
 if (empty($authCode)) {
     // Set content type for HTML
@@ -171,6 +187,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $messageInfo = parseContactOutput($output);
             $message = $messageInfo['message'];
             $messageType = $messageInfo['type'];
+            
+            // Redirect back to main page with message
+            $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
+            header('Location: ' . $redirectUrl);
+            exit;
         } catch (Exception $e) {
             ob_end_clean();
             $message = 'Internal server error: ' . $e->getMessage();
@@ -216,6 +237,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $message .= " The transaction will be routed through your network of contacts.";
                 }
                 $messageType = 'success';
+                
+                // Redirect back to main page with success message
+                $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
+                header('Location: ' . $redirectUrl);
+                exit;
             }
         } catch (Exception $e) {
             ob_end_clean();
@@ -260,10 +286,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                             // Check if the output contains "Contact accepted." and format it properly
                             if (strpos($output, 'Contact accepted.') !== false) {
                                 $message = 'Contact accepted successfully!';
+                                $messageType = 'contact-accepted'; // Special type for contact acceptance
                             } else {
                                 $message = 'Contact accepted successfully: ' . trim($output);
+                                $messageType = 'contact-accepted'; // Special type for contact acceptance
                             }
-                            $messageType = 'success';
+                            
+                            // Redirect back to main page with success message
+                            $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
+                            header('Location: ' . $redirectUrl);
+                            exit;
                         }
                     } catch (Exception $e) {
                         ob_end_clean();
@@ -287,13 +319,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     $messageInfo = parseContactOutput($output);
                     $message = $messageInfo['message'];
                     $messageType = $messageInfo['type'];
+                    
+                    // Redirect back to main page with message
+                    $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
+                    header('Location: ' . $redirectUrl);
+                    exit;
                 } catch (Exception $e) {
                     ob_end_clean();
                     $message = 'Internal server error: ' . $e->getMessage();
                     $messageType = 'error';
                 }
                 break;
-
 
             case 'blockContact':
                 $argv = ['eiou', 'block', $contactAddress];
@@ -308,6 +344,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     $messageInfo = parseContactOutput($output);
                     $message = $messageInfo['message'];
                     $messageType = $messageInfo['type'];
+                    
+                    // Redirect back to main page with message
+                    $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
+                    header('Location: ' . $redirectUrl);
+                    exit;
                 } catch (Exception $e) {
                     ob_end_clean();
                     $message = 'Internal server error: ' . $e->getMessage();
@@ -520,7 +561,7 @@ function parseContactOutput($output) {
     
     // Success messages
     if (strpos($output, 'Contact accepted.') !== false) {
-        return ['message' => 'Contact accepted successfully!', 'type' => 'success'];
+        return ['message' => 'Contact accepted successfully!', 'type' => 'contact-accepted'];
     }
     if (strpos($output, 'Contact created successfully.') !== false) {
         return ['message' => 'Contact added successfully!', 'type' => 'success'];
@@ -540,7 +581,7 @@ function parseContactOutput($output) {
     
     // Warning messages
     if (strpos($output, 'This contact has already been added or accepted.') !== false) {
-        return ['message' => 'This contact has already been added or accepted.', 'type' => 'warning'];
+        return ['message' => 'This contact has already been added or accepted.', 'type' => 'contact-accepted'];
     }
     if (strpos($output, 'Warning:') !== false) {
         return ['message' => $output, 'type' => 'warning'];
@@ -704,6 +745,55 @@ header('Content-Type: text/html; charset=UTF-8');
             background-color: #fff3cd;
             border-color: #ffeaa7;
             color: #856404;
+        }
+
+        /* Special styling for contact acceptance notifications */
+        .alert-contact-accepted {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            border: 2px solid #198754;
+            color: white;
+            font-weight: 600;
+            text-align: center;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(40, 167, 69, 0.3);
+            animation: contactAcceptedPulse 2s ease-in-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .alert-contact-accepted::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            animation: contactAcceptedShine 3s ease-in-out;
+        }
+
+        .alert-contact-accepted i {
+            font-size: 1.5rem;
+            margin-right: 0.5rem;
+            animation: contactAcceptedBounce 1s ease-in-out;
+        }
+
+        @keyframes contactAcceptedPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        @keyframes contactAcceptedShine {
+            0% { left: -100%; }
+            50% { left: 100%; }
+            100% { left: 100%; }
+        }
+
+        @keyframes contactAcceptedBounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
         }
 
         /* Wallet Dashboard */
@@ -1202,7 +1292,19 @@ header('Content-Type: text/html; charset=UTF-8');
         <!-- Message alerts -->
         <?php if (!empty($message)): ?>
             <div class="alert alert-<?php echo $messageType; ?> fade-in-up">
-                <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : ($messageType === 'error' ? 'exclamation-circle' : ($messageType === 'warning' ? 'exclamation-triangle' : 'info-circle')); ?>"></i>
+                <i class="fas fa-<?php 
+                    if ($messageType === 'contact-accepted') {
+                        echo 'user-check';
+                    } elseif ($messageType === 'success') {
+                        echo 'check-circle';
+                    } elseif ($messageType === 'error') {
+                        echo 'exclamation-circle';
+                    } elseif ($messageType === 'warning') {
+                        echo 'exclamation-triangle';
+                    } else {
+                        echo 'info-circle';
+                    }
+                ?>"></i>
                 <?php echo htmlspecialchars($message); ?>
             </div>
         <?php endif; ?>
