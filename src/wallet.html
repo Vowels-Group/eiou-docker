@@ -252,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 }
 
 // Handle contact request actions
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['acceptContact', 'deleteContact', 'blockContact'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['acceptContact', 'deleteContact', 'blockContact', 'editContact'])) {
     $contactAddress = $_POST['contact_address'] ?? '';
     $contactPubkey = $_POST['contact_pubkey'] ?? '';
     $contactName = $_POST['contact_name'] ?? '';
@@ -353,6 +353,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     ob_end_clean();
                     $message = 'Internal server error: ' . $e->getMessage();
                     $messageType = 'error';
+                }
+                break;
+
+            case 'editContact':
+                if (empty($contactName) || empty($contactFee) || empty($contactCredit) || empty($contactCurrency)) {
+                    $message = 'All fields are required to edit a contact';
+                    $messageType = 'error';
+                } else {
+                    // Create argv array for updateContact function
+                    $argv = ['eiou', 'update', $contactAddress, 'all', $contactName, $contactFee, $contactCredit];
+                    
+                    // Capture output
+                    ob_start();
+                    try {
+                        updateContact($argv);
+                        $output = ob_get_clean();
+                        
+                        // Parse the output to determine message type and content
+                        $messageInfo = parseContactOutput($output);
+                        $message = $messageInfo['message'];
+                        $messageType = $messageInfo['type'];
+                        
+                        // Redirect back to main page with message
+                        $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
+                        header('Location: ' . $redirectUrl);
+                        exit;
+                    } catch (Exception $e) {
+                        ob_end_clean();
+                        $message = 'Internal server error: ' . $e->getMessage();
+                        $messageType = 'error';
+                    }
                 }
                 break;
         }
@@ -1286,6 +1317,105 @@ header('Content-Type: text/html; charset=UTF-8');
         html {
             scroll-behavior: smooth;
         }
+
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: auto;
+            padding: 0;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid #dee2e6;
+            background: #f8f9fa;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #212529;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: #000;
+        }
+
+        .modal-content form {
+            padding: 1.5rem;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Enhanced contact card hover effect */
+        .contact-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
+            border-left-color: #28a745;
+        }
+
+        .contact-card:hover .contact-name {
+            color: #28a745;
+        }
+
+        /* Contact avatar enhancement */
+        .contact-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            flex-shrink: 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease;
+        }
+
+        .contact-card:hover .contact-avatar {
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body>
@@ -1549,19 +1679,68 @@ header('Content-Type: text/html; charset=UTF-8');
                     </div>
                 <?php else: ?>
                     <?php foreach ($contacts as $contact): ?>
-                        <div class="contact-card">
-                            <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
-                            <div class="contact-details">
-                                Address: <?php echo htmlspecialchars(truncateAddress($contact['address'])); ?><br>
-                                Balance: <span class="<?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>">
-                                    <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?>
-                                </span> <?php echo $contact['currency']; ?><br>
-                                Credit Limit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo $contact['currency']; ?><br>
-                                Fee: <?php echo number_format($contact['fee'], 2); ?>%
+                        <div class="contact-card" onclick="openEditContactModal('<?php echo htmlspecialchars($contact['address']); ?>', '<?php echo htmlspecialchars($contact['name']); ?>', <?php echo $contact['fee']; ?>, <?php echo $contact['credit_limit']; ?>, '<?php echo htmlspecialchars($contact['currency']); ?>')" style="cursor: pointer;">
+                            <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
+                                <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
+                            </div>
+                            <div class="contact-info">
+                                <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
+                                <div class="contact-details">
+                                    <div class="contact-address"><?php echo htmlspecialchars(truncateAddress($contact['address'])); ?></div>
+                                    <div>Balance: <span class="<?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>">
+                                        <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?>
+                                    </span> <?php echo $contact['currency']; ?></div>
+                                    <div>Credit Limit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo $contact['currency']; ?></div>
+                                    <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
+                                </div>
                             </div>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Edit Contact Modal -->
+        <div id="editContactModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-edit"></i> Edit Contact</h3>
+                    <span class="close" onclick="closeEditContactModal()">&times;</span>
+                </div>
+                <form method="POST" id="editContactForm">
+                    <input type="hidden" name="action" value="editContact">
+                    <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                    <input type="hidden" name="contact_address" id="edit_contact_address">
+                    
+                    <div class="form-group">
+                        <label for="edit_contact_name">Name:</label>
+                        <input type="text" id="edit_contact_name" name="contact_name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit_contact_fee">Fee (%):</label>
+                        <input type="number" id="edit_contact_fee" name="contact_fee" step="0.1" min="0" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit_contact_credit">Credit Limit:</label>
+                        <input type="number" id="edit_contact_credit" name="contact_credit" min="0" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit_contact_currency">Currency:</label>
+                        <select id="edit_contact_currency" name="contact_currency" required>
+                            <option value="USD">USD</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditContactModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
 
@@ -1960,6 +2139,48 @@ header('Content-Type: text/html; charset=UTF-8');
     // Initialize send form when page loads
     document.addEventListener('DOMContentLoaded', function() {
         initializeSendForm();
+    });
+
+    // Edit contact modal functions
+    function openEditContactModal(address, name, fee, credit, currency) {
+        // Populate the form fields
+        document.getElementById('edit_contact_address').value = address;
+        document.getElementById('edit_contact_name').value = name;
+        document.getElementById('edit_contact_fee').value = fee;
+        document.getElementById('edit_contact_credit').value = credit;
+        document.getElementById('edit_contact_currency').value = currency;
+        
+        // Show the modal
+        document.getElementById('editContactModal').style.display = 'flex';
+        
+        // Pause polling during form interaction
+        if (typeof pausePollingForInteraction === 'function') {
+            pausePollingForInteraction();
+        }
+    }
+
+    function closeEditContactModal() {
+        document.getElementById('editContactModal').style.display = 'none';
+        
+        // Resume polling after modal is closed
+        if (typeof resumePollingAfterInteraction === 'function') {
+            setTimeout(resumePollingAfterInteraction, 1000);
+        }
+    }
+
+    // Close modal when clicking outside of it
+    window.onclick = function(event) {
+        const modal = document.getElementById('editContactModal');
+        if (event.target === modal) {
+            closeEditContactModal();
+        }
+    }
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeEditContactModal();
+        }
     });
     </script>
     
