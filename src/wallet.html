@@ -359,6 +359,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
     }
 }
 
+// Helper function to truncate address for display
+function truncateAddress($address, $length = 10) {
+    if (strlen($address) <= $length) {
+        return $address;
+    }
+    return substr($address, 0, $length) . '...';
+}
+
 // Helper function to get user's total balance
 function getUserTotalBalance() {
     global $pdo, $user;
@@ -393,6 +401,7 @@ function getContactsWithBalances() {
                 'address' => $contact['address'],
                 'balance' => $balance / 100, // Convert from cents
                 'fee' => $contact['fee_percent'] / 100, // Convert from cents
+                'credit_limit' => $contact['credit_limit'] / 100, // Convert from cents
                 'currency' => $contact['currency']
             ];
         }
@@ -1543,10 +1552,11 @@ header('Content-Type: text/html; charset=UTF-8');
                         <div class="contact-card">
                             <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                             <div class="contact-details">
-                                Address: <?php echo htmlspecialchars($contact['address']); ?><br>
+                                Address: <?php echo htmlspecialchars(truncateAddress($contact['address'])); ?><br>
                                 Balance: <span class="<?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>">
                                     <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?>
                                 </span> <?php echo $contact['currency']; ?><br>
+                                Credit Limit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo $contact['currency']; ?><br>
                                 Fee: <?php echo number_format($contact['fee'], 2); ?>%
                             </div>
                         </div>
@@ -1570,7 +1580,7 @@ header('Content-Type: text/html; charset=UTF-8');
                     <div style="margin-bottom: 0.5rem;">
                         <div class="info-label">Address:</div>
                         <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px;">
-                            <?php echo htmlspecialchars($contact['address']); ?>
+                            <?php echo htmlspecialchars(truncateAddress($contact['address'])); ?>
                         </div>
                     </div>
                     <div style="margin-bottom: 1rem;">
