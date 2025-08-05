@@ -44,10 +44,10 @@ COPY src/functions.php /etc/eiou/functions.php
 RUN chown www-data:www-data /etc/eiou/functions.php
 RUN chmod 644 /etc/eiou/functions.php
 
-# Copy functions folder to /etc/eiou/functions
-COPY src/functions /etc/eiou/functions
-RUN chown www-data:www-data /etc/eiou/functions -R
-RUN chmod 644 /etc/eiou/functions/*
+# Copy functions folder to /etc/eiou/src/functions
+COPY src/functions /etc/eiou/src/functions
+RUN chown www-data:www-data /etc/eiou/src/functions -R
+RUN chmod 644 /etc/eiou/src/functions/*
 
 # Copy messages.php to a common location
 COPY src/messages.php /etc/eiou/messages.php
@@ -60,7 +60,7 @@ RUN touch /var/log/php_errors.log
 RUN chmod 666 /var/log/php_errors.log
 
 # Declare volumes for data persistence
-VOLUME ["/var/lib/mysql", "/etc/eiou"]
+VOLUME ["/var/lib/mysql", "/etc/eiou/"]
 
 # Copy and set up startup script
 COPY startup.sh /startup.sh
