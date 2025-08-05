@@ -222,7 +222,10 @@ function sendEiou($request = null) {
         $request = $data;
     }
     //output("Getting ready to send eIOU with request: " . print_r($request, true), 'SILENT');
-    validateSendRequest($request);
+    # Check if request is correctly formatted
+    if(!validateSendRequest($request)){
+        exit(0);
+    }
         
     // Check if any contacts for eIOU
     if(!retrieveContactAddresses()){
