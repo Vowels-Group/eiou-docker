@@ -20,12 +20,6 @@ function calculateRequestedAmount($request) {
     return $request['amount'] + $request['feeAmount'];
 }
 
-function removeTransactionFee($request){
-    // Remove users transaction fee from request
-    $p2p = getP2pByHash($request['memo']);
-    return $request['amount'] - $p2p['my_fee_amount'];
-}
-
 function changeSettings($argv) {
     global $user;
 
@@ -269,6 +263,13 @@ function displayUserInfo($argv) {
     }
 }
 
+function feeInformation($p2p,$rp2p){
+    // Output fee information into the log
+    $feeAmount = $rp2p['amount'] - $p2p['amount'];
+    $feePercent = ($feeAmount / $p2p['amount']) * 100;
+    output(outputFeeInformation($feePercent,$request,$user['maxFee']), 'SILENT');
+}
+
 function getContext(){
     $context = [];
 
@@ -368,6 +369,12 @@ function output($message, $level = 'ECHO') {
     if ($level !== 'SILENT') {
         echo $message;
     }
+}
+
+function removeTransactionFee($request){
+    // Remove users transaction fee from request
+    $p2p = getP2pByHash($request['memo']);
+    return $request['amount'] - $p2p['my_fee_amount'];
 }
 
 function setupErrorLogging() {
