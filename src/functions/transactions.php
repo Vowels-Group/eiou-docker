@@ -102,7 +102,7 @@ function processPendingTransactions(){
         $memo = $message['memo'];  
         $txid = $message['txid'];
         // If direct transaction
-        if($memo == 'standard'){
+        if($memo === 'standard'){
             if($message['sender_address'] == resolveUserAddressForTransport($message['sender_address'])){
                 $payload = buildSendDatabasePayload($message);
                 updateTransactionStatus($txid,'sent',true);  // Update transaction status to sent
@@ -147,6 +147,8 @@ function processPendingTransactions(){
                     updateTransactionStatus($memo,'accepted'); // Update received transaction status to accepted
                     
                     // Splice old transaction into new transaction for sending onwards
+
+                    // TO DO: CREATE NEW PAYLOAD (overwriting will yield potential issues)
                     $message['amount'] = removeTransactionFee($message); // Remove my transaction fee
                     $rp2p = checkRp2pExists($memo);
                     $message['time'] = $rp2p['time'];
