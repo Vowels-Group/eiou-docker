@@ -28,10 +28,10 @@ function returnContactDetails($data) {
            "---------------\n" .
            "Address: " . $data['address'] . "\n" .
            "Name: " . ($data['name'] ?? 'N/A') . "\n" .
-           "Public Key: " . "..." . substr($data['pubkey'], 51, 25) . "...\n" .              // TODO FIX SO LOOKS BETTER
+           "Public Key: " . "..." . substr($data['pubkey'], 51, 25) . "...\n" .              // TO DO: FIX SO LOOKS BETTER
            "Fee: " . (($data['fee_percent'] ?? '0.00') / 100) . "%\n" .
            "Credit Limit: " . (($data['credit_limit'] ?? '0.00') / 100) . "\n" .
-           "Currency: " . ($data['currency'] ?? 'USD') . "\n";
+           "Currency: " . ($data['currency']) . "\n";
 }
 
 function returnContactExists() {
