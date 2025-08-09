@@ -123,20 +123,40 @@ function buildMessageInvalidSourcePayload($message){
 }
 
 function buildP2pPayload($data) {
-    // Build p2p payload 
+    // Build p2p payload for initial message
     global $user;
     output(outputBuildingP2pPayload($data),'SILENT');
-    $userAddress = resolveUserAddressForTransport($data['receiverAddress'] ?? $data['sender_address']); //To whom: either to a contact (initial sending) or return to contact based on found end-recipient)
+    $userAddress = resolveUserAddressForTransport($data['receiverAddress']); //To a contact (initial sending)
     return array(
         'type' => 'p2p', // Peer to peer request type
         'hash' => $data['hash'],
         'salt' => $data['salt'],
         'time' => $data['time'],
-        'expiration' => $data['time'] + returnconvertedMicroTime($user['p2pExpiration']) ?? $data['expiration'], // Expiration time based on user's configuration (or database version)
-        'currency' => $data['currency'] ?? 'USD',
+        'expiration' => $data['time'] + returnconvertedMicroTime($user['p2pExpiration']), // Expiration time based on user's configuration 
+        'currency' => $data['currency'],
         'amount' => $data['amount'], // Nominal amount in cents recipient will receive
-        'requestLevel' => $data['minRequestLevel'] ?? $data['request_level'] + 1, // Initial request level (or increment)
-        'maxRequestLevel' => $data['maxRequestLevel'] ?? $data['max_request_level'], // Maximum number of hops for p2p request (or saved database version)
+        'requestLevel' => $data['minRequestLevel'], // Initial request level
+        'maxRequestLevel' => $data['maxRequestLevel'], // Maximum number of hops for p2p request
+        'senderPublicKey' => $user['public'],
+        'senderAddress' => $userAddress
+    );
+}
+
+function buildP2pPayloadDatabase($data) {
+    // Build p2p payload from database message
+    global $user;
+    output(outputBuildingP2pPayload($data),'SILENT');
+    $userAddress = resolveUserAddressForTransport($data['sender_address']); //To a contact (sending p2p onwards to find end-recipient)
+    return array(
+        'type' => $data['type'], // Peer to peer request type
+        'hash' => $data['hash'],
+        'salt' => $data['salt'],
+        'time' => $data['time'],
+        'expiration' => $data['expiration'], // Expiration time based on database
+        'currency' => $data['currency'],
+        'amount' => $data['amount'], // Nominal amount in cents recipient will receive
+        'requestLevel' => $data['request_level'] + 1, // increment request level (of message)
+        'maxRequestLevel' => $data['max_request_level'], // Maximum number of hops from database message
         'senderPublicKey' => $user['public'],
         'senderAddress' => $userAddress
     );
@@ -197,6 +217,18 @@ function buildSendDatabasePayload($data) {
         'previousTxid' => $data['previous_txid'],
         'memo' => $memo
     );
+}
+
+function buildForwardingTransactionPayload($message){
+    // TO DO FIX?
+    global $user;
+    $message['amount'] = removeTransactionFee($message); // Remove my transaction fee
+    $rp2p = checkRp2pExists($message['memo']);
+    $message['time'] = $rp2p['time'];
+    $message['txid'] = createUniqueDatabaseTxid($message); // Create new txid for new Transaction
+    $message['receiver_address'] = $rp2p['sender_address']; // Send new transaction onwards to sender of rp2p
+    $message['receiver_public_key'] = $rp2p['sender_public_key'];
+    $message['previous_txid'] = fixPreviousTxid($user['public'], $message['receiver_public_key']);
 }
 
 function buildSendAcceptancePayload($request){

@@ -58,7 +58,6 @@ function prepareP2pRequestData($request) {
 
     $data = $request;
 
-    // TO DO if address = name?
     $data['receiverAddress'] = $request[2];
     $data['txType'] = 'p2p';
     $data['time'] = returnMicroTime();
@@ -101,7 +100,7 @@ function processQueuedP2pMessages() {
 
     // Process each queued message
     foreach ($queuedMessages as $message) {     
-        $p2pPayload = buildP2pPayload($message); // Build p2p request payload
+        $p2pPayload = buildP2pPayloadDatabase($message); // Build p2p request payload
 
 
         // Check if user is NOT the original sender of the p2p and has a direct contact link to end-recipient
@@ -150,7 +149,7 @@ function sendP2pRequest($data) {
     if (isHttpAddress($data[2]) || isTorAddress($data[2])) {
         $address = $data[2];
     } else{
-        // This is only necessary in the case that a direct transaction to a contact (send NAME) was rejected based on insufficient credit
+        // Check if contact exists by Name supplied, if not then cannot send the p2p request
         $contactAddress = lookupContactAddressByName($data[2]);
         if($contactAddress){
             $address = $contactAddress;
