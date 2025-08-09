@@ -11,22 +11,21 @@ function handleRp2pRequest($request) {
     global $user;
     
     // Check if corresponding p2p exists 
-    $result = getP2pByHash($request['hash']);
-    if(!$result){
+    $p2p = getP2pByHash($request['hash']);
+    if(!$p2p){
         throw new Exception('P2P request was not found for the given hash.');
     }else{
-        if(isset($result['destination_address'])) {
+        if(isset($p2p['destination_address'])) {
             updateP2pRequestStatus($request['hash'], 'found');
         }
         // Add users fee to request
-        $request['amount'] += $result['my_fee_amount'];
-
+        $request['amount'] += $p2p['my_fee_amount'];
 
         //Check if intermediary sender of p2p can afford to send eIOU with fees
-        if(!isset($result['destination_address'])) {
-            $availableFunds = calculateAvailableFunds($result);
+        if(!isset($p2p['destination_address'])) {
+            $availableFunds = calculateAvailableFunds($p2p);
             if($availableFunds < $request['amount']){
-                output(outputP2pUnableToAffordRp2p($result,$request), 'SILENT');
+                output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
                 return false;
             }
         }
@@ -38,21 +37,19 @@ function handleRp2pRequest($request) {
             return false;
         }
         // Check if original p2p was sent by user
-        if(isset($result['destination_address'])) {
-            $p2pAmount = $result['amount'];
-            $rP2pAmount = $request['amount'];
-            $feeAmount = $rP2pAmount - $p2pAmount;
-            $feePercent = ($feeAmount / $p2pAmount) * 100;
-            output(outputFeeInformation($feePercent,$request,$user['maxFee']), 'SILENT');
+        if(isset($p2p['destination_address'])) {
+            feeInformation($p2p,$request); // Output fee information into the log
             
             // Check if the fee percent is below the set maximum fee percent the user would pay
             if ($feePercent <= $user['maxFee']) {
-                $result['amount'] = $request['amount'];
-                $result['currency'] = $request['currency'];
-                $result['senderPublicKey'] = $request['senderPublicKey'];
-                $result['senderAddress'] = $request['senderAddress'];
-                $result['memo'] = $request['hash'];
-                sendP2pEiou($result); // Send transaction
+
+                // TO DO: CREATE NEW PAYLOAD (overwriting will yield potential issues)
+                $p2p['amount'] = $request['amount'];
+                $p2p['currency'] = $request['currency'];
+                $p2p['senderPublicKey'] = $request['senderPublicKey'];
+                $p2p['senderAddress'] = $request['senderAddress'];
+                $p2p['memo'] = $request['hash'];
+                sendP2pEiou($p2p); // Send transaction
             } else {
                 output(outputFeeRejection(), 'SILENT');
             }
@@ -66,7 +63,7 @@ function processQueuedRp2pMessages() {
 
     // Process each 'sent' or 'paid' message
     foreach ($queuedMessages as $message) {
-        // Is message  'sent' or 'paid'
+        // Is message 'sent' or 'paid'
         if($message['status'] === 'sent'){
             // Check if the message hash exists in the rp2p table
             $rP2pResult = checkRp2pExists($message['hash']);
@@ -82,7 +79,7 @@ function processQueuedRp2pMessages() {
                 expireMessage($message);
             }              
         } elseif(time() > $message['expiration']){
-            // If no response after set amount of time, expire the p2p request
+            // If no response after set amount of time on messages with status 'paid', expire the p2p request
             expireMessage($message);
         }              
     }
