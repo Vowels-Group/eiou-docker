@@ -186,8 +186,6 @@ function checkContactStatus($request){
     }
 }
 
-
-
 function checkPendingContact($address) {
     global $pdo;
     // Check if contact already exists in the database but is not yet accepted
