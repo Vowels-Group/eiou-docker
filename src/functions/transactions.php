@@ -88,12 +88,11 @@ function prepareP2pSendData($request) {
 
     $data['amount'] = $request['amount'];
     $data['currency'] = $request['currency'];
-    $data['txid'] = createUniqueTxid($request); // TO DO DOES THIS NEED TO CHANGE? to use $data????
+    $data['txid'] = createUniqueTxid($request);
     $data['previousTxid'] = fixPreviousTxid($user['public'], $request['senderPublicKey']);
     $data['memo'] = $request['hash'];
     return $data;
 }
-
 
 function processTransaction($request) {
     global $user;
@@ -171,9 +170,13 @@ function processPendingTransactions(){
                 if(!matchYourselfTransaction($message,resolveUserAddressForTransport($message['sender_address']))) {
                     // If not end-recipient of transaction
                     updateTransactionStatus($memo,'accepted'); // Update received transaction status to accepted
-                    
+                    updateIncomingP2pTxid($message['memo'], $message['txid']); // Update incoming_txid of p2p to match received transaction
+
+
                     // Create new transaction, from received prior transaction, for sending onwards to sender of rp2p
                     $data = buildForwardingTransactionPayload($message);
+                    updateOutgoingP2pTxid($data['memo'], $data['txid']); // Update outgoing_txid of p2p to match transaction to be sent
+
                     $payload = buildSendDatabasePayload($data); 
                     $insertTransactionResponse = json_decode(insertTransaction($payload),true); // Insert to be sent onwards Transaction as pending     
                     output(outputTransactionInsertion($insertTransactionResponse));
@@ -181,6 +184,7 @@ function processPendingTransactions(){
                     // If end-recipient of transaction
                     updateP2pRequestStatus($memo,'completed',true); // Update p2p status to completed
                     updateTransactionStatus($memo,'completed'); // Update transaction status to completed
+                    updateIncomingP2pTxid($message['memo'], $message['txid']); // Update incoming_txid of p2p to match received transaction
                     output(outputTransactionAmountReceived($message),'SILENT');
                     $payloadTransactionCompleted = buildSendCompletedPayload($message);
                     output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
@@ -190,7 +194,6 @@ function processPendingTransactions(){
         }  
     }
 }
-
 
 function sendEiou($request = null) {
     // If no request is provided, use $data as a fallback
@@ -237,5 +240,7 @@ function sendP2pEiou($request) {
     // Prepare transaction payload
     $payload = buildSendPayload($data);
     insertTransaction($payload); // Insert transaction as pending
+
+    updateOutgoingP2pTxid($data['memo'], $data['txid']); // Update outgoing_txid of p2p to match transaction
 }
 
