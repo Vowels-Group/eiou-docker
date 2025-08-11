@@ -9,15 +9,25 @@ function checkWalletExists($user, $request) {
 }
 
 function generateWallet($argv) {
+  // global $user;
   // If config (wallet) exists query user about overwriting
   // if(file_exists("//etc//eiou//config.php")){
-  //   echo returnUserInputRequestOverwritingWallet();
-  //   $decision = trim(fgets(STDIN));
-  //   if(strtolower($decision) !== 'y'){
-  //     exit(0);
+  //   if ((isset($argv[2]) && strtolower($argv[2]) === 'force') || (isset($argv[3]) && strtolower($argv[3]) === 'force')){
+  //     echo returnOverwritingExistingWalletForced();
+  //     wipeEverything($user['dbName']);
+  //     freshInstall();
   //   } else{
-  //     echo returnOverwritingExistingWallet();
-  //   }
+  //     echo returnUserInputRequestOverwritingWallet();
+  //     $decision = trim(fgets(STDIN));
+  //     if(strtolower($decision) !== 'y'){
+  //       echo returnOverwritingExistingWalletCancelled();
+  //       exit(0);
+  //     } else{
+  //       echo returnOverwritingExistingWallet();
+  //       wipeEverything($user['dbName']);
+  //       freshInstall();
+  //     }
+  //   } 
   // }
 
   // Generate a private key
