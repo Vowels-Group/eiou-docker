@@ -42,14 +42,7 @@ function handleRp2pRequest($request) {
             
             // Check if the fee percent is below the set maximum fee percent the user would pay
             if ($feePercent <= $user['maxFee']) {
-
-                // TO DO: CREATE NEW PAYLOAD (overwriting will yield potential issues)
-                $p2p['amount'] = $request['amount'];
-                $p2p['currency'] = $request['currency'];
-                $p2p['senderPublicKey'] = $request['senderPublicKey'];
-                $p2p['senderAddress'] = $request['senderAddress'];
-                $p2p['memo'] = $request['hash'];
-                sendP2pEiou($p2p); // Send transaction
+                sendP2pEiou($request); // Send transaction through rp2p chain
             } else {
                 output(outputFeeRejection(), 'SILENT');
             }
