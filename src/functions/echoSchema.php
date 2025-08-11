@@ -94,8 +94,8 @@ function returnContactSearchResults ($data) {
             "Total contacts found: " . count($data) ;
 }
 
-function returnLockfileCreation($lockfile,$pid){
-    return "Created lockfile at $lockfile with PID $pid\n";
+function returnHostnameSaved($hostname){
+    return "Hostname saved: " . $hostname . "\n";
 }
 
 function returnInstanceAlreadyRunning(){
@@ -112,11 +112,32 @@ function returnInvalidSendRequest(){
 function returnInvalidAmountSendRequest(){
     return "Invalid amount. Please enter a positive number.\n";
 }
+function returnInvalidHostnameFormat(){
+    return "Invalid hostname format. Please provide a valid URL.\n";
+}
 
 function returnInvalidCurrencySendRequest(){
     return "Invalid currency. Please use a 3-letter currency code (e.g., USD).\n";
 }
 
+function returnLockfileCreation($lockfile,$pid){
+    return "Created lockfile at $lockfile with PID $pid\n";
+}
+
 function returnNotProvidedCurrencySendRequest(){
     return "Currency not provided. Please provide a 3-letter currency code (e.g., USD).\n";
+}
+
+function returnNoWalletExists(){
+    return "No wallet found. Please generate a new wallet by running 'eiou generate' or restore an existing wallet by running 'eiou restore'.\n";
+}
+
+function returnOverwritingExistingWallet(){
+    return "Wallet will now be overwritten...\n";
+}
+
+function returnUserInputRequestOverwritingWallet(){
+    return "A wallet already exists, do you want to overwrite the existing wallet?\n" .
+           "WARNING: this act is irreversible!\n" .
+           "enter 'y' to continue, anything else to abort.\n";
 }

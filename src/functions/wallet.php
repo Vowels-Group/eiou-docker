@@ -3,12 +3,23 @@
 
 function checkWalletExists($user, $request) {
     if ((!isset($user['public']) || !isset($user['private'])) && $request != 'generate' && $request != 'restore') {
-        echo "No wallet found. Please generate a new wallet by running 'eiou generate' or restore an existing wallet by running 'eiou restore'.\n";
+        echo returnNoWalletExists();
         exit();
     }
 }
 
 function generateWallet($argv) {
+  // If config (wallet) exists query user about overwriting
+  // if(file_exists("//etc//eiou//config.php")){
+  //   echo returnUserInputRequestOverwritingWallet();
+  //   $decision = trim(fgets(STDIN));
+  //   if(strtolower($decision) !== 'y'){
+  //     exit(0);
+  //   } else{
+  //     echo returnOverwritingExistingWallet();
+  //   }
+  // }
+
   // Generate a private key
   $config = array(
       "private_key_bits" => 2048,
@@ -42,9 +53,9 @@ function generateWallet($argv) {
         $config_content = file_get_contents('/etc/eiou/config.php');
         $config_content .= "\n" . '$user["hostname"]="' . addslashes($argv[2]) . '";' . "\n";
         file_put_contents('/etc/eiou/config.php', $config_content, LOCK_EX);
-        echo "Hostname saved: " . $argv[2] . "\n";
+        echo returnHostnameSaved($argv[2]);
     } else {
-        echo "Invalid hostname format. Please provide a valid URL.\n";
+        echo returnInvalidHostnameFormat();
         exit(1);
     }
     return;
