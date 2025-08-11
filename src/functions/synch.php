@@ -35,7 +35,7 @@ function synchContact($contactAddress){
     if($contact['status'] === 'pending'){
         output(outputSynchContactDueToPendingStatus($contactAddress),'SILENT');
         // If the contact is still pending then inquire with contact
-        $messagePayload = buildContactIsAcceptedInquiryPayload($contactAddress);
+        $messagePayload = buildMessageContactIsAcceptedInquiryPayload($contactAddress);
         $synchResponse = json_decode(send($contactAddress, $messagePayload),true);
         $status = $synchResponse['status'];
         $reason = $synchResponse['reason'];
@@ -51,7 +51,7 @@ function synchContact($contactAddress){
                 // Contact received our contact request, needs to be accepted by other user first
                 //   If acceptance is automatic then able to check through following inquiry
                 //   Otherwise would need to inquire again down the line (through synch or otherwise)
-                $messagePayload = buildContactIsAcceptedInquiryPayload($contactAddress);
+                $messagePayload = buildMessageContactIsAcceptedInquiryPayload($contactAddress);
                 $synchResponse = send($contactAddress, $messagePayload);
                 if($status === 'accepted'){
                     updateContactStatus($contactAddress, $status);
