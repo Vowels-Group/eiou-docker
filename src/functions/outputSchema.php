@@ -42,11 +42,16 @@ function outputContactNotFoundTryP2p($request){
     return "Contact not found, trying p2p with data: " . print_r($request, true);
 }
 
+function outputEiouSend($request){
+    return "Getting ready to send eIOU with request: " . print_r($request, true);
+}
+
 function outputFeeInformation($feePercent,$request,$maxFee){
     return "They want a fee of " . $feePercent . " percent, for transaction with hash " . $request['hash'] .  ", my max fee is " . $maxFee . " percent";
 }
 
 function outputFeeRejection(){
+    // TO DO make meaningfull
     return "I reject the fee, ignore really. it will expire. or is there something else i can do?";
 }
 
@@ -98,12 +103,19 @@ function outputPrepareP2pData($request){
     return "Prepare send p2p data: " . print_r($request, true);
 }
 
+function outputPrepareSendData($request){
+    return "Prepare send data: " . print_r($request, true);
+}
 function outputReceiverAddressNotSet($request){
     return "$request[2] (receiverAddress) is not set: " . print_r($request, true);
 }
 
 function outputP2pComponents($data){
     return "p2pHash components: " . "receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time'];
+}
+
+function outputP2pEiouSend($request){
+    return "Getting ready to send P2p eIOU with memo: " . print_r($request['memo'], true);
 }
 
 function outputP2pExpired($message){
