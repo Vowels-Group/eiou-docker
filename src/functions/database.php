@@ -385,11 +385,24 @@ function deleteContact($data) {
     $stmt->bindParam(':address', $address);
     
     if ($stmt->execute() && $stmt->rowCount() > 0) {
-        echo "Contact deleted successfully.\n";
+        echo returnContactDeletedSuccesfully();
         return true;
     } else {
-        echo "Contact not found, no action taken.\n";
+        echo returnContactNotFoundNoAction();
         return false;
+    }
+}
+
+function deleteDatabase($dbname){
+    global $pdo;
+    // Delete the database
+    try {
+        $query = "DROP database IF EXISTS $dbname";
+        $stmt = $pdo->prepare($query);
+        $stmt->execute();
+        echo "Database deleted successfully.";
+    } catch (PDOException $e) {
+        echo "Error when trying to delete database: " . $e->getMessage();
     }
 }
 
@@ -1234,4 +1247,9 @@ function viewTransactionHistory($argv) {
     } else {
         echo "No transaction history found.\n";
     }
+}
+
+function wipeEverything(){
+    unlink("//etc//eiou//config.php");
+    deleteDatabase();
 }
