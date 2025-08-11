@@ -110,8 +110,6 @@ function buildSendCompletedPayload($request){
     );
 }
 
-
-
 function buildSendRejectionPayload($request){
     // Build send (Transaction/eIOU) was rejected payload 
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
