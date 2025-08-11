@@ -57,11 +57,11 @@ function handleContactMessageInquiryRequest($decodedMessage){
     $address = $decodedMessage['senderAddress'];
     $name = $decodedMessage['senderName'];
     if(checkAcceptedContact($address, $name)){
-        echo buildEchoContactIsAcceptedPayload($address);
+        echo buildMessageContactIsAcceptedPayload($address);
     } elseif(checkPendingContact($address)){
-        echo buildContactIsNotYetAcceptedPayload($address);
+        echo buildMessageContactIsNotYetAcceptedPayload($address);
     } else{
-        echo buildContactIsUnknownPayload($address);
+        echo buildMessageContactIsUnknownPayload($address);
     }
 }
 
@@ -78,7 +78,7 @@ function handleContactMessageRequest($decodedMessage){
 function handleTransactionMessageInquiryRequest($decodedMessage){
     // Handle inquiry about transaction status
     output(outputHandleTransactionMessageResponse($decodedMessage),'SILENT');
-    echo buildSendCompletedCorrectlyPayload($decodedMessage);
+    echo buildMessageTransactionCompletedCorrectlyPayload($decodedMessage);
 }
 
 // TO DO: Check what happens if someone says txid when it's not txid
@@ -96,7 +96,7 @@ function handleTransactionMessageRequest($decodedMessage){
                 // Check if user was original sender of transaction
                 if(isset($p2p['destination_address'])){
                     // Send direct message inquiry to end recipient double checking if completion of transaction correct 
-                    $completedTransactionInquiry = buildSendCompletedInquiryPayload($decodedMessage);
+                    $completedTransactionInquiry = buildMessageTransactionCompletedInquiryPayload($decodedMessage);
                     $response = json_decode(send($p2p['destination_address'],$completedTransactionInquiry),true);
                     output(outputTransactionInquiryResponse($response),'SILENT');
                     if($response['status'] === 'completed'){
