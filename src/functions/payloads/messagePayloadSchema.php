@@ -1,29 +1,18 @@
 <?php
 # Copyright 2025
 
-function buildMessageTransactionCompletedCorrectlyPayload($message){
-    $hash = $message['hash'];
-    return json_encode([
-        "status" => "completed",
-        "hash" => $hash,
-        "message" => "Transaction with hash " . print_r($hash,true) . " was received succesfully by end-recipient"
-    ]);
-}
-
-function buildMessageTransactionCompletedInquiryPayload($message){
+// Contacts
+function buildMessageContactIsAcceptedInquiryPayload($address){
+    // Build contact inquiry payload when user wants to inquire the status of the contact request
     global $user;
-    $hash = $message['hash'];
-    $myAddress = resolveUserAddressForTransport($message['senderAddress']);
+    $myAddress = resolveUserAddressForTransport($address);
     return array(
         'type' => "message", // message request type
-        'typeMessage' => "transaction", // type of message
+        'typeMessage' => "contact", // type of message
         'inquiry' => true, // request for information
-        "status" => "completed",
-        "hash" => $hash,
-        "hashType" => $message['hashType'],
         "senderAddress" => $myAddress,
         'senderPublicKey' => $user['public'],
-        "message" => $myAddress . " is requesting information about transaction with memo " . $hash 
+        "message" => $myAddress . " wants to know if we are contacts" 
     );
 }
 
@@ -71,16 +60,31 @@ function buildMessageContactIsUnknownPayload($address){
     ]);
 }
 
-function buildMessageContactIsAcceptedInquiryPayload($address){
-    // Build contact inquiry payload when user wants to inquire the status of the contact request
+// Transactions
+function buildMessageTransactionCompletedCorrectlyPayload($message){
+    // Build payload regarding the succesfull completion of a transaction
+    $hash = $message['hash'];
+    return json_encode([
+        "status" => "completed",
+        "hash" => $hash,
+        "message" => "Transaction with hash " . print_r($hash,true) . " was received succesfully by end-recipient"
+    ]);
+}
+
+function buildMessageTransactionCompletedInquiryPayload($message){
+    // Build inquiry payload regarding the completion status of a transaction
     global $user;
-    $myAddress = resolveUserAddressForTransport($address);
+    $hash = $message['hash'];
+    $myAddress = resolveUserAddressForTransport($message['senderAddress']);
     return array(
         'type' => "message", // message request type
-        'typeMessage' => "contact", // type of message
+        'typeMessage' => "transaction", // type of message
         'inquiry' => true, // request for information
+        "status" => "completed",
+        "hash" => $hash,
+        "hashType" => $message['hashType'],
         "senderAddress" => $myAddress,
         'senderPublicKey' => $user['public'],
-        "message" => $myAddress . " wants to know if we are contacts" 
+        "message" => $myAddress . " is requesting information about transaction with memo " . $hash 
     );
 }
