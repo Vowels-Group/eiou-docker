@@ -121,7 +121,6 @@ function processTransaction($request) {
 }
    
 function processPendingTransactions(){
-    global $user;
     // Select pending messages from the transaction table (with status pending)
     $pendingMessages = retrievePendingTransactionMessages();
     // Process each pending message
