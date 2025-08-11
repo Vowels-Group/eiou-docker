@@ -210,14 +210,14 @@ function outputTransactionDirectSentSuccesfully($data){
     return "Sent " . $data['amount']/100 . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully";
 }
 
-function outputTransactionStatusUpdated($status,$what,$memo){
-    return "Updated status to '" . $status . "' for transaction $what: " . $memo;
+function outputTransactionStatusUpdated($status,$typeTransaction,$memo){
+    return "Updated status to '" . $status . "' for transaction of type $typeTransaction: " . $memo;
 }
 
 function outputTransactionResponse($response){
     return "Received transaction message response: " . print_r($response,true);
 }
 
-function outputUpdatedTxid($txid,$what,$hash){
-    return "Updated " . $what . " to " . $txid . " for hash " . $hash;
+function outputUpdatedTxid($txid,$which_txid,$hash){
+    return "Updated " . $which_txid . " to " . $txid . " for p2p with hash " . $hash;
 }
