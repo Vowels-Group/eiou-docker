@@ -76,7 +76,7 @@ function validateSendRequest($data) {
         return false;
     }
 
-    // Validate currency
+    // Optional: Validate currency if provided
     if (isset($data[4])) {
         $currency = strtoupper($data[4]);
         // You can add more specific currency validation if needed
@@ -84,8 +84,6 @@ function validateSendRequest($data) {
             echo returnInvalidCurrencySendRequest();
             return false;
         }
-    } else{
-        echo returnNotProvidedCurrencySendRequest();
-    }
+    } 
     return true;
 }
