@@ -38,7 +38,7 @@ function handleRp2pRequest($request) {
         }
         // Check if original p2p was sent by user
         if(isset($p2p['destination_address'])) {
-            feeInformation($p2p,$request); // Output fee information into the log
+            $feePercent = feeInformation($p2p,$request); // Get fee percent and output fee information in  log
             
             // Check if the fee percent is below the set maximum fee percent the user would pay
             if ($feePercent <= $user['maxFee']) {
