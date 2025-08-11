@@ -27,7 +27,7 @@ function checkAvailableFundsTransaction($request){
     if ($availableFunds > $requiredAmount) {
         return true;
     } else{
-        echo buildInsufficientBalancePayload($availableFunds, $requiredAmount, $creditLimit, 0);
+        echo buildInsufficientBalancePayload($availableFunds, $requiredAmount, $creditLimit, 0,$request['currency']);
         return false;
     }   
 }
@@ -56,15 +56,15 @@ function createUniqueDatabaseTxid($data){
     return $txid;
 }
 
-function prepareSendData($request,$contactInfo) {
+function prepareStandardSendData($request,$contactInfo) {
     global $user;
-    // Prepare initial request payload for direct transaction
+    // Prepare initial data payload for direct transaction
     
     output(outputPrepareSendData($request), 'SILENT');
     $data['txType'] = 'standard';
     $data['time'] = returnMicroTime();
     $data['amount'] = round($request[3] * 100); // Convert to cents
-    $data['currency'] = $request[4];
+    $data['currency'] = $request[4] ?? 'USD'; // Get currency or default to USD
     $data['memo'] = 'standard';
 
     // Additional data preparation
@@ -72,6 +72,27 @@ function prepareSendData($request,$contactInfo) {
     $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
     $data['txid'] = createUniqueTxid($data);
     $data['previousTxid'] = fixPreviousTxid($user['public'], $contactInfo['receiverPublicKey']);
+
+    return $data;
+}
+
+function prepareP2pSendData($request) {
+    global $user;
+    // Prepare data for p2p transaction
+    $data['time'] = $request['time'];
+    $data['amount'] = $request['amount'];
+    $data['currency'] = $request['currency'];
+    $data['senderPublicKey'] = $request['senderPublicKey'];
+    $data['senderAddress'] = $request['senderAddress'];
+    $data['memo'] = $request['hash'];
+
+
+     // Send transaction back to rp2p sender
+    $data['receiverAddress'] = $request['senderAddress'];
+    $data['receiverPublicKey'] = $request['senderPublicKey'];
+
+    $data['txid'] = createUniqueTxid($request); // TO DO DOES THIS NEED TO CHANGE? to use $data????
+    $data['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
 
     return $data;
 }
@@ -155,17 +176,9 @@ function processPendingTransactions(){
                     // If not end-recipient of transaction
                     updateTransactionStatus($memo,'accepted'); // Update received transaction status to accepted
                     
-                    // Splice old transaction into new transaction for sending onwards
-
-                    // TO DO: CREATE NEW PAYLOAD (overwriting will yield potential issues)
-                    $message['amount'] = removeTransactionFee($message); // Remove my transaction fee
-                    $rp2p = checkRp2pExists($memo);
-                    $message['time'] = $rp2p['time'];
-                    $message['txid'] = createUniqueDatabaseTxid($message); // Create new txid for new Transaction
-                    $message['receiver_address'] = $rp2p['sender_address']; // Send new transaction onwards to sender of rp2p
-                    $message['receiver_public_key'] = $rp2p['sender_public_key'];
-                    $message['previous_txid'] = fixPreviousTxid($user['public'], $message['receiver_public_key']);
-                    $payload = buildSendDatabasePayload($message); 
+                    // Create new transaction, from received prior transaction, for sending onwards to sender of rp2p
+                    $data = buildForwardingTransactionPayload($message);
+                    $payload = buildSendDatabasePayload($data); 
                     $insertTransactionResponse = json_decode(insertTransaction($payload),true); // Insert to be sent onwards Transaction as pending     
                     output(outputTransactionInsertion($insertTransactionResponse));
                 } else{
@@ -205,7 +218,7 @@ function sendEiou($request = null) {
     if ($contactInfo = lookupContactInfo($request[2])) {
         output(outputLookedUpContactInfo($contactInfo), 'SILENT');
         // Data preparation for eIOU
-        $data = prepareSendData($request,$contactInfo);
+        $data = prepareStandardSendData($request,$contactInfo);
      
         // Prepare transaction payload from data
         $payload = buildSendPayload($data);
@@ -220,18 +233,13 @@ function sendEiou($request = null) {
 }
 
 function sendP2pEiou($request) {
-    global $user;
     output(outputP2pEiouSend($request),'SILENT');
 
-    // Send transaction back to rp2p sender
-    $request['receiverAddress'] = $request['senderAddress'];
-    $request['receiverPublicKey'] = $request['senderPublicKey'];
-
-    $request['txid'] = createUniqueTxid($request);
-    $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
+    // Create data to send back to rp2p sender
+    $data = prepareP2pSendData($request);
 
     // Prepare transaction payload
-    $payload = buildSendPayload($request);
+    $payload = buildSendPayload($data);
     insertTransaction($payload); // Insert transaction as pending
 }
 

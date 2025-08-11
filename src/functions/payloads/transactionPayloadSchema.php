@@ -44,15 +44,18 @@ function buildSendDatabasePayload($data) {
 }
 
 function buildForwardingTransactionPayload($message){
-    // TO DO FIX?
+    // Build forwarding payload (from database information)
     global $user;
-    $message['amount'] = removeTransactionFee($message); // Remove my transaction fee
     $rp2p = checkRp2pExists($message['memo']);
-    $message['time'] = $rp2p['time'];
-    $message['txid'] = createUniqueDatabaseTxid($message); // Create new txid for new Transaction
-    $message['receiver_address'] = $rp2p['sender_address']; // Send new transaction onwards to sender of rp2p
-    $message['receiver_public_key'] = $rp2p['sender_public_key'];
-    $message['previous_txid'] = fixPreviousTxid($user['public'], $message['receiver_public_key']);
+    $data['time'] = $rp2p['time'];
+    $data['receiver_address'] = $rp2p['sender_address']; // Send new transaction onwards to sender of rp2p
+    $data['receiver_public_key'] = $rp2p['sender_public_key'];
+    $data['amount'] = removeTransactionFee($message); // Remove my transaction fee
+    $data['currency'] = $rp2p['currency'];
+    $data['txid'] = createUniqueDatabaseTxid($message); // Create new txid for new Transaction
+    $data['previous_txid'] = fixPreviousTxid($user['public'], $message['receiver_public_key']);
+    $data['memo'] = $rp2p['hash'];
+    return $data;
 }
 
 function buildSendAcceptancePayload($request){
@@ -79,6 +82,7 @@ function buildSendAcceptancePayload($request){
 }
 
 function buildSendCompletedPayload($request){
+    // Build send (Transaction/eIOU) was completed payload 
     global $user;
     $receiver = resolveUserAddressForTransport($request['senderAddress'] ?? $request['sender_address']);
     // for direct transaction hash is equivalent to txid, otherwise hash is equivalent to memo (only for initialisation)
