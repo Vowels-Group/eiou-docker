@@ -77,23 +77,20 @@ function prepareStandardSendData($request,$contactInfo) {
 }
 
 function prepareP2pSendData($request) {
-    global $user;
     // Prepare data for p2p transaction
-    $data['time'] = $request['time'];
-    $data['amount'] = $request['amount'];
-    $data['currency'] = $request['currency'];
-    $data['senderPublicKey'] = $request['senderPublicKey'];
-    $data['senderAddress'] = $request['senderAddress'];
-    $data['memo'] = $request['hash'];
+    global $user;
 
+    $data['time'] = $request['time'];
 
      // Send transaction back to rp2p sender
     $data['receiverAddress'] = $request['senderAddress'];
     $data['receiverPublicKey'] = $request['senderPublicKey'];
 
+    $data['amount'] = $request['amount'];
+    $data['currency'] = $request['currency'];
     $data['txid'] = createUniqueTxid($request); // TO DO DOES THIS NEED TO CHANGE? to use $data????
-    $data['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
-
+    $data['previousTxid'] = fixPreviousTxid($user['public'], $request['senderPublicKey']);
+    $data['memo'] = $request['hash'];
     return $data;
 }
 
