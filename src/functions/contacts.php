@@ -48,7 +48,6 @@ function addContact($data) {
         else {
             $payload['senderAddress'] = $user['hostname'];
         }
-
         // Check if the response indicates successful acceptance
         $responseData = json_decode(send($address, $payload), true);
         if (isset($responseData['status']) && ($responseData['status'] === 'accepted' || $responseData['status'] === 'warning')) {
