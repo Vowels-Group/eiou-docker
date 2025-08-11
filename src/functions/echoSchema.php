@@ -94,6 +94,14 @@ function returnContactSearchResults ($data) {
             "Total contacts found: " . count($data) ;
 }
 
+function returnLockfileCreation($lockfile,$pid){
+    return "Created lockfile at $lockfile with PID $pid\n";
+}
+
+function returnInstanceAlreadyRunning(){
+    return "Another instance is already running.\n";
+}
+
 function returnInvalidSendRequest(){
     return "Incorrect usage. Please use the following format:\n" .
            "eiou send [recipient] [amount] [optional: currency]\n" .
@@ -111,12 +119,4 @@ function returnInvalidCurrencySendRequest(){
 
 function returnNotProvidedCurrencySendRequest(){
     return "Currency not provided. Please provide a 3-letter currency code (e.g., USD).\n";
-}
-
-function returnInstanceAlreadyRunning(){
-    return "Another instance is already running.\n";
-}
-
-function returnLockfileCreation($lockfile,$pid){
-    return "Created lockfile at $lockfile with PID $pid\n";
 }
