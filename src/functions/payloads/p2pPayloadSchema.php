@@ -5,7 +5,7 @@ function buildP2pPayload($data) {
     // Build p2p payload for initial message
     global $user;
     output(outputBuildingP2pPayload($data),'SILENT');
-    $userAddress = resolveUserAddressForTransport($data['receiverAddress']); //To a contact (initial sending)
+    $userAddress = resolveUserAddressForTransport($data['receiverAddress']); // To a contact (initial sending)
     return array(
         'type' => 'p2p', // Peer to peer request type
         'hash' => $data['hash'],
@@ -25,7 +25,7 @@ function buildP2pPayloadDatabase($data) {
     // Build p2p payload from database message
     global $user;
     output(outputBuildingP2pPayload($data),'SILENT');
-    $userAddress = resolveUserAddressForTransport($data['sender_address']); //To a contact (sending p2p onwards to find end-recipient)
+    $userAddress = resolveUserAddressForTransport($data['sender_address']); // To a contact (sending p2p onwards to find end-recipient)
     return array(
         'type' => 'p2p', // Peer to peer request type
         'hash' => $data['hash'],
