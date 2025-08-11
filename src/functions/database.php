@@ -1098,18 +1098,18 @@ function updateTransactionStatus($memo, $status, $txid=false) {
     global $pdo;
     // Update transaction request status
     try {
-        $what = "hash";
+        $typeTransaction = "hash";
         if($txid){
             // Update only for direct transactions (no p2p)
             $updateStmt = $pdo->prepare("UPDATE transactions SET status = :status WHERE txid = :memo");   
-            $what = "txid";  
+            $typeTransaction = "txid";  
         } else{
             $updateStmt = $pdo->prepare("UPDATE transactions SET status = :status WHERE memo = :memo");     
         }
         $updateStmt->bindParam(':memo', $memo);
         $updateStmt->bindParam(':status', $status);
         $updateStmt->execute();
-        output(outputTransactionStatusUpdated($status,$what,$memo),'SILENT');
+        output(outputTransactionStatusUpdated($status,$typeTransaction,$memo),'SILENT');
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating transaction status: " . $e->getMessage());
