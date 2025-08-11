@@ -27,7 +27,7 @@ function buildP2pPayloadDatabase($data) {
     output(outputBuildingP2pPayload($data),'SILENT');
     $userAddress = resolveUserAddressForTransport($data['sender_address']); //To a contact (sending p2p onwards to find end-recipient)
     return array(
-        'type' => $data['type'], // Peer to peer request type
+        'type' => 'p2p', // Peer to peer request type
         'hash' => $data['hash'],
         'salt' => $data['salt'],
         'time' => $data['time'],
