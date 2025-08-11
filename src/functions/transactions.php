@@ -56,16 +56,26 @@ function createUniqueDatabaseTxid($data){
     return $txid;
 }
 
-function prepareSendData($request) {
+function prepareSendData($request,$contactInfo) {
+    global $user;
     // Prepare initial request payload for direct transaction
-    output("Prepare send data: " . print_r($request, true), 'SILENT');
+    
+    output(outputPrepareSendData($request), 'SILENT');
     $data['txType'] = 'standard';
     $data['time'] = returnMicroTime();
     $data['amount'] = round($request[3] * 100); // Convert to cents
-    $data['currency'] = 'USD';
+    $data['currency'] = $request[4];
     $data['memo'] = 'standard';
+
+    // Additional data preparation
+    $data['receiverAddress'] = $contactInfo['receiverAddress'];
+    $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
+    $data['txid'] = createUniqueTxid($data);
+    $data['previousTxid'] = fixPreviousTxid($user['public'], $contactInfo['receiverPublicKey']);
+
     return $data;
 }
+
 
 function processTransaction($request) {
     global $user;
@@ -174,13 +184,12 @@ function processPendingTransactions(){
 
 
 function sendEiou($request = null) {
-    global $user;
     // If no request is provided, use $data as a fallback
     if ($request === null) {
         global $data;
         $request = $data;
     }
-    //output("Getting ready to send eIOU with request: " . print_r($request, true), 'SILENT');
+    //output(outputEiouSend($request), 'SILENT');
     # Check if request is correctly formatted
     if(!validateSendRequest($request)){
         exit(0);
@@ -195,14 +204,10 @@ function sendEiou($request = null) {
     // If receiver's public key is in contacts, prepare a transaction to send directly to them
     if ($contactInfo = lookupContactInfo($request[2])) {
         output(outputLookedUpContactInfo($contactInfo), 'SILENT');
-        $data = prepareSendData($request);
-        $data['receiverAddress'] = $contactInfo['receiverAddress'];
-        $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
-        
-        $data['txid'] = createUniqueTxid($data);
-        $data['previousTxid'] = fixPreviousTxid($user['public'], $contactInfo['receiverPublicKey']);
-        
-        // Prepare transaction payload
+        // Data preparation for eIOU
+        $data = prepareSendData($request,$contactInfo);
+     
+        // Prepare transaction payload from data
         $payload = buildSendPayload($data);
         
         insertTransaction($payload); // Insert transaction as pending       
@@ -216,13 +221,13 @@ function sendEiou($request = null) {
 
 function sendP2pEiou($request) {
     global $user;
-    output("Getting ready to send P2p eIOU with memo: " . print_r($request['memo'], true),'SILENT');
+    output(outputP2pEiouSend($request),'SILENT');
 
     // Send transaction back to rp2p sender
     $request['receiverAddress'] = $request['senderAddress'];
     $request['receiverPublicKey'] = $request['senderPublicKey'];
 
-    $request['txid'] = hash('sha256', $user['public'] . $request['receiverPublicKey'] . $request['amount'] . $request['time']);
+    $request['txid'] = createUniqueTxid($request);
     $request['previousTxid'] = getPreviousTxid($user['public'], $request['receiverPublicKey']);
 
     // Prepare transaction payload
