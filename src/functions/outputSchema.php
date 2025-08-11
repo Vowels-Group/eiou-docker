@@ -1,5 +1,4 @@
 <?php
-
 # Copyright 2025
 
 function outputAdressOrContactIssue($data){
