@@ -56,12 +56,10 @@ function prepareP2pRequestData($request) {
         die;
     }
 
-    $data = $request;
-
     $data['receiverAddress'] = $request[2];
     $data['txType'] = 'p2p';
     $data['time'] = returnMicroTime();
-    $data['amount'] = round($request[3] * 100); // Convert to cents 100 
+    $data['amount'] = round($request[3] * 100); // Convert to cents 100 (based on USD currency)
     $data['currency'] = 'USD';
 
     // Additional data preparation
@@ -75,7 +73,7 @@ function prepareP2pRequestData($request) {
 }
 
 function prepareP2pRequestFromFailedTransactionData($message){
-    // Build initial p2p payload from Failed direct Transaction
+    // Build initial p2p payload from failed direct Transaction
     global $user;
     $data['receiverAddress'] = $message['receiver_address'];
     $data['txType'] = 'p2p';
