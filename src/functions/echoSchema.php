@@ -93,3 +93,30 @@ function returnContactSearchResults ($data) {
             "--------------------------------------------\n" .
             "Total contacts found: " . count($data) ;
 }
+
+function returnInvalidSendRequest(){
+    return "Incorrect usage. Please use the following format:\n" .
+           "eiou send [recipient] [amount] [optional: currency]\n" .
+           "Example: eiou send Bob 50\n" .
+           "Example: eiou send 123abc.onion 100 USD\n";
+}
+
+function returnInvalidAmountSendRequest(){
+    return "Invalid amount. Please enter a positive number.\n";
+}
+
+function returnInvalidCurrencySendRequest(){
+    return "Invalid currency. Please use a 3-letter currency code (e.g., USD).\n";
+}
+
+function returnNotProvidedCurrencySendRequest(){
+    return "Currency not provided. Please provide a 3-letter currency code (e.g., USD).\n";
+}
+
+function returnInstanceAlreadyRunning(){
+    return "Another instance is already running.\n";
+}
+
+function returnLockfileCreation($lockfile,$pid){
+    return "Created lockfile at $lockfile with PID $pid\n";
+}

@@ -6,13 +6,13 @@ function checkSingleInstance($lockfile = '/tmp/messages_lock.pid') {
     if (file_exists($lockfile)) {
         $pid = file_get_contents($lockfile);
         if (posix_kill($pid, 0)) {
-            echo "Another instance is already running.\n";
+            echo returnInstanceAlreadyRunning();
             exit(1);
         }
     }
     // Create lockfile with current process ID
     file_put_contents($lockfile, getmypid());
-    echo "Created lockfile at $lockfile with PID " . getmypid() . "\n";
+    echo returnLockfileCreation($lockfile,getmypid());
 }
 
 function countTorAndHttpAddresses($data){
@@ -65,28 +65,27 @@ function validateRequestLevel($request){
 function validateSendRequest($data) {
     // Validate the send request
     if (count($data) < 4) {
-        echo "Incorrect usage. Please use the following format:\n";
-        echo "eiou send [recipient] [amount] [optional: currency]\n";
-        echo "Example: eiou send Bob 50\n";
-        echo "Example: eiou send 123abc.onion 100 USD\n";
+        echo returnInvalidSendRequest();
         return false;
     }
 
     // Validate amount is a positive number
     $amount = $data[3];
     if (!is_numeric($amount) || floatval($amount) <= 0) {
-        echo "Invalid amount. Please enter a positive number.\n";
+        echo returnInvalidAmountSendRequest();
         return false;
     }
 
-    // Optional: Validate currency if provided
+    // Validate currency
     if (isset($data[4])) {
         $currency = strtoupper($data[4]);
         // You can add more specific currency validation if needed
         if (strlen($currency) !== 3) {
-            echo "Invalid currency. Please use a 3-letter currency code (e.g., USD).\n";
+            echo returnInvalidCurrencySendRequest();
             return false;
         }
+    } else{
+        echo returnNotProvidedCurrencySendRequest();
     }
     return true;
 }
