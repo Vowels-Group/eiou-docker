@@ -44,7 +44,7 @@ while true; do
         echo -e "\t Authentication Code: $authcode"
         break
     else
-        if [ $first ]; then
+        if $first; then
             echo "Message processing check failed to complete. Retrying every 5 seconds..."
             if [ "$QUICKSTART" = "false" ]; then
                 echo "Please run the 'generate' command to generate a new wallet and setup message processing"
