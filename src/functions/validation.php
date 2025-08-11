@@ -15,16 +15,6 @@ function checkSingleInstance($lockfile = '/tmp/messages_lock.pid') {
     echo returnLockfileCreation($lockfile,getmypid());
 }
 
-function countTorAndHttpAddresses($data){
-    // Count how many tor and http addresses
-    $result = [
-        'tor' => count(array_filter($data, 'isTorAddress')),
-        'http' => count(array_filter($data, 'isHttpAddress')),
-        'total' => count($data)
-    ];
-    return $result;
-}
-
 function determineTransportType($address) {
     // Check if the address is a Tor (.onion) address
     if (isTorAddress($address)) {
@@ -86,4 +76,21 @@ function validateSendRequest($data) {
         }
     } 
     return true;
+}
+
+function verifyRequest($request) {
+    // Check if request is valid based on signature
+    $publicKeyResource = openssl_pkey_get_public($request['senderPublicKey']);
+    $verified = openssl_verify($request['message'], base64_decode($request['signature']), $publicKeyResource);
+    
+    // Step 3: Output the verification result
+    if ($verified === 1) {
+        return true; // continue
+    } elseif ($verified === 0) {
+        echo json_encode(["status" => "rejected", "message" => "Signature is invalid"]);
+        return false;
+    } else {
+        echo json_encode(["status" => "error", "message" => "Error occurred during verification"]);
+        return false;
+    }
 }
