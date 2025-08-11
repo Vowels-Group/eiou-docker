@@ -9,6 +9,11 @@ function returnContactAcceptanceFailed() {
     return "Failed to accept contact.";
 }
 
+function returnContactAddInvalidInput() {
+    return "Invalid input. Please provide a valid address, name, fee, credit, and currency.\n" .
+           "Example command: eiou add [address] [name] [fee percent] [credit] [currency]";
+}
+
 function returnContactCreationSuccessful() {
     return "Contact created successfully.";
 }
@@ -20,6 +25,10 @@ function returnContactCreationFailed() {
 function returnContactCreationWarning($message) {
     return "Warning: " . $message . "\n" .
            "Contact was previously deleted and has been added again.\n";
+}
+
+function returnContactDeletedSuccesfully(){
+    return "Contact deleted successfully.\n";
 }
 
 function returnContactDetails($data) {
@@ -38,13 +47,12 @@ function returnContactExists() {
     return "This contact has already been added or accepted.";
 }
 
-function returnContactAddInvalidInput() {
-    return "Invalid input. Please provide a valid address, name, fee, credit, and currency.\n" .
-           "Example command: eiou add [address] [name] [fee percent] [credit] [currency]";
-}
-
 function returnContactNotFound() {
     return "Contact not found.";
+}
+
+function returnContactNotFoundNoAction() {
+    return "Contact not found, no action taken.\n";
 }
 
 function returnContactUpdate() {
@@ -132,12 +140,24 @@ function returnNoWalletExists(){
     return "No wallet found. Please generate a new wallet by running 'eiou generate' or restore an existing wallet by running 'eiou restore'.\n";
 }
 
-function returnOverwritingExistingWallet(){
-    return "Wallet will now be overwritten...\n";
-}
+// function returnOverwritingExistingWallet(){
+//     return "Wallet will now be overwritten...\n";
+// }
 
-function returnUserInputRequestOverwritingWallet(){
-    return "A wallet already exists, do you want to overwrite the existing wallet?\n" .
-           "WARNING: this act is irreversible!\n" .
-           "enter 'y' to continue, anything else to abort.\n";
-}
+// function returnOverwritingExistingWalletForced(){
+//     return "'force' parameter passed: Wallet will now be forcefully overwritten...\n";
+// }
+
+// function returnOverwritingExistingWalletCancelled(){
+//     return "Wallet will not be overwritten.\n";
+// }
+
+// function returnUserInputRequestOverwritingWallet(){
+//     return "A wallet already exists, do you want to overwrite the existing wallet?\n" .
+//            "\tWARNING: this act is irreversible!\n" .
+//            "\tenter 'y' to continue overwriting, anything else to abort.\n" . 
+//            "\tIf unsuccessful pass the force parameter:\n" .
+//            "\t'eiou generate [address] (toraddressonly) (force)'\n" .
+//            "\t\t\t or\n" .
+//            "\t'eiou generate [address] (force)'.\n";
+// }
