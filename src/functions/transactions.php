@@ -5,10 +5,7 @@ function checkPreviousTxid($request){
     // If a previous transaction exists, verify the previousTxid matches
     if (isset($request['previousTxid']) && $previousTxResult = getPreviousTxid($request['senderPublicKey'], $request['receiverAddress'])) {
         if ($previousTxResult !== $request['previousTxid']) {
-            echo json_encode([
-                "status" => "rejected", 
-                "message" => "Previous transaction ID does not match. Expecting: " . $previousTxResult['txid'] . " Received: " . $request['previousTxid']
-            ]);
+            echo buildInvalidTransactionIDPayload($previousTxResult,$request);
             return false;
         }
     }
@@ -16,6 +13,7 @@ function checkPreviousTxid($request){
 }
 
 function checkAvailableFundsTransaction($request){
+    // Check if there is enough funds to complete the transaction
     $totalSent = calculateTotalSent($request['senderPublicKey']);
     $totalReceived = calculateTotalReceived($request['senderPublicKey']);
     $currentBalance = $totalReceived - $totalSent; 
@@ -35,6 +33,7 @@ function checkAvailableFundsTransaction($request){
 }
 
 function fixPreviousTxid($senderPubKey,$receiverPubKey){
+    // Make sure that the previous transactions txid in the chain is not already being used as a previous_txid for another transaction
     $prevID = getPreviousTxid($senderPubKey, $receiverPubKey);
     while(getExistingPreviousTxid($prevID)){
         $prevID = getPreviousTxid($senderPubKey, $receiverPubKey);
@@ -52,7 +51,7 @@ function createUniqueTxid($data){
 
 function createUniqueDatabaseTxid($data){
     global $user;
-    // Create unique Txid for transactions (from database)
+    // Create unique Txid for transactions (from database values)
     $txid = hash('sha256', $user['public'] . $data['receiver_public_key'] . $data['amount'] . $data['time']);
     return $txid;
 }
@@ -173,48 +172,6 @@ function processPendingTransactions(){
     }
 }
 
-function send($recipient, $payload){
-    // Encode the payload as JSON
-    $signedPayload = json_encode(sign($payload));
-    // Determine if tor address, else send by http
-    if (preg_match('/\.onion$/', $recipient)) {
-        return sendByTor($recipient, $signedPayload);
-    } else {
-        return sendByHttp($recipient, $signedPayload);
-    }
-}
-
-function sendByHttp ($recipient, $signedPayload) {
-    $ch = curl_init();
-    
-    // Determine the protocol based on the recipient format
-    $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'http://';
-
-    curl_setopt($ch, CURLOPT_URL, $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload));
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
-    curl_setopt($ch, CURLOPT_POST, true);
-    $response = curl_exec($ch);
-    curl_close($ch);
-    // Return the response from the recipient
-    return $response;
-}
-
-function sendByTor ($recipient, $signedPayload) {
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou?payload=" . urlencode($signedPayload));
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
-    curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
-    curl_setopt($ch, CURLOPT_POST, true);
-    $response = curl_exec($ch);
-    curl_close($ch);
-    // Return the response from the recipient
-    return $response;
-}
 
 function sendEiou($request = null) {
     global $user;
@@ -273,88 +230,3 @@ function sendP2pEiou($request) {
     insertTransaction($payload); // Insert transaction as pending
 }
 
-function viewBalances($data) {
-    // View balance information based on transactions
-    global $pdo, $user;
-    $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
-    // Check if an address or name is provided
-    if (isset($data[2])) {
-        // Check if it's a HTTP or Tor address
-        if (isHttpAddress($data[2]) || isTorAddress($data[2])) {
-            $address = $data[2];
-        } else{
-             // Check if the name yields an address
-            $contactResult = lookupContactByName($data[2]);
-            $address = $contactResult['address'] ?? null;
-        }
-        // Add WHERE clause if a valid address is found
-        if ($address) {
-            $query .= " WHERE sender_address = :address OR receiver_address = :address ORDER BY timestamp DESC";
-        } else{
-            echo "Address/Name unknown, displaying all balances";
-            $query .= " ORDER BY timestamp DESC";   
-        }    
-    }
-
-    $balances = [];
-    $stmt = $pdo->prepare($query);
-    
-    if (isset($data[2]) && $address) {
-        $stmt->bindParam(':address', $address);
-    }
-    
-    $stmt->execute();
-    
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        // Calculate balance changes
-        $senderAddress = $row['sender_address'];
-        $receiverAddress = $row['receiver_address'];
-        $amount = $row['amount'] / 100;
-        
-        // Adjust balances for sender and receiver
-        $balances[$senderAddress] = ($balances[$senderAddress] ?? 0) - $amount;
-        $balances[$receiverAddress] = ($balances[$receiverAddress] ?? 0) + $amount;
-    }
-    $otherBalances = [];
-    
-    // Pretty print balances
-    foreach ($balances as $address => $balance) {
-        // Check if the address is the user's own address
-        if (isMe($address)) {
-            $displayName = "me";
-            $additionalAddresses = [];
-            
-            if (isset($user['hostname'])) {
-                $additionalAddresses[] = $user['hostname'];
-            }
-            
-            if (isset($user['torAddress'])) {
-                $additionalAddresses[] = $user['torAddress'];
-            }
-            
-            $additionalInfo = $additionalAddresses ? '(' . implode(', ', $additionalAddresses) . ')' : '';
-            
-            printf("%s %s, Balance: %.2f\n", $displayName, $additionalInfo, $balance);
-        } else {
-            // If it's not the user's own address, add to a list to be sorted
-            // Lookup contact name for the address
-            $contactResult = lookupContactByAddress($address);
-            $contactName = $contactResult ? $contactResult['name'] : $address;
-            
-            $otherBalances[] = [
-                'address' => $address, 
-                'name' => $contactName, 
-                'balance' => $balance
-            ];
-        }
-    }
-
-    // Sort and print other balances
-    usort($otherBalances, function($a, $b) {
-        return $b['balance'] <=> $a['balance'];
-    });
-
-    foreach ($otherBalances as $contact) {   
-        printf("\t%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], $contact['balance']);
-    }
-}
