@@ -3,8 +3,6 @@
 
 function addContact($data) {
     global $user;
-    //Get sender address
-    $senderPublicKey = $user['public'];
     
     // Assign command line arguments to variables
     $address = filter_var($data[2], FILTER_VALIDATE_REGEXP, array("options"=>array("regexp"=>"/^[a-zA-Z0-9]{56}$|^[a-z2-7]{56}\.onion$|^https?:\/\/[a-zA-Z0-9.-]+/")));
