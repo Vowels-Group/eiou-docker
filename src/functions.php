@@ -22,5 +22,3 @@ require_once 'src/functions/transactions.php';
 require_once 'src/functions/utils.php';
 require_once 'src/functions/validation.php';
 require_once 'src/functions/wallet.php';
-
-
