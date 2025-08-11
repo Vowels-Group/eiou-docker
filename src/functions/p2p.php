@@ -56,11 +56,13 @@ function prepareP2pRequestData($request) {
         die;
     }
 
-    $data['receiverAddress'] = $request[2];
+    // Initial data preparation
     $data['txType'] = 'p2p';
+    $data['receiverAddress'] = $request[2];
+
     $data['time'] = returnMicroTime();
     $data['amount'] = round($request[3] * 100); // Convert to cents 100 (based on USD currency)
-    $data['currency'] = 'USD';
+    $data['currency'] = 'USD'; // Default to USD
 
     // Additional data preparation
     $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
@@ -132,7 +134,7 @@ function processQueuedP2pMessages() {
             }
             if(isset($message['destination_address'])){
                 output(outputSendP2PToAmountContacts($contactsCount), 'SILENT');
-                //Inform user about expected response time
+                //Inform user (in debug) about expected response time
                 $httpExpectedResponseTime = $user['maxP2pLevel']; // Use maxP2pLevel seconds for http
                 $torExpectedResponseTime = 5 * 2 * $user['maxP2pLevel']; //5 seconds for a tor request, 2 times for a round trip, multiplied by maxP2pLevel
                 output(outputResponseTransactionTimes($httpExpectedResponseTime,$torExpectedResponseTime), 'SILENT');
