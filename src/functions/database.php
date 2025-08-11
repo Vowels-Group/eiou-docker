@@ -1044,6 +1044,36 @@ function updateContactStatus($address,$status) {
     }
 }
 
+function updateIncomingP2pTxid($hash, $txid){
+    global $pdo;
+    // Update p2p incoming_txid
+    try{
+        $updateStmt = $pdo->prepare("UPDATE p2p SET incoming_txid = :txid WHERE hash = :hash");
+        $updateStmt->bindParam(':hash', $hash);
+        $updateStmt->bindParam(':txid', $txid);
+        $updateStmt->execute();
+        output(outputUpdatedTxid($txid,'incoming_txid',$hash),'SILENT');
+    } catch (PDOException $e) {
+        // Log or handle the error if updating incoming_txid fails
+        error_log("Error updating p2p txid : " . $e->getMessage());
+    }
+}
+
+function updateOutgoingP2pTxid($hash, $txid){
+    global $pdo;
+    // Update p2p outgoing_txid
+    try{
+        $updateStmt = $pdo->prepare("UPDATE p2p SET outgoing_txid = :txid WHERE hash = :hash");
+        $updateStmt->bindParam(':hash', $hash);
+        $updateStmt->bindParam(':txid', $txid);
+        $updateStmt->execute();
+        output(outputUpdatedTxid($txid,'outgoing_txid',$hash),'SILENT');
+    } catch (PDOException $e) {
+        // Log or handle the error if updating txid fails
+        error_log("Error updating p2p outgoing_txid : " . $e->getMessage());
+    }
+}
+
 function updateP2pRequestStatus($hash, $status, $completed = false) {
     global $pdo;
     // Update p2p request status
@@ -1061,27 +1091,6 @@ function updateP2pRequestStatus($hash, $status, $completed = false) {
     } catch (PDOException $e) {
         // Log or handle the error if updating status fails
         error_log("Error updating p2p request status: " . $e->getMessage());
-    }
-}
-
-function updateP2pTxid($hash, $txid, $incoming = false){
-    global $pdo;
-    // Update p2p txid
-    try{
-        $what = 'incoming_txid';
-        if($incoming){
-            $updateStmt = $pdo->prepare("UPDATE p2p SET incoming_txid = :txid WHERE hash = :hash");
-        } else{
-            $updateStmt = $pdo->prepare("UPDATE p2p SET outgoing_txid = :txid WHERE hash = :hash");
-            $what = 'outgoing_txid';
-        }
-        $updateStmt->bindParam(':hash', $hash);
-        $updateStmt->bindParam(':txid', $txid);
-        $updateStmt->execute();
-        //output(outputUpdatedTxid($txid,$what,$hash),'SILENT');
-    } catch (PDOException $e) {
-        // Log or handle the error if updating txid fails
-        error_log("Error updating p2p txid : " . $e->getMessage());
     }
 }
 
