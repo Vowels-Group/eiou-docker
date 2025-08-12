@@ -203,7 +203,7 @@ function sendEiou($request = null) {
     }
     //output(outputEiouSend($request), 'SILENT');
     # Check if request is correctly formatted
-    if(!validateTransactionRequest($request)){
+    if(!validateSendRequest($request)){
         exit(0);
     }
         
