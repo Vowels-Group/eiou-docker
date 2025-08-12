@@ -242,6 +242,42 @@ function displayUserInfo($argv) {
     }
 }
 
+function viewBalanceQuery($direction, $userAddress, $limit){
+    global $pdo;
+    // View balance information based on transactions
+    if($direction === "received"){
+         $query = "SELECT sender_address, amount, currency, timestamp FROM transactions WHERE receiver_address = :userAddress ORDER BY timestamp DESC";
+         $address = "sender_address";
+         $where = "from";
+    } else{
+         $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions WHERE sender_address = :userAddress ORDER BY timestamp DESC";
+         $address = "receiver_address";
+         $where = "to";
+    }
+   
+    $stmt = $pdo->prepare($query);  
+    $stmt->bindParam(':userAddress', $userAddress);
+    $stmt->execute();
+
+    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $countResults = count($results);
+    
+    echo "\t\tBalance $direction $where:\n";
+    $countrows = 1;
+    foreach ($results as $res) {
+        $amount = $res['amount'] / 100;
+        printf("\t\t\t%s (%s) %s, %.2f %s\n", lookupContactNameByAddress($res[$address]), $res[$address], $res['timestamp'], $amount, $res['currency']);
+        if($limit !== 'all' && ($countrows >= $limit)){
+            break;
+        } 
+        $countrows += 1;
+    }
+    if($limit === 'all' || $limit > $countResults){
+        $limit = $countResults;
+    } 
+    echo "\t\t\t----- Displaying $limit out of $countResults $direction balance(s) -----\n";
+}
+
 function viewBalances($data) {
     // View balance information based on transactions
     global $pdo, $user;
@@ -325,5 +361,89 @@ function viewBalances($data) {
 
     foreach ($otherBalances as $contact) {   
         printf("\t%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], $contact['balance']);
+    }
+}
+
+function viewTransactionHistory($argv) {
+    global $pdo, $user;
+    // View all transaction history in pretty print 'table'
+    $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
+    $address = null;
+    $displayLimit = $user['maxOutput'];
+    // Check if an address or name is provided
+    if (isset($argv[2])) {
+        // First if it's an HTTP or Tor address
+        if (isHttpAddress($argv[2]) || isTorAddress($argv[2])) {
+            $address = $argv[2];
+        } else {
+            // Check if the name yields an address
+            $contactResult = lookupContactByName($argv[2]);
+            $address = $contactResult ? $contactResult['address'] : $argv[2];
+        }
+        // Add WHERE clause if a valid address is found
+        if ($address) {
+            $query .= " WHERE sender_address = :address OR receiver_address = :address";
+        } 
+    }
+    // Add ordering
+    $query .= " ORDER BY timestamp DESC";
+    // Add limit depending on passed parameter
+    if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
+        $displayLimit = $argv[3];
+    }
+    
+    $stmt = $pdo->prepare($query);
+    
+    if ($address) {
+        $stmt->bindParam(':address', $address);
+    }
+    
+    $stmt->execute();
+    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Pretty print results in 'table'
+    if ($results) {
+        echo "Transaction History:\n";
+        echo "-------------------------------------------\n";
+        echo str_pad("Sender name (Address)", 56, ' ') . " | " . 
+             str_pad("Receiver name (Address)", 56, ' ') . " | " . 
+             str_pad("Amount", 10, ' ') . " | " . 
+             str_pad("Currency", 10, ' ') . " | " . 
+             "Timestamp\n";
+        echo "-------------------------------------------\n";
+        $countResults = count($results);
+        $countrows = 1;
+        foreach ($results as $transaction) {
+            // Lookup sender name
+            $senderResult = lookupContactByAddress($transaction['sender_address']);
+            $senderName = $senderResult ? $senderResult['name'] : $transaction['sender_address'];
+            
+            // Lookup receiver name
+            $receiverResult = lookupContactByAddress($transaction['receiver_address']);
+            $receiverName = $receiverResult ? $receiverResult['name'] : $transaction['receiver_address'];
+            
+            // Replace name with 'me' if the address is mine
+            $senderName = isMe($transaction['sender_address']) ? 'me' : $senderName;
+            $receiverName = isMe($transaction['receiver_address']) ? 'me' : $receiverName;
+            
+            echo str_pad($senderName . " (" . $transaction['sender_address'] . ")", 56, ' ') . " | " . 
+                 str_pad($receiverName . " (" . $transaction['receiver_address'] . ")", 56, ' ') . " | " . 
+                 str_pad(number_format($transaction['amount'] / 100, 2), 10, ' ') . " | " . 
+                 str_pad($transaction['currency'], 10, ' ') . " | " . 
+                 $transaction['timestamp'] . "\n";
+            if($displayLimit !== 'all' && ($countrows >= $displayLimit)){
+                break;
+            } 
+            $countrows += 1;        
+        }
+        echo "-------------------------------------------\n";
+        if($displayLimit === 'all'){
+            $displayLimit = $countResults;
+        } elseif($displayLimit > $countResults){
+            $displayLimit = $countResults;
+        }
+        echo "Displaying " . $displayLimit .  " out of " . $countResults . " total transactions.\n";
+    } else {
+        echo "No transaction history found.\n";
     }
 }

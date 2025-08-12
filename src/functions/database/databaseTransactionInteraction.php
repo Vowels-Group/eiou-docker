@@ -330,7 +330,6 @@ function viewBalanceQuery($direction, $userAddress, $limit){
     echo "\t\t\t----- Displaying $limit out of $countResults $direction balance(s) -----\n";
 }
 
-
 function viewTransactionHistory($argv) {
     global $pdo, $user;
     // View all transaction history in pretty print 'table'
