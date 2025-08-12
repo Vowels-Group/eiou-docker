@@ -18,12 +18,12 @@ require_once 'src/functions/echoSchema.php';
 require_once 'src/functions/message.php';
 require_once 'src/functions/outputSchema.php';
 
-require_once 'src/functions/payloads/contactPayloadSchema.php';
-require_once 'src/functions/payloads/messagePayloadSchema.php';
-require_once 'src/functions/payloads/p2pPayloadSchema.php';
-require_once 'src/functions/payloads/rp2pPayloadSchema.php';
-require_once 'src/functions/payloads/transactionPayloadSchema.php';
-require_once 'src/functions/payloads/utilPayloadSchema.php';
+require_once 'src/functions/payloads/payloadContactSchema.php';
+require_once 'src/functions/payloads/payloadMessageSchema.php';
+require_once 'src/functions/payloads/payloadP2pSchema.php';
+require_once 'src/functions/payloads/payloadRp2pSchema.php';
+require_once 'src/functions/payloads/payloadTransactionSchema.php';
+require_once 'src/functions/payloads/payloadUtilSchema.php';
 
 
 require_once 'src/functions/p2p.php';
@@ -31,10 +31,10 @@ require_once 'src/functions/rp2p.php';
 require_once 'src/functions/synch.php';
 require_once 'src/functions/transactions.php';
 
-require_once 'src/functions/utils/debug.php';
-require_once 'src/functions/utils/general.php';
-require_once 'src/functions/utils/transport.php';
-require_once 'src/functions/utils/userInteraction.php';
+require_once 'src/functions/utils/utilDebug.php';
+require_once 'src/functions/utils/utilGeneral.php';
+require_once 'src/functions/utils/utilTransport.php';
+require_once 'src/functions/utils/utilUserInteraction.php';
 
 require_once 'src/functions/validation.php';
 require_once 'src/functions/wallet.php';

@@ -13,7 +13,6 @@ function sych($argv){
     } else{
         synchAll();
     }
-
 }
 
 function synchAll(){
@@ -61,7 +60,6 @@ function synchContact($contactAddress){
         }
     }
 }
-
 
 function synchAllTransactions(){
     // To Do: synch transactions
