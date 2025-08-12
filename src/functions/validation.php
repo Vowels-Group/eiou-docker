@@ -52,7 +52,7 @@ function validateRequestLevel($request){
     return $request['requestLevel'] <= $request['maxRequestLevel'];
 }
 
-function validateSendRequest($data) {
+function validateTransactionRequest($data) {
     // Validate the send request
     if (count($data) < 4) {
         echo returnInvalidSendRequest();
