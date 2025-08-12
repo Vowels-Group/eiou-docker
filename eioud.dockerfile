@@ -48,8 +48,12 @@ RUN chmod 644 /etc/eiou/functions.php
 COPY src/functions /etc/eiou/src/functions
 RUN chown www-data:www-data /etc/eiou/src/functions -R
 RUN chmod 644 /etc/eiou/src/functions/*
+RUN chmod 755 /etc/eiou/src/functions/database
+RUN chmod 644 /etc/eiou/src/functions/database/*
 RUN chmod 755 /etc/eiou/src/functions/payloads
 RUN chmod 644 /etc/eiou/src/functions/payloads/*
+RUN chmod 755 /etc/eiou/src/functions/utils
+RUN chmod 644 /etc/eiou/src/functions/utils/*
 
 # Copy messages.php to a common location
 COPY src/messages.php /etc/eiou/messages.php
