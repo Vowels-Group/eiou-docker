@@ -18,7 +18,7 @@ function generateWallet($argv) {
       echo returnOverwritingExistingWalletCancelled();
       exit(0);
     } else{
-      // Note new values are appended, old still exist in config.php. But new ones are used
+      // Note: new values are appended, old still exist in config.php. But new ones are used due to way php reads in
       echo returnOverwritingExistingWallet();
     } 
   }
