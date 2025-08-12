@@ -56,7 +56,7 @@ function createUniqueDatabaseTxid($data){
     return $txid;
 }
 
-function prepareStandardSendData($request,$contactInfo) {
+function prepareStandardTransactionData($request,$contactInfo) {
     global $user;
     // Prepare initial data payload for direct transaction
     
@@ -76,7 +76,7 @@ function prepareStandardSendData($request,$contactInfo) {
     return $data;
 }
 
-function prepareP2pSendData($request) {
+function prepareP2pTransactionData($request) {
     // Prepare data for p2p transaction
     global $user;
 
@@ -203,7 +203,7 @@ function sendEiou($request = null) {
     }
     //output(outputEiouSend($request), 'SILENT');
     # Check if request is correctly formatted
-    if(!validateSendRequest($request)){
+    if(!validateTransactionRequest($request)){
         exit(0);
     }
         
@@ -217,7 +217,7 @@ function sendEiou($request = null) {
     if ($contactInfo = lookupContactInfo($request[2])) {
         output(outputLookedUpContactInfo($contactInfo), 'SILENT');
         // Data preparation for eIOU
-        $data = prepareStandardSendData($request,$contactInfo);
+        $data = prepareStandardTransactionData($request,$contactInfo);
      
         // Prepare transaction payload from data
         $payload = buildSendPayload($data);
@@ -235,7 +235,7 @@ function sendP2pEiou($request) {
     output(outputP2pEiouSend($request),'SILENT');
 
     // Create data to send back to rp2p sender
-    $data = prepareP2pSendData($request);
+    $data = prepareP2pTransactionData($request);
 
     // Prepare transaction payload
     $payload = buildSendPayload($data);
