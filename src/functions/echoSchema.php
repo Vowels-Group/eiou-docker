@@ -140,24 +140,16 @@ function returnNoWalletExists(){
     return "No wallet found. Please generate a new wallet by running 'eiou generate' or restore an existing wallet by running 'eiou restore'.\n";
 }
 
-// function returnOverwritingExistingWallet(){
-//     return "Wallet will now be overwritten...\n";
-// }
+function returnOverwritingExistingWallet(){
+    return "Wallet will now be overwritten...\n";
+}
 
-// function returnOverwritingExistingWalletForced(){
-//     return "'force' parameter passed: Wallet will now be forcefully overwritten...\n";
-// }
+function returnOverwritingExistingWalletCancelled(){
+    return "Wallet will not be overwritten.\n";
+}
 
-// function returnOverwritingExistingWalletCancelled(){
-//     return "Wallet will not be overwritten.\n";
-// }
-
-// function returnUserInputRequestOverwritingWallet(){
-//     return "A wallet already exists, do you want to overwrite the existing wallet?\n" .
-//            "\tWARNING: this act is irreversible!\n" .
-//            "\tenter 'y' to continue overwriting, anything else to abort.\n" . 
-//            "\tIf unsuccessful pass the force parameter:\n" .
-//            "\t'eiou generate [address] (toraddressonly) (force)'\n" .
-//            "\t\t\t or\n" .
-//            "\t'eiou generate [address] (force)'.\n";
-// }
+function returnUserInputRequestOverwritingWallet(){
+    return "A wallet already exists, do you want to overwrite the existing wallet?\n" .
+           "\tWARNING: this act is irreversible!\n" .
+           "\tenter 'y' to continue overwriting, anything else to abort.\n";
+}
