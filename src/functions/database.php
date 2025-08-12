@@ -406,6 +406,19 @@ function deleteDatabase($dbname){
     }
 }
 
+function deleteDatabaseTableData(){
+    global $pdo;
+    // Delete the data from the tables
+    try {
+        $query = "DELETE FROM 'contacts','debug','p2p','rp2p','transactions'";
+        $stmt = $pdo->prepare($query);
+        $stmt->execute();
+        echo "Database tables deleted successfully.";
+    } catch (PDOException $e) {
+        echo "Error when trying to delete database: " . $e->getMessage();
+    }
+}
+
 function freshInstall(){
     // Check if the configuration file exists
     if (!file_exists('/etc/eiou/config.php')) {
@@ -1249,7 +1262,7 @@ function viewTransactionHistory($argv) {
     }
 }
 
-function wipeEverything(){
+function wipeEverything($dbName){
     unlink("//etc//eiou//config.php");
-    deleteDatabase();
+    deleteDatabase($dbName);
 }
