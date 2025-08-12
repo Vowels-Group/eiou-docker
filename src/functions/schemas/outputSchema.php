@@ -51,7 +51,7 @@ function outputFeeInformation($feePercent,$request,$maxFee){
 
 function outputFeeRejection(){
     // TO DO make meaningfull
-    return "I reject the fee, ignore really. it will expire. or is there something else i can do?";
+    return "I reject the fee, transaction will be ignored and it will expire.";
 }
 
 function outputFoundRp2pMatch($message){
