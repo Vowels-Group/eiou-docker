@@ -48,14 +48,28 @@ RUN chmod 644 /etc/eiou/functions.php
 COPY src/functions /etc/eiou/src/functions
 RUN chown www-data:www-data /etc/eiou/src/functions -R
 RUN chmod 644 /etc/eiou/src/functions/*
-RUN chmod 755 /etc/eiou/src/functions/database
-RUN chmod 644 /etc/eiou/src/functions/database/*
-RUN chmod 755 /etc/eiou/src/functions/schemas
-RUN chmod 644 /etc/eiou/src/functions/schemas/*
-RUN chmod 755 /etc/eiou/src/functions/schemas/payloads
-RUN chmod 644 /etc/eiou/src/functions/schemas/payloads/*
-RUN chmod 755 /etc/eiou/src/functions/utils
-RUN chmod 644 /etc/eiou/src/functions/utils/*
+
+# Copy database folder to /etc/eiou/src/database
+COPY src/database /etc/eiou/src/database
+RUN chmod 755 /etc/eiou/src/database
+RUN chmod 644 /etc/eiou/src/database/*
+
+# Copy schemas folder to /etc/eiou/src/schemas
+COPY src/schemas /etc/eiou/src/schemas
+RUN chmod 755 /etc/eiou/src/schemas
+RUN chmod 644 /etc/eiou/src/schemas/*
+RUN chmod 755 /etc/eiou/src/schemas/payloads
+RUN chmod 644 /etc/eiou/src/schemas/payloads/*
+
+# Copy utils folder to /etc/eiou/src/utils
+COPY src/utils /etc/eiou/src/utils
+RUN chmod 755 /etc/eiou/src/utils
+RUN chmod 644 /etc/eiou/src/utils/*
+
+# Copy startup folder to /etc/eiou/src/startup
+COPY src/startup /etc/eiou/src/startup
+RUN chmod 755 /etc/eiou/src/startup
+RUN chmod 644 /etc/eiou/src/startup/*
 
 # Copy messages.php to a common location
 COPY src/messages.php /etc/eiou/messages.php

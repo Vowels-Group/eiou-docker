@@ -27,7 +27,7 @@ fi
 # Check if all precursors to messages.php are available and working
 first=true
 while true; do
-    if [[ $(php -r 'require("//etc//eiou//src//functions//messageCheck.php"); echo $passed;') ]]; then
+    if [[ $(php -r 'require("//etc//eiou//src//startup//messageCheck.php"); echo $passed;') ]]; then
         echo "Message processing check completed successfully."  
         # Display all user info for quick access
         http=$(php -r 'require("//etc//eiou//config.php"); if(isset($user["hostname"])){echo $user["hostname"];}')
