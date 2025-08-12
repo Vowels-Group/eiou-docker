@@ -9,28 +9,20 @@ function checkWalletExists($user, $request) {
 }
 
 function generateWallet($argv) {
-  // global $user;
+  global $user;
   // //If config (wallet) exists query user about overwriting
-  // if(file_exists("//etc//eiou//config.php")){
-  //   if ((isset($argv[2]) && strtolower($argv[2]) === 'force') || (isset($argv[3]) && strtolower($argv[3]) === 'force')){
-  //     echo returnOverwritingExistingWalletForced();
-  //     // wipeEverything($user['dbName']);
-  //     // freshInstall();
-  //     deleteDatabaseTableData();
-  //   } else{
-  //     echo returnUserInputRequestOverwritingWallet();
-  //     $decision = trim(fgets(STDIN));
-  //     if(strtolower($decision) !== 'y'){
-  //       echo returnOverwritingExistingWalletCancelled();
-  //       exit(0);
-  //     } else{
-  //       echo returnOverwritingExistingWallet();
-  //       // wipeEverything($user['dbName']);
-  //       // freshInstall();
-  //       deleteDatabaseTableData();
-  //     }
-  //   } 
-  // }
+  if(file_exists("//etc//eiou//config.php") && isset($user["public"])){
+    echo returnUserInputRequestOverwritingWallet();
+    $decision = trim(fgets(STDIN));
+    if(strtolower($decision) !== 'y'){
+      echo returnOverwritingExistingWalletCancelled();
+      exit(0);
+    } else{
+      // Note new values are appended, old still exist in config.php. But new ones are used
+      echo returnOverwritingExistingWallet();
+    } 
+  }
+
 
   // Generate a private key
   $config = array(
@@ -73,7 +65,7 @@ function generateWallet($argv) {
     return;
   }
   
-  // TO DO: Unreachable code, to use when not testing?
+  // Only display if generate is called without arguments (eiou generate)
   echo "Public key: $publicKey\n";
   echo "Private key: $privateKey\n";
   echo "Authentication Code: $authCode\n";
