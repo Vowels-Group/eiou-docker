@@ -10,7 +10,7 @@ function checkWalletExists($user, $request) {
 
 function generateWallet($argv) {
   global $user;
-  // //If config (wallet) exists query user about overwriting
+  // If config (wallet) exists query user about overwriting
   if(file_exists("//etc//eiou//config.php") && isset($user["public"])){
     echo returnUserInputRequestOverwritingWallet();
     $decision = trim(fgets(STDIN));
@@ -22,7 +22,6 @@ function generateWallet($argv) {
       echo returnOverwritingExistingWallet();
     } 
   }
-
 
   // Generate a private key
   $config = array(
