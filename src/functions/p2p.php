@@ -77,8 +77,9 @@ function prepareP2pRequestData($request) {
 function prepareP2pRequestFromFailedTransactionData($message){
     // Build initial p2p payload from failed direct Transaction
     global $user;
-    $data['receiverAddress'] = $message['receiver_address'];
     $data['txType'] = 'p2p';
+    $data['receiverAddress'] = $message['receiver_address'];
+
     $data['time'] = returnMicroTime();
     $data['amount'] = $message['amount'];
     $data['currency'] = $message['currency'];
