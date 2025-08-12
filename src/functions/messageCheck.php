@@ -9,7 +9,7 @@ try{
         return;
     }
     require_once("/etc/eiou/config.php");
-    require_once("/etc/eiou/src/functions/pdo.php");
+    require_once("/etc/eiou/src/functions/database/pdo.php");
     // create PDO connection, will return the connection or raise an exception (check if PDO functions)
     $pdo = createPDOConnection();
     $pdo = null; // reset PDO
