@@ -50,6 +50,8 @@ RUN chown www-data:www-data /etc/eiou/src/functions -R
 RUN chmod 644 /etc/eiou/src/functions/*
 RUN chmod 755 /etc/eiou/src/functions/database
 RUN chmod 644 /etc/eiou/src/functions/database/*
+RUN chmod 755 /etc/eiou/src/functions/schemas
+RUN chmod 644 /etc/eiou/src/functions/schemas/*
 RUN chmod 755 /etc/eiou/src/functions/schemas/payloads
 RUN chmod 644 /etc/eiou/src/functions/schemas/payloads/*
 RUN chmod 755 /etc/eiou/src/functions/utils
