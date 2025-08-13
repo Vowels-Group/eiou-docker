@@ -459,6 +459,38 @@ function getPendingContacts() {
     }
 }
 
+// Helper function to get pending contacts inserted requests from user
+function getUserPendingContacts() {
+    global $pdo;
+    
+    try {
+        // Get all pending contact requests (where name IS NOT NULL and status = 'pending')
+        $stmt = $pdo->prepare("SELECT address, pubkey, status FROM contacts WHERE name IS NOT NULL AND status = 'pending'");
+        $stmt->execute();
+        $pendingUserContacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        return $pendingUserContacts;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Helper function to get blocked contacts
+function getBlockedContacts() {
+    global $pdo;
+    
+    try {
+        // Get all pending contact requests (where name IS NULL and status = 'pending')
+        $stmt = $pdo->prepare("SELECT * FROM contacts WHERE status = 'blocked'");
+        $stmt->execute();
+        $blockedContacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        return $blockedContacts;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
 // Helper function to get contact balance
 function getContactBalance($userPubkey, $contactPubkey) {
     global $pdo;
@@ -679,6 +711,8 @@ if (isset($_GET['check_updates']) && $_GET['check_updates'] === '1') {
 $totalBalance = getUserTotalBalance();
 $contacts = getContactsWithBalances();
 $pendingContacts = getPendingContacts();
+$pendingUserContacts = getUserPendingContacts();
+$blockedContacts = getBlockedContacts();
 $transactions = getTransactionHistory(10);
 
 // If we get here, authentication is successful
