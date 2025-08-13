@@ -2,24 +2,29 @@
 # Copyright 2025
 
 function returnContactAccepted() {
-    return "Contact accepted.";
+    return "Contact accepted.\n";
 }
 
 function returnContactAcceptanceFailed() {
-    return "Failed to accept contact.";
+    return "Failed to accept contact.\n";
 }
 
 function returnContactAddInvalidInput() {
     return "Invalid input. Please provide a valid address, name, fee, credit, and currency.\n" .
-           "Example command: eiou add [address] [name] [fee percent] [credit] [currency]";
+           "Example command: eiou add [address] [name] [fee percent] [credit] [currency]\n";
 }
 
 function returnContactCreationSuccessful() {
-    return "Contact created successfully.";
+    return "Contact created successfully.\n";
 }
 
 function returnContactCreationFailed() {
-    return "Failed to create contact.";
+    return "Failed to create contact.\n";
+}
+
+function returnContactRequestAlreadyInserted() {
+    return "Warning: Contact was previously added but no response has yet been received from other user.\n" .
+            "trying to resynch contact...\n";
 }
 
 function returnContactCreationWarning($message) {
@@ -44,11 +49,11 @@ function returnContactDetails($data) {
 }
 
 function returnContactExists() {
-    return "This contact has already been added or accepted.";
+    return "This contact has already been added or accepted.\n";
 }
 
 function returnContactNotFound() {
-    return "Contact not found.";
+    return "Contact not found.\n";
 }
 
 function returnContactNotFoundNoAction() {
@@ -56,7 +61,7 @@ function returnContactNotFoundNoAction() {
 }
 
 function returnContactUpdate() {
-    return "Contact updated successfully.";
+    return "Contact updated successfully.\n";
 }
 
 function returnContactUpdateInvalidInput() {
@@ -66,19 +71,19 @@ function returnContactUpdateInvalidInput() {
            "• 'name' - Update contact name (e.g., eiou update name 123abc.onion name John)\n" .
            "• 'fee' - Update fee percentage (e.g., eiou update 123abc.onion fee 1.5)\n" .
            "• 'credit' - Update credit limit (e.g., eiou update 123abc.onion credit 500)\n" .
-           "• 'all' - Update all fields at once (e.g., eiou update 123abc.onion all NewName 1.5 500)";
+           "• 'all' - Update all fields at once (e.g., eiou update 123abc.onion all NewName 1.5 500)\n";
 }
 
 function returnContactReadInvalidInput() {
-    return "Invalid input. Example command: eiou viewcontact [address/name]";       
+    return "Invalid input. Example command: eiou viewcontact [address/name]\n";       
 }
 
 function returnContactRejected($data) {
-    return "Contact creation was not accepted by the recipient ". print_r($data, TRUE) . "";
+    return "Contact creation was not accepted by the recipient ". print_r($data, TRUE) . "\n";
 }
 
 function returnContactSearchNoResults() {
-    return "No results found.";
+    return "No results found.\n";
 }
 
 function returnContactSearchResults ($data) {
@@ -99,7 +104,7 @@ function returnContactSearchResults ($data) {
                         ($contact['currency'] ?? 'N/A');
             }, $data)) . "\n" .
             "--------------------------------------------\n" .
-            "Total contacts found: " . count($data) ;
+            "Total contacts found: " . count($data) ."\n";
 }
 
 function returnHostnameSaved($hostname){
