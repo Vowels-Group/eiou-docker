@@ -98,24 +98,17 @@ function checkContactBlockedStatus($request){
     $checkStmt = $pdo->prepare("SELECT * FROM contacts WHERE address = :address AND status = 'blocked'");
     $checkStmt->bindParam(':address', $request['senderAddress']);
     $checkStmt->execute();
-    if($checkStmt->rowCount() > 0){
-        return false;
-    } else{
-        return true;
-    }
+    return $checkStmt->rowCount() > 0;
 }
 
-function checkContactStatus($request){
+function checkContactStatus($address){
     global $pdo;
     // Check if contact has no bad status i.e. blocked
     $checkStmt = $pdo->prepare("SELECT * FROM contacts WHERE address = :address AND status != 'accepted'");
-    $checkStmt->bindParam(':address', $request['senderAddress']);
+    $checkStmt->bindParam(':address', $address);
     $checkStmt->execute();
-    if($checkStmt->rowCount() > 0){
-        return true;
-    } else{
-        return false;
-    }
+    $result = $checkStmt->fetch(PDO::FETCH_ASSOC);
+    return $result ? $result : null;
 }
 
 function checkPendingContact($address) {
@@ -125,7 +118,6 @@ function checkPendingContact($address) {
     $stmt = $pdo->prepare($checkQuery);
     $stmt->bindParam(':address', $address);
     $stmt->execute();
-    
     return $stmt->rowCount() > 0;
 }
 
@@ -136,7 +128,6 @@ function checkPendingContactInserted($address) {
     $stmt = $pdo->prepare($checkQuery);
     $stmt->bindParam(':address', $address);
     $stmt->execute();
-    
     return $stmt->rowCount() > 0;
 }
 
@@ -177,7 +168,6 @@ function deleteContact($data) {
     $query = "DELETE FROM contacts WHERE address = :address";
     $stmt = $pdo->prepare($query);
     $stmt->bindParam(':address', $address);
-    
     if ($stmt->execute() && $stmt->rowCount() > 0) {
         echo returnContactDeletedSuccesfully();
         return true;
@@ -228,7 +218,7 @@ function insertContact($address, $contactPublicKey, $name, $fee, $credit, $curre
 function lookupContactByName($name) {
     global $pdo;
     // Lookup general contact information based on name
-    $nameStmt = $pdo->prepare("SELECT name, address, pubkey FROM contacts WHERE LOWER(name) = LOWER(:name)");
+    $nameStmt = $pdo->prepare("SELECT name, address, pubkey, fee_percent FROM contacts WHERE LOWER(name) = LOWER(:name)");
     $nameStmt->bindParam(':name', $name);
     $nameStmt->execute();
     $result = $nameStmt->fetch(PDO::FETCH_ASSOC);
@@ -287,6 +277,7 @@ function retrieveContactQuery($address) {
     $stmt->execute();
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
+
 
 function retrieveContactPubkey($address){
     global $pdo;
@@ -407,4 +398,26 @@ function updateContactStatus($address,$status) {
         // Log or handle the error if updating status fails
         error_log("Error updating contact request status: " . $e->getMessage());
     }
+}
+
+function updateUnblockContact($address,$name,$fee,$credit,$currency){
+    global $pdo;
+    try { 
+        $updateStmt = $pdo->prepare("UPDATE contacts SET name = :name, status = 'accepted', fee_percent = :fee, credit_limit = :credit, currency = :currency WHERE address = :address"); 
+        $updateStmt->bindParam(':address', $address);
+        $updateStmt->bindParam(':name', $name);
+        $updateStmt->bindParam(':fee', $fee);
+        $updateStmt->bindParam(':credit', $credit);
+        $updateStmt->bindParam(':currency', $currency);
+        if($updateStmt->execute()){
+            return true;
+        } else{
+            return false;            
+        }
+    } catch (PDOException $e) {
+        // Log or handle the error if updating status fails
+        error_log("Error unblocking contact and adding new values: " . $e->getMessage());
+        return false;
+    }
+
 }
