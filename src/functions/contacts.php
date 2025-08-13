@@ -17,28 +17,57 @@ function addContact($data) {
         exit(1);
     }
 
-    if (checkAcceptedContact($address, $name)) {
+    // Get contact if exists in database in some form
+    $contact = retrieveContactQuery($address);
+    if($contact){
         // Check if contact is already an accepted contact
-        output(returnContactExists(), 'WARNING');
-        exit(1);
-    } elseif(checkPendingContactInserted($address)){
-        // This contact was already sent a contact request, but has not yet responded to user (try resynching)  
-        output(returnContactRequestAlreadyInserted());
-        synchContact($address,'ECHO'); // resynch contact
-        exit(0);
-    }
-    elseif (checkPendingContact($address)) {
-        // If contact already exists with an address, it's a contact request, skip sending a message
-        if (acceptContact($address, $name, $fee, $credit, $currency)) {
-            // Send message of succesfull contact acceptance back to original contact requester
-            send($address,buildContactIsAcceptedPayload($address));
-            output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
-            output(returnContactAccepted());
-            exit(0);    
-        }
-        else {
-            output(returnContactAcceptanceFailed(), 'ERROR');            
+        if($contact['status'] === 'accepted'){
+            output(returnContactExists(), 'WARNING');
             exit(1);
+        }
+        // Check if contact was blocked
+        elseif($contact['status'] === 'blocked'){
+            // Contact was blocked after user accepted contact request
+            if($contact['name']){
+                // Unblock contact and add values
+                if(updateUnblockContact($address,$name,$fee,$credit,$currency)){
+                    output(outputContactUnblockedAndOverwritten());
+                } else{
+                    output(outputContactUnblockedAndOverwrittenFailure());
+                }
+            } 
+            // Contact was blocked when user received contact request
+            else{
+                if(updateUnblockContact($address,$name,$fee,$credit,$currency)){
+                    output(outputContactUnblockedAndAdded());
+                } else{
+                    output( outputContactUnblockedAndAddedFailure());
+                }
+                // Send message of succesfull contact acceptance back to original contact requester
+                send($address,buildContactIsAcceptedPayload($address));
+            }          
+        } 
+        elseif($contact['status'] === 'pending'){
+            // if pending with name
+            if($contact['name']){
+                // This contact was already sent a contact request, but has not yet responded to user (try resynching)  
+                output(returnContactRequestAlreadyInserted());
+                synchContact($address,'ECHO'); // resynch contact
+                exit(0);
+            } else{
+                // If contact already exists with an address, it's a contact request, skip sending a message
+                if (acceptContact($address, $name, $fee, $credit, $currency)) {
+                    // Send message of succesfull contact acceptance back to original contact requester
+                    send($address,buildContactIsAcceptedPayload($address));
+                    output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
+                    output(returnContactAccepted());
+                    exit(0);    
+                }
+                else {
+                    output(returnContactAcceptanceFailed(), 'ERROR');            
+                    exit(1);
+                }
+            }
         }
     }
     else{
@@ -69,7 +98,7 @@ function addContact($data) {
         }else {
             // If not accepted, show error and display the response
             output(returnContactRejected($responseData));
-            output("Failed contact request payload: ". print_r($payload, true), 'SILENT');
+            output(outputFailedContactRequest($payload), 'SILENT');
             exit(1);
         }
     }
