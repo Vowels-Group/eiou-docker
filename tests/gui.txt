@@ -9,7 +9,10 @@ docker build -f eioud.dockerfile -t eioud .
 # Create the network (only need to do this once per docker installation)
 docker network create -d bridge eiou-network
 
+
+
 ## Container Setup Options
+
 
 ### Option 1: Bob with Volume Mount (for development/testing)
 # This links the local src/wallet.html with the container's /var/www/html/index.html
@@ -32,6 +35,7 @@ docker run -d --name Daniel --network eiou-network -v "$(pwd)/src/wallet.html:/v
 # Windows: -v "C:\path\to\your\eiou\src\wallet.html:/var/www/html/index.html"
 # Linux: -v "/home/user/eiou/src/wallet.html:/var/www/html/index.html"
 # macOS: -v "/Users/user/eiou/src/wallet.html:/var/www/html/index.html"
+
 
 ### Option 2: Alice, Carol, and Daniel (standard containers)
 # These containers use the built-in wallet.html from the Docker image
@@ -69,4 +73,3 @@ docker exec -it Bob bash
 # - Alice, Carol, and Daniel use the standard built-in GUI
 # - All containers automatically generate wallets and setup when QUICKSTART is used
 # - The network 'eiou-network' allows containers to communicate with each other
-
