@@ -98,7 +98,7 @@ function checkContactBlockedStatus($request){
     $checkStmt = $pdo->prepare("SELECT * FROM contacts WHERE address = :address AND status = 'blocked'");
     $checkStmt->bindParam(':address', $request['senderAddress']);
     $checkStmt->execute();
-    return $checkStmt->rowCount() > 0;
+    return $checkStmt->rowCount() <= 0; // Note > 0 = false, we check if contacts are blocked
 }
 
 function checkContactStatus($address){
@@ -107,8 +107,7 @@ function checkContactStatus($address){
     $checkStmt = $pdo->prepare("SELECT * FROM contacts WHERE address = :address AND status != 'accepted'");
     $checkStmt->bindParam(':address', $address);
     $checkStmt->execute();
-    $result = $checkStmt->fetch(PDO::FETCH_ASSOC);
-    return $result ? $result : null;
+    return $checkStmt->rowCount() > 0;
 }
 
 function checkPendingContact($address) {
