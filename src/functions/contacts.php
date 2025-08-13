@@ -21,6 +21,11 @@ function addContact($data) {
         // Check if contact is already an accepted contact
         output(returnContactExists(), 'WARNING');
         exit(1);
+    } elseif(checkPendingContactInserted($address)){
+        // This contact was already sent a contact request, but has not yet responded to user (try resynching)  
+        output(returnContactRequestAlreadyInserted());
+        synchContact($address,'ECHO'); // resynch contact
+        exit(0);
     }
     elseif (checkPendingContact($address)) {
         // If contact already exists with an address, it's a contact request, skip sending a message
@@ -52,6 +57,7 @@ function addContact($data) {
             // Check if the response status is a warning
             if ($responseData['status'] === 'warning') {
                 output(returnContactCreationWarning($responseData['message']));
+                // TO DO: think about RESYNCH INSTEAD?
             }
             // Insert into database
             if (insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
