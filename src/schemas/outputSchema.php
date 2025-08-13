@@ -37,16 +37,36 @@ function outputContactNoResponseSynch(){
     return "Contact did not respond to synch request immediately.\n";
 }
 
-function outputContactRequestWasAccepted($address){
-    return "Contact request was accepted by " . $address ."\n";
-}
-
 function outputContactNotFoundTryP2p($request){
     return "Contact not found, trying p2p with data: " . print_r($request, true)."\n";
 }
 
+function outputContactRequestWasAccepted($address){
+    return "Contact request was accepted by " . $address ."\n";
+}
+
+function outputContactUnblockedAndAdded(){
+    return "Contact was unblocked and name/credit/fee/currency information was added upon acceptance.\n";
+}
+
+function outputContactUnblockedAndAddedFailure(){
+    return "Contact could not be unblocked and no name/credit/fee/currency information was added.\n";
+}
+
+function outputContactUnblockedAndOverwritten(){
+    return "Contact was unblocked and name/credit/fee/currency information was overwritten.\n";
+}
+
+function outputContactUnblockedAndOverwrittenFailure(){
+    return "Contact could not be unblocked and no name/credit/fee/currency information was overwritten.\n";
+}
+
 function outputEiouSend($request){
     return "Getting ready to send eIOU with request: " . print_r($request, true)."\n";
+}
+
+function outputFailedContactRequest($payload){
+    "Failed contact request payload: ". print_r($payload, true)."\n";
 }
 
 function outputFeeInformation($feePercent,$request,$maxFee){
