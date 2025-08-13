@@ -139,7 +139,17 @@ echo -e "\t-> torA sends money to torB, using name"
 docker exec torA eiou send torB 12 USD
 
 # need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances)
-#echo -e "\nSleeping for 10 seconds..."
-#sleep 10
+echo -e "\nSleeping for 10 seconds..."
+sleep 10
+
+# View balances
+echo -e "\nViewing balances..."
+docker exec torA eiou viewbalances
+docker exec torB eiou viewbalances
+
+# View transaction history
+echo -e "\nViewing transaction history..."
+docker exec torA eiou history
+docker exec torB eiou history
 
 echo -e "\nScript completed successfully."
