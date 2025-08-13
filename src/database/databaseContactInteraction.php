@@ -129,6 +129,17 @@ function checkPendingContact($address) {
     return $stmt->rowCount() > 0;
 }
 
+function checkPendingContactInserted($address) {
+    global $pdo;
+    // Check if contact already exists in the database but is not yet accepted
+    $checkQuery = "SELECT * FROM contacts WHERE address = :address AND name IS NOT NULL AND status = 'pending'";
+    $stmt = $pdo->prepare($checkQuery);
+    $stmt->bindParam(':address', $address);
+    $stmt->execute();
+    
+    return $stmt->rowCount() > 0;
+}
+
 function checkPendingContactRequests() {
     global $pdo;
     try {
