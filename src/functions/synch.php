@@ -28,11 +28,11 @@ function synchAllContacts(){
     }
 }
 
-function synchContact($contactAddress){
+function synchContact($contactAddress, $echo='SILENT'){
     // Synch contact
     $contact = retrieveContactQuery($contactAddress); // Get contact from database
     if($contact['status'] === 'pending'){
-        output(outputSynchContactDueToPendingStatus($contactAddress),'SILENT');
+        output(outputSynchContactDueToPendingStatus($contactAddress),$echo);
         // If the contact is still pending then inquire with contact
         $messagePayload = buildMessageContactIsAcceptedInquiryPayload($contactAddress);
         $synchResponse = json_decode(send($contactAddress, $messagePayload),true);
@@ -41,7 +41,7 @@ function synchContact($contactAddress){
         if($status === 'accepted'){
             // If you are accepted as a contact by the contact in question then update accordingly 
             updateContactStatus($contactAddress, $status);
-            output(outputContactSuccesfullySynched($contactAddress),'SILENT');
+            output(outputContactSuccesfullySynched($contactAddress),$echo);
         } elseif($status === 'rejected' && $reason === 'unknown'){
             // If no database existence of contact request on their end, resend contact request
             $contactPayload = createContactPayload();
@@ -54,9 +54,15 @@ function synchContact($contactAddress){
                 $synchResponse = send($contactAddress, $messagePayload);
                 if($status === 'accepted'){
                     updateContactStatus($contactAddress, $status);
-                    output(outputContactSuccesfullySynched($contactAddress),'SILENT');
+                    output(outputContactSuccesfullySynched($contactAddress),$echo);
                 }
+            } else{
+                // Contact did not respond immediately
+                output(outputContactNoResponseSynch(),$echo);
             }
+        } else{
+            // Contact did not respond immediately
+            output(outputContactNoResponseSynch(),$echo);
         }
     }
 }
