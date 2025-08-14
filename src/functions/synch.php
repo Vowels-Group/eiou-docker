@@ -42,6 +42,7 @@ function synchContact($contactAddress, $echo='SILENT'){
             // If you are accepted as a contact by the contact in question then update accordingly 
             updateContactStatus($contactAddress, $status);
             output(outputContactSuccesfullySynched($contactAddress),$echo);
+            return true;
         } elseif($status === 'rejected' && $reason === 'unknown'){
             // If no database existence of contact request on their end, resend contact request
             $contactPayload = createContactPayload();
@@ -55,14 +56,17 @@ function synchContact($contactAddress, $echo='SILENT'){
                 if($status === 'accepted'){
                     updateContactStatus($contactAddress, $status);
                     output(outputContactSuccesfullySynched($contactAddress),$echo);
+                    return true;
                 }
             } else{
                 // Contact did not respond immediately
                 output(outputContactNoResponseSynch(),$echo);
+                return false;
             }
         } else{
             // Contact did not respond immediately
             output(outputContactNoResponseSynch(),$echo);
+             return false;
         }
     }
 }
