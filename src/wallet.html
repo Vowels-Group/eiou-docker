@@ -356,8 +356,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                 }
                 break;
 
+            // THIS only functions if contact exists with full info
             case 'unblockContact':
-                $argv = ['eiou', 'block', $contactAddress];
+                $argv = ['eiou', 'unblock', $contactAddress];
                 
                 // Capture output
                 ob_start();
@@ -1820,17 +1821,7 @@ header('Content-Type: text/html; charset=UTF-8');
                                        -
                                     </span> <?php echo $contact['currency'] ?? "USD"; ?></div>
                                     <div>Credit Limit: <?php echo $contact['credit_limit'] ? (number_format($contact['credit_limit'], 2)) : "-"; ?> <?php echo $contact['currency'] ?? "USD"; ?></div>
-                                    <div>Fee: <?php echo $contact['fee'] ? number_format($contact['fee'], 2) : "-"; ?>%</div>
-                                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
-                                        <form method="POST" style="flex: 1; min-width: 130px;">
-                                            <input type="hidden" name="action" value="deleteContact">
-                                            <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
-                                            <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
-                                            <button type="submit" class="btn btn-secondary" style="width: 100%;" onclick="return confirm('Are you sure you want to delete this contact?')">
-                                                <i class="fas fa-trash"></i> Delete Contact
-                                            </button>
-                                        </form>
-                                    </div>
+                                    <div>Fee: <?php echo $contact['fee'] ? number_format($contact['fee'], 2) : "-"; ?>%</div>                                    
                                 </div>
                             </div>
                         </div>
@@ -1883,6 +1874,7 @@ header('Content-Type: text/html; charset=UTF-8');
                 </form>
             </div>
         </div>
+        
 
         <!-- Pending Contacts Section -->
         <?php if (!empty($pendingContacts)): ?>
