@@ -88,8 +88,11 @@ function addContact($data) {
                 output(returnContactCreationWarning($responseData['message']));
                 // Insert into database
                 if (insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
-                    updateContactStatus($address,'accepted'); // Update contact status to accepted
-                    output(returnContactCreationSuccessful());
+                    if(synchContact($address)){
+                        output(returnContactCreationSuccessful());
+                    }
+                    // else
+
                 }
             } else{
                 // Insert into database

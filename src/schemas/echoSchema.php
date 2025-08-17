@@ -29,7 +29,7 @@ function returnContactRequestAlreadyInserted() {
 
 function returnContactCreationWarning($message) {
     return "Warning: " . $message . "\n" .
-           "Contact was previously deleted and has been added again.\n";
+           "Contact was previously deleted and will be added again.\n";
 }
 
 function returnContactDeletedSuccesfully(){
