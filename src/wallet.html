@@ -1682,7 +1682,7 @@ header('Content-Type: text/html; charset=UTF-8');
                     <label for="recipient">Recipient:</label>
                     <select id="recipient" name="recipient">
                         <option value="">Or select from contacts below</option>
-                        <?php foreach ($contacts as $contact): ?>
+                        <?php foreach ($acceptedContacts as $contact): ?>
                             <option value="<?php echo htmlspecialchars($contact['name']); ?>"><?php echo htmlspecialchars($contact['name']); ?> (Contact)</option>
                         <?php endforeach; ?>
                     </select>
