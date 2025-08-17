@@ -426,7 +426,7 @@ function truncateAddress($address, $length = 10) {
 
 // Helper function to get user's total balance
 function getUserTotalBalance() {
-    global $pdo, $user;
+    global $pdo;
     
     try {
         $totalReceived = calculateTotalReceivedUser();
@@ -438,32 +438,16 @@ function getUserTotalBalance() {
     }
 }
 
-// Helper function to get contacts with balances
-function getContactsWithBalances() {
-    global $pdo, $user;
+// Helper function to get accepted contacts
+function getAcceptedContacts() {
+    global $pdo;
     
     try {
         // Get all accepted contacts
-        $stmt = $pdo->prepare("SELECT address, name, pubkey, fee_percent, credit_limit, currency FROM contacts WHERE status = 'accepted'");
+        $stmt = $pdo->prepare("SELECT * FROM contacts WHERE status = 'accepted'");
         $stmt->execute();
         $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        $contactsWithBalances = [];
-        foreach ($contacts as $contact) {
-            // Calculate balance for this contact
-            $balance = getContactBalance($user['public'], $contact['pubkey']);
-            
-            $contactsWithBalances[] = [
-                'name' => $contact['name'],
-                'address' => $contact['address'],
-                'balance' => $balance / 100, // Convert from cents
-                'fee' => $contact['fee_percent'] / 100, // Convert from cents
-                'credit_limit' => $contact['credit_limit'] / 100, // Convert from cents
-                'currency' => $contact['currency']
-            ];
-        }
-        
-        return $contactsWithBalances;
+        return $contacts;
     } catch (Exception $e) {
         return [];
     }
@@ -749,14 +733,48 @@ if (isset($_GET['check_updates']) && $_GET['check_updates'] === '1') {
     exit;
 }
 
-// Get actual data
+// Helper Function to convert output based on currency cases
+function currencyOutputConversion($value,$currency){
+    if($currency === 'USD'){
+        return $value ? ($value / 100) : $value;
+    }
+    return $value;
+}
+
+
+// Helper Function, conversion database values to output values
+function contactConversion($contacts){
+    global $user;
+    $contactsWithBalances = [];
+    foreach($contacts as $contact){
+        // Calculate balance for this contact
+        $balance = getContactBalance($user['public'], $contact['pubkey']);
+        
+        $contactsWithBalances[] = [
+            'name' => $contact['name'],
+            'address' => $contact['address'],
+            'balance' =>  currencyOutputConversion($balance,$contact['currency']),
+            'fee' =>  currencyOutputConversion($contact['fee_percent'],$contact['currency']),
+            'credit_limit' =>  currencyOutputConversion($contact['credit_limit'],$contact['currency']),
+            'currency' => $contact['currency']
+        ];
+       
+    }
+    return $contactsWithBalances;
+}
+
+
+// Get user based data
 $totalBalance = getUserTotalBalance();
-$contacts = getContactsWithBalances();
-$allContacts = getAllContacts();
-$pendingContacts = getPendingContacts();
-$pendingUserContacts = getUserPendingContacts();
-$blockedContacts = getBlockedContacts();
 $transactions = getTransactionHistory(10);
+
+// Contact data
+$allContacts = getAllContacts();
+$acceptedContacts = contactConversion(getAcceptedContacts());
+$pendingContacts = getPendingContacts();
+$pendingUserContacts = contactConversion(getUserPendingContacts());
+$blockedContacts = contactConversion(getBlockedContacts());
+
 
 // If we get here, authentication is successful
 // Set content type for HTML
@@ -1763,8 +1781,8 @@ header('Content-Type: text/html; charset=UTF-8');
                     </div>
                 <?php else: ?>
                 <!-- TO DO: Try pulling everything at once and sorting, not 4 different queries???? -->
-                <!-- Accepted Contacts with Balance -->
-                    <?php foreach ($contacts as $contact): ?>
+                <!-- Accepted Contacts (with Balance) -->
+                    <?php foreach ($acceptedContacts as $contact): ?>
                         <div class="contact-card" onclick="openEditContactModal('<?php echo htmlspecialchars($contact['address']); ?>', '<?php echo htmlspecialchars($contact['name']); ?>', <?php echo $contact['fee']; ?>, <?php echo $contact['credit_limit']; ?>, '<?php echo htmlspecialchars($contact['currency']); ?>')" style="cursor: pointer;">
                             <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
                                 <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
