@@ -70,13 +70,12 @@ function blockContact($data) {
     }
 }
 
-function checkAcceptedContact($address, $name) {
+function checkAcceptedContact($address) {
     global $pdo;
     // Check if contact is already an accepted contact in the database
-    $checkQuery = "SELECT * FROM contacts WHERE (address = :address OR name = :name) AND status = 'accepted'";
+    $checkQuery = "SELECT * FROM contacts WHERE address = :address AND status = 'accepted'";
     $stmt = $pdo->prepare($checkQuery);
     $stmt->bindParam(':address', $address);
-    $stmt->bindParam(':name', $name);
     $stmt->execute();
 
     return $stmt->rowCount() > 0;

@@ -55,9 +55,8 @@ function handleMessageRequest($message){
 function handleContactMessageInquiryRequest($decodedMessage){
     // Handle inquiry about contact request status
     $address = $decodedMessage['senderAddress'];
-    $name = $decodedMessage['senderName'];
     // Contact is already accepted
-    if(checkAcceptedContact($address, $name)){
+    if(checkAcceptedContact($address)){
         echo buildMessageContactIsAcceptedPayload($address);
     // Contact is pending
     } elseif(checkPendingContact($address)){
