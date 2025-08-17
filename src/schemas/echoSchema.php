@@ -2,7 +2,7 @@
 # Copyright 2025
 
 function returnContactAccepted() {
-    return "Contact accepted.\n";
+    return "Contact accepted successfully.\n";
 }
 
 function returnContactAcceptanceFailed() {
