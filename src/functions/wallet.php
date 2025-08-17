@@ -11,6 +11,7 @@ function checkWalletExists($user, $request) {
 function generateWallet($argv) {
   global $user;
   // If config (wallet) exists query user about overwriting
+  // On restart of container keeps from appending new values
   if(file_exists("//etc//eiou//config.php") && isset($user["public"])){
     echo returnUserInputRequestOverwritingWallet();
     $decision = trim(fgets(STDIN));
