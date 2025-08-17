@@ -70,7 +70,7 @@ function synchContact($contactAddress, $echo='SILENT'){
         }
     } elseif($contact['status'] === 'accepted'){
         // If contact needs no synching
-        output(outputContactNoNeedSynch($contactAddress),'SILENT');
+        //output(outputContactNoNeedSynch($contactAddress),'SILENT');
         return true;
     }
 }
