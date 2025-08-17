@@ -37,7 +37,7 @@ function synchContact($contactAddress, $echo='SILENT'){
         $messagePayload = buildMessageContactIsAcceptedInquiryPayload($contactAddress);
         $synchResponse = json_decode(send($contactAddress, $messagePayload),true);
         $status = $synchResponse['status'];
-        $reason = $synchResponse['reason'];
+        $reason = $synchResponse['reason'] ?? NULL;
         if($status === 'accepted'){
             // If you are accepted as a contact by the contact in question then update accordingly 
             updateContactStatus($contactAddress, $status);
@@ -66,7 +66,7 @@ function synchContact($contactAddress, $echo='SILENT'){
         } else{
             // Contact did not respond immediately
             output(outputContactNoResponseSynch(),$echo);
-             return false;
+            return false;
         }
     } elseif($contact['status'] === 'accepted'){
         // If contact needs no synching
