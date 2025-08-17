@@ -22,8 +22,7 @@ function addContact($data) {
     if($contact){
         // Check if contact is already an accepted contact
         if($contact['status'] === 'accepted'){
-            output(returnContactExists(), 'WARNING');
-            exit(1);
+            output(returnContactExists(),'WARNING');
         }
         // Check if contact was blocked
         elseif($contact['status'] === 'blocked'){
@@ -53,7 +52,6 @@ function addContact($data) {
                 // This contact was already sent a contact request, but has not yet responded to user (try resynching)  
                 output(returnContactRequestAlreadyInserted());
                 $succesfullSynch = synchContact($address,'ECHO'); // resynch contact
-                exit(0);
             } else{
                 // If contact already exists with an address, it's a contact request, skip sending a message
                 if (acceptContact($address, $name, $fee, $credit, $currency)) {
@@ -61,11 +59,10 @@ function addContact($data) {
                     send($address,buildContactIsAcceptedPayload($address));
                     output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
                     output(returnContactAccepted());
-                    exit(0);    
                 }
                 else {
-                    output(returnContactAcceptanceFailed(), 'ERROR');            
-                    exit(1);
+                    output(returnContactAcceptanceFailed(), 'ERROR');  
+                    exit(1);          
                 }
             }
         }
@@ -98,10 +95,10 @@ function addContact($data) {
                 // Insert into database
                 if (insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
                     output(returnContactCreationSuccessful());
-
                 }
                 else{
                     output(returnContactCreationFailed());
+                    exit(1);
                 }
             }
             
