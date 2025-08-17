@@ -19,15 +19,6 @@ if (empty($authCode) && isset($_GET['message'])) {
     exit;
 }
 
-// Get message from URL parameters (for redirects)
-if (isset($_GET['message']) && isset($_GET['type'])) {
-    $message = $_GET['message'];
-    $messageType = $_GET['type'];
-} else {
-    $message = '';
-    $messageType = '';
-}
-
 // If no auth code provided, show authentication form
 if (empty($authCode)) {
     // Set content type for HTML
@@ -158,9 +149,24 @@ if (!isset($user['authcode']) || !hash_equals($user['authcode'], $authCode)) {
 // Create PDO connection
 $pdo = createPDOConnection();
 
-// Handle form submissions
-$message = '';
-$messageType = '';
+// Helper function for redirecting
+function redirectMessage($message,$messageType){
+    // Redirect back to main page with message
+    $authCode = $_GET['authcode'] ?? $_POST['authcode'] ?? '';
+    $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
+    header('Location: ' . $redirectUrl);
+    exit;
+}
+
+// Get message from URL parameters (for redirects)
+if (isset($_GET['message']) && isset($_GET['type'])) {
+    $messageForDisplay = $_GET['message'];
+    $messageTypeForDisplay = $_GET['type'];
+} else {
+    $messageForDisplay = '';
+    $messageTypeForDisplay = '';
+}
+
 
 // Handle add contact form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'addContact') {
@@ -187,18 +193,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $messageInfo = parseContactOutput($output);
             $message = $messageInfo['message'];
             $messageType = $messageInfo['type'];
-            
-            // Redirect back to main page with message
-            $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
-            header('Location: ' . $redirectUrl);
-            exit;
         } catch (Exception $e) {
             ob_end_clean();
             $message = 'Internal server error: ' . $e->getMessage();
             $messageType = 'error';
         }
     }
+    redirectMessage($message,$messageType);
 }
+
 
 // Handle send eIOU form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'sendEIOU') {
@@ -212,7 +215,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     if (empty($finalRecipient) || empty($amount) || empty($currency)) {
         $message = 'All fields are required';
-        $messageType = 'error';
+        $messageType = 'error';        
     } else {
         // Create argv array for sendEiou function
         $argv = ['eiou','send', $finalRecipient, $amount, $currency];
@@ -222,26 +225,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         try {
             sendEiou($argv);
             $output = ob_get_clean();
-            
+            $message = trim($output);
             if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
-                $message = trim($output);
                 $messageType = 'error';
             } else {
-                // Determine if this was a P2P transaction
-                $isP2P = empty($recipient) && !empty($manualRecipient);
-                $transactionType = $isP2P ? 'P2P' : 'Direct';
-                
-                // TODO: NOTE cannot ascertain completion from this one, comes through message system from end-recipient
-                $message = "Sending {$amount} {$currency} to {$finalRecipient} via {$transactionType} transaction!";
-                if ($isP2P) {
-                    $message .= " The transaction will be routed through your network of contacts.";
-                }
                 $messageType = 'success';
-                
-                // Redirect back to main page with success message
-                $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
-                header('Location: ' . $redirectUrl);
-                exit;
             }
         } catch (Exception $e) {
             ob_end_clean();
@@ -249,6 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $messageType = 'error';
         }
     }
+    redirectMessage($message,$messageType);
 }
 
 // Handle contact request actions
@@ -263,6 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
     if (empty($contactAddress)) {
         $message = 'Contact address is required';
         $messageType = 'error';
+        redirectMessage($message,$messageType);
     } else {
         switch ($_POST['action']) {
             case 'acceptContact':
@@ -279,30 +269,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                         addContact($argv);
                         $output = ob_get_clean();
                         
-                        if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
-                            $message = trim($output);
-                            $messageType = 'error';
-                        } else {
-                            // Check if the output contains "Contact accepted." and format it properly
-                            if (strpos($output, 'Contact accepted.') !== false) {
-                                $message = 'Contact accepted successfully!';
-                                $messageType = 'contact-accepted'; // Special type for contact acceptance
-                            } else {
-                                $message = 'Contact accepted successfully: ' . trim($output);
-                                $messageType = 'contact-accepted'; // Special type for contact acceptance
-                            }
-                            
-                            // Redirect back to main page with success message
-                            $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
-                            header('Location: ' . $redirectUrl);
-                            exit;
-                        }
+                        // Parse the output to determine message type and content
+                        $messageInfo = parseContactOutput($output);
+                        $message = $messageInfo['message'];
+                        $messageType = $messageInfo['type'];
                     } catch (Exception $e) {
                         ob_end_clean();
                         $message = 'Internal server error: ' . $e->getMessage();
                         $messageType = 'error';
                     }
                 }
+                redirectMessage($message,$messageType);
                 break;
                 
             case 'deleteContact':
@@ -319,16 +296,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     $messageInfo = parseContactOutput($output);
                     $message = $messageInfo['message'];
                     $messageType = $messageInfo['type'];
-                    
-                    // Redirect back to main page with message
-                    $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
-                    header('Location: ' . $redirectUrl);
-                    exit;
                 } catch (Exception $e) {
                     ob_end_clean();
                     $message = 'Internal server error: ' . $e->getMessage();
                     $messageType = 'error';
                 }
+                redirectMessage($message,$messageType);
                 break;
 
             case 'blockContact':
@@ -344,16 +317,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     $messageInfo = parseContactOutput($output);
                     $message = $messageInfo['message'];
                     $messageType = $messageInfo['type'];
-                    
-                    // Redirect back to main page with message
-                    $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
-                    header('Location: ' . $redirectUrl);
-                    exit;
                 } catch (Exception $e) {
                     ob_end_clean();
                     $message = 'Internal server error: ' . $e->getMessage();
                     $messageType = 'error';
                 }
+                redirectMessage($message,$messageType);
                 break;
 
             // THIS only functions if contact exists with full info
@@ -363,23 +332,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                 // Capture output
                 ob_start();
                 try {
-                    ublockContact($argv);
+                    unblockContact($argv);
                     $output = ob_get_clean();
                     
                     // Parse the output to determine message type and content
                     $messageInfo = parseContactOutput($output);
                     $message = $messageInfo['message'];
                     $messageType = $messageInfo['type'];
-                    
-                    // Redirect back to main page with message
-                    $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
-                    header('Location: ' . $redirectUrl);
-                    exit;
                 } catch (Exception $e) {
                     ob_end_clean();
                     $message = 'Internal server error: ' . $e->getMessage();
                     $messageType = 'error';
                 }
+                redirectMessage($message,$messageType);
                 break;
 
             case 'editContact':
@@ -400,17 +365,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                         $messageInfo = parseContactOutput($output);
                         $message = $messageInfo['message'];
                         $messageType = $messageInfo['type'];
-                        
-                        // Redirect back to main page with message
-                        $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
-                        header('Location: ' . $redirectUrl);
-                        exit;
                     } catch (Exception $e) {
                         ob_end_clean();
                         $message = 'Internal server error: ' . $e->getMessage();
                         $messageType = 'error';
                     }
                 }
+                redirectMessage($message,$messageType);
                 break;
         }
     }
@@ -653,60 +614,45 @@ function checkForNewContactRequests($lastCheckTime) {
     }
 }
 
+
 // Helper function to parse contact function output and determine message type
 function parseContactOutput($output) {
     $output = trim($output);
     
     // Success messages
-    if (strpos($output, 'Contact accepted.') !== false) {
-        return ['message' => 'Contact accepted successfully!', 'type' => 'contact-accepted'];
+    if (str_contains(strtolower($output), 'contact accepted.') !== false) {
+        return ['message' => $output, 'type' => 'contact-accepted'];
     }
-    if (strpos($output, 'Contact created successfully.') !== false) {
-        return ['message' => 'Contact added successfully!', 'type' => 'success'];
-    }
-    if (strpos($output, 'Contact updated successfully.') !== false) {
-        return ['message' => 'Contact updated successfully!', 'type' => 'success'];
-    }
-    if (strpos($output, 'Contact deleted successfully.') !== false) {
-        return ['message' => 'Contact deleted successfully!', 'type' => 'success'];
-    }
-    if (strpos($output, 'Contact blocked successfully.') !== false) {
-        return ['message' => 'Contact blocked successfully!', 'type' => 'success'];
-    }
-    if (strpos($output, 'Contact unblocked successfully.') !== false) {
-        return ['message' => 'Contact unblocked successfully!', 'type' => 'success'];
+
+    // General success message
+    if(str_contains(strtolower($output), 'success') !== false) {
+        return ['message' => $output, 'type' => 'success'];
     }
     
     // Warning messages
-    if (strpos($output, 'This contact has already been added or accepted.') !== false) {
-        return ['message' => 'This contact has already been added or accepted.', 'type' => 'contact-accepted'];
+    if (str_contains(strtolower($output), 'already been added or accepted') !== false) {
+        return ['message' => $output, 'type' => 'warning'];
     }
-    if (strpos($output, 'Warning:') !== false) {
+    if (str_contains(strtolower($output), 'warning:') !== false) {
         return ['message' => $output, 'type' => 'warning'];
     }
     
     // Error messages
-    if (strpos($output, 'Invalid input. Please provide a valid address, name, fee, credit, and currency.') !== false) {
-        return ['message' => 'Invalid input. Please provide a valid address, name, fee, credit, and currency.', 'type' => 'error'];
+    if (str_contains(strtolower($output), 'failed') !== false) {
+        return ['message' => $output . ' Please try again.', 'type' => 'error'];
     }
-    if (strpos($output, 'Failed to accept contact.') !== false) {
-        return ['message' => 'Failed to accept contact. Please try again.', 'type' => 'error'];
+    if (str_contains(strtolower($output), 'not accepted by the recipient') !== false) {
+        return ['message' => $output . ' Please try again or contact the recipient directly.', 'type' => 'error'];
     }
-    if (strpos($output, 'Failed to create contact.') !== false) {
-        return ['message' => 'Failed to create contact. Please try again.', 'type' => 'error'];
+    if (str_contains(strtolower($output), 'not found') !== false) {
+        return ['message' => $output, 'type' => 'error'];
     }
-    if (strpos($output, 'Contact creation was not accepted by the recipient') !== false) {
-        return ['message' => 'Contact creation was not accepted by the recipient. Please try again or contact the recipient directly.', 'type' => 'error'];
-    }
-    if (strpos($output, 'Contact not found.') !== false) {
-        return ['message' => 'Contact not found.', 'type' => 'error'];
-    }
-    if (strpos($output, 'No results found.') !== false) {
-        return ['message' => 'No contacts found matching your search.', 'type' => 'error'];
+    if (str_contains(strtolower($output), 'no results found.') !== false) {
+        return ['message' => $output, 'type' => 'error'];
     }
     
     // Generic error detection
-    if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
+    if (str_contains(strtolower($output), 'error') !== false || str_contains(strtolower($output), 'failed') !== false) {
         return ['message' => $output, 'type' => 'error'];
     }
     
@@ -762,7 +708,6 @@ function contactConversion($contacts){
     }
     return $contactsWithBalances;
 }
-
 
 // Get user based data
 $totalBalance = getUserTotalBalance();
@@ -1531,30 +1476,22 @@ header('Content-Type: text/html; charset=UTF-8');
         </div>
 
         <!-- Message alerts -->
-        <?php if (!empty($message)): ?>
-            <div class="alert alert-<?php echo $messageType; ?> fade-in-up">
+        <?php if (!empty($messageForDisplay)): ?>
+            <div class="alert alert-<?php echo $messageTypeForDisplay; ?> fade-in-up">
                 <i class="fas fa-<?php 
-                    if ($messageType === 'contact-accepted') {
+                    if ($messageTypeForDisplay === 'contact-accepted') {
                         echo 'user-check';
-                    } elseif ($messageType === 'success') {
+                    } elseif ($messageTypeForDisplay === 'success') {
                         echo 'check-circle';
-                    } elseif ($messageType === 'error') {
+                    } elseif ($messageTypeForDisplay === 'error') {
                         echo 'exclamation-circle';
-                    } elseif ($messageType === 'warning') {
+                    } elseif ($messageTypeForDisplay === 'warning') {
                         echo 'exclamation-triangle';
                     } else {
                         echo 'info-circle';
                     }
                 ?>"></i>
-                <?php echo htmlspecialchars($message); ?>
-            </div>
-        <?php endif; ?>
-
-        <!-- Contact Creation Warning -->
-        <?php if (isset($_GET['contact_failed']) && $_GET['contact_failed'] === '1'): ?>
-            <div class="alert alert-warning fade-in-up">
-                <i class="fas fa-exclamation-triangle"></i>
-                Contact creation was not accepted by the recipient. Please try again or contact the recipient directly.
+                <?php echo htmlspecialchars($messageForDisplay); ?>
             </div>
         <?php endif; ?>
 
@@ -1783,7 +1720,7 @@ header('Content-Type: text/html; charset=UTF-8');
                 <!-- TO DO: Try pulling everything at once and sorting, not 4 different queries???? -->
                 <!-- Accepted Contacts (with Balance) -->
                     <?php foreach ($acceptedContacts as $contact): ?>
-                        <div class="contact-card" onclick="openEditContactModal('<?php echo htmlspecialchars($contact['address']); ?>', '<?php echo htmlspecialchars($contact['name']); ?>', <?php echo $contact['fee']; ?>, <?php echo $contact['credit_limit']; ?>, '<?php echo htmlspecialchars($contact['currency']); ?>')" style="cursor: pointer;">
+                        <div class="contact-card" onclick="openEditContactModal('<?php echo htmlspecialchars($contact['address']); ?>', '<?php echo htmlspecialchars($contact['name']); ?>', '<?php echo $contact['fee']; ?>', '<?php echo $contact['credit_limit']; ?>', '<?php echo htmlspecialchars($contact['currency']); ?>')" style="cursor: pointer;">
                             <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
                                 <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                             </div>
@@ -2223,6 +2160,7 @@ header('Content-Type: text/html; charset=UTF-8');
         refreshBtn.disabled = true;
         
         // Preserve auth code when refreshing
+        // TO DO: issue upon manual refresh after initital entrance, no GET possible so user will be booted to login screen.
         const url = new URL(window.location.href);
         window.location.href = url.toString();
     }
