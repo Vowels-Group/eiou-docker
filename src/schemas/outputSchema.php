@@ -37,6 +37,10 @@ function outputContactNoResponseSynch(){
     return "Contact did not respond to synch request immediately.\n";
 }
 
+function outputContactNoNeedSynch($address){
+    return "Contact " . $address . " has no need for synching as it's already an accepted contact.\n";
+}
+
 function outputContactNotFoundTryP2p($request){
     return "Contact not found, trying p2p with data: " . print_r($request, true)."\n";
 }

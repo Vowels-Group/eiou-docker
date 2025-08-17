@@ -68,6 +68,10 @@ function synchContact($contactAddress, $echo='SILENT'){
             output(outputContactNoResponseSynch(),$echo);
              return false;
         }
+    } elseif($contact['status'] === 'accepted'){
+        // If contact needs no synching
+        output(outputContactNoNeedSynch($contactAddress),'SILENT');
+        return true;
     }
 }
 

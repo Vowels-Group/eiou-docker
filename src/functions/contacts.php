@@ -52,7 +52,7 @@ function addContact($data) {
             if($contact['name']){
                 // This contact was already sent a contact request, but has not yet responded to user (try resynching)  
                 output(returnContactRequestAlreadyInserted());
-                synchContact($address,'ECHO'); // resynch contact
+                $succesfullSynch = synchContact($address,'ECHO'); // resynch contact
                 exit(0);
             } else{
                 // If contact already exists with an address, it's a contact request, skip sending a message
