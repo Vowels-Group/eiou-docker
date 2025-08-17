@@ -86,15 +86,22 @@ function addContact($data) {
             // Check if the response status is a warning
             if ($responseData['status'] === 'warning') {
                 output(returnContactCreationWarning($responseData['message']));
-                // TO DO: think about RESYNCH INSTEAD?
+                // Insert into database
+                if (insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
+                    updateContactStatus($address,'accepted'); // Update contact status to accepted
+                    output(returnContactCreationSuccessful());
+                }
+            } else{
+                // Insert into database
+                if (insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
+                    output(returnContactCreationSuccessful());
+
+                }
+                else{
+                    output(returnContactCreationFailed());
+                }
             }
-            // Insert into database
-            if (insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
-                output(returnContactCreationSuccessful());
-            }
-            else{
-                output(returnContactCreationFailed());
-            }
+            
         }else {
             // If not accepted, show error and display the response
             output(returnContactRejected($responseData));
