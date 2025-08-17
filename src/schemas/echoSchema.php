@@ -83,7 +83,7 @@ function returnContactRejected($data) {
 }
 
 function returnContactSearchNoResults() {
-    return "No results found.\n";
+    return "No contacts found matching your search.\n";
 }
 
 function returnContactSearchResults ($data) {

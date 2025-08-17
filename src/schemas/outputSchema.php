@@ -190,11 +190,11 @@ function outputSendContactAcceptedSuccesfullyMessage($address){
 }
 
 function outputSendP2p($request){
-    return "Sending " . $request[3] . " " . $request[4] . " to " . $request[2]."\n";
+    return "Sending " . $request[3] . " " . $request[4] . " to " . $request[2]." via routing through your network of contacts!\n";
 }
 
 function outputSendTransaction($payload){
-    return "Sending " . $payload['amount']/100 . " " . $payload['currency'] . " to " . $payload['receiverAddress']."\n";
+    return "Sending " . $payload['amount']/100 . " " . $payload['currency'] . " to " . $payload['receiverAddress']." via direct transaction!\n";
 }
 
 function outputSendTransactionCompletionMessageMemo($message){
