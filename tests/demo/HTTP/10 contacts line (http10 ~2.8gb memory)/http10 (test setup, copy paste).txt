@@ -1,0 +1,67 @@
+# create the network (only need to do this once per docker)
+docker network create -d bridge demo-net
+
+# Remove any existing containers
+powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+
+
+# build and start containers
+docker build -f .\eioud.dockerfile -t eioud .
+docker run -d  --network=demo-net --name httpA eioud
+docker run -d  --network=demo-net --name httpB eioud
+docker run -d  --network=demo-net --name httpC eioud
+docker run -d  --network=demo-net --name httpD eioud
+docker run -d  --network=demo-net --name httpE eioud
+docker run -d  --network=demo-net --name httpF eioud
+docker run -d  --network=demo-net --name httpG eioud
+docker run -d  --network=demo-net --name httpH eioud
+docker run -d  --network=demo-net --name httpI eioud
+docker run -d  --network=demo-net --name httpJ eioud
+sleep 5
+
+# generate pubkeys and set hostname
+docker exec httpA eiou generate http://httpA
+docker exec httpB eiou generate http://httpB
+docker exec httpC eiou generate http://httpC
+docker exec httpD eiou generate http://httpD
+docker exec httpE eiou generate http://httpE
+docker exec httpF eiou generate http://httpF
+docker exec httpG eiou generate http://httpG
+docker exec httpH eiou generate http://httpH
+docker exec httpI eiou generate http://httpI
+docker exec httpJ eiou generate http://httpJ
+
+# add contacts
+docker exec httpA eiou add http://httpB httpB 0.1 1000 USD
+docker exec httpB eiou add http://httpA httpA 0.1 1000 USD
+docker exec httpB eiou add http://httpC httpC 0.1 1000 USD
+docker exec httpC eiou add http://httpB httpB 0.1 1000 USD
+docker exec httpC eiou add http://httpD httpD 0.1 1000 USD
+docker exec httpD eiou add http://httpC httpC 0.1 1000 USD
+docker exec httpD eiou add http://httpE httpE 0.1 1000 USD
+docker exec httpE eiou add http://httpD httpD 0.1 1000 USD
+docker exec httpE eiou add http://httpF httpF 0.1 1000 USD
+docker exec httpF eiou add http://httpE httpE 0.1 1000 USD
+docker exec httpF eiou add http://httpG httpG 0.1 1000 USD
+docker exec httpG eiou add http://httpF httpF 0.1 1000 USD
+docker exec httpG eiou add http://httpH httpH 0.1 1000 USD
+docker exec httpH eiou add http://httpG httpG 0.1 1000 USD
+docker exec httpH eiou add http://httpI httpI 0.1 1000 USD
+docker exec httpI eiou add http://httpH httpH 0.1 1000 USD
+docker exec httpI eiou add http://httpJ httpJ 0.1 1000 USD
+docker exec httpJ eiou add http://httpI httpI 0.1 1000 USD
+
+# direct transaction
+docker exec httpA eiou send http://httpB 100 USD
+
+# p2p transaction
+docker exec httpA eiou send http://httpC 50 USD
+docker exec httpA eiou send http://httpD 40 USD
+docker exec httpA eiou send http://httpE 22 USD
+docker exec httpA eiou send http://httpF 65 USD
+docker exec httpA eiou send http://httpG 83 USD
+docker exec httpA eiou send http://httpH 41 USD
+
+# Note the following p2p transactions will expire due to exceeding max-default hops of 6
+docker exec httpA eiou send http://httpI 6 USD
+docker exec httpA eiou send http://httpJ 13 USD

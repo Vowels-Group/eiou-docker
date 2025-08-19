@@ -54,10 +54,10 @@ class ContactsTest extends PHPUnit\Framework\TestCase {
     }
 
     public function testReadContactValidatesInput() {
-        $data = ['read', 'contact'];
+        $data = ['viewcontact', 'contact'];
         
-        $this->expectOutputString('ERROR: Invalid input parameters for reading contact');
-        readContact($data);
+        $this->expectOutputString('ERROR: Invalid input parameters for viewing contact');
+        viewContact($data);
     }
 
     public function testSearchContacts() {

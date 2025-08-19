@@ -1,0 +1,211 @@
+# create the network (only need to do this once per docker installation)
+docker network create -d bridge demo-net
+
+# Remove any existing containers
+powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+
+# build image
+docker build -f eioud.dockerfile -t eioud .
+
+# start containers
+docker run -d --network=demo-net --name A0 eioud
+docker run -d --network=demo-net --name A1 eioud
+docker run -d --network=demo-net --name A11 eioud
+docker run -d --network=demo-net --name A111 eioud
+docker run -d --network=demo-net --name A112 eioud
+docker run -d --network=demo-net --name A113 eioud
+docker run -d --network=demo-net --name A12 eioud
+docker run -d --network=demo-net --name A121 eioud
+docker run -d --network=demo-net --name A122 eioud
+docker run -d --network=demo-net --name A123 eioud
+docker run -d --network=demo-net --name A2 eioud
+docker run -d --network=demo-net --name A21 eioud
+docker run -d --network=demo-net --name A211 eioud
+docker run -d --network=demo-net --name A212 eioud
+docker run -d --network=demo-net --name A213 eioud
+docker run -d --network=demo-net --name A22 eioud
+docker run -d --network=demo-net --name A221 eioud
+docker run -d --network=demo-net --name A222 eioud
+docker run -d --network=demo-net --name A223 eioud
+docker run -d --network=demo-net --name A3 eioud
+docker run -d --network=demo-net --name A31 eioud
+docker run -d --network=demo-net --name A311 eioud
+docker run -d --network=demo-net --name A312 eioud
+docker run -d --network=demo-net --name A313 eioud
+docker run -d --network=demo-net --name A32 eioud
+docker run -d --network=demo-net --name A321 eioud
+docker run -d --network=demo-net --name A322 eioud
+docker run -d --network=demo-net --name A323 eioud
+docker run -d --network=demo-net --name A4 eioud
+docker run -d --network=demo-net --name A41 eioud
+docker run -d --network=demo-net --name A411 eioud
+docker run -d --network=demo-net --name A412 eioud
+docker run -d --network=demo-net --name A413 eioud
+docker run -d --network=demo-net --name A42 eioud
+docker run -d --network=demo-net --name A421 eioud
+docker run -d --network=demo-net --name A422 eioud
+docker run -d --network=demo-net --name A423 eioud
+
+
+# Generate pubkeys and set hostnames
+docker exec A0 eiou generate http://A0
+docker exec A1 eiou generate http://A1
+docker exec A11 eiou generate http://A11
+docker exec A111 eiou generate http://A111
+docker exec A112 eiou generate http://A112
+docker exec A113 eiou generate http://A113
+docker exec A12 eiou generate http://A12
+docker exec A121 eiou generate http://A121
+docker exec A122 eiou generate http://A122
+docker exec A123 eiou generate http://A123
+docker exec A2 eiou generate http://A2
+docker exec A21 eiou generate http://A21
+docker exec A211 eiou generate http://A211
+docker exec A212 eiou generate http://A212
+docker exec A213 eiou generate http://A213
+docker exec A22 eiou generate http://A22
+docker exec A221 eiou generate http://A221
+docker exec A222 eiou generate http://A222
+docker exec A223 eiou generate http://A223
+docker exec A3 eiou generate http://A3
+docker exec A31 eiou generate http://A31
+docker exec A311 eiou generate http://A311
+docker exec A312 eiou generate http://A312
+docker exec A313 eiou generate http://A313
+docker exec A32 eiou generate http://A32
+docker exec A321 eiou generate http://A321
+docker exec A322 eiou generate http://A322
+docker exec A323 eiou generate http://A323
+docker exec A4 eiou generate http://A4
+docker exec A41 eiou generate http://A41
+docker exec A411 eiou generate http://A411
+docker exec A412 eiou generate http://A412
+docker exec A413 eiou generate http://A413
+docker exec A42 eiou generate http://A42
+docker exec A421 eiou generate http://A421
+docker exec A422 eiou generate http://A422
+docker exec A423 eiou generate http://A423
+
+# Add friends (NOTE that names are NOT arbitrary)
+docker exec A0 eiou add http://A1 A1 0.1 1000 USD
+docker exec A1 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A2 A2 0.1 1000 USD
+docker exec A2 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A3 A3 0.1 1000 USD
+docker exec A3 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A4 A4 0.1 1000 USD
+docker exec A4 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A321 A321 0.1 1000 USD
+docker exec A321 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A322 A322 0.1 1000 USD
+docker exec A322 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A323 A323 0.1 1000 USD
+docker exec A323 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A411 A411 0.1 1000 USD
+docker exec A411 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A412 A412 0.1 1000 USD
+docker exec A412 eiou add http://A0 A0 0.1 1000 USD
+docker exec A0 eiou add http://A413 A413 0.1 1000 USD
+docker exec A413 eiou add http://A0 A0 0.1 1000 USD
+docker exec A1 eiou add http://A11 A11 0.1 1000 USD
+docker exec A11 eiou add http://A1 A1 0.1 1000 USD
+docker exec A1 eiou add http://A12 A12 0.1 1000 USD
+docker exec A12 eiou add http://A1 A1 0.1 1000 USD
+docker exec A11 eiou add http://A111 A111 0.1 1000 USD
+docker exec A111 eiou add http://A11 A11 0.1 1000 USD
+docker exec A11 eiou add http://A112 A112 0.1 1000 USD
+docker exec A112 eiou add http://A11 A11 0.1 1000 USD
+docker exec A11 eiou add http://A113 A113 0.1 1000 USD
+docker exec A113 eiou add http://A11 A11 0.1 1000 USD
+docker exec A111 eiou add http://A421 A421 0.1 1000 USD
+docker exec A421 eiou add http://A111 A111 0.1 1000 USD
+docker exec A111 eiou add http://A422 A422 0.1 1000 USD
+docker exec A422 eiou add http://A111 A111 0.1 1000 USD
+docker exec A111 eiou add http://A112 A112 0.1 1000 USD
+docker exec A112 eiou add http://A111 A111 0.1 1000 USD
+docker exec A112 eiou add http://A113 A113 0.1 1000 USD
+docker exec A113 eiou add http://A112 A112 0.1 1000 USD
+docker exec A112 eiou add http://A421 A421 0.1 1000 USD
+docker exec A421 eiou add http://A112 A112 0.1 1000 USD
+docker exec A112 eiou add http://A422 A422 0.1 1000 USD
+docker exec A422 eiou add http://A112 A112 0.1 1000 USD
+docker exec A112 eiou add http://A423 A423 0.1 1000 USD
+docker exec A423 eiou add http://A112 A112 0.1 1000 USD
+docker exec A113 eiou add http://A421 A421 0.1 1000 USD
+docker exec A421 eiou add http://A113 A113 0.1 1000 USD
+docker exec A113 eiou add http://A422 A422 0.1 1000 USD
+docker exec A422 eiou add http://A113 A113 0.1 1000 USD
+docker exec A113 eiou add http://A423 A423 0.1 1000 USD
+docker exec A423 eiou add http://A113 A113 0.1 1000 USD
+docker exec A12 eiou add http://A121 A121 0.1 1000 USD
+docker exec A121 eiou add http://A12 A12 0.1 1000 USD
+docker exec A12 eiou add http://A122 A122 0.1 1000 USD
+docker exec A122 eiou add http://A12 A12 0.1 1000 USD
+docker exec A12 eiou add http://A123 A123 0.1 1000 USD
+docker exec A123 eiou add http://A12 A12 0.1 1000 USD
+docker exec A12 eiou add http://A21 A21 0.1 1000 USD
+docker exec A21 eiou add http://A12 A12 0.1 1000 USD
+docker exec A2 eiou add http://A21 A21 0.1 1000 USD
+docker exec A21 eiou add http://A2 A2 0.1 1000 USD
+docker exec A2 eiou add http://A22 A22 0.1 1000 USD
+docker exec A22 eiou add http://A2 A2 0.1 1000 USD
+docker exec A21 eiou add http://A211 A211 0.1 1000 USD
+docker exec A211 eiou add http://A21 A21 0.1 1000 USD
+docker exec A21 eiou add http://A212 A212 0.1 1000 USD
+docker exec A212 eiou add http://A21 A21 0.1 1000 USD
+docker exec A21 eiou add http://A213 A213 0.1 1000 USD
+docker exec A213 eiou add http://A21 A21 0.1 1000 USD
+docker exec A22 eiou add http://A221 A221 0.1 1000 USD
+docker exec A221 eiou add http://A22 A22 0.1 1000 USD
+docker exec A22 eiou add http://A222 A222 0.1 1000 USD
+docker exec A222 eiou add http://A22 A22 0.1 1000 USD
+docker exec A22 eiou add http://A223 A223 0.1 1000 USD
+docker exec A223 eiou add http://A22 A22 0.1 1000 USD
+docker exec A221 eiou add http://A313 A313 0.1 1000 USD
+docker exec A313 eiou add http://A221 A221 0.1 1000 USD
+docker exec A222 eiou add http://A312 A312 0.1 1000 USD
+docker exec A312 eiou add http://A222 A222 0.1 1000 USD
+docker exec A223 eiou add http://A311 A311 0.1 1000 USD
+docker exec A311 eiou add http://A223 A223 0.1 1000 USD
+docker exec A3 eiou add http://A31 A31 0.1 1000 USD
+docker exec A31 eiou add http://A3 A3 0.1 1000 USD
+docker exec A3 eiou add http://A32 A32 0.1 1000 USD
+docker exec A32 eiou add http://A3 A3 0.1 1000 USD
+docker exec A31 eiou add http://A311 A311 0.1 1000 USD
+docker exec A311 eiou add http://A31 A31 0.1 1000 USD
+docker exec A31 eiou add http://A312 A312 0.1 1000 USD
+docker exec A312 eiou add http://A31 A31 0.1 1000 USD
+docker exec A31 eiou add http://A313 A313 0.1 1000 USD
+docker exec A313 eiou add http://A31 A31 0.1 1000 USD
+docker exec A32 eiou add http://A321 A321 0.1 1000 USD
+docker exec A321 eiou add http://A32 A32 0.1 1000 USD
+docker exec A32 eiou add http://A322 A322 0.1 1000 USD
+docker exec A322 eiou add http://A32 A32 0.1 1000 USD
+docker exec A32 eiou add http://A323 A323 0.1 1000 USD
+docker exec A323 eiou add http://A32 A32 0.1 1000 USD
+docker exec A4 eiou add http://A41 A41 0.1 1000 USD
+docker exec A41 eiou add http://A4 A4 0.1 1000 USD
+docker exec A4 eiou add http://A42 A42 0.1 1000 USD
+docker exec A42 eiou add http://A4 A4 0.1 1000 USD
+docker exec A41 eiou add http://A411 A411 0.1 1000 USD
+docker exec A411 eiou add http://A41 A41 0.1 1000 USD
+docker exec A41 eiou add http://A412 A412 0.1 1000 USD
+docker exec A412 eiou add http://A41 A41 0.1 1000 USD
+docker exec A41 eiou add http://A413 A413 0.1 1000 USD
+docker exec A413 eiou add http://A41 A41 0.1 1000 USD
+docker exec A42 eiou add http://A421 A421 0.1 1000 USD
+docker exec A421 eiou add http://A42 A42 0.1 1000 USD
+docker exec A42 eiou add http://A422 A422 0.1 1000 USD
+docker exec A422 eiou add http://A42 A42 0.1 1000 USD
+docker exec A42 eiou add http://A423 A423 0.1 1000 USD
+docker exec A423 eiou add http://A42 A42 0.1 1000 USD
+
+
+# direct transaction
+docker exec A0 eiou send http://A1 100 USD
+
+# p2p transaction
+docker exec A0 eiou send http://A313 50 USD
+docker exec A0 eiou send http://A422 40 USD
+docker exec A0 eiou send http://A113 22 USD
+docker exec A0 eiou send http://A41 65 USD

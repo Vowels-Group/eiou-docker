@@ -1,1 +1,2323 @@
-placeholder
+<?php
+# Copyright 2025
+
+// This file accepts incoming messages from the eIOU network
+require_once("/etc/eiou/functions.php");
+if (!file_exists("/etc/eiou/config.php")) {
+  echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
+  die;
+}
+require_once("/etc/eiou/config.php");
+
+// Check if auth code is provided
+$authCode = $_GET['authcode'] ?? $_POST['authcode'] ?? '';
+
+// Check for messages from redirects
+if (empty($authCode) && isset($_GET['message'])) {
+    // If no auth code but there's a message, redirect to auth page
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+// If no auth code provided, show authentication form
+if (empty($authCode)) {
+    // Set content type for HTML
+    header('Content-Type: text/html; charset=UTF-8');
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo isset($user['hostname']) ? htmlspecialchars(parse_url($user['hostname'], PHP_URL_HOST) ?: $user['hostname']) . ' - ' : ''; ?>₳ Wallet - Authentication</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-container {
+            background: white;
+            padding: 3rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .auth-container h1 {
+            color: #212529;
+            margin-bottom: 1.5rem;
+            font-size: 2rem;
+        }
+
+        .auth-container p {
+            color: #6c757d;
+            margin-bottom: 2rem;
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .auth-input {
+            padding: 1rem;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        .auth-input:focus {
+            outline: none;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+        }
+
+        .auth-button {
+            padding: 1rem;
+            background: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: background 0.3s ease;
+        }
+
+        .auth-button:hover {
+            background: #0b5ed7;
+        }
+
+        .error-message {
+            color: #dc3545;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <h1><i class="fas fa-wallet"></i> ₳ Wallet</h1>
+        <p>Please enter your authentication code to access your wallet</p>
+        
+        <form class="auth-form" method="POST">
+            <input type="password" name="authcode" class="auth-input" placeholder="Enter auth code" required autocomplete="off">
+            <button type="submit" class="auth-button">
+                <i class="fas fa-unlock"></i> Access Wallet
+            </button>
+        </form>
+        
+        <?php if (isset($_POST['authcode']) && !empty($_POST['authcode'])): ?>
+            <div class="error-message">
+                Invalid authentication code. Please try again.
+            </div>
+        <?php endif; ?>
+    </div>
+</body>
+</html>
+<?php
+    exit;
+}
+
+// Verify auth code
+if (!isset($user['authcode']) || !hash_equals($user['authcode'], $authCode)) {
+    // Redirect back to auth form with error
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?error=invalid');
+    exit;
+}
+
+// Create PDO connection
+$pdo = createPDOConnection();
+
+// Helper function for redirecting
+function redirectMessage($message,$messageType){
+    // Redirect back to main page with message
+    $authCode = $_GET['authcode'] ?? $_POST['authcode'] ?? '';
+    $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
+    header('Location: ' . $redirectUrl);
+    exit;
+}
+
+// Get message from URL parameters (for redirects)
+if (isset($_GET['message']) && isset($_GET['type'])) {
+    $messageForDisplay = $_GET['message'];
+    $messageTypeForDisplay = $_GET['type'];
+} else {
+    $messageForDisplay = '';
+    $messageTypeForDisplay = '';
+}
+
+
+// Handle add contact form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'addContact') {
+    $address = $_POST['address'] ?? '';
+    $name = $_POST['name'] ?? '';
+    $fee = $_POST['fee'] ?? '';
+    $credit = $_POST['credit'] ?? '';
+    $currency = $_POST['currency'] ?? '';
+    
+    if (empty($address) || empty($name) || empty($fee) || empty($credit) || empty($currency)) {
+        $message = 'All fields are required';
+        $messageType = 'error';
+    } else {
+        // Create argv array for addContact function
+        $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency];
+        
+        // Capture output
+        ob_start();
+        try {
+            addContact($argv);
+            $output = ob_get_clean();
+            
+            // Parse the output to determine message type and content
+            $messageInfo = parseContactOutput($output);
+            $message = $messageInfo['message'];
+            $messageType = $messageInfo['type'];
+        } catch (Exception $e) {
+            ob_end_clean();
+            $message = 'Internal server error: ' . $e->getMessage();
+            $messageType = 'error';
+        }
+    }
+    redirectMessage($message,$messageType);
+}
+
+
+// Handle send eIOU form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'sendEIOU') {
+    $recipient = $_POST['recipient'] ?? '';
+    $manualRecipient = $_POST['manual_recipient'] ?? '';
+    $amount = $_POST['amount'] ?? '';
+    $currency = $_POST['currency'] ?? '';
+    
+    // Use manual recipient if provided, otherwise use selected recipient
+    $finalRecipient = !empty($manualRecipient) ? $manualRecipient : $recipient;
+    
+    if (empty($finalRecipient) || empty($amount) || empty($currency)) {
+        $message = 'All fields are required';
+        $messageType = 'error';        
+    } else {
+        // Create argv array for sendEiou function
+        $argv = ['eiou','send', $finalRecipient, $amount, $currency];
+
+        // Capture output
+        ob_start();
+        try {
+            sendEiou($argv);
+            $output = ob_get_clean();
+            $message = trim($output);
+            if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
+                $messageType = 'error';
+            } else {
+                $messageType = 'success';
+            }
+        } catch (Exception $e) {
+            ob_end_clean();
+            $message = 'Internal server error: ' . $e->getMessage();
+            $messageType = 'error';
+        }
+    }
+    redirectMessage($message,$messageType);
+}
+
+// Handle contact request actions
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array($_POST['action'], ['acceptContact', 'deleteContact', 'blockContact','ublockContact', 'editContact'])) {
+    $contactAddress = $_POST['contact_address'] ?? '';
+    $contactPubkey = $_POST['contact_pubkey'] ?? '';
+    $contactName = $_POST['contact_name'] ?? '';
+    $contactFee = $_POST['contact_fee'] ?? '';
+    $contactCredit = $_POST['contact_credit'] ?? '';
+    $contactCurrency = $_POST['contact_currency'] ?? '';
+    
+    if (empty($contactAddress)) {
+        $message = 'Contact address is required';
+        $messageType = 'error';
+        redirectMessage($message,$messageType);
+    } else {
+        switch ($_POST['action']) {
+            case 'acceptContact':
+                if (empty($contactName) || empty($contactFee) || empty($contactCredit) || empty($contactCurrency)) {
+                    $message = 'All fields are required to accept a contact';
+                    $messageType = 'error';
+                } else {
+                    // Create argv array for addContact function
+                    $argv = ['eiou', 'add', $contactAddress, $contactName, $contactFee, $contactCredit, $contactCurrency];
+                    
+                    // Capture output
+                    ob_start();
+                    try {
+                        addContact($argv);
+                        $output = ob_get_clean();
+                        
+                        // Parse the output to determine message type and content
+                        $messageInfo = parseContactOutput($output);
+                        $message = $messageInfo['message'];
+                        $messageType = $messageInfo['type'];
+                    } catch (Exception $e) {
+                        ob_end_clean();
+                        $message = 'Internal server error: ' . $e->getMessage();
+                        $messageType = 'error';
+                    }
+                }
+                redirectMessage($message,$messageType);
+                break;
+                
+            case 'deleteContact':
+                // Create argv array for deleteContact function
+                $argv = ['eiou', 'delete', $contactAddress];
+                
+                // Capture output
+                ob_start();
+                try {
+                    deleteContact($argv);
+                    $output = ob_get_clean();
+                    
+                    // Parse the output to determine message type and content
+                    $messageInfo = parseContactOutput($output);
+                    $message = $messageInfo['message'];
+                    $messageType = $messageInfo['type'];
+                } catch (Exception $e) {
+                    ob_end_clean();
+                    $message = 'Internal server error: ' . $e->getMessage();
+                    $messageType = 'error';
+                }
+                redirectMessage($message,$messageType);
+                break;
+
+            case 'blockContact':
+                $argv = ['eiou', 'block', $contactAddress];
+                
+                // Capture output
+                ob_start();
+                try {
+                    blockContact($argv);
+                    $output = ob_get_clean();
+                    
+                    // Parse the output to determine message type and content
+                    $messageInfo = parseContactOutput($output);
+                    $message = $messageInfo['message'];
+                    $messageType = $messageInfo['type'];
+                } catch (Exception $e) {
+                    ob_end_clean();
+                    $message = 'Internal server error: ' . $e->getMessage();
+                    $messageType = 'error';
+                }
+                redirectMessage($message,$messageType);
+                break;
+
+            // THIS only functions if contact exists with full info
+            case 'unblockContact':
+                $argv = ['eiou', 'unblock', $contactAddress];
+                
+                // Capture output
+                ob_start();
+                try {
+                    unblockContact($argv);
+                    $output = ob_get_clean();
+                    
+                    // Parse the output to determine message type and content
+                    $messageInfo = parseContactOutput($output);
+                    $message = $messageInfo['message'];
+                    $messageType = $messageInfo['type'];
+                } catch (Exception $e) {
+                    ob_end_clean();
+                    $message = 'Internal server error: ' . $e->getMessage();
+                    $messageType = 'error';
+                }
+                redirectMessage($message,$messageType);
+                break;
+
+            case 'editContact':
+                if (empty($contactName) || empty($contactFee) || empty($contactCredit) || empty($contactCurrency)) {
+                    $message = 'All fields are required to edit a contact';
+                    $messageType = 'error';
+                } else {
+                    // Create argv array for updateContact function
+                    $argv = ['eiou', 'update', $contactAddress, 'all', $contactName, $contactFee, $contactCredit];
+                    
+                    // Capture output
+                    ob_start();
+                    try {
+                        updateContact($argv);
+                        $output = ob_get_clean();
+                        
+                        // Parse the output to determine message type and content
+                        $messageInfo = parseContactOutput($output);
+                        $message = $messageInfo['message'];
+                        $messageType = $messageInfo['type'];
+                    } catch (Exception $e) {
+                        ob_end_clean();
+                        $message = 'Internal server error: ' . $e->getMessage();
+                        $messageType = 'error';
+                    }
+                }
+                redirectMessage($message,$messageType);
+                break;
+        }
+    }
+}
+
+// Helper function to truncate address for display
+function truncateAddress($address, $length = 10) {
+    if (strlen($address) <= $length) {
+        return $address;
+    }
+    return substr($address, 0, $length) . '...';
+}
+
+// Helper function to get user's total balance
+function getUserTotalBalance() {
+    global $pdo;
+    
+    try {
+        $totalReceived = calculateTotalReceivedUser();
+        $totalSent = calculateTotalSentUser();
+        $balance = ($totalReceived - $totalSent) / 100; // Convert from cents
+        return number_format($balance, 2);
+    } catch (Exception $e) {
+        return "0.00";
+    }
+}
+
+// Helper function to get accepted contacts
+function getAcceptedContacts() {
+    global $pdo;
+    
+    try {
+        // Get all accepted contacts
+        $stmt = $pdo->prepare("SELECT * FROM contacts WHERE status = 'accepted'");
+        $stmt->execute();
+        $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $contacts;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Helper function to get pending contacts
+function getPendingContacts() {
+    global $pdo;
+    
+    try {
+        // Get all pending contact requests (where name IS NULL and status = 'pending')
+        $stmt = $pdo->prepare("SELECT address, pubkey, status FROM contacts WHERE name IS NULL AND status = 'pending'");
+        $stmt->execute();
+        $pendingContacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        return $pendingContacts;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Helper function to get pending contacts inserted requests from user
+function getUserPendingContacts() {
+    global $pdo;
+    
+    try {
+        // Get all pending contact requests (where name IS NOT NULL and status = 'pending')
+        $stmt = $pdo->prepare("SELECT * FROM contacts WHERE name IS NOT NULL AND status = 'pending'");
+        $stmt->execute();
+        $pendingUserContacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        return $pendingUserContacts;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Helper function to get blocked contacts
+function getBlockedContacts() {
+    global $pdo;
+    
+    try {
+        // Get all blocked contacts 
+        $stmt = $pdo->prepare("SELECT * FROM contacts WHERE status = 'blocked'");
+        $stmt->execute();
+        $blockedContacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        return $blockedContacts;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Helper function to get all contacts
+function getAllContacts() {
+    global $pdo;
+    
+    try {
+        // Get all all contacts (regardless of status)
+        $stmt = $pdo->prepare("SELECT * FROM contacts");
+        $stmt->execute();
+        $contacts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        return $contacts;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Helper function to get contact balance
+function getContactBalance($userPubkey, $contactPubkey) {
+    global $pdo;
+    
+    try {
+        // Calculate sent to this contact
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as sent FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?");
+        $stmt->execute([hash('sha256', $userPubkey), hash('sha256', $contactPubkey)]);
+        $sent = $stmt->fetch()['sent'];
+        
+        // Calculate received from this contact
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as received FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?");
+        $stmt->execute([hash('sha256', $contactPubkey), hash('sha256', $userPubkey)]);
+        $received = $stmt->fetch()['received'];
+        
+        return $received - $sent;
+    } catch (Exception $e) {
+        return 0;
+    }
+}
+
+// Helper function to get transaction history
+function getTransactionHistory($limit = 10) {
+    global $pdo, $user;
+    
+    try {
+        $userAddresses = [];
+        if (isset($user['hostname'])) {
+            $userAddresses[] = $user['hostname'];
+        }
+        if (isset($user['torAddress'])) {
+            $userAddresses[] = $user['torAddress'];
+        }
+        
+        if (empty($userAddresses)) {
+            return [];
+        }
+        
+        $placeholders = sprintf("'%s'", implode("','", $userAddresses ) );
+        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions 
+                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders)) 
+                  ORDER BY timestamp DESC LIMIT $limit";
+        $stmt = $pdo->prepare($query);
+        $stmt->execute();
+
+        
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $formattedTransactions = [];
+        
+        foreach ($transactions as $tx) {
+            $isSent = in_array($tx['sender_address'], $userAddresses);
+            $counterpartyAddress = $isSent ? $tx['receiver_address'] : $tx['sender_address'];
+            
+            // Get contact name for counterparty
+            $contactName = getContactNameByAddress($counterpartyAddress);
+            
+            $formattedTransactions[] = [
+                'date' => $tx['timestamp'],
+                'type' => $isSent ? 'sent' : 'received',
+                'amount' => $tx['amount'] / 100, // Convert from cents
+                'currency' => $tx['currency'],
+                'counterparty' => $contactName ?: $counterpartyAddress
+            ];
+        }
+        
+        return $formattedTransactions;
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Helper function to get contact name by address
+function getContactNameByAddress($address) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("SELECT name FROM contacts WHERE address = ?");
+        $stmt->execute([$address]);
+        $result = $stmt->fetch();
+        return $result ? $result['name'] : null;
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
+// Helper function to check for new transactions since last check
+function checkForNewTransactions($lastCheckTime) {
+    global $pdo, $user;
+    
+    try {
+        $userAddresses = [];
+        if (isset($user['hostname'])) {
+            $userAddresses[] = $user['hostname'];
+        }
+        if (isset($user['torAddress'])) {
+            $userAddresses[] = $user['torAddress'];
+        }
+        
+        if (empty($userAddresses)) {
+            return false;
+        }
+        
+        $placeholders = sprintf("'%s'", implode("','", $userAddresses ) );
+        $query = "SELECT COUNT(*) as count FROM transactions 
+                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders)) 
+                  AND timestamp > $lastCheckTime";
+        $stmt = $pdo->prepare($query);
+        $stmt->execute();
+
+        
+        $result = $stmt->fetch();
+        return $result['count'] > 0;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+// Helper function to check for new contact requests since last check
+function checkForNewContactRequests($lastCheckTime) {
+    global $pdo;
+    
+    try {
+        $query = "SELECT COUNT(*) as count FROM contacts 
+                  WHERE name IS NULL AND status = 'pending' 
+                  AND created_at > ?";
+        
+        $stmt = $pdo->prepare($query);
+        $stmt->execute([$lastCheckTime]);
+        
+        $result = $stmt->fetch();
+        return $result['count'] > 0;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+
+// Helper function to parse contact function output and determine message type
+function parseContactOutput($output) {
+    $output = trim($output);
+    
+    // Success messages
+    if (str_contains(strtolower($output), 'contact accepted.') !== false) {
+        return ['message' => $output, 'type' => 'contact-accepted'];
+    }
+
+    // General success message
+    if(str_contains(strtolower($output), 'success') !== false) {
+        return ['message' => $output, 'type' => 'success'];
+    }
+    
+    // Warning messages
+    if (str_contains(strtolower($output), 'already been added or accepted') !== false) {
+        return ['message' => $output, 'type' => 'warning'];
+    }
+    if (str_contains(strtolower($output), 'warning:') !== false) {
+        return ['message' => $output, 'type' => 'warning'];
+    }
+    
+    // Error messages
+    if (str_contains(strtolower($output), 'failed') !== false) {
+        return ['message' => $output . ' Please try again.', 'type' => 'error'];
+    }
+    if (str_contains(strtolower($output), 'not accepted by the recipient') !== false) {
+        return ['message' => $output . ' Please try again or contact the recipient directly.', 'type' => 'error'];
+    }
+    if (str_contains(strtolower($output), 'not found') !== false) {
+        return ['message' => $output, 'type' => 'error'];
+    }
+    if (str_contains(strtolower($output), 'no results found.') !== false) {
+        return ['message' => $output, 'type' => 'error'];
+    }
+    
+    // Generic error detection
+    if (str_contains(strtolower($output), 'error') !== false || str_contains(strtolower($output), 'failed') !== false) {
+        return ['message' => $output, 'type' => 'error'];
+    }
+    
+    // Default success case
+    return ['message' => $output, 'type' => 'success'];
+}
+
+// Handle update checking requests (for Tor Browser polling)
+if (isset($_GET['check_updates']) && $_GET['check_updates'] === '1') {
+    // Check for new transactions or contact requests since last check
+    $lastCheckTime = $_GET['last_check'] ?? 0;
+    
+    // Check for new transactions
+    $newTransactions = checkForNewTransactions($lastCheckTime);
+    $newContactRequests = checkForNewContactRequests($lastCheckTime);
+    
+    if ($newTransactions || $newContactRequests) {
+        echo "new_transaction:" . ($newTransactions ? '1' : '0') . "\n";
+        echo "new_contact_request:" . ($newContactRequests ? '1' : '0') . "\n";
+        echo "timestamp:" . time() . "\n";
+    } else {
+        echo "no_updates\n";
+    }
+    exit;
+}
+
+// Helper Function to convert output based on currency cases
+function currencyOutputConversion($value,$currency){
+    if($currency === 'USD'){
+        return $value ? ($value / 100) : $value;
+    }
+    return $value;
+}
+
+
+// Helper Function, conversion database values to output values
+function contactConversion($contacts){
+    global $user;
+    $contactsWithBalances = [];
+    foreach($contacts as $contact){
+        // Calculate balance for this contact
+        $balance = getContactBalance($user['public'], $contact['pubkey']);
+        
+        $contactsWithBalances[] = [
+            'name' => $contact['name'],
+            'address' => $contact['address'],
+            'balance' =>  currencyOutputConversion($balance,$contact['currency']),
+            'fee' =>  currencyOutputConversion($contact['fee_percent'],$contact['currency']),
+            'credit_limit' =>  currencyOutputConversion($contact['credit_limit'],$contact['currency']),
+            'currency' => $contact['currency']
+        ];
+       
+    }
+    return $contactsWithBalances;
+}
+
+// Get user based data
+$totalBalance = getUserTotalBalance();
+$transactions = getTransactionHistory(10);
+
+// Contact data
+$allContacts = getAllContacts();
+$acceptedContacts = contactConversion(getAcceptedContacts());
+$pendingContacts = getPendingContacts();
+$pendingUserContacts = contactConversion(getUserPendingContacts());
+$blockedContacts = contactConversion(getBlockedContacts());
+
+
+// If we get here, authentication is successful
+// Set content type for HTML
+header('Content-Type: text/html; charset=UTF-8');
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo isset($user['hostname']) ? htmlspecialchars(parse_url($user['hostname'], PHP_URL_HOST) ?: $user['hostname']) . ' - ' : ''; ?>₳ Wallet</title>
+    <!-- Auto-refresh for users with JavaScript disabled (Tor Browser compatible) -->
+    <noscript>
+        <?php if (!empty($authCode)): ?>
+        <meta http-equiv="refresh" content="10;url=<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>">
+        <?php else: ?>
+        <meta http-equiv="refresh" content="10">
+        <?php endif; ?>
+    </noscript>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #212529;
+            background: #f8f9fa;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #212529;
+            font-size: 2rem;
+        }
+
+        .logout-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .logout-btn:hover {
+            background: #c82333;
+        }
+
+        /* Message alerts */
+        .alert {
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 2rem;
+            border: 1px solid transparent;
+        }
+
+        .alert-success {
+            background-color: #d1e7dd;
+            border-color: #badbcc;
+            color: #0f5132;
+        }
+
+        .alert-error {
+            background-color: #f8d7da;
+            border-color: #f5c2c7;
+            color: #842029;
+        }
+
+        .alert-info {
+            background-color: #cff4fc;
+            border-color: #b6effb;
+            color: #055160;
+        }
+
+        .alert-warning {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+            color: #856404;
+        }
+
+        /* Special styling for contact acceptance notifications */
+        .alert-contact-accepted {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            border: 2px solid #198754;
+            color: white;
+            font-weight: 600;
+            text-align: center;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(40, 167, 69, 0.3);
+            animation: contactAcceptedPulse 2s ease-in-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .alert-contact-accepted::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            animation: contactAcceptedShine 3s ease-in-out;
+        }
+
+        .alert-contact-accepted i {
+            font-size: 1.5rem;
+            margin-right: 0.5rem;
+            animation: contactAcceptedBounce 1s ease-in-out;
+        }
+
+        @keyframes contactAcceptedPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        @keyframes contactAcceptedShine {
+            0% { left: -100%; }
+            50% { left: 100%; }
+            100% { left: 100%; }
+        }
+
+        @keyframes contactAcceptedBounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+
+        /* Wallet Dashboard */
+        .wallet-dashboard {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .wallet-info {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .wallet-info h2 {
+            color: #212529;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 0.5rem;
+        }
+
+        .info-item {
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .balance-display {
+            background: #0d6efd;
+            color: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .balance-amount {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .balance-currency {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .action-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .action-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .action-card i {
+            font-size: 2rem;
+            color: #0d6efd;
+            margin-bottom: 1rem;
+        }
+
+        .action-card h3 {
+            color: #212529;
+            margin-bottom: 0.5rem;
+        }
+
+        .action-card p {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        /* Contacts Section */
+        .contacts-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .contacts-section h2 {
+            color: #212529;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 0.5rem;
+        }
+
+        .contacts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .contact-card {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid #0d6efd;
+            transition: transform 0.2s ease;
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .contact-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .pending {   
+            border-left: 4px solid grey;
+        }
+        .blocked {   
+            border-left: 4px solid red;
+        }
+
+        .contact-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .contact-info {
+            flex: 1;
+            min-width: 0; /* Allows text to wrap properly */
+        }
+
+        .contact-name {
+            font-weight: bold;
+            color: #0d6efd;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .contact-details {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .contact-address {
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            word-break: break-all;
+            background: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            margin: 0.25rem 0;
+            border: 1px solid #dee2e6;
+        }
+
+        .balance-positive {
+            color: #198754;
+        }
+
+        .balance-negative {
+            color: #dc3545;
+        }
+
+        /* Transaction History */
+        .transactions-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .transactions-section h2 {
+            color: #212529;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 0.5rem;
+        }
+
+        .transaction-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .transaction-item:last-child {
+            border-bottom: none;
+        }
+
+        .transaction-info {
+            flex: 1;
+        }
+
+        .transaction-amount {
+            font-weight: bold;
+            color: #0d6efd;
+        }
+
+        .transaction-sent {
+            color: #dc3545;
+        }
+
+        .transaction-received {
+            color: #198754;
+        }
+
+        /* Form styles */
+        .form-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .form-container h2 {
+            color: #212529;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            color: #212529;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #0d6efd;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0b5ed7;
+            text-decoration: none;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5c636a;
+            text-decoration: none;
+            color: white;
+        }
+
+        .btn-success {
+            background: #198754;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #157347;
+            text-decoration: none;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+            text-decoration: none;
+            color: white;
+        }
+
+        /* Add Contact Button */
+        .add-contact-btn {
+            background: #198754;
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            transition: background 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .add-contact-btn:hover {
+            background: #157347;
+            text-decoration: none;
+            color: white;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #6c757d;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            color: #dee2e6;
+            margin-bottom: 1rem;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .wallet-dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .form-actions {
+                flex-direction: column;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in-up {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        /* Copy text area */
+        .copy-textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 0.5rem;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            background: #f8f9fa;
+            resize: vertical;
+        }
+
+        /* Section toggle */
+        .section-toggle {
+            background: #f8f9fa;
+            border: 1px solid #ced4da;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 1rem;
+            display: inline-block;
+            text-decoration: none;
+            color: #212529;
+        }
+
+        .section-toggle:hover {
+            background: #e9ecef;
+            text-decoration: none;
+            color: #212529;
+        }
+
+        .section-content {
+            display: none;
+        }
+
+        .section-content.show {
+            display: block;
+        }
+
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            text-decoration: none;
+        }
+
+        .fab:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
+            text-decoration: none;
+            color: white;
+            background: #0b5ed7;
+        }
+
+        .fab:active {
+            transform: translateY(-1px);
+        }
+
+        /* Hide FAB when at top of page */
+        .fab.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(20px);
+        }
+
+        /* Smooth scrolling for the page */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Modal styles */
+        .modal {
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: auto;
+            padding: 0;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid #dee2e6;
+            background: #f8f9fa;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #212529;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: #000;
+        }
+
+        .modal-content form {
+            padding: 1.5rem;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Enhanced contact card hover effect */
+        .contact-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
+            border-left-color: #28a745;
+        }
+
+        .contact-card:hover .contact-name {
+            color: #28a745;
+        }
+
+        /* Contact avatar enhancement */
+        .contact-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            flex-shrink: 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease;
+        }
+
+        .contact-card:hover .contact-avatar {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header fade-in-up">
+            <h1><i class="fas fa-wallet"></i> ₳ Wallet</h1>
+            <a href="<?php echo $_SERVER['PHP_SELF']; ?>" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+        </div>
+
+        <!-- Message alerts -->
+        <?php if (!empty($messageForDisplay)): ?>
+            <div class="alert alert-<?php echo $messageTypeForDisplay; ?> fade-in-up">
+                <i class="fas fa-<?php 
+                    if ($messageTypeForDisplay === 'contact-accepted') {
+                        echo 'user-check';
+                    } elseif ($messageTypeForDisplay === 'success') {
+                        echo 'check-circle';
+                    } elseif ($messageTypeForDisplay === 'error') {
+                        echo 'exclamation-circle';
+                    } elseif ($messageTypeForDisplay === 'warning') {
+                        echo 'exclamation-triangle';
+                    } else {
+                        echo 'info-circle';
+                    }
+                ?>"></i>
+                <?php echo htmlspecialchars($messageForDisplay); ?>
+            </div>
+        <?php endif; ?>
+
+        <!-- Pending Contact Requests Notification -->
+        <?php if (!empty($pendingContacts)): ?>
+        <div class="alert alert-info fade-in-up" style="margin-bottom: 2rem;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <i class="fas fa-user-clock" style="font-size: 1.5rem; color: #0d6efd;"></i>
+                <div style="flex: 1;">
+                    <h4 style="margin: 0; color: #0d6efd;">
+                        <?php echo count($pendingContacts); ?> Pending Contact Request<?php echo count($pendingContacts) > 1 ? 's' : ''; ?>
+                    </h4>
+                    <p style="margin: 0.5rem 0 0 0; color: #6c757d;">
+                        You have contact requests waiting for your approval.
+                    </p>
+                </div>
+                <a href="#pending-contacts" class="btn btn-primary" style="padding: 0.5rem 1rem;">
+                    <i class="fas fa-eye"></i> View Requests
+                </a>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <a href="#send-form" class="action-card">
+                <i class="fas fa-paper-plane"></i>
+                <h3>Send eIOU</h3>
+                <p>Transfer value to contacts or anyone via P2P</p>
+            </a>
+            <a href="#add-contact" class="action-card">
+                <i class="fas fa-user-plus"></i>
+                <h3>Add Contact</h3>
+                <p>Add new contact</p>
+            </a>
+            <a href="#contacts" class="action-card">
+                <i class="fas fa-address-book"></i>
+                <h3>View Contacts</h3>
+                <p>Manage your contacts</p>
+            </a>
+            <a href="#transactions" class="action-card">
+                <i class="fas fa-history"></i>
+                <h3>Transaction History</h3>
+                <p>View past transactions</p>
+            </a>
+        </div>
+
+        <!-- Wallet Dashboard -->
+        <div class="wallet-dashboard">
+            <!-- Wallet Info -->
+            <div class="wallet-info fade-in-up">
+                <h2><i class="fas fa-info-circle"></i> Wallet Information</h2>
+                
+                <!-- Last Updated Status -->
+                <div style="text-align: center; margin-bottom: 1rem; padding: 0.5rem; background: #e9ecef; border-radius: 4px; font-size: 0.9rem; color: #6c757d;">
+                    <i class="fas fa-clock"></i> Last updated: <?php echo date('M j, Y g:i:s A'); ?>
+                    <br>
+                    <small id="refresh-status">Auto-refresh every 10 seconds • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>" style="color: #0d6efd;">Refresh now</a></small>
+                    <div id="polling-status" style="margin-top: 0.25rem; font-size: 0.8rem; color: #28a745;">
+                        <i class="fas fa-sync-alt fa-spin"></i> Auto-refresh active
+                    </div>
+                    <noscript>
+                        <br><small style="color: #dc3545;"><i class="fas fa-exclamation-triangle"></i> JavaScript disabled - page refreshes every 10 seconds automatically</small>
+                    </noscript>
+                </div>
+                
+                <div class="balance-display">
+                    <div class="balance-amount">$<?php echo $totalBalance; ?></div>
+                    <div class="balance-currency">Total Balance</div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-label">Address:</div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <span style="flex: 1; word-break: break-all;"><?php echo isset($user['torAddress']) ? $user['torAddress'] : 'Not available'; ?></span>
+                        <?php if (isset($user['torAddress'])): ?>
+                            <textarea class="copy-textarea" readonly style="display: none;" id="tor-address"><?php echo $user['torAddress']; ?></textarea>
+                            <button class="btn btn-sm btn-outline" onclick="document.getElementById('tor-address').style.display='block'; document.getElementById('tor-address').select();" title="Copy Tor address">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Public Key:</div>
+                    <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
+                        <span style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo isset($user['public']) ? $user['public'] : 'Not available'; ?></span>
+                        <?php if (isset($user['public'])): ?>
+                            <textarea class="copy-textarea" readonly style="display: none;" id="public-key"><?php echo $user['public']; ?></textarea>
+                            <button class="btn btn-sm btn-outline" onclick="document.getElementById('public-key').style.display='block'; document.getElementById('public-key').select();" title="Copy public key">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Status:</div>
+                    <div style="color: #198754;">Active</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Send eIOU Form -->
+        <div id="send-form" class="form-container fade-in-up">
+            <h2><i class="fas fa-paper-plane"></i> Send eIOU</h2>
+            
+            <!-- P2P Information Alert -->
+            <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 4px; padding: 1rem; margin-bottom: 1.5rem;">
+                <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
+                    <i class="fas fa-info-circle" style="color: #0066cc; margin-top: 0.2rem;"></i>
+                    <div>
+                        <strong style="color: #0066cc;">Peer-to-Peer Routing Available</strong>
+                        <p style="margin: 0.5rem 0 0 0; color: #333; font-size: 0.9rem;">
+                            You can send eIOUs to anyone, even if they're not in your contacts! The system will automatically route the transaction through your network of contacts to reach the recipient.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <form method="POST">
+                <input type="hidden" name="action" value="sendEIOU">
+                <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                
+                <div class="form-group">
+                    <label for="recipient">Recipient:</label>
+                    <select id="recipient" name="recipient">
+                        <option value="">Or select from contacts below</option>
+                        <?php foreach ($acceptedContacts as $contact): ?>
+                            <option value="<?php echo htmlspecialchars($contact['name']); ?>"><?php echo htmlspecialchars($contact['name']); ?> (Contact)</option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                        <i class="fas fa-lightbulb"></i> 
+                        <strong>Tip:</strong> You can also enter a .onion address or HTTP address directly to send to non-contacts via P2P routing.
+                    </small>
+                </div>
+                
+                <!-- Manual Address Input (visible by default) -->
+                <div class="form-group" id="manual-address-group">
+                    <label for="manual-address">Recipient Address:</label>
+                    <input type="text" id="manual-address" name="manual_recipient" placeholder="Enter .onion address or HTTP address" style="font-family: 'Courier New', monospace;">
+                    <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                        <i class="fas fa-shield-alt"></i> 
+                        <strong>Security:</strong> P2P transactions are routed through your trusted contacts for security.
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="amount">Amount:</label>
+                    <input type="number" id="amount" name="amount" placeholder="100" min="0" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="currency">Currency:</label>
+                    <select id="currency" name="currency" required>
+                        <option value="USD">USD</option>
+                    </select>
+                </div>
+                
+                <!-- Transaction Type Indicator -->
+                <div id="transaction-type-indicator" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 1rem; margin-bottom: 1rem; display: none;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-exchange-alt" style="color: #28a745;"></i>
+                        <span id="transaction-type-text" style="font-weight: 600; color: #28a745;"></span>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Send eIOU
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Add Contact Form -->
+        <div id="add-contact" class="form-container fade-in-up">
+            <h2><i class="fas fa-user-plus"></i> Add New Contact</h2>
+            <form method="POST">
+                <input type="hidden" name="action" value="addContact">
+                <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                
+                <div class="form-group">
+                    <label for="address">Address:</label>
+                    <input type="text" id="address" name="address" placeholder="Enter .tor address" required>
+                </div>
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <input type="text" id="name" name="name" placeholder="Enter contact name" required>
+                </div>
+                <div class="form-group">
+                    <label for="fee">Fee (%):</label>
+                    <input type="number" id="fee" name="fee" placeholder="0.1" step="0.1" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="credit">Credit Limit:</label>
+                    <input type="number" id="credit" name="credit" placeholder="100" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="contactCurrency">Currency:</label>
+                    <select id="contactCurrency" name="currency" required>
+                        <option value="USD">USD</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-success">Add Contact</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Contacts Section -->
+        <div id="contacts" class="contacts-section fade-in-up">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
+                <a href="#add-contact" class="add-contact-btn">
+                    <i class="fas fa-plus"></i> Add Contact
+                </a>
+            </div>
+            <div class="contacts-grid">
+                <?php if (empty($allContacts)): ?>
+                    <div class="empty-state">
+                        <i class="fas fa-users"></i>
+                        <h3>No Contacts Yet</h3>
+                        <p>Add your first contact to start using eIOU</p>
+                    </div>
+                <?php else: ?>
+                <!-- TO DO: Try pulling everything at once and sorting, not 4 different queries???? -->
+                <!-- Accepted Contacts (with Balance) -->
+                    <?php foreach ($acceptedContacts as $contact): ?>
+                        <div class="contact-card" onclick="openEditContactModal('<?php echo htmlspecialchars($contact['address']); ?>', '<?php echo htmlspecialchars($contact['name']); ?>', '<?php echo $contact['fee']; ?>', '<?php echo $contact['credit_limit']; ?>', '<?php echo htmlspecialchars($contact['currency']); ?>')" style="cursor: pointer;">
+                            <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
+                                <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
+                            </div>
+                            <div class="contact-info">
+                                <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
+                                <span style="background: lightgreen; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Accepted</span>
+                                <div class="contact-details">
+                                    <div class="contact-address"><?php echo htmlspecialchars(truncateAddress($contact['address'])); ?></div>
+                                    <div>Balance: <span class="<?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>">
+                                        <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?>
+                                    </span> <?php echo $contact['currency']; ?></div>
+                                    <div>Credit Limit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo $contact['currency']; ?></div>
+                                    <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                    <!-- Pending User Contacts -->
+                    <!-- TO DO: add resynch -->
+                    <?php foreach ($pendingUserContacts as $contact): ?>
+                        <div class="contact-card pending" style="cursor: pointer;">
+                            <div class="contact-avatar" style="background: linear-gradient(135deg, grey, grey);">
+                                <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
+                            </div>
+                            <div class="contact-info">
+                                <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
+                                <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending Response</span>
+                                <div class="contact-details">
+                                    <div class="contact-address"><?php echo htmlspecialchars(truncateAddress($contact['address'])); ?></div>
+                                    <div>Balance: <span class="balance-negative">
+                                       -
+                                    </span> <?php echo $contact['currency']; ?></div>
+                                    <div>Credit Limit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo $contact['currency']; ?></div>
+                                    <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+
+                    <!-- Blocked Contacts -->
+                    <!-- TO DO: add unblock capability, either simple or with add values for acceptance contact request-->
+                    <?php foreach ($blockedContacts as $contact): ?>
+                        <div class="contact-card pending" style="cursor: pointer;">
+                            <div class="contact-avatar" style="background: linear-gradient(135deg, grey, grey);">
+                                <?php echo $contact['name'] ? strtoupper(substr($contact['name'], 0, 1)) : "-"; ?>
+                            </div>
+                            <div class="contact-info">
+                                <div class="contact-name"><?php echo htmlspecialchars($contact['name'] ?? "-"); ?></div>
+                                <span style="background: red; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Blocked</span>
+                                <div class="contact-details">
+                                    <div class="contact-address"><?php echo htmlspecialchars(truncateAddress($contact['address'])); ?></div>
+                                    <div>Balance: <span class="balance-negative">
+                                       -
+                                    </span> <?php echo $contact['currency'] ?? "USD"; ?></div>
+                                    <div>Credit Limit: <?php echo $contact['credit_limit'] ? (number_format($contact['credit_limit'], 2)) : "-"; ?> <?php echo $contact['currency'] ?? "USD"; ?></div>
+                                    <div>Fee: <?php echo $contact['fee'] ? number_format($contact['fee'], 2) : "-"; ?>%</div>                                    
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                    
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Edit Contact Modal -->
+        <div id="editContactModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-edit"></i> Edit Contact</h3>
+                    <span class="close" onclick="closeEditContactModal()">&times;</span>
+                </div>
+                <form method="POST" id="editContactForm">
+                    <input type="hidden" name="action" value="editContact">
+                    <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                    <input type="hidden" name="contact_address" id="edit_contact_address">
+                    
+                    <div class="form-group">
+                        <label for="edit_contact_name">Name:</label>
+                        <input type="text" id="edit_contact_name" name="contact_name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit_contact_fee">Fee (%):</label>
+                        <input type="number" id="edit_contact_fee" name="contact_fee" step="0.1" min="0" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit_contact_credit">Credit Limit:</label>
+                        <input type="number" id="edit_contact_credit" name="contact_credit" min="0" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="edit_contact_currency">Currency:</label>
+                        <select id="edit_contact_currency" name="contact_currency" required>
+                            <option value="USD">USD</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditContactModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+
+        <!-- Pending Contacts Section -->
+        <?php if (!empty($pendingContacts)): ?>
+        <div id="pending-contacts" class="contacts-section fade-in-up">
+            <h2><i class="fas fa-user-clock"></i> Pending Contact Requests</h2>
+            <p style="color: #6c757d; margin-bottom: 1rem;">The following contacts have requested to connect with you:</p>
+            
+            <?php foreach ($pendingContacts as $index => $contact): ?>
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; border-left: 4px solid #0d6efd;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong style="color: #0d6efd;">Contact Request #<?php echo $index + 1; ?></strong>
+                        <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending</span>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <div class="info-label">Address:</div>
+                        <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px;">
+                            <?php echo htmlspecialchars(truncateAddress($contact['address'])); ?>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <div class="info-label">Public Key:</div>
+                        <div style="font-family: monospace; font-size: 0.8rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px; max-height: 100px; overflow-y: auto;">
+                            <?php echo htmlspecialchars($contact['pubkey']); ?>
+                        </div>
+                    </div>
+                    
+                    <!-- Accept Contact Form -->
+                    <div style="margin-top: 1rem; padding: 1rem; background: white; border-radius: 4px; border: 1px solid #dee2e6;">
+                        <h4 style="color: #0d6efd; margin-bottom: 1rem;">
+                            <i class="fas fa-user-check"></i> Accept this contact request
+                        </h4>
+                        <form method="POST" style="margin-bottom: 1rem;">
+                            <input type="hidden" name="action" value="acceptContact">
+                            <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                            <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                            <input type="hidden" name="contact_pubkey" value="<?php echo htmlspecialchars($contact['pubkey']); ?>">
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="contact_name_<?php echo $index; ?>">Name:</label>
+                                    <input type="text" id="contact_name_<?php echo $index; ?>" name="contact_name" placeholder="Enter contact name" required>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="contact_fee_<?php echo $index; ?>">Fee (%):</label>
+                                    <input type="number" id="contact_fee_<?php echo $index; ?>" name="contact_fee" placeholder="0.1" step="0.1" min="0" required>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="contact_credit_<?php echo $index; ?>">Credit Limit:</label>
+                                    <input type="number" id="contact_credit_<?php echo $index; ?>" name="contact_credit" placeholder="100" min="0" required>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label for="contact_currency_<?php echo $index; ?>">Currency:</label>
+                                    <select id="contact_currency_<?php echo $index; ?>" name="contact_currency" required>
+                                        <option value="USD">USD</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                <button type="submit" class="btn btn-success" style="flex: 1; min-width: 120px;">
+                                    <i class="fas fa-check"></i> Accept Contact
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
+                        <form method="POST" style="flex: 1; min-width: 120px;">
+                            <input type="hidden" name="action" value="deleteContact">
+                            <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                            <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                            <button type="submit" class="btn btn-secondary" style="width: 100%;" onclick="return confirm('Are you sure you want to delete this contact request?')">
+                                <i class="fas fa-trash"></i> Delete Request
+                            </button>
+                        </form>
+                        
+                        <form method="POST" style="flex: 1; min-width: 120px;">
+                            <input type="hidden" name="action" value="blockContact">
+                            <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                            <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                            <button type="submit" class="btn btn-danger" style="width: 100%;" onclick="return confirm('Are you sure you want to block this contact? This action cannot be undone.')">
+                                <i class="fas fa-ban"></i> Block Contact
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+            
+            <div style="text-align: center; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
+                <p style="color: #6c757d; font-size: 0.9rem;">
+                    <i class="fas fa-lightbulb"></i> You can now accept, delete, or block contact requests directly from this interface.
+                </p>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Transaction History -->
+        <div id="transactions" class="transactions-section fade-in-up">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2><i class="fas fa-history"></i> Recent Transactions</h2>
+                <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </a>
+            </div>
+            <div>
+                <?php if (empty($transactions)): ?>
+                    <div class="empty-state">
+                        <i class="fas fa-receipt"></i>
+                        <h3>No Transactions Yet</h3>
+                        <p>Your transaction history will appear here</p>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($transactions as $tx): ?>
+                        <div class="transaction-item">
+                            <div class="transaction-info">
+                                <div><strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars($tx['counterparty']); ?></strong></div>
+                                <div style="font-size: 0.9rem; color: #6c757d;"><?php echo $tx['date']; ?></div>
+                            </div>
+                            <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
+                                <?php echo ($tx['type'] === 'sent' ? '-' : '+') . '$' . number_format($tx['amount'], 2); ?> <?php echo $tx['currency']; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Buttons -->
+    <a href="#top" class="fab" id="backToTop" title="Back to top">
+        <i class="fas fa-arrow-up"></i>
+    </a>
+    
+    <!-- Manual Refresh Button (Tor Browser friendly) -->
+    <button class="manual-refresh" id="manualRefresh" title="Refresh wallet data" onclick="refreshWalletData()">
+        <i class="fas fa-sync-alt"></i>
+    </button>
+
+    <script>
+        // Simple script to show/hide the floating action button
+        // This is minimal JavaScript that should work in Tor Browser
+        window.addEventListener('scroll', function() {
+            const fab = document.getElementById('backToTop');
+            if (window.pageYOffset > 300) {
+                fab.classList.remove('hidden');
+            } else {
+                fab.classList.add('hidden');
+            }
+        });
+
+        // Hide FAB initially
+        document.addEventListener('DOMContentLoaded', function() {
+            const fab = document.getElementById('backToTop');
+            fab.classList.add('hidden');
+            
+            // Initialize polling for updates (Tor Browser compatible)
+            initializePolling();
+        });
+
+        // Simple polling mechanism that works with Tor Browser
+        function initializePolling() {
+            // Only poll if user is actively using the page
+            let isPageActive = true;
+            let pollInterval = null;
+            let isUserInteracting = false;
+            let interactionTimeout = null;
+            
+            // Start polling when page becomes visible
+            function startPolling() {
+                if (pollInterval) return; // Already polling
+                
+                pollInterval = setInterval(function() {
+                    if (isPageActive && !isUserInteracting) {
+                        checkForUpdates();
+                    }
+                }, 10000); // Poll every 10 seconds
+            }
+            
+            // Stop polling when page is hidden
+            function stopPolling() {
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+            }
+            
+            // Pause polling when user is interacting with forms
+            function pausePollingForInteraction() {
+                isUserInteracting = true;
+                updatePollingStatus();
+                
+                // Clear existing timeout
+                if (interactionTimeout) {
+                    clearTimeout(interactionTimeout);
+                }
+                
+                // Resume polling after 30 seconds of no interaction
+                interactionTimeout = setTimeout(function() {
+                    isUserInteracting = false;
+                    updatePollingStatus();
+                }, 30000);
+            }
+            
+            // Update the polling status indicator
+            function updatePollingStatus() {
+                const statusElement = document.getElementById('polling-status');
+                if (statusElement) {
+                    if (isUserInteracting) {
+                        statusElement.innerHTML = '<i class="fas fa-pause"></i> Auto-refresh paused (form interaction detected)';
+                        statusElement.style.color = '#ffc107';
+                    } else {
+                        statusElement.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Auto-refresh active';
+                        statusElement.style.color = '#28a745';
+                    }
+                }
+            }
+            
+            // Check for updates using a simple fetch
+            function checkForUpdates() {
+                const currentUrl = window.location.href;
+                
+                // Create a simple request to check for updates
+                fetch(currentUrl + '&check_updates=1', {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.text())
+                .then(data => {
+                    // Parse the response for updates
+                    if (data.includes('new_transaction') || data.includes('new_contact_request')) {
+                        // Show notification and refresh page
+                        showUpdateNotification();
+                        setTimeout(() => {
+                            // Preserve auth code when refreshing
+                            const url = new URL(window.location.href);
+                            window.location.href = url.toString();
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    // Silently fail - don't show errors to user
+                    console.log('Update check failed (normal in Tor)');
+                });
+            }
+            
+            // Show a simple notification
+            function showUpdateNotification() {
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #0d6efd;
+                    color: white;
+                    padding: 1rem;
+                    border-radius: 4px;
+                    z-index: 10000;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                    animation: slideIn 0.3s ease-out;
+                `;
+                notification.innerHTML = '<i class="fas fa-sync-alt"></i> New updates available! Refreshing...';
+                document.body.appendChild(notification);
+                
+                // Remove after 3 seconds
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 3000);
+            }
+            
+            // Page visibility API (works in Tor Browser)
+            if (typeof document.hidden !== "undefined") {
+                document.addEventListener("visibilitychange", function() {
+                    if (document.hidden) {
+                        isPageActive = false;
+                        stopPolling();
+                    } else {
+                        isPageActive = true;
+                        startPolling();
+                    }
+                });
+            }
+            
+                                // Add event listeners for form interactions
+            function addFormInteractionListeners() {
+                // Listen for form input events
+                const formInputs = document.querySelectorAll('input, select, textarea');
+                formInputs.forEach(input => {
+                    input.addEventListener('focus', pausePollingForInteraction);
+                    input.addEventListener('input', pausePollingForInteraction);
+                    input.addEventListener('change', pausePollingForInteraction);
+                });
+                
+                // Listen for form submission
+                const forms = document.querySelectorAll('form');
+                forms.forEach(form => {
+                    form.addEventListener('submit', function() {
+                        isUserInteracting = true; // Keep paused during submission
+                    });
+                });
+                
+                // Listen for mouse clicks on form elements
+                document.addEventListener('click', function(e) {
+                    if (e.target.matches('input, select, textarea, button, .btn')) {
+                        pausePollingForInteraction();
+                    }
+                });
+            }
+            
+            // Start polling initially
+            startPolling();
+            
+            // Add form interaction listeners
+            addFormInteractionListeners();
+        }
+    
+    // Manual refresh function (Tor Browser compatible)
+    function refreshWalletData() {
+        const refreshBtn = document.getElementById('manualRefresh');
+        const icon = refreshBtn.querySelector('i');
+        
+        // Show loading state
+        icon.className = 'fas fa-spinner fa-spin';
+        refreshBtn.disabled = true;
+        
+        // Preserve auth code when refreshing
+        // TO DO: issue upon manual refresh after initital entrance, no GET possible so user will be booted to login screen.
+        const url = new URL(window.location.href);
+        window.location.href = url.toString();
+    }
+    
+    // Send eIOU form handling
+    function initializeSendForm() {
+        const recipientSelect = document.getElementById('recipient');
+        const manualAddressGroup = document.getElementById('manual-address-group');
+        const manualAddressInput = document.getElementById('manual-address');
+        const transactionTypeIndicator = document.getElementById('transaction-type-indicator');
+        const transactionTypeText = document.getElementById('transaction-type-text');
+        
+        // Set initial state - manual address is visible by default
+        manualAddressInput.required = true;
+        recipientSelect.required = false;
+        transactionTypeIndicator.style.display = 'block';
+        transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
+        transactionTypeText.style.color = '#ffc107';
+        
+        if (recipientSelect) {
+            recipientSelect.addEventListener('change', function() {
+                const selectedValue = this.value;
+                
+                if (selectedValue === '') {
+                    // Show manual address input (default state)
+                    manualAddressGroup.style.display = 'block';
+                    manualAddressInput.required = true;
+                    recipientSelect.required = false;
+                    transactionTypeIndicator.style.display = 'block';
+                    transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
+                    transactionTypeText.style.color = '#ffc107';
+                } else {
+                    // Hide manual address input when contact is selected
+                    manualAddressGroup.style.display = 'none';
+                    manualAddressInput.required = false;
+                    recipientSelect.required = true;
+                    transactionTypeIndicator.style.display = 'block';
+                    transactionTypeText.textContent = 'Direct Transaction (to contact)';
+                    transactionTypeText.style.color = '#28a745';
+                }
+            });
+        }
+        
+        // Handle manual address input
+        if (manualAddressInput) {
+            manualAddressInput.addEventListener('input', function() {
+                const address = this.value.trim();
+                if (address) {
+                    transactionTypeIndicator.style.display = 'block';
+                    if (address.includes('.onion') || address.startsWith('http')) {
+                        transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
+                        transactionTypeText.style.color = '#ffc107';
+                    } else {
+                        transactionTypeText.textContent = 'P2P Transaction (address format detected)';
+                        transactionTypeText.style.color = '#ffc107';
+                    }
+                } else {
+                    transactionTypeIndicator.style.display = 'none';
+                }
+            });
+        }
+    }
+    
+    // Initialize send form when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeSendForm();
+    });
+
+    // Edit contact modal functions
+    function openEditContactModal(address, name, fee, credit, currency) {
+        // Populate the form fields
+        document.getElementById('edit_contact_address').value = address;
+        document.getElementById('edit_contact_name').value = name;
+        document.getElementById('edit_contact_fee').value = fee;
+        document.getElementById('edit_contact_credit').value = credit;
+        document.getElementById('edit_contact_currency').value = currency;
+        
+        // Show the modal
+        document.getElementById('editContactModal').style.display = 'flex';
+        
+        // Pause polling during form interaction
+        if (typeof pausePollingForInteraction === 'function') {
+            pausePollingForInteraction();
+        }
+    }
+
+    function closeEditContactModal() {
+        document.getElementById('editContactModal').style.display = 'none';
+        
+        // Resume polling after modal is closed
+        if (typeof resumePollingAfterInteraction === 'function') {
+            setTimeout(resumePollingAfterInteraction, 1000);
+        }
+    }
+
+    // Close modal when clicking outside of it
+    window.onclick = function(event) {
+        const modal = document.getElementById('editContactModal');
+        if (event.target === modal) {
+            closeEditContactModal();
+        }
+    }
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeEditContactModal();
+        }
+    });
+    </script>
+    
+    <style>
+        /* Animation for notification */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Manual refresh button styling */
+        .manual-refresh {
+            position: fixed;
+            bottom: 100px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            text-decoration: none;
+        }
+        
+        .manual-refresh:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
+            text-decoration: none;
+            color: white;
+            background: #218838;
+        }
+        
+        .manual-refresh:active {
+            transform: translateY(-1px);
+        }
+    </style>
+</body>
+</html> 

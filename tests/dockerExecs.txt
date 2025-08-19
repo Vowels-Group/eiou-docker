@@ -1,7 +1,7 @@
 # run the message processing script
 docker exec eioud0http php /etc/eiou/messages.php
 
-# check php error
+# check php errors
 docker exec eioud0http cat /var/log/php_errors.log
 
 # check apache2 errors

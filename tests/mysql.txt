@@ -6,6 +6,7 @@ use eiou
 
 # Debug
 SELECT id, timestamp, level, message, file, line FROM debug;
+SELECT message FROM debug;
 
 # Contacts output without a public key
 SELECT id, address, name, fee_percent, credit_limit, currency FROM contacts;
@@ -19,4 +20,4 @@ SELECT id, hash, time, currency, amount, my_fee_amount, request_level, max_reque
 # rp2p requests output without keys or signatures
 SELECT id, hash, time, currency, amount, sender_address FROM rp2p;
 
-
+SELECT id, hash, sender_address FROM rp2p;

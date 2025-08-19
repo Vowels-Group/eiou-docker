@@ -1,0 +1,24 @@
+services:
+  eioud:
+    build:
+      context: .
+      dockerfile: eioud.dockerfile
+    container_name: eioud-single
+    networks:
+      - eiou-network-compose
+    environment:
+      - QUICKSTART=eioud
+    volumes:
+      - eioud-mysql-data:/var/lib/mysql
+      - ./src:/etc/eiou
+      - ./config-template.php:/etc/eiou/config.php:ro
+    restart: unless-stopped
+
+networks:
+  eiou-network-compose:
+    driver: bridge
+    name: eiou-network-compose
+
+volumes:
+  eioud-mysql-data:
+    name: eioud-mysql-data

@@ -1,11 +1,10 @@
 <?php
+# Copyright 2025
 
 function addContact($data) {
     global $user;
-    //Get sender address
-    $senderPublicKey = $user['public'];
+    
     // Assign command line arguments to variables
-
     $address = filter_var($data[2], FILTER_VALIDATE_REGEXP, array("options"=>array("regexp"=>"/^[a-zA-Z0-9]{56}$|^[a-z2-7]{56}\.onion$|^https?:\/\/[a-zA-Z0-9.-]+/")));
     $name = htmlspecialchars(trim($data[3]), ENT_QUOTES, 'UTF-8');
     $fee = filter_var($data[4], FILTER_VALIDATE_FLOAT) * 100;
@@ -18,29 +17,59 @@ function addContact($data) {
         exit(1);
     }
 
-    if (checkAcceptedContact($address, $name)) {
+    // Get contact if exists in database in some form
+    $contact = retrieveContactQuery($address);
+    if($contact){
         // Check if contact is already an accepted contact
-        output(returnContactExists(), 'WARNING');
-        exit(1);
-    }
-    elseif (checkPendingContact($address)) {
-        // If contact already exists with an address, it's a contact request, skip sending a message
-        if (acceptContact($address, $name, $fee, $credit, $currency)) {
-            output(returnContactAccepted());
-            exit(0);    
+        if($contact['status'] === 'accepted'){
+            output(returnContactExists(),'WARNING');
         }
-        else {
-            output(returnContactAcceptanceFailed(), 'ERROR');            
-            exit(1);
+        // Check if contact was blocked
+        elseif($contact['status'] === 'blocked'){
+            // Contact was blocked after user accepted contact request
+            if($contact['name']){
+                // Unblock contact and add values
+                if(updateUnblockContact($address,$name,$fee,$credit,$currency)){
+                    output(outputContactUnblockedAndOverwritten());
+                } else{
+                    output(outputContactUnblockedAndOverwrittenFailure());
+                }
+            } 
+            // Contact was blocked when user received contact request
+            else{
+                if(updateUnblockContact($address,$name,$fee,$credit,$currency)){
+                    output(outputContactUnblockedAndAdded());
+                } else{
+                    output( outputContactUnblockedAndAddedFailure());
+                }
+                // Send message of succesfull contact acceptance back to original contact requester
+                send($address,buildContactIsAcceptedPayload($address));
+            }          
+        } 
+        elseif($contact['status'] === 'pending'){
+            // if pending with name
+            if($contact['name']){
+                // This contact was already sent a contact request, but has not yet responded to user (try resynching)  
+                output(returnContactRequestAlreadyInserted());
+                $succesfullSynch = synchContact($address,'ECHO'); // resynch contact
+            } else{
+                // If contact already exists with an address, it's a contact request, skip sending a message
+                if (acceptContact($address, $name, $fee, $credit, $currency)) {
+                    // Send message of succesfull contact acceptance back to original contact requester
+                    send($address,buildContactIsAcceptedPayload($address));
+                    output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
+                    output(returnContactAccepted());
+                }
+                else {
+                    output(returnContactAcceptanceFailed(), 'ERROR');  
+                    exit(1);          
+                }
+            }
         }
     }
     else{
         // Build the payload array
-        $payload = array(
-            'type' => 'create',
-            'senderPublicKey' => $senderPublicKey,
-            'name' => $name
-        );
+        $payload = createContactPayload();
         // Determine if tor, else add http hostname
         if (preg_match('/\.onion$/', $address)) {
             $payload['senderAddress'] = $user['torAddress'];
@@ -48,28 +77,35 @@ function addContact($data) {
         else {
             $payload['senderAddress'] = $user['hostname'];
         }
-
-        // Send the message and get the response
-        $response = send($address, $payload);
-        
         // Check if the response indicates successful acceptance
-        $responseData = json_decode($response, true);
+        $responseData = json_decode(send($address, $payload), true);
         if (isset($responseData['status']) && ($responseData['status'] === 'accepted' || $responseData['status'] === 'warning')) {
             // Check if the response status is a warning
             if ($responseData['status'] === 'warning') {
                 output(returnContactCreationWarning($responseData['message']));
+                // Insert into database
+                if (insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
+                    if(synchContact($address)){
+                        output(returnContactCreationSuccessful());
+                    }
+                    // else
+
+                }
+            } else{
+                // Insert into database
+                if (insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
+                    output(returnContactCreationSuccessful());
+                }
+                else{
+                    output(returnContactCreationFailed());
+                    exit(1);
+                }
             }
-            // Insert into database
-            if (insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
-                output(returnContactCreationSuccessful());
-            }
-            else{
-                output(returnContactCreationFailed());
-            }
+            
         }else {
             // If not accepted, show error and display the response
             output(returnContactRejected($responseData));
-            output("Failed contact request payload: ". print_r($payload, true), 'SILENT');
+            output(outputFailedContactRequest($payload), 'SILENT');
             exit(1);
         }
     }
@@ -81,14 +117,14 @@ function handleContactCreation($request) {
 
     // Check if contact already exists
     if (checkContactExists($address)) {
-        return json_encode(["status" => "warning", "message" => "Contact already exists"]);
+        return buildContactAlreadyExistsPayload();
     }
     else{
         return addPendingContact($address, $senderPublicKey);
     }
 }
 
-function lookupContactInfo ($request) {
+function lookupContactInfo($request) {
     // Lookup information
     $lookupResultByName = lookupContactByName($request);
     $lookupResultByAddress = lookupContactByAddress($request);
@@ -108,9 +144,29 @@ function lookupContactInfo ($request) {
     return isset($data) ? $data : null;
 }
 
-function readContact($data) {
+function searchContacts($data) {
+    // Lookup contact based on their name
+    $searchTerm = $data[2] ?? null;
+    if ($results = searchContactsQuery($searchTerm)) {
+        output(returnContactSearchResults($results));
+    }
+    else{
+        output(returnContactSearchNoResults());
+    }
+}
+
+function viewContact($data) {
+    // View contact information
     if (count($data) >= 3) {
-        if ($result = readContactQuery($data[2])) {
+        // Check if is a HTTP or TOR address
+        if (isHttpAddress($data[2]) || isTorAddress($data[2])) {
+            $address = $data[2];
+        } else{
+             // Check if the name yields an address
+            $contactResult = lookupContactByName($data[2]);
+            $address = $contactResult['address'] ?? null;
+        }
+        if ($result = retrieveContactQuery($address)) {
             output(returnContactDetails($result));
         } else {
             output(returnContactNotFound());
@@ -118,15 +174,5 @@ function readContact($data) {
     } else {
         output(returnContactReadInvalidInput());
         exit(1);
-    }
-}
-
-function searchContacts($data) {
-    $searchTerm = $data[2] ?? null;
-    if ($results = searchContactsQuery($searchTerm)) {
-        output(returnContactSearchResults());
-    }
-    else{
-        output(returnContactSearchNoResults());
     }
 }
