@@ -17,11 +17,14 @@ while ! mysqladmin ping -h localhost --silent; do
     sleep 1
 done
 
-# If quickstart flag is set, automatically run generate command
-if [ "$QUICKSTART" != "false" ]; then
-    echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
-    eiou generate http://$QUICKSTART
-    echo "Generate command completed."
+# Check if config.php was already made and if so if user keys exist, if not build config
+if [[ $(php -r 'require("//etc//eiou//src//startup//configCheck.php"); echo $run;') ]]; then
+    # If quickstart flag is set, automatically run generate command
+    if [ "$QUICKSTART" != "false" ]; then
+        echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
+        eiou generate http://$QUICKSTART
+        echo "Generate command completed."
+    fi
 fi
 
 # Check if all precursors to messages.php are available and working
