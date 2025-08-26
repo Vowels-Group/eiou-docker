@@ -25,6 +25,16 @@ function resolveUserAddressForTransport($address) {
     return false;
 }
 
+function readjustP2pLevel($request){
+    // Adjust remaining p2p chain length based on intermediary contact's config of maxP2pLevel 
+    global $user;
+    if($request['maxRequestLevel'] > $request['requestLevel'] + $user['maxP2pLevel']){
+        return $request['requestLevel'] + $user['maxP2pLevel'];
+    } else{
+        return $request['maxRequestLevel'];
+    }
+}
+
 function send($recipient, $payload){
     // Encode the payload as JSON
     $signedPayload = json_encode(sign($payload));
