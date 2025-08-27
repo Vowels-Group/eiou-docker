@@ -40,27 +40,33 @@ function handleRp2pRequest($request) {
             } else {
                 output(outputFeeRejection(), 'SILENT');
             }
+        } else{
+            // Send rp2p messages onwards to sender of p2p
+            $rP2pPayload = buildRp2pPayload($request); // Build rp2p payload
+            updateP2pRequestStatus($request['hash'], 'found'); // Update the p2p request status to found
+            $response = json_decode(send($p2p['sender_address'], $rP2pPayload),true);
+            output( outputRp2pResponse($response),'SILENT');
         }
     }
 }
 
-function processSentP2pMessages() {
-    // Select  messages from the p2p table with 'sent' status
-    $queuedMessages = retrieveRp2pMessages('sent');
-    // Process each 'sent' message
-    foreach ($queuedMessages as $message) {
-        // Check if the message hash exists in the rp2p table
-        $rP2pResult = checkRp2pExists($message['hash']);
-        // If matching rp2p found for 'sent' message, echo forwarding message, otherwise check if p2p is expired
-        if ($rP2pResult) {
-            output(outputFoundRp2pMatch($message), 'SILENT');
-            $rP2pPayload = buildRp2pPayload($rP2pResult); // Build rp2p payload
-            updateP2pRequestStatus($message['hash'], 'found'); // Update the p2p request status to found
-            $response = json_decode(send($message['sender_address'], $rP2pPayload),true);
-            output( outputRp2pResponse($response),'SILENT');
-        } elseif(returnMicroTime() > $message['expiration']){
-            // If no response after set amount of time, expire the p2p
-            expireMessage($message);
-        }              
-    }          
-}
+// function processSentP2pMessages() {
+//     // Select  messages from the p2p table with 'sent' status
+//     $queuedMessages = retrieveRp2pMessages('sent');
+//     // Process each 'sent' message
+//     foreach ($queuedMessages as $message) {
+//         // Check if the message hash exists in the rp2p table
+//         $rP2pResult = checkRp2pExists($message['hash']);
+//         // If matching rp2p found for 'sent' message, echo forwarding message, otherwise check if p2p is expired
+//         if ($rP2pResult) {
+//             output(outputFoundRp2pMatch($message), 'SILENT');
+//             $rP2pPayload = buildRp2pPayload($rP2pResult); // Build rp2p payload
+//             updateP2pRequestStatus($message['hash'], 'found'); // Update the p2p request status to found
+//             $response = json_decode(send($message['sender_address'], $rP2pPayload),true);
+//             output( outputRp2pResponse($response),'SILENT');
+//         } elseif(returnMicroTime() > $message['expiration']){
+//             // If no response after set amount of time, expire the p2p
+//             expireMessage($message);
+//         }              
+//     }          
+// }
