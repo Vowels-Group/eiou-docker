@@ -24,7 +24,7 @@ function feeInformation($p2p,$request){
     global $user;
     //  return fee percent and output fee information into the log
     $feeAmount = $request['amount'] - $p2p['amount'];
-    $feePercent = ($feeAmount / $p2p['amount']) * 100;
+    $feePercent = round(($feeAmount / $p2p['amount']) * 100,2);
     output(outputFeeInformation($feePercent,$request,$user['maxFee']), 'SILENT'); // output fee information into the log
     return $feePercent;
 }
