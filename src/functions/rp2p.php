@@ -45,7 +45,7 @@ function handleRp2pRequest($request) {
             $rP2pPayload = buildRp2pPayload($request); // Build rp2p payload
             updateP2pRequestStatus($request['hash'], 'found'); // Update the p2p request status to found
             $response = json_decode(send($p2p['sender_address'], $rP2pPayload),true);
-            output( outputRp2pResponse($response),'SILENT');
+            output(outputRp2pResponse($response),'SILENT');
         }
     }
 }
