@@ -52,6 +52,7 @@ function buildP2pRejectionPayload($request){
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     return json_encode([
         "status" => "rejected",
+        "reason" => 'already exists',
         "message" => "hash " . print_r($request['hash'],true) . " for P2P already exists in database of " .  print_r($receiver,true)
     ]);
 }
