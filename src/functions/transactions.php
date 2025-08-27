@@ -155,14 +155,14 @@ function processPendingTransactions(){
                 // If sending transaction forwards
                 $payload = buildSendDatabasePayload($message);
                 updateP2pRequestStatus($memo,'paid'); // Update p2p status to paid
-                updateTransactionStatus($txid,'sent',true); // Update transaction status to sent
+                updateTransactionStatus($memo,'sent'); // Update transaction status to sent
                 output(outputSendTransactionOnwards($message),'SILENT');
                 $response = json_decode(send($message['receiver_address'], $payload),true);     
                 if($response['status'] === 'accepted'){
-                    updateTransactionStatus($txid,'accepted',true); // Update transaction status to accepted
-                } elseif($response['status'] === 'rejected'){
+                    updateTransactionStatus($txid,'accepted'); // Update transaction status to accepted
+                } elseif($response['status'] === 'rejected' ){ //&& $response['reason'] != 'already exists'
                     updateP2pRequestStatus($memo,'cancelled'); // Update transaction status to cancelled
-                    updateTransactionStatus($txid,'rejected',true); // Update transaction status to rejected
+                    updateTransactionStatus($memo,'rejected'); // Update transaction status to rejected
                 }
                 output(outputTransactionResponse($response),'SILENT');
             } else{
