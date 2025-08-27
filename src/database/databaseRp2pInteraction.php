@@ -89,3 +89,16 @@ function insertRp2pRequest ($request){
         return json_encode(["status" => "rejected", "message" => "Failed to record rp2p: " . $e->getMessage()]);
     }
 }
+
+function retrieveRp2pMessages($status = 'sent') {
+    global $pdo;
+    // Retrieve all p2p messages that are 'sent'
+    $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status = :status ORDER BY created_at ASC LIMIT 5");
+    $queuedStmt->bindParam(':status', $status);
+
+    $queuedStmt->execute();
+    $queuedMessages = $queuedStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    echo "Found " . count($queuedMessages) . " " . $status . " messages to process\n";
+    return $queuedMessages;
+}
