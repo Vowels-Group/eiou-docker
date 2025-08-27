@@ -142,7 +142,7 @@ function outputP2pComponents($data){
 }
 
 function outputP2pEiouSend($request){
-    return "Getting ready to send P2p eIOU with memo: " . print_r($request['memo'], true)."\n";
+    return "Getting ready to send P2p eIOU with hash: " . print_r($request['hash'], true)."\n";
 }
 
 function outputP2pExpired($message){
@@ -219,6 +219,10 @@ function outputSynchContactDueToPendingStatus($address){
 
 function outputTransactionAmountReceived($message){
     return "Received " . $message['amount']/100 . " " . $message['currency'] . " from " . $message['sender_address']."\n";
+}
+
+function outputTransactionExpired($message){
+    return "Transaction request with hash: " . $message['hash'] . " has expired\n";
 }
 
 function outputTransactionInsertion($insertTransactionResponse){
