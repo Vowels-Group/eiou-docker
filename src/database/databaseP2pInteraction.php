@@ -139,26 +139,14 @@ function lookupP2pRequest($hash) {
     return $p2pRequest->fetch(PDO::FETCH_ASSOC);
 }
 
-function retrieveQueuedP2pMessages($status = 'queued', $status2 = '') {
+function retrieveQueuedP2pMessages($status = 'queued') {
     global $pdo;
     // Retrieve all p2p messages that are queued (default) or by specific status(es) 
-    if($status2 != ''){
-        $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status = :status OR status = :status2 ORDER BY created_at ASC LIMIT 5");
-        $queuedStmt->bindParam(':status', $status);
-        $queuedStmt->bindParam(':status2', $status2);
-    }else{
-        $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status = :status ORDER BY created_at ASC LIMIT 5");
-        $queuedStmt->bindParam(':status', $status);
-    }
-    
+    $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status = :status ORDER BY created_at ASC LIMIT 5");
+    $queuedStmt->bindParam(':status', $status);
     $queuedStmt->execute();
     $queuedMessages = $queuedStmt->fetchAll(PDO::FETCH_ASSOC);
-
-    if($status2 === ''){
-        echo "Found " . count($queuedMessages) . " " . $status . " messages to process\n";
-    } else{
-        echo "Found " . count($queuedMessages) . " " . $status . " & " . $status2 . " messages to process\n";
-    }
+    echo "Found " . count($queuedMessages) . " " . $status . " messages to process\n";
     return $queuedMessages;
 }
 

@@ -31,6 +31,7 @@ require_once 'src/schemas/payloads/payloadTransactionSchema.php';
 require_once 'src/schemas/payloads/payloadUtilSchema.php';
 
 // Require util functionality
+require_once 'src/utils/utilCleanup.php';
 require_once 'src/utils/utilDebug.php';
 require_once 'src/utils/utilGeneral.php';
 require_once 'src/utils/utilTransport.php';
