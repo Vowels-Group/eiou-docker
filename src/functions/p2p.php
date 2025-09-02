@@ -71,7 +71,7 @@ function prepareP2pRequestData($request) {
     output(outputGeneratedP2pHash($data['hash']), 'SILENT'); // Added verbose output
     output(outputP2pComponents($data), 'SILENT'); // Detailed verbose output
     $data['minRequestLevel'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // Caculate 'random' lower bound for request level
-    $data['maxRequestLevel'] = $data['minRequestLevel'] + $user['maxP2pLevel'];    // Add upper bound to request level, using users max 
+    $data['maxRequestLevel'] = $data['minRequestLevel'] + jitter($user['maxP2pLevel']);    // Add upper bound to request level, using users max 
     return $data;
 }
 

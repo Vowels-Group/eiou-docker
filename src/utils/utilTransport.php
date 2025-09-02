@@ -12,7 +12,7 @@ function countTorAndHttpAddresses($data){
 }
 
 function jitter($value){
-    // Add random number to value
+    // Add random number to value (either 0 or 1)
     return $value + random_int(0,1);
 }
 
