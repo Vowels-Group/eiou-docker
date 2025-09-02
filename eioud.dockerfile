@@ -71,11 +71,15 @@ COPY src/startup /etc/eiou/src/startup
 RUN chmod 755 /etc/eiou/src/startup
 RUN chmod 644 /etc/eiou/src/startup/*
 
-# Copy messages.php to a common location
-COPY src/messages.php /etc/eiou/messages.php
-RUN chown www-data:www-data /etc/eiou/messages.php
-RUN chmod 644 /etc/eiou/messages.php
+# Copy p2pMessages.php to a common location
+COPY src/p2pMessages.php /etc/eiou/p2pMessages.php
+RUN chown www-data:www-data /etc/eiou/p2pMessages.php
+RUN chmod 644 /etc/eiou/p2pMessages.php
 
+# Copy transactionMessages.php to a common location
+COPY src/transactionMessages.php /etc/eiou/transactionMessages.php
+RUN chown www-data:www-data /etc/eiou/transactionMessages.php
+RUN chmod 644 /etc/eiou/transactionMessages.php
 
 # Copy cleanup.php to a common location
 COPY src/cleanup.php /etc/eiou/cleanup.php

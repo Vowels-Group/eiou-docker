@@ -65,14 +65,17 @@ while true; do
     fi
 done
 
-# Start message processing in background
-nohup php /etc/eiou/messages.php > /dev/null 2>&1 &
-echo "Message processing started successfully."  
+# Start p2p message processing in background
+nohup php /etc/eiou/p2pMessages.php > /dev/null 2>&1 &
+echo "P2p message processing started successfully."  
+
+# Start transaction message processing in background
+nohup php /etc/eiou/transactionMessages.php > /dev/null 2>&1 &
+echo "Transaction message processing started successfully."  
 
 # Start cleanup processing in background
 nohup php /etc/eiou/cleanup.php > /dev/null 2>&1 &
 echo "Cleanup processing started successfully."  
-
 
 # Keep container running
 tail -f /dev/null
