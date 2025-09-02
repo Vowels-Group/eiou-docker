@@ -4,7 +4,7 @@
 //processing transation messages
 require_once("/etc/eiou/config.php");
 require_once("/etc/eiou/functions.php");
-$lockfile = '/tmp/messages_lock.pid';
+$lockfile = '/tmp/transactionmessages_lock.pid';
 
 // Ensure only one instance runs
 checkSingleInstance($lockfile);

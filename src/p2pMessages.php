@@ -4,7 +4,7 @@
 //processing messages like (r)p2p
 require_once("/etc/eiou/config.php");
 require_once("/etc/eiou/functions.php");
-$lockfile = '/tmp/messages_lock.pid';
+$lockfile = '/tmp/p2pmessages_lock.pid';
 
 // Ensure only one instance runs
 checkSingleInstance($lockfile);
