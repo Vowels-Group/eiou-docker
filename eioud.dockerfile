@@ -81,10 +81,10 @@ COPY src/transactionMessages.php /etc/eiou/transactionMessages.php
 RUN chown www-data:www-data /etc/eiou/transactionMessages.php
 RUN chmod 644 /etc/eiou/transactionMessages.php
 
-# Copy cleanup.php to a common location
-COPY src/cleanup.php /etc/eiou/cleanup.php
-RUN chown www-data:www-data /etc/eiou/cleanup.php
-RUN chmod 644 /etc/eiou/cleanup.php
+# Copy cleanupMessages.php to a common location
+COPY src/cleanupMessages.php /etc/eiou/cleanupMessages.php
+RUN chown www-data:www-data /etc/eiou/cleanupMessages.php
+RUN chmod 644 /etc/eiou/cleanupMessages.php
 
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini
