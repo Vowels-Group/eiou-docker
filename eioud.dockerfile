@@ -76,6 +76,12 @@ COPY src/messages.php /etc/eiou/messages.php
 RUN chown www-data:www-data /etc/eiou/messages.php
 RUN chmod 644 /etc/eiou/messages.php
 
+
+# Copy cleanup.php to a common location
+COPY src/cleanup.php /etc/eiou/cleanup.php
+RUN chown www-data:www-data /etc/eiou/cleanup.php
+RUN chmod 644 /etc/eiou/cleanup.php
+
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini
 RUN touch /var/log/php_errors.log

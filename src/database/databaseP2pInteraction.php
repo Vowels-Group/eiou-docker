@@ -139,6 +139,20 @@ function lookupP2pRequest($hash) {
     return $p2pRequest->fetch(PDO::FETCH_ASSOC);
 }
 
+function retrieveExpiringP2pMessages($status = 'completed', $status2 = 'expired', $status3 = 'cancelled') {
+    global $pdo;
+    // Retrieve all p2p messages that are potentially not updating  
+    $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status NOT IN (:status, :status2, :status3) ORDER BY created_at ASC LIMIT 5");
+    $queuedStmt->bindParam(':status', $status);
+    $queuedStmt->bindParam(':status2', $status2);
+    $queuedStmt->bindParam(':status3', $status3);
+    $queuedStmt->execute();
+    $queuedMessages = $queuedStmt->fetchAll(PDO::FETCH_ASSOC);
+    echo "Found " . count($queuedMessages) . " " . $status . " messages to process\n";
+    return $queuedMessages;
+}
+
+
 function retrieveQueuedP2pMessages($status = 'queued') {
     global $pdo;
     // Retrieve all p2p messages that are queued (default) or by specific status(es) 

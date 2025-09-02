@@ -27,7 +27,7 @@ if [[ $(php -r 'require("//etc//eiou//src//startup//configCheck.php"); echo $run
     fi
 fi
 
-# Check if all precursors to messages.php are available and working
+# Check if all precursors to messages.php (also checks for cleanup.php by extension) are available and working
 first=true
 while true; do
     if [[ $(php -r 'require("//etc//eiou//src//startup//messageCheck.php"); echo $passed;') ]]; then
@@ -68,6 +68,11 @@ done
 # Start message processing in background
 nohup php /etc/eiou/messages.php > /dev/null 2>&1 &
 echo "Message processing started successfully."  
+
+# Start cleanup processing in background
+nohup php /etc/eiou/cleanup.php > /dev/null 2>&1 &
+echo "Cleanup processing started successfully."  
+
 
 # Keep container running
 tail -f /dev/null
