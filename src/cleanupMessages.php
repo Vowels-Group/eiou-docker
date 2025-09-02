@@ -4,7 +4,7 @@
 //processing messages like (r)p2p/transactions for cleanup
 require_once("/etc/eiou/config.php");
 require_once("/etc/eiou/functions.php");
-$lockfile = '/tmp/cleanup_lock.pid';
+$lockfile = '/tmp/cleanupmessages_lock.pid';
 
 // Ensure only one instance runs
 checkSingleInstance($lockfile);
