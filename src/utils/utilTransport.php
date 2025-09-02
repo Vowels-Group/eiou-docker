@@ -11,6 +11,11 @@ function countTorAndHttpAddresses($data){
     return $result;
 }
 
+function jitter($value){
+    // Add random number to value
+    return $value + random_int(0,1);
+}
+
 function resolveUserAddressForTransport($address) {
     global $user;
     // Check if the address is a Tor (.onion) address
