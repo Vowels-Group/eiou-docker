@@ -73,7 +73,7 @@ echo "P2p message processing started successfully."
 nohup php /etc/eiou/transactionMessages.php > /dev/null 2>&1 &
 echo "Transaction message processing started successfully."  
 
-# Start cleanup processing in background
+# Start cleanup message processing in background
 nohup php /etc/eiou/cleanupMessages.php > /dev/null 2>&1 &
 echo "Cleanup processing started successfully."  
 
