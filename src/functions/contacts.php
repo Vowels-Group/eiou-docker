@@ -88,8 +88,6 @@ function addContact($data) {
                     if(synchContact($address)){
                         output(returnContactCreationSuccessful());
                     }
-                    // else
-
                 }
             } else{
                 // Insert into database
@@ -101,7 +99,6 @@ function addContact($data) {
                     exit(1);
                 }
             }
-            
         }else {
             // If not accepted, show error and display the response
             output(returnContactRejected($responseData));
