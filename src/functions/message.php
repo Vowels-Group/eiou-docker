@@ -17,16 +17,14 @@ function checkMessageValidity($decodedMessage){
                 return false;
             } 
             // Potential Spam (hash is unknown)
-            // TO DO: handle different message types in future versions
             return false;
     }
     // Not a contact nor able to match source
     return false;
 }
 
-function handleMessageRequest($message){
-    // TO DO: build a lock that cannot be sent more than x messages in a span of time, rest ignore untill handled previous (counter potential spam / overload)
-
+function handleMessageRequest($message){    
+    // Handler for different message types
     $decodedMessage = json_decode($message['message'],true);
     // Check if message is from a known or logical source
     if(!checkMessageValidity($decodedMessage)){
@@ -81,9 +79,6 @@ function handleTransactionMessageInquiryRequest($decodedMessage){
     output(outputHandleTransactionMessageResponse($decodedMessage),'SILENT');
     echo buildMessageTransactionCompletedCorrectlyPayload($decodedMessage);
 }
-
-// TO DO: Check what happens if someone says txid when it's not txid
-// odd thought if say txid is actually the hash but it's not for this transaction (since lucky guess)
 
 function handleTransactionMessageRequest($decodedMessage){
     // Handle incoming transaction messages

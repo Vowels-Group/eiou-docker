@@ -137,7 +137,7 @@ function processPendingTransactions(){
                     updateTransactionStatus($txid,'accepted',true); // Update transaction status to accepted
                 } elseif($response['status'] === 'rejected'){
                     updateTransactionStatus($txid,'rejected',true); // Update transaction status to rejected
-                    output(outputIssueTransactionTryP2p($response),'SILENT'); // TO DO also not silent for people?
+                    output(outputIssueTransactionTryP2p($response),'SILENT'); 
                     sendP2pRequestFromFailedDirectTransaction($message);
                 }
             } else{

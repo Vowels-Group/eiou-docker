@@ -78,7 +78,6 @@ function outputFeeInformation($feePercent,$request,$maxFee){
 }
 
 function outputFeeRejection(){
-    // TO DO make meaningfull
     return "I reject the fee, transaction will be ignored and it will expire.\n";
 }
 

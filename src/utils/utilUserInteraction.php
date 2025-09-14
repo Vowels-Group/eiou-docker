@@ -8,7 +8,6 @@ function changeSettings($argv) {
             $key = 'defaultFee';
             $value = floatval($argv[3]);
         }elseif(strtolower($argv[2]) === 'defaultcurrency'){
-            // To do: when more currencies added, check if valid currency
             $key = 'defaultCurrency';
             $value = strtoupper($argv[3]);
         }elseif(strtolower($argv[2]) === 'localhostonly'){

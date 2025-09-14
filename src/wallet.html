@@ -1717,7 +1717,6 @@ header('Content-Type: text/html; charset=UTF-8');
                         <p>Add your first contact to start using eIOU</p>
                     </div>
                 <?php else: ?>
-                <!-- TO DO: Try pulling everything at once and sorting, not 4 different queries???? -->
                 <!-- Accepted Contacts (with Balance) -->
                     <?php foreach ($acceptedContacts as $contact): ?>
                         <div class="contact-card" onclick="openEditContactModal('<?php echo htmlspecialchars($contact['address']); ?>', '<?php echo htmlspecialchars($contact['name']); ?>', '<?php echo $contact['fee']; ?>', '<?php echo $contact['credit_limit']; ?>', '<?php echo htmlspecialchars($contact['currency']); ?>')" style="cursor: pointer;">
@@ -1739,7 +1738,6 @@ header('Content-Type: text/html; charset=UTF-8');
                         </div>
                     <?php endforeach; ?>
                     <!-- Pending User Contacts -->
-                    <!-- TO DO: add resynch -->
                     <?php foreach ($pendingUserContacts as $contact): ?>
                         <div class="contact-card pending" style="cursor: pointer;">
                             <div class="contact-avatar" style="background: linear-gradient(135deg, grey, grey);">
@@ -1761,7 +1759,6 @@ header('Content-Type: text/html; charset=UTF-8');
                     <?php endforeach; ?>
 
                     <!-- Blocked Contacts -->
-                    <!-- TO DO: add unblock capability, either simple or with add values for acceptance contact request-->
                     <?php foreach ($blockedContacts as $contact): ?>
                         <div class="contact-card pending" style="cursor: pointer;">
                             <div class="contact-avatar" style="background: linear-gradient(135deg, grey, grey);">
@@ -2160,7 +2157,6 @@ header('Content-Type: text/html; charset=UTF-8');
         refreshBtn.disabled = true;
         
         // Preserve auth code when refreshing
-        // TO DO: issue upon manual refresh after initital entrance, no GET possible so user will be booted to login screen.
         const url = new URL(window.location.href);
         window.location.href = url.toString();
     }

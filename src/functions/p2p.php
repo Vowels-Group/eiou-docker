@@ -157,7 +157,7 @@ function sendP2pRequest($data) {
         $contactAddress = lookupContactAddressByName($data[2]);
         if($contactAddress){
             $address = $contactAddress;
-            $data[2] = $address; // TO DO check if fixed issue with blank sender_address
+            $data[2] = $address; 
         } else{
             output(outputAdressOrContactIssue($data),'SILENT');
             die;

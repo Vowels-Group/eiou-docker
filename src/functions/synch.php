@@ -76,11 +76,9 @@ function synchContact($contactAddress, $echo='SILENT'){
 }
 
 function synchAllTransactions(){
-    // To Do: synch transactions
 }
 
 function synchTransaction(){
-    // To Do: synch single transaction
 }
 
 
