@@ -11,26 +11,59 @@ function countTorAndHttpAddresses($data){
     return $result;
 }
 
+function determineTransportType($address) {
+    // Check if the address is a Tor (.onion) address
+    if (isTorAddress($address)) {
+        return 'tor';
+    }
+    
+    // Check if the address is an HTTP/HTTPS address
+    if (isHttpAddress($address)) {
+        return 'http';
+    }
+    
+    // If neither Tor nor HTTP, return null or a default type
+    return null;
+}
+
+function isHttpAddress($address) {
+    // Check if is http address
+    return preg_match('/^https?:\/\//', $address) === 1;
+}
+
+function isMe($address){
+    // Check if address is mine
+    global $user;
+    return (isset($user['torAddress']) && $user['torAddress'] === $address) || 
+           (isset($user['hostname']) && $user['hostname'] === $address);
+}
+
+function isTorAddress($address) {
+    // Check if is tor address
+    return preg_match('/\.onion$/', $address) === 1;
+}
+
 function jitter($value){
     // Add random number to value (either 0 or 1)
     return $value + random_int(0,1);
 }
 
 function resolveUserAddressForTransport($address) {
+    // Figure out what type of address is needed to transport payload
     global $user;
     // Check if the address is a Tor (.onion) address
-    if (preg_match('/\.onion$/', $address)) {
+    if (isTorAddress($address)) {
         return $user["torAddress"];
     }
     // Check if the address is an HTTP/HTTPS address
-    elseif (preg_match('/^https?:\/\//', $address)) {
+    elseif (isHttpAddress($address)) {
         return $user["hostname"];
     }
     // If no specific transport type is detected, return the original address
     return false;
 }
 
-function readjustP2pLevel($request){
+function reAdjustP2pLevel($request){
     // Adjust remaining p2p chain length based on intermediary contact's config of maxP2pLevel 
     global $user;
     if($request['maxRequestLevel'] > $request['requestLevel'] + $user['maxP2pLevel']){
@@ -41,8 +74,8 @@ function readjustP2pLevel($request){
 }
 
 function send($recipient, $payload){
-    // Encode the payload as JSON
-    $signedPayload = json_encode(sign($payload));
+    // Send payload to recipient 
+    $signedPayload = json_encode(sign($payload)); // Encode the payload as JSON
     // Determine if tor address, else send by http
     if (preg_match('/\.onion$/', $recipient)) {
         return sendByTor($recipient, $signedPayload);
@@ -52,6 +85,7 @@ function send($recipient, $payload){
 }
 
 function sendByHttp ($recipient, $signedPayload) {
+    // Send payload through HTTP
     $ch = curl_init();
     
     // Determine the protocol based on the recipient format
@@ -69,6 +103,7 @@ function sendByHttp ($recipient, $signedPayload) {
 }
 
 function sendByTor ($recipient, $signedPayload) {
+    // Send payload through TOR
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou?payload=" . urlencode($signedPayload));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -87,9 +122,9 @@ function sign($payload){
   // Add signature to payload
   global $user;
   $privateKey = $user['private'];
-  // Step 1: Get the private key resource
+  // Get the private key resource
   $privateKeyResource = openssl_pkey_get_private($privateKey);
-  // Step 2: Sign the message
+  // Sign the message
   $payload['nonce'] = time();
   $message = json_encode($payload);
   $payload['message'] = $message;
