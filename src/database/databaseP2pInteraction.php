@@ -12,7 +12,7 @@ function checkCompletionP2pByHash($hash){
 
 function checkExistenceP2p($request, $echo = true){
     // Check if P2P already exists for hash in database, is valid and can be completed
-    // Check if P2P is valid and can be completed given credit of user requesting
+    // & Check if P2P is valid and can be completed given credit of user requesting
     if(!checkContactBlockedStatus($request) || !checkRequestLevel($request) || !checkAvailableFunds($request)){
         return true; 
     }
@@ -130,18 +130,9 @@ function insertP2pRequest($request, $destinationAddress = null) {
     }
 }
 
-function lookupP2pRequest($hash) {
-    global $pdo;
-    // Lookup p2p request based on hash
-    $p2pRequest = $pdo->prepare("SELECT * FROM p2p WHERE hash = :hash");
-    $p2pRequest->bindParam(':hash', $hash);
-    $p2pRequest->execute();
-    return $p2pRequest->fetch(PDO::FETCH_ASSOC);
-}
-
 function retrieveExpiringP2pMessages($status = 'completed', $status2 = 'expired', $status3 = 'cancelled') {
     global $pdo;
-    // Retrieve all p2p messages that are potentially not updating  
+    // Retrieve all (max 5) p2p messages that are potentially not updating  
     $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status NOT IN (:status, :status2, :status3) ORDER BY created_at ASC LIMIT 5");
     $queuedStmt->bindParam(':status', $status);
     $queuedStmt->bindParam(':status2', $status2);
@@ -155,7 +146,7 @@ function retrieveExpiringP2pMessages($status = 'completed', $status2 = 'expired'
 
 function retrieveQueuedP2pMessages($status = 'queued') {
     global $pdo;
-    // Retrieve all p2p messages that are queued (default) or by specific status(es) 
+    // Retrieve all (max 5) p2p messages that are queued (default) or by specific status(es) 
     $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status = :status ORDER BY created_at ASC LIMIT 5");
     $queuedStmt->bindParam(':status', $status);
     $queuedStmt->execute();

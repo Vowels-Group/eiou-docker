@@ -21,8 +21,8 @@ function calculateRequestedAmount($request) {
 }
 
 function feeInformation($p2p,$request){
+    // Return fee percent and output fee information into the log
     global $user;
-    //  return fee percent and output fee information into the log
     $feeAmount = $request['amount'] - $p2p['amount'];
     $feePercent = round(($feeAmount / $p2p['amount']) * 100,2);
     output(outputFeeInformation($feePercent,$request,$user['maxFee']), 'SILENT'); // output fee information into the log
@@ -30,6 +30,7 @@ function feeInformation($p2p,$request){
 }
 
 function matchContact($request) {
+    // Check if contact matches transactions end-recipient
     $contacts = retrieveContacts();
     // Check if end recipient of request in contacts
     foreach ($contacts as $contact) {
@@ -53,7 +54,7 @@ function matchYourselfP2P($request,$address){
 
 function matchYourselfTransaction($request,$address){
     // Check if transaction end recipient is user
-    $p2pRequest = lookupP2pRequest($request['memo']);
+    $p2pRequest = getP2pByHash($request['memo']);
     if( hash('sha256', $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
         return true;
     }
@@ -67,9 +68,11 @@ function removeTransactionFee($request){
 }
 
 function returnconvertedMicroTime($time){
+    // Convert float of time to int by moving values behind comma to in front of comma
     return $time*10000;
 }
 
 function returnMicroTime(){
+    // Create current micro-time stamp
     return returnconvertedMicroTime(microtime(true));
 }
