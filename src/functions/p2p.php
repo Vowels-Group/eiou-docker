@@ -11,7 +11,7 @@ function checkRequestLevel($request){
 }
 
 function checkAvailableFunds($request){
-    // Check if p2p's destination is to user
+    // Check if p2p's destination is not to user (i.e. you are an intermediary and not the end-recipient)
     if(!matchYourselfP2P($request, resolveUserAddressForTransport($request['senderAddress']))){
         // Check if sender has enough 'credit' to facilitate eIOU
         $requestedAmount = calculateRequestedAmount($request);
@@ -23,10 +23,12 @@ function checkAvailableFunds($request){
             return false;
         } 
     }
+    // If you are the end-recipient you do not need to pay
     return true;
 }
 
 function handleP2pRequest($request) {
+    // Hanlder for p2p requests
     $myAddress = resolveUserAddressForTransport($request['senderAddress']);  
     // Check if p2p's destination is to user
     if(matchYourselfP2P($request,$myAddress)){
@@ -40,7 +42,7 @@ function handleP2pRequest($request) {
         // Calculate fees
         $requestedAmount = calculateRequestedAmount($request);
         $request['feeAmount'] = $requestedAmount - $request['amount'];
-        $request['maxRequestLevel'] = readjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
+        $request['maxRequestLevel'] = reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
         insertP2pRequest($request, NULL);  // Insert p2p request
         updateP2pRequestStatus($request['hash'], 'queued'); // Update the p2p request status to queued
     }
