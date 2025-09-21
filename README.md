@@ -86,3 +86,11 @@ docker-compose -f docker-compose-4line.yml restart alice
 ## Network Topologies
 
 ### Line Topology (4 nodes)
+<img width="2640" height="192" alt="demo 4 - overview (Alice, Bob, Carol, Daniel)" src="https://github.com/user-attachments/assets/7a9204e3-114a-47c7-b6e4-1496c9dfed8d" />
+
+### Line Topology (10 nodes)
+<img width="2640" height="192" alt="http10 (overview)" src="https://github.com/user-attachments/assets/d5d29fea-9b0a-4b60-89bb-7682db0887db" />
+
+
+### Line Topology (13 nodes)
+<img width="1392" height="1414" alt="http_small_cluster (overview)" src="https://github.com/user-attachments/assets/fb504179-3278-4ca5-ac1d-93c5942f20b2" />
