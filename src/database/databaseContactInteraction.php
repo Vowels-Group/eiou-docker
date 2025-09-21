@@ -2,8 +2,8 @@
 # Copyright 2025
 
 function acceptContact($address, $name, $fee, $credit, $currency) {
-    global $pdo;
     // Accept Contact request
+    global $pdo;
     $insertStmt = $pdo->prepare("UPDATE contacts SET name = :name, status = 'accepted', fee_percent = :fee, credit_limit = :credit, currency = :currency WHERE address = :address");
     $insertStmt->bindParam(':address', $address);
     $insertStmt->bindParam(':name', $name);
@@ -25,8 +25,8 @@ function acceptContact($address, $name, $fee, $credit, $currency) {
 }
 
 function addPendingContact($address, $senderPublicKey) {
-    global $pdo, $user;
     // Add Contact that was pending
+    global $pdo, $user;
     $myPublicKey = $user['public'];
     $pubkey_hash = hash('sha256', $senderPublicKey);
 
@@ -49,8 +49,8 @@ function addPendingContact($address, $senderPublicKey) {
 }
 
 function blockContact($data) {
-    global $pdo;
     // Block a contact
+    global $pdo;
     $addressFromName = lookupContactAddressByName($data[2]);
     if(isset($addressFromName)){
         $address = $addressFromName;
@@ -71,8 +71,8 @@ function blockContact($data) {
 }
 
 function checkAcceptedContact($address) {
-    global $pdo;
     // Check if contact is already an accepted contact in the database
+    global $pdo;
     $checkQuery = "SELECT * FROM contacts WHERE address = :address AND status = 'accepted'";
     $stmt = $pdo->prepare($checkQuery);
     $stmt->bindParam(':address', $address);
@@ -82,8 +82,8 @@ function checkAcceptedContact($address) {
 }
 
 function checkContactExists($address) {
-    global $pdo;
     // Check if contact exists in database
+    global $pdo;
     $checkStmt = $pdo->prepare("SELECT * FROM contacts WHERE address = :address");
     $checkStmt->bindParam(':address', $address);
     $checkStmt->execute();
@@ -92,8 +92,8 @@ function checkContactExists($address) {
 }
 
 function checkContactBlockedStatus($request){
+    // Check if contact has not the status blocked
     global $pdo;
-    // Check if contact has no bad status i.e. blocked
     $checkStmt = $pdo->prepare("SELECT * FROM contacts WHERE address = :address AND status = 'blocked'");
     $checkStmt->bindParam(':address', $request['senderAddress']);
     $checkStmt->execute();
@@ -101,8 +101,8 @@ function checkContactBlockedStatus($request){
 }
 
 function checkContactStatus($address){
-    global $pdo;
     // Check if contact has no bad status i.e. blocked
+    global $pdo;
     $checkStmt = $pdo->prepare("SELECT * FROM contacts WHERE address = :address AND status != 'accepted'");
     $checkStmt->bindParam(':address', $address);
     $checkStmt->execute();
@@ -110,8 +110,10 @@ function checkContactStatus($address){
 }
 
 function checkPendingContact($address) {
+    // Check if there are any pending contact requests (non-user initiated)
     global $pdo;
-    // Check if contact already exists in the database but is not yet accepted
+    // Check if contact already exists in the database but is not yet accepted 
+    // Case when contact is inserted into database through outside contact-request
     $checkQuery = "SELECT * FROM contacts WHERE address = :address AND name IS NULL AND status = 'pending'";
     $stmt = $pdo->prepare($checkQuery);
     $stmt->bindParam(':address', $address);
@@ -120,8 +122,10 @@ function checkPendingContact($address) {
 }
 
 function checkPendingContactInserted($address) {
+    // Check if there are any pending contact requests (user initiated)
     global $pdo;
     // Check if contact already exists in the database but is not yet accepted
+    // Case when contact is inserted into database through user-input
     $checkQuery = "SELECT * FROM contacts WHERE address = :address AND name IS NOT NULL AND status = 'pending'";
     $stmt = $pdo->prepare($checkQuery);
     $stmt->bindParam(':address', $address);
@@ -130,6 +134,7 @@ function checkPendingContactInserted($address) {
 }
 
 function checkPendingContactRequests() {
+    // Get all pending contact requests (non-user initiated)
     global $pdo;
     try {
         // Get all contacts with null default fee
@@ -155,8 +160,8 @@ function checkPendingContactRequests() {
 }
 
 function deleteContact($data) {
-    global $pdo;
     // Delete a contact
+    global $pdo;
     $addressFromName = lookupContactAddressByName($data[2]);
     if(isset($addressFromName)){
         $address = $addressFromName;
@@ -176,8 +181,8 @@ function deleteContact($data) {
 }
 
 function getCreditLimit($senderPublicKey) {
-    global $pdo;
     // Check credit limit for the sender by public key hash
+    global $pdo;   
     $pubkey_hash = hash('sha256', $senderPublicKey);
     $creditStmt = $pdo->prepare("SELECT credit_limit FROM contacts WHERE pubkey_hash = :sender_pubkey_hash");
     $creditStmt->bindParam(':sender_pubkey_hash', $pubkey_hash);
@@ -188,10 +193,9 @@ function getCreditLimit($senderPublicKey) {
 }
 
 function insertContact($address, $contactPublicKey, $name, $fee, $credit, $currency) {
-    global $pdo;
     // Insert a contact into database (status 'pending' awaiting acceptance from contact in question)
+    global $pdo;
     $pubkey_hash = hash('sha256', $contactPublicKey);
-    
     $insertStmt = $pdo->prepare("INSERT INTO contacts (address, pubkey, pubkey_hash, name, status, fee_percent, credit_limit, currency) VALUES (:address, :pubkey, :pubkey_hash, :name, 'pending', :fee, :credit, :currency)");
     $insertStmt->bindParam(':address', $address);
     $insertStmt->bindParam(':pubkey', $contactPublicKey);
@@ -214,8 +218,8 @@ function insertContact($address, $contactPublicKey, $name, $fee, $credit, $curre
 }
 
 function lookupContactByName($name) {
-    global $pdo;
     // Lookup general contact information based on name
+    global $pdo;
     $nameStmt = $pdo->prepare("SELECT name, address, pubkey, fee_percent FROM contacts WHERE LOWER(name) = LOWER(:name)");
     $nameStmt->bindParam(':name', $name);
     $nameStmt->execute();
@@ -224,8 +228,8 @@ function lookupContactByName($name) {
 }
 
 function lookupContactByAddress($address) {
-    global $pdo;
     // Lookup contact information for messaging based on address
+    global $pdo;
     $addressStmt = $pdo->prepare("SELECT name, address, pubkey, fee_percent FROM contacts WHERE address = :address");
     $addressStmt->bindParam(':address', $address);
     $addressStmt->execute();
@@ -234,8 +238,8 @@ function lookupContactByAddress($address) {
 }
 
 function lookupContactAddressByName($name){
-    global $pdo;
     // Lookup contact address based on name
+    global $pdo;
     $nameStmt = $pdo->prepare("SELECT address FROM contacts WHERE LOWER(name) = LOWER(:name)");
     $nameStmt->bindParam(':name', $name);
     $nameStmt->execute();
@@ -244,8 +248,8 @@ function lookupContactAddressByName($name){
 }
 
 function lookupContactNameByAddress($address){
-     global $pdo;
     // Lookup contact name based on address
+    global $pdo;
     $nameStmt = $pdo->prepare("SELECT name FROM contacts WHERE address = :address");
     $nameStmt->bindParam(':address', $address);
     $nameStmt->execute();
@@ -254,8 +258,9 @@ function lookupContactNameByAddress($address){
 }
 
 function retrieveContactAddresses($exclude = null) {
-    global $pdo;
     // Retrieve all contact addresses
+    global $pdo;
+    // If excluding specific address from lookup
     if ($exclude) {
         $contactsStmt = $pdo->prepare("SELECT address FROM contacts WHERE address != :exclude");
         $contactsStmt->bindParam(':exclude', $exclude);
@@ -267,8 +272,8 @@ function retrieveContactAddresses($exclude = null) {
 }
 
 function retrieveContactQuery($address) {
-    global $pdo;
     // Retrieve all contact information based on address
+    global $pdo;
     $query = "SELECT * FROM contacts WHERE address = :address";
     $stmt = $pdo->prepare($query);
     $stmt->bindParam(':address', $address, PDO::PARAM_STR);
@@ -278,8 +283,8 @@ function retrieveContactQuery($address) {
 
 
 function retrieveContactPubkey($address){
-    global $pdo;
     // Retrieve all contact information based on address
+    global $pdo;
     $query = "SELECT pubkey FROM contacts WHERE address = :address";
     $stmt = $pdo->prepare($query);
     $stmt->bindParam(':address', $address, PDO::PARAM_STR);
@@ -288,16 +293,16 @@ function retrieveContactPubkey($address){
 }
 
 function retrieveContacts() {
-    global $pdo;
     // Retrieve all contacts
+    global $pdo;
     $contactsStmt = $pdo->prepare("SELECT address, pubkey FROM contacts");
     $contactsStmt->execute();
     return $contactsStmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 function searchContactsQuery($name = null) {
-    global $pdo;
     // Search for possible contacts based on name, return all (possible) changeable information if found
+    global $pdo;
     $query = "SELECT address, name, fee_percent, credit_limit, currency FROM contacts";
     if($name !== null){
         $query .= " WHERE LOWER(name) LIKE LOWER(:name)";
@@ -312,8 +317,8 @@ function searchContactsQuery($name = null) {
 }
 
 function unblockContact($data) {
-    global $pdo;
-    // Block a contact
+    // Unblock a contact
+    global $pdo; 
     $addressFromName = lookupContactAddressByName($data[2]);
     if(isset($addressFromName)){
         $address = $addressFromName;
@@ -334,59 +339,71 @@ function unblockContact($data) {
 }
 
 function updateContact($data) {
-    global $pdo;
     // Update contact information
-    $address = $data[2];
-    $field = strtolower($data[3]);
-    $value = $data[4];
+    global $pdo;
+
+    $address = isset($data[2]) ? $data[2] : null;
+    $field = isset($data[3]) ? strtolower($data[3]) : null;
+    $value = isset($data[4]) ? $data[4] : null;
     $value2 = isset($data[5]) ? $data[5] : null;
     $value3 = isset($data[6]) ? $data[6] : null;
-    $query = "UPDATE contacts SET ";
-    
-    $params = [];
-    
-    // Depending on supplied argument update specific (or all) items
-    if($field === 'name'){
-        $query .= "name = :name";
-        $params[':name'] = $value;
-    }
-    elseif($field === 'fee'){
-        $query .= "fee_percent = :fee";
-        $params[':fee'] = $value * 100; // Convert percentage
-    }
-    elseif($field === 'credit'){
-        $query .= "credit_limit = :credit, currency = :currency";
-        $params[':credit'] = $value * 100; // Convert to cents
-        $params[':currency'] = 'USD';
-    }
-    elseif($field === 'all'){
-        $query .= "name = :name, fee_percent = :fee, credit_limit = :credit, currency = :currency";
-        $params[':name'] = $value;
-        $params[':fee'] = $value2 * 100; // Convert percentage
-        $params[':credit'] = $value3 * 100; // Convert to cents
-        $params[':currency'] = 'USD';
-    }
-    else{
+
+    // Check if all fields are valid and contact exists before proceeding
+    if(!$address || ($address && !lookupContactByAddress($address))){
+        // If no address supplied or no contact exists with supplied address
+        if(!$address){
+            output(outputNoSuppliedAddress());
+        } else{
+            output(outputAdressContactIssue($address));
+        }
+    } elseif (!in_array($field,['name','fee','credit','all'])){
         // If no proper field update parameter
         output(returnContactUpdateInvalidInput());
-    }
-    
-    $query .= " WHERE address = :address";
-    $params[':address'] = $address;
-    
-    $stmt = $pdo->prepare($query);
-    if ($stmt->execute($params)) {
-        // If succesful update, respond of success
-        output(returnContactUpdate());
+    }elseif( !$value || ($field === 'all' && (!$value2 || !$value3)) ){
+        // Check if enough parameters are given to update
+        output(returnContactUpdateInvalidInputParameters());
     } else{
-        // If unsuccesful update with correct parameters, implies not an existing contact, respond of this fact
-        output(returnContactNotFound());
-    }
+        $query = "UPDATE contacts SET ";
+        $params = []; 
+        // Depending on supplied argument update specific (or all) items
+        if($field === 'name'){
+            $query .= "name = :name";
+            $params[':name'] = $value;
+        }
+        elseif($field === 'fee'){
+            $query .= "fee_percent = :fee";
+            $params[':fee'] = $value * 100; // Convert percentage
+        }
+        elseif($field === 'credit'){
+            $query .= "credit_limit = :credit, currency = :currency";
+            $params[':credit'] = $value * 100; // Convert to cents
+            $params[':currency'] = 'USD';
+        }
+        elseif($field === 'all'){
+            $query .= "name = :name, fee_percent = :fee, credit_limit = :credit, currency = :currency";
+            $params[':name'] = $value;
+            $params[':fee'] = $value2 * 100; // Convert percentage
+            $params[':credit'] = $value3 * 100; // Convert to cents
+            $params[':currency'] = 'USD';
+        }
+        
+        $query .= " WHERE address = :address";
+        $params[':address'] = $address;
+        
+        $stmt = $pdo->prepare($query);
+        if ($stmt->execute($params)) {
+            // If succesful update, respond of success
+            output(returnContactUpdate());
+        } else{
+            // If unsuccesful update with correct parameters, implies not an existing contact, respond of this fact
+            output(returnContactNotFound());
+        }
+    }  
 }
 
 function updateContactStatus($address,$status) {
-    global $pdo;
     // Update contact request status
+    global $pdo;
     try {     
         $updateStmt = $pdo->prepare("UPDATE contacts SET status = :status WHERE address = :address");     
         $updateStmt->bindParam(':status', $status);
@@ -399,6 +416,7 @@ function updateContactStatus($address,$status) {
 }
 
 function updateUnblockContact($address,$name,$fee,$credit,$currency){
+    // Update contact with supplied user information, on unblock initial blocked contact-request
     global $pdo;
     try { 
         $updateStmt = $pdo->prepare("UPDATE contacts SET name = :name, status = 'accepted', fee_percent = :fee, credit_limit = :credit, currency = :currency WHERE address = :address"); 
@@ -417,5 +435,4 @@ function updateUnblockContact($address,$name,$fee,$credit,$currency){
         error_log("Error unblocking contact and adding new values: " . $e->getMessage());
         return false;
     }
-
 }
