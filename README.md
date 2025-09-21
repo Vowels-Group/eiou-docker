@@ -83,7 +83,7 @@ docker-compose -f <config-file>.yml restart
 docker-compose -f docker-compose-4line.yml restart alice
 ```
 
-## Network Topologies
+## Network Topologies (conceptuals)
 
 ### Line Topology (4 nodes)
 <img width="2640" height="192" alt="demo 4 - overview (Alice, Bob, Carol, Daniel)" src="https://github.com/user-attachments/assets/7a9204e3-114a-47c7-b6e4-1496c9dfed8d" />
@@ -93,4 +93,4 @@ docker-compose -f docker-compose-4line.yml restart alice
 
 
 ### Line Topology (13 nodes)
-<img width="1392" height="1414" alt="http_small_cluster (overview)" src="https://github.com/user-attachments/assets/fb504179-3278-4ca5-ac1d-93c5942f20b2" />
+<img width="2640" height="1414" alt="http_small_cluster (overview)" src="https://github.com/user-attachments/assets/fb504179-3278-4ca5-ac1d-93c5942f20b2" />
