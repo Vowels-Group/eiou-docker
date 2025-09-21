@@ -3,6 +3,7 @@
 
 function createPDOConnection() {
     global $user;
+    // Create PDO connection to database
     try {
         // Recreate PDO connection if it's null
         $pdo = new PDO("mysql:host={$user['dbHost']};dbname={$user['dbName']}", $user['dbUser'], $user['dbPass']);

@@ -2,10 +2,11 @@
 # Copyright 2025
 
 function checkWalletExists($user, $request) {
-    if ((!isset($user['public']) || !isset($user['private'])) && $request != 'generate' && $request != 'restore') {
-        echo returnNoWalletExists();
-        exit();
-    }
+  // Check if wallet exists
+  if ((!isset($user['public']) || !isset($user['private'])) && $request != 'generate' && $request != 'restore') {
+      echo returnNoWalletExists();
+      exit();
+  }
 }
 
 function generateWallet($argv) {

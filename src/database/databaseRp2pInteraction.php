@@ -92,7 +92,7 @@ function insertRp2pRequest ($request){
 
 function retrieveRp2pMessages($status = 'sent') {
     global $pdo;
-    // Retrieve all p2p messages that are 'sent'
+    // Retrieve all (max 5) p2p messages that are 'sent'
     $queuedStmt = $pdo->prepare("SELECT * FROM p2p WHERE status = :status ORDER BY created_at ASC LIMIT 5");
     $queuedStmt->bindParam(':status', $status);
 

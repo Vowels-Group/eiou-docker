@@ -1,7 +1,7 @@
 <?php
 # Copyright 2025
 
-# Check if there are any messages that have expired
+# Check if there are any messages that will expire
 function processCleanupMessages(){
      $expiringMessages = retrieveExpiringP2pMessages();
 

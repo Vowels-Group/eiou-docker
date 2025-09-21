@@ -42,6 +42,7 @@ function buildP2pPayloadDatabase($data) {
 }
 
 function buildP2pAcceptancePayload($request){
+    // Build p2p was accepted (received) payload
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     echo json_encode([
         "status" => "received",
@@ -49,6 +50,7 @@ function buildP2pAcceptancePayload($request){
 }
 
 function buildP2pRejectionPayload($request){
+    // Build p2p was rejected payload (due to already existing in database)
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     return json_encode([
         "status" => "rejected",

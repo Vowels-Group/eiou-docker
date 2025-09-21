@@ -129,6 +129,7 @@ function checkExistenceTransaction($request, $echo = true){
 
 function getExistingPreviousTxid($previousTxid){
     global $pdo;
+    // Get previous txid of transaction in chain
     $prevTxStmt = $pdo->prepare("SELECT txid FROM transactions WHERE previous_txid = :previous_txid ORDER BY timestamp DESC LIMIT 1");
     $prevTxStmt->bindParam(':previous_txid', $previousTxid);
     $prevTxStmt->execute();
@@ -138,6 +139,7 @@ function getExistingPreviousTxid($previousTxid){
 
 function getExistingTxid($txid){
     global $pdo;
+    // Get txid if exists in database
     $prevTxStmt = $pdo->prepare("SELECT txid FROM transactions WHERE txid = :txid ORDER BY timestamp DESC LIMIT 1");
     $prevTxStmt->bindParam(':txid', $txid);
     $prevTxStmt->execute();

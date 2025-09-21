@@ -3,6 +3,7 @@
 # Copyright 2025
 
 function sych($argv){
+    // Handler for synch through user-input
     if(isset($argv[2])){
         $argument = strtolower($argv[2]);
         if($argument === 'contacts'){
@@ -16,12 +17,13 @@ function sych($argv){
 }
 
 function synchAll(){
+    // Synch both contacts and transactions
     synchAllContacts();
     synchAllTransactions();
 }
 
 function synchAllContacts(){
-    //output synching all contacts
+    // Synch all contacts
     $contacts = retrieveContactAddresses();
     foreach ($contacts as $contact) {
         synchContact($contact);
@@ -29,7 +31,7 @@ function synchAllContacts(){
 }
 
 function synchContact($contactAddress, $echo='SILENT'){
-    // Synch contact
+    // Synch specific contact based on address
     $contact = retrieveContactQuery($contactAddress); // Get contact from database
     if($contact['status'] === 'pending'){
         output(outputSynchContactDueToPendingStatus($contactAddress),$echo);
@@ -76,9 +78,11 @@ function synchContact($contactAddress, $echo='SILENT'){
 }
 
 function synchAllTransactions(){
+    // Synch all transactions
 }
 
 function synchTransaction(){
+    // Synch specific
 }
 
 

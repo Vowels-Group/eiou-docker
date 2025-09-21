@@ -74,6 +74,16 @@ function returnContactUpdateInvalidInput() {
            "• 'all' - Update all fields at once (e.g., eiou update 123abc.onion all NewName 1.5 500)\n";
 }
 
+function returnContactUpdateInvalidInputParameters() {
+    return "Incorrect amount of parameters given. Please provide a valid field & corresponding parameter amount to update.\n" .
+           "Example command: eiou update [type] [address/name] [(name)] [(fee)] [(credit)]\n" .
+           "Valid fields & parameter amounts include:\n" .
+           "• 'name' - Update contact name -> 1 parameter (e.g., eiou update name 123abc.onion name John)\n" .
+           "• 'fee' - Update fee percentage -> 1 parameter (e.g., eiou update 123abc.onion fee 1.5)\n" .
+           "• 'credit' - Update credit limit -> 1 parameter (e.g., eiou update 123abc.onion credit 500)\n" .
+           "• 'all' - Update all fields at once -> 3 parameters (e.g., eiou update 123abc.onion all NewName 1.5 500)\n";
+}
+
 function returnContactReadInvalidInput() {
     return "Invalid input. Example command: eiou viewcontact [address/name]\n";       
 }

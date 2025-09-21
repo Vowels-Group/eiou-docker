@@ -1,7 +1,7 @@
 <?php
 # Copyright 2025
 
-//processing transation messages
+// Processing transation messages
 require_once("/etc/eiou/config.php");
 require_once("/etc/eiou/functions.php");
 $lockfile = '/tmp/transactionmessages_lock.pid';

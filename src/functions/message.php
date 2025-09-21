@@ -2,7 +2,7 @@
 # Copyright 2025
 
 function checkMessageValidity($decodedMessage){
-    // Check if message from a valid source
+    // Check if message is from a valid source
     if(retrieveContactQuery($decodedMessage['senderAddress'])){
         // The source is a contact
         return true;

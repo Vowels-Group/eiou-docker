@@ -2,6 +2,7 @@
 # Copyright 2025
 
 // This file is how users interact with eiou
+
 require_once("/etc/eiou/functions.php");
 // Check if config.php exists, if not run freshInstall()
 if (!file_exists('/etc/eiou/config.php')) {
@@ -110,6 +111,7 @@ checkWalletExists($user, $request);
   //   restoreWallet($argv);
   // }
   else{
+    // If no known input, display commands possible for input
     displayHelp($argv);
     echo $request . " not found, displaying help above\n";
   }

@@ -1,7 +1,7 @@
 <?php
 # Copyright 2025
 
-//processing messages like (r)p2p
+// Processing messages like (r)p2p
 require_once("/etc/eiou/config.php");
 require_once("/etc/eiou/functions.php");
 $lockfile = '/tmp/p2pmessages_lock.pid';

@@ -2,6 +2,7 @@
 # Copyright 2025
 
 function handleRp2pRequest($request) {
+    // Handler for incoming rp2p messages
     global $user;
     
     // Check if corresponding p2p exists 

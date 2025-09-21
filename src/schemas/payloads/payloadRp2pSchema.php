@@ -19,7 +19,7 @@ function buildRp2pPayload($data) {
 }
 
 function buildRp2pAcceptancePayload($request){
-    // Build rp2p was accepted payload 
+    // Build rp2p was accepted (received) payload 
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     echo json_encode([
         "status" => "received",
@@ -27,7 +27,7 @@ function buildRp2pAcceptancePayload($request){
 }
 
 function buildRp2pRejectionPayload($request){
-    // Build rp2p was rejected payload 
+    // Build rp2p  was rejected payload (due to already existing in database) 
     $receiver = resolveUserAddressForTransport($request['senderAddress']);
     return json_encode([
         "status" => "rejected",

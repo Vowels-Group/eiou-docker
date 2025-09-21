@@ -1,10 +1,10 @@
 <?php
 # Copyright 2025
 
-// Check if all needed precursors to (p2p/transaction)Messages.php/cleanup.php are available and working
+// Check if all needed precursors for core functionality are available and working
 $passed = false;
 try{
-    // Checks if config.php exists (needed for (p2p/transaction)<essages.php & cleanup.php)
+    // Checks if config.php exists (needed for core functionality)
     if(!file_exists("/etc/eiou/config.php")){
         return;
     }

@@ -38,7 +38,7 @@ function getP2pTableSchema() {
         hash VARCHAR(255) NOT NULL UNIQUE, /* This is the hash of the final recipient address + salt + time*/
         salt VARCHAR(255) NOT NULL,
         time BIGINT NOT NULL,
-        expiration BIGINT NOT NULL, /* unix epoch seconds */
+        expiration BIGINT NOT NULL, /* unix epoch (micro) seconds */
         currency VARCHAR(10) NOT NULL,
         amount INTEGER NOT NULL,
         my_fee_amount INTEGER,

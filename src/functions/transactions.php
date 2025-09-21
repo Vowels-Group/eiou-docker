@@ -43,23 +43,24 @@ function fixPreviousTxid($senderPubKey,$receiverPubKey){
 }
 
 function createUniqueTxid($data){
-    global $user;
     // Create Txid for transactions
+    global $user;
+
     $txid = hash('sha256', $user['public'] . $data['receiverPublicKey'] . $data['amount'] . $data['time']);
     return $txid;
 }
 
 function createUniqueDatabaseTxid($data){
-    global $user;
     // Create unique Txid for transactions (from database values)
+    global $user;
     $txid = hash('sha256', $user['public'] . $data['receiver_public_key'] . $data['amount'] . $data['time']);
     return $txid;
 }
 
 function prepareStandardTransactionData($request,$contactInfo) {
-    global $user;
     // Prepare initial data payload for direct transaction
-    
+    global $user;
+
     output(outputPrepareSendData($request), 'SILENT');
     $data['txType'] = 'standard';
     $data['time'] = returnMicroTime();
@@ -95,8 +96,8 @@ function prepareP2pTransactionData($request) {
 }
 
 function processTransaction($request) {
-    global $user;
     // Process incoming transactions
+    global $user;
     if($request['memo'] === 'standard'){
         // If direct transaction
         $insertTransactionResponse = insertTransaction($request);    
@@ -120,6 +121,7 @@ function processTransaction($request) {
 }
    
 function processPendingTransactions(){
+    // Process pending transactions in database
     // Select pending messages from the transaction table (with status pending)
     $pendingMessages = retrievePendingTransactionMessages();
     // Process each pending message
@@ -196,6 +198,8 @@ function processPendingTransactions(){
 }
 
 function sendEiou($request = null) {
+    // Handler for sending eIOU through user Input
+
     // If no request is provided, use $data as a fallback
     if ($request === null) {
         global $data;
@@ -232,6 +236,8 @@ function sendEiou($request = null) {
 }
 
 function sendP2pEiou($request) {
+    // Handler for sending transactions upon succesfully receiving route to end-recipient
+
     output(outputP2pEiouSend($request),'SILENT');
 
     // Create data to send back to rp2p sender

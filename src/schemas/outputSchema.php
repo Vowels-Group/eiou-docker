@@ -1,6 +1,10 @@
 <?php
 # Copyright 2025
 
+function outputAdressContactIssue($address){
+    return "No contact with supplied address: " . $address." exists \n";
+}
+
 function outputAdressOrContactIssue($data){
     return "Not an address nor existing contact with name: " . $data[2]."\n";
 }
@@ -70,7 +74,7 @@ function outputEiouSend($request){
 }
 
 function outputFailedContactRequest($payload){
-    "Failed contact request payload: ". print_r($payload, true)."\n";
+    return "Failed contact request payload: ". print_r($payload, true)."\n";
 }
 
 function outputFeeInformation($feePercent,$request,$maxFee){
@@ -119,6 +123,10 @@ function outputIssueTransactionTryP2p($response){
 
 function outputLookedUpContactInfo($contactInfo){
     return "Looked up contact info: " . print_r($contactInfo, true)."\n";
+}
+
+function outputNoSuppliedAddress(){
+    return "No address was supplied.\n";
 }
 
 function outputNoContactsForTransaction($request){

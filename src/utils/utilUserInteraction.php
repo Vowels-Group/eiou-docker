@@ -2,6 +2,7 @@
 # Copyright 2025
 
 function changeSettings($argv) {
+    // Change the default settings to user-input
     // Check if command line based or user input based
     if(isset($argv[2])){
         if(strtolower($argv[2]) === 'defaultfee'){
@@ -192,9 +193,9 @@ function displayHelp($argv) {
 }
 
 function displayUserInfo($argv) {
+    // Display user information
     global $user;
     
-    // Display user information
     echo "User Information:\n";
     
     // Locators array
@@ -242,8 +243,8 @@ function displayUserInfo($argv) {
 }
 
 function viewBalanceQuery($direction, $userAddress, $limit){
+    // View balance information based on transactions, either received or send by user
     global $pdo;
-    // View balance information based on transactions
     if($direction === "received"){
          $query = "SELECT sender_address, amount, currency, timestamp FROM transactions WHERE receiver_address = :userAddress ORDER BY timestamp DESC";
          $address = "sender_address";
@@ -364,8 +365,8 @@ function viewBalances($data) {
 }
 
 function viewTransactionHistory($argv) {
-    global $pdo, $user;
     // View all transaction history in pretty print 'table'
+    global $pdo, $user;
     $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
     $address = null;
     $displayLimit = $user['maxOutput'];
@@ -393,6 +394,7 @@ function viewTransactionHistory($argv) {
     
     $stmt = $pdo->prepare($query);
     
+    // Bind address param
     if ($address) {
         $stmt->bindParam(':address', $address);
     }
