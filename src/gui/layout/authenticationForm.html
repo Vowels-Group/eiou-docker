@@ -1,0 +1,30 @@
+<!-- Copyright 2025  -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo isset($user['hostname']) ? htmlspecialchars(parse_url($user['hostname'], PHP_URL_HOST) ?: $user['hostname']) . ' - ' : ''; ?>eIOU Wallet - Authentication</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style><?php require_once("/etc/eiou/src/gui/assets/css/authentication-form.css");?></style>
+</head>
+<body>
+    <div class="auth-container">
+        <h1><i class="fas fa-wallet"></i> ₳ Wallet</h1>
+        <p>Please enter your authentication code to access your wallet</p>
+        
+        <form class="auth-form" method="POST">
+            <input type="password" name="authcode" class="auth-input" placeholder="Enter auth code" required autocomplete="off">
+            <button type="submit" class="auth-button">
+                <i class="fas fa-unlock"></i> Access Wallet
+            </button>
+        </form>
+        
+        <?php if (isset($_POST['authcode']) && !empty($_POST['authcode'])): ?>
+            <div class="error-message">
+                Invalid authentication code. Please try again.
+            </div>
+        <?php endif; ?>
+    </div>
+</body>
+</html>

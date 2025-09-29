@@ -15,30 +15,30 @@ docker network create -d bridge eiou-network
 
 
 ### Option 1: Bob with Volume Mount (for development/testing)
-# This links the local src/wallet.html with the container's /var/www/html/index.html
+# This links the local src/walletIndex.html with the container's /var/www/html/index.html
 # This links the local src/functions folder with the container's /var/www/etc/eiou/src/functions folder
 # Use this when you want to modify the GUI locally and see changes immediately
 
 # Windows (PowerShell/Command Prompt)
-docker run -d --name Alice --network eiou-network -v "${PWD}\src\wallet.html:/var/www/html/index.html" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Alice eioud
-docker run -d --name Bob --network eiou-network -v "${PWD}\src\wallet.html:/var/www/html/index.html" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Bob eioud
-docker run -d --name Carol --network eiou-network -v "${PWD}\src\wallet.html:/var/www/html/index.html" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Carol eioud
-docker run -d --name Daniel --network eiou-network -v "${PWD}\src\wallet.html:/var/www/html/index.html" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Daniel eioud
+docker run -d --name Alice --network eiou-network -v "${PWD}\src\gui:/etc/eiou/src/gui" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Alice eioud
+docker run -d --name Bob --network eiou-network -v "${PWD}\src\gui:/etc/eiou/src/gui" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Bob eioud
+docker run -d --name Carol --network eiou-network -v "${PWD}\src\gui:/etc/eiou/src/gui" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Carol eioud
+docker run -d --name Daniel --network eiou-network -v "${PWD}\src\gui:/etc/eiou/src/gui" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Daniel eioud
 
 # Linux/macOS (Bash/Zsh)
-docker run -d --name Alice --network eiou-network -v "$(pwd)/src/wallet.html:/var/www/html/index.html" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Alice eioud
-docker run -d --name Bob --network eiou-network -v "$(pwd)/src/wallet.html:/var/www/html/index.html" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Bob eioud
-docker run -d --name Carol --network eiou-network -v "$(pwd)/src/wallet.html:/var/www/html/index.html" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Carol eioud
-docker run -d --name Daniel --network eiou-network -v "$(pwd)/src/wallet.html:/var/www/html/index.html" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Daniel eioud
+docker run -d --name Alice --network eiou-network -v "$(pwd)/src/gui:/etc/eiou/src/gui" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Alice eioud
+docker run -d --name Bob --network eiou-network -v "$(pwd)/src/gui:/etc/eiou/src/gui" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Bob eioud
+docker run -d --name Carol --network eiou-network -v "$(pwd)/src/gui:/etc/eiou/src/gui" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Carol eioud
+docker run -d --name Daniel --network eiou-network -v "$(pwd)/src/gui:/etc/eiou/src/gui" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Daniel eioud
 
 # Alternative absolute path examples:
-# Windows: -v "C:\path\to\your\eiou\src\wallet.html:/var/www/html/index.html"
-# Linux: -v "/home/user/eiou/src/wallet.html:/var/www/html/index.html"
-# macOS: -v "/Users/user/eiou/src/wallet.html:/var/www/html/index.html"
+# Windows: -v "C:\path\to\your\eiou\src\walletIndex.html:/var/www/html/index.html"
+# Linux: -v "/home/user/eiou/src/walletIndex.html:/var/www/html/index.html"
+# macOS: -v "/Users/user/eiou/src/walletIndex.html:/var/www/html/index.html"
 
 
 ### Option 2: Alice, Carol, and Daniel (standard containers)
-# These containers use the built-in wallet.html from the Docker image
+# These containers use the built-in walletIndex.html from the Docker image
 # No volume mounting needed - they use the default GUI
 
 # Windows (PowerShell/Command Prompt)

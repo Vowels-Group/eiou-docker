@@ -1,0 +1,41 @@
+<!-- Copyright 2025  -->
+ 
+<!-- Message alerts -->
+<?php if (!empty($messageForDisplay)): ?>
+    <div class="alert alert-<?php echo $messageTypeForDisplay; ?> fade-in-up">
+        <i class="fas fa-<?php 
+            if ($messageTypeForDisplay === 'contact-accepted') {
+                echo 'user-check';
+            } elseif ($messageTypeForDisplay === 'success') {
+                echo 'check-circle';
+            } elseif ($messageTypeForDisplay === 'error') {
+                echo 'exclamation-circle';
+            } elseif ($messageTypeForDisplay === 'warning') {
+                echo 'exclamation-triangle';
+            } else {
+                echo 'info-circle';
+            }
+        ?>"></i>
+        <?php echo htmlspecialchars($messageForDisplay); ?>
+    </div>
+<?php endif; ?>
+
+<!-- Pending Contact Requests Notification -->
+<?php if (!empty($pendingContacts)): ?>
+<div class="alert alert-info fade-in-up" style="margin-bottom: 2rem;">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <i class="fas fa-user-clock" style="font-size: 1.5rem; color: #0d6efd;"></i>
+        <div style="flex: 1;">
+            <h4 style="margin: 0; color: #0d6efd;">
+                <?php echo count($pendingContacts); ?> Pending Contact Request<?php echo count($pendingContacts) > 1 ? 's' : ''; ?>
+            </h4>
+            <p style="margin: 0.5rem 0 0 0; color: #6c757d;">
+                You have contact requests waiting for your approval.
+            </p>
+        </div>
+        <a href="#pending-contacts" class="btn btn-primary" style="padding: 0.5rem 1rem;">
+            <i class="fas fa-eye"></i> View Requests
+        </a>
+    </div>
+</div>
+<?php endif; ?>

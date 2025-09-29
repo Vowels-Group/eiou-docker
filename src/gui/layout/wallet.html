@@ -1,0 +1,43 @@
+<!-- Copyright 2025  -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo isset($user['hostname']) ? htmlspecialchars(parse_url($user['hostname'], PHP_URL_HOST) ?: $user['hostname']) . ' - ' : ''; ?>₳ Wallet</title>
+    <!-- Auto-refresh for users with JavaScript disabled (Tor Browser compatible) -->
+    <noscript>
+        <?php if (!empty($authCode)): ?>
+        <meta http-equiv="refresh" content="10;url=<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>">
+        <?php else: ?>
+        <meta http-equiv="refresh" content="10">
+        <?php endif; ?>
+    </noscript>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style><?php require_once("/etc/eiou/src/gui/assets/css/page.css");?></style>
+    <script><?php require_once("/etc/eiou/src/gui/assets/js/script.js");?></script>
+</head>
+<body> 
+    <div class="container">
+        <!-- Header -->
+        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/header.html");?>  
+        <!-- Notifications -->
+        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/notifications.html");?>  
+        <!-- Quick Actions -->
+        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/quickActions.html");?>  
+        <!-- Wallet Dashboard -->
+        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/walletInformation.html");?>    
+        <!-- Send eIOU Form -->
+        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/eiouForm.html");?>    
+        <!-- Add Contact Form -->
+        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/contactForm.html");?>    
+        <!-- Contacts Section -->   
+        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/contactSection.html");?>   
+        <!-- Transaction History -->    
+        <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/transactionHistory.html");?>     
+    </div>
+    <!-- Floating Action Buttons -->
+    <?php require_once("/etc/eiou/src/gui/layout/walletSubParts/floatingButtons.html");?>    
+</body>
+</html> 

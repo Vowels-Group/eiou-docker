@@ -1,0 +1,32 @@
+<!-- Copyright 2025  -->
+ 
+<!-- Transaction History -->
+<div id="transactions" class="transactions-section fade-in-up">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2><i class="fas fa-history"></i> Recent Transactions</h2>
+        <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </a>
+    </div>
+    <div>
+        <?php if (empty($transactions)): ?>
+            <div class="empty-state">
+                <i class="fas fa-receipt"></i>
+                <h3>No Transactions Yet</h3>
+                <p>Your transaction history will appear here</p>
+            </div>
+        <?php else: ?>
+            <?php foreach ($transactions as $tx): ?>
+                <div class="transaction-item">
+                    <div class="transaction-info">
+                        <div><strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars($tx['counterparty']); ?></strong></div>
+                        <div style="font-size: 0.9rem; color: #6c757d;"><?php echo $tx['date']; ?></div>
+                    </div>
+                    <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
+                        <?php echo ($tx['type'] === 'sent' ? '-' : '+') . '$' . number_format($tx['amount'], 2); ?> <?php echo $tx['currency']; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
+</div>

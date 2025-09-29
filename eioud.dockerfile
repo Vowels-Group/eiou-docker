@@ -34,10 +34,27 @@ RUN echo '#!/bin/bash\nphp /usr/local/bin/eiou.php "$@"' > /usr/local/bin/eiou &
     chmod +x /usr/local/bin/eiou
 
 # Copy wallet and index files to web directory
-COPY src/wallet.html /var/www/html/index.html
+COPY src/walletIndex.html /var/www/html/index.html
 COPY src/index.html /var/www/html/eiou/index.html
 RUN chown www-data:www-data /var/www/html/eiou -R
 RUN chmod 755 /var/www/html/eiou
+
+# Copy wallet (GUI) folder to /etc/eiou/src/wallet
+COPY src/gui /etc/eiou/src/gui
+RUN chmod 755 /etc/eiou/src/gui
+RUN chmod 644 /etc/eiou/src/gui/*
+RUN chmod 755 /etc/eiou/src/gui/assets
+RUN chmod 644 /etc/eiou/src/gui/assets/*
+RUN chmod 755 /etc/eiou/src/gui/assets/css
+RUN chmod 644 /etc/eiou/src/gui/assets/css/*
+RUN chmod 755 /etc/eiou/src/gui/assets/js
+RUN chmod 644 /etc/eiou/src/gui/assets/js/*
+RUN chmod 755 /etc/eiou/src/gui/functions
+RUN chmod 644 /etc/eiou/src/gui/functions/*
+RUN chmod 755 /etc/eiou/src/gui/layout
+RUN chmod 644 /etc/eiou/src/gui/layout/*
+RUN chmod 755 /etc/eiou/src/gui/layout/walletSubParts
+RUN chmod 644 /etc/eiou/src/gui/layout/walletSubParts/*
 
 # Copy functions.php to a common location
 COPY src/functions.php /etc/eiou/functions.php
@@ -46,7 +63,6 @@ RUN chmod 644 /etc/eiou/functions.php
 
 # Copy functions folder to /etc/eiou/src/functions
 COPY src/functions /etc/eiou/src/functions
-RUN chown www-data:www-data /etc/eiou/src/functions -R
 RUN chmod 644 /etc/eiou/src/functions/*
 
 # Copy database folder to /etc/eiou/src/database

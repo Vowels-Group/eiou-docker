@@ -1,0 +1,47 @@
+<?php
+# Copyright 2025
+
+// This file accepts incoming messages from the eIOU network
+require_once("/etc/eiou/functions.php");
+
+if (!file_exists("/etc/eiou/config.php")) {
+  echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
+  die;
+}
+require_once("/etc/eiou/config.php");
+
+// Check if auth code is provided
+$authCode = $_GET['authcode'] ?? $_POST['authcode'] ?? '';
+
+// Check for messages from redirects
+if (empty($authCode) && isset($_GET['message'])) {
+    // If no auth code but there's a message, redirect to auth page
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+// If no auth code provided, show authentication form
+if (empty($authCode)) {
+    // Set content type for HTML
+    header('Content-Type: text/html; charset=UTF-8');
+    require_once("/etc/eiou/src/gui/layout/authenticationForm.html");
+    exit;
+}
+
+// Verify auth code
+if (!isset($user['authcode']) || !hash_equals($user['authcode'], $authCode)) {
+    // Redirect back to auth form with error
+    header('Location: ' . $_SERVER['PHP_SELF'] . '?error=invalid');
+    exit;
+}
+
+// If we get here, authentication is successful
+
+// This file handles wallet interaction with the eIOU network
+require_once("/etc/eiou/src/gui/functions/functions.php");
+
+// Set content type for HTML
+header('Content-Type: text/html; charset=UTF-8');
+require_once("/etc/eiou/src/gui/layout/wallet.html");
+?>
+
