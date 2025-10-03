@@ -20,7 +20,7 @@
             </button>
         </form>
         
-        <?php if (isset($_POST['authcode']) && !empty($_POST['authcode'])): ?>
+        <?php if (isset($authError) && $authError === true): ?>
             <div class="error-message">
                 Invalid authentication code. Please try again.
             </div>

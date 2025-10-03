@@ -1,0 +1,94 @@
+{
+  "default": [
+    {
+      "key": "hive/research/tech-stack",
+      "value": "Technology Stack: PHP 8.x, Apache2, MariaDB, Tor, Docker, Debian 12. No Node.js/npm packages. CLI-first architecture with web GUI frontend.",
+      "namespace": "default",
+      "timestamp": 1759526343725
+    },
+    {
+      "key": "hive/research/server-clusters",
+      "value": "Server Configurations: 4 Docker compose setups (single node, 4-node line, 10-node line, 13-node cluster). Each node runs LAMP stack with Tor. Hierarchical cluster topology supported. Memory usage: 1.1GB (single) to 9.5GB (37-node cluster).",
+      "namespace": "default",
+      "timestamp": 1759526348418
+    },
+    {
+      "key": "hive/research/testing-framework",
+      "value": "Testing: Shell-based integration tests for HTTP and Tor topologies. Basic PHPUnit unit tests. No formal test runner found. Tests located in /tests/demo/ (integration) and /tests/unit/ (unit tests).",
+      "namespace": "default",
+      "timestamp": 1759526352839
+    },
+    {
+      "key": "hive/research/architecture-patterns",
+      "value": "Architecture: MVC-style PHP with CLI entry point (eiou.php), modular functions (contacts, transactions, p2p, wallet), database layer with PDO, background message processors, schema validators, GUI layer with REST-like API endpoints.",
+      "namespace": "default",
+      "timestamp": 1759526357441
+    },
+    {
+      "key": "hive/clusters/single-node",
+      "value": "Single EIOU node configuration with 1 container (eioud-single), 1GB MySQL volume, bridge network, Tor+Apache+MariaDB stack",
+      "namespace": "default",
+      "timestamp": 1759526381308
+    },
+    {
+      "key": "hive/clusters/4-line",
+      "value": "4-node line topology (alice,bob,carol,daniel), ~1.1GB memory, 4 MySQL volumes, bridge network, sequential contact chain",
+      "namespace": "default",
+      "timestamp": 1759526386737
+    },
+    {
+      "key": "hive/clusters/10-line",
+      "value": "10-node line topology (node-a through node-j), ~2.8GB memory, 10 MySQL volumes, bridge network, extended sequential chain",
+      "namespace": "default",
+      "timestamp": 1759526390922
+    },
+    {
+      "key": "hive/code-review/security-issues",
+      "value": "{\"critical\": [\n  {\n    \"issue\": \"SQL Injection via String Interpolation\",\n    \"severity\": \"CRITICAL\",\n    \"files\": [\n      \"/home/adrien/Github/eiou-org/eiou/src/gui/functions/functions.php:374-378\",\n      \"/home/adrien/Github/eiou-org/eiou/src/gui/functions/functions.php:438-442\"\n    ],\n    \"description\": \"Direct string interpolation of user addresses into SQL queries without proper parameterization. Lines use sprintf() to build placeholders but then concatenate directly.\",\n    \"exploit_example\": \"An attacker could inject SQL through crafted addresses stored in database or hostname values\",\n    \"fix\": \"Use proper PDO parameter binding for all dynamic values, not just some\"\n  },\n  {\n    \"issue\": \"Authentication via GET Parameter\",\n    \"severity\": \"HIGH\",\n    \"files\": [\n      \"/home/adrien/Github/eiou-org/eiou/src/walletIndex.html:14\",\n      \"/home/adrien/Github/eiou-org/eiou/src/gui/functions/functions.php:10\"\n    ],\n    \"description\": \"Authentication code passed via URL query parameter (authcode). This is logged in browser history, server logs, and can be leaked via Referer headers\",\n    \"exploit_example\": \"Auth code visible in URL bar, browser history, and any logging middleware\",\n    \"fix\": \"Use secure session-based authentication with HttpOnly cookies, not URL parameters\"\n  },\n  {\n    \"issue\": \"Timing Attack on Authentication\",\n    \"severity\": \"MEDIUM\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/walletIndex.html:32\"],\n    \"description\": \"Uses hash_equals() correctly but auth failure reveals information through immediate redirect without rate limiting\",\n    \"fix\": \"Implement rate limiting and account lockout after failed attempts\"\n  },\n  {\n    \"issue\": \"No CSRF Protection\",\n    \"severity\": \"HIGH\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/gui/functions/functions.php:27-233\"],\n    \"description\": \"All POST form submissions lack CSRF tokens. Since auth is via URL parameter, forms are vulnerable to CSRF attacks\",\n    \"exploit_example\": \"Attacker could craft malicious page that submits forms to authenticated session\",\n    \"fix\": \"Implement CSRF token generation and validation for all state-changing operations\"\n  },\n  {\n    \"issue\": \"Weak Authentication Secret\",\n    \"severity\": \"MEDIUM\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/functions/wallet.php:41\"],\n    \"description\": \"Auth code is only 20 hex characters (10 random bytes = 80 bits). No password hashing, stored in plaintext\",\n    \"fix\": \"Use bcrypt/argon2 for password hashing, increase entropy to 128+ bits for tokens\"\n  }\n], \"total_count\": 5}",
+      "namespace": "default",
+      "timestamp": 1759526394448
+    },
+    {
+      "key": "hive/clusters/hierarchical-13",
+      "value": "13-node hierarchical cluster: 1 root (cluster-a), 4 level-1 nodes (a1-a4), 8 level-2 nodes (a11,a12,a21,a22,a31,a32,a41,a42), ~3.5GB memory, tree topology",
+      "namespace": "default",
+      "timestamp": 1759526395037
+    },
+    {
+      "key": "hive/clusters/infrastructure",
+      "value": "Stack: Debian 12, Apache2, MariaDB, PHP 8.x, Tor. Volumes: MySQL persistence. Network: eiou-network-compose (bridge). Startup: startup.sh with quickstart support. Dockerfile: eioud.dockerfile",
+      "namespace": "default",
+      "timestamp": 1759526400890
+    },
+    {
+      "key": "hive/clusters/deployment",
+      "value": "Setup: docker-compose up -d --build. Node init: QUICKSTART=<name> env var OR eiou generate. Commands via: docker-compose exec <node> eiou <command>. Cleanup: docker-compose down -v",
+      "namespace": "default",
+      "timestamp": 1759526405428
+    },
+    {
+      "key": "hive/code-review/performance-issues",
+      "value": "{\"issues\": [\n  {\n    \"issue\": \"N+1 Query Problem\",\n    \"severity\": \"MEDIUM\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/gui/functions/functions.php:549-564\"],\n    \"description\": \"contactConversion() function calls getContactBalance() for each contact in a loop, causing N+1 database queries\",\n    \"performance_impact\": \"With 100 contacts, this generates 100+ separate database queries\",\n    \"fix\": \"Use a single JOIN query to fetch all balances at once\"\n  },\n  {\n    \"issue\": \"Inefficient Polling Mechanism\",\n    \"severity\": \"LOW\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/gui/assets/js/script.js:35-108\"],\n    \"description\": \"JavaScript polls server every 10 seconds regardless of activity, causing unnecessary load\",\n    \"fix\": \"Use WebSocket or Server-Sent Events for real-time updates, or increase polling interval\"\n  },\n  {\n    \"issue\": \"Unoptimized Transaction Queries\",\n    \"severity\": \"MEDIUM\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/gui/functions/functions.php:337-354\"],\n    \"description\": \"getContactBalance() runs two separate queries with hash calculations that could be combined\",\n    \"fix\": \"Combine into single query with CASE statement for sent/received\"\n  },\n  {\n    \"issue\": \"No Database Indexing Evident\",\n    \"severity\": \"MEDIUM\",\n    \"description\": \"Multiple queries search by pubkey_hash, sender_address, receiver_address but no evidence of indexes\",\n    \"fix\": \"Add database indexes on frequently queried columns: pubkey_hash, sender_public_key_hash, receiver_public_key_hash, address, timestamp\"\n  }\n], \"total_count\": 4}",
+      "namespace": "default",
+      "timestamp": 1759526474863
+    },
+    {
+      "key": "hive/code-review/quality-issues",
+      "value": "{\"issues\": [\n  {\n    \"issue\": \"Error Information Disclosure\",\n    \"severity\": \"MEDIUM\",\n    \"files\": [\n      \"/home/adrien/Github/eiou-org/eiou/src/database/pdo.php:14\",\n      \"/home/adrien/Github/eiou-org/eiou/src/gui/functions/functions.php:52-54\"\n    ],\n    \"description\": \"Exception messages exposed directly to users, revealing internal system details\",\n    \"fix\": \"Log detailed errors server-side, show generic messages to users\"\n  },\n  {\n    \"issue\": \"Inconsistent Error Handling\",\n    \"severity\": \"LOW\",\n    \"files\": [\"Multiple files\"],\n    \"description\": \"Mix of error handling patterns: some return JSON, some echo strings, some use exceptions\",\n    \"fix\": \"Standardize error handling across the codebase with consistent response format\"\n  },\n  {\n    \"issue\": \"Magic Numbers and Hardcoded Values\",\n    \"severity\": \"LOW\",\n    \"files\": [\n      \"/home/adrien/Github/eiou-org/eiou/src/functions/p2p.php:75-76\",\n      \"/home/adrien/Github/eiou-org/eiou/src/functions/transactions.php:67-68\"\n    ],\n    \"description\": \"Currency conversion (multiply by 100), request level calculations use magic numbers without constants\",\n    \"fix\": \"Define constants for currency precision, request level bounds, etc.\"\n  },\n  {\n    \"issue\": \"Missing Input Sanitization\",\n    \"severity\": \"MEDIUM\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/gui/functions/functions.php\"],\n    \"description\": \"Form inputs not sanitized before processing, relying only on database parameterization\",\n    \"fix\": \"Add input validation and sanitization layers before database interaction\"\n  },\n  {\n    \"issue\": \"No Output Encoding for HTML\",\n    \"severity\": \"MEDIUM\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/gui/layout/*.html\"],\n    \"description\": \"PHP variables echoed directly into HTML without htmlspecialchars(), enabling XSS\",\n    \"fix\": \"Use htmlspecialchars() for all dynamic content rendered in HTML\"\n  },\n  {\n    \"issue\": \"Commented Out Code\",\n    \"severity\": \"LOW\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/eiou.php:107-112\"],\n    \"description\": \"Dead code commented out instead of removed (restore wallet feature)\",\n    \"fix\": \"Remove commented code or implement feature properly\"\n  },\n  {\n    \"issue\": \"Global Variable Usage\",\n    \"severity\": \"MEDIUM\",\n    \"files\": [\"Multiple files\"],\n    \"description\": \"Heavy reliance on global $user and $pdo variables instead of dependency injection\",\n    \"fix\": \"Refactor to use dependency injection or service locator pattern\"\n  }\n], \"total_count\": 7}",
+      "namespace": "default",
+      "timestamp": 1759526566028
+    },
+    {
+      "key": "hive/code-review/best-practices",
+      "value": "{\"violations\": [\n  {\n    \"issue\": \"No Prepared Statement Consistency\",\n    \"files\": [\"Multiple database interaction files\"],\n    \"description\": \"Some queries use parameterized queries, others use string interpolation in same codebase\",\n    \"best_practice\": \"Always use prepared statements for all database queries without exception\"\n  },\n  {\n    \"issue\": \"Security Headers Missing\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/walletIndex.html\"],\n    \"description\": \"No security headers set (X-Frame-Options, X-Content-Type-Options, CSP, etc.)\",\n    \"best_practice\": \"Set comprehensive security headers to protect against common web attacks\"\n  },\n  {\n    \"issue\": \"No Rate Limiting\",\n    \"files\": [\"Authentication and API endpoints\"],\n    \"description\": \"No rate limiting on authentication attempts or API endpoints\",\n    \"best_practice\": \"Implement rate limiting to prevent brute force and DoS attacks\"\n  },\n  {\n    \"issue\": \"Sensitive Data in Logs\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/functions/wallet.php:70-73\"],\n    \"description\": \"Private keys and auth codes printed to console during wallet generation\",\n    \"best_practice\": \"Never log sensitive data like private keys or authentication tokens\"\n  },\n  {\n    \"issue\": \"No Content Security Policy\",\n    \"files\": [\"HTML files\"],\n    \"description\": \"No CSP headers to prevent XSS attacks\",\n    \"best_practice\": \"Implement strict Content Security Policy\"\n  },\n  {\n    \"issue\": \"Direct File System Access\",\n    \"files\": [\"/home/adrien/Github/eiou-org/eiou/src/functions/wallet.php:44\"],\n    \"description\": \"Config file written with FILE_APPEND, risking race conditions and corruption\",\n    \"best_practice\": \"Use atomic writes (write to temp, then rename) for critical config files\"\n  }\n], \"total_count\": 6}",
+      "namespace": "default",
+      "timestamp": 1759526670318
+    },
+    {
+      "key": "hive/code-review/summary",
+      "value": "{\n  \"review_date\": \"2025-10-03\",\n  \"total_issues\": 22,\n  \"severity_breakdown\": {\n    \"critical\": 1,\n    \"high\": 2,\n    \"medium\": 10,\n    \"low\": 9\n  },\n  \"categories\": {\n    \"security\": 5,\n    \"performance\": 4,\n    \"quality\": 7,\n    \"best_practices\": 6\n  },\n  \"risk_level\": \"HIGH\",\n  \"production_ready\": false,\n  \"critical_blockers\": [\n    \"SQL Injection via string interpolation\",\n    \"Authentication via URL parameters\",\n    \"No CSRF protection\"\n  ],\n  \"deliverables\": [\n    \"/home/adrien/Github/eiou-org/eiou/docs/CODE_REVIEW_REPORT.md\"\n  ],\n  \"next_actions\": [\n    \"Create GitHub issues for each finding\",\n    \"Implement critical security fixes (Week 1)\",\n    \"Add database indexes and optimize queries (Week 2-3)\",\n    \"Conduct follow-up security audit after fixes\"\n  ]\n}",
+      "namespace": "default",
+      "timestamp": 1759526915656
+    }
+  ]
+}

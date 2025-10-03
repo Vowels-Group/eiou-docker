@@ -6,9 +6,8 @@ $pdo = createPDOConnection();
 
 // Helper function for redirecting
 function redirectMessage($message,$messageType){
-    // Redirect back to main page with message
-    $authCode = $_GET['authcode'] ?? $_POST['authcode'] ?? '';
-    $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
+    // Redirect back to main page with message (no auth code in URL)
+    $redirectUrl = $_SERVER['PHP_SELF'] . '?message=' . urlencode($message) . '&type=' . urlencode($messageType);
     header('Location: ' . $redirectUrl);
     exit;
 }

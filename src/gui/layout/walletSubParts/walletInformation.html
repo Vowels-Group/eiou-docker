@@ -10,7 +10,7 @@
         <div style="text-align: center; margin-bottom: 1rem; padding: 0.5rem; background: #e9ecef; border-radius: 4px; font-size: 0.9rem; color: #6c757d;">
             <i class="fas fa-clock"></i> Last updated: <?php echo date('M j, Y g:i:s A'); ?>
             <br>
-            <small id="refresh-status">Auto-refresh every 10 seconds • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>" style="color: #0d6efd;">Refresh now</a></small>
+            <small id="refresh-status">Auto-refresh every 10 seconds • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" style="color: #0d6efd;">Refresh now</a> • <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?logout=1'); ?>" style="color: #dc3545;">Logout</a></small>
             <div id="polling-status" style="margin-top: 0.25rem; font-size: 0.8rem; color: #28a745;">
                 <i class="fas fa-sync-alt fa-spin"></i> Auto-refresh active
             </div>
