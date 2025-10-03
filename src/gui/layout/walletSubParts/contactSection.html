@@ -33,6 +33,24 @@
                             <div>Credit Limit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo $contact['currency']; ?></div>
                             <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
                         </div>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                            <form method="POST" style="flex: 1;" onclick="event.stopPropagation();">
+                                <input type="hidden" name="action" value="blockContact">
+                                <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                                <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                                <button type="submit" class="btn btn-danger btn-sm" style="width: 100%;" onclick="return confirm('Are you sure you want to block this contact?')">
+                                    <i class="fas fa-ban"></i> Block
+                                </button>
+                            </form>
+                            <form method="POST" style="flex: 1; display: none;" onclick="event.stopPropagation();">
+                                <input type="hidden" name="action" value="unblockContact">
+                                <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                                <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                                <button type="submit" class="btn btn-success btn-sm" style="width: 100%;">
+                                    <i class="fas fa-check"></i> Unblock
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -72,7 +90,17 @@
                                 -
                             </span> <?php echo $contact['currency'] ?? "USD"; ?></div>
                             <div>Credit Limit: <?php echo $contact['credit_limit'] ? (number_format($contact['credit_limit'], 2)) : "-"; ?> <?php echo $contact['currency'] ?? "USD"; ?></div>
-                            <div>Fee: <?php echo $contact['fee'] ? number_format($contact['fee'], 2) : "-"; ?>%</div>                                    
+                            <div>Fee: <?php echo $contact['fee'] ? number_format($contact['fee'], 2) : "-"; ?>%</div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                            <form method="POST" style="flex: 1;" onclick="event.stopPropagation();">
+                                <input type="hidden" name="action" value="unblockContact">
+                                <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+                                <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                                <button type="submit" class="btn btn-success btn-sm" style="width: 100%;" onclick="return confirm('Are you sure you want to unblock this contact?')">
+                                    <i class="fas fa-check"></i> Unblock
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
