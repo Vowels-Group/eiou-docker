@@ -1,8 +1,25 @@
 <?php
 // Copyright 2025
 
-// Create PDO connection
-$pdo = createPDOConnection();
+// Initialize PDO connection variable (will be created when needed)
+$pdo = null;
+
+// Get PDO connection (lazy initialization)
+function getPDOConnection() {
+    global $pdo;
+
+    if ($pdo === null) {
+        try {
+            $pdo = createPDOConnection();
+        } catch (Exception $e) {
+            // Log error but don't expose details
+            error_log("Database connection failed: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    return $pdo;
+}
 
 // Helper function for redirecting
 function redirectMessage($message,$messageType){
@@ -242,6 +259,10 @@ function truncateAddress($address, $length = 10) {
 // Helper function to get user's total balance
 function getUserTotalBalance() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         $totalReceived = calculateTotalReceivedUser();
@@ -256,6 +277,10 @@ function getUserTotalBalance() {
 // Helper function to get accepted contacts
 function getAcceptedContacts() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         // Get all accepted contacts
@@ -271,6 +296,10 @@ function getAcceptedContacts() {
 // Helper function to get pending contacts
 function getPendingContacts() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         // Get all pending contact requests (where name IS NULL and status = 'pending')
@@ -287,6 +316,10 @@ function getPendingContacts() {
 // Helper function to get pending contacts inserted requests from user
 function getUserPendingContacts() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         // Get all pending contact requests (where name IS NOT NULL and status = 'pending')
@@ -303,6 +336,10 @@ function getUserPendingContacts() {
 // Helper function to get blocked contacts
 function getBlockedContacts() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         // Get all blocked contacts 
@@ -319,6 +356,10 @@ function getBlockedContacts() {
 // Helper function to get all contacts
 function getAllContacts() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         // Get all all contacts (regardless of status)
@@ -335,6 +376,10 @@ function getAllContacts() {
 // Helper function to get contact balance
 function getContactBalance($userPubkey, $contactPubkey) {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         // Calculate sent to this contact
@@ -412,6 +457,10 @@ function getTransactionHistory($limit = 10) {
 // Helper function to get contact name by address
 function getContactNameByAddress($address) {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         $stmt = $pdo->prepare("SELECT name FROM contacts WHERE address = ?");
@@ -464,6 +513,10 @@ function checkForNewTransactions($lastCheckTime) {
 // Helper function to check for new contact requests since last check
 function checkForNewContactRequests($lastCheckTime) {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         $query = "SELECT COUNT(*) as count FROM contacts 
