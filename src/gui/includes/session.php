@@ -107,3 +107,60 @@ function requireAuth() {
         exit;
     }
 }
+
+// CSRF Protection Functions
+
+// Generate CSRF token
+function generateCSRFToken() {
+    if (!isset($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        $_SESSION['csrf_token_time'] = time();
+    }
+    return $_SESSION['csrf_token'];
+}
+
+// Get current CSRF token
+function getCSRFToken() {
+    startSecureSession();
+    return generateCSRFToken();
+}
+
+// Validate CSRF token
+function validateCSRFToken($token) {
+    startSecureSession();
+
+    // Check if token exists
+    if (!isset($_SESSION['csrf_token']) || !isset($_SESSION['csrf_token_time'])) {
+        return false;
+    }
+
+    // Check token age (1 hour max)
+    if (time() - $_SESSION['csrf_token_time'] > 3600) {
+        // Token expired, regenerate
+        unset($_SESSION['csrf_token']);
+        unset($_SESSION['csrf_token_time']);
+        return false;
+    }
+
+    // Validate token using constant-time comparison
+    return hash_equals($_SESSION['csrf_token'], $token);
+}
+
+// Verify CSRF token for POST requests
+function verifyCSRFToken() {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $token = $_POST['csrf_token'] ?? '';
+
+        if (!validateCSRFToken($token)) {
+            // CSRF token validation failed
+            http_response_code(403);
+            die('CSRF token validation failed. Please refresh the page and try again.');
+        }
+    }
+}
+
+// Get CSRF token field HTML
+function getCSRFField() {
+    $token = getCSRFToken();
+    return '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($token) . '">';
+}

@@ -54,6 +54,12 @@ if (!checkSessionTimeout()) {
 
 // If we get here, authentication is valid and session is active
 
+// Verify CSRF token for POST requests
+verifyCSRFToken();
+
+// Generate CSRF token for forms
+$csrfToken = getCSRFToken();
+
 // This file handles wallet interaction with the eIOU network
 require_once("/etc/eiou/src/gui/functions/functions.php");
 
