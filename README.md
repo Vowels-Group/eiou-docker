@@ -88,6 +88,24 @@ docker-compose -f docker-compose-4line.yml restart alice
 ### Pre-made test topologies 
 Under [test/demo](https://github.com/eiou-org/eiou/tree/main/tests/demo) are two folders containing pre-made topologies for both HTTP and TOR. These topologies come with an overview image depicting the topology and several files, either in .txt format (for easy copy-pasting) and/or .sh format for running through bash.
 
+Below are all the .sh files listed for easy access, note the two versions of each file. The 'basic setup' and 'basic test setup', the former sets up the topology as described in the image in the folder. The later does the same as the former but also runs a few functions, like sending some transactions and checking contact information.
+
+#### HTTP
+| Configuration | Nodes | Memory Usage | Description |
+|---------------|-------|--------------|-------------|
+| [http4 basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/4%20contacts%20line%20(http4%20~1.1gb%20memory)/http4%20(basic%20setup%2C%20shell%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [http4 basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/4%20contacts%20line%20(http4%20~1.1gb%20memory)/http4%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [demo4 basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(basic%20setup%2C%20shell%20script)%20copy.sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [demo4 basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [http10 basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/10%20contacts%20line%20(http10%20~2.8gb%20memory)/http10%20(basic%20setup%2C%20shell%20script).sh) | 10 | ~2.8GB | Extended 10-node line topology |
+| [http10 basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/10%20contacts%20line%20(http10%20~2.8gb%20memory)/http10%20(shell%20test%20script).sh)| 10 | ~2.8GB | Extended 10-node line topology |
+| [Small Cluster basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/http_small_cluster%20(basic%20setup%2C%20shell%20script).sh) | 13 | ~3.5GB | Basic 13-node cluster topology |
+| [Small Cluster basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/http_small_cluster%20(shell%20test%20script).sh)| 13 | ~3.5GB | 13-node cluster topology |
+| [Cluster basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/http_cluster%20(basic%20setup%2C%20shell%20script).sh) | 37 | ~8.1GB | 37-node cluster topology |
+| [Cluster basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/http_cluster%20(shell%20test%20script).sh)| 37 | ~8.1GB | 37-node cluster topology |
+
+
+
 
 ### Line Topology (4 nodes)
 <img width="2640" height="192" alt="topological 4 - overview (alice, bob, carol, daniel)" src="https://github.com/user-attachments/assets/a5da5519-7c22-4591-89f1-e27d699c576b" />
