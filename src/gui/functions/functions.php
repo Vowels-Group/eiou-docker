@@ -370,13 +370,19 @@ function getTransactionHistory($limit = 10) {
         if (empty($userAddresses)) {
             return [];
         }
-        
-        $placeholders = sprintf("'%s'", implode("','", $userAddresses ) );
-        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions 
-                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders)) 
-                  ORDER BY timestamp DESC LIMIT $limit";
+
+        // Create placeholders for IN clause
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions
+                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
+                  ORDER BY timestamp DESC LIMIT ?";
+
         $stmt = $pdo->prepare($query);
-        $stmt->execute();
+
+        // Bind parameters - addresses twice for both IN clauses, then limit
+        $params = array_merge($userAddresses, $userAddresses, [$limit]);
+        $stmt->execute($params);
 
         
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -434,13 +440,19 @@ function checkForNewTransactions($lastCheckTime) {
         if (empty($userAddresses)) {
             return false;
         }
-        
-        $placeholders = sprintf("'%s'", implode("','", $userAddresses ) );
-        $query = "SELECT COUNT(*) as count FROM transactions 
-                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders)) 
-                  AND timestamp > $lastCheckTime";
+
+        // Create placeholders for IN clause
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        $query = "SELECT COUNT(*) as count FROM transactions
+                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
+                  AND timestamp > ?";
+
         $stmt = $pdo->prepare($query);
-        $stmt->execute();
+
+        // Bind parameters - addresses twice for both IN clauses, then timestamp
+        $params = array_merge($userAddresses, $userAddresses, [$lastCheckTime]);
+        $stmt->execute($params);
 
         
         $result = $stmt->fetch();
