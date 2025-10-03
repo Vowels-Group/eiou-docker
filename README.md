@@ -37,10 +37,10 @@ docker-compose -f docker-compose-cluster.yml up -d --build
 
 | Configuration | Nodes | Memory Usage | Description |
 |---------------|-------|--------------|-------------|
-| `docker-compose-single.yml` | 1 | ~1.1GB | Single EIOU node for testing |
-| `docker-compose-4line.yml` | 4 | ~1.1GB | Basic 4-node line topology |
-| `docker-compose-10line.yml` | 10 | ~2.8GB | Extended 10-node line topology |
-| `docker-compose-cluster.yml` | 13 | ~3.5GB | Cluster topology with hierarchical structure |
+| [`docker-compose-single.yml`](https://github.com/eiou-org/eiou/blob/main/docker-compose-single.yml) | 1 | ~1.1GB | Single EIOU node for testing |
+| [`docker-compose-4line.yml`](https://github.com/eiou-org/eiou/blob/main/docker-compose-4line.yml) | 4 | ~1.1GB | Basic 4-node line topology |
+| [`docker-compose-10line.yml`](https://github.com/eiou-org/eiou/blob/main/docker-compose-10line.yml) | 10 | ~2.8GB | Extended 10-node line topology |
+| [`docker-compose-cluster.yml`](https://github.com/eiou-org/eiou/blob/main/docker-compose-cluster.yml) | 13 | ~3.5GB | Cluster topology with hierarchical structure |
 
 ## Container Management
 
