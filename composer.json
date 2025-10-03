@@ -1,0 +1,13 @@
+{
+    "name": "eiou/eiou",
+    "description": "Peer-to-peer transaction system",
+    "type": "project",
+    "require": {},
+    "scripts": {
+        "test": "php tests/run_tests.php",
+        "test-single": "php"
+    },
+    "autoload": {
+        "files": ["tests/SimpleTest.php"]
+    }
+}
