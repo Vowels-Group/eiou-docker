@@ -181,3 +181,5 @@ docker-compose -f docker-compose-cluster.yml exec cluster-a41 eiou add <address>
 docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a42 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a42 eiou add <address> cluster-a4 <fee> <credit> <currency>
 ```
+## Pre-made test topologies 
+Under test/demo are two folders containing pre-made topologies for both HTTP and TOR. These topologies come with an overview image depicting the topology and several files, either in .txt format (for easy copy-pasting) and/or .sh format for running through bash.
