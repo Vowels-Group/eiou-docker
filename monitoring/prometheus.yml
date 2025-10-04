@@ -1,0 +1,38 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files:
+  - 'alerts.yml'
+
+scrape_configs:
+  # Application metrics
+  - job_name: 'eiou-app'
+    static_configs:
+      - targets: ['app:80']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Docker metrics
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['localhost:9323']
+
+  # Node exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+
+  # Custom application metrics
+  - job_name: 'eiou-custom'
+    static_configs:
+      - targets: ['app:9090']
+    metrics_path: '/api/metrics'
+    scrape_interval: 10s
+    params:
+      module: [transaction, user, security]

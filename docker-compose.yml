@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # Main application container
+  app:
+    build:
+      context: .
+      target: development
+      dockerfile: Dockerfile
+    container_name: eiou-app
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      # Mount source code for development
+      - ./:/var/www/html
+      # Persist data and logs
+      - eiou-data:/var/www/html/data
+      - eiou-logs:/var/www/html/logs
+    environment:
+      - APP_ENV=development
+      - APP_DEBUG=true
+      - DB_PATH=/var/www/html/data/database.sqlite
+      - LOG_LEVEL=debug
+      - RATE_LIMIT_ENABLED=true
+      - SESSION_LIFETIME=3600
+    networks:
+      - eiou-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+
+  # Database backup service
+  backup:
+    image: alpine:latest
+    container_name: eiou-backup
+    restart: unless-stopped
+    volumes:
+      - eiou-data:/data
+      - ./backups:/backups
+    command: >
+      sh -c "while true; do
+        echo 'Backing up database...';
+        cp -f /data/database.sqlite /backups/database-$$(date +%Y%m%d-%H%M%S).sqlite;
+        find /backups -name 'database-*.sqlite' -mtime +7 -delete;
+        sleep 3600;
+      done"
+    networks:
+      - eiou-network
+
+  # Monitoring service (optional)
+  monitoring:
+    image: prom/prometheus:latest
+    container_name: eiou-monitoring
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - eiou-network
+    profiles:
+      - monitoring
+
+  # Test runner service
+  test-runner:
+    build:
+      context: .
+      target: development
+      dockerfile: Dockerfile
+    container_name: eiou-tests
+    volumes:
+      - ./:/var/www/html
+    command: >
+      sh -c "cd /var/www/html && ./run_tests.sh"
+    networks:
+      - eiou-network
+    profiles:
+      - testing
+
+volumes:
+  eiou-data:
+    driver: local
+  eiou-logs:
+    driver: local
+  prometheus-data:
+    driver: local
+
+networks:
+  eiou-network:
+    driver: bridge
