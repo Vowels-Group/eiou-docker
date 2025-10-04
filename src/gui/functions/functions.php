@@ -378,23 +378,108 @@ function getContactBalance($userPubkey, $contactPubkey) {
     global $pdo;
     $pdo = getPDOConnection();
     if ($pdo === null) return null;
-    $pdo = getPDOConnection();
-    if ($pdo === null) return null;
-    
+
     try {
         // Calculate sent to this contact
         $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as sent FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?");
         $stmt->execute([hash('sha256', $userPubkey), hash('sha256', $contactPubkey)]);
         $sent = $stmt->fetch()['sent'];
-        
+
         // Calculate received from this contact
         $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as received FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?");
         $stmt->execute([hash('sha256', $contactPubkey), hash('sha256', $userPubkey)]);
         $received = $stmt->fetch()['received'];
-        
+
         return $received - $sent;
     } catch (Exception $e) {
         return 0;
+    }
+}
+
+/**
+ * Optimized function to get all contact balances in a single query
+ * Fixes N+1 query problem by batching balance calculations
+ */
+function getAllContactBalances($userPubkey, $contactPubkeys) {
+    global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return [];
+
+    if (empty($contactPubkeys)) {
+        return [];
+    }
+
+    try {
+        $userHash = hash('sha256', $userPubkey);
+        $contactHashes = array_map(function($pubkey) {
+            return hash('sha256', $pubkey);
+        }, $contactPubkeys);
+
+        // Create a mapping of hash to pubkey for later lookup
+        $hashToPubkey = array_combine($contactHashes, $contactPubkeys);
+
+        // Build placeholders for IN clause
+        $placeholders = str_repeat('?,', count($contactHashes) - 1) . '?';
+
+        // Single query to get all balances using UNION
+        $sql = "
+            SELECT
+                contact_hash,
+                SUM(sent) as total_sent,
+                SUM(received) as total_received
+            FROM (
+                -- Sent from user to contacts
+                SELECT
+                    receiver_public_key_hash as contact_hash,
+                    SUM(amount) as sent,
+                    0 as received
+                FROM transactions
+                WHERE sender_public_key_hash = ?
+                    AND receiver_public_key_hash IN ($placeholders)
+                GROUP BY receiver_public_key_hash
+
+                UNION ALL
+
+                -- Received by user from contacts
+                SELECT
+                    sender_public_key_hash as contact_hash,
+                    0 as sent,
+                    SUM(amount) as received
+                FROM transactions
+                WHERE receiver_public_key_hash = ?
+                    AND sender_public_key_hash IN ($placeholders)
+                GROUP BY sender_public_key_hash
+            ) as balance_calc
+            GROUP BY contact_hash
+        ";
+
+        // Prepare parameters: userHash, contactHashes, userHash, contactHashes
+        $params = array_merge([$userHash], $contactHashes, [$userHash], $contactHashes);
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        // Build result array indexed by original pubkey
+        $balances = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $pubkey = $hashToPubkey[$row['contact_hash']] ?? null;
+            if ($pubkey) {
+                $balances[$pubkey] = $row['total_received'] - $row['total_sent'];
+            }
+        }
+
+        // Ensure all contacts have a balance entry (default to 0)
+        foreach ($contactPubkeys as $pubkey) {
+            if (!isset($balances[$pubkey])) {
+                $balances[$pubkey] = 0;
+            }
+        }
+
+        return $balances;
+    } catch (Exception $e) {
+        error_log("Error getting contact balances: " . $e->getMessage());
+        // Return zero balances for all contacts on error
+        return array_fill_keys($contactPubkeys, 0);
     }
 }
 
@@ -610,11 +695,24 @@ function currencyOutputConversion($value,$currency){
 // Helper Function, conversion database values to output values
 function contactConversion($contacts){
     global $user;
+
+    // If no contacts, return empty array
+    if (empty($contacts)) {
+        return [];
+    }
+
+    // Extract all pubkeys for batch processing
+    $pubkeys = array_column($contacts, 'pubkey');
+
+    // Get all balances in a single optimized query
+    $balances = getAllContactBalances($user['public'], $pubkeys);
+
+    // Build result array with balances
     $contactsWithBalances = [];
     foreach($contacts as $contact){
-        // Calculate balance for this contact
-        $balance = getContactBalance($user['public'], $contact['pubkey']);
-        
+        // Get pre-calculated balance from batch query result
+        $balance = $balances[$contact['pubkey']] ?? 0;
+
         $contactsWithBalances[] = [
             'name' => $contact['name'],
             'address' => $contact['address'],
@@ -623,7 +721,7 @@ function contactConversion($contacts){
             'credit_limit' =>  currencyOutputConversion($contact['credit_limit'],$contact['currency']),
             'currency' => $contact['currency']
         ];
-       
+
     }
     return $contactsWithBalances;
 }
