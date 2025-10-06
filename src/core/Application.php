@@ -40,7 +40,7 @@ class Application {
     public function getDatabase() {
         if ($this->pdo === null) {
             try {
-                require_once dirname(__DIR__, 2) . '/src/database/databaseConnection.php';
+                require_once dirname(__DIR__, 2) . '/src/database/pdo.php';
                 $this->pdo = createPDOConnection();
             } catch (Exception $e) {
                 $this->logError("Database connection failed", $e);
