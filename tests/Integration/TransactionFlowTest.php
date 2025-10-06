@@ -3,7 +3,7 @@
  * Integration tests for end-to-end transaction flow
  */
 
-require_once __DIR__ . '/../bootstrap.php';
+require_once dirname(__DIR__, 2). '/tests/walletTests/bootstrap.php';
 
 class TransactionFlowTest extends TestCase {
 

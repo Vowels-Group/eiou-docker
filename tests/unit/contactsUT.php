@@ -1,6 +1,6 @@
 <?php
 
-require_once(__DIR__ . '/../../src/functions/contacts.php');
+require_once dirname(__DIR__, 2). '/src/functions/contacts.php';
 
 class ContactsTest extends PHPUnit\Framework\TestCase {
 

@@ -4,10 +4,10 @@
     "type": "project",
     "require": {},
     "scripts": {
-        "test": "php tests/run_tests.php",
+        "test": "php tests/walletTests/run_tests.php",
         "test-single": "php"
     },
     "autoload": {
-        "files": ["tests/SimpleTest.php"]
+        "files": ["tests/walletTests/SimpleTest.php"]
     }
 }

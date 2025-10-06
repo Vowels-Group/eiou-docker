@@ -3,7 +3,7 @@
  * Unit tests for database operations
  */
 
-require_once __DIR__ . '/../bootstrap.php';
+require_once dirname(__DIR__, 2). '/tests/walletTests/bootstrap.php';
 
 class DatabaseTest extends TestCase {
 
