@@ -33,6 +33,9 @@ require_once 'src/schemas/payloads/payloadUtilSchema.php';
 
 // Require util functionality
 require_once 'src/utils/AdaptivePoller.php';
+require_once 'src/utils/RateLimiter.php';
+require_once 'src/utils/SecureLogger.php';
+require_once 'src/utils/Security.php';
 require_once 'src/utils/utilCleanup.php';
 require_once 'src/utils/utilDebug.php';
 require_once 'src/utils/utilGeneral.php';
