@@ -10,32 +10,55 @@ if (!file_exists("/etc/eiou/config.php")) {
 }
 require_once("/etc/eiou/config.php");
 
-// Check if auth code is provided
-$authCode = $_GET['authcode'] ?? $_POST['authcode'] ?? '';
+// Include session management
+require_once("/etc/eiou/src/gui/includes/session.php");
 
-// Check for messages from redirects
-if (empty($authCode) && isset($_GET['message'])) {
-    // If no auth code but there's a message, redirect to auth page
+// Start secure session
+startSecureSession();
+
+// Handle logout request
+if (isset($_GET['logout'])) {
+    logout();
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
 
-// If no auth code provided, show authentication form
-if (empty($authCode)) {
-    // Set content type for HTML
+// Handle authentication POST request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
+    $submittedAuthCode = $_POST['authcode'];
+
+    if (isset($user['authcode']) && authenticate($submittedAuthCode, $user['authcode'])) {
+        // Authentication successful, redirect to clean URL
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit;
+    } else {
+        // Authentication failed, show error
+        $authError = true;
+    }
+}
+
+// Check if user is authenticated
+if (!isAuthenticated()) {
+    // Show authentication form
     header('Content-Type: text/html; charset=UTF-8');
     require_once("/etc/eiou/src/gui/layout/authenticationForm.html");
     exit;
 }
 
-// Verify auth code
-if (!isset($user['authcode']) || !hash_equals($user['authcode'], $authCode)) {
-    // Redirect back to auth form with error
-    header('Location: ' . $_SERVER['PHP_SELF'] . '?error=invalid');
+// User is authenticated, check session timeout
+if (!checkSessionTimeout()) {
+    // Session timed out, redirect to login
+    header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
 
-// If we get here, authentication is successful
+// If we get here, authentication is valid and session is active
+
+// Verify CSRF token for POST requests
+verifyCSRFToken();
+
+// Generate CSRF token for forms
+$csrfToken = getCSRFToken();
 
 // This file handles wallet interaction with the eIOU network
 require_once("/etc/eiou/src/gui/functions/functions.php");

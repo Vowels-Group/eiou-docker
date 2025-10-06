@@ -19,7 +19,7 @@
     
     <form method="POST">
         <input type="hidden" name="action" value="sendEIOU">
-        <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
         
         <div class="form-group">
             <label for="recipient">Recipient:</label>

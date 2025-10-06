@@ -1,14 +1,30 @@
 <?php
 // Copyright 2025
 
-// Create PDO connection
-$pdo = createPDOConnection();
+// Initialize PDO connection variable (will be created when needed)
+$pdo = null;
+
+// Get PDO connection (lazy initialization)
+function getPDOConnection() {
+    global $pdo;
+
+    if ($pdo === null) {
+        try {
+            $pdo = createPDOConnection();
+        } catch (Exception $e) {
+            // Log error but don't expose details
+            error_log("Database connection failed: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    return $pdo;
+}
 
 // Helper function for redirecting
 function redirectMessage($message,$messageType){
-    // Redirect back to main page with message
-    $authCode = $_GET['authcode'] ?? $_POST['authcode'] ?? '';
-    $redirectUrl = $_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode) . '&message=' . urlencode($message) . '&type=' . urlencode($messageType);
+    // Redirect back to main page with message (no auth code in URL)
+    $redirectUrl = $_SERVER['PHP_SELF'] . '?message=' . urlencode($message) . '&type=' . urlencode($messageType);
     header('Location: ' . $redirectUrl);
     exit;
 }
@@ -243,6 +259,10 @@ function truncateAddress($address, $length = 10) {
 // Helper function to get user's total balance
 function getUserTotalBalance() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         $totalReceived = calculateTotalReceivedUser();
@@ -257,6 +277,10 @@ function getUserTotalBalance() {
 // Helper function to get accepted contacts
 function getAcceptedContacts() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         // Get all accepted contacts
@@ -272,6 +296,10 @@ function getAcceptedContacts() {
 // Helper function to get pending contacts
 function getPendingContacts() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         // Get all pending contact requests (where name IS NULL and status = 'pending')
@@ -288,6 +316,10 @@ function getPendingContacts() {
 // Helper function to get pending contacts inserted requests from user
 function getUserPendingContacts() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         // Get all pending contact requests (where name IS NOT NULL and status = 'pending')
@@ -304,6 +336,10 @@ function getUserPendingContacts() {
 // Helper function to get blocked contacts
 function getBlockedContacts() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         // Get all blocked contacts 
@@ -320,6 +356,10 @@ function getBlockedContacts() {
 // Helper function to get all contacts
 function getAllContacts() {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         // Get all all contacts (regardless of status)
@@ -336,21 +376,110 @@ function getAllContacts() {
 // Helper function to get contact balance
 function getContactBalance($userPubkey, $contactPubkey) {
     global $pdo;
-    
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+
     try {
         // Calculate sent to this contact
         $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as sent FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?");
         $stmt->execute([hash('sha256', $userPubkey), hash('sha256', $contactPubkey)]);
         $sent = $stmt->fetch()['sent'];
-        
+
         // Calculate received from this contact
         $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) as received FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?");
         $stmt->execute([hash('sha256', $contactPubkey), hash('sha256', $userPubkey)]);
         $received = $stmt->fetch()['received'];
-        
+
         return $received - $sent;
     } catch (Exception $e) {
         return 0;
+    }
+}
+
+/**
+ * Optimized function to get all contact balances in a single query
+ * Fixes N+1 query problem by batching balance calculations
+ */
+function getAllContactBalances($userPubkey, $contactPubkeys) {
+    global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return [];
+
+    if (empty($contactPubkeys)) {
+        return [];
+    }
+
+    try {
+        $userHash = hash('sha256', $userPubkey);
+        $contactHashes = array_map(function($pubkey) {
+            return hash('sha256', $pubkey);
+        }, $contactPubkeys);
+
+        // Create a mapping of hash to pubkey for later lookup
+        $hashToPubkey = array_combine($contactHashes, $contactPubkeys);
+
+        // Build placeholders for IN clause
+        $placeholders = str_repeat('?,', count($contactHashes) - 1) . '?';
+
+        // Single query to get all balances using UNION
+        $sql = "
+            SELECT
+                contact_hash,
+                SUM(sent) as total_sent,
+                SUM(received) as total_received
+            FROM (
+                -- Sent from user to contacts
+                SELECT
+                    receiver_public_key_hash as contact_hash,
+                    SUM(amount) as sent,
+                    0 as received
+                FROM transactions
+                WHERE sender_public_key_hash = ?
+                    AND receiver_public_key_hash IN ($placeholders)
+                GROUP BY receiver_public_key_hash
+
+                UNION ALL
+
+                -- Received by user from contacts
+                SELECT
+                    sender_public_key_hash as contact_hash,
+                    0 as sent,
+                    SUM(amount) as received
+                FROM transactions
+                WHERE receiver_public_key_hash = ?
+                    AND sender_public_key_hash IN ($placeholders)
+                GROUP BY sender_public_key_hash
+            ) as balance_calc
+            GROUP BY contact_hash
+        ";
+
+        // Prepare parameters: userHash, contactHashes, userHash, contactHashes
+        $params = array_merge([$userHash], $contactHashes, [$userHash], $contactHashes);
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        // Build result array indexed by original pubkey
+        $balances = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $pubkey = $hashToPubkey[$row['contact_hash']] ?? null;
+            if ($pubkey) {
+                $balances[$pubkey] = $row['total_received'] - $row['total_sent'];
+            }
+        }
+
+        // Ensure all contacts have a balance entry (default to 0)
+        foreach ($contactPubkeys as $pubkey) {
+            if (!isset($balances[$pubkey])) {
+                $balances[$pubkey] = 0;
+            }
+        }
+
+        return $balances;
+    } catch (Exception $e) {
+        error_log("Error getting contact balances: " . $e->getMessage());
+        // Return zero balances for all contacts on error
+        return array_fill_keys($contactPubkeys, 0);
     }
 }
 
@@ -370,13 +499,19 @@ function getTransactionHistory($limit = 10) {
         if (empty($userAddresses)) {
             return [];
         }
-        
-        $placeholders = sprintf("'%s'", implode("','", $userAddresses ) );
-        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions 
-                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders)) 
-                  ORDER BY timestamp DESC LIMIT $limit";
+
+        // Create placeholders for IN clause
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions
+                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
+                  ORDER BY timestamp DESC LIMIT ?";
+
         $stmt = $pdo->prepare($query);
-        $stmt->execute();
+
+        // Bind parameters - addresses twice for both IN clauses, then limit
+        $params = array_merge($userAddresses, $userAddresses, [$limit]);
+        $stmt->execute($params);
 
         
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -407,6 +542,10 @@ function getTransactionHistory($limit = 10) {
 // Helper function to get contact name by address
 function getContactNameByAddress($address) {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         $stmt = $pdo->prepare("SELECT name FROM contacts WHERE address = ?");
@@ -434,13 +573,19 @@ function checkForNewTransactions($lastCheckTime) {
         if (empty($userAddresses)) {
             return false;
         }
-        
-        $placeholders = sprintf("'%s'", implode("','", $userAddresses ) );
-        $query = "SELECT COUNT(*) as count FROM transactions 
-                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders)) 
-                  AND timestamp > $lastCheckTime";
+
+        // Create placeholders for IN clause
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        $query = "SELECT COUNT(*) as count FROM transactions
+                  WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
+                  AND timestamp > ?";
+
         $stmt = $pdo->prepare($query);
-        $stmt->execute();
+
+        // Bind parameters - addresses twice for both IN clauses, then timestamp
+        $params = array_merge($userAddresses, $userAddresses, [$lastCheckTime]);
+        $stmt->execute($params);
 
         
         $result = $stmt->fetch();
@@ -453,6 +598,10 @@ function checkForNewTransactions($lastCheckTime) {
 // Helper function to check for new contact requests since last check
 function checkForNewContactRequests($lastCheckTime) {
     global $pdo;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
+    $pdo = getPDOConnection();
+    if ($pdo === null) return null;
     
     try {
         $query = "SELECT COUNT(*) as count FROM contacts 
@@ -546,11 +695,24 @@ function currencyOutputConversion($value,$currency){
 // Helper Function, conversion database values to output values
 function contactConversion($contacts){
     global $user;
+
+    // If no contacts, return empty array
+    if (empty($contacts)) {
+        return [];
+    }
+
+    // Extract all pubkeys for batch processing
+    $pubkeys = array_column($contacts, 'pubkey');
+
+    // Get all balances in a single optimized query
+    $balances = getAllContactBalances($user['public'], $pubkeys);
+
+    // Build result array with balances
     $contactsWithBalances = [];
     foreach($contacts as $contact){
-        // Calculate balance for this contact
-        $balance = getContactBalance($user['public'], $contact['pubkey']);
-        
+        // Get pre-calculated balance from batch query result
+        $balance = $balances[$contact['pubkey']] ?? 0;
+
         $contactsWithBalances[] = [
             'name' => $contact['name'],
             'address' => $contact['address'],
@@ -559,7 +721,7 @@ function contactConversion($contacts){
             'credit_limit' =>  currencyOutputConversion($contact['credit_limit'],$contact['currency']),
             'currency' => $contact['currency']
         ];
-       
+
     }
     return $contactsWithBalances;
 }

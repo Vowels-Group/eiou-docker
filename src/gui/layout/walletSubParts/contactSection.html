@@ -35,16 +35,16 @@
                         </div>
                         <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
                             <form method="POST" style="flex: 1;" onclick="event.stopPropagation();">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                                 <input type="hidden" name="action" value="blockContact">
-                                <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
                                 <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
                                 <button type="submit" class="btn btn-danger btn-sm" style="width: 100%;" onclick="return confirm('Are you sure you want to block this contact?')">
                                     <i class="fas fa-ban"></i> Block
                                 </button>
                             </form>
                             <form method="POST" style="flex: 1; display: none;" onclick="event.stopPropagation();">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                                 <input type="hidden" name="action" value="unblockContact">
-                                <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
                                 <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
                                 <button type="submit" class="btn btn-success btn-sm" style="width: 100%;">
                                     <i class="fas fa-check"></i> Unblock
@@ -94,8 +94,8 @@
                         </div>
                         <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
                             <form method="POST" style="flex: 1;" onclick="event.stopPropagation();">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                                 <input type="hidden" name="action" value="unblockContact">
-                                <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
                                 <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
                                 <button type="submit" class="btn btn-success btn-sm" style="width: 100%;" onclick="return confirm('Are you sure you want to unblock this contact?')">
                                     <i class="fas fa-check"></i> Unblock
@@ -118,8 +118,8 @@
             <span class="close" onclick="closeEditContactModal()">&times;</span>
         </div>
         <form method="POST" id="editContactForm">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
             <input type="hidden" name="action" value="editContact">
-            <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
             <input type="hidden" name="contact_address" id="edit_contact_address">
             
             <div class="form-group">
@@ -185,8 +185,8 @@
                     <i class="fas fa-user-check"></i> Accept this contact request
                 </h4>
                 <form method="POST" style="margin-bottom: 1rem;">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="acceptContact">
-                    <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
                     <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
                     <input type="hidden" name="contact_pubkey" value="<?php echo htmlspecialchars($contact['pubkey']); ?>">
                     
@@ -222,8 +222,8 @@
             <!-- Action Buttons -->
             <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
                 <form method="POST" style="flex: 1; min-width: 120px;">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="deleteContact">
-                    <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
                     <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
                     <button type="submit" class="btn btn-secondary" style="width: 100%;" onclick="return confirm('Are you sure you want to delete this contact request?')">
                         <i class="fas fa-trash"></i> Delete Request
@@ -231,8 +231,8 @@
                 </form>
                 
                 <form method="POST" style="flex: 1; min-width: 120px;">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="blockContact">
-                    <input type="hidden" name="authcode" value="<?php echo htmlspecialchars($authCode); ?>">
                     <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
                     <button type="submit" class="btn btn-danger" style="width: 100%;" onclick="return confirm('Are you sure you want to block this contact? This action cannot be undone.')">
                         <i class="fas fa-ban"></i> Block Contact
