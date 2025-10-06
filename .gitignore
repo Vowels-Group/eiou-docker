@@ -1,3 +1,8 @@
 # robert's script makes these for some reason
 node_modules
 yarn.lock
+.swarm/*
+.hive-mind/*
+.calude-flow/*
+docs/*
+memory/*
