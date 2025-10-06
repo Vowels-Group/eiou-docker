@@ -3,7 +3,7 @@
 
 # Check if there are any messages that will expire
 function processCleanupMessages(){
-     $expiringMessages = retrieveExpiringP2pMessages();
+    $expiringMessages = retrieveExpiringP2pMessages();
 
     // Process each not completed message
     foreach ($expiringMessages as $message) {     
@@ -12,4 +12,5 @@ function processCleanupMessages(){
             expireMessage($message);
         }
     }
+    return isset($expiringMessages) ? count($expiringMessages) : 0;
 }

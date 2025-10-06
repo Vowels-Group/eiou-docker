@@ -195,6 +195,7 @@ function processPendingTransactions(){
             }   
         }  
     }
+    return isset($pendingMessages) ? count($pendingMessages) : 0;
 }
 
 function sendEiou($request = null) {

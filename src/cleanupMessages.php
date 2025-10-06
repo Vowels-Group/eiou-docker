@@ -2,9 +2,9 @@
 # Copyright 2025
 
 // Processing cleanup messages with adaptive polling
-require_once("/etc/eiou/config.php");
-require_once("/etc/eiou/functions.php");
-require_once(__DIR__ . "/utils/AdaptivePoller.php");
+require_once(__DIR__ . "/config.php");
+require_once(__DIR__ . "/functions.php");
+require_once(__DIR__ . "/src/utils/AdaptivePoller.php");
 
 // Load polling configuration - cleanup can run less frequently
 $pollerConfig = [

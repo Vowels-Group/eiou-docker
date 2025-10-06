@@ -65,6 +65,11 @@ RUN chmod 644 /etc/eiou/functions.php
 COPY src/functions /etc/eiou/src/functions
 RUN chmod 644 /etc/eiou/src/functions/*
 
+# Copy config folder to /etc/eiou/src/config
+COPY src/config /etc/eiou/src/config
+RUN chmod 755 /etc/eiou/src/config
+RUN chmod 644 /etc/eiou/src/config/*
+
 # Copy database folder to /etc/eiou/src/database
 COPY src/database /etc/eiou/src/database
 RUN chmod 755 /etc/eiou/src/database

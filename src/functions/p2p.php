@@ -148,6 +148,7 @@ function processQueuedP2pMessages() {
         }
         updateP2pRequestStatus($message['hash'], 'sent'); // Update the p2p request status to sent
     }
+    return isset($queuedMessages) ? count($queuedMessages) : 0;
 }
 
 function sendP2pRequest($data) {
