@@ -70,6 +70,12 @@ COPY src/config /etc/eiou/src/config
 RUN chmod 755 /etc/eiou/src/config
 RUN chmod 644 /etc/eiou/src/config/*
 
+# Copy core folder to /etc/eiou/src/core
+COPY src/core /etc/eiou/src/core
+RUN chmod 755 /etc/eiou/src/core
+RUN chmod 644 /etc/eiou/src/core/*
+
+
 # Copy database folder to /etc/eiou/src/database
 COPY src/database /etc/eiou/src/database
 RUN chmod 755 /etc/eiou/src/database

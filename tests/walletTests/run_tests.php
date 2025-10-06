@@ -6,7 +6,7 @@
  */
 
 // Include the SimpleTest framework
-require_once __DIR__ . '/SimpleTest.php';
+require_once __DIR__ . '/tests/walletTests/SimpleTest.php';
 
 // Get command line arguments
 $testFile = $argv[1] ?? null;

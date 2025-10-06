@@ -9,11 +9,18 @@ function getContactsTableSchema() {
         pubkey TEXT NOT NULL,
         pubkey_hash VARCHAR(64),
         name VARCHAR(255),
-        status TEXT,
+        status ENUM(
+            'pending',  /* Contact request Created */ 
+            'accepted', /* Contact request Accepted */ 
+            'blocked',  /* Contact request Blocked */ 
+        ) DEFAULT 'pending',
         fee_percent INT,
         credit_limit INT,
         currency VARCHAR(10),
-        INDEX idx_pubkey_hash (pubkey_hash)
+        INDEX idx_pubkey_hash (pubkey_hash),
+        INDEX idx_status (status),
+        INDEX idx_status_address (status, address),
+        INDEX idx_name (name)
     )";
 }
 
@@ -27,7 +34,10 @@ function getDebugTableSchema() {
         context JSON,
         file VARCHAR(255),
         line INTEGER,
-        trace TEXT
+        trace TEXT,
+        INDEX idx_timestamp (timestamp),
+        INDEX idx_level (level),
+        INDEX idx_level_timestamp (level, timestamp)
     )";
 }
 
@@ -63,7 +73,11 @@ function getP2pTableSchema() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         incoming_txid VARCHAR(255),
         outgoing_txid VARCHAR(255),
-        completed_at TIMESTAMP NULL
+        completed_at TIMESTAMP NULL,
+        INDEX idx_status (status),
+        INDEX idx_created_at (created_at),
+        INDEX idx_sender_address (sender_address),
+        INDEX idx_status_created_at (status, created_at)
     )";
 }
 
@@ -78,7 +92,9 @@ function getRp2pTableSchema() {
         sender_public_key TEXT NOT NULL,
         sender_address VARCHAR(255) NOT NULL,
         sender_signature TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_created_at (created_at),
+        INDEX idx_sender_address (sender_address)
     )";
 }
 
@@ -112,6 +128,12 @@ function getTransactionsTableSchema() {
         sender_signature TEXT,
         memo TEXT,
         INDEX idx_receiver_public_key_hash (receiver_public_key_hash),
-        INDEX idx_sender_public_key_hash (sender_public_key_hash)
+        INDEX idx_sender_public_key_hash (sender_public_key_hash),
+        INDEX idx_status (status),
+        INDEX idx_timestamp (timestamp),
+        INDEX idx_previous_txid (previous_txid),
+        INDEX idx_memo (memo(255)),
+        INDEX idx_status_timestamp (status, timestamp),
+        INDEX idx_sender_receiver (sender_public_key_hash, receiver_public_key_hash)
     )";
 }
