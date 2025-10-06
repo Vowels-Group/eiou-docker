@@ -3,6 +3,6 @@ node_modules
 yarn.lock
 .swarm/*
 .hive-mind/*
-.calude-flow/*
+.claude-flow/*
 docs/*
 memory/*
