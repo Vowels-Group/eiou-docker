@@ -89,7 +89,7 @@ function prepareP2pTransactionData($request) {
 
     $data['amount'] = $request['amount'];
     $data['currency'] = $request['currency'];
-    $data['txid'] = createUniqueTxid($request);
+    $data['txid'] = createUniqueTxid($data);
     $data['previousTxid'] = fixPreviousTxid($user['public'], $request['senderPublicKey']);
     $data['memo'] = $request['hash'];
     return $data;
