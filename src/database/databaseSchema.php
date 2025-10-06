@@ -12,7 +12,7 @@ function getContactsTableSchema() {
         status ENUM(
             'pending',  /* Contact request Created */ 
             'accepted', /* Contact request Accepted */ 
-            'blocked',  /* Contact request Blocked */ 
+            'blocked'   /* Contact request Blocked */ 
         ) DEFAULT 'pending',
         fee_percent INT,
         credit_limit INT,
