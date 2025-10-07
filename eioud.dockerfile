@@ -39,64 +39,11 @@ COPY src/index.html /var/www/html/eiou/index.html
 RUN chown www-data:www-data /var/www/html/eiou -R
 RUN chmod 755 /var/www/html/eiou
 
-# Copy wallet (GUI) folder to /etc/eiou/src/wallet
-COPY src/gui /etc/eiou/src/gui
-RUN chmod 755 /etc/eiou/src/gui
-RUN chmod 644 /etc/eiou/src/gui/*
-RUN chmod 755 /etc/eiou/src/gui/assets
-RUN chmod 644 /etc/eiou/src/gui/assets/*
-RUN chmod 755 /etc/eiou/src/gui/assets/css
-RUN chmod 644 /etc/eiou/src/gui/assets/css/*
-RUN chmod 755 /etc/eiou/src/gui/assets/js
-RUN chmod 644 /etc/eiou/src/gui/assets/js/*
-RUN chmod 755 /etc/eiou/src/gui/functions
-RUN chmod 644 /etc/eiou/src/gui/functions/*
-RUN chmod 755 /etc/eiou/src/gui/layout
-RUN chmod 644 /etc/eiou/src/gui/layout/*
-RUN chmod 755 /etc/eiou/src/gui/layout/walletSubParts
-RUN chmod 644 /etc/eiou/src/gui/layout/walletSubParts/*
-
 # Copy functions.php to a common location
 COPY src/functions.php /etc/eiou/functions.php
 RUN chown www-data:www-data /etc/eiou/functions.php
 RUN chmod 644 /etc/eiou/functions.php
 
-# Copy functions folder to /etc/eiou/src/functions
-COPY src/functions /etc/eiou/src/functions
-RUN chmod 644 /etc/eiou/src/functions/*
-
-# Copy config folder to /etc/eiou/src/config
-COPY src/config /etc/eiou/src/config
-RUN chmod 755 /etc/eiou/src/config
-RUN chmod 644 /etc/eiou/src/config/*
-
-# Copy core folder to /etc/eiou/src/core
-COPY src/core /etc/eiou/src/core
-RUN chmod 755 /etc/eiou/src/core
-RUN chmod 644 /etc/eiou/src/core/*
-
-
-# Copy database folder to /etc/eiou/src/database
-COPY src/database /etc/eiou/src/database
-RUN chmod 755 /etc/eiou/src/database
-RUN chmod 644 /etc/eiou/src/database/*
-
-# Copy schemas folder to /etc/eiou/src/schemas
-COPY src/schemas /etc/eiou/src/schemas
-RUN chmod 755 /etc/eiou/src/schemas
-RUN chmod 644 /etc/eiou/src/schemas/*
-RUN chmod 755 /etc/eiou/src/schemas/payloads
-RUN chmod 644 /etc/eiou/src/schemas/payloads/*
-
-# Copy utils folder to /etc/eiou/src/utils
-COPY src/utils /etc/eiou/src/utils
-RUN chmod 755 /etc/eiou/src/utils
-RUN chmod 644 /etc/eiou/src/utils/*
-
-# Copy startup folder to /etc/eiou/src/startup
-COPY src/startup /etc/eiou/src/startup
-RUN chmod 755 /etc/eiou/src/startup
-RUN chmod 644 /etc/eiou/src/startup/*
 
 # Copy p2pMessages.php to a common location
 COPY src/p2pMessages.php /etc/eiou/p2pMessages.php
@@ -112,6 +59,50 @@ RUN chmod 644 /etc/eiou/transactionMessages.php
 COPY src/cleanupMessages.php /etc/eiou/cleanupMessages.php
 RUN chown www-data:www-data /etc/eiou/cleanupMessages.php
 RUN chmod 644 /etc/eiou/cleanupMessages.php
+
+
+# Copy src folder to /etc/eiou/src
+COPY src /etc/eiou/src
+RUN chmod 755 /etc/eiou/src
+RUN chmod 644 /etc/eiou/src/*
+# Config folder
+RUN chmod 755 /etc/eiou/src/config
+RUN chmod 644 /etc/eiou/src/config/*
+# Core folder
+RUN chmod 755 /etc/eiou/src/core
+RUN chmod 644 /etc/eiou/src/core/*
+# Database folder
+RUN chmod 755 /etc/eiou/src/database
+RUN chmod 644 /etc/eiou/src/database/*
+# Functions folder
+RUN chmod 755 /etc/eiou/src/functions
+RUN chmod 644 /etc/eiou/src/functions/*
+# GUI (wallet) folder
+RUN chmod 755 /etc/eiou/src/gui
+RUN chmod 644 /etc/eiou/src/gui/*
+RUN chmod 755 /etc/eiou/src/gui/assets
+RUN chmod 644 /etc/eiou/src/gui/assets/*
+RUN chmod 755 /etc/eiou/src/gui/assets/css
+RUN chmod 644 /etc/eiou/src/gui/assets/css/*
+RUN chmod 755 /etc/eiou/src/gui/assets/js
+RUN chmod 644 /etc/eiou/src/gui/assets/js/*
+RUN chmod 755 /etc/eiou/src/gui/functions
+RUN chmod 644 /etc/eiou/src/gui/functions/*
+RUN chmod 755 /etc/eiou/src/gui/layout
+RUN chmod 644 /etc/eiou/src/gui/layout/*
+RUN chmod 755 /etc/eiou/src/gui/layout/walletSubParts
+RUN chmod 644 /etc/eiou/src/gui/layout/walletSubParts/*
+# Schemas folder
+RUN chmod 755 /etc/eiou/src/schemas
+RUN chmod 644 /etc/eiou/src/schemas/*
+RUN chmod 755 /etc/eiou/src/schemas/payloads
+RUN chmod 644 /etc/eiou/src/schemas/payloads/*
+# Startup folder
+RUN chmod 755 /etc/eiou/src/startup
+RUN chmod 644 /etc/eiou/src/startup/*
+# Utils folder
+RUN chmod 755 /etc/eiou/src/utils
+RUN chmod 644 /etc/eiou/src/utils/*
 
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini
