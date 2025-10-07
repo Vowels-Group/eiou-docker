@@ -1,0 +1,272 @@
+<?php
+# Copyright 2025
+
+require_once __DIR__ . '/../database/DatabaseConnection.php';
+require_once __DIR__ . '/../database/ContactRepository.php';
+require_once __DIR__ . '/../database/TransactionRepository.php';
+require_once __DIR__ . '/../database/P2pRepository.php';
+require_once __DIR__ . '/../database/Rp2pRepository.php';
+
+/**
+ * Service Container
+ *
+ * Centralized dependency injection container for managing service instances.
+ * Replaces global variables with proper dependency management.
+ *
+ * @package Services
+ */
+class ServiceContainer {
+    /**
+     * @var ServiceContainer|null Singleton instance
+     */
+    private static ?ServiceContainer $instance = null;
+
+    /**
+     * @var array Cached service instances
+     */
+    private array $services = [];
+
+    /**
+     * @var array Current user data
+     */
+    private array $currentUser = [];
+
+    /**
+     * @var PDO Database connection
+     */
+    private PDO $pdo;
+
+    /**
+     * Private constructor for singleton pattern
+     */
+    private function __construct() {
+        $this->pdo = DatabaseConnection::getConnection();
+        $this->loadCurrentUser();
+    }
+
+    /**
+     * Get singleton instance
+     *
+     * @return ServiceContainer
+     */
+    public static function getInstance(): ServiceContainer {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    /**
+     * Load current user from global scope
+     * This is a bridge to gradually transition away from global $user
+     */
+    private function loadCurrentUser(): void {
+        global $user;
+        $this->currentUser = $user ?? [];
+    }
+
+    /**
+     * Set current user (for testing or manual injection)
+     *
+     * @param array $user User data
+     */
+    public function setCurrentUser(array $user): void {
+        $this->currentUser = $user;
+    }
+
+    /**
+     * Get current user
+     *
+     * @return array Current user data
+     */
+    public function getCurrentUser(): array {
+        return $this->currentUser;
+    }
+
+    /**
+     * Get PDO instance
+     *
+     * @return PDO Database connection
+     */
+    public function getPdo(): PDO {
+        return $this->pdo;
+    }
+
+    /**
+     * Get ContactRepository instance
+     *
+     * @return ContactRepository
+     */
+    public function getContactRepository(): ContactRepository {
+        if (!isset($this->services['ContactRepository'])) {
+            $this->services['ContactRepository'] = new ContactRepository($this->pdo);
+        }
+        return $this->services['ContactRepository'];
+    }
+
+    /**
+     * Get TransactionRepository instance
+     *
+     * @return TransactionRepository
+     */
+    public function getTransactionRepository(): TransactionRepository {
+        if (!isset($this->services['TransactionRepository'])) {
+            $this->services['TransactionRepository'] = new TransactionRepository($this->pdo);
+        }
+        return $this->services['TransactionRepository'];
+    }
+
+    /**
+     * Get P2pRepository instance
+     *
+     * @return P2pRepository
+     */
+    public function getP2pRepository(): P2pRepository {
+        if (!isset($this->services['P2pRepository'])) {
+            $this->services['P2pRepository'] = new P2pRepository($this->pdo);
+        }
+        return $this->services['P2pRepository'];
+    }
+
+    /**
+     * Get Rp2pRepository instance
+     *
+     * @return Rp2pRepository
+     */
+    public function getRp2pRepository(): Rp2pRepository {
+        if (!isset($this->services['Rp2pRepository'])) {
+            $this->services['Rp2pRepository'] = new Rp2pRepository($this->pdo);
+        }
+        return $this->services['Rp2pRepository'];
+    }
+
+    /**
+     * Get ContactService instance
+     *
+     * @return ContactService
+     */
+    public function getContactService(): ContactService {
+        if (!isset($this->services['ContactService'])) {
+            require_once __DIR__ . '/ContactService.php';
+            $this->services['ContactService'] = new ContactService(
+                $this->getContactRepository(),
+                $this->currentUser
+            );
+        }
+        return $this->services['ContactService'];
+    }
+
+    /**
+     * Get TransactionService instance
+     *
+     * @return TransactionService
+     */
+    public function getTransactionService(): TransactionService {
+        if (!isset($this->services['TransactionService'])) {
+            require_once __DIR__ . '/TransactionService.php';
+            $this->services['TransactionService'] = new TransactionService(
+                $this->getTransactionRepository(),
+                $this->getContactRepository(),
+                $this->currentUser
+            );
+        }
+        return $this->services['TransactionService'];
+    }
+
+    /**
+     * Get P2pService instance
+     *
+     * @return P2pService
+     */
+    public function getP2pService(): P2pService {
+        if (!isset($this->services['P2pService'])) {
+            require_once __DIR__ . '/P2pService.php';
+            $this->services['P2pService'] = new P2pService(
+                $this->getP2pRepository(),
+                $this->getContactRepository(),
+                $this->currentUser
+            );
+        }
+        return $this->services['P2pService'];
+    }
+
+    /**
+     * Get WalletService instance
+     *
+     * @return WalletService
+     */
+    public function getWalletService(): WalletService {
+        if (!isset($this->services['WalletService'])) {
+            require_once __DIR__ . '/WalletService.php';
+            $this->services['WalletService'] = new WalletService($this->currentUser);
+        }
+        return $this->services['WalletService'];
+    }
+
+    /**
+     * Get MessageService instance
+     *
+     * @return MessageService
+     */
+    public function getMessageService(): MessageService {
+        if (!isset($this->services['MessageService'])) {
+            require_once __DIR__ . '/MessageService.php';
+            $this->services['MessageService'] = new MessageService(
+                $this->getContactRepository(),
+                $this->getP2pRepository(),
+                $this->getTransactionRepository(),
+                $this->currentUser
+            );
+        }
+        return $this->services['MessageService'];
+    }
+
+    /**
+     * Clear all cached services (useful for testing)
+     */
+    public function clearServices(): void {
+        $this->services = [];
+    }
+
+    /**
+     * Register a custom service instance
+     *
+     * @param string $name Service name
+     * @param mixed $instance Service instance
+     */
+    public function registerService(string $name, $instance): void {
+        $this->services[$name] = $instance;
+    }
+
+    /**
+     * Check if a service is registered
+     *
+     * @param string $name Service name
+     * @return bool True if service exists
+     */
+    public function hasService(string $name): bool {
+        return isset($this->services[$name]);
+    }
+
+    /**
+     * Get a registered service by name
+     *
+     * @param string $name Service name
+     * @return mixed Service instance or null
+     */
+    public function getService(string $name) {
+        return $this->services[$name] ?? null;
+    }
+
+    /**
+     * Prevent cloning of singleton
+     */
+    private function __clone() {}
+
+    /**
+     * Prevent unserialization of singleton
+     */
+    public function __wakeup() {
+        throw new Exception("Cannot unserialize singleton");
+    }
+}

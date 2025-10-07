@@ -1,0 +1,274 @@
+<?php
+# Copyright 2025
+
+require_once __DIR__ . '/../database/ContactRepository.php';
+require_once __DIR__ . '/../database/P2pRepository.php';
+require_once __DIR__ . '/../database/TransactionRepository.php';
+
+/**
+ * Message Service
+ *
+ * Handles all business logic for message processing and validation.
+ * Replaces procedural functions from src/functions/message.php
+ *
+ * @package Services
+ */
+class MessageService {
+    /**
+     * @var ContactRepository Contact repository instance
+     */
+    private ContactRepository $contactRepository;
+
+    /**
+     * @var P2pRepository P2P repository instance
+     */
+    private P2pRepository $p2pRepository;
+
+    /**
+     * @var TransactionRepository Transaction repository instance
+     */
+    private TransactionRepository $transactionRepository;
+
+    /**
+     * @var array Current user data
+     */
+    private array $currentUser;
+
+    /**
+     * Constructor
+     *
+     * @param ContactRepository $contactRepository Contact repository
+     * @param P2pRepository $p2pRepository P2P repository
+     * @param TransactionRepository $transactionRepository Transaction repository
+     * @param array $currentUser Current user data
+     */
+    public function __construct(
+        ContactRepository $contactRepository,
+        P2pRepository $p2pRepository,
+        TransactionRepository $transactionRepository,
+        array $currentUser = []
+    ) {
+        $this->contactRepository = $contactRepository;
+        $this->p2pRepository = $p2pRepository;
+        $this->transactionRepository = $transactionRepository;
+        $this->currentUser = $currentUser;
+    }
+
+    /**
+     * Check if message is from a valid source
+     *
+     * @param array $decodedMessage Decoded message data
+     * @return bool True if valid source
+     */
+    public function checkMessageValidity(array $decodedMessage): bool {
+        // Check if message is from a valid source
+        if($this->contactRepository->getContactByAddress($decodedMessage['senderAddress'])){
+            // The source is a contact
+            return true;
+        } elseif(isset($decodedMessage['hash'])){
+            $hash = $decodedMessage['hash'];
+            $p2p = $this->p2pRepository->getByHash($hash);
+
+            if($p2p){
+                // Check if source is original sender for any messages related to transactions
+                if($hash === hash('sha256', resolveUserAddressForTransport($decodedMessage['senderAddress']) . $p2p['salt'] . $p2p['time'])){
+                    return true;
+                }
+                return false;
+            }
+            // Potential Spam (hash is unknown)
+            return false;
+        }
+        // Not a contact nor able to match source
+        return false;
+    }
+
+    /**
+     * Handle incoming message request
+     *
+     * @param array $message Message data
+     * @return void
+     */
+    public function handleMessageRequest(array $message): void {
+        // Handler for different message types
+        $decodedMessage = json_decode($message['message'],true);
+
+        // Check if message is from a known or logical source
+        if(!$this->checkMessageValidity($decodedMessage)){
+            echo buildMessageInvalidSourcePayload($message);
+            exit();
+        }
+
+        // Handle Transaction messages
+        if($decodedMessage['typeMessage'] === "transaction"){
+            if(isset($decodedMessage['inquiry']) && $decodedMessage['inquiry']){
+                $this->handleTransactionMessageInquiryRequest($decodedMessage);
+            } else{
+                $this->handleTransactionMessageRequest($decodedMessage);
+            }
+        }
+        // Handle Contact messages
+        elseif($decodedMessage['typeMessage'] === "contact"){
+            if(isset($decodedMessage['inquiry']) && $decodedMessage['inquiry']){
+                $this->handleContactMessageInquiryRequest($decodedMessage);
+            } else{
+                $this->handleContactMessageRequest($decodedMessage);
+            }
+        }
+    }
+
+    /**
+     * Handle contact message inquiry request
+     *
+     * @param array $decodedMessage Decoded message data
+     * @return void
+     */
+    private function handleContactMessageInquiryRequest(array $decodedMessage): void {
+        // Handle inquiry about contact request status
+        $address = $decodedMessage['senderAddress'];
+
+        // Contact is already accepted
+        if($this->contactRepository->isAcceptedContact($address)){
+            echo buildMessageContactIsAcceptedPayload($address);
+        }
+        // Contact is pending
+        elseif($this->contactRepository->hasPendingContact($address)){
+            echo buildMessageContactIsNotYetAcceptedPayload($address);
+        } else{
+            echo buildMessageContactIsUnknownPayload($address);
+        }
+    }
+
+    /**
+     * Handle contact message request
+     *
+     * @param array $decodedMessage Decoded message data
+     * @return void
+     */
+    private function handleContactMessageRequest(array $decodedMessage): void {
+        // Handle contact request status update messages
+        $address = $decodedMessage['senderAddress'];
+        $status = $decodedMessage['status'];
+
+        if($status === 'accepted'){
+            output(outputContactRequestWasAccepted($address),'SILENT');
+            $this->contactRepository->updateStatus($address, $status);
+        }
+    }
+
+    /**
+     * Handle transaction message inquiry request
+     *
+     * @param array $decodedMessage Decoded message data
+     * @return void
+     */
+    private function handleTransactionMessageInquiryRequest(array $decodedMessage): void {
+        // Handle inquiry about transaction status
+        output(outputHandleTransactionMessageResponse($decodedMessage),'SILENT');
+        echo buildMessageTransactionCompletedCorrectlyPayload($decodedMessage);
+    }
+
+    /**
+     * Handle transaction message request
+     *
+     * @param array $decodedMessage Decoded message data
+     * @return void
+     */
+    private function handleTransactionMessageRequest(array $decodedMessage): void {
+        // Handle incoming transaction messages
+        $hash = $decodedMessage['hash']; // for direct transaction is equivalent to txid, otherwise equivalent to memo
+
+        if($decodedMessage['status'] === 'completed'){
+            // check if hash exists for p2p and check if hash exists for transaction
+            if($decodedMessage['hashType'] === 'memo'){
+                $p2p = $this->p2pRepository->getByHash($hash);
+                $transaction = $this->transactionRepository->getByMemo($hash);
+
+                if($p2p && $transaction){
+                    // Check if user was original sender of transaction
+                    if(isset($p2p['destination_address'])){
+                        // Send direct message inquiry to end recipient double checking if completion of transaction correct
+                        $completedTransactionInquiry = buildMessageTransactionCompletedInquiryPayload($decodedMessage);
+                        $response = json_decode(send($p2p['destination_address'],$completedTransactionInquiry),true);
+                        output(outputTransactionInquiryResponse($response),'SILENT');
+
+                        if($response['status'] === 'completed'){
+                            $this->p2pRepository->updateStatus($hash,'completed',true);
+                            $this->transactionRepository->updateStatus($hash,'completed');
+                            output(outputTransactionP2pSentSuccesfully($p2p),'SILENT');
+                        }
+                    } else{
+                        $this->p2pRepository->updateStatus($hash,'completed',true);
+                        $this->transactionRepository->updateStatus($hash,'completed');
+
+                        // Send transaction completion message onwards
+                        $payloadTransactionCompleted = buildSendCompletedPayload($decodedMessage);
+                        output(outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$p2p['sender_address']),'SILENT');
+                        $response = send($p2p['sender_address'],$payloadTransactionCompleted);
+                    }
+                }
+            } elseif($decodedMessage['hashType'] === 'txid'){
+                // End recipient (contact) sent us direct confirmation, thus transaction completed successfully
+                $transaction = $this->transactionRepository->getByTxid($hash);
+
+                if($transaction){
+                    $this->transactionRepository->updateStatus($hash,'completed',true);
+                    output(outputTransactionDirectSentSuccesfully($decodedMessage),'SILENT');
+                }
+            }
+        }
+    }
+
+    /**
+     * Validate message structure
+     *
+     * @param array $message Message data
+     * @return bool True if valid structure
+     */
+    public function validateMessageStructure(array $message): bool {
+        if (!isset($message['message'])) {
+            error_log("Message structure invalid: missing 'message' field");
+            return false;
+        }
+
+        $decodedMessage = json_decode($message['message'], true);
+
+        if (!$decodedMessage) {
+            error_log("Message structure invalid: failed to decode JSON");
+            return false;
+        }
+
+        if (!isset($decodedMessage['typeMessage'])) {
+            error_log("Message structure invalid: missing 'typeMessage' field");
+            return false;
+        }
+
+        if (!isset($decodedMessage['senderAddress'])) {
+            error_log("Message structure invalid: missing 'senderAddress' field");
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Build message response
+     *
+     * @param string $status Response status
+     * @param string $message Response message
+     * @param array $additionalData Additional data to include
+     * @return string JSON response
+     */
+    public function buildMessageResponse(string $status, string $message, array $additionalData = []): string {
+        $response = [
+            'status' => $status,
+            'message' => $message
+        ];
+
+        if (!empty($additionalData)) {
+            $response = array_merge($response, $additionalData);
+        }
+
+        return json_encode($response);
+    }
+}
