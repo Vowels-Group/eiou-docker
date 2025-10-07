@@ -1,62 +1,129 @@
 <?php
 # Copyright 2025
 
-function checkRequestLevel($request){
-    // Check validatity of p2p request
-    if(!validateRequestLevel($request)){
+/**
+ * Check if P2P request level is valid
+ *
+ * @param array $request The P2P request data
+ * @return bool True if request level is valid, false otherwise
+ */
+function checkRequestLevel(array $request): bool {
+    // Validate input
+    if (!isset($request['requestLevel']) || !isset($request['maxRequestLevel'])) {
+        error_log("Missing requestLevel or maxRequestLevel in request");
         echo buildInvalidRequestLevelPayload($request);
-        return false;   
-    } 
+        return false;
+    }
+
+    // Check validity of p2p request
+    if (!validateRequestLevel($request)) {
+        echo buildInvalidRequestLevelPayload($request);
+        return false;
+    }
     return true;
 }
 
-function checkAvailableFunds($request){
-    // Check if p2p's destination is not to user (i.e. you are an intermediary and not the end-recipient)
-    if(!matchYourselfP2P($request, resolveUserAddressForTransport($request['senderAddress']))){
-        // Check if sender has enough 'credit' to facilitate eIOU
-        $requestedAmount = calculateRequestedAmount($request);
-        $availableFunds = calculateAvailableFunds($request);  
-        $fundsOnHold =  retrieveCreditInP2p($request['senderAddress']);
-        $creditLimit = getCreditLimit($request['senderPublicKey']);
-        if ($availableFunds < ($requestedAmount + $fundsOnHold)) {
-            echo buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit, $fundsOnHold);
+/**
+ * Check if sender has sufficient available funds for P2P request
+ *
+ * @param array $request The P2P request data
+ * @return bool True if funds are available, false otherwise
+ * @throws PDOException If database query fails
+ */
+function checkAvailableFunds(array $request): bool {
+    try {
+        // Validate required fields
+        if (!isset($request['senderAddress'], $request['senderPublicKey'])) {
+            error_log("Missing required fields in P2P request for funds check");
             return false;
-        } 
-    }
-    // If you are the end-recipient you do not need to pay
-    return true;
-}
+        }
 
-function handleP2pRequest($request) {
-    // Hanlder for p2p requests
-    $myAddress = resolveUserAddressForTransport($request['senderAddress']);  
-    // Check if p2p's destination is to user
-    if(matchYourselfP2P($request,$myAddress)){
-        $request['status'] = 'found';
-        insertP2pRequest($request, $myAddress); // Insert p2p request
-        // Build and send corresponding rp2p request payload to sender of p2p
-        $rP2pPayload = buildRp2pPayload($request);
-        $response = json_decode(send($request['senderAddress'], $rP2pPayload),true);
-        output(outputRp2pTransactionResponse($response),'SILENT');
-    } else{
-        // Calculate fees
-        $requestedAmount = calculateRequestedAmount($request);
-        $request['feeAmount'] = $requestedAmount - $request['amount'];
-        $request['maxRequestLevel'] = reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
-        insertP2pRequest($request, NULL);  // Insert p2p request
-        updateP2pRequestStatus($request['hash'], 'queued'); // Update the p2p request status to queued
+        // Check if p2p's destination is not to user (i.e. you are an intermediary and not the end-recipient)
+        if (!matchYourselfP2P($request, resolveUserAddressForTransport($request['senderAddress']))) {
+            // Check if sender has enough 'credit' to facilitate eIOU
+            $requestedAmount = calculateRequestedAmount($request);
+            $availableFunds = calculateAvailableFunds($request);
+            $fundsOnHold = retrieveCreditInP2p($request['senderAddress']);
+            $creditLimit = getCreditLimit($request['senderPublicKey']);
+
+            if ($availableFunds < ($requestedAmount + $fundsOnHold)) {
+                echo buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit, $fundsOnHold);
+                return false;
+            }
+        }
+        // If you are the end-recipient you do not need to pay
+        return true;
+    } catch (PDOException $e) {
+        error_log("Database error in checkAvailableFunds: " . $e->getMessage());
+        throw $e;
     }
 }
 
-function prepareP2pRequestData($request) {
+/**
+ * Handle incoming P2P request
+ *
+ * @param array $request The P2P request data
+ * @return void
+ * @throws PDOException If database operations fail
+ * @throws Exception If network communication fails
+ */
+function handleP2pRequest(array $request): void {
+    try {
+        // Validate required fields
+        if (!isset($request['senderAddress'], $request['hash'], $request['amount'])) {
+            error_log("Missing required fields in P2P request: " . json_encode(Security::maskSensitiveData($request)));
+            throw new InvalidArgumentException("Invalid P2P request structure");
+        }
+
+        // Handler for p2p requests
+        $myAddress = resolveUserAddressForTransport($request['senderAddress']);
+
+        // Check if p2p's destination is to user
+        if (matchYourselfP2P($request, $myAddress)) {
+            $request['status'] = 'found';
+            insertP2pRequest($request, $myAddress); // Insert p2p request
+            // Build and send corresponding rp2p request payload to sender of p2p
+            $rP2pPayload = buildRp2pPayload($request);
+            $response = json_decode(send($request['senderAddress'], $rP2pPayload), true);
+            output(outputRp2pTransactionResponse($response), 'SILENT');
+        } else {
+            // Calculate fees
+            $requestedAmount = calculateRequestedAmount($request);
+            $request['feeAmount'] = $requestedAmount - $request['amount'];
+            $request['maxRequestLevel'] = reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
+            insertP2pRequest($request, NULL);  // Insert p2p request
+            updateP2pRequestStatus($request['hash'], 'queued'); // Update the p2p request status to queued
+        }
+    } catch (PDOException $e) {
+        error_log("Database error in handleP2pRequest: " . $e->getMessage());
+        throw $e;
+    } catch (Exception $e) {
+        error_log("Error in handleP2pRequest: " . $e->getMessage());
+        throw $e;
+    }
+}
+
+/**
+ * Prepare P2P request data from user input
+ *
+ * @param array $request The request array from user input
+ * @return array Prepared P2P request data
+ * @throws InvalidArgumentException If required fields are missing
+ */
+function prepareP2pRequestData(array $request): array {
     // Build initial p2p request payload
     global $user;
     output(outputPrepareP2pData($request), 'SILENT');
-    
+
     // Check if the address of the recipient was supplied
     if (!isset($request[2])) {
-        output(outputReceiverAddressNotSet($request),'SILENT');
+        output(outputReceiverAddressNotSet($request), 'SILENT');
         die;
+    }
+
+    // Validate amount
+    if (!isset($request[3]) || !is_numeric($request[3]) || $request[3] <= 0) {
+        throw new InvalidArgumentException("Invalid amount for P2P request");
     }
 
     // Initial data preparation
@@ -67,13 +134,19 @@ function prepareP2pRequestData($request) {
     $data['amount'] = round($request[3] * 100); // Convert to cents 100 (based on USD currency)
     $data['currency'] = 'USD'; // Default to USD
 
-    // Additional data preparation
-    $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
+    // Additional data preparation - Use cryptographically secure random
+    try {
+        $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
+    } catch (Exception $e) {
+        error_log("Failed to generate random salt: " . $e->getMessage());
+        throw new RuntimeException("Failed to generate secure random data");
+    }
+
     $data['hash'] = hash('sha256', $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
     output(outputGeneratedP2pHash($data['hash']), 'SILENT'); // Added verbose output
     output(outputP2pComponents($data), 'SILENT'); // Detailed verbose output
-    $data['minRequestLevel'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // Caculate 'random' lower bound for request level
-    $data['maxRequestLevel'] = $data['minRequestLevel'] + jitter($user['maxP2pLevel']);    // Add upper bound to request level, using users max 
+    $data['minRequestLevel'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // Calculate 'random' lower bound for request level
+    $data['maxRequestLevel'] = $data['minRequestLevel'] + jitter($user['maxP2pLevel']);    // Add upper bound to request level, using users max
     return $data;
 }
 
