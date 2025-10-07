@@ -88,6 +88,8 @@ RUN chmod 755 /etc/eiou/src/gui/assets/js
 RUN chmod 644 /etc/eiou/src/gui/assets/js/*
 RUN chmod 755 /etc/eiou/src/gui/functions
 RUN chmod 644 /etc/eiou/src/gui/functions/*
+RUN chmod 755 /etc/eiou/src/gui/includes
+RUN chmod 644 /etc/eiou/src/gui/includes/*
 RUN chmod 755 /etc/eiou/src/gui/layout
 RUN chmod 644 /etc/eiou/src/gui/layout/*
 RUN chmod 755 /etc/eiou/src/gui/layout/walletSubParts
