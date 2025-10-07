@@ -1,0 +1,514 @@
+<?php
+# Copyright 2025
+
+require_once __DIR__ . '/AbstractRepository.php';
+
+/**
+ * Contact Repository
+ *
+ * Manages all database interactions for the contacts table.
+ * Replaces global $pdo usage in databaseContactInteraction.php
+ *
+ * @package Database\Repository
+ */
+class ContactRepository extends AbstractRepository {
+    /**
+     * Constructor
+     *
+     * @param PDO|null $pdo Optional PDO instance for dependency injection
+     */
+    public function __construct(?PDO $pdo = null) {
+        parent::__construct($pdo);
+        $this->tableName = 'contacts';
+        $this->primaryKey = 'address';
+    }
+
+    /**
+     * Accept a contact request
+     *
+     * @param string $address Contact address
+     * @param string $name Contact name
+     * @param float $fee Fee percentage
+     * @param float $credit Credit limit
+     * @param string $currency Currency code
+     * @return bool Success status
+     */
+    public function acceptContact(string $address, string $name, float $fee, float $credit, string $currency): bool {
+        $data = [
+            'name' => $name,
+            'status' => 'accepted',
+            'fee_percent' => $fee,
+            'credit_limit' => $credit,
+            'currency' => $currency
+        ];
+
+        $affectedRows = $this->update($data, 'address', $address);
+        return $affectedRows > 0;
+    }
+
+    /**
+     * Add a pending contact (incoming request)
+     *
+     * @param string $address Contact address
+     * @param string $senderPublicKey Sender's public key
+     * @return string JSON response
+     */
+    public function addPendingContact(string $address, string $senderPublicKey): string {
+        global $user; // Still needed for myPublicKey in response
+        $myPublicKey = $user['public'] ?? '';
+        $pubkeyHash = hash('sha256', $senderPublicKey);
+
+        $data = [
+            'address' => $address,
+            'pubkey' => $senderPublicKey,
+            'pubkey_hash' => $pubkeyHash,
+            'name' => null,
+            'status' => 'pending',
+            'fee_percent' => null,
+            'credit_limit' => null,
+            'currency' => null
+        ];
+
+        $result = $this->insert($data);
+
+        if ($result !== false) {
+            return json_encode([
+                "status" => "accepted",
+                "message" => "Contact request received successfully",
+                "myPublicKey" => $myPublicKey
+            ]);
+        } else {
+            return json_encode([
+                "status" => "rejected",
+                "message" => "Failed to add contact to database"
+            ]);
+        }
+    }
+
+    /**
+     * Block a contact
+     *
+     * @param string $address Contact address
+     * @return bool Success status
+     */
+    public function blockContact(string $address): bool {
+        $affectedRows = $this->update(['status' => 'blocked'], 'address', $address);
+        return $affectedRows > 0;
+    }
+
+    /**
+     * Unblock a contact
+     *
+     * @param string $address Contact address
+     * @return bool Success status
+     */
+    public function unblockContact(string $address): bool {
+        $affectedRows = $this->update(['status' => 'accepted'], 'address', $address);
+        return $affectedRows > 0;
+    }
+
+    /**
+     * Delete a contact
+     *
+     * @param string $address Contact address
+     * @return bool Success status
+     */
+    public function deleteContact(string $address): bool {
+        $deletedRows = $this->delete('address', $address);
+        return $deletedRows > 0;
+    }
+
+    /**
+     * Check if contact is accepted
+     *
+     * @param string $address Contact address
+     * @return bool True if accepted
+     */
+    public function isAcceptedContact(string $address): bool {
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE address = :address AND status = 'accepted'";
+        $stmt = $this->execute($query, [':address' => $address]);
+
+        if (!$stmt) {
+            return false;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int) ($result['count'] ?? 0) > 0;
+    }
+
+    /**
+     * Check if contact exists
+     *
+     * @param string $address Contact address
+     * @return bool True if exists
+     */
+    public function contactExists(string $address): bool {
+        return $this->exists('address', $address);
+    }
+
+    /**
+     * Check if contact is blocked
+     *
+     * @param string $address Contact address
+     * @return bool True if NOT blocked (returns result suitable for validation)
+     */
+    public function isNotBlocked(string $address): bool {
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE address = :address AND status = 'blocked'";
+        $stmt = $this->execute($query, [':address' => $address]);
+
+        if (!$stmt) {
+            return true; // Allow if query fails (fail open for validation)
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int) ($result['count'] ?? 0) <= 0;
+    }
+
+    /**
+     * Check contact status (returns true if status is NOT accepted)
+     *
+     * @param string $address Contact address
+     * @return bool True if status is not 'accepted'
+     */
+    public function hasNonAcceptedStatus(string $address): bool {
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE address = :address AND status != 'accepted'";
+        $stmt = $this->execute($query, [':address' => $address]);
+
+        if (!$stmt) {
+            return false;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int) ($result['count'] ?? 0) > 0;
+    }
+
+    /**
+     * Check if there's a pending contact (non-user initiated)
+     *
+     * @param string $address Contact address
+     * @return bool True if pending
+     */
+    public function hasPendingContact(string $address): bool {
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName}
+                  WHERE address = :address AND name IS NULL AND status = 'pending'";
+        $stmt = $this->execute($query, [':address' => $address]);
+
+        if (!$stmt) {
+            return false;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int) ($result['count'] ?? 0) > 0;
+    }
+
+    /**
+     * Check if there's a pending contact (user initiated)
+     *
+     * @param string $address Contact address
+     * @return bool True if pending with name
+     */
+    public function hasPendingContactInserted(string $address): bool {
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName}
+                  WHERE address = :address AND name IS NOT NULL AND status = 'pending'";
+        $stmt = $this->execute($query, [':address' => $address]);
+
+        if (!$stmt) {
+            return false;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int) ($result['count'] ?? 0) > 0;
+    }
+
+    /**
+     * Get all pending contact requests (non-user initiated)
+     *
+     * @return array Array of pending contacts
+     */
+    public function getPendingContactRequests(): array {
+        $query = "SELECT * FROM {$this->tableName} WHERE name IS NULL AND status = 'pending'";
+        $stmt = $this->execute($query);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get credit limit for a contact by public key
+     *
+     * @param string $senderPublicKey Sender's public key
+     * @return float Credit limit (0 if not found)
+     */
+    public function getCreditLimit(string $senderPublicKey): float {
+        $pubkeyHash = hash('sha256', $senderPublicKey);
+        $query = "SELECT credit_limit FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash";
+        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
+
+        if (!$stmt) {
+            return 0;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (float) ($result['credit_limit'] ?? 0);
+    }
+
+    /**
+     * Insert a new contact
+     *
+     * @param string $address Contact address
+     * @param string $contactPublicKey Contact's public key
+     * @param string $name Contact name
+     * @param float $fee Fee percentage
+     * @param float $credit Credit limit
+     * @param string $currency Currency code
+     * @return bool Success status
+     */
+    public function insertContact(
+        string $address,
+        string $contactPublicKey,
+        string $name,
+        float $fee,
+        float $credit,
+        string $currency
+    ): bool {
+        $pubkeyHash = hash('sha256', $contactPublicKey);
+
+        $data = [
+            'address' => $address,
+            'pubkey' => $contactPublicKey,
+            'pubkey_hash' => $pubkeyHash,
+            'name' => $name,
+            'status' => 'pending',
+            'fee_percent' => $fee,
+            'credit_limit' => $credit,
+            'currency' => $currency
+        ];
+
+        $result = $this->insert($data);
+        return $result !== false;
+    }
+
+    /**
+     * Lookup contact by name
+     *
+     * @param string $name Contact name (case-insensitive)
+     * @return array|null Contact data or null
+     */
+    public function lookupByName(string $name): ?array {
+        $query = "SELECT name, address, pubkey, fee_percent FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
+        $stmt = $this->execute($query, [':name' => $name]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
+     * Lookup contact by address
+     *
+     * @param string $address Contact address
+     * @return array|null Contact data or null
+     */
+    public function lookupByAddress(string $address): ?array {
+        $query = "SELECT name, address, pubkey, fee_percent FROM {$this->tableName} WHERE address = :address";
+        $stmt = $this->execute($query, [':address' => $address]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
+     * Lookup contact address by name
+     *
+     * @param string $name Contact name (case-insensitive)
+     * @return string|null Contact address or null
+     */
+    public function lookupAddressByName(string $name): ?string {
+        $query = "SELECT address FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
+        $stmt = $this->execute($query, [':name' => $name]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetchColumn();
+        return $result ?: null;
+    }
+
+    /**
+     * Lookup contact name by address
+     *
+     * @param string $address Contact address
+     * @return string|null Contact name or null
+     */
+    public function lookupNameByAddress(string $address): ?string {
+        $query = "SELECT name FROM {$this->tableName} WHERE address = :address";
+        $stmt = $this->execute($query, [':address' => $address]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetchColumn();
+        return $result ?: null;
+    }
+
+    /**
+     * Retrieve all contact addresses
+     *
+     * @param string|null $exclude Address to exclude
+     * @return array Array of addresses
+     */
+    public function getAllAddresses(?string $exclude = null): array {
+        if ($exclude) {
+            $query = "SELECT address FROM {$this->tableName} WHERE address != :exclude";
+            $stmt = $this->execute($query, [':exclude' => $exclude]);
+        } else {
+            $query = "SELECT address FROM {$this->tableName}";
+            $stmt = $this->execute($query);
+        }
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    /**
+     * Retrieve contact information by address
+     *
+     * @param string $address Contact address
+     * @return array|null Full contact data or null
+     */
+    public function getContactByAddress(string $address): ?array {
+        return $this->findByColumn('address', $address);
+    }
+
+    /**
+     * Retrieve contact public key by address
+     *
+     * @param string $address Contact address
+     * @return array|null Array with 'pubkey' key or null
+     */
+    public function getContactPubkey(string $address): ?array {
+        $query = "SELECT pubkey FROM {$this->tableName} WHERE address = :address";
+        $stmt = $this->execute($query, [':address' => $address]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
+     * Retrieve all contacts
+     *
+     * @return array Array of contacts with address and pubkey
+     */
+    public function getAllContacts(): array {
+        $query = "SELECT address, pubkey FROM {$this->tableName}";
+        $stmt = $this->execute($query);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Search contacts by name (partial match)
+     *
+     * @param string|null $name Search term (null returns all)
+     * @return array Array of contacts
+     */
+    public function searchContacts(?string $name = null): array {
+        $query = "SELECT address, name, fee_percent, credit_limit, currency FROM {$this->tableName}";
+
+        if ($name !== null) {
+            $query .= " WHERE LOWER(name) LIKE LOWER(:name)";
+            $stmt = $this->pdo->prepare($query);
+            $stmt->bindValue(':name', '%' . $name . '%', PDO::PARAM_STR);
+        } else {
+            $stmt = $this->pdo->prepare($query);
+        }
+
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to search contacts", $e);
+            return [];
+        }
+    }
+
+    /**
+     * Update contact status
+     *
+     * @param string $address Contact address
+     * @param string $status New status
+     * @return bool Success status
+     */
+    public function updateStatus(string $address, string $status): bool {
+        $affectedRows = $this->update(['status' => $status], 'address', $address);
+        return $affectedRows >= 0; // >= 0 because update might not change anything
+    }
+
+    /**
+     * Update and unblock a contact
+     *
+     * @param string $address Contact address
+     * @param string $name Contact name
+     * @param float $fee Fee percentage
+     * @param float $credit Credit limit
+     * @param string $currency Currency code
+     * @return bool Success status
+     */
+    public function updateUnblockContact(
+        string $address,
+        string $name,
+        float $fee,
+        float $credit,
+        string $currency
+    ): bool {
+        $data = [
+            'name' => $name,
+            'status' => 'accepted',
+            'fee_percent' => $fee,
+            'credit_limit' => $credit,
+            'currency' => $currency
+        ];
+
+        $affectedRows = $this->update($data, 'address', $address);
+        return $affectedRows > 0;
+    }
+
+    /**
+     * Update specific contact fields
+     *
+     * @param string $address Contact address
+     * @param array $fields Associative array of field => value
+     * @return bool Success status
+     */
+    public function updateContactFields(string $address, array $fields): bool {
+        if (empty($fields)) {
+            return false;
+        }
+
+        $affectedRows = $this->update($fields, 'address', $address);
+        return $affectedRows >= 0;
+    }
+}
