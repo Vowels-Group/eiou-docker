@@ -1,9 +1,9 @@
 <?php
 # Copyright 2025
 
-require_once __DIR__ . '/../database/ContactRepository.php';
-require_once __DIR__ . '/../database/P2pRepository.php';
-require_once __DIR__ . '/../database/TransactionRepository.php';
+require_once dirname(__DIR__) . '/database/ContactRepository.php';
+require_once dirname(__DIR__) . '/database/P2pRepository.php';
+require_once dirname(__DIR__) . '/database/TransactionRepository.php';
 
 /**
  * Message Service

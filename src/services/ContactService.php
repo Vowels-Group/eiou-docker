@@ -1,8 +1,8 @@
 <?php
 # Copyright 2025
 
-require_once __DIR__ . '/../database/ContactRepository.php';
-
+require_once dirname(__DIR__) . '/database/ContactRepository.php';
+require_once dirname(__DIR__) . '/schemas/payloads/payloadContactSchema.php';
 /**
  * Contact Service
  *
@@ -190,9 +190,9 @@ class ContactService {
      * Handle contact creation request (incoming)
      *
      * @param array $request Request data
-     * @return array Response payload
+     * @return string Response payload
      */
-    public function handleContactCreation(array $request): array {
+    public function handleContactCreation(array $request): string {
         $address = $request['senderAddress'];
         $senderPublicKey = $request['senderPublicKey'];
 
@@ -200,7 +200,7 @@ class ContactService {
         if ($this->repository->contactExists($address)) {
             return buildContactAlreadyExistsPayload();
         } else{
-            return json_decode($this->repository->addPendingContact($address, $senderPublicKey), true);
+            return $this->repository->addPendingContact($address, $senderPublicKey);
         }
     }
 
@@ -316,6 +316,16 @@ class ContactService {
      */
     public function isAcceptedContact(string $address): bool {
         return $this->repository->isAcceptedContact($address);
+    }
+
+    /**
+     * Check if contact is not blocked
+     *
+     * @param string $address Contact address
+     * @return bool True if not blocked
+     */
+    public function isNotBlocked(string $address): bool {
+        return $this->repository->isNotBlocked($address);
     }
 
     /**

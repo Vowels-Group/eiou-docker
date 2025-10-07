@@ -4,6 +4,7 @@
 // Processing transaction messages with adaptive polling
 require_once(__DIR__ . "/config.php");
 require_once(__DIR__ . "/functions.php");
+require_once(__DIR__ . "/src/services/ServiceWrappers.php");
 require_once(__DIR__ . "/src/utils/AdaptivePoller.php");
 
 // Load polling configuration

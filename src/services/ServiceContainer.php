@@ -1,11 +1,11 @@
 <?php
 # Copyright 2025
 
-require_once __DIR__ . '/../database/DatabaseConnection.php';
-require_once __DIR__ . '/../database/ContactRepository.php';
-require_once __DIR__ . '/../database/TransactionRepository.php';
-require_once __DIR__ . '/../database/P2pRepository.php';
-require_once __DIR__ . '/../database/Rp2pRepository.php';
+require_once dirname(__DIR__) . '/database/pdo.php';
+require_once dirname(__DIR__) . '/database/ContactRepository.php';
+require_once dirname(__DIR__) . '/database/TransactionRepository.php';
+require_once dirname(__DIR__) . '/database/P2pRepository.php';
+require_once dirname(__DIR__) . '/database/Rp2pRepository.php';
 
 /**
  * Service Container
@@ -40,7 +40,7 @@ class ServiceContainer {
      * Private constructor for singleton pattern
      */
     private function __construct() {
-        $this->pdo = DatabaseConnection::getConnection();
+        $this->pdo = createPDOConnection();
         $this->loadCurrentUser();
     }
 
@@ -188,6 +188,24 @@ class ServiceContainer {
             );
         }
         return $this->services['P2pService'];
+    }
+
+
+    /**
+     * Get R2pService instance
+     *
+     * @return Rp2pService
+     */
+    public function getRp2pService(): Rp2pService {
+        if (!isset($this->services['Rp2pService'])) {
+            require_once __DIR__ . '/Rp2pService.php';
+            $this->services['Rp2pService'] = new Rp2pService(
+                $this->getP2pRepository(),
+                $this->getRp2pRepository(),
+                $this->currentUser
+            );
+        }
+        return $this->services['Rp2pService'];
     }
 
     /**

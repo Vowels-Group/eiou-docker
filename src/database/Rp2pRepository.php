@@ -52,6 +52,41 @@ class Rp2pRepository extends AbstractRepository {
     }
 
     /**
+     * Check Existence of Rp2p
+     *
+     * @param array|null $request Request data
+     * @return bool
+     */
+    function checkExistenceRp2p($request, $echo = true){
+    // Check if RP2P already exists for hash in database
+    try{
+
+        if(!$this->rp2pExists($request['hash'])){
+            if($echo){
+                echo buildRp2pAcceptancePayload($request);
+            }
+            return false;  
+        } else{
+            if($echo){
+                echo buildRp2pRejectionPayload($request);
+            }
+            return true;
+        }
+
+    } catch (PDOException $e) {
+        // Handle database error
+         $this->logError("Error retrieving existence of RP2P by hash", $e);
+        if($echo){
+            echo json_encode([
+                "status" => "rejected",
+                "message" => "Could not retrieve existence of RP2P with receiver"
+            ]);
+        }
+        return true;
+    }
+}
+
+    /**
      * Insert a new RP2P request
      *
      * @param array $request RP2P request data

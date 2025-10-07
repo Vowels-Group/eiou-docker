@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once dirname(__DIR__,2) . '/src/database/P2pRepository.php';
+
 /**
  * Check if there are any messages that will expire and process them
  *
@@ -12,7 +14,7 @@
  */
 function processCleanupMessages(): int {
     try {
-        $expiringMessages = retrieveExpiringP2pMessages();
+        $expiringMessages = getExpiringP2pMessages();
 
         // Process each not completed message
         foreach ($expiringMessages as $message) {

@@ -60,14 +60,10 @@ COPY src/cleanupMessages.php /etc/eiou/cleanupMessages.php
 RUN chown www-data:www-data /etc/eiou/cleanupMessages.php
 RUN chmod 644 /etc/eiou/cleanupMessages.php
 
-
 # Copy src folder to /etc/eiou/src
 COPY src /etc/eiou/src
 RUN chmod 755 /etc/eiou/src
 RUN chmod 644 /etc/eiou/src/*
-# Config folder
-RUN chmod 755 /etc/eiou/src/config
-RUN chmod 644 /etc/eiou/src/config/*
 # Core folder
 RUN chmod 755 /etc/eiou/src/core
 RUN chmod 644 /etc/eiou/src/core/*
@@ -77,6 +73,9 @@ RUN chmod 644 /etc/eiou/src/database/*
 # Functions folder
 RUN chmod 755 /etc/eiou/src/functions
 RUN chmod 644 /etc/eiou/src/functions/*
+# Services folder
+RUN chmod 755 /etc/eiou/src/services
+RUN chmod 644 /etc/eiou/src/services/*
 # GUI (wallet) folder
 RUN chmod 755 /etc/eiou/src/gui
 RUN chmod 644 /etc/eiou/src/gui/*

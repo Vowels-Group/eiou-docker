@@ -1,0 +1,112 @@
+<?php
+# Copyright 2025
+
+require_once dirname(__DIR__) . '/database/P2pRepository.php';
+require_once dirname(__DIR__) . '/database/Rp2pRepository.php';
+
+/**
+ * RP2P Service
+ *
+ * Handles all business logic for R peer-to-peer payment routing.
+ * Replaces procedural functions from src/functions/rp2p.php
+ *
+ * @package Services
+ */
+class RP2pService {
+    /**
+     * @var P2pRepository P2P repository instance
+     */
+    private P2pRepository $p2pRepository;
+
+    /**
+     * @var RP2pRepository RP2P repository instance
+     */
+    private RP2pRepository $rp2pRepository;
+
+    /**
+     * @var array Current user data
+     */
+    private array $currentUser;
+
+    /**
+     * Constructor
+     *
+     * @param P2pRepository $p2pRepository P2P repository
+     * @param RP2pRepository $rp2pRepository RP2P repository
+     * @param array $currentUser Current user data
+     */
+    public function __construct(
+        P2pRepository $p2pRepository,
+        RP2pRepository $rp2pRepository,
+        array $currentUser = []
+    ) {
+        $this->p2pRepository = $p2pRepository;
+        $this->rp2pRepository = $rp2pRepository;
+        $this->currentUser = $currentUser;
+    }
+
+
+
+    /**
+     * Handle incoming RP2P request
+     *
+     * @param array $request The RP2P request data
+     * @return void
+     */
+    public function handleRp2pRequest(array $request): void {
+        // Handler for incoming rp2p messages
+        
+        // Check if corresponding p2p exists 
+        $p2p = getP2pByHash($request['hash']);
+        if(!$p2p){
+            throw new Exception('P2P request was not found for the given hash.');
+        }else{
+            if(isset($p2p['destination_address'])) {
+                updateP2pRequestStatus($request['hash'], 'found');
+            }
+            // Add users fee to request
+            $request['amount'] += $p2p['my_fee_amount'];
+
+            //Check if intermediary sender of p2p can afford to send eIOU with fees
+            if(!isset($p2p['destination_address'])) {
+                $availableFunds = calculateAvailableFunds($p2p);
+                if($availableFunds < $request['amount']){
+                    output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
+                }
+            }
+
+            // Save rp2p response 
+            $insertResult = insertRp2pRequest($request);
+            if (!$insertResult) {
+                output(outputRp2pInsertionFailure($request), 'SILENT');
+            }
+            // Check if original p2p was sent by user
+            if(isset($p2p['destination_address'])) {
+                $feePercent = feeInformation($p2p,$request); // Get fee percent and output fee information in  log
+                
+                // Check if the fee percent is below the set maximum fee percent the user would pay
+                if ($feePercent <= $this->currentUser['maxFee']) {
+                    sendP2pEiou($request); // Send transaction through rp2p chain
+                } else {
+                    output(outputFeeRejection(), 'SILENT');
+                }
+            } else{
+                // Send rp2p messages onwards to sender of p2p
+                $rP2pPayload = buildRp2pPayload($request); // Build rp2p payload
+                $this->p2pRepository->updateStatus($request['hash'], 'found');  // Update the p2p request status to found
+                $response = json_decode(send($p2p['sender_address'], $rP2pPayload),true);
+                output(outputRp2pResponse($response),'SILENT');
+            }
+        }
+    }
+
+    /**
+     * Get RP2P request prior existence
+     *
+     * @param array $request Rp2p request data
+     * @return bool True if found
+     */
+    public function getPriorExistenceRp2p(array $request): bool {
+        return $this->rp2pRepository->checkExistenceRp2p($request);
+    }
+}

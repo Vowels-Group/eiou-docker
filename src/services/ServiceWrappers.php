@@ -90,6 +90,18 @@ function checkPreviousTxid(array $request): bool {
 }
 
 /**
+ * Check Transaction request prior existence (wrapper)
+ *
+ * @param array $request Transaction request data
+ * @return bool True if found
+ */
+function checkPriorExistenceTransaction(array $request): bool {
+    $service = ServiceContainer::getInstance()->getTransactionService();
+    return $service->getPriorExistenceTransaction($request);
+}
+
+
+/**
  * Check available funds for transaction (wrapper)
  *
  * @param array $request Transaction request data
@@ -216,6 +228,17 @@ function checkRequestLevel(array $request): bool {
 }
 
 /**
+ * Check P2P request prior existence (wrapper)
+ *
+ * @param array $request P2P request data
+ * @return bool True if found
+ */
+function checkPriorExistenceP2p(array $request): bool {
+    $service = ServiceContainer::getInstance()->getP2pService();
+    return $service->getPriorExistenceP2p($request);
+}
+
+/**
  * Check available funds for P2P (wrapper)
  *
  * @param array $request P2P request data
@@ -290,6 +313,58 @@ function sendP2pRequestFromFailedDirectTransaction($message) {
     $service = ServiceContainer::getInstance()->getP2pService();
     $service->sendP2pRequestFromFailedDirectTransaction($message);
 }
+
+// ============================================================================
+// RP2P SERVICE WRAPPERS
+// ============================================================================
+
+/**
+ * Handle rp2p request (wrapper)
+ *
+ * @param array $request rp2p request
+ * @return void
+ */
+function handleRp2pRequest($request) {
+    $service = ServiceContainer::getInstance()->getRp2pService();
+    $service->handleRp2pRequest($request);
+}
+
+// RP2P Repository Wrappers
+
+/**
+ * Check RP2P exists (wrapper)
+ *
+ * @param string $hash RP2P hash
+ * @return array|null RP2P data or null
+ */
+function checkRp2pExists($hash) {
+    $repo = ServiceContainer::getInstance()->getRp2pRepository();
+    return $repo->getByHash($hash);
+}
+
+/**
+ * Check RP2P request prior existence (wrapper)
+ *
+ * @param array $request RP2P request data
+ * @return bool True if found
+ */
+function checkPriorExistenceRp2p(array $request): bool {
+    $service = ServiceContainer::getInstance()->getRp2pService();
+    return $service->getPriorExistenceRp2p($request);
+}
+
+/**
+ * Insert RP2P request (wrapper)
+ *
+ * @param array $request RP2P request data
+ * @return string JSON response
+ */
+function insertRp2pRequest($request) {
+    $repo = ServiceContainer::getInstance()->getRp2pRepository();
+    return $repo->insertRp2pRequest($request);
+}
+
+
 
 // ============================================================================
 // WALLET SERVICE WRAPPERS
@@ -473,6 +548,18 @@ function retrieveContactAddresses($exclude = null) {
 }
 
 /**
+ * Retrieve contact addresses & pubkeys (wrapper)
+ *
+ * @param string|null $exclude Address to exclude
+ * @return array Array of addresses
+ */
+function retrieveContactAddressesPubkeys() {
+    $repo = ServiceContainer::getInstance()->getContactRepository();
+    return $repo->getAllContacts();
+}
+
+
+/**
  * Get credit limit (wrapper)
  *
  * @param string $senderPublicKey Sender's public key
@@ -503,6 +590,16 @@ function checkAcceptedContact($address) {
 function checkPendingContact($address) {
     $repo = ServiceContainer::getInstance()->getContactRepository();
     return $repo->hasPendingContact($address);
+}
+
+/**
+ * Get pending contacts (wrapper)
+ *
+ * @return array Array of contacts
+ */
+function getAllPendingContactRequests() {
+    $repo = ServiceContainer::getInstance()->getContactRepository();
+    return $repo->getPendingContactRequests();
 }
 
 /**
@@ -631,19 +728,6 @@ function getTransactionByTxid($txid) {
     return $repo->getByTxid($txid);
 }
 
-// P2P Repository Wrappers
-
-/**
- * Check RP2P exists (wrapper)
- *
- * @param string $hash RP2P hash
- * @return array|null RP2P data or null
- */
-function checkRp2pExists($hash) {
-    $repo = ServiceContainer::getInstance()->getRp2pRepository();
-    return $repo->getByHash($hash);
-}
-
 /**
  * Get P2P by hash (wrapper)
  *
@@ -723,17 +807,4 @@ function updateIncomingP2pTxid($hash, $txid) {
 function updateOutgoingP2pTxid($hash, $txid) {
     $repo = ServiceContainer::getInstance()->getP2pRepository();
     return $repo->updateOutgoingTxid($hash, $txid);
-}
-
-// RP2P Repository Wrappers
-
-/**
- * Insert RP2P request (wrapper)
- *
- * @param array $request RP2P request data
- * @return string JSON response
- */
-function insertRp2pRequest($request) {
-    $repo = ServiceContainer::getInstance()->getRp2pRepository();
-    return $repo->insertRp2pRequest($request);
 }

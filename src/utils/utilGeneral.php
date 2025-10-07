@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+//require_once(dirname(__DIR__,2) . "/src/services/ServiceWrappers.php");
+
 function calculateAvailableFunds($request){
     // Calculate funds request's sender has available with user
     $totalSent = calculateTotalSent($request['senderPublicKey'] ?? $request['sender_public_key']);   // Calculate IOUs sent to sender
@@ -31,7 +33,7 @@ function feeInformation($p2p,$request){
 
 function matchContact($request) {
     // Check if contact matches transactions end-recipient
-    $contacts = retrieveContacts();
+    $contacts = retrieveContactAddressesPubkeys();
     // Check if end recipient of request in contacts
     foreach ($contacts as $contact) {
         $contactHash = hash('sha256', $contact['address'] . $request['salt'] . $request['time']);

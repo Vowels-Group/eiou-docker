@@ -1,8 +1,8 @@
 <?php
 # Copyright 2025
 
-require_once __DIR__ . '/../database/TransactionRepository.php';
-require_once __DIR__ . '/../database/ContactRepository.php';
+require_once dirname(__DIR__) . '/database/TransactionRepository.php';
+require_once dirname(__DIR__) . '/database/ContactRepository.php';
 
 /**
  * Transaction Service
@@ -429,6 +429,16 @@ class TransactionService {
      */
     public function getByTxid(string $txid): ?array {
         return $this->transactionRepository->getByTxid($txid);
+    }
+
+    /**
+     * Get Transaction request prior existence
+     *
+     * @param array $request Transaction request data
+     * @return bool True if found
+     */
+    public function getPriorExistenceTransaction(array $request): bool {
+        return $this->transactionRepository->checkExistenceTransaction($request);
     }
 
     /**

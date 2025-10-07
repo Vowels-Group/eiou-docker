@@ -6,7 +6,7 @@
 
 require_once dirname(__DIR__) . '/walletTests/bootstrap.php';
 require_once dirname(__DIR__, 2) . '/src/utils/AdaptivePoller.php';
-require_once dirname(__DIR__, 2) . '/src/config/polling.php';
+require_once dirname(__DIR__) . '/config/polling.php';
 
 class PollingPerformanceTest extends TestCase {
 

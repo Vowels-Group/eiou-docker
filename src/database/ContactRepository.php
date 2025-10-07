@@ -237,6 +237,25 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Get all pending contact requests (non-user initiated) and display information
+     */
+    public function getPendingContactRequestsInfo(){
+        $results = $this->getPendingContactRequests();
+        $pending_count = count($results);
+        
+        // If there are pending contacts without a default fee, provide guidance
+        if ($pending_count > 0) {
+            echo "\n\nYou have {$pending_count} contact request(s) pending acceptance.\n";
+            foreach ($results as $contact) {
+                echo "Pending contact request from: " . $contact['address'] . "\n";
+                echo "To accept this contact request, use the command:\n";
+                echo "eiou add " . $contact['address'] . " [name] [fee percent] [credit] [currency]\n";
+                echo "Example: eiou add " . $contact['address'] . " Bob 0.1 100 USD\n\n";
+            }
+        }
+    }
+
+    /**
      * Get credit limit for a contact by public key
      *
      * @param string $senderPublicKey Sender's public key

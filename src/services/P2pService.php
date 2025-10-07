@@ -1,8 +1,8 @@
 <?php
 # Copyright 2025
 
-require_once __DIR__ . '/../database/P2pRepository.php';
-require_once __DIR__ . '/../database/ContactRepository.php';
+require_once dirname(__DIR__) . '/database/P2pRepository.php';
+require_once dirname(__DIR__) . '/database/ContactRepository.php';
 
 /**
  * P2P Service
@@ -330,6 +330,16 @@ class P2pService {
      */
     public function getByHash(string $hash): ?array {
         return $this->p2pRepository->getByHash($hash);
+    }
+
+    /**
+     * Get P2P request prior existence
+     *
+     * @param array $request P2P request data
+     * @return bool True if found
+     */
+    public function getPriorExistenceP2p(array $request): bool {
+        return $this->p2pRepository->checkExistenceP2p($request);
     }
 
     /**
