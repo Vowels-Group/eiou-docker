@@ -191,10 +191,9 @@ function getTransactionByTxid($txid){
     }
 }
 
-function insertTransaction($request) {  
+function insertTransaction($request) {
     global $pdo;
     // Insert transaction request in database
-    usleep(500000); // wait a little to prevent tight access (Sleep for 500ms)
     // Calculate public key hashes
     $senderPublicKeyHash = hash('sha256', $request['senderPublicKey']);
     $receiverPublicKeyHash = hash('sha256', $request['receiverPublicKey']);
