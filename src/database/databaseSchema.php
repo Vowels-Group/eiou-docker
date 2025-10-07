@@ -17,10 +17,11 @@ function getContactsTableSchema() {
         fee_percent INT,
         credit_limit INT,
         currency VARCHAR(10),
-        INDEX idx_pubkey_hash (pubkey_hash),
-        INDEX idx_status (status),
-        INDEX idx_status_address (status, address),
-        INDEX idx_name (name)
+        INDEX idx_contacts_address (address),
+        INDEX idx_contacts_pubkey_hash (pubkey_hash),
+        INDEX idx_contacts_name (name),
+        INDEX idx_contacts_status (status),
+        INDEX idx_contacts_address_status (address, status)
     )";
 }
 
@@ -74,10 +75,16 @@ function getP2pTableSchema() {
         incoming_txid VARCHAR(255),
         outgoing_txid VARCHAR(255),
         completed_at TIMESTAMP NULL,
-        INDEX idx_status (status),
-        INDEX idx_created_at (created_at),
-        INDEX idx_sender_address (sender_address),
-        INDEX idx_status_created_at (status, created_at)
+        INDEX idx_p2p_hash (hash),
+        INDEX idx_p2p_status (status),
+        INDEX idx_p2p_created_at (created_at),
+        INDEX idx_p2p_status_created_at (status, created_at ASC),  
+        INDEX idx_p2p_sender_address (sender_address),
+        INDEX idx_p2p_sender_address_status (sender_address, status),
+        INDEX idx_p2p_destination (destination_address),
+        INDEX idx_p2p_incoming_txid (incoming_txid),
+        INDEX idx_p2p_outgoing_txid (outgoing_txid),
+        INDEX idx_p2p_status_expiration (status, expiration)
     )";
 }
 
@@ -93,8 +100,9 @@ function getRp2pTableSchema() {
         sender_address VARCHAR(255) NOT NULL,
         sender_signature TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_created_at (created_at),
-        INDEX idx_sender_address (sender_address)
+        INDEX idx_rp2p_hash (hash),
+        INDEX idx_rp2p_created_at (created_at),
+        INDEX idx_rp2p_sender_address (sender_address)
     )";
 }
 
@@ -127,13 +135,15 @@ function getTransactionsTableSchema() {
         previous_txid VARCHAR(255),
         sender_signature TEXT,
         memo TEXT,
-        INDEX idx_receiver_public_key_hash (receiver_public_key_hash),
-        INDEX idx_sender_public_key_hash (sender_public_key_hash),
-        INDEX idx_status (status),
-        INDEX idx_timestamp (timestamp),
-        INDEX idx_previous_txid (previous_txid),
-        INDEX idx_memo (memo(255)),
-        INDEX idx_status_timestamp (status, timestamp),
-        INDEX idx_sender_receiver (sender_public_key_hash, receiver_public_key_hash)
+        INDEX idx_transactions_receiver_public_key_hash (receiver_public_key_hash),
+        INDEX idx_transactions_sender_public_key_hash (sender_public_key_hash),
+        INDEX idx_transactions_sender_receiver (sender_public_key_hash, receiver_public_key_hash),
+        INDEX idx_transactions_chain (sender_public_key_hash, receiver_public_key_hash, timestamp DESC),
+        INDEX idx_transactions_status (status),
+        INDEX idx_transactions_timestamp (timestamp),
+        INDEX idx_transactions_status_timestamp (status, timestamp DESC),
+        INDEX idx_transactions_txid (txid),
+        INDEX idx_transactions_previous_txid (previous_txid),
+        INDEX idx_transactions_memo (memo(255))
     )";
 }
