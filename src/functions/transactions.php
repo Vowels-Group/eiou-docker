@@ -1,35 +1,77 @@
 <?php
 # Copyright 2025
 
-function checkPreviousTxid($request){
-    // If a previous transaction exists, verify the previousTxid matches
-    if (isset($request['previousTxid']) && $previousTxResult = getPreviousTxid($request['senderPublicKey'], $request['receiverAddress'])) {
-        if ($previousTxResult !== $request['previousTxid']) {
-            echo buildInvalidTransactionIDPayload($previousTxResult,$request);
+/**
+ * Check if previous transaction ID is valid
+ *
+ * @param array $request The transaction request data
+ * @return bool True if previous txid is valid or not required, false otherwise
+ * @throws PDOException If database query fails
+ */
+function checkPreviousTxid(array $request): bool {
+    try {
+        // Validate required fields
+        if (!isset($request['senderPublicKey'], $request['receiverAddress'])) {
+            error_log("Missing required fields for previous txid check");
             return false;
         }
+
+        // If a previous transaction exists, verify the previousTxid matches
+        if (isset($request['previousTxid']) && $previousTxResult = getPreviousTxid($request['senderPublicKey'], $request['receiverAddress'])) {
+            if ($previousTxResult !== $request['previousTxid']) {
+                echo buildInvalidTransactionIDPayload($previousTxResult, $request);
+                return false;
+            }
+        }
+        return true;
+    } catch (PDOException $e) {
+        error_log("Database error in checkPreviousTxid: " . $e->getMessage());
+        throw $e;
     }
-    return true;
 }
 
-function checkAvailableFundsTransaction($request){
-    // Check if there is enough funds to complete the transaction
-    $totalSent = calculateTotalSent($request['senderPublicKey']);
-    $totalReceived = calculateTotalReceived($request['senderPublicKey']);
-    $currentBalance = $totalReceived - $totalSent; 
-    // Get credit limit of sender
-    $creditLimit = getCreditLimit($request['senderPublicKey']);
+/**
+ * Check if sender has sufficient available funds for transaction
+ *
+ * @param array $request The transaction request data
+ * @return bool True if sufficient funds are available, false otherwise
+ * @throws PDOException If database query fails
+ */
+function checkAvailableFundsTransaction(array $request): bool {
+    try {
+        // Validate required fields
+        if (!isset($request['senderPublicKey'], $request['amount'], $request['currency'])) {
+            error_log("Missing required fields for funds check");
+            return false;
+        }
 
-    // Check if sender has sufficient balance or credit limit
-    $requiredAmount = $request['amount']; 
-    $availableFunds = $currentBalance + $creditLimit;  
+        // Validate amount is numeric and positive
+        if (!is_numeric($request['amount']) || $request['amount'] <= 0) {
+            error_log("Invalid amount in transaction request: " . $request['amount']);
+            return false;
+        }
 
-    if ($availableFunds > $requiredAmount) {
-        return true;
-    } else{
-        echo buildInsufficientBalancePayload($availableFunds, $requiredAmount, $creditLimit, 0,$request['currency']);
-        return false;
-    }   
+        // Check if there is enough funds to complete the transaction
+        $totalSent = calculateTotalSent($request['senderPublicKey']);
+        $totalReceived = calculateTotalReceived($request['senderPublicKey']);
+        $currentBalance = $totalReceived - $totalSent;
+        // Get credit limit of sender
+        $creditLimit = getCreditLimit($request['senderPublicKey']);
+
+        // Check if sender has sufficient balance or credit limit
+        $requiredAmount = $request['amount'];
+        $availableFunds = $currentBalance + $creditLimit;
+
+        if ($availableFunds > $requiredAmount) {
+            return true;
+        } else {
+            echo buildInsufficientBalancePayload($availableFunds, $requiredAmount, $creditLimit, 0, $request['currency']);
+            return false;
+        }
+    } catch (PDOException $e) {
+        error_log("Database error in checkAvailableFundsTransaction: " . $e->getMessage());
+        throw $e;
+    }
 }
 
 function fixPreviousTxid($senderPubKey,$receiverPubKey){
@@ -42,7 +84,19 @@ function fixPreviousTxid($senderPubKey,$receiverPubKey){
     return $prevID;
 }
 
-function createUniqueTxid($data){
+/**
+ * Create unique transaction ID from transaction data
+ *
+ * @param array $data Transaction data including receiverPublicKey, amount, and time
+ * @return string The generated transaction ID (SHA-256 hash)
+ * @throws InvalidArgumentException If required fields are missing
+ */
+function createUniqueTxid(array $data): string {
+    // Validate required fields
+    if (!isset($data['receiverPublicKey'], $data['amount'], $data['time'])) {
+        throw new InvalidArgumentException("Missing required fields for txid creation");
+    }
+
     // Create Txid for transactions
     global $user;
 
@@ -95,28 +149,50 @@ function prepareP2pTransactionData($request) {
     return $data;
 }
 
-function processTransaction($request) {
-    // Process incoming transactions
-    global $user;
-    if($request['memo'] === 'standard'){
-        // If direct transaction
-        $insertTransactionResponse = insertTransaction($request);    
-    } else{
-        // If p2p type transaction
-        $memo = $request['memo'];
-        $rP2pResult  = checkRp2pExists($memo);
-        // Check if precursors to transactions exist and correspond
-        if(isset($rP2pResult) && $memo === $rP2pResult['hash']){  
-            $request['txid'] = createUniqueTxid($request);
-            $request['previousTxid'] = fixPreviousTxid($user['public'], $request['senderPublicKey']);
-            $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
-            output(outputTransactionInsertion($insertTransactionResponse));
-        } elseif(matchYourselfTransaction($request,resolveUserAddressForTransport($request['senderAddress']))){  
-            // If Transaction is for end-recipient
-            $request['previousTxid'] = fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']); 
-            $insertTransactionResponse = json_decode(insertTransaction($request),true); // Insert Transaction as pending
-            output(outputTransactionInsertion($insertTransactionResponse));
+/**
+ * Process incoming transaction request
+ *
+ * @param array $request The transaction request data
+ * @return void
+ * @throws PDOException If database operations fail
+ * @throws InvalidArgumentException If required fields are missing
+ */
+function processTransaction(array $request): void {
+    try {
+        // Validate required fields
+        if (!isset($request['memo'], $request['senderAddress'])) {
+            error_log("Missing required fields in transaction request");
+            throw new InvalidArgumentException("Invalid transaction request structure");
         }
+
+        // Process incoming transactions
+        global $user;
+        if ($request['memo'] === 'standard') {
+            // If direct transaction
+            $insertTransactionResponse = insertTransaction($request);
+        } else {
+            // If p2p type transaction
+            $memo = $request['memo'];
+            $rP2pResult = checkRp2pExists($memo);
+            // Check if precursors to transactions exist and correspond
+            if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
+                $request['txid'] = createUniqueTxid($request);
+                $request['previousTxid'] = fixPreviousTxid($user['public'], $request['senderPublicKey']);
+                $insertTransactionResponse = json_decode(insertTransaction($request), true); // Insert Transaction as pending
+                output(outputTransactionInsertion($insertTransactionResponse));
+            } elseif (matchYourselfTransaction($request, resolveUserAddressForTransport($request['senderAddress']))) {
+                // If Transaction is for end-recipient
+                $request['previousTxid'] = fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']);
+                $insertTransactionResponse = json_decode(insertTransaction($request), true); // Insert Transaction as pending
+                output(outputTransactionInsertion($insertTransactionResponse));
+            }
+        }
+    } catch (PDOException $e) {
+        error_log("Database error in processTransaction: " . $e->getMessage());
+        throw $e;
+    } catch (Exception $e) {
+        error_log("Error in processTransaction: " . $e->getMessage());
+        throw $e;
     }
 }
    

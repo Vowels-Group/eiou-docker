@@ -63,7 +63,7 @@ function getPollingConfig($key, $default = null) {
     static $config = null;
 
     if ($config === null) {
-        $configFile = __DIR__ . '/src/config/polling.php';
+        $configFile = __DIR__ . '/polling.php';
         if (file_exists($configFile)) {
             $config = require $configFile;
         } else {

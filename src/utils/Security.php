@@ -49,10 +49,8 @@ class Security {
         $input = str_replace(chr(0), '', $input);
         // Trim whitespace
         $input = trim($input);
-        // Remove backslashes
-        if (get_magic_quotes_gpc()) {
-            $input = stripslashes($input);
-        }
+        // Note: magic_quotes_gpc was removed in PHP 5.4 and is no longer needed
+        // Modern PHP versions don't have this issue
         return $input;
     }
 
@@ -159,5 +157,195 @@ class Security {
             $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
         }
         return $_SESSION['csrf_token'];
+    }
+
+    /**
+     * Validate email address format
+     *
+     * @param string $email Email address to validate
+     * @return bool True if valid, false otherwise
+     */
+    public static function validateEmail($email) {
+        return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+    }
+
+    /**
+     * Validate URL format
+     *
+     * @param string $url URL to validate
+     * @return bool True if valid, false otherwise
+     */
+    public static function validateUrl($url) {
+        return filter_var($url, FILTER_VALIDATE_URL) !== false;
+    }
+
+    /**
+     * Validate IP address
+     *
+     * @param string $ip IP address to validate
+     * @return bool True if valid, false otherwise
+     */
+    public static function validateIp($ip) {
+        return filter_var($ip, FILTER_VALIDATE_IP) !== false;
+    }
+
+    /**
+     * Sanitize filename to prevent directory traversal attacks
+     *
+     * @param string $filename Filename to sanitize
+     * @return string Sanitized filename
+     */
+    public static function sanitizeFilename($filename) {
+        // Remove directory separators and special characters
+        $filename = basename($filename);
+        $filename = str_replace(['..', '/', '\\', "\0"], '', $filename);
+        $filename = preg_replace('/[^a-zA-Z0-9._-]/', '', $filename);
+        return $filename;
+    }
+
+    /**
+     * Generate secure random token
+     *
+     * @param int $length Length in bytes (output will be hex, so double the length)
+     * @return string Random token
+     * @throws Exception If secure random generation fails
+     */
+    public static function generateSecureToken($length = 32) {
+        try {
+            return bin2hex(random_bytes($length));
+        } catch (Exception $e) {
+            error_log("Failed to generate secure token: " . $e->getMessage());
+            throw new RuntimeException("Failed to generate secure random token");
+        }
+    }
+
+    /**
+     * Hash password using secure algorithm
+     *
+     * @param string $password Password to hash
+     * @return string Hashed password
+     */
+    public static function hashPassword($password) {
+        return password_hash($password, PASSWORD_DEFAULT);
+    }
+
+    /**
+     * Verify password against hash
+     *
+     * @param string $password Password to verify
+     * @param string $hash Hash to verify against
+     * @return bool True if password matches, false otherwise
+     */
+    public static function verifyPassword($password, $hash) {
+        return password_verify($password, $hash);
+    }
+
+    /**
+     * Check if password needs rehashing (algorithm updated)
+     *
+     * @param string $hash Password hash
+     * @return bool True if needs rehashing, false otherwise
+     */
+    public static function needsRehash($hash) {
+        return password_needs_rehash($hash, PASSWORD_DEFAULT);
+    }
+
+    /**
+     * Validate string length
+     *
+     * @param string $string String to validate
+     * @param int $min Minimum length
+     * @param int $max Maximum length
+     * @return bool True if valid, false otherwise
+     */
+    public static function validateLength($string, $min = 1, $max = 255) {
+        $length = mb_strlen($string, 'UTF-8');
+        return $length >= $min && $length <= $max;
+    }
+
+    /**
+     * Sanitize array recursively
+     *
+     * @param array $array Array to sanitize
+     * @return array Sanitized array
+     */
+    public static function sanitizeArray($array) {
+        foreach ($array as $key => $value) {
+            if (is_array($value)) {
+                $array[$key] = self::sanitizeArray($value);
+            } elseif (is_string($value)) {
+                $array[$key] = self::sanitizeInput($value);
+            }
+        }
+        return $array;
+    }
+
+    /**
+     * Constant-time string comparison to prevent timing attacks
+     *
+     * @param string $known Known string
+     * @param string $user User-provided string
+     * @return bool True if strings match, false otherwise
+     */
+    public static function timingSafeEquals($known, $user) {
+        return hash_equals($known, $user);
+    }
+
+    /**
+     * Validate and sanitize integer input
+     *
+     * @param mixed $value Value to validate
+     * @param int $min Minimum value
+     * @param int $max Maximum value
+     * @return int|null Sanitized integer or null if invalid
+     */
+    public static function sanitizeInt($value, $min = PHP_INT_MIN, $max = PHP_INT_MAX) {
+        $filtered = filter_var($value, FILTER_VALIDATE_INT);
+        if ($filtered === false) {
+            return null;
+        }
+        if ($filtered < $min || $filtered > $max) {
+            return null;
+        }
+        return $filtered;
+    }
+
+    /**
+     * Validate and sanitize float input
+     *
+     * @param mixed $value Value to validate
+     * @param float $min Minimum value
+     * @param float $max Maximum value
+     * @return float|null Sanitized float or null if invalid
+     */
+    public static function sanitizeFloat($value, $min = -PHP_FLOAT_MAX, $max = PHP_FLOAT_MAX) {
+        $filtered = filter_var($value, FILTER_VALIDATE_FLOAT);
+        if ($filtered === false) {
+            return null;
+        }
+        if ($filtered < $min || $filtered > $max) {
+            return null;
+        }
+        return $filtered;
+    }
+
+    /**
+     * Prevent clickjacking by setting appropriate headers
+     */
+    public static function preventClickjacking() {
+        header('X-Frame-Options: DENY');
+        header('Content-Security-Policy: frame-ancestors \'none\'');
+    }
+
+    /**
+     * Log security event
+     *
+     * @param string $event Event description
+     * @param array $context Additional context
+     */
+    public static function logSecurityEvent($event, $context = []) {
+        $maskedContext = self::maskSensitiveData($context);
+        $logMessage = "SECURITY EVENT: $event | Context: " . json_encode($maskedContext);
+        error_log($logMessage);
     }
 }
