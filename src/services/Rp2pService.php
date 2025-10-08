@@ -97,12 +97,38 @@ class RP2pService {
     }
 
     /**
-     * Get RP2P request prior existence
+     * Check Existence of Rp2p
      *
-     * @param array $request Rp2p request data
-     * @return bool True if found
+     * @param array|null $request Request data
+     * @return bool
      */
-    public function getPriorExistenceRp2p(array $request): bool {
-        return $this->rp2pRepository->checkExistenceRp2p($request);
+    function checkExistenceRp2p($request, $echo = true){
+        // Check if RP2P already exists for hash in database
+        try{
+
+            if(!$this->rp2pRepository->rp2pExists($request['hash'])){
+                if($echo){
+                    echo buildRp2pAcceptancePayload($request);
+                }
+                return false;  
+            } else{
+                if($echo){
+                    echo buildRp2pRejectionPayload($request);
+                }
+                return true;
+            }
+
+        } catch (PDOException $e) {
+            // Handle database error
+            error_log("Error retrieving existence of RP2P by hash" . $e->getMessage());
+            if($echo){
+                echo json_encode([
+                    "status" => "rejected",
+                    "message" => "Could not retrieve existence of RP2P with receiver"
+                ]);
+            }
+            return true;
+        }
     }
+
 }

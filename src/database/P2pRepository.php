@@ -52,46 +52,6 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
-     * Check Existence of P2P
-     *
-     * @param array $request Request data
-     * @return bool True if P2P exists or cannot be checked, False otherwise.
-     */
-    public function checkExistenceP2p(array $request, $echo = true) : bool{
-    // Check if P2P already exists for hash in database, is valid and can be completed
-    // & Check if P2P is valid and can be completed given credit of user requesting
-    $contactService = ServiceContainer::getInstance()->getContactService();
-    if(!$contactService->isNotBlocked($request['senderAddress']) || !checkRequestLevel($request) || !checkAvailableFunds($request)){
-        return true; 
-    }
-    // Check if P2P already exists for hash in database
-    try{
-        $results = getP2pByHash($request['hash']);
-        if(!$results){
-            if($echo){
-                echo buildP2pAcceptancePayload($request);
-            }
-            return false;  
-        } else{
-            if($echo){
-                echo buildP2pRejectionPayload($request);
-            }
-            return true;
-        }
-    } catch (PDOException $e) {
-        // Handle database error
-        $this->logError("Error retrieving existence of P2P by hash", $e);
-        if($echo){
-            echo json_encode([
-                "status" => "rejected",
-                "message" => "Could not retrieve existence of P2P with receiver"
-            ]);
-        }
-        return true;
-    }
-}
-
-    /**
      * Insert a new P2P request
      *
      * @param array $request P2P request data

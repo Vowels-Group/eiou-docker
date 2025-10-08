@@ -114,6 +114,53 @@ class TransactionService {
     }
 
     /**
+     * Check Existence of Transaction
+     *
+     * @param array|null $request Request data
+     * @return bool
+     */
+    function checkExistenceTransaction(array $request, $echo = true) : bool{
+        // Check if Transaction already exists for memo in database and is a valid successor of previous txids
+        // Check if Transaction is a valid successor of previous txids
+       
+        if(!$this->contactRepository->isNotBlocked($request['senderAddress']) || !checkPreviousTxid($request) || !checkAvailableFundsTransaction($request)){
+            return true;
+        }
+        // Check if Transaction already exists for txid or memo in database
+        try{
+            $memo = $request['memo'];
+            if($memo === "standard"){
+                // If direct transaction
+                $results = getTransactionByTxid($request['txid']);
+            } else{
+                // If p2p based transaction
+                $results = getTransactionByMemo($memo);
+            }
+            if(!$results){
+                if($echo){
+                    echo buildSendAcceptancePayload($request);            
+                }
+                return false;  
+            } else{
+                if($echo){
+                    echo buildSendRejectionPayload($request);
+                }
+                return true;
+            }
+        } catch (PDOException $e) {
+            // Handle database error
+            error_log("Error retrieving existence of Transaction by memo" . $e->getMessage());
+            if($echo){
+                echo json_encode([
+                    "status" => "rejected",
+                    "message" => "Could not retrieve existence of Transaction with receiver"
+                ]);
+            }
+            return true;
+        }
+    }
+
+    /**
      * Fix previous transaction ID to avoid duplicates
      *
      * @param string $senderPubKey Sender's public key
@@ -425,16 +472,6 @@ class TransactionService {
      */
     public function getByTxid(string $txid): ?array {
         return $this->transactionRepository->getByTxid($txid);
-    }
-
-    /**
-     * Get Transaction request prior existence
-     *
-     * @param array $request Transaction request data
-     * @return bool True if found
-     */
-    public function getPriorExistenceTransaction(array $request): bool {
-        return $this->transactionRepository->checkExistenceTransaction($request);
     }
 
     /**

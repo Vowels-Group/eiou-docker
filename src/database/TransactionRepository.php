@@ -163,53 +163,6 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
-     * Check Existence of Transaction
-     *
-     * @param array|null $request Request data
-     * @return bool
-     */
-    function checkExistenceTransaction(array $request, $echo = true) : bool{
-        // Check if Transaction already exists for memo in database and is a valid successor of previous txids
-        // Check if Transaction is a valid successor of previous txids
-        $contactService = ServiceContainer::getInstance()->getContactService();
-        if(!$contactService->isNotBlocked($request['senderAddress']) || !checkPreviousTxid($request) || !checkAvailableFundsTransaction($request)){
-            return true;
-        }
-        // Check if Transaction already exists for txid or memo in database
-        try{
-            $memo = $request['memo'];
-            if($memo === "standard"){
-                // If direct transaction
-                $results = getTransactionByTxid($request['txid']);
-            } else{
-                // If p2p based transaction
-                $results = getTransactionByMemo($memo);
-            }
-            if(!$results){
-                if($echo){
-                    echo buildSendAcceptancePayload($request);            
-                }
-                return false;  
-            } else{
-                if($echo){
-                    echo buildSendRejectionPayload($request);
-                }
-                return true;
-            }
-        } catch (PDOException $e) {
-            // Handle database error
-            $this->logError("Error retrieving existence of Transaction by memo", $e);
-            if($echo){
-                echo json_encode([
-                    "status" => "rejected",
-                    "message" => "Could not retrieve existence of Transaction with receiver"
-                ]);
-            }
-            return true;
-        }
-    }
-
-    /**
      * Get previous transaction ID between two parties
      *
      * @param string $senderPublicKey Sender's public key

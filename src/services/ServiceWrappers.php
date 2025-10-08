@@ -97,7 +97,7 @@ function checkPreviousTxid(array $request): bool {
  */
 function checkPriorExistenceTransaction(array $request): bool {
     $service = ServiceContainer::getInstance()->getTransactionService();
-    return $service->getPriorExistenceTransaction($request);
+    return $service->checkExistenceTransaction($request);
 }
 
 
@@ -235,7 +235,7 @@ function checkRequestLevel(array $request): bool {
  */
 function checkPriorExistenceP2p(array $request): bool {
     $service = ServiceContainer::getInstance()->getP2pService();
-    return $service->getPriorExistenceP2p($request);
+    return $service->checkExistenceP2p($request);
 }
 
 /**
@@ -350,7 +350,7 @@ function checkRp2pExists($hash) {
  */
 function checkPriorExistenceRp2p(array $request): bool {
     $service = ServiceContainer::getInstance()->getRp2pService();
-    return $service->getPriorExistenceRp2p($request);
+    return $service->checkExistenceRp2p($request);
 }
 
 /**
