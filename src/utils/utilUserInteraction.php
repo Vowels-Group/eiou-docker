@@ -224,8 +224,9 @@ function displayUserInfo($argv) {
     echo "\tPublic Key:" . $readablePubKey . "\n";
 
     // Calculate total sent and received
-    $totalReceived = calculateTotalReceivedUser(); // Received by user
-    $totalSent = calculateTotalSentUser(); // Sent by user
+    $transactionService = ServiceContainer::getInstance()->getTransactionService();
+    $totalReceived = $transactionService->calculateTotalReceived($user['public']);
+    $totalSent = $transactionService->calculateTotalSent($user['public']);
     $balance = ($totalReceived - $totalSent) / 100;
     
     echo "\tTotal Balance: " . number_format($balance, 2) . "\n";
@@ -243,6 +244,7 @@ function displayUserInfo($argv) {
 }
 
 function viewBalanceQuery($direction, $userAddress, $limit){
+    $contactService = ServiceContainer::getInstance()->getContactService();
     // View balance information based on transactions, either received or send by user
     global $pdo;
     if($direction === "received"){
@@ -266,7 +268,7 @@ function viewBalanceQuery($direction, $userAddress, $limit){
     $countrows = 1;
     foreach ($results as $res) {
         $amount = $res['amount'] / 100;
-        printf("\t\t\t%s (%s) %s, %.2f %s\n", lookupContactNameByAddress($res[$address]), $res[$address], $res['timestamp'], $amount, $res['currency']);
+        printf("\t\t\t%s (%s) %s, %.2f %s\n", $contactService->lookupNameByAddress($res[$address]), $res[$address], $res['timestamp'], $amount, $res['currency']);
         if($limit !== 'all' && ($countrows >= $limit)){
             break;
         } 

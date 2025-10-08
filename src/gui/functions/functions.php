@@ -17,9 +17,13 @@ function getPDOConnection() {
             return null;
         }
     }
-
     return $pdo;
 }
+
+require_once("/etc/eiou/src/services/ServiceContainer.php");
+$contactService = ServiceContainer::getInstance()->getContactService();
+$synchService = ServiceContainer::getInstance()->getSynchService();
+$walletService = ServiceContainer::getInstance()->getWalletService();
 
 // Helper function for redirecting
 function redirectMessage($message,$messageType){
@@ -57,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         // Capture output
         ob_start();
         try {
-            addContact($argv);
+            $contactService->addContact($argv);
             $output = ob_get_clean();
             
             // Parse the output to determine message type and content
@@ -137,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     // Capture output
                     ob_start();
                     try {
-                        addContact($argv);
+                        $contactService->addContact($argv);
                         $output = ob_get_clean();
                         
                         // Parse the output to determine message type and content
@@ -160,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                 // Capture output
                 ob_start();
                 try {
-                    deleteContact($argv);
+                    $contactService->deleteContact($argv[2]);
                     $output = ob_get_clean();
                     
                     // Parse the output to determine message type and content
@@ -181,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                 // Capture output
                 ob_start();
                 try {
-                    blockContact($argv);
+                    $contactService->blockContact($argv[2]);
                     $output = ob_get_clean();
                     
                     // Parse the output to determine message type and content
@@ -203,7 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                 // Capture output
                 ob_start();
                 try {
-                    unblockContact($argv);
+                    $contactService->unblockContact($argv[2]);
                     $output = ob_get_clean();
                     
                     // Parse the output to determine message type and content
@@ -229,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     // Capture output
                     ob_start();
                     try {
-                        updateContact($argv);
+                        $contactService->updateContact($argv);
                         $output = ob_get_clean();
                         
                         // Parse the output to determine message type and content
@@ -258,15 +262,14 @@ function truncateAddress($address, $length = 10) {
 
 // Helper function to get user's total balance
 function getUserTotalBalance() {
-    global $pdo;
-    $pdo = getPDOConnection();
-    if ($pdo === null) return null;
+    global $pdo, $user;
     $pdo = getPDOConnection();
     if ($pdo === null) return null;
     
     try {
-        $totalReceived = calculateTotalReceivedUser();
-        $totalSent = calculateTotalSentUser();
+        $transactionService = ServiceContainer::getInstance()->getTransactionService();
+        $totalReceived = $transactionService->calculateTotalReceived($user['public']);
+        $totalSent = $transactionService->calculateTotalSent($user['public']);
         $balance = ($totalReceived - $totalSent) / 100; // Convert from cents
         return number_format($balance, 2);
     } catch (Exception $e) {
@@ -277,8 +280,6 @@ function getUserTotalBalance() {
 // Helper function to get accepted contacts
 function getAcceptedContacts() {
     global $pdo;
-    $pdo = getPDOConnection();
-    if ($pdo === null) return null;
     $pdo = getPDOConnection();
     if ($pdo === null) return null;
     
@@ -296,8 +297,6 @@ function getAcceptedContacts() {
 // Helper function to get pending contacts
 function getPendingContacts() {
     global $pdo;
-    $pdo = getPDOConnection();
-    if ($pdo === null) return null;
     $pdo = getPDOConnection();
     if ($pdo === null) return null;
     
@@ -318,8 +317,6 @@ function getUserPendingContacts() {
     global $pdo;
     $pdo = getPDOConnection();
     if ($pdo === null) return null;
-    $pdo = getPDOConnection();
-    if ($pdo === null) return null;
     
     try {
         // Get all pending contact requests (where name IS NOT NULL and status = 'pending')
@@ -336,8 +333,6 @@ function getUserPendingContacts() {
 // Helper function to get blocked contacts
 function getBlockedContacts() {
     global $pdo;
-    $pdo = getPDOConnection();
-    if ($pdo === null) return null;
     $pdo = getPDOConnection();
     if ($pdo === null) return null;
     
@@ -358,8 +353,6 @@ function getAllContacts() {
     global $pdo;
     $pdo = getPDOConnection();
     if ($pdo === null) return null;
-    $pdo = getPDOConnection();
-    if ($pdo === null) return null;
     
     try {
         // Get all all contacts (regardless of status)
@@ -378,6 +371,7 @@ function getContactBalance($userPubkey, $contactPubkey) {
     global $pdo;
     $pdo = getPDOConnection();
     if ($pdo === null) return null;
+    
 
     try {
         // Calculate sent to this contact
@@ -544,8 +538,6 @@ function getContactNameByAddress($address) {
     global $pdo;
     $pdo = getPDOConnection();
     if ($pdo === null) return null;
-    $pdo = getPDOConnection();
-    if ($pdo === null) return null;
     
     try {
         $stmt = $pdo->prepare("SELECT name FROM contacts WHERE address = ?");
@@ -598,8 +590,6 @@ function checkForNewTransactions($lastCheckTime) {
 // Helper function to check for new contact requests since last check
 function checkForNewContactRequests($lastCheckTime) {
     global $pdo;
-    $pdo = getPDOConnection();
-    if ($pdo === null) return null;
     $pdo = getPDOConnection();
     if ($pdo === null) return null;
     
