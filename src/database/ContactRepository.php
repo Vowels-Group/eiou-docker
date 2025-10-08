@@ -7,7 +7,6 @@ require_once __DIR__ . '/AbstractRepository.php';
  * Contact Repository
  *
  * Manages all database interactions for the contacts table.
- * Replaces global $pdo usage in databaseContactInteraction.php
  *
  * @package Database\Repository
  */

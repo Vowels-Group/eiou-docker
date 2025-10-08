@@ -7,7 +7,6 @@ require_once __DIR__ . '/AbstractRepository.php';
  * Transaction Repository
  *
  * Manages all database interactions for the transactions table.
- * Replaces global $pdo usage in databaseTransactionInteraction.php
  *
  * @package Database\Repository
  */
@@ -301,7 +300,7 @@ class TransactionRepository extends AbstractRepository {
             'currency' => $request['currency'],
             'txid' => $request['txid'],
             'previous_txid' => $request['previousTxid'],
-            'sender_signature' => $request['signature'],
+            'sender_signature' => $request['signature'] ?? null, // upon initial inserting a standard transaction in database of original sender it is null
             'memo' => $request['memo']
         ];
 

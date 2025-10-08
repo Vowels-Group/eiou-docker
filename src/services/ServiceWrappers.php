@@ -420,6 +420,64 @@ function handleMessageRequest($message) {
 }
 
 // ============================================================================
+// CLEANUP SERVICE WRAPPERS
+// ============================================================================
+
+/**
+ * Process potential cleanup of messages (wrapper)
+ *
+ * @return void
+ */
+function processCleanupMessages() {
+    $service = ServiceContainer::getInstance()->getCleanupService();
+    $service->processCleanupMessages();
+}
+
+
+// ============================================================================
+// DEBUG SERVICE WRAPPERS
+// ============================================================================
+
+/**
+ * Output any message to log (wrapper)
+ *
+ * @param string $message Message to output to user and/or log
+ * @param string $echo 'ECHO' (to user & log) or 'SILENT' (only to log) 
+ * @return void
+ */
+function output($message,$echo = 'ECHO') {
+    $service = ServiceContainer::getInstance()->getDebugService();
+    $service->output($message,$echo);
+}
+
+
+// ============================================================================
+// SYNCH SERVICE WRAPPERS
+// ============================================================================
+
+/**
+ * Synch a Contact (wrapper)
+ *
+ * @param string $address Contact address
+ * @param string $echo 'ECHO' (to user & log) or 'SILENT' (only to log) 
+ * @return bool True if synchable, False otherwise
+ */
+function synchContact($address, $echo = 'SILENT') {
+    $service = ServiceContainer::getInstance()->getSynchService();
+    return $service->synchSingleContact($address, $echo);
+}
+
+/**
+ * Synch a Transaction (wrapper)
+ *
+ * @return bool True if synchable, False otherwise
+ */
+function synchTransaction() {
+    $service = ServiceContainer::getInstance()->getSynchService();
+    return $service->synchTransaction();
+}
+
+// ============================================================================
 // REPOSITORY ACCESS HELPERS (for code that directly accesses repositories)
 // ============================================================================
 

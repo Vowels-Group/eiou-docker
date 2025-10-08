@@ -1,14 +1,10 @@
 <?php
 # Copyright 2025
 
-require_once dirname(__DIR__) . '/database/P2pRepository.php';
-require_once dirname(__DIR__) . '/database/ContactRepository.php';
-
 /**
  * P2P Service
  *
  * Handles all business logic for peer-to-peer payment routing.
- * Replaces procedural functions from src/functions/p2p.php
  *
  * @package Services
  */
@@ -243,14 +239,12 @@ class P2pService {
                 $contacts = $this->contactRepository->getAllAddresses($message['sender_address']);
                 // Count amount of contacts to send p2p request
                 $contactsCount = countTorAndHttpAddresses($contacts);
-
                 // Send p2p request to all contacts
                 foreach ($contacts as $contact) {
                     if(!synchContact($contact)){
                         // If contact cannot be synched in case of pending contact status, skip sending p2p to this contact
                         continue;
                     }
-
                     // Do not send p2p to contact (end-recipient), if direct transaction failed due to insufficient funds
                     if(isset($message['destination_address']) && $contact === $message['destination_address']){
                         if(isTorAddress($message['destination_address'])){
@@ -260,7 +254,6 @@ class P2pService {
                         }
                         continue;
                     }
-
                     $response = json_decode(send($contact, $p2pPayload),true);
                     output(outputP2pResponse($response),'SILENT');
                 }

@@ -1,13 +1,10 @@
 <?php
 # Copyright 2025
 
-require_once dirname(__DIR__) . '/database/ContactRepository.php';
-require_once dirname(__DIR__) . '/schemas/payloads/payloadContactSchema.php';
 /**
  * Contact Service
  *
  * Handles all business logic for contact management.
- * Replaces procedural functions from src/functions/contacts.php
  *
  * @package Services
  */

@@ -1,4 +1,6 @@
 <?php
+
+# Copyright 2025
 /**
  * Secure logging wrapper that masks sensitive data
  * Prevents sensitive information from being logged

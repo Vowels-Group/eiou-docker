@@ -7,7 +7,6 @@ require_once __DIR__ . '/AbstractRepository.php';
  * P2P Repository
  *
  * Manages all database interactions for the p2p table.
- * Replaces global $pdo usage in databaseP2pInteraction.php
  *
  * @package Database\Repository
  */
@@ -55,8 +54,8 @@ class P2pRepository extends AbstractRepository {
     /**
      * Check Existence of P2P
      *
-     * @param array|null $request Request data
-     * @return bool
+     * @param array $request Request data
+     * @return bool True if P2P exists or cannot be checked, False otherwise.
      */
     public function checkExistenceP2p(array $request, $echo = true) : bool{
     // Check if P2P already exists for hash in database, is valid and can be completed
@@ -115,7 +114,7 @@ class P2pRepository extends AbstractRepository {
             'max_request_level' => $request['maxRequestLevel'],
             'sender_public_key' => $request['senderPublicKey'],
             'sender_address' => $request['senderAddress'],
-            'sender_signature' => $request['signature'] ?? null,
+            'sender_signature' => $request['signature'] ?? null, // upon inserting a p2p in the db of the user that created it it is null
             'destination_address' => $destinationAddress,
             'incoming_txid' => $request['incoming_txid'] ?? null,
             'outgoing_txid' => $request['outgoing_txid'] ?? null,

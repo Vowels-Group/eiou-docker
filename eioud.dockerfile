@@ -70,9 +70,6 @@ RUN chmod 644 /etc/eiou/src/core/*
 # Database folder
 RUN chmod 755 /etc/eiou/src/database
 RUN chmod 644 /etc/eiou/src/database/*
-# Functions folder
-RUN chmod 755 /etc/eiou/src/functions
-RUN chmod 644 /etc/eiou/src/functions/*
 # Services folder
 RUN chmod 755 /etc/eiou/src/services
 RUN chmod 644 /etc/eiou/src/services/*

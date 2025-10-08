@@ -1,17 +1,10 @@
 <?php
 # Copyright 2025
 
-require_once dirname(__DIR__) . '/database/pdo.php';
-require_once dirname(__DIR__) . '/database/ContactRepository.php';
-require_once dirname(__DIR__) . '/database/TransactionRepository.php';
-require_once dirname(__DIR__) . '/database/P2pRepository.php';
-require_once dirname(__DIR__) . '/database/Rp2pRepository.php';
-
 /**
  * Service Container
  *
  * Centralized dependency injection container for managing service instances.
- * Replaces global variables with proper dependency management.
  *
  * @package Services
  */
@@ -140,6 +133,19 @@ class ServiceContainer {
         return $this->services['Rp2pRepository'];
     }
 
+
+    /**
+     * Get DebugRepository instance
+     *
+     * @return DebugRepository
+     */
+    public function getDebugRepository(): DebugRepository {
+        if (!isset($this->services['DebugRepository'])) {
+            $this->services['DebugRepository'] = new DebugRepository($this->pdo);
+        }
+        return $this->services['DebugRepository'];
+    }
+
     /**
      * Get ContactService instance
      *
@@ -238,6 +244,61 @@ class ServiceContainer {
         }
         return $this->services['MessageService'];
     }
+
+    /**
+     * Get CleanupService instance
+     *
+     * @return CleanupService
+     */
+    public function getCleanupService(): CleanupService {
+        if (!isset($this->services['CleanupService'])) {
+            require_once __DIR__ . '/CleanupService.php';
+            $this->services['CleanupService'] = new CleanupService(
+                $this->getP2pRepository(),
+                $this->getRp2pRepository(),
+                $this->getTransactionRepository(),
+                $this->currentUser
+            );
+        }
+        return $this->services['CleanupService'];
+    }
+
+    /**
+     * Get SynchService instance
+     *
+     * @return SynchService
+     */
+    public function getSynchService(): SynchService {
+        if (!isset($this->services['SynchService'])) {
+            require_once __DIR__ . '/SynchService.php';
+            $this->services['SynchService'] = new SynchService(
+                $this->getContactRepository(),
+                $this->getP2pRepository(),
+                $this->getRp2pRepository(),
+                $this->getTransactionRepository(),
+                $this->currentUser
+            );
+        }
+        return $this->services['SynchService'];
+    }
+
+    /**
+     * Get DebugService instance
+     *
+     * @return DebugService
+     */
+    public function getDebugService(): DebugService {
+        if (!isset($this->services['DebugService'])) {
+            require_once __DIR__ . '/DebugService.php';
+            $this->services['DebugService'] = new DebugService(
+                $this->getDebugRepository(),
+                $this->currentUser
+            );
+        }
+        return $this->services['DebugService'];
+    }
+
+
 
     /**
      * Clear all cached services (useful for testing)

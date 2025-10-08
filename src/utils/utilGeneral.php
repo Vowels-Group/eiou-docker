@@ -1,8 +1,6 @@
 <?php
 # Copyright 2025
 
-//require_once(dirname(__DIR__,2) . "/src/services/ServiceWrappers.php");
-
 function calculateAvailableFunds($request){
     // Calculate funds request's sender has available with user
     $totalSent = calculateTotalSent($request['senderPublicKey'] ?? $request['sender_public_key']);   // Calculate IOUs sent to sender

@@ -1,4 +1,6 @@
 <?php
+
+# Copyright 2025
 /**
  * Security utility functions for eIOU application
  * Provides output encoding, rate limiting, and security headers

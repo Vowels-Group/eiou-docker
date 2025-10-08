@@ -1,4 +1,6 @@
 <?php
+
+# Copyright 2025
 /**
  * Adaptive polling mechanism for background processors
  * Dynamically adjusts polling intervals based on system load and queue size

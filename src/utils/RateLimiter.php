@@ -1,4 +1,6 @@
 <?php
+
+# Copyright 2025
 /**
  * Rate limiting implementation for eIOU application
  * Prevents abuse and brute force attacks

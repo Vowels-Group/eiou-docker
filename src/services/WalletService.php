@@ -5,7 +5,6 @@
  * Wallet Service
  *
  * Handles all business logic for wallet management.
- * Replaces procedural functions from src/functions/wallet.php
  *
  * @package Services
  */

@@ -45,21 +45,23 @@ checkWalletExists($user, $request);
     // Update Contact
     output("Executing update contact request", 'SILENT');
     $contactService->updateContact($argv);
+    //updateContactFields
   }
   elseif($request === "block"){
     // Block Contact
     output("Executing block contact request", 'SILENT');
-    $contactService->blockContact($argv);
+    // no check on argv[2] what is
+    $contactService->blockContact($argv[2]);
   }
   elseif($request === "unblock"){
     // Unblock Contact
     output("Executing unblock contact request", 'SILENT');
-    $contactService->unblockContact($argv);
+    $contactService->unblockContact($argv[2]);
   }
   elseif($request === "delete"){
     // Delete Contact
     output("Executing delete contact request", 'SILENT');
-    $contactService->deleteContact($argv);
+    $contactService->deleteContact($argv[2]);
   }
   elseif($request === "search"){
     // Search Contacts

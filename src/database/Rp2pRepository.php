@@ -7,7 +7,6 @@ require_once __DIR__ . '/AbstractRepository.php';
  * RP2P Repository
  *
  * Manages all database interactions for the rp2p (reverse P2P) table.
- * Replaces global $pdo usage in databaseRp2pInteraction.php
  *
  * @package Database\Repository
  */

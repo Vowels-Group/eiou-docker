@@ -1,14 +1,10 @@
 <?php
 # Copyright 2025
 
-require_once dirname(__DIR__) . '/database/P2pRepository.php';
-require_once dirname(__DIR__) . '/database/Rp2pRepository.php';
-
 /**
  * RP2P Service
  *
  * Handles all business logic for R peer-to-peer payment routing.
- * Replaces procedural functions from src/functions/rp2p.php
  *
  * @package Services
  */
