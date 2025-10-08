@@ -114,17 +114,17 @@ class TransactionService {
     }
 
     /**
-     * Check Existence of Transaction
+     * Check Transaction is Possible
      *
      * @param array|null $request Request data
-     * @return bool
+     * @return bool True if Transaction possible, False otherwise.
      */
-    function checkExistenceTransaction(array $request, $echo = true) : bool{
+    function checkTransactionPossible(array $request, $echo = true) : bool{
         // Check if Transaction already exists for memo in database and is a valid successor of previous txids
         // Check if Transaction is a valid successor of previous txids
        
         if(!$this->contactRepository->isNotBlocked($request['senderAddress']) || !checkPreviousTxid($request) || !checkAvailableFundsTransaction($request)){
-            return true;
+            return false;
         }
         // Check if Transaction already exists for txid or memo in database
         try{
@@ -136,17 +136,17 @@ class TransactionService {
                 // If p2p based transaction
                 $results = getTransactionByMemo($memo);
             }
-            if(!$results){
-                if($echo){
-                    echo buildSendAcceptancePayload($request);            
-                }
-                return false;  
-            } else{
+            if($results){
+                // if transaction already exists
                 if($echo){
                     echo buildSendRejectionPayload($request);
                 }
-                return true;
+                return false;
+            } 
+            if($echo){
+                echo buildSendAcceptancePayload($request);            
             }
+            return true;  
         } catch (PDOException $e) {
             // Handle database error
             error_log("Error retrieving existence of Transaction by memo" . $e->getMessage());
@@ -156,7 +156,7 @@ class TransactionService {
                     "message" => "Could not retrieve existence of Transaction with receiver"
                 ]);
             }
-            return true;
+            return false;
         }
     }
 

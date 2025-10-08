@@ -99,31 +99,30 @@ class P2pService {
     }
 
     /**
-     * Check Existence of P2P
+     * Check P2P is possible
      *
      * @param array $request Request data
-     * @return bool True if P2P exists or cannot be checked, False otherwise.
+     * @return bool True if P2P possible, False otherwise.
      */
-    public function checkExistenceP2p(array $request, $echo = true) : bool{
+    public function checkP2pPossible(array $request, $echo = true) : bool{
         // Check if P2P already exists for hash in database, is valid and can be completed
         // & Check if P2P is valid and can be completed given credit of user requesting
         if(!$this->contactRepository->isNotBlocked($request['senderAddress']) || !checkRequestLevel($request) || !checkAvailableFunds($request)){
-            return true; 
+            return false; 
         }
         // Check if P2P already exists for hash in database
         try{
-            $results = getP2pByHash($request['hash']);
-            if(!$results){
-                if($echo){
-                    echo buildP2pAcceptancePayload($request);
-                }
-                return false;  
-            } else{
+            if($this->p2pRepository->getByHash($request['hash'])){
+                //If P2P already exists
                 if($echo){
                     echo buildP2pRejectionPayload($request);
                 }
-                return true;
+                return false;
+            } 
+            if($echo){
+                echo buildP2pAcceptancePayload($request);
             }
+            return true;  
         } catch (PDOException $e) {
             // Handle database error
             error_log("Error retrieving existence of P2P by hash" , $e->getMessage());
@@ -133,7 +132,7 @@ class P2pService {
                     "message" => "Could not retrieve existence of P2P with receiver"
                 ]);
             }
-            return true;
+            return false;
         }
     }
 

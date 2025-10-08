@@ -90,14 +90,14 @@ function checkPreviousTxid(array $request): bool {
 }
 
 /**
- * Check Transaction request prior existence (wrapper)
+ * Check Transaction is possinble (wrapper)
  *
  * @param array $request Transaction request data
- * @return bool True if found
+ * @return bool True if possible, false otherwise
  */
-function checkPriorExistenceTransaction(array $request): bool {
+function checkTransactionPossible(array $request): bool {
     $service = ServiceContainer::getInstance()->getTransactionService();
-    return $service->checkExistenceTransaction($request);
+    return $service->checkTransactionPossible($request);
 }
 
 
@@ -228,14 +228,14 @@ function checkRequestLevel(array $request): bool {
 }
 
 /**
- * Check P2P request prior existence (wrapper)
+ * Check P2P is possible (wrapper)
  *
  * @param array $request P2P request data
- * @return bool True if found
+ * @return bool True if possible
  */
-function checkPriorExistenceP2p(array $request): bool {
+function checkP2pPossible(array $request): bool {
     $service = ServiceContainer::getInstance()->getP2pService();
-    return $service->checkExistenceP2p($request);
+    return $service->checkP2pPossible($request);
 }
 
 /**
@@ -343,14 +343,14 @@ function checkRp2pExists($hash) {
 }
 
 /**
- * Check RP2P request prior existence (wrapper)
+ * Check RP2P request is possible (wrapper)
  *
  * @param array $request RP2P request data
- * @return bool True if found
+ * @return bool True if possible, false otherwise
  */
-function checkPriorExistenceRp2p(array $request): bool {
+function checkRp2pPossible(array $request): bool {
     $service = ServiceContainer::getInstance()->getRp2pService();
-    return $service->checkExistenceRp2p($request);
+    return $service->checkRp2pPossible($request);
 }
 
 /**
@@ -363,8 +363,6 @@ function insertRp2pRequest($request) {
     $repo = ServiceContainer::getInstance()->getRp2pRepository();
     return $repo->insertRp2pRequest($request);
 }
-
-
 
 // ============================================================================
 // WALLET SERVICE WRAPPERS
