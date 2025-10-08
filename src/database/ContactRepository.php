@@ -529,4 +529,71 @@ class ContactRepository extends AbstractRepository {
         $affectedRows = $this->update($fields, 'address', $address);
         return $affectedRows >= 0;
     }
+
+    /**
+     * Update specific contact fields through CLI interaction
+     *
+     * @param array $argv Command line arguments
+     */
+    function updateContact($argv): void {
+        // Update contact information
+
+        $address = isset($argv[2]) ? $argv[2] : null;
+        $field = isset($argv[3]) ? strtolower($argv[3]) : null;
+        $value = isset($argv[4]) ? $argv[4] : null;
+        $value2 = isset($argv[5]) ? $argv[5] : null;
+        $value3 = isset($argv[6]) ? $argv[6] : null;
+
+        // Check if all fields are valid and contact exists before proceeding
+        if(!$address || ($address && !lookupContactByAddress($address))){
+            // If no address supplied or no contact exists with supplied address
+            if(!$address){
+                output(outputNoSuppliedAddress());
+            } else{
+                output(outputAdressContactIssue($address));
+            }
+        } elseif (!in_array($field,['name','fee','credit','all'])){
+            // If no proper field update parameter
+            output(returnContactUpdateInvalidInput());
+        }elseif( !$value || ($field === 'all' && (!$value2 || !$value3)) ){
+            // Check if enough parameters are given to update
+            output(returnContactUpdateInvalidInputParameters());
+        } else{
+            $query = "UPDATE contacts SET ";
+            $params = []; 
+            // Depending on supplied argument update specific (or all) items
+            if($field === 'name'){
+                $query .= "name = :name";
+                $params[':name'] = $value;
+            }
+            elseif($field === 'fee'){
+                $query .= "fee_percent = :fee";
+                $params[':fee'] = $value * 100; // Convert percentage
+            }
+            elseif($field === 'credit'){
+                $query .= "credit_limit = :credit, currency = :currency";
+                $params[':credit'] = $value * 100; // Convert to cents
+                $params[':currency'] = 'USD';
+            }
+            elseif($field === 'all'){
+                $query .= "name = :name, fee_percent = :fee, credit_limit = :credit, currency = :currency";
+                $params[':name'] = $value;
+                $params[':fee'] = $value2 * 100; // Convert percentage
+                $params[':credit'] = $value3 * 100; // Convert to cents
+                $params[':currency'] = 'USD';
+            }
+            
+            $query .= " WHERE address = :address";
+            $params[':address'] = $address;
+            
+           
+            if ($this->execute($query,$params)) {
+                // If succesful update, respond of success
+                output(returnContactUpdate());
+            } else{
+                // If unsuccesful update with correct parameters, implies not an existing contact, respond of this fact
+                output(returnContactNotFound());
+            }
+        }  
+    }
 }

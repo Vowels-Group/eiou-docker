@@ -356,6 +356,15 @@ class ContactService {
     }
 
     /**
+     * Update specific contact fields through CLI interaction
+     *
+     * @param array $argv Command line arguments
+     */
+    public function updateContact(array $argv) {
+        return $this->repository->updateContact($argv);
+    }
+
+    /**
      * Get all contact addresses
      *
      * @param string|null $exclude Address to exclude
