@@ -10,15 +10,16 @@ if (!file_exists("/etc/eiou/config.php")) {
 }
 require_once("/etc/eiou/config.php");
 
-// Include session management
-require_once("/etc/eiou/src/gui/includes/session.php");
+// Include new bootstrap (includes session management and all components)
+require_once("/etc/eiou/src/gui/bootstrap.php");
 
 // Start secure session
-startSecureSession();
+use eIOUGUI\Core\Session;
+$session = new Session();
 
 // Handle logout request
 if (isset($_GET['logout'])) {
-    logout();
+    $session->logout();
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
@@ -27,7 +28,7 @@ if (isset($_GET['logout'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
     $submittedAuthCode = $_POST['authcode'];
 
-    if (isset($user['authcode']) && authenticate($submittedAuthCode, $user['authcode'])) {
+    if (isset($user['authcode']) && $session->authenticate($submittedAuthCode, $user['authcode'])) {
         // Authentication successful, redirect to clean URL
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
@@ -38,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
 }
 
 // Check if user is authenticated
-if (!isAuthenticated()) {
+if (!$session->isAuthenticated()) {
     // Show authentication form
     header('Content-Type: text/html; charset=UTF-8');
     require_once("/etc/eiou/src/gui/layout/authenticationForm.html");
@@ -46,7 +47,7 @@ if (!isAuthenticated()) {
 }
 
 // User is authenticated, check session timeout
-if (!checkSessionTimeout()) {
+if (!$session->checkSessionTimeout()) {
     // Session timed out, redirect to login
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
@@ -55,13 +56,12 @@ if (!checkSessionTimeout()) {
 // If we get here, authentication is valid and session is active
 
 // Verify CSRF token for POST requests
-verifyCSRFToken();
+$session->verifyCSRFToken();
 
 // Generate CSRF token for forms
-$csrfToken = getCSRFToken();
+$csrfToken = $session->getCSRFToken();
 
-// This file handles wallet interaction with the eIOU network
-require_once("/etc/eiou/src/gui/functions/functions.php");
+// Bootstrap already loaded all components (repositories, controllers, helpers, services)
 
 // Set content type for HTML
 header('Content-Type: text/html; charset=UTF-8');
