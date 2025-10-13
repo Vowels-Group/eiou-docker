@@ -299,11 +299,3 @@ document.addEventListener('keydown', function(event) {
         closeEditContactModal();
     }
 });
-
-$(function () {
-  var includeHtml = $('[include-html]')
-  $.each(includeHtml, function () {
-    var file = 'src/wallet/html-parts/' + $(this).data('include') + '.html'
-    $(this).load(file)
-  })
-});
