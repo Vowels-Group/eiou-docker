@@ -180,130 +180,122 @@
         addFormInteractionListeners();
     }
 
-// Manual refresh function (Tor Browser compatible)
-function refreshWalletData() {
-    const refreshBtn = document.getElementById('manualRefresh');
-    const icon = refreshBtn.querySelector('i');
-    
-    // Show loading state
-    icon.className = 'fas fa-spinner fa-spin';
-    refreshBtn.disabled = true;
-    
-    // Preserve auth code when refreshing
-    const url = new URL(window.location.href);
-    window.location.href = url.toString();
-}
-
-// Send eIOU form handling
-function initializeSendForm() {
-    const recipientSelect = document.getElementById('recipient');
-    const manualAddressGroup = document.getElementById('manual-address-group');
-    const manualAddressInput = document.getElementById('manual-address');
-    const transactionTypeIndicator = document.getElementById('transaction-type-indicator');
-    const transactionTypeText = document.getElementById('transaction-type-text');
-    
-    // Set initial state - manual address is visible by default
-    manualAddressInput.required = true;
-    recipientSelect.required = false;
-    transactionTypeIndicator.style.display = 'block';
-    transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
-    transactionTypeText.style.color = '#ffc107';
-    
-    if (recipientSelect) {
-        recipientSelect.addEventListener('change', function() {
-            const selectedValue = this.value;
-            
-            if (selectedValue === '') {
-                // Show manual address input (default state)
-                manualAddressGroup.style.display = 'block';
-                manualAddressInput.required = true;
-                recipientSelect.required = false;
-                transactionTypeIndicator.style.display = 'block';
-                transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
-                transactionTypeText.style.color = '#ffc107';
-            } else {
-                // Hide manual address input when contact is selected
-                manualAddressGroup.style.display = 'none';
-                manualAddressInput.required = false;
-                recipientSelect.required = true;
-                transactionTypeIndicator.style.display = 'block';
-                transactionTypeText.textContent = 'Direct Transaction (to contact)';
-                transactionTypeText.style.color = '#28a745';
-            }
-        });
+    // Manual refresh function (Tor Browser compatible)
+    function refreshWalletData() {
+        const refreshBtn = document.getElementById('manualRefresh');
+        const icon = refreshBtn.querySelector('i');
+        
+        // Show loading state
+        icon.className = 'fas fa-spinner fa-spin';
+        refreshBtn.disabled = true;
+        
+        // Preserve auth code when refreshing
+        const url = new URL(window.location.href);
+        window.location.href = url.toString();
     }
-    
-    // Handle manual address input
-    if (manualAddressInput) {
-        manualAddressInput.addEventListener('input', function() {
-            const address = this.value.trim();
-            if (address) {
-                transactionTypeIndicator.style.display = 'block';
-                if (address.includes('.onion') || address.startsWith('http')) {
+
+    // Send eIOU form handling
+    function initializeSendForm() {
+        const recipientSelect = document.getElementById('recipient');
+        const manualAddressGroup = document.getElementById('manual-address-group');
+        const manualAddressInput = document.getElementById('manual-address');
+        const transactionTypeIndicator = document.getElementById('transaction-type-indicator');
+        const transactionTypeText = document.getElementById('transaction-type-text');
+        
+        // Set initial state - manual address is visible by default
+        manualAddressInput.required = true;
+        recipientSelect.required = false;
+        transactionTypeIndicator.style.display = 'block';
+        transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
+        transactionTypeText.style.color = '#ffc107';
+        
+        if (recipientSelect) {
+            recipientSelect.addEventListener('change', function() {
+                const selectedValue = this.value;
+                
+                if (selectedValue === '') {
+                    // Show manual address input (default state)
+                    manualAddressGroup.style.display = 'block';
+                    manualAddressInput.required = true;
+                    recipientSelect.required = false;
+                    transactionTypeIndicator.style.display = 'block';
                     transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
                     transactionTypeText.style.color = '#ffc107';
                 } else {
-                    transactionTypeText.textContent = 'P2P Transaction (address format detected)';
-                    transactionTypeText.style.color = '#ffc107';
+                    // Hide manual address input when contact is selected
+                    manualAddressGroup.style.display = 'none';
+                    manualAddressInput.required = false;
+                    recipientSelect.required = true;
+                    transactionTypeIndicator.style.display = 'block';
+                    transactionTypeText.textContent = 'Direct Transaction (to contact)';
+                    transactionTypeText.style.color = '#28a745';
                 }
-            } else {
-                transactionTypeIndicator.style.display = 'none';
-            }
-        });
+            });
+        }
+        
+        // Handle manual address input
+        if (manualAddressInput) {
+            manualAddressInput.addEventListener('input', function() {
+                const address = this.value.trim();
+                if (address) {
+                    transactionTypeIndicator.style.display = 'block';
+                    if (address.includes('.onion') || address.startsWith('http')) {
+                        transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
+                        transactionTypeText.style.color = '#ffc107';
+                    } else {
+                        transactionTypeText.textContent = 'P2P Transaction (address format detected)';
+                        transactionTypeText.style.color = '#ffc107';
+                    }
+                } else {
+                    transactionTypeIndicator.style.display = 'none';
+                }
+            });
+        }
     }
-}
 
-// Initialize send form when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    initializeSendForm();
-});
+    // Initialize send form when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeSendForm();
+    });
 
-// Edit contact modal functions
-function openEditContactModal(address, name, fee, credit, currency) {
-    // Populate the form fields
-    document.getElementById('edit_contact_address').value = address;
-    document.getElementById('edit_contact_name').value = name;
-    document.getElementById('edit_contact_fee').value = fee;
-    document.getElementById('edit_contact_credit').value = credit;
-    document.getElementById('edit_contact_currency').value = currency;
-    
-    // Show the modal
-    document.getElementById('editContactModal').style.display = 'flex';
-    
-    // Pause polling during form interaction
-    if (typeof pausePollingForInteraction === 'function') {
-        pausePollingForInteraction();
+    // Edit contact modal functions
+    function openEditContactModal(address, name, fee, credit, currency) {
+        // Populate the form fields
+        document.getElementById('edit_contact_address').value = address;
+        document.getElementById('edit_contact_name').value = name;
+        document.getElementById('edit_contact_fee').value = fee;
+        document.getElementById('edit_contact_credit').value = credit;
+        document.getElementById('edit_contact_currency').value = currency;
+        
+        // Show the modal
+        document.getElementById('editContactModal').style.display = 'flex';
+        
+        // Pause polling during form interaction
+        if (typeof pausePollingForInteraction === 'function') {
+            pausePollingForInteraction();
+        }
     }
-}
 
-function closeEditContactModal() {
-    document.getElementById('editContactModal').style.display = 'none';
-    
-    // Resume polling after modal is closed
-    if (typeof resumePollingAfterInteraction === 'function') {
-        setTimeout(resumePollingAfterInteraction, 1000);
+    function closeEditContactModal() {
+        document.getElementById('editContactModal').style.display = 'none';
+        
+        // Resume polling after modal is closed
+        if (typeof resumePollingAfterInteraction === 'function') {
+            setTimeout(resumePollingAfterInteraction, 1000);
+        }
     }
-}
 
-// Close modal when clicking outside of it
-window.onclick = function(event) {
-    const modal = document.getElementById('editContactModal');
-    if (event.target === modal) {
-        closeEditContactModal();
+    // Close modal when clicking outside of it
+    window.onclick = function(event) {
+        const modal = document.getElementById('editContactModal');
+        if (event.target === modal) {
+            closeEditContactModal();
+        }
     }
-}
 
-// Close modal with Escape key
-document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') {
-        closeEditContactModal();
-    }
-});
-
-$(function () {
-  var includeHtml = $('[include-html]')
-  $.each(includeHtml, function () {
-    var file = 'src/eiou/gui/layout/walletSubParts/' + $(this).data('include') + '.html'
-    $(this).load(file)
-  })
-});
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeEditContactModal();
+        }
+    });
