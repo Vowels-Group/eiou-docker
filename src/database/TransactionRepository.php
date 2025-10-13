@@ -12,11 +12,6 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class TransactionRepository extends AbstractRepository {
     /**
-     * @var ContactRepository Contact repository instance
-     */
-    private ContactRepository $contactRepository;
-
-    /**
      * @var array Current user data
      */
     private array $currentUser;
@@ -26,10 +21,9 @@ class TransactionRepository extends AbstractRepository {
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection
      */
-    public function __construct(?PDO $pdo = null, ContactRepository $contactRepository) {
+    public function __construct(?PDO $pdo = null) {
         parent::__construct($pdo);
         $this->tableName = 'transactions';
-        $this->contactRepository = $contactRepository;
         $this->primaryKey = 'id';
     }
 
@@ -435,15 +429,12 @@ class TransactionRepository extends AbstractRepository {
             $isSent = in_array($tx['sender_address'], $userAddresses);
             $counterpartyAddress = $isSent ? $tx['receiver_address'] : $tx['sender_address'];
 
-            // Get contact name for counterparty
-            $contactName = $this->contactRepository->lookupNameByAddress($counterpartyAddress);
-
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
                 'type' => $isSent ? 'sent' : 'received',
                 'amount' => $tx['amount'] / 100, // Convert from cents
                 'currency' => $tx['currency'],
-                'counterparty' => $contactName ?: $counterpartyAddress
+                'counterparty' => $counterpartyAddress
             ];
         }
         return $formattedTransactions;
