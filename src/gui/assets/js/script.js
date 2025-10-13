@@ -303,7 +303,7 @@ document.addEventListener('keydown', function(event) {
 $(function () {
   var includeHtml = $('[include-html]')
   $.each(includeHtml, function () {
-    var file = 'src/wallet/html-parts/' + $(this).data('include') + '.html'
+    var file = 'src/eiou/gui/layout/walletSubParts/' + $(this).data('include') + '.html'
     $(this).load(file)
   })
 });

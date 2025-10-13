@@ -82,12 +82,20 @@ RUN chmod 755 /etc/eiou/src/gui/assets/css
 RUN chmod 644 /etc/eiou/src/gui/assets/css/*
 RUN chmod 755 /etc/eiou/src/gui/assets/js
 RUN chmod 644 /etc/eiou/src/gui/assets/js/*
-RUN chmod 755 /etc/eiou/src/gui/functions
-RUN chmod 644 /etc/eiou/src/gui/functions/*
+RUN chmod 755 /etc/eiou/src/gui/Controllers
+RUN chmod 644 /etc/eiou/src/gui/Controllers/*
+RUN chmod 755 /etc/eiou/src/gui/Core
+RUN chmod 644 /etc/eiou/src/gui/Core/*
+RUN chmod 755 /etc/eiou/src/gui/Helpers
+RUN chmod 644 /etc/eiou/src/gui/Helpers/*
 RUN chmod 755 /etc/eiou/src/gui/includes
 RUN chmod 644 /etc/eiou/src/gui/includes/*
 RUN chmod 755 /etc/eiou/src/gui/layout
 RUN chmod 644 /etc/eiou/src/gui/layout/*
+RUN chmod 755 /etc/eiou/src/gui/Repositories
+RUN chmod 644 /etc/eiou/src/gui/Repositories/*
+RUN chmod 755 /etc/eiou/src/gui/Services
+RUN chmod 644 /etc/eiou/src/gui/Services/*
 RUN chmod 755 /etc/eiou/src/gui/layout/walletSubParts
 RUN chmod 644 /etc/eiou/src/gui/layout/walletSubParts/*
 # Schemas folder
