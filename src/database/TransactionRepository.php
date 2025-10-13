@@ -12,13 +12,24 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class TransactionRepository extends AbstractRepository {
     /**
+     * @var ContactRepository Contact repository instance
+     */
+    private ContactRepository $contactRepository;
+
+    /**
+     * @var array Current user data
+     */
+    private array $currentUser;
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection
      */
-    public function __construct(?PDO $pdo = null) {
+    public function __construct(?PDO $pdo = null, ContactRepository $contactRepository) {
         parent::__construct($pdo);
         $this->tableName = 'transactions';
+        $this->contactRepository = $contactRepository;
         $this->primaryKey = 'id';
     }
 
@@ -189,6 +200,253 @@ class TransactionRepository extends AbstractRepository {
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result ? $result['txid'] : null;
+    }
+
+
+        /**
+     * Get contact balance (optimized single query)
+     *
+     * @param string $userPubkey
+     * @param string $contactPubkey
+     * @return int Balance in cents
+     */
+    public function getContactBalance(string $userPubkey, string $contactPubkey): int
+    {
+        $userHash = hash('sha256', $userPubkey);
+        $contactHash = hash('sha256', $contactPubkey);
+
+        // Calculate sent to this contact
+        $query = "SELECT COALESCE(SUM(amount), 0) as sent FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?";
+        $stmt = $this->execute($query,[$userHash, $contactHash]);
+        if(!$stmt){
+            return 0;
+        }
+        $sent = $stmt->fetch(PDO::FETCH_ASSOC)['sent'];
+
+        // Calculate received from this contact
+        $query = "SELECT COALESCE(SUM(amount), 0) as received FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?";
+        $stmt = $this->execute($query,[$contactHash, $userHash]);
+        if(!$stmt){
+            return 0;
+        }
+        $received = $stmt->fetch(PDO::FETCH_ASSOC)['received'];
+        return $received - $sent;     
+    }
+
+    
+    /**
+     * Get all contact balances in a single optimized query (fixes N+1 problem)
+     *
+     * @param string $userPubkey
+     * @param array $contactPubkeys
+     * @return array Associative array of pubkey => balance
+     */
+    public function getAllContactBalances(string $userPubkey, array $contactPubkeys): array
+    {
+        $userHash = hash('sha256', $userPubkey);
+        $contactHashes = array_map(function($pubkey) {
+            return hash('sha256', $pubkey);
+        }, $contactPubkeys);
+
+        // Create a mapping of hash to pubkey for later lookup
+        $hashToPubkey = array_combine($contactHashes, $contactPubkeys);
+
+        // Build placeholders for IN clause
+        $placeholders = str_repeat('?,', count($contactHashes) - 1) . '?';
+
+        // Single query to get all balances using UNION
+        $query = "
+            SELECT
+                contact_hash,
+                SUM(sent) as total_sent,
+                SUM(received) as total_received
+            FROM (
+                -- Sent from user to contacts
+                SELECT
+                    receiver_public_key_hash as contact_hash,
+                    SUM(amount) as sent,
+                    0 as received
+                FROM transactions
+                WHERE sender_public_key_hash = ?
+                    AND receiver_public_key_hash IN ($placeholders)
+                GROUP BY receiver_public_key_hash
+
+                UNION ALL
+
+                -- Received by user from contacts
+                SELECT
+                    sender_public_key_hash as contact_hash,
+                    0 as sent,
+                    SUM(amount) as received
+                FROM transactions
+                WHERE receiver_public_key_hash = ?
+                    AND sender_public_key_hash IN ($placeholders)
+                GROUP BY sender_public_key_hash
+            ) as balance_calc
+            GROUP BY contact_hash
+        ";
+
+        // Prepare parameters: userHash, contactHashes, userHash, contactHashes
+        $params = array_merge([$userHash], $contactHashes, [$userHash], $contactHashes);
+        $stmt = $this->execute($query,$params);
+        if(!$stmt){
+            return array_fill_keys($contactPubkeys, 0);
+        }
+
+        // Build result array indexed by original pubkey
+        $balances = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $pubkey = $hashToPubkey[$row['contact_hash']] ?? null;
+            if ($pubkey) {
+                $balances[$pubkey] = $row['total_received'] - $row['total_sent'];
+            }
+        }
+
+        // Ensure all contacts have a balance entry (default to 0)
+        foreach ($contactPubkeys as $pubkey) {
+            if (!isset($balances[$pubkey])) {
+                $balances[$pubkey] = 0;
+            }
+        }
+        return $balances;
+    } 
+
+    /**
+     * Check for new transactions since last check
+     *
+     * @param int $lastCheckTime
+     * @return bool
+     */
+    public function checkForNewTransactions(int $lastCheckTime): bool
+    {
+        global $user;
+
+        $userAddresses = [];
+        if (isset($user['hostname'])) {
+            $userAddresses[] = $user['hostname'];
+        }
+        if (isset($user['torAddress'])) {
+            $userAddresses[] = $user['torAddress'];
+        }
+
+        if (empty($userAddresses)) {
+            return false;
+        }
+
+        // Create placeholders for IN clause
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        $query = "SELECT COUNT(*) as count FROM transactions
+                    WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
+                    AND timestamp > ?";
+
+        // Bind parameters - addresses twice for both IN clauses, then timestamp
+        $params = array_merge($userAddresses, $userAddresses, [date('Y-m-d H:i:s', $lastCheckTime)]);
+        $stmt = $this->execute($query,$params);
+        if(!$stmt){
+             return false;
+        }
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['count'] > 0;
+    }
+
+    /**
+     * Get transactions by type
+     *
+     * @param string $type
+     * @return array
+     */
+    public function getTransactionsByType(string $type): array
+    {
+        $allTransactions = $this->getAllTransactions();
+        $filtered = [];
+
+        foreach ($allTransactions as $transaction) {
+            if ($transaction['type'] === $type) {
+                $filtered[] = $transaction;
+            }
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * Get recent transactions
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getRecentTransactions(int $limit = 5): array
+    {
+        return $this->getTransactionHistory($limit);
+    }
+
+    /**
+     * Get all transactions
+     *
+     * @return array
+     */
+    public function getAllTransactions(): array
+    {
+        return $this->getTransactionHistory(PHP_INT_MAX); // Get a large number
+    }
+
+     /**
+     * Get transaction history with limit
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getTransactionHistory(int $limit = 10): array
+    {
+        global $user;
+
+        $userAddresses = [];
+        if (isset($user['hostname'])) {
+            $userAddresses[] = $user['hostname'];
+        }
+        if (isset($user['torAddress'])) {
+            $userAddresses[] = $user['torAddress'];
+        }
+
+        if (empty($userAddresses)) {
+            return [];
+        }
+
+        // Create placeholders for IN clause
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions
+                    WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
+                    ORDER BY timestamp DESC LIMIT ?";
+
+
+        // Bind parameters - addresses twice for both IN clauses, then limit
+        $params = array_merge($userAddresses, $userAddresses, [$limit]);
+        $stmt = $this->execute($query,$params);
+        if(!$stmt){
+            return [];
+        }
+
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $formattedTransactions = [];
+
+        foreach ($transactions as $tx) {
+            $isSent = in_array($tx['sender_address'], $userAddresses);
+            $counterpartyAddress = $isSent ? $tx['receiver_address'] : $tx['sender_address'];
+
+            // Get contact name for counterparty
+            $contactName = $this->contactRepository->lookupNameByAddress($counterpartyAddress);
+
+            $formattedTransactions[] = [
+                'date' => $tx['timestamp'],
+                'type' => $isSent ? 'sent' : 'received',
+                'amount' => $tx['amount'] / 100, // Convert from cents
+                'currency' => $tx['currency'],
+                'counterparty' => $contactName ?: $counterpartyAddress
+            ];
+        }
+        return $formattedTransactions;
     }
 
     /**

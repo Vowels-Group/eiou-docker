@@ -118,6 +118,23 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Update contact status
+     *
+     * @param string $address
+     * @param string $status
+     * @return bool
+     */
+    public function updateContactStatus(string $address, string $status): bool
+    {
+        $query ="UPDATE contacts SET status = ? WHERE address = ?";
+        $stmt = $this->execute($query,[$status, $address]);
+        if(!$stmt){
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Check if contact is accepted
      *
      * @param string $address Contact address
@@ -144,6 +161,27 @@ class ContactRepository extends AbstractRepository {
     public function contactExists(string $address): bool {
         return $this->exists('address', $address);
     }
+
+    /**
+     * Check for new contact requests since last check
+     *
+     * @param int $lastCheckTime
+     * @return bool
+     */
+    public function checkForNewContactRequests(int $lastCheckTime): bool
+    {   
+        $query = "SELECT COUNT(*) as count FROM contacts
+                    WHERE name IS NULL AND status = 'pending'
+                    AND created_at > ?";
+        $stmt = $this->execute($query,[date('Y-m-d H:i:s', $lastCheckTime)]);
+        if(!$stmt){
+            return false;
+        }
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['count'] > 0;
+    }
+
+
 
     /**
      * Check if contact is blocked
@@ -232,6 +270,37 @@ class ContactRepository extends AbstractRepository {
             return [];
         }
 
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get user pending contacts (requests sent by user)
+     *
+     * @return array Array of pending contacts
+     */
+    public function getUserPendingContactRequests(): array
+    {
+        // Get all pending contact requests (where name IS NOT NULL and status = 'pending')
+        $query = "SELECT address, pubkey, status FROM contacts WHERE name IS NOT NULL AND status = 'pending'";
+        $stmt = $this->execute($query);
+        if(!$stmt){
+            return [];
+        } 
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get all blocked contacts
+     *
+     * @return array
+     */
+    public function getBlockedContacts(): array
+    {
+        $query = "SELECT * FROM contacts WHERE status = 'blocked'";
+        $stmt = $this->execute($query);
+        if(!$stmt){
+            return [];
+        } 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -447,6 +516,54 @@ class ContactRepository extends AbstractRepository {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Get all contacts regardless of status
+     *
+     * @return array
+     */
+    public function getAllContactsInfo(): array
+    {
+        $query = "SELECT * FROM contacts";
+        $stmt = $this->execute($query);
+        if(!$stmt){
+            return [];
+        } 
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);    
+    }
+
+    /**
+     * Get recent contacts
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getRecentContacts(int $limit = 5): array
+    {
+        $query = "SELECT * FROM contacts WHERE status = 'accepted' ORDER BY created_at DESC LIMIT ?";
+        $stmt = $this->execute($query,[$limit]);
+        if(!$stmt){
+            return [];
+        }
+        return $stmt->fetchAll(PDO::FETCH_ASSOC); 
+    }
+
+    /**
+     * Search contacts by name
+     *
+     * @param string $searchTerm
+     * @return array
+     */
+    public function searchByName(string $searchTerm): array
+    {
+        $query = "SELECT * FROM contacts WHERE name LIKE ? AND status = 'accepted'";
+        $stmt = $this->execute($query,['%' . $searchTerm . '%']);
+        if(!$stmt){
+            return [];
+        }
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+       
+    }
+    
     /**
      * Search contacts by name (partial match)
      *
