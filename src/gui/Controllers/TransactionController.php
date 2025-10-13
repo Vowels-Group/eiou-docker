@@ -88,6 +88,7 @@ class TransactionController
      */
     public function handleCheckUpdates(): void
     {
+        //TEST
         if (!isset($_GET['check_updates']) || $_GET['check_updates'] !== '1') {
             return;
         }
