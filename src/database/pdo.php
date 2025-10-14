@@ -11,17 +11,37 @@
  * @throws PDOException If connection fails
  */
 function createPDOConnection(): PDO {
-    global $user;
+    // Try to use UserContext if available, fallback to global $user
+    $userContext = null;
+    if (class_exists('UserContext')) {
+        require_once dirname(__DIR__) . '/core/UserContext.php';
+        $userContext = UserContext::getInstance();
+    }
+
+    // Get database configuration from UserContext or global $user
+    if ($userContext && $userContext->isInitialized()) {
+        $dbHost = $userContext->get('dbHost');
+        $dbName = $userContext->get('dbName');
+        $dbUser = $userContext->get('dbUser');
+        $dbPass = $userContext->get('dbPass');
+    } else {
+        // Fallback to global $user for backward compatibility
+        global $user;
+        $dbHost = $user['dbHost'] ?? null;
+        $dbName = $user['dbName'] ?? null;
+        $dbUser = $user['dbUser'] ?? null;
+        $dbPass = $user['dbPass'] ?? null;
+    }
 
     // Validate required configuration
-    if (!isset($user['dbHost'], $user['dbName'], $user['dbUser'], $user['dbPass'])) {
+    if (!$dbHost || !$dbName || !$dbUser || !$dbPass) {
         error_log("Missing database configuration parameters");
         throw new RuntimeException("Database configuration incomplete");
     }
 
     try {
         // Create DSN with charset to prevent injection attacks
-        $dsn = "mysql:host={$user['dbHost']};dbname={$user['dbName']};charset=utf8mb4";
+        $dsn = "mysql:host={$dbHost};dbname={$dbName};charset=utf8mb4";
 
         // PDO options for security and performance
         $options = [
@@ -33,7 +53,7 @@ function createPDOConnection(): PDO {
         ];
 
         // Create PDO connection
-        $pdo = new PDO($dsn, $user['dbUser'], $user['dbPass'], $options);
+        $pdo = new PDO($dsn, $dbUser, $dbPass, $options);
 
         return $pdo;
     } catch (PDOException $e) {
