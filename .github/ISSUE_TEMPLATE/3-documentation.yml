@@ -1,0 +1,133 @@
+name: 📚 Documentation Improvement
+description: Suggest improvements to documentation
+title: "[DOCS] "
+labels: ["documentation", "good-first-issue"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us improve EIOU documentation! Even small improvements make a big difference.
+
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation Type
+      options:
+        - README.md
+        - Architecture Documentation
+        - Sprint Documentation
+        - Setup/Installation Guide
+        - Testing Guide
+        - Contributing Guide
+        - Docker Documentation
+        - CLI Documentation
+        - API/Code Documentation
+        - Code Comments
+        - Examples/Tutorials
+        - Security Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      options:
+        - Missing Information
+        - Incorrect/Outdated
+        - Unclear/Confusing
+        - Broken Links
+        - Formatting Issues
+        - Typo/Grammar
+        - Code Example Not Working
+        - Needs More Examples
+        - Needs Diagrams/Images
+        - Translation Needed
+        - New Documentation Needed
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: Where is the documentation issue?
+      placeholder: |
+        File: docs/architecture/OVERVIEW.md
+        Section: "P2P Protocol"
+        Line: 42
+
+        Or URL: https://github.com/eiou-org/eiou/blob/main/...
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current Documentation
+      description: What does the current documentation say?
+      placeholder: |
+        Quote the current text or describe what's there now.
+
+        If it's missing, say "Not documented" or "Missing section"
+
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested Improvement
+      description: How should it be improved?
+      placeholder: |
+        Provide your suggested text, or describe what should be added/changed.
+
+        Be as specific as possible!
+    validations:
+      required: true
+
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Rationale
+      description: Why is this improvement needed?
+      placeholder: |
+        Why is this change important?
+
+        - Who will benefit?
+        - What problem does it solve?
+        - What confusion does it clear up?
+
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Target Audience
+      description: Who is this documentation for?
+      options:
+        - New Users
+        - Developers
+        - Contributors
+        - System Administrators
+        - Security Researchers
+        - All Users
+      multiple: true
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples/References
+      description: Links to good documentation examples (optional)
+      placeholder: |
+        If you've seen similar documentation done well elsewhere, share links!
+
+        - https://example.com/docs/...
+        - https://github.com/other-project/...
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to submit a PR with this documentation fix
+        - label: I can provide technical review
+        - label: I can help with proofreading

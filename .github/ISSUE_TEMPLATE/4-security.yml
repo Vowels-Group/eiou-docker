@@ -1,0 +1,171 @@
+name: 🔒 Security Concern
+description: Report a security issue (use private reporting for critical vulnerabilities)
+title: "[SECURITY] "
+labels: ["security", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **IMPORTANT**: For critical security vulnerabilities that could be exploited, please use [GitHub's private security advisory feature](https://github.com/eiou-org/eiou/security/advisories/new) instead of filing a public issue.
+
+        This template is for:
+        - General security improvements
+        - Security questions
+        - Non-critical security concerns
+        - Security feature requests
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Info (General security improvement)
+        - Low (Minor security concern)
+        - Medium (Moderate security issue)
+        - High (Requires immediate attention - consider private reporting)
+        - Critical (MUST use private security advisory)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Privacy Leak
+        - Authentication/Authorization
+        - Input Validation
+        - Cryptography
+        - Dependency Vulnerability
+        - Configuration Issue
+        - Code Injection
+        - SQL Injection
+        - XSS (Cross-Site Scripting)
+        - CSRF (Cross-Site Request Forgery)
+        - Network Security
+        - Docker Security
+        - Rate Limiting
+        - Information Disclosure
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the security concern
+      placeholder: |
+        What is the security concern?
+
+        Be as specific as possible, but avoid sharing exploit details publicly for critical issues.
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Potential Impact
+      description: What could happen?
+      placeholder: |
+        What is the potential impact if this issue is not addressed?
+
+        - Who could be affected?
+        - What data or systems are at risk?
+        - What could an attacker do?
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce (if applicable)
+      description: How can this be demonstrated safely?
+      placeholder: |
+        If you can demonstrate this issue safely:
+
+        1. Set up environment...
+        2. Execute command...
+        3. Observe behavior...
+
+        ⚠️ Do NOT include actual exploit code for critical vulnerabilities!
+
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Suggested Mitigation
+      description: How should this be fixed?
+      placeholder: |
+        If you have suggestions for fixing this:
+
+        - Add validation for...
+        - Update configuration to...
+        - Implement additional check for...
+        - Use library X instead of Y...
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Temporary Workaround
+      description: Is there a temporary workaround?
+      placeholder: |
+        Can users protect themselves while waiting for a fix?
+
+        - Disable feature X
+        - Use configuration Y
+        - Avoid action Z
+
+  - type: textarea
+    id: affected
+    attributes:
+      label: Affected Components
+      description: What parts of EIOU are affected?
+      placeholder: |
+        - Files: src/...
+        - Services: ...
+        - Docker configurations: ...
+        - Dependencies: ...
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Links to CVEs, security advisories, or related issues
+      placeholder: |
+        - CVE-XXXX-XXXXX
+        - https://...
+        - Related GitHub issue: #XXX
+        - OWASP reference: ...
+
+  - type: dropdown
+    id: disclosure
+    attributes:
+      label: Responsible Disclosure
+      description: Have you notified anyone privately about this?
+      options:
+        - No (filing this issue first)
+        - Yes (already reported privately)
+        - Not applicable (low severity)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acknowledgment
+    attributes:
+      label: Security Reporting Acknowledgment
+      options:
+        - label: I understand that critical vulnerabilities should be reported privately
+          required: true
+        - label: I confirm this is not a critical vulnerability requiring private disclosure
+          required: true
+        - label: I will not publicly share exploit code or proof-of-concept attacks
+          required: true
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to help develop a fix
+        - label: I can assist with security testing
+        - label: I can help review security patches

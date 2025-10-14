@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/eiou-org/eiou/discussions
+    about: For questions, ideas, and general discussion
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/eiou-org/eiou/security/advisories/new
+    about: Report security vulnerabilities privately (CRITICAL issues only)
+  - name: 📚 Documentation
+    url: https://github.com/eiou-org/eiou/tree/main/docs
+    about: Browse project documentation
+  - name: 🌐 EIOU Website
+    url: https://eiou.org
+    about: Visit the official EIOU website

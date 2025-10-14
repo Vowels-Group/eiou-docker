@@ -1,0 +1,143 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior
+title: "[BUG] "
+labels: ["bug", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the form below to help us understand and fix the issue.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight Checklist
+      description: Please ensure you've completed all these steps
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have read the documentation
+          required: true
+        - label: I am using the latest version (or have specified my version below)
+          required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component is affected?
+      options:
+        - Core Services
+        - Repository Layer
+        - Transaction Engine
+        - Contact Management
+        - Security Utils
+        - P2P Messaging
+        - Docker Configuration
+        - CLI/eiou.php
+        - GUI/Web Wallet
+        - Testing Infrastructure
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is this bug?
+      options:
+        - Critical (System crash, data loss, security vulnerability)
+        - High (Major functionality broken)
+        - Medium (Feature not working as expected)
+        - Low (Minor issue, cosmetic)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Clear and concise description of the bug
+      placeholder: What happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the behavior
+      placeholder: |
+        1. Start container with 'docker-compose -f docker-compose-4line.yml up -d'
+        2. Execute command 'docker-compose exec alice eiou ...'
+        3. Observe error '...'
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Relevant environment details
+      value: |
+        - OS: [e.g. Ubuntu 24.04, macOS 14, Windows 11 + WSL2]
+        - Docker Version: [e.g. 24.0.5]
+        - Docker Compose Version: [e.g. 2.20.0]
+        - PHP Version: [e.g. 8.2.0]
+        - EIOU Version/Commit: [e.g. main branch, commit abc123]
+        - Network Topology: [e.g. 4-line HTTP, 10-line Tor]
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant log output (if applicable)
+      render: shell
+      placeholder: |
+        Paste logs here. You can get logs with:
+        docker-compose -f docker-compose-4line.yml logs alice
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or information
+      placeholder: |
+        - Configuration files
+        - Screenshots
+        - Related issues
+        - Workarounds you've tried
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to submit a PR to fix this bug
+        - label: I can provide additional testing/debugging assistance
