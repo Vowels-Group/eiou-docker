@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+use EIOU\Context\UserContext;
+
 // Contacts
 function buildMessageContactIsAcceptedInquiryPayload(string $address, ?UserContext $userContext = null): array {
     // Build contact inquiry payload when user wants to inquire the status of the contact request

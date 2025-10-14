@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+use EIOU\Context\UserContext;
+
 function buildP2pPayload(array $data, ?UserContext $userContext = null): array {
     // Build p2p payload for initial message
     $userContext = $userContext ?? UserContext::fromGlobal();

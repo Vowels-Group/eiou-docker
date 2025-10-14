@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+use EIOU\Context\UserContext;
+
 function createContactPayload(?UserContext $userContext = null): array {
     // Create payload for contact request
     $userContext = $userContext ?? UserContext::fromGlobal();
