@@ -64,6 +64,9 @@ RUN chmod 644 /etc/eiou/cleanupMessages.php
 COPY src /etc/eiou/src
 RUN chmod 755 /etc/eiou/src
 RUN chmod 644 /etc/eiou/src/*
+# Context folder
+RUN chmod 755 /etc/eiou/src/context
+RUN chmod 644 /etc/eiou/src/context/*
 # Core folder
 RUN chmod 755 /etc/eiou/src/core
 RUN chmod 644 /etc/eiou/src/core/*
