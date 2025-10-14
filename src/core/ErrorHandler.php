@@ -4,7 +4,7 @@
  * Provides consistent error handling patterns across the application
  */
 
-require_once dirname(dirname(__DIR__)) . '/tests/config/Constants.php';
+require_once __DIR__ . '/Constants.php';
 
 class ErrorHandler {
 
