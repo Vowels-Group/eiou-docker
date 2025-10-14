@@ -4,10 +4,13 @@
  * Replaces global variables with proper encapsulation
  */
 
+use EIOU\Context\UserContext;
+
 class Application {
     private static $instance = null;
     private $pdo = null;
     private $user = null;
+    private $userContext = null;
     private $config = [];
     private $rateLimiter = null;
     private $logger = null;
@@ -78,6 +81,34 @@ class Application {
      */
     public function setUser($user) {
         $this->user = $user;
+        // Update UserContext when user is set
+        $this->userContext = new UserContext($user);
+    }
+
+    /**
+     * Get UserContext instance
+     *
+     * @return UserContext
+     */
+    public function getUserContext() {
+        if ($this->userContext === null) {
+            if ($this->user === null) {
+                $this->loadUser();
+            }
+            $this->userContext = new UserContext($this->user ?? []);
+        }
+        return $this->userContext;
+    }
+
+    /**
+     * Set UserContext instance
+     *
+     * @param UserContext $userContext
+     */
+    public function setUserContext($userContext) {
+        $this->userContext = $userContext;
+        // Keep $user in sync for backward compatibility
+        $this->user = $userContext->toArray();
     }
 
     /**

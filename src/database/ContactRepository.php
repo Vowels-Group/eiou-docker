@@ -3,6 +3,8 @@
 
 require_once __DIR__ . '/AbstractRepository.php';
 
+use EIOU\Context\UserContext;
+
 /**
  * Contact Repository
  *
@@ -12,14 +14,21 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class ContactRepository extends AbstractRepository {
     /**
+     * @var UserContext|null User context for accessing user data
+     */
+    private ?UserContext $userContext = null;
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection
+     * @param UserContext|null $userContext Optional UserContext for user data access
      */
-    public function __construct(?PDO $pdo = null) {
+    public function __construct(?PDO $pdo = null, ?UserContext $userContext = null) {
         parent::__construct($pdo);
         $this->tableName = 'contacts';
         $this->primaryKey = 'address';
+        $this->userContext = $userContext;
     }
 
     /**
@@ -50,11 +59,16 @@ class ContactRepository extends AbstractRepository {
      *
      * @param string $address Contact address
      * @param string $senderPublicKey Sender's public key
+     * @param UserContext|null $userContext User context (optional, falls back to instance context or global)
      * @return string JSON response
      */
-    public function addPendingContact(string $address, string $senderPublicKey): string {
-        global $user; // Still needed for myPublicKey in response
-        $myPublicKey = $user['public'] ?? '';
+    public function addPendingContact(string $address, string $senderPublicKey, ?UserContext $userContext = null): string {
+        // Use provided context, instance context, or fall back to global
+        if ($userContext === null) {
+            $userContext = $this->userContext ?? UserContext::fromGlobal();
+        }
+
+        $myPublicKey = $userContext->getPublicKey() ?? '';
         $pubkeyHash = hash('sha256', $senderPublicKey);
 
         $data = [

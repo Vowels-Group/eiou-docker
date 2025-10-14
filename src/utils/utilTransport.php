@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+use EIOU\Context\UserContext;
+
 function countTorAndHttpAddresses($data){
     // Count how many tor and http addresses
     $result = [
@@ -31,11 +33,18 @@ function isHttpAddress($address) {
     return preg_match('/^https?:\/\//', $address) === 1;
 }
 
-function isMe($address){
-    // Check if address is mine
-    global $user;
-    return (isset($user['torAddress']) && $user['torAddress'] === $address) || 
-           (isset($user['hostname']) && $user['hostname'] === $address);
+/**
+ * Check if address belongs to the current user
+ *
+ * @param string $address Address to check
+ * @param UserContext|null $userContext User context (optional, falls back to global)
+ * @return bool True if address belongs to user
+ */
+function isMe($address, ?UserContext $userContext = null): bool {
+    if ($userContext === null) {
+        $userContext = UserContext::fromGlobal();
+    }
+    return $userContext->isMyAddress($address);
 }
 
 function isTorAddress($address) {
@@ -48,27 +57,47 @@ function jitter($value){
     return $value + random_int(0,1);
 }
 
-function resolveUserAddressForTransport($address) {
-    // Figure out what type of address is needed to transport payload
-    global $user;
+/**
+ * Resolve user's address based on recipient transport type
+ *
+ * @param string $address Recipient address
+ * @param UserContext|null $userContext User context (optional, falls back to global)
+ * @return string|false User's address matching transport type, or false
+ */
+function resolveUserAddressForTransport($address, ?UserContext $userContext = null) {
+    if ($userContext === null) {
+        $userContext = UserContext::fromGlobal();
+    }
+
     // Check if the address is a Tor (.onion) address
     if (isTorAddress($address)) {
-        return $user["torAddress"];
+        return $userContext->getTorAddress();
     }
     // Check if the address is an HTTP/HTTPS address
     elseif (isHttpAddress($address)) {
-        return $user["hostname"];
+        return $userContext->getHostname();
     }
-    // If no specific transport type is detected, return the original address
+    // If no specific transport type is detected, return false
     return false;
 }
 
-function reAdjustP2pLevel($request){
-    // Adjust remaining p2p chain length based on intermediary contact's config of maxP2pLevel 
-    global $user;
-    if($request['maxRequestLevel'] > $request['requestLevel'] + $user['maxP2pLevel']){
-        return $request['requestLevel'] + $user['maxP2pLevel'];
-    } else{
+/**
+ * Adjust remaining P2P chain length based on user's maxP2pLevel config
+ *
+ * @param array $request P2P request data
+ * @param UserContext|null $userContext User context (optional, falls back to global)
+ * @return int Adjusted P2P level
+ */
+function reAdjustP2pLevel($request, ?UserContext $userContext = null): int {
+    if ($userContext === null) {
+        $userContext = UserContext::fromGlobal();
+    }
+
+    $maxUserLevel = $request['requestLevel'] + $userContext->getMaxP2pLevel();
+
+    if ($request['maxRequestLevel'] > $maxUserLevel) {
+        return $maxUserLevel;
+    } else {
         return $request['maxRequestLevel'];
     }
 }
@@ -118,21 +147,42 @@ function sendByTor ($recipient, $signedPayload) {
     return $response;
 }
 
-function sign($payload){
-  // Add signature to payload
-  global $user;
-  $privateKey = $user['private'];
-  // Get the private key resource
-  $privateKeyResource = openssl_pkey_get_private($privateKey);
-  // Sign the message
-  $payload['nonce'] = time();
-  $message = json_encode($payload);
-  $payload['message'] = $message;
-  $signature = '';
-  if (!openssl_sign($message, $signature, $privateKeyResource)) {
-      echo "Failed to sign the message.\n";
-      return false;
-  }
-  $payload['signature'] = base64_encode($signature);
-  return $payload;
+/**
+ * Sign a payload with user's private key
+ *
+ * @param array $payload Payload data to sign
+ * @param UserContext|null $userContext User context (optional, falls back to global)
+ * @return array|false Signed payload with signature, or false on failure
+ */
+function sign($payload, ?UserContext $userContext = null) {
+    if ($userContext === null) {
+        $userContext = UserContext::fromGlobal();
+    }
+
+    $privateKey = $userContext->getPrivateKey();
+    if (!$privateKey) {
+        echo "No private key available for signing.\n";
+        return false;
+    }
+
+    // Get the private key resource
+    $privateKeyResource = openssl_pkey_get_private($privateKey);
+    if ($privateKeyResource === false) {
+        echo "Failed to load private key.\n";
+        return false;
+    }
+
+    // Sign the message
+    $payload['nonce'] = time();
+    $message = json_encode($payload);
+    $payload['message'] = $message;
+    $signature = '';
+
+    if (!openssl_sign($message, $signature, $privateKeyResource)) {
+        echo "Failed to sign the message.\n";
+        return false;
+    }
+
+    $payload['signature'] = base64_encode($signature);
+    return $payload;
 }

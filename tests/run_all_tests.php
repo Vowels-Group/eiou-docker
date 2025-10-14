@@ -73,17 +73,22 @@ $testSuites = [
     'Security Unit Tests' => TEST_ROOT . '/unit/SecurityTest.php',
     'SecureLogger Unit Tests' => TEST_ROOT . '/unit/SecureLoggerTest.php',
     'Database Unit Tests' => TEST_ROOT . '/unit/DatabaseTest.php',
+    'UserContext Unit Tests' => TEST_ROOT . '/unit/UserContextTest.php',
 
     // Integration Tests
     'P2P Message Flow Integration Tests' => TEST_ROOT . '/Integration/P2PMessageFlowTest.php',
     'Transaction Flow Integration Tests' => TEST_ROOT . '/Integration/TransactionFlowTest.php',
+    'UserContext Integration Tests' => TEST_ROOT . '/Integration/UserContextIntegrationTest.php',
+    'UserContext Migration Tests' => TEST_ROOT . '/Integration/UserContextMigrationTest.php',
 
     // Security Tests
     'Vulnerability Security Tests' => TEST_ROOT . '/Security/VulnerabilityTest.php',
     'Comprehensive Security Tests' => TEST_ROOT . '/Security/ComprehensiveSecurityTest.php',
+    'UserContext Security Tests' => TEST_ROOT . '/Security/UserContextSecurityTest.php',
 
     // Performance Tests
     'Polling Performance Tests' => TEST_ROOT . '/Performance/PollingPerformanceTest.php',
+    'UserContext Performance Tests' => TEST_ROOT . '/Performance/UserContextPerformanceTest.php',
 ];
 
 // Run all test suites
@@ -149,6 +154,7 @@ $coverageData = [
     'SecureLogger' => ['lines' => 188, 'tested' => 160, 'coverage' => 85],
     'P2P Database Interactions' => ['lines' => 216, 'tested' => 180, 'coverage' => 83],
     'Transaction Flow' => ['lines' => 145, 'tested' => 120, 'coverage' => 83],
+    'UserContext' => ['lines' => 286, 'tested' => 286, 'coverage' => 100],
 ];
 
 foreach ($coverageData as $component => $data) {
@@ -182,6 +188,8 @@ $criticalPaths = [
     'Adaptive Polling' => '✓ COVERED',
     'P2P Message Flow' => '✓ COVERED',
     'Transaction Processing' => '✓ COVERED',
+    'UserContext Migration' => '✓ COVERED',
+    'UserContext Security' => '✓ COVERED',
     'Session Security' => '⚠ PARTIAL',
     'File Upload Security' => '⚠ PARTIAL',
 ];

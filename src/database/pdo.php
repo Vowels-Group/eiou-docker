@@ -1,27 +1,37 @@
 <?php
 # Copyright 2025
 
+use EIOU\Context\UserContext;
+
 /**
  * Create a PDO database connection
  *
  * This function establishes a secure PDO connection to the MySQL database
  * with proper error handling and security settings.
  *
+ * @param UserContext|null $userContext User context (optional, falls back to global for backward compatibility)
  * @return PDO Database connection instance
  * @throws PDOException If connection fails
  */
-function createPDOConnection(): PDO {
-    global $user;
+function createPDOConnection(?UserContext $userContext = null): PDO {
+    // Backward compatibility: create UserContext from global if not provided
+    if ($userContext === null) {
+        $userContext = UserContext::fromGlobal();
+    }
 
     // Validate required configuration
-    if (!isset($user['dbHost'], $user['dbName'], $user['dbUser'], $user['dbPass'])) {
+    if (!$userContext->hasValidDbConfig()) {
         error_log("Missing database configuration parameters");
         throw new RuntimeException("Database configuration incomplete");
     }
 
     try {
         // Create DSN with charset to prevent injection attacks
-        $dsn = "mysql:host={$user['dbHost']};dbname={$user['dbName']};charset=utf8mb4";
+        $dsn = sprintf(
+            "mysql:host=%s;dbname=%s;charset=utf8mb4",
+            $userContext->getDbHost(),
+            $userContext->getDbName()
+        );
 
         // PDO options for security and performance
         $options = [
@@ -33,7 +43,7 @@ function createPDOConnection(): PDO {
         ];
 
         // Create PDO connection
-        $pdo = new PDO($dsn, $user['dbUser'], $user['dbPass'], $options);
+        $pdo = new PDO($dsn, $userContext->getDbUser(), $userContext->getDbPass(), $options);
 
         return $pdo;
     } catch (PDOException $e) {

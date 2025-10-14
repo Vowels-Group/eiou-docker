@@ -2,37 +2,37 @@
 # Copyright 2025
 
 // Contacts
-function buildMessageContactIsAcceptedInquiryPayload($address){
+function buildMessageContactIsAcceptedInquiryPayload(string $address, ?UserContext $userContext = null): array {
     // Build contact inquiry payload when user wants to inquire the status of the contact request
-    global $user;
+    $userContext = $userContext ?? UserContext::fromGlobal();
     $myAddress = resolveUserAddressForTransport($address);
-    return array(
+    return [
         'type' => "message", // message request type
         'typeMessage' => "contact", // type of message
         'inquiry' => true, // request for information
         "senderAddress" => $myAddress,
-        'senderPublicKey' => $user['public'],
-        "message" => $myAddress . " wants to know if we are contacts" 
-    );
+        'senderPublicKey' => $userContext->getPublicKey(),
+        "message" => $myAddress . " wants to know if we are contacts"
+    ];
 }
 
-function buildMessageContactIsAcceptedPayload($address){
+function buildMessageContactIsAcceptedPayload(string $address, ?UserContext $userContext = null): string {
     // Build contact accepted payload when user has accepted the contact request
-    global $user;
+    $userContext = $userContext ?? UserContext::fromGlobal();
     $myAddress = resolveUserAddressForTransport($address);
     return json_encode([
         'type' => "message", // message request type
         'typeMessage' => "contact", // type of message
         "status" => "accepted",
         "senderAddress" => $myAddress,
-        'senderPublicKey' => $user['public'],
-        "message" => $myAddress . " confirms that we are contacts" 
+        'senderPublicKey' => $userContext->getPublicKey(),
+        "message" => $myAddress . " confirms that we are contacts"
     ]);
 }
 
-function buildMessageContactIsNotYetAcceptedPayload($address){
+function buildMessageContactIsNotYetAcceptedPayload(string $address, ?UserContext $userContext = null): string {
     // Build contact not yet accepted payload when user has not accepted the contact request yet
-    global $user;
+    $userContext = $userContext ?? UserContext::fromGlobal();
     $myAddress = resolveUserAddressForTransport($address);
     return json_encode([
         'type' => "message", // message request type
@@ -40,14 +40,14 @@ function buildMessageContactIsNotYetAcceptedPayload($address){
         "status" => "rejected",
         "reason" => "pending",
         "senderAddress" => $myAddress,
-        'senderPublicKey' => $user['public'],
-        "message" => $myAddress . " has not yet accepted your contact request" 
+        'senderPublicKey' => $userContext->getPublicKey(),
+        "message" => $myAddress . " has not yet accepted your contact request"
     ]);
 }
 
-function buildMessageContactIsUnknownPayload($address){
+function buildMessageContactIsUnknownPayload(string $address, ?UserContext $userContext = null): string {
     // Build contact is unknown payload when user no database record of the 'contact' in question
-    global $user;
+    $userContext = $userContext ?? UserContext::fromGlobal();
     $myAddress = resolveUserAddressForTransport($address);
     return json_encode([
         'type' => "message", // message request type
@@ -55,8 +55,8 @@ function buildMessageContactIsUnknownPayload($address){
         "status" => "rejected",
         "reason" => "unknown",
         "senderAddress" => $myAddress,
-        'senderPublicKey' => $user['public'],
-        "message" => $myAddress . " and you are not contacts" 
+        'senderPublicKey' => $userContext->getPublicKey(),
+        "message" => $myAddress . " and you are not contacts"
     ]);
 }
 
@@ -71,12 +71,12 @@ function buildMessageTransactionCompletedCorrectlyPayload($message){
     ]);
 }
 
-function buildMessageTransactionCompletedInquiryPayload($message){
+function buildMessageTransactionCompletedInquiryPayload(array $message, ?UserContext $userContext = null): array {
     // Build inquiry payload regarding the completion status of a transaction
-    global $user;
+    $userContext = $userContext ?? UserContext::fromGlobal();
     $hash = $message['hash'];
     $myAddress = resolveUserAddressForTransport($message['senderAddress']);
-    return array(
+    return [
         'type' => "message", // message request type
         'typeMessage' => "transaction", // type of message
         'inquiry' => true, // request for information
@@ -84,7 +84,7 @@ function buildMessageTransactionCompletedInquiryPayload($message){
         "hash" => $hash,
         "hashType" => $message['hashType'],
         "senderAddress" => $myAddress,
-        'senderPublicKey' => $user['public'],
-        "message" => $myAddress . " is requesting information about transaction with memo " . $hash 
-    );
+        'senderPublicKey' => $userContext->getPublicKey(),
+        "message" => $myAddress . " is requesting information about transaction with memo " . $hash
+    ];
 }

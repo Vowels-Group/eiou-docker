@@ -1,31 +1,52 @@
 <?php
 # Copyright 2025
 
+use EIOU\Context\UserContext;
+
 function calculateAvailableFunds($request){
     // Calculate funds request's sender has available with user
     $totalSent = calculateTotalSent($request['senderPublicKey'] ?? $request['sender_public_key']);   // Calculate IOUs sent to sender
     $totalReceived = calculateTotalReceived($request['senderPublicKey'] ?? $request['sender_public_key']); // Calulcate IOUs received from sender
-    $theirCurrentBalance = $totalSent - $totalReceived; 
+    $theirCurrentBalance = $totalSent - $totalReceived;
     $senderContact = lookupContactByAddress($request['senderAddress'] ?? $request['sender_address']);
     $creditLimit = getCreditLimit($senderContact['pubkey']);    // Get senders credit limit with user
     return $theirCurrentBalance + $creditLimit;
 }
 
-function calculateRequestedAmount($request) {
-    // Calculate total amount needed for p2p through user
-    global $user;
+/**
+ * Calculate total amount needed for P2P transaction through user
+ *
+ * @param array $request Request data
+ * @param UserContext|null $userContext User context (optional, falls back to global)
+ * @return int Total amount including fee
+ */
+function calculateRequestedAmount($request, ?UserContext $userContext = null): int {
+    if ($userContext === null) {
+        $userContext = UserContext::fromGlobal();
+    }
+
     $senderContact = lookupContactByAddress($request['senderAddress']);
-    $fee = ($senderContact ? $senderContact['fee_percent'] : $user['defaultFee']) / 10000; //convert back to percent for math
+    $fee = ($senderContact ? $senderContact['fee_percent'] : $userContext->getDefaultFee()) / 10000; //convert back to percent for math
     $request['feeAmount'] = round($request['amount'] * $fee);   // Caculate fee on the amount sender wants sent
     return $request['amount'] + $request['feeAmount'];
 }
 
-function feeInformation($p2p,$request){
-    // Return fee percent and output fee information into the log
-    global $user;
+/**
+ * Calculate fee information and output to log
+ *
+ * @param array $p2p P2P data
+ * @param array $request Request data
+ * @param UserContext|null $userContext User context (optional, falls back to global)
+ * @return float Fee percentage
+ */
+function feeInformation($p2p, $request, ?UserContext $userContext = null): float {
+    if ($userContext === null) {
+        $userContext = UserContext::fromGlobal();
+    }
+
     $feeAmount = $request['amount'] - $p2p['amount'];
-    $feePercent = round(($feeAmount / $p2p['amount']) * 100,2);
-    output(outputFeeInformation($feePercent,$request,$user['maxFee']), 'SILENT'); // output fee information into the log
+    $feePercent = round(($feeAmount / $p2p['amount']) * 100, 2);
+    output(outputFeeInformation($feePercent, $request, $userContext->getMaxFee()), 'SILENT'); // output fee information into the log
     return $feePercent;
 }
 

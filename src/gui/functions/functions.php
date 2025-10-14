@@ -261,15 +261,16 @@ function truncateAddress($address, $length = 10) {
 }
 
 // Helper function to get user's total balance
-function getUserTotalBalance() {
-    global $pdo, $user;
+function getUserTotalBalance(?UserContext $userContext = null) {
+    global $pdo;
+    $userContext = $userContext ?? UserContext::fromGlobal();
     $pdo = getPDOConnection();
     if ($pdo === null) return null;
-    
+
     try {
         $transactionService = ServiceContainer::getInstance()->getTransactionService();
-        $totalReceived = $transactionService->calculateTotalReceived($user['public']);
-        $totalSent = $transactionService->calculateTotalSent($user['public']);
+        $totalReceived = $transactionService->calculateTotalReceived($userContext->getPublicKey());
+        $totalSent = $transactionService->calculateTotalSent($userContext->getPublicKey());
         $balance = ($totalReceived - $totalSent) / 100; // Convert from cents
         return number_format($balance, 2);
     } catch (Exception $e) {
@@ -478,18 +479,13 @@ function getAllContactBalances($userPubkey, $contactPubkeys) {
 }
 
 // Helper function to get transaction history
-function getTransactionHistory($limit = 10) {
-    global $pdo, $user;
-    
+function getTransactionHistory(int $limit = 10, ?UserContext $userContext = null): array {
+    global $pdo;
+    $userContext = $userContext ?? UserContext::fromGlobal();
+
     try {
-        $userAddresses = [];
-        if (isset($user['hostname'])) {
-            $userAddresses[] = $user['hostname'];
-        }
-        if (isset($user['torAddress'])) {
-            $userAddresses[] = $user['torAddress'];
-        }
-        
+        $userAddresses = $userContext->getUserAddresses();
+
         if (empty($userAddresses)) {
             return [];
         }
@@ -507,17 +503,17 @@ function getTransactionHistory($limit = 10) {
         $params = array_merge($userAddresses, $userAddresses, [$limit]);
         $stmt->execute($params);
 
-        
+
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $formattedTransactions = [];
-        
+
         foreach ($transactions as $tx) {
             $isSent = in_array($tx['sender_address'], $userAddresses);
             $counterpartyAddress = $isSent ? $tx['receiver_address'] : $tx['sender_address'];
-            
+
             // Get contact name for counterparty
             $contactName = getContactNameByAddress($counterpartyAddress);
-            
+
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
                 'type' => $isSent ? 'sent' : 'received',
@@ -526,7 +522,7 @@ function getTransactionHistory($limit = 10) {
                 'counterparty' => $contactName ?: $counterpartyAddress
             ];
         }
-        
+
         return $formattedTransactions;
     } catch (Exception $e) {
         return [];
@@ -550,18 +546,13 @@ function getContactNameByAddress($address) {
 }
 
 // Helper function to check for new transactions since last check
-function checkForNewTransactions($lastCheckTime) {
-    global $pdo, $user;
-    
+function checkForNewTransactions($lastCheckTime, ?UserContext $userContext = null): bool {
+    global $pdo;
+    $userContext = $userContext ?? UserContext::fromGlobal();
+
     try {
-        $userAddresses = [];
-        if (isset($user['hostname'])) {
-            $userAddresses[] = $user['hostname'];
-        }
-        if (isset($user['torAddress'])) {
-            $userAddresses[] = $user['torAddress'];
-        }
-        
+        $userAddresses = $userContext->getUserAddresses();
+
         if (empty($userAddresses)) {
             return false;
         }
@@ -579,7 +570,7 @@ function checkForNewTransactions($lastCheckTime) {
         $params = array_merge($userAddresses, $userAddresses, [$lastCheckTime]);
         $stmt->execute($params);
 
-        
+
         $result = $stmt->fetch();
         return $result['count'] > 0;
     } catch (Exception $e) {
@@ -683,8 +674,8 @@ function currencyOutputConversion($value,$currency){
 
 
 // Helper Function, conversion database values to output values
-function contactConversion($contacts){
-    global $user;
+function contactConversion(array $contacts, ?UserContext $userContext = null): array {
+    $userContext = $userContext ?? UserContext::fromGlobal();
 
     // If no contacts, return empty array
     if (empty($contacts)) {
@@ -695,7 +686,7 @@ function contactConversion($contacts){
     $pubkeys = array_column($contacts, 'pubkey');
 
     // Get all balances in a single optimized query
-    $balances = getAllContactBalances($user['public'], $pubkeys);
+    $balances = getAllContactBalances($userContext->getPublicKey(), $pubkeys);
 
     // Build result array with balances
     $contactsWithBalances = [];

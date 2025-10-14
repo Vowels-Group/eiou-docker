@@ -1,32 +1,32 @@
 <?php
 # Copyright 2025
 
-function buildP2pPayload($data) {
+function buildP2pPayload(array $data, ?UserContext $userContext = null): array {
     // Build p2p payload for initial message
-    global $user;
+    $userContext = $userContext ?? UserContext::fromGlobal();
     output(outputBuildingP2pPayload($data),'SILENT');
     $userAddress = resolveUserAddressForTransport($data['receiverAddress']); // To a contact (initial sending)
-    return array(
+    return [
         'type' => 'p2p', // Peer to peer request type
         'hash' => $data['hash'],
         'salt' => $data['salt'],
         'time' => $data['time'],
-        'expiration' => $data['time'] + returnconvertedMicroTime($user['p2pExpiration']), // Expiration time based on user's configuration 
+        'expiration' => $data['time'] + returnconvertedMicroTime($userContext->getP2pExpiration()), // Expiration time based on user's configuration
         'currency' => $data['currency'],
         'amount' => $data['amount'], // Nominal amount in cents recipient will receive
         'requestLevel' => $data['minRequestLevel'], // Initial request level
         'maxRequestLevel' => $data['maxRequestLevel'], // Maximum number of hops for p2p request
-        'senderPublicKey' => $user['public'],
+        'senderPublicKey' => $userContext->getPublicKey(),
         'senderAddress' => $userAddress
-    );
+    ];
 }
 
-function buildP2pPayloadDatabase($data) {
+function buildP2pPayloadDatabase(array $data, ?UserContext $userContext = null): array {
     // Build p2p payload from database message
-    global $user;
+    $userContext = $userContext ?? UserContext::fromGlobal();
     output(outputBuildingP2pPayload($data),'SILENT');
     $userAddress = resolveUserAddressForTransport($data['sender_address']); // To a contact (sending p2p onwards to find end-recipient)
-    return array(
+    return [
         'type' => 'p2p', // Peer to peer request type
         'hash' => $data['hash'],
         'salt' => $data['salt'],
@@ -36,9 +36,9 @@ function buildP2pPayloadDatabase($data) {
         'amount' => $data['amount'], // Nominal amount in cents recipient will receive
         'requestLevel' => $data['request_level'] + 1, // increment request level (of message)
         'maxRequestLevel' => $data['max_request_level'], // Maximum number of hops from database message
-        'senderPublicKey' => $user['public'],
+        'senderPublicKey' => $userContext->getPublicKey(),
         'senderAddress' => $userAddress
-    );
+    ];
 }
 
 function buildP2pAcceptancePayload($request){

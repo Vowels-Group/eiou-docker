@@ -11,6 +11,12 @@ if (!file_exists('/etc/eiou/config.php')) {
 }
 require_once("/etc/eiou/config.php");
 
+// Initialize UserContext from global $user for dependency injection
+require_once("/etc/eiou/src/context/UserContext.php");
+use EIOU\Context\UserContext;
+// UserContext is now available throughout the application via UserContext::fromGlobal()
+// or by passing it as a parameter to functions that accept ?UserContext $userContext = null
+
 require_once("/etc/eiou/src/services/ServiceContainer.php");
 $contactService = ServiceContainer::getInstance()->getContactService();
 $transactionService = ServiceContainer::getInstance()->getTransactionService();

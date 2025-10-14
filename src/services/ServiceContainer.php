@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+use EIOU\Context\UserContext;
+
 /**
  * Service Container
  *
@@ -20,9 +22,9 @@ class ServiceContainer {
     private array $services = [];
 
     /**
-     * @var array Current user data
+     * @var UserContext User context
      */
-    private array $currentUser = [];
+    private UserContext $userContext;
 
     /**
      * @var PDO Database connection
@@ -31,49 +33,70 @@ class ServiceContainer {
 
     /**
      * Private constructor for singleton pattern
+     *
+     * @param UserContext|null $userContext Optional UserContext (falls back to global)
      */
-    private function __construct() {
-        $this->pdo = createPDOConnection();
-        $this->loadCurrentUser();
+    private function __construct(?UserContext $userContext = null) {
+        // Initialize UserContext from global if not provided
+        $this->userContext = $userContext ?? UserContext::fromGlobal();
+
+        // Create PDO connection with UserContext
+        $this->pdo = createPDOConnection($this->userContext);
     }
 
     /**
      * Get singleton instance
      *
+     * @param UserContext|null $userContext Optional UserContext for initialization
      * @return ServiceContainer
      */
-    public static function getInstance(): ServiceContainer {
+    public static function getInstance(?UserContext $userContext = null): ServiceContainer {
         if (self::$instance === null) {
-            self::$instance = new self();
+            self::$instance = new self($userContext);
         }
         return self::$instance;
     }
 
     /**
-     * Load current user from global scope
-     * This is a bridge to gradually transition away from global $user
+     * Set user context (for testing or runtime changes)
+     *
+     * @param UserContext $userContext User context
      */
-    private function loadCurrentUser(): void {
-        global $user;
-        $this->currentUser = $user ?? [];
+    public function setUserContext(UserContext $userContext): void {
+        $this->userContext = $userContext;
+        // Clear cached services that depend on user context
+        $this->clearServices();
     }
 
     /**
-     * Set current user (for testing or manual injection)
+     * Get user context
      *
-     * @param array $user User data
+     * @return UserContext Current user context
      */
-    public function setCurrentUser(array $user): void {
-        $this->currentUser = $user;
+    public function getUserContext(): UserContext {
+        return $this->userContext;
     }
 
     /**
-     * Get current user
+     * Get current user (legacy support)
      *
+     * @deprecated Use getUserContext() instead
      * @return array Current user data
      */
     public function getCurrentUser(): array {
-        return $this->currentUser;
+        return $this->userContext->toArray();
+    }
+
+    /**
+     * Set current user (legacy support)
+     *
+     * @deprecated Use setUserContext() instead
+     * @param array $user User data
+     */
+    public function setCurrentUser(array $user): void {
+        $this->userContext = new UserContext($user);
+        // Clear cached services that depend on user context
+        $this->clearServices();
     }
 
     /**
@@ -92,7 +115,7 @@ class ServiceContainer {
      */
     public function getContactRepository(): ContactRepository {
         if (!isset($this->services['ContactRepository'])) {
-            $this->services['ContactRepository'] = new ContactRepository($this->pdo);
+            $this->services['ContactRepository'] = new ContactRepository($this->pdo, $this->userContext);
         }
         return $this->services['ContactRepository'];
     }
@@ -104,7 +127,7 @@ class ServiceContainer {
      */
     public function getTransactionRepository(): TransactionRepository {
         if (!isset($this->services['TransactionRepository'])) {
-            $this->services['TransactionRepository'] = new TransactionRepository($this->pdo);
+            $this->services['TransactionRepository'] = new TransactionRepository($this->pdo, $this->userContext);
         }
         return $this->services['TransactionRepository'];
     }
@@ -156,7 +179,7 @@ class ServiceContainer {
             require_once __DIR__ . '/ContactService.php';
             $this->services['ContactService'] = new ContactService(
                 $this->getContactRepository(),
-                $this->currentUser
+                $this->userContext
             );
         }
         return $this->services['ContactService'];
@@ -173,7 +196,7 @@ class ServiceContainer {
             $this->services['TransactionService'] = new TransactionService(
                 $this->getTransactionRepository(),
                 $this->getContactRepository(),
-                $this->currentUser
+                $this->userContext
             );
         }
         return $this->services['TransactionService'];
@@ -190,7 +213,7 @@ class ServiceContainer {
             $this->services['P2pService'] = new P2pService(
                 $this->getP2pRepository(),
                 $this->getContactRepository(),
-                $this->currentUser
+                $this->userContext
             );
         }
         return $this->services['P2pService'];
@@ -208,7 +231,7 @@ class ServiceContainer {
             $this->services['Rp2pService'] = new Rp2pService(
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
-                $this->currentUser
+                $this->userContext
             );
         }
         return $this->services['Rp2pService'];
@@ -222,7 +245,7 @@ class ServiceContainer {
     public function getWalletService(): WalletService {
         if (!isset($this->services['WalletService'])) {
             require_once __DIR__ . '/WalletService.php';
-            $this->services['WalletService'] = new WalletService($this->currentUser);
+            $this->services['WalletService'] = new WalletService($this->userContext);
         }
         return $this->services['WalletService'];
     }
@@ -239,7 +262,7 @@ class ServiceContainer {
                 $this->getContactRepository(),
                 $this->getP2pRepository(),
                 $this->getTransactionRepository(),
-                $this->currentUser
+                $this->userContext
             );
         }
         return $this->services['MessageService'];
@@ -257,7 +280,7 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
-                $this->currentUser
+                $this->userContext
             );
         }
         return $this->services['CleanupService'];
@@ -276,7 +299,7 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
-                $this->currentUser
+                $this->userContext
             );
         }
         return $this->services['SynchService'];
@@ -292,7 +315,7 @@ class ServiceContainer {
             require_once __DIR__ . '/DebugService.php';
             $this->services['DebugService'] = new DebugService(
                 $this->getDebugRepository(),
-                $this->currentUser
+                $this->userContext
             );
         }
         return $this->services['DebugService'];

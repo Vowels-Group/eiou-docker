@@ -3,6 +3,8 @@
 
 require_once __DIR__ . '/AbstractRepository.php';
 
+use EIOU\Context\UserContext;
+
 /**
  * Transaction Repository
  *
@@ -12,19 +14,21 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class TransactionRepository extends AbstractRepository {
     /**
-     * @var array Current user data
+     * @var UserContext|null User context for accessing user data
      */
-    private array $currentUser;
+    private ?UserContext $userContext = null;
 
     /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection
+     * @param UserContext|null $userContext Optional UserContext for user data access
      */
-    public function __construct(?PDO $pdo = null) {
+    public function __construct(?PDO $pdo = null, ?UserContext $userContext = null) {
         parent::__construct($pdo);
         $this->tableName = 'transactions';
         $this->primaryKey = 'id';
+        $this->userContext = $userContext;
     }
 
     /**
@@ -309,19 +313,17 @@ class TransactionRepository extends AbstractRepository {
      * Check for new transactions since last check
      *
      * @param int $lastCheckTime
+     * @param UserContext|null $userContext User context (optional, falls back to instance context or global)
      * @return bool
      */
-    public function checkForNewTransactions(int $lastCheckTime): bool
+    public function checkForNewTransactions(int $lastCheckTime, ?UserContext $userContext = null): bool
     {
-        global $user;
+        // Use provided context, instance context, or fall back to global
+        if ($userContext === null) {
+            $userContext = $this->userContext ?? UserContext::fromGlobal();
+        }
 
-        $userAddresses = [];
-        if (isset($user['hostname'])) {
-            $userAddresses[] = $user['hostname'];
-        }
-        if (isset($user['torAddress'])) {
-            $userAddresses[] = $user['torAddress'];
-        }
+        $userAddresses = $userContext->getUserAddresses();
 
         if (empty($userAddresses)) {
             return false;
@@ -389,19 +391,17 @@ class TransactionRepository extends AbstractRepository {
      * Get transaction history with limit
      *
      * @param int $limit
+     * @param UserContext|null $userContext User context (optional, falls back to instance context or global)
      * @return array
      */
-    public function getTransactionHistory(int $limit = 10): array
+    public function getTransactionHistory(int $limit = 10, ?UserContext $userContext = null): array
     {
-        global $user;
+        // Use provided context, instance context, or fall back to global
+        if ($userContext === null) {
+            $userContext = $this->userContext ?? UserContext::fromGlobal();
+        }
 
-        $userAddresses = [];
-        if (isset($user['hostname'])) {
-            $userAddresses[] = $user['hostname'];
-        }
-        if (isset($user['torAddress'])) {
-            $userAddresses[] = $user['torAddress'];
-        }
+        $userAddresses = $userContext->getUserAddresses();
 
         if (empty($userAddresses)) {
             return [];
