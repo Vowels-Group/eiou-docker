@@ -31,4 +31,4 @@ docker exec Alice eiou send http://Bob 100 USD
 docker exec Alice eiou send Bob 40 USD
 
 # p2p transaction
-#docker exec Alice eiou send http://Carol 60 USD
+docker exec Alice eiou send http://Carol 60 USD

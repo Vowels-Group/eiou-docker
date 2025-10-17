@@ -21,6 +21,11 @@ class ContactService {
     private UserContext $currentUser;
 
     /**
+     * @var ContactPayload payload builder for contacts
+     */
+    private ContactPayload $contactPayload;
+
+    /**
      * Constructor
      *
      * @param ContactRepository $repository Contact repository
@@ -29,6 +34,7 @@ class ContactService {
     public function __construct(ContactRepository $repository, UserContext $currentUser) {
         $this->repository = $repository;
         $this->currentUser = $currentUser;
+        $this->contactPayload = new ContactPayload($this->currentUser);
     }
 
     /**
@@ -95,7 +101,7 @@ class ContactService {
                     output(outputContactUnblockedAndAddedFailure());
                 }
                 // Send message of successful contact acceptance back to original contact requester
-                send($address, buildContactIsAcceptedPayload($address));
+                send($address, $this->contactPayload->buildAccepted($address));
             }
         }
         elseif($contact['status'] === 'pending'){
@@ -108,7 +114,7 @@ class ContactService {
                 // If contact already exists with an address, it's a contact request, skip sending a message
                 if ($this->acceptContact($address, $name, $fee, $credit, $currency)) {
                     // Send message of successful contact acceptance back to original contact requester
-                    send($address, buildContactIsAcceptedPayload($address));
+                    send($address, $this->contactPayload->buildAccepted($address));
                     output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
                     output(returnContactAccepted());
                 }
@@ -131,7 +137,7 @@ class ContactService {
      */
     private function handleNewContact(string $address, string $name, float $fee, float $credit, string $currency): void {
         // Build the payload array
-        $payload = createContactPayload();
+        $payload = $this->contactPayload->buildCreateRequest();
 
         // Determine if tor, else add http hostname
         if (preg_match('/\.onion$/', $address)) {
@@ -196,7 +202,7 @@ class ContactService {
 
         // Check if contact already exists
         if ($this->repository->contactExists($address)) {
-            return buildContactAlreadyExistsPayload();
+            return $this->contactPayload->buildAlreadyExists();
         } else{
             return $this->repository->addPendingContact($address, $senderPublicKey);
         }

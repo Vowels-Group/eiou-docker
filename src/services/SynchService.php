@@ -35,6 +35,22 @@ class SynchService {
     private UserContext $currentUser;
 
     /**
+     * @var ContactPayload payload builder for contacts
+     */
+    private ContactPayload $contactPayload;
+
+     /**
+     * @var TransactionPayload payload builder for transactions
+     */
+    private TransactionPayload $transactionPayload;
+
+    /**
+     * @var MessagePayload payload builder for messages
+     */
+    private MessagePayload $messagePayload;
+
+
+    /**
      * Constructor
      * @param ContactRepository $contactRepository Contact repository
      * @param P2pRepository $p2pRepository P2P repository
@@ -54,6 +70,9 @@ class SynchService {
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
         $this->currentUser = $currentUser;
+        $this->contactPayload = new ContactPayload($this->currentUser);
+        $this->transactionPayload = new TransactionPayload($this->currentUser);
+        $this->messagePayload = new MessagePayload($this->currentUser);
     }
 
     /**
@@ -109,7 +128,7 @@ class SynchService {
         if($contact['status'] === 'pending'){
             output(outputSynchContactDueToPendingStatus($contactAddress),$echo);
             // If the contact is still pending then inquire with contact
-            $messagePayload = buildMessageContactIsAcceptedInquiryPayload($contactAddress);
+            $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
             $synchResponse = json_decode(send($contactAddress, $messagePayload),true);
             $status = $synchResponse['status'];
             $reason = $synchResponse['reason'] ?? NULL;
@@ -120,13 +139,13 @@ class SynchService {
                 return true;
             } elseif($status === 'rejected' && $reason === 'unknown'){
                 // If no database existence of contact request on their end, resend contact request
-                $contactPayload = createContactPayload();
+                $contactPayload = $this->contactPayload->buildCreateRequest();
                 $responseData = json_decode(send($contactAddress, $contactPayload), true);
                 if(isset($responseData['status']) && ($responseData['status'] === 'accepted')){
                     // Contact received our contact request, needs to be accepted by other user first
                     //   If acceptance is automatic then able to check through following inquiry
                     //   Otherwise would need to inquire again down the line (through synch or otherwise)
-                    $messagePayload = buildMessageContactIsAcceptedInquiryPayload($contactAddress);
+                    $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
                     $synchResponse = send($contactAddress, $messagePayload);
                     if($status === 'accepted'){
                         updateContactStatus($contactAddress, $status);

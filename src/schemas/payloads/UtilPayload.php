@@ -36,11 +36,11 @@ class UtilPayload
     /**
      * Build invalid transaction ID rejection payload
      *
-     * @param array $previousTxResult Previous transaction result
+     * @param string $previousTxResult Previous transaction result
      * @param array $request Current request data
      * @return string JSON encoded invalid transaction ID payload
      */
-    public static function buildInvalidTransactionId(array $previousTxResult, array $request): string
+    public static function buildInvalidTransactionId(string $previousTxResult, array $request): string
     {
         $expectedTxid = $previousTxResult['txid'] ?? 'unknown';
         $receivedTxid = $request['previousTxid'] ?? 'none';

@@ -25,6 +25,11 @@ class RP2pService {
     private UserContext $currentUser;
 
     /**
+     * @var Rp2pPayload payload builder for Rp2p
+     */
+    private Rp2pPayload $rp2pPayload;
+
+    /**
      * Constructor
      *
      * @param P2pRepository $p2pRepository P2P repository
@@ -39,6 +44,7 @@ class RP2pService {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->currentUser = $currentUser;
+        $this->rp2pPayload = new Rp2pPayload($this->currentUser);
     }
 
 
@@ -88,7 +94,7 @@ class RP2pService {
                 }
             } else{
                 // Send rp2p messages onwards to sender of p2p
-                $rP2pPayload = buildRp2pPayload($request); // Build rp2p payload
+                $rP2pPayload =  $this->rp2pPayload->build($request); // Build rp2p payload
                 $this->p2pRepository->updateStatus($request['hash'], 'found');  // Update the p2p request status to found
                 $response = json_decode(send($p2p['sender_address'], $rP2pPayload),true);
                 output(outputRp2pResponse($response),'SILENT');
@@ -108,12 +114,12 @@ class RP2pService {
             if($this->rp2pRepository->rp2pExists($request['hash'])){
               //If RP2P already exists 
                 if($echo){
-                    echo buildRp2pRejectionPayload($request);
+                    echo  $this->rp2pPayload->buildRejection($request);
                 }
                 return false;
             } 
             if($echo){
-                echo buildRp2pAcceptancePayload($request);
+                echo  $this->rp2pPayload->buildAcceptance($request);
             }
             return true;  
         } catch (PDOException $e) {

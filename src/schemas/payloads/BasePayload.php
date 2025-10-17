@@ -7,7 +7,7 @@
  *
  */
 
-require_once dirname(__DIR__,2) . '/src/core/UserContext.php';
+require_once dirname(__DIR__,3) . '/src/core/UserContext.php';
 
 abstract class BasePayload
 {

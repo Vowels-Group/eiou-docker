@@ -25,6 +25,16 @@ class TransactionService {
     private UserContext $currentUser;
 
     /**
+     * @var TransactionPayload payload builder for transactions
+     */
+    private TransactionPayload $transactionPayload;
+
+    /**
+     * @var UtilPayload payload builder for utility
+     */
+    private UtilPayload $utilPayload;
+
+    /**
      * Constructor
      *
      * @param TransactionRepository $transactionRepository Transaction repository
@@ -39,6 +49,8 @@ class TransactionService {
         $this->transactionRepository = $transactionRepository;
         $this->contactRepository = $contactRepository;
         $this->currentUser = $currentUser;
+        $this->transactionPayload = new TransactionPayload($this->currentUser);
+        $this->utilPayload = new UtilPayload($this->currentUser);
     }
 
     /**
@@ -58,7 +70,7 @@ class TransactionService {
             // If a previous transaction exists, verify the previousTxid matches
             if (isset($request['previousTxid']) && $previousTxResult = $this->transactionRepository->getPreviousTxid($request['senderPublicKey'], $request['receiverAddress'])) {
                 if ($previousTxResult !== $request['previousTxid']) {
-                    echo buildInvalidTransactionIDPayload($previousTxResult, $request);
+                    echo $this->utilPayload->buildInvalidTransactionId($previousTxResult, $request);
                     return false;
                 }
             }
@@ -104,7 +116,7 @@ class TransactionService {
             if ($availableFunds > $requiredAmount) {
                 return true;
             } else {
-                echo buildInsufficientBalancePayload($availableFunds, $requiredAmount, $creditLimit, 0, $request['currency']);
+                echo $this->utilPayload->buildInsufficientBalance($availableFunds, $requiredAmount, $creditLimit, 0, $request['currency']);
                 return false;
             }
         } catch (PDOException $e) {
@@ -139,12 +151,12 @@ class TransactionService {
             if($results){
                 // if transaction already exists
                 if($echo){
-                    echo buildSendRejectionPayload($request);
+                    echo $this->transactionPayload->buildRejection($request);
                 }
                 return false;
             } 
             if($echo){
-                echo buildSendAcceptancePayload($request);            
+                echo $this->transactionPayload->buildAcceptance($request);            
             }
             return true;  
         } catch (PDOException $e) {
@@ -279,7 +291,6 @@ class TransactionService {
                 // If p2p type transaction
                 $memo = $request['memo'];
                 $rP2pResult = checkRp2pExists($memo);
-
                 // Check if precursors to transactions exist and correspond
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
                     $request['txid'] = $this->createUniqueTxid($request);
@@ -319,7 +330,7 @@ class TransactionService {
             // If direct transaction
             if($memo === 'standard'){
                 if($message['sender_address'] == resolveUserAddressForTransport($message['sender_address'])){
-                    $payload = buildSendDatabasePayload($message);
+                    $payload = $this->transactionPayload->buildSendFromDatabase($message);
                     $this->transactionRepository->updateStatus($txid,'sent',true);
                     $response = json_decode(send($message['receiver_address'], $payload),true);
                     output(outputTransactionInquiryResponse($response),'SILENT');
@@ -334,7 +345,7 @@ class TransactionService {
                 } else{
                     $this->transactionRepository->updateStatus($txid,'completed',true);
                     output(outputTransactionAmountReceived($message),'SILENT');
-                    $payloadTransactionCompleted = buildSendCompletedPayload($message);
+                    $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                     output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
                     $response = send($message['sender_address'],$payloadTransactionCompleted);
                 }
@@ -360,7 +371,7 @@ class TransactionService {
             $message['time'] = $rp2p['time'];
 
             // If sending transaction forwards
-            $payload = buildSendDatabasePayload($message);
+            $payload = $this->transactionPayload->buildSendFromDatabase($message);
             updateP2pRequestStatus($memo,'paid');
             $this->transactionRepository->updateStatus($memo,'sent');
             output(outputSendTransactionOnwards($message),'SILENT');
@@ -381,10 +392,11 @@ class TransactionService {
                 updateIncomingP2pTxid($message['memo'], $message['txid']);
 
                 // Create new transaction, from received prior transaction, for sending onwards to sender of rp2p
-                $data = buildForwardingTransactionPayload($message);
+                $rp2p = checkRp2pExists($message['memo']);
+                $data = $this->transactionPayload->buildForwarding($message,$rp2p);
                 updateOutgoingP2pTxid($data['memo'], $data['txid']);
 
-                $payload = buildSendDatabasePayload($data);
+                $payload = $this->transactionPayload->buildSendFromDatabase($data);
                 $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($payload),true);
                 output(outputTransactionInsertion($insertTransactionResponse));
             } else{
@@ -393,7 +405,7 @@ class TransactionService {
                 $this->transactionRepository->updateStatus($memo,'completed');
                 updateIncomingP2pTxid($message['memo'], $message['txid']);
                 output(outputTransactionAmountReceived($message),'SILENT');
-                $payloadTransactionCompleted = buildSendCompletedPayload($message);
+                $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                 output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
                 $response = send($message['sender_address'],$payloadTransactionCompleted);
             }
@@ -431,11 +443,11 @@ class TransactionService {
 
             // Data preparation for eIOU
             $data = $this->prepareStandardTransactionData($request,$contactInfo);
-
+            
             // Prepare transaction payload from data
-            $payload = buildSendPayload($data);
-
+            $payload = $this->transactionPayload->buildSend($data);
             $this->transactionRepository->insertTransaction($payload);
+
             output(outputSendTransaction($payload));
         } else {
             output(outputContactNotFoundTryP2p($request), 'SILENT');
@@ -458,7 +470,7 @@ class TransactionService {
         $data = $this->prepareP2pTransactionData($request);
 
         // Prepare transaction payload
-        $payload = buildSendPayload($data);
+        $payload = $this->transactionPayload->buildSend($data);
         $this->transactionRepository->insertTransaction($payload);
 
         updateOutgoingP2pTxid($data['memo'], $data['txid']);

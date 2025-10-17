@@ -25,6 +25,21 @@ class P2pService {
     private UserContext $currentUser;
 
     /**
+     * @var P2pPayload payload builder for p2p
+     */
+    private P2pPayload $p2pPayload;
+
+    /**
+     * @var Rp2pPayload payload builder for Rp2p
+     */
+    private Rp2pPayload $rp2pPayload;
+
+    /**
+     * @var UtilPayload payload builder for utility
+     */
+    private UtilPayload $utilPayload;
+
+    /**
      * Constructor
      *
      * @param P2pRepository $p2pRepository P2P repository
@@ -39,6 +54,9 @@ class P2pService {
         $this->p2pRepository = $p2pRepository;
         $this->contactRepository = $contactRepository;
         $this->currentUser = $currentUser;
+        $this->p2pPayload = new P2pPayload($this->currentUser);
+        $this->rp2pPayload = new Rp2pPayload($this->currentUser);
+        $this->utilPayload = new UtilPayload($this->currentUser);
     }
 
     /**
@@ -51,13 +69,13 @@ class P2pService {
         // Validate input
         if (!isset($request['requestLevel']) || !isset($request['maxRequestLevel'])) {
             error_log("Missing requestLevel or maxRequestLevel in request");
-            echo buildInvalidRequestLevelPayload($request);
+            echo $this->utilPayload->buildInvalidRequestLevel($request);
             return false;
         }
 
         // Check validity of p2p request
         if (!validateRequestLevel($request)) {
-            echo buildInvalidRequestLevelPayload($request);
+            echo $this->utilPayload->buildInvalidRequestLevel($request);
             return false;
         }
         return true;
@@ -86,7 +104,7 @@ class P2pService {
                 $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
 
                 if ($availableFunds < ($requestedAmount + $fundsOnHold)) {
-                    echo buildInsufficientBalancePayload($availableFunds, $requestedAmount, $creditLimit, $fundsOnHold);
+                    echo $this->utilPayload->buildInsufficientBalance($availableFunds, $requestedAmount, $creditLimit, $fundsOnHold);
                     return false;
                 }
             }
@@ -115,12 +133,12 @@ class P2pService {
             if($this->p2pRepository->getByHash($request['hash'])){
                 //If P2P already exists
                 if($echo){
-                    echo buildP2pRejectionPayload($request);
+                    echo $this->p2pPayload->buildRejection($request);
                 }
                 return false;
             } 
             if($echo){
-                echo buildP2pAcceptancePayload($request);
+                echo $this->p2pPayload->buildAcceptance($request);
             }
             return true;  
         } catch (PDOException $e) {
@@ -159,7 +177,7 @@ class P2pService {
                 $this->p2pRepository->insertP2pRequest($request, $myAddress);
 
                 // Build and send corresponding rp2p request payload to sender of p2p
-                $rP2pPayload = buildRp2pPayload($request);
+                $rP2pPayload = $this->rp2pPayload->build($request);
                 $response = json_decode(send($request['senderAddress'], $rP2pPayload), true);
                 output(outputRp2pTransactionResponse($response), 'SILENT');
             } else {
@@ -265,7 +283,7 @@ class P2pService {
 
         // Process each queued message
         foreach ($queuedMessages as $message) {
-            $p2pPayload = buildP2pPayloadDatabase($message); // Build p2p request payload
+            $p2pPayload = $this->p2pPayload->buildFromDatabase($message); // Build p2p request payload
 
             // Check if user is NOT the original sender of the p2p and has a direct contact link to end-recipient
             // If this is the case then send p2p directly
@@ -333,7 +351,7 @@ class P2pService {
             }
         }
 
-        $p2pPayload = buildP2pPayload($this->prepareP2pRequestData($data));
+        $p2pPayload = $this->p2pPayload->build($this->prepareP2pRequestData($data));
         output(outputInsertingP2pRequest($address), 'SILENT');
         $this->p2pRepository->insertP2pRequest($p2pPayload, $address);
         $this->p2pRepository->updateStatus($p2pPayload['hash'], 'queued');
@@ -347,7 +365,7 @@ class P2pService {
      */
     public function sendP2pRequestFromFailedDirectTransaction(array $message): void {
         // Create p2p version of failed direct transaction
-        $p2pPayload = buildP2pPayload($this->prepareP2pRequestFromFailedTransactionData($message));
+        $p2pPayload = $this->p2pPayload->build($this->prepareP2pRequestFromFailedTransactionData($message));
         output(outputInsertingP2pRequest($message['receiver_address']), 'SILENT');
         $this->p2pRepository->insertP2pRequest($p2pPayload, $message['receiver_address']);
         $this->p2pRepository->updateStatus($p2pPayload['hash'], 'queued');

@@ -31,6 +31,27 @@ class MessageService {
     private UserContext $currentUser;
 
     /**
+     * @var ContactPayload payload builder for contacts
+     */
+    private ContactPayload $contactPayload;
+
+    /**
+     * @var TransactionPayload payload builder for transactions
+     */
+    private TransactionPayload $transactionPayload;
+
+    /**
+     * @var UtilPayload payload builder for utility
+     */
+    private UtilPayload $utilPayload;
+
+    /**
+     * @var MessagePayload payload builder for messages
+     */
+    private MessagePayload $messagePayload;
+
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
@@ -48,6 +69,10 @@ class MessageService {
         $this->p2pRepository = $p2pRepository;
         $this->transactionRepository = $transactionRepository;
         $this->currentUser = $currentUser;
+        $this->contactPayload = new ContactPayload($this->currentUser);
+        $this->transactionPayload = new TransactionPayload($this->currentUser);
+        $this->utilPayload = new UtilPayload($this->currentUser);
+        $this->messagePayload = new MessagePayload($this->currentUser);
     }
 
     /**
@@ -91,7 +116,7 @@ class MessageService {
 
         // Check if message is from a known or logical source
         if(!$this->checkMessageValidity($decodedMessage)){
-            echo buildMessageInvalidSourcePayload($message);
+            echo $this->utilPayload->buildInvalidSource($message);
             exit();
         }
 
@@ -125,13 +150,13 @@ class MessageService {
 
         // Contact is already accepted
         if($this->contactRepository->isAcceptedContact($address)){
-            echo buildMessageContactIsAcceptedPayload($address);
+            echo $this->messagePayload->buildContactIsAccepted($address);
         }
         // Contact is pending
         elseif($this->contactRepository->hasPendingContact($address)){
-            echo buildMessageContactIsNotYetAcceptedPayload($address);
+            echo $this->messagePayload->buildContactIsNotYetAccepted($address);
         } else{
-            echo buildMessageContactIsUnknownPayload($address);
+            echo $this->messagePayload->buildContactIsUnknown($address);
         }
     }
 
@@ -161,7 +186,7 @@ class MessageService {
     private function handleTransactionMessageInquiryRequest(array $decodedMessage): void {
         // Handle inquiry about transaction status
         output(outputHandleTransactionMessageResponse($decodedMessage),'SILENT');
-        echo buildMessageTransactionCompletedCorrectlyPayload($decodedMessage);
+        echo  $this->messagePayload->buildTransactionCompletedCorrectly($decodedMessage);
     }
 
     /**
@@ -184,7 +209,7 @@ class MessageService {
                     // Check if user was original sender of transaction
                     if(isset($p2p['destination_address'])){
                         // Send direct message inquiry to end recipient double checking if completion of transaction correct
-                        $completedTransactionInquiry = buildMessageTransactionCompletedInquiryPayload($decodedMessage);
+                        $completedTransactionInquiry =  $this->messagePayload->buildTransactionCompletedInquiry($decodedMessage);
                         $response = json_decode(send($p2p['destination_address'],$completedTransactionInquiry),true);
                         output(outputTransactionInquiryResponse($response),'SILENT');
 
@@ -198,7 +223,7 @@ class MessageService {
                         $this->transactionRepository->updateStatus($hash,'completed');
 
                         // Send transaction completion message onwards
-                        $payloadTransactionCompleted = buildSendCompletedPayload($decodedMessage);
+                        $payloadTransactionCompleted =  $this->transactionPayload->buildCompleted($decodedMessage);
                         output(outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$p2p['sender_address']),'SILENT');
                         $response = send($p2p['sender_address'],$payloadTransactionCompleted);
                     }

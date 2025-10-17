@@ -24,13 +24,13 @@ class P2pPayload extends BasePayload
         ]);
         //output(outputBuildingP2pPayload($data),'SILENT');
         $userAddress = resolveUserAddressForTransport($data['receiverAddress']);
-        
+
         return [
             'type' => 'p2p',
             'hash' => $data['hash'],
             'salt' => $data['salt'],
             'time' => $data['time'],
-            'expiration' => $data['time'] + $this->getP2pExpirationTime(),
+            'expiration' => $data['time'] + returnconvertedMicroTime($this->currentUser->getP2pExpirationTime()),
             'currency' => $this->sanitizeString($data['currency']),
             'amount' => $this->sanitizeNumber($data['amount']),
             'requestLevel' => (int) $data['minRequestLevel'],
@@ -108,45 +108,44 @@ class P2pPayload extends BasePayload
         ]);
     }
 
-    /**
-     * Build P2P inquiry payload
-     *
-     * @param string $hash The P2P hash to inquire about
-     * @return array The inquiry payload
-     */
-    public function buildInquiry(string $hash): array
-    {
+    // /**
+    //  * Build P2P inquiry payload
+    //  *
+    //  * @param string $hash The P2P hash to inquire about
+    //  * @return array The inquiry payload
+    //  */
+    // public function buildInquiry(string $hash): array
+    // {
        
 
-        return [
-            'type' => 'p2p',
-            'inquiry' => true,
-            'hash' => $hash,
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'senderAddress' => $this->getUserAddress(),
-        ];
-    }
+    //     return [
+    //         'type' => 'p2p',
+    //         'inquiry' => true,
+    //         'hash' => $hash,
+    //         'senderPublicKey' => $this->currentUser->getPublicKey(),
+    //         'senderAddress' => $this->getUserAddress(),
+    //     ];
+    // }
 
-    /**
-     * Build P2P status update payload
-     *
-     * @param string $hash The P2P hash
-     * @param string $status The status update
-     * @param array $additionalData Optional additional data
-     * @return array The status update payload
-     */
-    public function buildStatusUpdate(string $hash, string $status, array $additionalData = []): array
-    {
-        $user = $this->userContext->getUser();
+    // /**
+    //  * Build P2P status update payload
+    //  *
+    //  * @param string $hash The P2P hash
+    //  * @param string $status The status update
+    //  * @param array $additionalData Optional additional data
+    //  * @return array The status update payload
+    //  */
+    // public function buildStatusUpdate(string $hash, string $status, array $additionalData = []): array
+    // {
 
-        return array_merge([
-            'type' => 'p2p',
-            'statusUpdate' => true,
-            'hash' => $hash,
-            'status' => $status,
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'senderAddress' => $this->getUserAddress(),
-            'timestamp' => time(),
-        ], $additionalData);
-    }
+    //     return array_merge([
+    //         'type' => 'p2p',
+    //         'statusUpdate' => true,
+    //         'hash' => $hash,
+    //         'status' => $status,
+    //         'senderPublicKey' => $this->currentUser->getPublicKey(),
+    //         'senderAddress' => $this->getUserAddress(),
+    //         'timestamp' => time(),
+    //     ], $additionalData);
+    // }
 }

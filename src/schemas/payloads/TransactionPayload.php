@@ -31,8 +31,8 @@ class TransactionPayload extends BasePayload
     public function buildSend(array $data): array
     {
         $this->ensureRequiredFields($data, [
-            'time', 'receiverAddress', 'receiverPublicKey',
-            'amount', 'currency', 'txid', 'previousTxid'
+            'receiverAddress', 'receiverPublicKey',
+            'amount', 'currency', 'txid'
         ]);
 
 
@@ -63,10 +63,9 @@ class TransactionPayload extends BasePayload
     public function buildSendFromDatabase(array $data): array
     {
         $this->ensureRequiredFields($data, [
-            'time', 'receiver_address', 'receiver_public_key',
-            'amount', 'currency', 'txid', 'previous_txid'
+            'receiver_address', 'receiver_public_key',
+            'amount', 'currency', 'txid'
         ]);
-
        
         $userAddress = resolveUserAddressForTransport($data['receiver_address']);
         $memo = $data['memo'] ?? 'standard';
@@ -96,7 +95,6 @@ class TransactionPayload extends BasePayload
     public function buildForwarding(array $message, array $rp2pData): array
     {
         // This method returns data array for further processing, not final payload
-        // The actual implementation would need the helper functions from the original code
         return [
             'time' => $rp2pData['time'] ?? time(),
             'receiver_address' => $rp2pData['sender_address'] ?? null,
