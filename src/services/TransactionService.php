@@ -20,21 +20,21 @@ class TransactionService {
     private ContactRepository $contactRepository;
 
     /**
-     * @var array Current user data
+     * @var UserContext Current user data
      */
-    private array $currentUser;
+    private UserContext $currentUser;
 
     /**
      * Constructor
      *
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param ContactRepository $contactRepository Contact repository
-     * @param array $currentUser Current user data
+     * @param UserContext $currentUser Current user data
      */
     public function __construct(
         TransactionRepository $transactionRepository,
         ContactRepository $contactRepository,
-        array $currentUser = []
+        UserContext $currentUser
     ) {
         $this->transactionRepository = $transactionRepository;
         $this->contactRepository = $contactRepository;
@@ -192,7 +192,7 @@ class TransactionService {
         }
 
         // Create Txid for transactions
-        $txid = hash('sha256', $this->currentUser['public'] . $data['receiverPublicKey'] . $data['amount'] . $data['time']);
+        $txid = hash('sha256', $this->currentUser->getPublicKey() . $data['receiverPublicKey'] . $data['amount'] . $data['time']);
         return $txid;
     }
 
@@ -204,7 +204,7 @@ class TransactionService {
      */
     public function createUniqueDatabaseTxid(array $data): string {
         // Create unique Txid for transactions (from database values)
-        $txid = hash('sha256', $this->currentUser['public'] . $data['receiver_public_key'] . $data['amount'] . $data['time']);
+        $txid = hash('sha256', $this->currentUser->getPublicKey() . $data['receiver_public_key'] . $data['amount'] . $data['time']);
         return $txid;
     }
 
@@ -229,7 +229,7 @@ class TransactionService {
         $data['receiverAddress'] = $contactInfo['receiverAddress'];
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
         $data['txid'] = $this->createUniqueTxid($data);
-        $data['previousTxid'] = $this->fixPreviousTxid($this->currentUser['public'], $contactInfo['receiverPublicKey']);
+        $data['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $contactInfo['receiverPublicKey']);
 
         return $data;
     }
@@ -251,7 +251,7 @@ class TransactionService {
         $data['amount'] = $request['amount'];
         $data['currency'] = $request['currency'];
         $data['txid'] = $this->createUniqueTxid($data);
-        $data['previousTxid'] = $this->fixPreviousTxid($this->currentUser['public'], $request['senderPublicKey']);
+        $data['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $request['senderPublicKey']);
         $data['memo'] = $request['hash'];
 
         return $data;
@@ -283,7 +283,7 @@ class TransactionService {
                 // Check if precursors to transactions exist and correspond
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
                     $request['txid'] = $this->createUniqueTxid($request);
-                    $request['previousTxid'] = $this->fixPreviousTxid($this->currentUser['public'], $request['senderPublicKey']);
+                    $request['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $request['senderPublicKey']);
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 } elseif (matchYourselfTransaction($request, resolveUserAddressForTransport($request['senderAddress']))) {

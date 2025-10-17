@@ -1,6 +1,5 @@
 <?php
 # Copyright 2025
-
 /**
  * Abstract Repository Base Class
  *
@@ -32,6 +31,13 @@ abstract class AbstractRepository {
      */
     protected $primaryKey = 'id';
 
+
+    /**
+     * @var UserContext object of user data
+     */
+    protected $currentUser;
+
+
     /**
      * Constructor - Initializes PDO connection
      *
@@ -51,6 +57,9 @@ abstract class AbstractRepository {
         if (!$this->pdo) {
             throw new RuntimeException("Failed to initialize repository: Database connection unavailable");
         }
+
+        require_once dirname(__DIR__) . '/core/UserContext.php';
+        $this->currentUser = UserContext::getInstance();
     }
 
     /**

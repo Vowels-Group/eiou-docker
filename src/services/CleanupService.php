@@ -25,22 +25,22 @@ class CleanupService {
     private TransactionRepository $transactionRepository;
 
     /**
-     * @var array Current user data
+     * @var UserContext Current user data
      */
-    private array $currentUser;
+    private UserContext $currentUser;
 
     /**
      * Constructor
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
-     * @param array $currentUser Current user data
+     * @param UserContext $currentUser Current user data
      */
     public function __construct(
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
-        array $currentUser = []
+        UserContext $currentUser
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;

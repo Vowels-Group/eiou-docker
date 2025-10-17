@@ -10,16 +10,16 @@
  */
 class WalletService {
     /**
-     * @var array Current user data
+     * @var UserContext Current user data
      */
-    private array $currentUser;
+    private UserContext $currentUser;
 
     /**
      * Constructor
      *
-     * @param array $currentUser Current user data
+     * @param UserContext $currentUser Current user data
      */
-    public function __construct(array $currentUser = []) {
+    public function __construct(UserContext $currentUser) {
         $this->currentUser = $currentUser;
     }
 
@@ -31,7 +31,7 @@ class WalletService {
      */
     public function checkWalletExists(string $request): void {
         // Check if wallet exists
-        if ((!isset($this->currentUser['public']) || !isset($this->currentUser['private'])) && $request != 'generate' && $request != 'restore') {
+        if ((null === $this->currentUser->hasKeys()) && $request != 'generate' && $request != 'restore') {
             echo returnNoWalletExists();
             exit();
         }
@@ -46,7 +46,7 @@ class WalletService {
     public function generateWallet(array $argv): void {
         // If config (wallet) exists query user about overwriting
         // On restart of container keeps from appending new values
-        if(file_exists("/etc/eiou/config.php") && isset($this->currentUser["public"])){
+        if(file_exists("/etc/eiou/config.php") && (null !== $this->currentUser->getPublicKey())){
             echo returnUserInputRequestOverwritingWallet();
             $decision = trim(fgets(STDIN));
             if(strtolower($decision) !== 'y'){
@@ -111,89 +111,5 @@ class WalletService {
             file_put_contents($privateKeyFile, $privateKey);
             echo "Private key saved to $privateKeyFile\n";
         }
-    }
-
-    /**
-     * Get public key
-     *
-     * @return string|null Public key or null
-     */
-    public function getPublicKey(): ?string {
-        return $this->currentUser['public'] ?? null;
-    }
-
-    /**
-     * Get private key
-     *
-     * @return string|null Private key or null
-     */
-    public function getPrivateKey(): ?string {
-        return $this->currentUser['private'] ?? null;
-    }
-
-    /**
-     * Get authentication code
-     *
-     * @return string|null Auth code or null
-     */
-    public function getAuthCode(): ?string {
-        return $this->currentUser['authcode'] ?? null;
-    }
-
-    /**
-     * Get Tor address
-     *
-     * @return string|null Tor address or null
-     */
-    public function getTorAddress(): ?string {
-        return $this->currentUser['torAddress'] ?? null;
-    }
-
-    /**
-     * Get hostname
-     *
-     * @return string|null Hostname or null
-     */
-    public function getHostname(): ?string {
-        return $this->currentUser['hostname'] ?? null;
-    }
-
-    /**
-     * Check if wallet has keys
-     *
-     * @return bool True if wallet has both public and private keys
-     */
-    public function hasKeys(): bool {
-        return isset($this->currentUser['public']) && isset($this->currentUser['private']);
-    }
-
-    /**
-     * Validate wallet configuration
-     *
-     * @return array Validation result with status and errors
-     */
-    public function validateWallet(): array {
-        $errors = [];
-
-        if (!isset($this->currentUser['public'])) {
-            $errors[] = 'Public key is missing';
-        }
-
-        if (!isset($this->currentUser['private'])) {
-            $errors[] = 'Private key is missing';
-        }
-
-        if (!isset($this->currentUser['authcode'])) {
-            $errors[] = 'Authentication code is missing';
-        }
-
-        if (!isset($this->currentUser['torAddress']) && !isset($this->currentUser['hostname'])) {
-            $errors[] = 'No network address configured (Tor or HTTP)';
-        }
-
-        return [
-            'valid' => empty($errors),
-            'errors' => $errors
-        ];
     }
 }

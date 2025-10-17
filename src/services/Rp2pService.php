@@ -20,21 +20,21 @@ class RP2pService {
     private RP2pRepository $rp2pRepository;
 
     /**
-     * @var array Current user data
+     * @var UserContext Current user data
      */
-    private array $currentUser;
+    private UserContext $currentUser;
 
     /**
      * Constructor
      *
      * @param P2pRepository $p2pRepository P2P repository
      * @param RP2pRepository $rp2pRepository RP2P repository
-     * @param array $currentUser Current user data
+     * @param UserContext $currentUser Current user data
      */
     public function __construct(
         P2pRepository $p2pRepository,
         RP2pRepository $rp2pRepository,
-        array $currentUser = []
+        UserContext $currentUser
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
@@ -81,7 +81,7 @@ class RP2pService {
                 $feePercent = feeInformation($p2p,$request); // Get fee percent and output fee information in  log
                 
                 // Check if the fee percent is below the set maximum fee percent the user would pay
-                if ($feePercent <= $this->currentUser['maxFee']) {
+                if ($feePercent <= $this->currentUser->getMaxFee()) {
                     sendP2pEiou($request); // Send transaction through rp2p chain
                 } else {
                     output(outputFeeRejection(), 'SILENT');

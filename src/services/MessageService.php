@@ -26,9 +26,9 @@ class MessageService {
     private TransactionRepository $transactionRepository;
 
     /**
-     * @var array Current user data
+     * @var UserContext Current user data
      */
-    private array $currentUser;
+    private UserContext $currentUser;
 
     /**
      * Constructor
@@ -36,13 +36,13 @@ class MessageService {
      * @param ContactRepository $contactRepository Contact repository
      * @param P2pRepository $p2pRepository P2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
-     * @param array $currentUser Current user data
+     * @param UserContext $currentUser Current user data
      */
     public function __construct(
         ContactRepository $contactRepository,
         P2pRepository $p2pRepository,
         TransactionRepository $transactionRepository,
-        array $currentUser = []
+        UserContext $currentUser
     ) {
         $this->contactRepository = $contactRepository;
         $this->p2pRepository = $p2pRepository;

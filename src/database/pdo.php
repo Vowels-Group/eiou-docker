@@ -10,13 +10,13 @@
  * @return PDO Database connection instance
  * @throws PDOException If connection fails
  */
+
+require_once dirname(__DIR__) . '/core/UserContext.php';
+
 function createPDOConnection(): PDO {
     // Try to use UserContext if available, fallback to global $user
-    $userContext = null;
-    if (class_exists('UserContext')) {
-        require_once dirname(__DIR__) . '/core/UserContext.php';
-        $userContext = UserContext::getInstance();
-    }
+    $userContext = UserContext::getInstance();
+
 
     // Get database configuration from UserContext or global $user
     if ($userContext && $userContext->isInitialized()) {

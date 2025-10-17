@@ -8,6 +8,7 @@
  *
  * @package Services
  */
+
 class ContactService {
     /**
      * @var ContactRepository Contact repository instance
@@ -15,17 +16,17 @@ class ContactService {
     private ContactRepository $repository;
 
     /**
-     * @var array Current user data
+     * @var UserContext Current user data
      */
-    private array $currentUser;
+    private UserContext $currentUser;
 
     /**
      * Constructor
      *
      * @param ContactRepository $repository Contact repository
-     * @param array $currentUser Current user data
+     * @param UserContext $currentUser Current user data
      */
-    public function __construct(ContactRepository $repository, array $currentUser = []) {
+    public function __construct(ContactRepository $repository, UserContext $currentUser) {
         $this->repository = $repository;
         $this->currentUser = $currentUser;
     }
@@ -134,9 +135,9 @@ class ContactService {
 
         // Determine if tor, else add http hostname
         if (preg_match('/\.onion$/', $address)) {
-            $payload['senderAddress'] = $this->currentUser['torAddress'];
+            $payload['senderAddress'] = $this->currentUser->getTorAddress();
         } else {
-            $payload['senderAddress'] = $this->currentUser['hostname'];
+            $payload['senderAddress'] = $this->currentUser->getHttpAddress();
         }
 
         // Check if the response indicates successful acceptance

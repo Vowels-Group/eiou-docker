@@ -53,8 +53,8 @@ class ContactRepository extends AbstractRepository {
      * @return string JSON response
      */
     public function addPendingContact(string $address, string $senderPublicKey): string {
-        global $user; // Still needed for myPublicKey in response
-        $myPublicKey = $user['public'] ?? '';
+       
+        $myPublicKey = $this->currentUser->getPublicKey() ?? '';
         $pubkeyHash = hash('sha256', $senderPublicKey);
 
         $data = [

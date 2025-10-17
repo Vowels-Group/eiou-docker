@@ -8,6 +8,8 @@
  * @todo Eventually replace all global $user references with this class
  */
 
+// namespace EIOU\core;
+
 class UserContext {
     private static ?UserContext $instance = null;
     private array $userData = [];
@@ -16,7 +18,9 @@ class UserContext {
     /**
      * Private constructor to enforce singleton pattern
      */
-    private function __construct() {}
+    private function __construct() {
+        $this->initFromGlobal();
+    }
 
     /**
      * Get singleton instance
@@ -63,9 +67,6 @@ class UserContext {
      * @return mixed
      */
     public function get(string $key, $default = null) {
-        if (!$this->initialized) {
-            $this->initFromGlobal();
-        }
         return $this->userData[$key] ?? $default;
     }
 
@@ -77,9 +78,6 @@ class UserContext {
      * @return void
      */
     public function set(string $key, $value): void {
-        if (!$this->initialized) {
-            $this->initFromGlobal();
-        }
         $this->userData[$key] = $value;
 
         // Also update global for backward compatibility
@@ -96,9 +94,6 @@ class UserContext {
      * @return bool
      */
     public function has(string $key): bool {
-        if (!$this->initialized) {
-            $this->initFromGlobal();
-        }
         return isset($this->userData[$key]);
     }
 
@@ -108,38 +103,246 @@ class UserContext {
      * @return array
      */
     public function getAll(): array {
-        if (!$this->initialized) {
-            $this->initFromGlobal();
-        }
         return $this->userData;
     }
 
     /**
-     * Common getters for frequently used properties
+     * Get public key
+     *
+     * @return string|null
      */
-
     public function getPublicKey(): ?string {
-        return $this->get('myPublicKey');
+        return $this->get('public') ?? null;
     }
 
+    /**
+     * Get private key
+     *
+     * @return string|null
+     */
     public function getPrivateKey(): ?string {
-        return $this->get('myPrivateKey');
+        return $this->get('private') ?? null;
     }
 
+    /**
+     * Check if wallet has keys
+     *
+     * @return bool True if wallet has both public and private keys
+     */
+    public function hasKeys(): bool {
+        return (null!== $this->getPublicKey()) && (null!== $this->getPrivateKey());
+    }
+
+    /**
+     * Get authentication code
+     *
+     * @return string|null Auth code or null
+     */
+    public function getAuthCode(): ?string {
+        return $this->get('authcode') ?? null;
+    }
+
+    /**
+     * Get hostname
+     *
+     * @return string|null
+     */
+    public function getHttpAddress(): ?string {
+        return $this->get('hostname') ?? null;
+    }
+
+    /**
+     * Get Tor address
+     *
+     * @return string|null
+     */
     public function getTorAddress(): ?string {
-        return $this->get('myTorAddress');
+        return $this->get('torAddress') ?? null;
     }
 
-    public function isDebugMode(): bool {
-        return (bool) $this->get('debug', false);
+    /**
+     * Validate wallet configuration
+     *
+     * @return array Validation result with status and errors
+     */
+    public function validateWallet(): array {
+        $errors = [];
+
+        if (null === $this->getPublicKey()) {
+            $errors[] = 'Public key is missing';
+        }
+
+        if (null=== $this->getPrivateKey()) {
+            $errors[] = 'Private key is missing';
+        }
+
+        if (null=== $this->getAuthCode()) {
+            $errors[] = 'Authentication code is missing';
+        }
+
+        if ((null!== $this->getHttpAddress()) && (null!== $this->getTorAddress())) {
+            $errors[] = 'No network address configured (Tor or HTTP)';
+        }
+
+        return [
+            'valid' => empty($errors),
+            'errors' => $errors
+        ];
     }
 
+    /**
+     * Get all user addresses (hostname and tor)
+     *
+     * @return array
+     */
+    public function getUserAddresses(): array {
+        $addresses = [];
+        if ($hostname = $this->getHttpAddress()) {
+            $addresses[] = $hostname;
+        }
+        if ($torAddress = $this->getTorAddress()) {
+            $addresses[] = $torAddress;
+        }
+        return $addresses;
+    }
+
+    /**
+     * Check if an address belongs to this user
+     *
+     * @param string $address
+     * @return bool
+     */
+    public function isMyAddress(string $address): bool {
+        return in_array($address, $this->getUserAddresses(), true);
+    }
+
+    /**
+     * Get default fee percentage
+     *
+     * @return float
+     */
     public function getDefaultFee(): float {
-        return (float) $this->get('myDefaultFee', 0);
+        return (float) ($this->get('defaultFee') ?? 0.1);
     }
 
-    public function getCurrency(): string {
-        return $this->get('myCurrency', 'USD');
+    /**
+     * Get default currency
+     *
+     * @return string
+     */
+    public function getDefaultCurrency(): string {
+        return $this->get('defaultCurrency') ?? 'USD';
+    }
+
+    /**
+     * Check if localhost only mode is enabled
+     *
+     * @return bool
+     */
+    public function isLocalhostOnly(): bool {
+        return (bool) ($this->get('localhostOnly') ?? true);
+    }
+
+    /**
+     * Get maximum fee percentage
+     *
+     * @return float
+     */
+    public function getMaxFee(): float {
+        return (float) ($this->get('maxFee') ?? 5.0);
+    }
+
+    /**
+     * Get maximum P2P level
+     *
+     * @return int
+     */
+    public function getMaxP2pLevel(): int {
+        return (int) ($this->get('maxP2pLevel') ?? 6);
+    }
+
+    /**
+     * Get P2P expiration time in seconds
+     *
+     * @return int
+     */
+    public function getP2pExpirationTime(): int {
+        return (int) ($this->get('p2pExpiration') ?? 300);
+    }
+
+    /**
+     * Check if debug mode is enabled
+     *
+     * @return bool
+     */
+    public function isDebugMode(): bool {
+        return (bool) ($this->get('debug') ?? false);
+    }
+
+    /**
+     * Get maximum output lines
+     *
+     * @return int
+     */
+    public function getMaxOutput(): int {
+        return (int) ($this->get('maxOutput') ?? 5);
+    }
+
+    /**
+     * Get database host
+     *
+     * @return string|null
+     */
+    public function getDbHost(): ?string {
+        return $this->get('dbHost') ?? null;
+    }
+
+    /**
+     * Get database name
+     *
+     * @return string|null
+     */
+    public function getDbName(): ?string {
+        return $this->get('dbName') ?? null;
+    }
+
+    /**
+     * Get database user
+     *
+     * @return string|null
+     */
+    public function getDbUser(): ?string {
+        return $this->get('dbUser') ?? null;
+    }
+
+    /**
+     * Get database password
+     *
+     * @return string|null
+     */
+    public function getDbPass(): ?string {
+        return $this->get('dbPass') ?? null;
+    }
+
+    /**
+     * Check if database configuration is valid
+     *
+     * @return bool
+     */
+    public function hasValidDbConfig(): bool {
+        return $this->getDbHost() !== null
+            && $this->getDbName() !== null
+            && $this->getDbUser() !== null
+            && $this->getDbPass() !== null;
+    }
+
+    /**
+     * Get all user data as array
+     *
+     * @return array
+     */
+    public function toArray(): array {
+        return $this->userData;
     }
 
     /**

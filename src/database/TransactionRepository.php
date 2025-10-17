@@ -12,11 +12,6 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class TransactionRepository extends AbstractRepository {
     /**
-     * @var array Current user data
-     */
-    private array $currentUser;
-
-    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection
@@ -313,15 +308,7 @@ class TransactionRepository extends AbstractRepository {
      */
     public function checkForNewTransactions(int $lastCheckTime): bool
     {
-        global $user;
-
-        $userAddresses = [];
-        if (isset($user['hostname'])) {
-            $userAddresses[] = $user['hostname'];
-        }
-        if (isset($user['torAddress'])) {
-            $userAddresses[] = $user['torAddress'];
-        }
+        $userAddresses = $this->currentUser->getUserAddresses();
 
         if (empty($userAddresses)) {
             return false;
@@ -393,15 +380,8 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getTransactionHistory(int $limit = 10): array
     {
-        global $user;
-
-        $userAddresses = [];
-        if (isset($user['hostname'])) {
-            $userAddresses[] = $user['hostname'];
-        }
-        if (isset($user['torAddress'])) {
-            $userAddresses[] = $user['torAddress'];
-        }
+        $userAddresses = $this->currentUser->getUserAddresses();
+        
 
         if (empty($userAddresses)) {
             return [];

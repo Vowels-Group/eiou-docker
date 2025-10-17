@@ -17,19 +17,19 @@ class DebugService {
 
 
     /**
-     * @var array Current user data
+     * @var UserContext Current user data
      */
-    private array $currentUser;
+    private UserContext $currentUser;
 
     /**
      * Constructor
      *
      * @param DebugRepository $debugRepository Debug repository
-     * @param array $currentUser Current user data
+     * @param UserContext $currentUser Current user data
      */
     public function __construct(
         DebugRepository $debugRepository,
-        array $currentUser = []
+        UserContext $currentUser
     ) {
         $this->debugRepository = $debugRepository;
         $this->currentUser = $currentUser;
@@ -50,13 +50,12 @@ class DebugService {
         }
 
         // Add user information if available
-        if (isset($this->currentUser)) {
+        if ($this->currentUser->isInitialized()) {
             $context['user'] = [
-                'id' => $this->currentUser['id'] ?? null,
-                'public_key' => $this->currentUser['public'] ?? null,
-                'tor_address' => $this->currentUser['torAddress'] ?? null,
-                'hostname' => $this->currentUser['hostname'] ?? null,
-                'debug' => $this->currentUser['debug'] ?? null
+                'public_key' => $this->currentUser->getPublicKey(),
+                'tor_address' => $this->currentUser->getTorAddress(),
+                'hostname' => $this->currentUser->getHttpAddress(),
+                'debug' => $this->currentUser->isDebugMode()
             ];
         }
 
@@ -88,7 +87,7 @@ class DebugService {
     
     function output($message, $level = 'ECHO') {
         // Check if debug mode is enabled
-        if (isset($this->currentUser['debug']) && $this->currentUser['debug'] === true) {
+        if ($this->currentUser->isDebugMode()) {
             $data = [
                 'level' => $level,
                 'message' => trim($message),

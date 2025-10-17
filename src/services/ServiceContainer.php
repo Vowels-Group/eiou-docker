@@ -8,6 +8,8 @@
  *
  * @package Services
  */
+
+
 class ServiceContainer {
     /**
      * @var ServiceContainer|null Singleton instance
@@ -20,9 +22,9 @@ class ServiceContainer {
     private array $services = [];
 
     /**
-     * @var array Current user data
+     * @var UserContext Current user data
      */
-    private array $currentUser = [];
+    private UserContext $currentUser;
 
     /**
      * @var PDO Database connection
@@ -54,25 +56,24 @@ class ServiceContainer {
      * This is a bridge to gradually transition away from global $user
      */
     private function loadCurrentUser(): void {
-        global $user;
-        $this->currentUser = $user ?? [];
+        $this->currentUser = UserContext::getInstance() ?? [];
     }
 
     /**
      * Set current user (for testing or manual injection)
      *
-     * @param array $user User data
+     * @param UserContext $user User data
      */
-    public function setCurrentUser(array $user): void {
+    public function setCurrentUser(UserContext $user): void {
         $this->currentUser = $user;
     }
 
     /**
      * Get current user
      *
-     * @return array Current user data
+     * @return UserContext Current user data
      */
-    public function getCurrentUser(): array {
+    public function getCurrentUser(): UserContext {
         return $this->currentUser;
     }
 

@@ -20,21 +20,21 @@ class P2pService {
     private ContactRepository $contactRepository;
 
     /**
-     * @var array Current user data
+     * @var UserContext Current user data
      */
-    private array $currentUser;
+    private UserContext $currentUser;
 
     /**
      * Constructor
      *
      * @param P2pRepository $p2pRepository P2P repository
      * @param ContactRepository $contactRepository Contact repository
-     * @param array $currentUser Current user data
+     * @param UserContext $currentUser Current user data
      */
     public function __construct(
         P2pRepository $p2pRepository,
         ContactRepository $contactRepository,
-        array $currentUser = []
+        UserContext $currentUser
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->contactRepository = $contactRepository;
@@ -222,7 +222,7 @@ class P2pService {
         output(outputP2pComponents($data), 'SILENT');
 
         $data['minRequestLevel'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // Calculate 'random' lower bound for request level
-        $data['maxRequestLevel'] = $data['minRequestLevel'] + jitter($this->currentUser['maxP2pLevel']); // Add upper bound to request level, using users max
+        $data['maxRequestLevel'] = $data['minRequestLevel'] + jitter($this->currentUser->getMaxP2pLevel()); // Add upper bound to request level, using users max
 
         return $data;
     }
@@ -249,7 +249,7 @@ class P2pService {
         output(outputP2pComponents($data), 'SILENT');
 
         $data['minRequestLevel'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // Calculate 'random' lower bound for request level
-        $data['maxRequestLevel'] = $data['minRequestLevel'] + jitter($this->currentUser['maxP2pLevel']); // Add upper bound to request level, using users max
+        $data['maxRequestLevel'] = $data['minRequestLevel'] + jitter($this->currentUser->getMaxP2pLevel()); // Add upper bound to request level, using users max
 
         return $data;
     }
@@ -299,8 +299,8 @@ class P2pService {
                 if(isset($message['destination_address'])){
                     output(outputSendP2PToAmountContacts($contactsCount), 'SILENT');
                     //Inform user (in debug) about expected response time
-                    $httpExpectedResponseTime = $this->currentUser['maxP2pLevel']; // Use maxP2pLevel seconds for http
-                    $torExpectedResponseTime = 5 * 2 * $this->currentUser['maxP2pLevel']; //5 seconds for a tor request, 2 times for a round trip, multiplied by maxP2pLevel
+                    $httpExpectedResponseTime = $this->currentUser->getMaxP2pLevel(); // Use maxP2pLevel seconds for http
+                    $torExpectedResponseTime = 5 * 2 * $this->currentUser->getMaxP2pLevel(); //5 seconds for a tor request, 2 times for a round trip, multiplied by maxP2pLevel
                     output(outputResponseTransactionTimes($httpExpectedResponseTime,$torExpectedResponseTime), 'SILENT');
                 }
             }
