@@ -76,3 +76,15 @@ function returnMicroTime(){
     // Create current micro-time stamp
     return returnconvertedMicroTime(microtime(true));
 }
+
+/**
+ * Format currency from cents to dollars with USD suffix
+ *
+ * @param float $amountInCents Amount in cents
+ * @param string $currency Currency code (default: USD)
+ * @return string Formatted currency string
+*/
+function formatCurrency(float $amountInCents, string $currency = 'USD'): string{
+    $amountInDollars = $amountInCents / 100;
+    return number_format($amountInDollars, 2) . ' ' . $currency;
+}
