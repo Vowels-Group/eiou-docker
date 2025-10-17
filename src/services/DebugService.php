@@ -14,8 +14,6 @@ class DebugService {
      */
     private DebugRepository $debugRepository;
 
-
-
     /**
      * @var UserContext Current user data
      */
@@ -34,7 +32,6 @@ class DebugService {
         $this->debugRepository = $debugRepository;
         $this->currentUser = $currentUser;
     }
-
 
     function getContext(){
         $context = [];
@@ -83,8 +80,6 @@ class DebugService {
         return json_encode($context, JSON_PRETTY_PRINT);
     }
 
-
-    
     function output($message, $level = 'ECHO') {
         // Check if debug mode is enabled
         if ($this->currentUser->isDebugMode()) {
