@@ -10,7 +10,7 @@ services:
       - QUICKSTART=eioud
     volumes:
       - eioud-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
       - ./config-template.php:/etc/eiou/config.php:ro
     restart: unless-stopped
 

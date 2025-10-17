@@ -10,7 +10,7 @@ services:
       - QUICKSTART=alice
     volumes:
       - alice-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   bob:
@@ -24,7 +24,7 @@ services:
       - QUICKSTART=bob
     volumes:
       - bob-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   carol:
@@ -38,7 +38,7 @@ services:
       - QUICKSTART=carol
     volumes:
       - carol-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   daniel:
@@ -52,7 +52,7 @@ services:
       - QUICKSTART=daniel
     volumes:
       - daniel-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
 networks:

@@ -11,7 +11,7 @@ services:
       - QUICKSTART=cluster-a
     volumes:
       - cluster-a-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   # Level 1 nodes
@@ -26,7 +26,7 @@ services:
       - QUICKSTART=cluster-a1
     volumes:
       - cluster-a1-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   cluster-a2:
@@ -40,7 +40,7 @@ services:
       - QUICKSTART=cluster-a2
     volumes:
       - cluster-a2-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   cluster-a3:
@@ -54,7 +54,7 @@ services:
       - QUICKSTART=cluster-a3
     volumes:
       - cluster-a3-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   cluster-a4:
@@ -68,7 +68,7 @@ services:
       - QUICKSTART=cluster-a4
     volumes:
       - cluster-a4-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   # Level 2 nodes
@@ -83,7 +83,7 @@ services:
       - QUICKSTART=cluster-a11
     volumes:
       - cluster-a11-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   cluster-a12:
@@ -97,7 +97,7 @@ services:
       - QUICKSTART=cluster-a12
     volumes:
       - cluster-a12-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   cluster-a21:
@@ -111,7 +111,7 @@ services:
       - QUICKSTART=cluster-a21
     volumes:
       - cluster-a21-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   cluster-a22:
@@ -125,7 +125,7 @@ services:
       - QUICKSTART=cluster-a22
     volumes:
       - cluster-a22-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   cluster-a31:
@@ -139,7 +139,7 @@ services:
       - QUICKSTART=cluster-a31
     volumes:
       - cluster-a31-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   cluster-a32:
@@ -153,7 +153,7 @@ services:
       - QUICKSTART=cluster-a32
     volumes:
       - cluster-a32-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   cluster-a41:
@@ -167,7 +167,7 @@ services:
       - QUICKSTART=cluster-a41
     volumes:
       - cluster-a41-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
   cluster-a42:
@@ -181,7 +181,7 @@ services:
       - QUICKSTART=cluster-a42
     volumes:
       - cluster-a42-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou
+      - ./src:/etc/eiou/src
     restart: unless-stopped
 
 networks:
