@@ -71,10 +71,10 @@ class P2pPayload extends BasePayload
     }
 
     /**
-     * Build P2P acceptance (received) payload
+     * Build P2P accepted payload when request was received successfully
      *
      * @param array $request The P2P request data
-     * @return string JSON encoded acceptance payload
+     * @return string JSON encoded received payload
      */
     public function buildAcceptance(array $request): string
     {

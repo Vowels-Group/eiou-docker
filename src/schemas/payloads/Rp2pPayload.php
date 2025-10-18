@@ -22,9 +22,8 @@ class Rp2pPayload extends BasePayload
      */
     public function build(array $data): array
     {
-        // TO DO look into split for database vs regular like p2p?
         //output(outputBuildingRp2pPayload($data), 'SILENT');
-        $userAddress = resolveUserAddressForTransport($data['senderAddress'] ?? $data['sender_address']);
+        $userAddress = resolveUserAddressForTransport($data['senderAddress']);
         return [
             'type' => 'rp2p', // Return Peer to peer request type
             'hash' => $data['hash'],
@@ -38,10 +37,32 @@ class Rp2pPayload extends BasePayload
     }
 
     /**
-     * Build RP2P acceptance payload when request was received successfully
+     * Build a RP2P transaction payload from database data
+     *
+     * @param array $data Database RP2P data with snake_case keys
+     * @return array The built RP2P payload
+     */
+    public function buildFromDatabase(array $data): array
+    {
+        //output(outputBuildingRp2pPayload($data), 'SILENT');
+        $userAddress = resolveUserAddressForTransport($data['sender_address']);
+        return [
+            'type' => 'rp2p', // Return Peer to peer request type
+            'hash' => $data['hash'],
+            'time' => $data['time'],
+            'amount' => $data['amount'],
+            'currency' => $data['currency'],
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+            'senderAddress' => $userAddress,
+            'signature' => $data['signature']
+        ];
+    }
+
+    /**
+     * Build RP2P accepted payload when request was received successfully
      *
      * @param array $request The RP2P request data
-     * @return string JSON-encoded acceptance payload
+     * @return string JSON-encoded received payload
      */
     public function buildAcceptance(array $request): string
     {

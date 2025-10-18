@@ -11,30 +11,18 @@ require_once __DIR__ . '/BasePayload.php';
 class TransactionPayload extends BasePayload
 {
     /**
-     * Build the main transaction send payload
-     *
-     * @param array $data Transaction data
-     * @return array The transaction payload
-     */
-    public function build(array $data): array
-    {
-        return $this->buildSend($data);
-    }
-
-    /**
-     * Build a send transaction payload
+     * Build the main send transaction payload
      *
      * @param array $data Transaction data with keys: time, receiverAddress, receiverPublicKey,
      *                    amount, currency, txid, previousTxid, memo (optional)
      * @return array The send transaction payload
      */
-    public function buildSend(array $data): array
+    public function build(array $data): array
     {
         $this->ensureRequiredFields($data, [
             'receiverAddress', 'receiverPublicKey',
             'amount', 'currency', 'txid'
         ]);
-
 
         $userAddress = resolveUserAddressForTransport($data['receiverAddress']);
         $memo = $data['memo'] ?? 'standard';
@@ -60,7 +48,7 @@ class TransactionPayload extends BasePayload
      * @param array $data Database transaction data with snake_case keys
      * @return array The send transaction payload
      */
-    public function buildSendFromDatabase(array $data): array
+    public function buildFromDatabase(array $data): array
     {
         $this->ensureRequiredFields($data, [
             'receiver_address', 'receiver_public_key',
@@ -108,10 +96,10 @@ class TransactionPayload extends BasePayload
     }
 
     /**
-     * Build a transaction acceptance payload
+     * Build a transaction received payload when request was accepted successfully
      *
      * @param array $request The transaction request data
-     * @return string JSON encoded acceptance payload
+     * @return string JSON encoded received payload
      */
     public function buildAcceptance(array $request): string
     {

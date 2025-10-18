@@ -1,4 +1,7 @@
 <?php
+
+require_once __DIR__ . '/BasePayload.php';
+
 /**
  * Utility payload builder
  *
@@ -6,8 +9,21 @@
  * and other system messages. This class uses static methods as these utilities
  * don't always require user context.
  */
-class UtilPayload
+class UtilPayload extends BasePayload
 {
+    /**
+     * Build the main payload (required by BasePayload)
+     *
+     * @param array $data Input data for building the payload
+     * @return array The built payload
+     */
+    public function build(array $data): array
+    {
+        // This method can be implemented based on specific needs
+        // For now, return empty array as Util payloads use specific methods
+        return [];
+    }
+
     /**
      * Build insufficient balance rejection payload
      *

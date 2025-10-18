@@ -330,7 +330,7 @@ class TransactionService {
             // If direct transaction
             if($memo === 'standard'){
                 if($message['sender_address'] == resolveUserAddressForTransport($message['sender_address'])){
-                    $payload = $this->transactionPayload->buildSendFromDatabase($message);
+                    $payload = $this->transactionPayload->buildFromDatabase($message);
                     $this->transactionRepository->updateStatus($txid,'sent',true);
                     $response = json_decode(send($message['receiver_address'], $payload),true);
                     output(outputTransactionInquiryResponse($response),'SILENT');
@@ -371,7 +371,7 @@ class TransactionService {
             $message['time'] = $rp2p['time'];
 
             // If sending transaction forwards
-            $payload = $this->transactionPayload->buildSendFromDatabase($message);
+            $payload = $this->transactionPayload->buildFromDatabase($message);
             updateP2pRequestStatus($memo,'paid');
             $this->transactionRepository->updateStatus($memo,'sent');
             output(outputSendTransactionOnwards($message),'SILENT');
@@ -396,7 +396,7 @@ class TransactionService {
                 $data = $this->transactionPayload->buildForwarding($message,$rp2p);
                 updateOutgoingP2pTxid($data['memo'], $data['txid']);
 
-                $payload = $this->transactionPayload->buildSendFromDatabase($data);
+                $payload = $this->transactionPayload->buildFromDatabase($data);
                 $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($payload),true);
                 output(outputTransactionInsertion($insertTransactionResponse));
             } else{
@@ -445,7 +445,7 @@ class TransactionService {
             $data = $this->prepareStandardTransactionData($request,$contactInfo);
             
             // Prepare transaction payload from data
-            $payload = $this->transactionPayload->buildSend($data);
+            $payload = $this->transactionPayload->build($data);
             $this->transactionRepository->insertTransaction($payload);
 
             output(outputSendTransaction($payload));
@@ -470,7 +470,7 @@ class TransactionService {
         $data = $this->prepareP2pTransactionData($request);
 
         // Prepare transaction payload
-        $payload = $this->transactionPayload->buildSend($data);
+        $payload = $this->transactionPayload->build($data);
         $this->transactionRepository->insertTransaction($payload);
 
         updateOutgoingP2pTxid($data['memo'], $data['txid']);
