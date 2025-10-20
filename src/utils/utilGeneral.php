@@ -3,11 +3,11 @@
 
 function calculateAvailableFunds($request){
     // Calculate funds request's sender has available with user
-    $totalSent = calculateTotalSent($request['senderPublicKey'] ?? $request['sender_public_key']);   // Calculate IOUs sent to sender
-    $totalReceived = calculateTotalReceived($request['senderPublicKey'] ?? $request['sender_public_key']); // Calulcate IOUs received from sender
+    $pubkey = $request['senderPublicKey'] ?? $request['sender_public_key'];
+    $totalSent = calculateTotalSent($pubkey);   // Calculate IOUs sent to sender
+    $totalReceived = calculateTotalReceived($pubkey); // Calulcate IOUs received from sender
     $theirCurrentBalance = $totalSent - $totalReceived; 
-    $senderContact = lookupContactByAddress($request['senderAddress'] ?? $request['sender_address']);
-    $creditLimit = getCreditLimit($senderContact['pubkey']);    // Get senders credit limit with user
+    $creditLimit = getCreditLimit($pubkey);    // Get senders credit limit with user
     return $theirCurrentBalance + $creditLimit;
 }
 
