@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         // Capture output
         ob_start();
         try {
-            sendEiou($argv);
+            $guiService->sendEiou($argv);
             $output = ob_get_clean();
             $message = trim($output);
             if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
@@ -237,8 +237,8 @@ if (isset($_GET['check_updates']) && $_GET['check_updates'] === '1') {
     $lastCheckTime = $_GET['last_check'] ?? 0;
     
     // Check for new transactions
-    $newTransactions = $this->guiService->checkForNewTransactions($lastCheckTime);
-    $newContactRequests = $this->guiService->checkForNewContactRequests($lastCheckTime);
+    $newTransactions = $guiService->checkForNewTransactions($lastCheckTime);
+    $newContactRequests = $guiService->checkForNewContactRequests($lastCheckTime);
     
     if ($newTransactions || $newContactRequests) {
         echo "new_transaction:" . ($newTransactions ? '1' : '0') . "\n";

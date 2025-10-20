@@ -97,18 +97,6 @@ class ServiceContainer {
     }
 
     /**
-     * Get TransactionRepository instance
-     *
-     * @return TransactionRepository
-     */
-    public function getTransactionRepository(): TransactionRepository {
-        if (!isset($this->services['TransactionRepository'])) {
-            $this->services['TransactionRepository'] = new TransactionRepository($this->pdo);
-        }
-        return $this->services['TransactionRepository'];
-    }
-
-    /**
      * Get P2pRepository instance
      *
      * @return P2pRepository
@@ -132,6 +120,17 @@ class ServiceContainer {
         return $this->services['Rp2pRepository'];
     }
 
+    /**
+     * Get TransactionRepository instance
+     *
+     * @return TransactionRepository
+     */
+    public function getTransactionRepository(): TransactionRepository {
+        if (!isset($this->services['TransactionRepository'])) {
+            $this->services['TransactionRepository'] = new TransactionRepository($this->pdo);
+        }
+        return $this->services['TransactionRepository'];
+    }
 
     /**
      * Get DebugRepository instance
@@ -311,6 +310,7 @@ class ServiceContainer {
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
                 $this->getContactService(),
+                $this->getTransactionService(),
                 $this->currentUser
             );
         }

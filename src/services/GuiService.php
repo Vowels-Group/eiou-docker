@@ -35,6 +35,11 @@ class GuiService {
     private ContactService $contactService;
 
     /**
+     * @var TransactionService Transaciton service class
+     */
+    private TransactionService $transactionService;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -72,6 +77,7 @@ class GuiService {
      * @param RP2pRepository $rp2pRepository RP2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param ContactService $contactService Contact Service Class
+     * @param TransactionService $transactionService
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
@@ -80,6 +86,7 @@ class GuiService {
         RP2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
         ContactService $contactService,
+        TransactionService $transactionService,
         UserContext $currentUser  
     ) {
         $this->contactRepository = $contactRepository;
@@ -87,6 +94,7 @@ class GuiService {
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
         $this->contactService = $contactService;
+        $this->transactionService = $transactionService;
         $this->currentUser = $currentUser;
         $this->contactPayload = new ContactPayload($this->currentUser);
         $this->p2pPayload = new P2pPayload($this->currentUser);
@@ -296,6 +304,17 @@ class GuiService {
      */
     public function getContactNameByAddress($address): ?string {
         return $this->contactRepository->lookupNameByAddress($address);
+    }
+
+    // Transaction Service Helper
+    /**
+     * Send eIOU
+     *
+     * @param array|null $request Request data
+     * @return void|null
+     */
+    public function sendEiou(?array $request = null){
+        return $this->transactionService->sendEiou($request);
     }
 
     // Transaction Repository Helpers
