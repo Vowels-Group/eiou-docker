@@ -5,10 +5,7 @@
  * This class provides a centralized, type-safe way to access user configuration
  * and gradually transition away from the global $user variable.
  *
- * @todo Eventually replace all global $user references with this class
  */
-
-// namespace EIOU\core;
 
 class UserContext {
     private static ?UserContext $instance = null;

@@ -9,7 +9,6 @@
  * @package Services
  */
 
-
 class ServiceContainer {
     /**
      * @var ServiceContainer|null Singleton instance

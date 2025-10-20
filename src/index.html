@@ -18,41 +18,47 @@ if (!verifyRequest($request)) {
     die;
 }
 
-require_once("/etc/eiou/src/services/ServiceWrappers.php");
-
 // Create PDO (db) connection
-$pdo = createPDOConnection();
+//$pdo = createPDOConnection();
+
+require_once("/etc/eiou/src/services/ServiceContainer.php");
+
 
 if ($request['type'] === "create") {
   // Handle contact request
   output("Processing create request from " . print_r($request['senderAddress'],true) , 'SILENT');
-  echo handleContactCreation($request);  
+  $contactService = ServiceContainer::getInstance()->getContactService();
+  echo $contactService->handleContactCreation($request);  
 }
 elseif ($request['type'] === "send") {
   // Handle eIOU
   output("Processing send request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'] ?? $request['memo'], TRUE), 'SILENT');
   if(checkTransactionPossible($request)){
-    processTransaction($request);
+    $transactionService = ServiceContainer::getInstance()->getTransactionService();
+    $transactionService->processTransaction($request);
   }
 }
 elseif ($request['type'] === "p2p") {
   // Handle Peer to peer Request
   output("Processing p2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
   if(checkP2pPossible($request)){
-    handleP2pRequest($request);
+    $p2pService = ServiceContainer::getInstance()->getP2pService();
+    $p2pService->handleP2pRequest($request);
   }
 }
 elseif ($request['type'] === "rp2p") {
   // Handle Peer to peer Response
   output("Processing rp2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
   if(checkRp2pPossible($request)){
-    handleRp2pRequest($request);
+    $rp2pService = ServiceContainer::getInstance()->getRp2pService();
+    $rp2pService->handleRp2pRequest($request);
   }
 }
 elseif ($request['type'] === "message") {
   // Handle messages
   output("Processing message from " . print_r($request['senderAddress'],true), 'SILENT');
-  handleMessageRequest($request);
+  $messageService = ServiceContainer::getInstance()->getMessageService();
+  $messageService->handleMessageRequest($request);
 }
 else {
   // Handle unknown request type
