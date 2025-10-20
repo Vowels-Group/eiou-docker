@@ -52,7 +52,6 @@ class ServiceContainer {
 
     /**
      * Load current user from global scope
-     * This is a bridge to gradually transition away from global $user
      */
     private function loadCurrentUser(): void {
         $this->currentUser = UserContext::getInstance() ?? [];
