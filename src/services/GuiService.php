@@ -95,7 +95,14 @@ class GuiService {
         $this->utilPayload = new UtilPayload($this->currentUser);
     }
 
-    function contactConversion($contacts){
+
+    /**
+     * Convert Contact Information back to proper units for display
+     *
+     * @param array $contacts Contact Information
+     * @return array Converted contact information
+     */
+    function contactConversion($contacts): array {
         // If no contacts, return empty array
         if (empty($contacts)) {
             return [];
@@ -130,6 +137,12 @@ class GuiService {
         return $contactsWithBalances;
     }
 
+     /**
+     * Parse contact output to a general format type
+     *
+     * @param string output from EIOU
+     * @return array Parsed output
+     */
     function parseContactOutput($output) {
         $output = trim($output);
         
@@ -174,22 +187,54 @@ class GuiService {
         return ['message' => $output, 'type' => 'success'];
     }
 
-    function addContact($argv){
-        return $this->contactService->addContact($argv);
+
+    // Contact Service Helper
+    /**
+     * Add a contact
+     *
+     * @param array $data Command line arguments
+     * @return void
+     */
+    function addContact($argv): void {
+        $this->contactService->addContact($argv);
     }
 
-    function deleteContact($argv){
+    // Contact Repository Helpers
+    /**
+     * Delete a contact
+     *
+     * @param string $address Contact address
+     * @return bool Success status
+     */
+    function deleteContact($argv): bool {
         return $this->contactRepository->deleteContact($argv);
     }
 
-    function blockContact($argv){
+    /**
+     * Block a contact
+     *
+     * @param string $address Contact address
+     * @return bool Success status
+     */
+    function blockContact($argv): bool {
         return $this->contactRepository->blockContact($argv);
     }
 
-    function unblockContact($argv){
+    /**
+     * Unblock a contact
+     *
+     * @param string $address Contact address
+     * @return bool Success status
+     */
+    function unblockContact($argv): bool {
         return $this->contactRepository->unblockContact($argv);
     }
 
+    /**
+     * Update specific contact fields through CLI interaction
+     *
+     * @param array $argv Command line arguments
+     */
     function updateContact($argv){
         return $this->contactRepository->updateContact($argv);
     }
@@ -198,47 +243,105 @@ class GuiService {
         return $this->contactRepository->getAcceptedContacts();
     }
 
-    function getAllContacts(){
+    /**
+     * Get all contacts
+     *
+     * @return array Array of contacts
+     */
+    function getAllContacts(): array{
         return $this->contactRepository->getAllContactsInfo();
     }
-
-    function getBlockedContacts() {
+    /**
+     * Get all blocked contacts
+     *
+     * @return array Array of contacts
+     */
+    function getBlockedContacts(): array {
         return $this->contactRepository->getBlockedContacts();
     }
 
-    function getPendingContacts(){
+    /**
+     * Get pending contact requests
+     *
+     * @return array Array of pending contacts
+     */
+    function getPendingContacts(): array {
         return $this->contactRepository->getPendingContactRequests();
     }
 
-    function getUserPendingContacts(){
+    /**
+     * Get user initiated pending contact requests
+     *
+     * @return array Array of pending contacts
+     */
+    function getUserPendingContacts(): array{
         return $this->contactRepository->getUserPendingContactRequests();
     }
+
+    /**
+     * Check for new contact requests since last check
+     *
+     * @param int $lastCheckTime
+     * @return bool
+     */
+    function checkForNewContactRequests($lastCheckTime): bool{
+        return $this->contactRepository->checkForNewContactRequests($lastCheckTime);
+    }
+
+    /**
+     * Lookup contact name by address
+     *
+     * @param string $address Contact address
+     * @return string|null Contact name or null
+     */
+    function getContactNameByAddress($address): ?string {
+        return $this->contactRepository->lookupNameByAddress($address);
+    }
+
+    // Transaction Repository Helpers
 
     function getTransactionHistory($limit = 10){
          return $this->transactionRepository->getTransactionHistory($limit);
     }
 
+    /**
+     * Check for new transactions since last check
+     *
+     * @param int $lastCheckTime
+     * @return bool
+     */
     function checkForNewTransactions($lastCheckTime){
          return $this->transactionRepository->checkForNewTransactions($lastCheckTime);
     }
 
-    function getContactBalance($userPubkey, $contactPubkey){
+    /**
+     * Get contact balance (optimized single query)
+     *
+     * @param string $userPubkey
+     * @param string $contactPubkey
+     * @return int Balance in cents
+     */
+    function getContactBalance($userPubkey, $contactPubkey): int {
         return $this->transactionRepository->getContactBalance($userPubkey, $contactPubkey);
     }
 
-    function getAllContactBalances($userPubkey, $contactPubkeys){
+    /**
+     * Get all contact balances in a single optimized query (fixes N+1 problem)
+     *
+     * @param string $userPubkey
+     * @param array $contactPubkeys
+     * @return array Associative array of pubkey => balance
+     */
+    function getAllContactBalances($userPubkey, $contactPubkeys): array {
         return $this->transactionRepository->getAllContactBalances($userPubkey, $contactPubkeys);
     }
 
-    function checkForNewContactRequests($lastCheckTime){
-        return $this->contactRepository->checkForNewContactRequests($lastCheckTime);
-    }
-
-    function getContactNameByAddress($address) {
-        return $this->contactRepository->lookupNameByAddress($address);
-    }
-
-    function getUserTotalBalance(){
+    /**
+     * Get users current balance
+     *
+     * @return string Balance 
+     */
+    function getUserTotalBalance(): string {
         return $this->transactionRepository->getUserTotalBalance();
     }
 }
