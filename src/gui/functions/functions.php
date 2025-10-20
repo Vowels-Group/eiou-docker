@@ -250,7 +250,6 @@ if (isset($_GET['check_updates']) && $_GET['check_updates'] === '1') {
     exit;
 }
 
-
 // Get user based data
 $totalBalance = $guiService->getUserTotalBalance();
 $transactions = $guiService->getTransactionHistory(10);
@@ -261,4 +260,3 @@ $acceptedContacts = $guiService->contactConversion($guiService->getAcceptedConta
 $pendingContacts = $guiService->getPendingContacts();
 $pendingUserContacts = $guiService->contactConversion($guiService->getUserPendingContacts());
 $blockedContacts = $guiService->contactConversion($guiService->getBlockedContacts());
-
