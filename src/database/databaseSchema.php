@@ -17,6 +17,7 @@ function getContactsTableSchema() {
         fee_percent INT,
         credit_limit INT,
         currency VARCHAR(10),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_contacts_address (address),
         INDEX idx_contacts_pubkey_hash (pubkey_hash),
         INDEX idx_contacts_name (name),
