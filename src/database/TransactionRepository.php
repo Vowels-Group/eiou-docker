@@ -192,7 +192,7 @@ class TransactionRepository extends AbstractRepository {
     }
 
 
-        /**
+    /**
      * Get contact balance (optimized single query)
      *
      * @param string $userPubkey
