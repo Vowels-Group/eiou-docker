@@ -102,7 +102,7 @@ class GuiService {
      * @param array $contacts Contact Information
      * @return array Converted contact information
      */
-    function contactConversion($contacts): array {
+    public function contactConversion($contacts): array {
         // If no contacts, return empty array
         if (empty($contacts)) {
             return [];
@@ -143,7 +143,7 @@ class GuiService {
      * @param string output from EIOU
      * @return array Parsed output
      */
-    function parseContactOutput($output) {
+    public function parseContactOutput($output) {
         $output = trim($output);
         
         // Success messages
@@ -195,7 +195,7 @@ class GuiService {
      * @param array $data Command line arguments
      * @return void
      */
-    function addContact($argv): void {
+    public function addContact($argv): void {
         $this->contactService->addContact($argv);
     }
 
@@ -206,7 +206,7 @@ class GuiService {
      * @param string $address Contact address
      * @return bool Success status
      */
-    function deleteContact($argv): bool {
+    public function deleteContact($argv): bool {
         return $this->contactRepository->deleteContact($argv);
     }
 
@@ -216,7 +216,7 @@ class GuiService {
      * @param string $address Contact address
      * @return bool Success status
      */
-    function blockContact($argv): bool {
+    public function blockContact($argv): bool {
         return $this->contactRepository->blockContact($argv);
     }
 
@@ -226,7 +226,7 @@ class GuiService {
      * @param string $address Contact address
      * @return bool Success status
      */
-    function unblockContact($argv): bool {
+    public function unblockContact($argv): bool {
         return $this->contactRepository->unblockContact($argv);
     }
 
@@ -235,11 +235,11 @@ class GuiService {
      *
      * @param array $argv Command line arguments
      */
-    function updateContact($argv){
+    public function updateContact($argv){
         return $this->contactRepository->updateContact($argv);
     }
 
-    function getAcceptedContacts(){
+    public function getAcceptedContacts(){
         return $this->contactRepository->getAcceptedContacts();
     }
 
@@ -248,7 +248,7 @@ class GuiService {
      *
      * @return array Array of contacts
      */
-    function getAllContacts(): array{
+    public function getAllContacts(): array{
         return $this->contactRepository->getAllContactsInfo();
     }
     /**
@@ -256,7 +256,7 @@ class GuiService {
      *
      * @return array Array of contacts
      */
-    function getBlockedContacts(): array {
+    public function getBlockedContacts(): array {
         return $this->contactRepository->getBlockedContacts();
     }
 
@@ -265,7 +265,7 @@ class GuiService {
      *
      * @return array Array of pending contacts
      */
-    function getPendingContacts(): array {
+    public function getPendingContacts(): array {
         return $this->contactRepository->getPendingContactRequests();
     }
 
@@ -274,7 +274,7 @@ class GuiService {
      *
      * @return array Array of pending contacts
      */
-    function getUserPendingContacts(): array{
+    public function getUserPendingContacts(): array{
         return $this->contactRepository->getUserPendingContactRequests();
     }
 
@@ -284,7 +284,7 @@ class GuiService {
      * @param int $lastCheckTime
      * @return bool
      */
-    function checkForNewContactRequests($lastCheckTime): bool{
+    public function checkForNewContactRequests($lastCheckTime): bool{
         return $this->contactRepository->checkForNewContactRequests($lastCheckTime);
     }
 
@@ -294,13 +294,18 @@ class GuiService {
      * @param string $address Contact address
      * @return string|null Contact name or null
      */
-    function getContactNameByAddress($address): ?string {
+    public function getContactNameByAddress($address): ?string {
         return $this->contactRepository->lookupNameByAddress($address);
     }
 
     // Transaction Repository Helpers
-
-    function getTransactionHistory($limit = 10){
+    /**
+     * Get transaction history with limit
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getTransactionHistory($limit = 10): array {
          return $this->transactionRepository->getTransactionHistory($limit);
     }
 
@@ -310,7 +315,7 @@ class GuiService {
      * @param int $lastCheckTime
      * @return bool
      */
-    function checkForNewTransactions($lastCheckTime){
+    public function checkForNewTransactions($lastCheckTime){
          return $this->transactionRepository->checkForNewTransactions($lastCheckTime);
     }
 
@@ -321,7 +326,7 @@ class GuiService {
      * @param string $contactPubkey
      * @return int Balance in cents
      */
-    function getContactBalance($userPubkey, $contactPubkey): int {
+    public function getContactBalance($userPubkey, $contactPubkey): int {
         return $this->transactionRepository->getContactBalance($userPubkey, $contactPubkey);
     }
 
@@ -332,7 +337,7 @@ class GuiService {
      * @param array $contactPubkeys
      * @return array Associative array of pubkey => balance
      */
-    function getAllContactBalances($userPubkey, $contactPubkeys): array {
+    public function getAllContactBalances($userPubkey, $contactPubkeys): array {
         return $this->transactionRepository->getAllContactBalances($userPubkey, $contactPubkeys);
     }
 
@@ -341,7 +346,7 @@ class GuiService {
      *
      * @return string Balance 
      */
-    function getUserTotalBalance(): string {
+    public function getUserTotalBalance(): string {
         return $this->transactionRepository->getUserTotalBalance();
     }
 }
