@@ -174,7 +174,6 @@ class GuiService {
         return ['message' => $output, 'type' => 'success'];
     }
 
-
     function addContact($argv){
         return $this->contactService->addContact($argv);
     }
@@ -184,19 +183,19 @@ class GuiService {
     }
 
     function blockContact($argv){
-         return $this->contactRepository->blockContact($argv);
+        return $this->contactRepository->blockContact($argv);
     }
 
     function unblockContact($argv){
-         return $this->contactRepository->unblockContact($argv);
+        return $this->contactRepository->unblockContact($argv);
     }
 
     function updateContact($argv){
-         return $this->contactRepository->updateContact($argv);
+        return $this->contactRepository->updateContact($argv);
     }
 
     function getAcceptedContacts(){
-         return $this->contactRepository->getAcceptedContacts();
+        return $this->contactRepository->getAcceptedContacts();
     }
 
     function getAllContacts(){
@@ -242,5 +241,4 @@ class GuiService {
     function getUserTotalBalance(){
         return $this->transactionRepository->getUserTotalBalance();
     }
-    
 }
