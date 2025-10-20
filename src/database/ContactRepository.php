@@ -170,7 +170,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function checkForNewContactRequests(int $lastCheckTime): bool
     {   
-        $query = "SELECT COUNT(*) as count FROM contacts
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName}
                     WHERE name IS NULL AND status = 'pending'
                     AND created_at > ?";
         $stmt = $this->execute($query,[date('Y-m-d H:i:s', $lastCheckTime)]);
@@ -180,8 +180,6 @@ class ContactRepository extends AbstractRepository {
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result['count'] > 0;
     }
-
-
 
     /**
      * Check if contact is blocked
@@ -281,7 +279,22 @@ class ContactRepository extends AbstractRepository {
     public function getUserPendingContactRequests(): array
     {
         // Get all pending contact requests (where name IS NOT NULL and status = 'pending')
-        $query = "SELECT address, pubkey, status FROM contacts WHERE name IS NOT NULL AND status = 'pending'";
+        $query = "SELECT * FROM {$this->tableName} WHERE name IS NOT NULL AND status = 'pending'";
+        $stmt = $this->execute($query);
+        if(!$stmt){
+            return [];
+        } 
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get all accepted contacts
+     *
+     * @return array
+     */
+    public function getAcceptedContacts(): array
+    {
+        $query = "SELECT * FROM {$this->tableName} WHERE status = 'accepted'";
         $stmt = $this->execute($query);
         if(!$stmt){
             return [];
@@ -296,7 +309,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function getBlockedContacts(): array
     {
-        $query = "SELECT * FROM contacts WHERE status = 'blocked'";
+        $query = "SELECT * FROM {$this->tableName} WHERE status = 'blocked'";
         $stmt = $this->execute($query);
         if(!$stmt){
             return [];
@@ -523,7 +536,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function getAllContactsInfo(): array
     {
-        $query = "SELECT * FROM contacts";
+        $query = "SELECT * FROM {$this->tableName}";
         $stmt = $this->execute($query);
         if(!$stmt){
             return [];
@@ -539,7 +552,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function getRecentContacts(int $limit = 5): array
     {
-        $query = "SELECT * FROM contacts WHERE status = 'accepted' ORDER BY created_at DESC LIMIT ?";
+        $query = "SELECT * FROM {$this->tableName} WHERE status = 'accepted' ORDER BY created_at DESC LIMIT ?";
         $stmt = $this->execute($query,[$limit]);
         if(!$stmt){
             return [];
@@ -555,7 +568,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function searchByName(string $searchTerm): array
     {
-        $query = "SELECT * FROM contacts WHERE name LIKE ? AND status = 'accepted'";
+        $query = "SELECT * FROM {$this->tableName} WHERE name LIKE ? AND status = 'accepted'";
         $stmt = $this->execute($query,['%' . $searchTerm . '%']);
         if(!$stmt){
             return [];

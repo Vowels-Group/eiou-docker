@@ -88,3 +88,28 @@ function formatCurrency(float $amountInCents, string $currency = 'USD'): string{
     $amountInDollars = $amountInCents / 100;
     return number_format($amountInDollars, 2) . ' ' . $currency;
 }
+
+/**
+ * Convert amount from cent units to dollar units 
+ *
+ * @param float $amountInCents Amount in cents
+ * @return float Converted amount
+*/
+function convertQuantityCurrency(float $amountInCents): float{
+    $amountInDollars = $amountInCents / 100;
+    return $amountInDollars;
+}
+
+/**
+ * Truncate address for easier display
+ *
+ * @param string $address the address
+ * @param int $length point of truncation
+ * @return string Truncated address
+*/
+function truncateAddress($address, $length = 10) {
+    if (strlen($address) <= $length) {
+        return $address;
+    }
+    return substr($address, 0, $length) . '...';
+}

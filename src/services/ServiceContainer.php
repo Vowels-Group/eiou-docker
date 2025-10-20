@@ -9,7 +9,6 @@
  * @package Services
  */
 
-
 class ServiceContainer {
     /**
      * @var ServiceContainer|null Singleton instance
@@ -299,6 +298,25 @@ class ServiceContainer {
         return $this->services['DebugService'];
     }
 
+    /**
+     * Get GuiService instance
+     *
+     * @return GuiService
+     */
+    public function getGuiService(): GuiService {
+        if (!isset($this->services['GuiService'])) {
+            require_once __DIR__ . '/GuiService.php';
+            $this->services['GuiService'] = new GuiService(
+                $this->getContactRepository(),
+                $this->getP2pRepository(),
+                $this->getRp2pRepository(),
+                $this->getTransactionRepository(),
+                $this->getContactService(),
+                $this->currentUser
+            );
+        }
+        return $this->services['GuiService'];
+    }
 
 
     /**

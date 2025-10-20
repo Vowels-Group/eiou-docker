@@ -205,7 +205,7 @@ class TransactionRepository extends AbstractRepository {
         $contactHash = hash('sha256', $contactPubkey);
 
         // Calculate sent to this contact
-        $query = "SELECT COALESCE(SUM(amount), 0) as sent FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?";
+        $query = "SELECT COALESCE(SUM(amount), 0) as sent FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?";
         $stmt = $this->execute($query,[$userHash, $contactHash]);
         if(!$stmt){
             return 0;
@@ -213,7 +213,7 @@ class TransactionRepository extends AbstractRepository {
         $sent = $stmt->fetch(PDO::FETCH_ASSOC)['sent'];
 
         // Calculate received from this contact
-        $query = "SELECT COALESCE(SUM(amount), 0) as received FROM transactions WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?";
+        $query = "SELECT COALESCE(SUM(amount), 0) as received FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?";
         $stmt = $this->execute($query,[$contactHash, $userHash]);
         if(!$stmt){
             return 0;
@@ -255,7 +255,7 @@ class TransactionRepository extends AbstractRepository {
                     receiver_public_key_hash as contact_hash,
                     SUM(amount) as sent,
                     0 as received
-                FROM transactions
+                FROM {$this->tableName}
                 WHERE sender_public_key_hash = ?
                     AND receiver_public_key_hash IN ($placeholders)
                 GROUP BY receiver_public_key_hash
@@ -267,7 +267,7 @@ class TransactionRepository extends AbstractRepository {
                     sender_public_key_hash as contact_hash,
                     0 as sent,
                     SUM(amount) as received
-                FROM transactions
+                FROM {$this->tableName}
                 WHERE receiver_public_key_hash = ?
                     AND sender_public_key_hash IN ($placeholders)
                 GROUP BY sender_public_key_hash
@@ -277,7 +277,8 @@ class TransactionRepository extends AbstractRepository {
 
         // Prepare parameters: userHash, contactHashes, userHash, contactHashes
         $params = array_merge([$userHash], $contactHashes, [$userHash], $contactHashes);
-        $stmt = $this->execute($query,$params);
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
         if(!$stmt){
             return array_fill_keys($contactPubkeys, 0);
         }
@@ -301,6 +302,18 @@ class TransactionRepository extends AbstractRepository {
     } 
 
     /**
+     * Get users current balance
+     *
+     * @return string Balance 
+     */
+    function getUserTotalBalance() {
+        $totalReceived = $this->calculateTotalReceivedByUser($this->currentUser->getPublicKey());
+        $totalSent = $this->calculateTotalSentByUser($this->currentUser->getPublicKey());
+        $balance = (string)convertQuantityCurrency($totalReceived - $totalSent);
+        return $balance ?? "0.00";
+    }
+
+    /**
      * Check for new transactions since last check
      *
      * @param int $lastCheckTime
@@ -317,13 +330,14 @@ class TransactionRepository extends AbstractRepository {
         // Create placeholders for IN clause
         $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
 
-        $query = "SELECT COUNT(*) as count FROM transactions
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName}
                     WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
                     AND timestamp > ?";
 
         // Bind parameters - addresses twice for both IN clauses, then timestamp
         $params = array_merge($userAddresses, $userAddresses, [date('Y-m-d H:i:s', $lastCheckTime)]);
-        $stmt = $this->execute($query,$params);
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
         if(!$stmt){
              return false;
         }
@@ -390,14 +404,14 @@ class TransactionRepository extends AbstractRepository {
         // Create placeholders for IN clause
         $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
 
-        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions
+        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM {$this->tableName}
                     WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
                     ORDER BY timestamp DESC LIMIT ?";
 
-
         // Bind parameters - addresses twice for both IN clauses, then limit
         $params = array_merge($userAddresses, $userAddresses, [$limit]);
-        $stmt = $this->execute($query,$params);
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
         if(!$stmt){
             return [];
         }
