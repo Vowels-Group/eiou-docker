@@ -21,6 +21,7 @@ require_once 'src/database/TransactionRepository.php';
 // Require all files in the services directory
 require_once 'src/services/CleanupService.php';
 require_once 'src/services/ContactService.php';
+require_once 'src/services/GuiService.php';
 require_once 'src/services/MessageService.php';
 require_once 'src/services/P2pService.php';
 require_once 'src/services/Rp2pService.php';
