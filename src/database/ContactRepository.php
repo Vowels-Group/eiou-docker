@@ -519,7 +519,7 @@ class ContactRepository extends AbstractRepository {
      * @return array Array of contacts with address and pubkey
      */
     public function getAllContacts(): array {
-        $query = "SELECT address, pubkey FROM {$this->tableName}";
+        $query = "SELECT name, address, pubkey FROM {$this->tableName}";
         $stmt = $this->execute($query);
 
         if (!$stmt) {
@@ -527,6 +527,22 @@ class ContactRepository extends AbstractRepository {
         }
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Retrieve all contacts pubkeys
+     *
+     * @return array Array of contacts with only their pubkey
+     */
+    public function getAllContactsPubkeys(): array {
+        $query = "SELECT pubkey FROM {$this->tableName}";
+        $stmt = $this->execute($query);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
     /**
@@ -675,7 +691,7 @@ class ContactRepository extends AbstractRepository {
         $value3 = isset($argv[6]) ? $argv[6] : null;
 
         // Check if all fields are valid and contact exists before proceeding
-        if(!$address || ($address && !lookupContactByAddress($address))){
+        if(!$address || ($address && !$this->lookupByAddress($address))){
             // If no address supplied or no contact exists with supplied address
             if(!$address){
                 output(outputNoSuppliedAddress());
