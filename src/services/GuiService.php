@@ -45,31 +45,6 @@ class GuiService {
     private UserContext $currentUser;
 
     /**
-     * @var ContactPayload payload builder for contact
-     */
-    private ContactPayload $contactPayload;
-
-    /**
-     * @var P2pPayload payload builder for P2P
-     */
-    private P2pPayload $p2pPayload;
-
-    /**
-     * @var Rp2pPayload payload builder for RP2P
-     */
-    private Rp2pPayload $rp2pPayload;
-
-    /**
-     * @var TransactionPayload payload builder for transactions
-     */
-    private TransactionPayload $transactionPayload;
-
-    /**
-     * @var UtilPayload payload builder for utility
-     */
-    private UtilPayload $utilPayload;
-
-    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
@@ -96,11 +71,6 @@ class GuiService {
         $this->contactService = $contactService;
         $this->transactionService = $transactionService;
         $this->currentUser = $currentUser;
-        $this->contactPayload = new ContactPayload($this->currentUser);
-        $this->p2pPayload = new P2pPayload($this->currentUser);
-        $this->rp2pPayload = new Rp2pPayload($this->currentUser);
-        $this->transactionPayload = new TransactionPayload($this->currentUser);
-        $this->utilPayload = new UtilPayload($this->currentUser);
     }
 
 
