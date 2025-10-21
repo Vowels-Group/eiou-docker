@@ -195,6 +195,8 @@ function displayHelp($argv) {
 function displayUserInfo($argv) {
     // Display user information
     $currentUser = UserContext::getInstance();
+    $transactionService = ServiceContainer::getInstance()->getTransactionService();
+    
     echo "User Information:\n";
     
     // Locators array
@@ -215,7 +217,6 @@ function displayUserInfo($argv) {
     echo "\tPublic Key:" . $readablePubKey . "\n";
 
     // Calculate total sent and received
-    $transactionService = ServiceContainer::getInstance()->getTransactionService();
     $totalReceived = $transactionService->calculateTotalReceived($pubkey);
     $totalSent = $transactionService->calculateTotalSent($pubkey);
     $balance = convertQuantityCurrency(($totalReceived - $totalSent));
@@ -236,9 +237,9 @@ function displayUserInfo($argv) {
 }
 
 function viewBalanceQuery($direction, $where, $results, $limit){
+     // View balance information based on transactions, either received or send by user
     $contactService = ServiceContainer::getInstance()->getContactService();
    
-    // View balance information based on transactions, either received or send by user
     $countResults = count($results);
     
     echo "\t\tBalance $direction $where:\n";
@@ -263,88 +264,49 @@ function viewBalanceQuery($direction, $where, $results, $limit){
 
 function viewBalances($data) {
     // View balance information based on transactions
-    global $pdo;
     $currentUser = UserContext::getInstance();
-    $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
+    $contactService = ServiceContainer::getInstance()->getContactService();
+    $transactionService = ServiceContainer::getInstance()->getTransactionService();
+
+    $userBalance = $transactionService->getUserTotalBalance();
+    $additionalAddresses = $currentUser->getUserAddresses();
+    $additionalInfo = $additionalAddresses ? '(' . implode(', ', $additionalAddresses) . ')' : '';
+    printf("%s %s, Balance: %.2f\n", 'me', $additionalInfo, $userBalance);
+
     // Check if an address or name is provided
     if (isset($data[2])) {
         // Check if it's a HTTP or Tor address
         if (isHttpAddress($data[2]) || isTorAddress($data[2])) {
             $address = $data[2];
+            if($contactService->contactExists($address)){
+                $contactResult = $contactService->lookupContactByAddress($address);
+            }
         } else{
              // Check if the name yields an address
-            $contactResult = lookupContactByName($data[2]);
-            $address = $contactResult['address'] ?? null;
+            $contactResult = $contactService->lookupContactByName($data[2]);
         }
-        // Add WHERE clause if a valid address is found
-        if ($address) {
-            $query .= " WHERE sender_address = :address OR receiver_address = :address ORDER BY timestamp DESC";
+        if ($contactResult) {
+            $contactBalance = convertQuantityCurrency($transactionService->getContactBalance($currentUser->getPublicKey(),$contactResult['pubkey']));
+            printf("\t%s (%s), Balance: %.2f\n", $contactResult['name'], $contactResult['address'], $contactBalance);
+            return;
         } else{
-            echo "Address/Name unknown, displaying all balances";
-            $query .= " ORDER BY timestamp DESC";   
+            echo "Address/Name unknown, displaying all balances\n";
         }    
     }
-
-    $balances = [];
-    $stmt = $pdo->prepare($query);
-    
-    if (isset($data[2]) && $address) {
-        $stmt->bindParam(':address', $address);
+    $contacts = $contactService->getAllContacts();
+    $pubkeys = $contactService->getAllContactsPubkeys();
+    $balances = $transactionService->getAllContactBalances($currentUser->getPublicKey(),$pubkeys);
+    foreach($contacts as $contact){
+        printf("\t%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], convertQuantityCurrency($balances[$contact['pubkey']]));
     }
     
-    $stmt->execute();
-    
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        // Calculate balance changes
-        $senderAddress = $row['sender_address'];
-        $receiverAddress = $row['receiver_address'];
-        $amount = convertQuantityCurrency($row['amount']);
-        
-        // Adjust balances for sender and receiver
-        $balances[$senderAddress] = ($balances[$senderAddress] ?? 0) - $amount;
-        $balances[$receiverAddress] = ($balances[$receiverAddress] ?? 0) + $amount;
-    }
-    $otherBalances = [];
-    
-    // Pretty print balances
-    foreach ($balances as $address => $balance) {
-        // Check if the address is the user's own address
-        if (isMe($address)) {
-            $displayName = "me";
-            $additionalAddresses = $currentUser->getUserAddresses();
-
-            
-            $additionalInfo = $additionalAddresses ? '(' . implode(', ', $additionalAddresses) . ')' : '';
-            
-            printf("%s %s, Balance: %.2f\n", $displayName, $additionalInfo, $balance);
-        } else {
-            // If it's not the user's own address, add to a list to be sorted
-            // Lookup contact name for the address
-            $contactResult = lookupContactByAddress($address);
-            $contactName = $contactResult ? $contactResult['name'] : $address;
-            
-            $otherBalances[] = [
-                'address' => $address, 
-                'name' => $contactName, 
-                'balance' => $balance
-            ];
-        }
-    }
-
-    // Sort and print other balances
-    usort($otherBalances, function($a, $b) {
-        return $b['balance'] <=> $a['balance'];
-    });
-
-    foreach ($otherBalances as $contact) {   
-        printf("\t%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], $contact['balance']);
-    }
 }
 
 function viewTransactionHistory($argv) {
     // View all transaction history in pretty print 'table'
     global $pdo;
     $currentUser = UserContext::getInstance();
+    $contactService = ServiceContainer::getInstance()->getContactService();
 
     $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
     $address = null;
@@ -356,7 +318,7 @@ function viewTransactionHistory($argv) {
             $address = $argv[2];
         } else {
             // Check if the name yields an address
-            $contactResult = lookupContactByName($argv[2]);
+            $contactResult = $contactService->lookupContactByName($argv[2]);
             $address = $contactResult ? $contactResult['address'] : $argv[2];
         }
         // Add WHERE clause if a valid address is found
@@ -395,11 +357,11 @@ function viewTransactionHistory($argv) {
         $countrows = 1;
         foreach ($results as $transaction) {
             // Lookup sender name
-            $senderResult = lookupContactByAddress($transaction['sender_address']);
+            $senderResult = $contactService->lookupContactByAddress($transaction['sender_address']);
             $senderName = $senderResult ? $senderResult['name'] : $transaction['sender_address'];
             
             // Lookup receiver name
-            $receiverResult = lookupContactByAddress($transaction['receiver_address']);
+            $receiverResult = $contactService->lookupContactByAddress($transaction['receiver_address']);
             $receiverName = $receiverResult ? $receiverResult['name'] : $transaction['receiver_address'];
             
             // Replace name with 'me' if the address is mine
