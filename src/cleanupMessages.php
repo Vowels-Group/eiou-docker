@@ -31,7 +31,7 @@ $poller = new AdaptivePoller($pollerConfig);
 $totalProcessed = 0;
 $lastLogTime = time();
 
-echo "[" . date('Y-m-d H:i:s') . "] Cleanup processor started with adaptive polling\n";
+echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] Cleanup processor started with adaptive polling\n";
 
 while (TRUE) {
     // Process cleanup messages and track if we had work
@@ -46,7 +46,7 @@ while (TRUE) {
     // Log statistics every 5 minutes for cleanup (less frequent than others)
     if (time() - $lastLogTime >= 300) {
         $stats = $poller->getStats();
-        echo "[" . date('Y-m-d H:i:s') . "] Cleaned: $totalProcessed, ";
+        echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] Cleaned: $totalProcessed, ";
         echo "Interval: {$stats['current_interval_ms']}ms, ";
         echo "Empty cycles: {$stats['consecutive_empty']}\n";
         $lastLogTime = time();

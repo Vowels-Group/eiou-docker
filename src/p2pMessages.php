@@ -31,7 +31,7 @@ $poller = new AdaptivePoller($pollerConfig);
 $totalProcessed = 0;
 $lastLogTime = time();
 
-echo "[" . date('Y-m-d H:i:s') . "] P2P processor started with adaptive polling\n";
+echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] P2P processor started with adaptive polling\n";
 
 while (TRUE) {
     // Process queued P2P messages and track if we had work
@@ -46,7 +46,7 @@ while (TRUE) {
     // Log statistics every minute
     if (time() - $lastLogTime >= 60) {
         $stats = $poller->getStats();
-        echo "[" . date('Y-m-d H:i:s') . "] Processed: $totalProcessed, ";
+        echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] Processed: $totalProcessed, ";
         echo "Interval: {$stats['current_interval_ms']}ms, ";
         echo "Empty cycles: {$stats['consecutive_empty']}\n";
         $lastLogTime = time();
