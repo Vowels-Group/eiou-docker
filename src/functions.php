@@ -10,8 +10,8 @@
 // Require database functionality
 require_once 'src/database/pdo.php';
 require_once 'src/database/AbstractRepository.php';
-require_once 'src/database/ContactRepository.php';
 require_once 'src/database/DebugRepository.php';
+require_once 'src/database/ContactRepository.php';
 require_once 'src/database/databaseSchema.php';
 require_once 'src/database/databaseSetup.php';
 require_once 'src/database/P2pRepository.php';

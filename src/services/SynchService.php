@@ -109,7 +109,7 @@ class SynchService {
      */
     function synchAllContacts(): void{
         // Synch all contacts
-        $contacts = retrieveContactAddresses();
+        $contacts = $this->contactRepository->getAllAddresses();
         foreach ($contacts as $contact) {
             $this->synchSingleContact($contact);
         }
@@ -124,7 +124,7 @@ class SynchService {
      */
     function synchSingleContact($contactAddress, $echo='SILENT'): bool{
         // Synch specific contact based on address
-        $contact = retrieveContactQuery($contactAddress); // Get contact from database
+        $contact = $this->contactRepository->getContactByAddress($contactAddress); // Get contact from database
         if($contact['status'] === 'pending'){
             output(outputSynchContactDueToPendingStatus($contactAddress),$echo);
             // If the contact is still pending then inquire with contact
@@ -134,7 +134,7 @@ class SynchService {
             $reason = $synchResponse['reason'] ?? NULL;
             if($status === 'accepted'){
                 // If you are accepted as a contact by the contact in question then update accordingly 
-                updateContactStatus($contactAddress, $status);
+                $this->contactRepository->updateStatus($contactAddress, $status);
                 output(outputContactSuccesfullySynched($contactAddress),$echo);
                 return true;
             } elseif($status === 'rejected' && $reason === 'unknown'){
@@ -148,7 +148,7 @@ class SynchService {
                     $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
                     $synchResponse = send($contactAddress, $messagePayload);
                     if($status === 'accepted'){
-                        updateContactStatus($contactAddress, $status);
+                        $this->contactRepository->updateStatus($contactAddress, $status);
                         output(outputContactSuccesfullySynched($contactAddress),$echo);
                         return true;
                     }   

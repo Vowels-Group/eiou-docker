@@ -10,6 +10,16 @@
  */
 class TransactionService {
     /**
+     * @var P2pRepository P2p repository instance
+     */
+    private P2pRepository $p2pRepository;
+
+    /**
+     * @var Rp2pRepository Rp2p repository instance
+     */
+    private Rp2pRepository $rp2pRepository;
+
+    /**
      * @var TransactionRepository Transaction repository instance
      */
     private TransactionRepository $transactionRepository;
@@ -37,15 +47,21 @@ class TransactionService {
     /**
      * Constructor
      *
+     * @param P2pRepository $p2pRepository P2p repository
+     * @param Rp2pRepository $rp2pRepository Rp2p repository
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param ContactRepository $contactRepository Contact repository
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
+        P2pRepository $p2pRepository,
+        Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
         ContactRepository $contactRepository,
         UserContext $currentUser
     ) {
+        $this->p2pRepository = $p2pRepository;
+        $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
         $this->contactRepository = $contactRepository;
         $this->currentUser = $currentUser;
@@ -135,7 +151,7 @@ class TransactionService {
         // Check if Transaction already exists for memo in database and is a valid successor of previous txids
         // Check if Transaction is a valid successor of previous txids
        
-        if(!$this->contactRepository->isNotBlocked($request['senderAddress']) || !checkPreviousTxid($request) || !checkAvailableFundsTransaction($request)){
+        if(!$this->contactRepository->isNotBlocked($request['senderAddress']) || !$this->checkPreviousTxid($request) || !$this->checkAvailableFundsTransaction($request)){
             return false;
         }
         // Check if Transaction already exists for txid or memo in database
@@ -143,10 +159,10 @@ class TransactionService {
             $memo = $request['memo'];
             if($memo === "standard"){
                 // If direct transaction
-                $results = getTransactionByTxid($request['txid']);
+                $results = $this->transactionRepository->getByTxid($request['txid']);
             } else{
                 // If p2p based transaction
-                $results = getTransactionByMemo($memo);
+                $results = $this->transactionRepository->getByMemo($memo);
             }
             if($results){
                 // if transaction already exists
@@ -228,7 +244,7 @@ class TransactionService {
      * @param string $address Address 
      * @return bool True if user corresponds, False otherwise.
      */
-    function matchYourselfTransaction($request,$address){
+    public function matchYourselfTransaction($request,$address){
         // Check if transaction end recipient is user
         $p2pRequest = getP2pByHash($request['memo']);
         if( hash('sha256', $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
@@ -307,7 +323,7 @@ class TransactionService {
             } else {
                 // If p2p type transaction
                 $memo = $request['memo'];
-                $rP2pResult = checkRp2pExists($memo);
+                $rP2pResult = $this->rp2pRepository->getByHash($memo);
                 // Check if precursors to transactions exist and correspond
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
                     $request['txid'] = $this->createUniqueTxid($request);
@@ -384,12 +400,12 @@ class TransactionService {
      */
     private function processP2pTransaction(array $message, string $memo, string $txid): void {
         if($message['sender_address'] == resolveUserAddressForTransport($message['sender_address'])){
-            $rp2p = checkRp2pExists($memo);
+            $rp2p = $this->rp2pRepository->getByHash($memo);
             $message['time'] = $rp2p['time'];
 
             // If sending transaction forwards
             $payload = $this->transactionPayload->buildFromDatabase($message);
-            updateP2pRequestStatus($memo,'paid');
+            $this->p2pRepository->updateStatus($memo,'paid');
             $this->transactionRepository->updateStatus($memo,'sent');
             output(outputSendTransactionOnwards($message),'SILENT');
             $response = json_decode(send($message['receiver_address'], $payload),true);
@@ -397,7 +413,7 @@ class TransactionService {
             if($response['status'] === 'accepted'){
                 $this->transactionRepository->updateStatus($txid,'accepted');
             } elseif($response['status'] === 'rejected' ){
-                updateP2pRequestStatus($memo,'cancelled');
+                $this->p2pRepository->updateStatus($memo,'cancelled');
                 $this->transactionRepository->updateStatus($memo,'rejected');
             }
             output(outputTransactionResponse($response),'SILENT');
@@ -406,21 +422,21 @@ class TransactionService {
             if(!$this->matchYourselfTransaction($message,resolveUserAddressForTransport($message['sender_address']))) {
                 // If not end-recipient of transaction
                 $this->transactionRepository->updateStatus($memo,'accepted');
-                updateIncomingP2pTxid($message['memo'], $message['txid']);
+                $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
 
                 // Create new transaction, from received prior transaction, for sending onwards to sender of rp2p
-                $rp2p = checkRp2pExists($message['memo']);
+                $rp2p = $this->rp2pRepository->getByHash($message['memo']);
                 $data = $this->transactionPayload->buildForwarding($message,$rp2p);
-                updateOutgoingP2pTxid($data['memo'], $data['txid']);
+                $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
 
                 $payload = $this->transactionPayload->buildFromDatabase($data);
                 $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($payload),true);
                 output(outputTransactionInsertion($insertTransactionResponse));
             } else{
                 // If end-recipient of transaction
-                updateP2pRequestStatus($memo,'completed',true);
+                $this->p2pRepository->updateStatus($memo,'completed',true);
                 $this->transactionRepository->updateStatus($memo,'completed');
-                updateIncomingP2pTxid($message['memo'], $message['txid']);
+                $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
                 output(outputTransactionAmountReceived($message),'SILENT');
                 $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                 output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
@@ -490,7 +506,7 @@ class TransactionService {
         $payload = $this->transactionPayload->build($data);
         $this->transactionRepository->insertTransaction($payload);
 
-        updateOutgoingP2pTxid($data['memo'], $data['txid']);
+        $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
     }
 
     /**

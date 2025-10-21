@@ -89,12 +89,12 @@ class CleanupService {
      */
     public function expireMessage($message){
         // Expire the p2p request
-        updateP2pRequestStatus($message['hash'], 'expired');
+        $this->p2pRepository->updateStatus($message['hash'], 'expired');
         output(outputP2pExpired($message),'SILENT');
 
         // Cancel transaction if exists
-        if(getTransactionByMemo($message['hash'])){
-            updateTransactionStatus($message['hash'], 'cancelled');
+        if($this->transactionRepository->getByMemo($message['hash'])){
+            $this->transactionRepository->updateStatus($message['hash'], 'cancelled');
             output(outputTransactionExpired($message),'SILENT');
         }
     }

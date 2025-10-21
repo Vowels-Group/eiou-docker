@@ -4,7 +4,7 @@
 // Processing P2P messages with adaptive polling
 require_once(__DIR__ . "/config.php");
 require_once(__DIR__ . "/functions.php");
-require_once(__DIR__ . "/src/services/ServiceWrappers.php");
+require_once(__DIR__ . "/src/services/ServiceContainer.php");
 require_once(__DIR__ . "/src/utils/AdaptivePoller.php");
 
 // Load polling configuration
@@ -23,6 +23,8 @@ checkSingleInstance($lockfile);
 // Create PDO connection
 $pdo = createPDOConnection();
 
+$p2pService = ServiceContainer::getInstance()->getP2pService();
+
 // Initialize adaptive poller
 $poller = new AdaptivePoller($pollerConfig);
 $totalProcessed = 0;
@@ -33,7 +35,7 @@ echo "[" . date('Y-m-d H:i:s') . "] P2P processor started with adaptive polling\
 while (TRUE) {
     // Process queued P2P messages and track if we had work
     $before = microtime(true);
-    $processed = processQueuedP2pMessages();
+    $processed = $p2pService->processQueuedP2pMessages();
     $hadWork = $processed > 0;
 
     if ($hadWork) {

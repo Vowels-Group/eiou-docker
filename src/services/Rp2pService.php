@@ -64,7 +64,7 @@ class RP2pService {
             throw new Exception('P2P request was not found for the given hash.');
         }else{
             if(isset($p2p['destination_address'])) {
-                updateP2pRequestStatus($request['hash'], 'found');
+                $this->p2pRepository->updateStatus($request['hash'], 'found');
             }
             // Add users fee to request
             $request['amount'] += $p2p['my_fee_amount'];
@@ -78,7 +78,7 @@ class RP2pService {
             }
 
             // Save rp2p response 
-            $insertResult = insertRp2pRequest($request);
+            $insertResult = $this->rp2pRepository->insertRp2pRequest($request);
             if (!$insertResult) {
                 output(outputRp2pInsertionFailure($request), 'SILENT');
             }

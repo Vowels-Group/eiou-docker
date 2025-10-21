@@ -169,6 +169,8 @@ class ServiceContainer {
         if (!isset($this->services['TransactionService'])) {
             require_once __DIR__ . '/TransactionService.php';
             $this->services['TransactionService'] = new TransactionService(
+                $this->getP2pRepository(),
+                $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
                 $this->getContactRepository(),
                 $this->currentUser

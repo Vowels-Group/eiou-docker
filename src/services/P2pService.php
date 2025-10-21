@@ -124,7 +124,7 @@ class P2pService {
      */
     function calculateRequestedAmount($request): float {
         // Calculate total amount needed for p2p through user
-        $senderContact = lookupContactByAddress($request['senderAddress']);
+        $senderContact = $this->contactRepository->lookupByAddress($request['senderAddress']);
         $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee()) / 10000; //convert back to percent for math
         $request['feeAmount'] = round($request['amount'] * $fee);   // Caculate fee on the amount sender wants sent
         return $request['amount'] + $request['feeAmount'];
@@ -139,7 +139,7 @@ class P2pService {
     public function checkP2pPossible(array $request, $echo = true) : bool{
         // Check if P2P already exists for hash in database, is valid and can be completed
         // & Check if P2P is valid and can be completed given credit of user requesting
-        if(!$this->contactRepository->isNotBlocked($request['senderAddress']) || !checkRequestLevel($request) || !checkAvailableFunds($request)){
+        if(!$this->contactRepository->isNotBlocked($request['senderAddress']) || !$this->checkRequestLevel($request) || !$this->checkAvailableFunds($request)){
             return false; 
         }
         // Check if P2P already exists for hash in database
@@ -220,11 +220,10 @@ class P2pService {
      */
     function matchContact($request): ?array {
         // Check if contact matches transactions end-recipient
-        $contacts = retrieveContactAddressesPubkeys();
+        $contacts = $this->contactRepository->getAllContacts();
         // Check if end recipient of request in contacts
         foreach ($contacts as $contact) {
             $contactHash = hash('sha256', $contact['address'] . $request['salt'] . $request['time']);
-            // output(outputCalculateContactHash($contact,$request), 'SILENT');
             // output(outputCalculatedContactHash($contactHash), 'SILENT');
             if ($contactHash === $request['hash']) {
                 output(outputContactMatched($contactHash), 'SILENT');

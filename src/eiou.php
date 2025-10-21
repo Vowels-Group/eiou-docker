@@ -24,7 +24,7 @@ $request = strtolower($argv[1]);
 $pdo = createPDOConnection();
 
 // Check if user has a key set in config
-checkWalletExists($user, $request);
+$walletService->checkWalletExists($request);
 
 // Info
   // Call the function in the info section
@@ -120,7 +120,7 @@ checkWalletExists($user, $request);
   }
 
 // Check for pending contact requests for users with no default fee set
-$pending = getAllPendingContactRequests();
+$pending = $contactService->getPendingContactRequests();
 $pending_count = count($pending);
 // If there are pending contacts without a default fee, provide guidance
 if ($pending_count > 0) {

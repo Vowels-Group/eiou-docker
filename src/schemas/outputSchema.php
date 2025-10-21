@@ -21,10 +21,6 @@ function outputBuildingTransactionPayload($data){
     return "Building Transaction payload: " . print_r($data, true)."\n";
 }
 
-function outputCalculateContactHash($contact,$request){
-    return "Calculating contact hash: address=" . $contact['address'] . ", salt=" . $request['salt'] . ", time=" . $request['time']."\n";
-}
-
 function outputCalculatedContactHash($contactHash){
     return "Calculated contact hash: " . $contactHash."\n";
 }
