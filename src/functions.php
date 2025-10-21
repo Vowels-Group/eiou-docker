@@ -2,10 +2,10 @@
 # Copyright 2025
 
 // Require core functionality
-// require_once 'src/core/Application.php';
-// require_once 'src/core/Constants.php';
-// require_once 'src/core/ErrorHandler.php';
-// require_once 'src/core/UserContext.php';
+require_once 'src/core/Application.php';
+require_once 'src/core/Constants.php';
+require_once 'src/core/ErrorHandler.php';
+require_once 'src/core/UserContext.php';
 
 // Require database functionality
 require_once 'src/database/pdo.php';
