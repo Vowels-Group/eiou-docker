@@ -204,6 +204,23 @@ class UserContext {
     }
 
     /**
+     * Get all user locaters (hostname and tor)
+     *
+     * @return array
+     */
+    public function getUserLocaters(): array {
+        $locaters = [];
+        foreach($this->getUserAddresses() as $address){
+            if (isTorAddress($address)){
+                $locaters['Tor'] = $address;
+            } elseif (isHttpAddress($address)) {
+                $locaters['Http'] = $address;
+            }
+        }
+        return $locaters;
+    }
+
+    /**
      * Check if an address belongs to this user
      *
      * @param string $address
