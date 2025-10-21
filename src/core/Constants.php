@@ -11,6 +11,33 @@
 # - Set ADAPTIVE_POLLING=false to use fixed intervals only
 
 class Constants {
+    private static ?Constants $instance = null;
+    private array $envVariables = [];
+    private bool $initialized = false;
+
+    /**
+     * Private constructor to enforce singleton pattern
+     */
+    private function __construct() {
+        $this->envVariables = $this->all();
+        $this->initialized = true;
+    }
+
+    /**
+     * Get singleton instance
+     *
+     * @return Constants
+     */
+    public static function getInstance(): Constants {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    // Development/Production
+    const APP_ENV = 'development';
+    const APP_DEBUG = true;
     
     // Transaction limits
     const TRANSACTION_MIN_AMOUNT = 0;
@@ -108,6 +135,9 @@ class Constants {
     const PATH_LOCKFILE_PREFIX = '/tmp/';
     const PATH_LOG_DIR = '/var/log/eiou/';
     const PATH_CONFIG_DIR = '/etc/eiou/';
+
+    const LOG_FILE_APP = '/var/log/eiou/app.log';
+    const LOG_LEVEL = 'INFO';
 
     // Error messages
     const ERROR_GENERIC = "An error occurred. Please try again later.";
