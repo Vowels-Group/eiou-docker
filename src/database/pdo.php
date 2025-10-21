@@ -11,11 +11,13 @@
  * @throws PDOException If connection fails
  */
 
+require_once dirname(__DIR__) . '/core/Constants.php';
 require_once dirname(__DIR__) . '/core/UserContext.php';
 
 function createPDOConnection(): PDO {
     // Try to use UserContext if available, fallback to global $user
     $userContext = UserContext::getInstance();
+    $envVariables = Constants::getInstance();
 
 
     // Get database configuration from UserContext or global $user
@@ -61,7 +63,7 @@ function createPDOConnection(): PDO {
         error_log("Database connection failed: " . $e->getMessage());
 
         // Return safe error message to user
-        if (getenv('APP_ENV') === 'development' || getenv('APP_DEBUG') === 'true') {
+        if ($envVariables->get('APP_ENV') === 'development' || $envVariables->get('APP_DEBUG') === 'true') {
             echo json_encode([
                 "status" => "error",
                 "message" => "Database connection failed: " . $e->getMessage()
