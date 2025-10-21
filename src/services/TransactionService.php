@@ -577,16 +577,36 @@ class TransactionService {
         return $this->transactionRepository->getReceivedUserTransactions($limit); 
     }
 
-    // /**
-    //  * Get all contact balances 
-    //  *
-    //  * @param string $userPubkey
-    //  * @param array $contactPubkeys
-    //  * @return array Associative array of pubkey => balance
-    //  */
-    // public function getAllContactBalances(string $userPubkey, array $contactPubkeys): array {
-    //     return $this->transactionRepository->getAllContactBalances($userPubkey,$contactPubkeys); 
-    // }
+    /**
+     * Get users current balance
+     *
+     * @return string Balance 
+     */
+    public function getUserTotalBalance() {
+          return $this->transactionRepository->getUserTotalBalance();
+    }
+    
+    /**
+     * Get contact balance (optimized single query)
+     *
+     * @param string $userPubkey
+     * @param string $contactPubkey
+     * @return int Balance in cents
+     */
+    public function getContactBalance(string $userPubkey, string $contactPubkey): int {
+        return $this->transactionRepository->getContactBalance($userPubkey,$contactPubkey); 
+    }
+
+    /**
+     * Get all contact balances 
+     *
+     * @param string $userPubkey
+     * @param array $contactPubkeys
+     * @return array Associative array of pubkey => balance
+     */
+    public function getAllContactBalances(string $userPubkey, array $contactPubkeys): array {
+        return $this->transactionRepository->getAllContactBalances($userPubkey,$contactPubkeys); 
+    }
     
     /**
      * Get transaction statistics
