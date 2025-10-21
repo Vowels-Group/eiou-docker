@@ -15,6 +15,7 @@
  *
  * @abstract
  */
+
 abstract class AbstractRepository {
     /**
      * @var PDO Database connection instance
@@ -31,12 +32,15 @@ abstract class AbstractRepository {
      */
     protected $primaryKey = 'id';
 
-
     /**
      * @var UserContext object of user data
      */
     protected $currentUser;
 
+    /**
+     * @var Constants object of constants data
+     */
+    protected $envVariables;
 
     /**
      * Constructor - Initializes PDO connection
@@ -60,6 +64,9 @@ abstract class AbstractRepository {
 
         require_once dirname(__DIR__) . '/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
+        
+        require_once dirname(__DIR__) . '/core/Constants.php';
+        $this->envVariables = Constants::getInstance();
     }
 
     /**
@@ -365,7 +372,7 @@ abstract class AbstractRepository {
         error_log($logMessage);
 
         // Additional logging for development
-        if (getenv('APP_DEBUG') === 'true' && $exception) {
+        if ($this->envVariables->get('APP_DEBUG') === 'true' && $exception) {
             error_log("Stack trace: " . $exception->getTraceAsString());
         }
     }

@@ -173,7 +173,7 @@ class ContactRepository extends AbstractRepository {
         $query = "SELECT COUNT(*) as count FROM {$this->tableName}
                     WHERE name IS NULL AND status = 'pending'
                     AND created_at > ?";
-        $stmt = $this->execute($query,[date('Y-m-d H:i:s', $lastCheckTime)]);
+        $stmt = $this->execute($query,[date($this->envVariables->get('DISPLAY_DATE_FORMAT'), $lastCheckTime)]);
         if(!$stmt){
             return false;
         }
