@@ -66,7 +66,7 @@ class SecureLogger {
         $maskedContext = self::maskContext($context);
 
         // Format log entry
-        $timestamp = date('Y-m-d H:i:s');
+        $timestamp = date(Constants::DISPLAY_DATE_FORMAT);
         $pid = getmypid();
         $logEntry = "[$timestamp] [$level] [PID:$pid] $maskedMessage";
 

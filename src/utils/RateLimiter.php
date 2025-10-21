@@ -106,7 +106,7 @@ class RateLimiter {
 
         if ($attempts > $maxAttempts) {
             // Block the user
-            $blockedUntil = date('Y-m-d H:i:s', time() + $blockSeconds);
+            $blockedUntil = date(Constants::DISPLAY_DATE_FORMAT, time() + $blockSeconds);
             $stmt = $this->pdo->prepare("
                 UPDATE rate_limits
                 SET attempts = ?, last_attempt = NOW(), blocked_until = ?

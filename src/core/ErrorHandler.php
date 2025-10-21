@@ -4,8 +4,6 @@
  * Provides consistent error handling patterns across the application
  */
 
-require_once __DIR__ . '/Constants.php';
-
 class ErrorHandler {
 
     private static $errorHandlers = [];
@@ -176,7 +174,7 @@ class ErrorHandler {
      * @return bool
      */
     private static function isProduction() {
-        return getenv('APP_ENV') === 'production' || !getenv('APP_ENV');
+        return Constants::APP_ENV === 'production' || !Constants::APP_ENV;
     }
 
     /**

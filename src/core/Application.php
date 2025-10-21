@@ -5,18 +5,31 @@
  */
 
 class Application {
-    private static $instance = null;
-    private $pdo = null;
-    private $user = null;
-    private $config = [];
-    private $rateLimiter = null;
-    private $logger = null;
-    private $services = [];
+    private static ?Application $instance = null;
+    private RateLimiter $rateLimiter;
+    private SecureLogger $logger;
+    private ServiceContainer $services;
+
+    /**
+     * @var PDO Database connection instance
+     */
+    protected $pdo;
+
+    /**
+     * @var UserContext object of user data
+     */
+    protected $currentUser;
+
+    /**
+     * @var Constants object of constants data
+     */
+    protected $envVariables;
 
     /**
      * Private constructor for singleton pattern
      */
     private function __construct() {
+        $this->loadUser();
         $this->loadConfiguration();
     }
 
@@ -60,83 +73,20 @@ class Application {
     }
 
     /**
-     * Get current user
-     *
-     * @return array|null
-     */
-    public function getUser() {
-        if ($this->user === null) {
-            $this->loadUser();
-        }
-        return $this->user;
-    }
-
-    /**
-     * Set current user
-     *
-     * @param array $user
-     */
-    public function setUser($user) {
-        $this->user = $user;
-    }
-
-    /**
-     * Load user from session or config
+     * Load user from config
      */
     private function loadUser() {
-        // Try session first
-        if (isset($_SESSION['user'])) {
-            $this->user = $_SESSION['user'];
-            return;
-        }
-
-        // Try config file for CLI
-        $configFile = $this->getConfigPath() . '/config.php';
-        if (file_exists($configFile)) {
-            require_once $configFile;
-            if (isset($user)) {
-                $this->user = $user;
-            }
-        }
+        require_once dirname(__DIR__) . '/core/UserContext.php';
+        $this->currentUser = UserContext::getInstance();
     }
 
     /**
-     * Get configuration value
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
-     */
-    public function getConfig($key, $default = null) {
-        return $this->config[$key] ?? $default;
-    }
-
-    /**
-     * Set configuration value
-     *
-     * @param string $key
-     * @param mixed $value
-     */
-    public function setConfig($key, $value) {
-        $this->config[$key] = $value;
-    }
-
-    /**
-     * Load configuration from files and environment
+     * Load configuration from constants
      */
     private function loadConfiguration() {
-        // Load from environment variables
-        $this->config['app_env'] = getenv('APP_ENV') ?: 'production';
-        $this->config['app_debug'] = getenv('APP_DEBUG') === 'true';
-        $this->config['log_level'] = getenv('LOG_LEVEL') ?: 'INFO';
-        $this->config['log_file'] = getenv('LOG_FILE') ?: '/var/log/eiou/app.log';
-
-        // Load from config file if exists
-        $configFile = $this->getConfigPath() . '/app.config.php';
-        if (file_exists($configFile)) {
-            $fileConfig = require $configFile;
-            $this->config = array_merge($this->config, $fileConfig);
-        }
+        // Load from environment variables 
+        require_once dirname(__DIR__) . '/core/Constants.php';
+        $this->envVariables = Constants::getInstance();
     }
 
     /**
@@ -160,7 +110,7 @@ class Application {
     public function getLogger() {
         if ($this->logger === null) {
             require_once dirname(__DIR__) . '/utils/SecureLogger.php';
-            SecureLogger::init($this->config['log_file'], $this->config['log_level']);
+            SecureLogger::init($this->envVariables->get('LOG_FILE_APP'), $this->envVariables->get('LOG_LEVEL'));
             $this->logger = new SecureLogger();
         }
         return $this->logger;
@@ -202,7 +152,7 @@ class Application {
      * @param Exception $e
      */
     public function logError($message, $e = null) {
-        if ($this->config['app_debug']) {
+        if ($this->envVariables->get('APP_DEBUG')) {
             echo "Error: $message\n";
             if ($e) {
                 echo $e->getMessage() . "\n";
@@ -229,7 +179,7 @@ class Application {
      * @return bool
      */
     public function isDevelopment() {
-        return $this->config['app_env'] === 'development';
+        return $this->envVariables->get('APP_ENV') === 'development';
     }
 
     /**
@@ -238,7 +188,7 @@ class Application {
      * @return bool
      */
     public function isDebug() {
-        return $this->config['app_debug'] === true;
+        return $this->envVariables->get('APP_DEBUG') === true;
     }
 
     /**
@@ -256,7 +206,7 @@ class Application {
      * @return string
      */
     public function getConfigPath() {
-        return getenv('CONFIG_PATH') ?: '/etc/eiou';
+        return $this->envVariables->get('PATH_CONFIG_DIR') ?: '/etc/eiou';
     }
 
     /**
@@ -266,7 +216,7 @@ class Application {
         if ($this->pdo) {
             $this->pdo = null;
         }
-        $this->services = [];
+        $this->services->clearServices();
     }
 
     /**

@@ -6,8 +6,8 @@
  * Provides output encoding, rate limiting, and security headers
  */
 
+ require_once dirname(__DIR__) . '/core/Constants.php';
 class Security {
-
     /**
      * Encode output for safe HTML display (prevents XSS)
      *
@@ -129,7 +129,7 @@ class Security {
         error_log("Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
 
         // Return generic message to user
-        if ($debug && (getenv('APP_ENV') === 'development' || getenv('APP_DEBUG') === 'true')) {
+        if ($debug && (Constants::get('APP_ENV') === 'development' || Constants::get('APP_DEBUG') === 'true')) {
             return "Error: " . $e->getMessage();
         }
 
