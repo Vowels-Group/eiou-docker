@@ -15,16 +15,6 @@ class GuiService {
     private ContactRepository $contactRepository;
 
     /**
-     * @var P2pRepository P2P repository instance
-     */
-    private P2pRepository $p2pRepository;
-
-    /**
-     * @var RP2pRepository RP2P repository instance
-     */
-    private RP2pRepository $rp2pRepository;
-
-    /**
      * @var TransactionRepository Transaction repository instance
      */
     private TransactionRepository $transactionRepository;
@@ -48,8 +38,6 @@ class GuiService {
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
-     * @param P2pRepository $p2pRepository P2P repository
-     * @param RP2pRepository $rp2pRepository RP2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param ContactService $contactService Contact Service Class
      * @param TransactionService $transactionService
@@ -57,16 +45,12 @@ class GuiService {
      */
     public function __construct(
         ContactRepository $contactRepository,
-        P2pRepository $p2pRepository,
-        RP2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
         ContactService $contactService,
         TransactionService $transactionService,
         UserContext $currentUser  
     ) {
         $this->contactRepository = $contactRepository;
-        $this->p2pRepository = $p2pRepository;
-        $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
         $this->contactService = $contactService;
         $this->transactionService = $transactionService;

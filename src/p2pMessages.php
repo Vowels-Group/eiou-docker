@@ -4,15 +4,16 @@
 // Processing P2P messages with adaptive polling
 require_once(__DIR__ . "/config.php");
 require_once(__DIR__ . "/functions.php");
+require_once(__DIR__ . "/src/core/Constants.php");
 require_once(__DIR__ . "/src/services/ServiceContainer.php");
 require_once(__DIR__ . "/src/utils/AdaptivePoller.php");
 
 // Load polling configuration
 $pollerConfig = [
-    'min_interval_ms' => getenv('P2P_MIN_INTERVAL_MS') ?: 100,
-    'max_interval_ms' => getenv('P2P_MAX_INTERVAL_MS') ?: 5000,
-    'idle_interval_ms' => getenv('P2P_IDLE_INTERVAL_MS') ?: 2000,
-    'adaptive' => getenv('P2P_ADAPTIVE_POLLING') !== 'false',
+    'min_interval_ms' => Constants::P2P_MIN_INTERVAL_MS ?: 100,
+    'max_interval_ms' => Constants::P2P_MAX_INTERVAL_MS ?: 5000,
+    'idle_interval_ms' => Constants::P2P_IDLE_INTERVAL_MS ?: 2000,
+    'adaptive' => Constants::P2P_ADAPTIVE_POLLING !== 'false',
 ];
 
 $lockfile = '/tmp/p2pmessages_lock.pid';

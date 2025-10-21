@@ -22,7 +22,6 @@ class DebugRepository extends AbstractRepository {
         $this->primaryKey = 'id';
     }
 
-
     /**
      * Insert a Debug report
      *
@@ -30,7 +29,6 @@ class DebugRepository extends AbstractRepository {
      * @return void
      */
     public function insertDebug($data): void {
-        // Add debug messages to database
         // If PDO connection is not established, use error_log as fallback
         if (!$this->getPdo()) {
             $errorMessage = "Debug: " . ($data['message'] ?? 'No message');

@@ -63,7 +63,6 @@ function resolveUserAddressForTransport($address) {
     return false;
 }
 
-
 function send($recipient, $payload){
     // Send payload to recipient 
     $signedPayload = json_encode(sign($payload)); // Encode the payload as JSON

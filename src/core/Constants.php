@@ -4,6 +4,12 @@
  * Replaces magic numbers throughout the codebase
  */
 
+# Performance tuning notes:
+# - Lower MIN_INTERVAL for faster response times (costs more CPU)
+# - Higher MAX_INTERVAL for better CPU efficiency when idle
+# - IDLE_INTERVAL is used when no work for extended period
+# - Set ADAPTIVE_POLLING=false to use fixed intervals only
+
 class Constants {
     
     // Transaction limits
@@ -16,9 +22,29 @@ class Constants {
     const POLLING_MIN_INTERVAL_MS = 100;
     const POLLING_MAX_INTERVAL_MS = 5000;
     const POLLING_IDLE_INTERVAL_MS = 2000;
+
+    // Transaction processor polling intervals (milliseconds)
+    const TRANSACTION_MIN_INTERVAL_MS = 100;
+    const TRANSACTION_MAX_INTERVAL_MS = 5000;
+    const TRANSACTION_IDLE_INTERVAL_MS = 2000;
+    const TRANSACTION_ADAPTIVE_POLLING = true;
+
+    // P2P processor polling intervals (milliseconds)
+    const P2P_MIN_INTERVAL_MS = 100;
+    const P2P_MAX_INTERVAL_MS = 5000;
+    const P2P_IDLE_INTERVAL_MS = 2000;
+    const P2P_ADAPTIVE_POLLING = true;
+
+    // Cleanup processor polling intervals (milliseconds)
     const CLEANUP_MIN_INTERVAL_MS = 1000;
     const CLEANUP_MAX_INTERVAL_MS = 30000;
     const CLEANUP_IDLE_INTERVAL_MS = 10000;
+    const CLEANUP_ADAPTIVE_POLLING = true;
+
+    // Load thresholds for adaptive behavior
+    const HIGH_LOAD_CPU = 80;
+    const HIGH_LOAD_QUEUE = 100;
+    const LOW_LOAD_QUEUE = 10;
 
     // Queue processing
     const QUEUE_BATCH_SIZE = 5;

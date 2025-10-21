@@ -54,8 +54,6 @@ class RP2pService {
      * @return void
      */
     public function handleRp2pRequest(array $request): void {
-        // Handler for incoming rp2p messages
-        
         // Check if corresponding p2p exists 
         $p2p = getP2pByHash($request['hash']);
         if(!$p2p){
@@ -92,7 +90,7 @@ class RP2pService {
                 }
             } else{
                 // Send rp2p messages onwards to sender of p2p
-                $rP2pPayload =  $this->rp2pPayload->build($request); // Build rp2p payload
+                $rP2pPayload = $this->rp2pPayload->build($request); // Build rp2p payload
                 $this->p2pRepository->updateStatus($request['hash'], 'found');  // Update the p2p request status to found
                 $response = json_decode(send($p2p['sender_address'], $rP2pPayload),true);
                 output(outputRp2pResponse($response),'SILENT');
