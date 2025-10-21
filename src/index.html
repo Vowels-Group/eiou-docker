@@ -9,7 +9,6 @@ if (!file_exists("/etc/eiou/config.php")) {
 }
 require_once("/etc/eiou/config.php");
 
-
 // Accept incoming connection and decode request
 $request = json_decode($_GET['payload'], true);
 
@@ -18,11 +17,7 @@ if (!verifyRequest($request)) {
     die;
 }
 
-// Create PDO (db) connection
-//$pdo = createPDOConnection();
-
 require_once("/etc/eiou/src/services/ServiceContainer.php");
-
 
 if ($request['type'] === "create") {
   // Handle contact request
