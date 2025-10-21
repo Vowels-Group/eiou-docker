@@ -206,7 +206,8 @@ class TransactionRepository extends AbstractRepository {
 
         // Calculate sent to this contact
         $query = "SELECT COALESCE(SUM(amount), 0) as sent FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?";
-        $stmt = $this->execute($query,[$userHash, $contactHash]);
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([$userHash, $contactHash]);
         if(!$stmt){
             return 0;
         }
@@ -214,7 +215,8 @@ class TransactionRepository extends AbstractRepository {
 
         // Calculate received from this contact
         $query = "SELECT COALESCE(SUM(amount), 0) as received FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?";
-        $stmt = $this->execute($query,[$contactHash, $userHash]);
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute([$contactHash, $userHash]);
         if(!$stmt){
             return 0;
         }
