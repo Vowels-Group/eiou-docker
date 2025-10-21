@@ -43,8 +43,8 @@ function returnContactDetails($data) {
            "Address: " . $data['address'] . "\n" .
            "Name: " . ($data['name'] ?? 'N/A') . "\n" .
            "Public Key: " . "..." . substr($data['pubkey'], 51, 25) . "...\n" .              
-           "Fee: " . (($data['fee_percent'] ?? '0.00') / 100) . "%\n" .
-           "Credit Limit: " . (($data['credit_limit'] ?? '0.00') / 100) . "\n" .
+           "Fee: " .  convertQuantityCurrency(($data['fee_percent'] ?? '0.00') ) . "%\n" .
+           "Credit Limit: " . convertQuantityCurrency(($data['credit_limit'] ?? '0.00')) . "\n" .
            "Currency: " . ($data['currency']) . "\n";
 }
 
@@ -109,8 +109,8 @@ function returnContactSearchResults ($data) {
             implode("\n", array_map(function($contact) {
                 return str_pad($contact['address'], 56, ' ') . " | " . 
                         str_pad($contact['name'] ?? 'N/A', 20, ' ') . " | " . 
-                        str_pad(($contact['fee_percent'] !== null ? $contact['fee_percent'] / 100 : 'N/A'), 10, ' ') . " | " . 
-                        str_pad(($contact['credit_limit'] !== null ? $contact['credit_limit'] / 100 : 'N/A'), 15, ' ') . " | " . 
+                        str_pad(($contact['fee_percent'] !== null ? convertQuantityCurrency($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " . 
+                        str_pad(($contact['credit_limit'] !== null ? convertQuantityCurrency($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " . 
                         ($contact['currency'] ?? 'N/A');
             }, $data)) . "\n" .
             "--------------------------------------------\n" .
