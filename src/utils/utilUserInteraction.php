@@ -128,15 +128,15 @@ function changeSettings($argv) {
 
 function displayCurrentSettings() {
     // Display current settings of user
-    global $user;
+    $currentUser = UserContext::getInstance();
     echo "Current Settings:\n";
-    echo "\tDefault fee: " . $user['defaultFee'] ."%\n";
-    echo "\tDefault currency: " . $user['defaultCurrency'] . "\n";
-    echo "\tAccess Mode: " . ($user['localhostOnly'] ? "Local Access Only" : "Network Authorized") . "\n";
-    echo "\tMaximum Fee: " . $user['maxFee'] . "%\n";
-    echo "\tMaximum Peer to Peer Level: " . $user['maxP2pLevel'] . "\n";
-    echo "\tDefault Peer to Peer Expiration: " . $user['p2pExpiration'] . " seconds\n";
-    echo "\tDefault Maximum lines of balance output: " . $user['maxOutput'] . "\n";
+    echo "\tDefault fee: " . $currentUser->getDefaultFee() ."%\n";
+    echo "\tDefault currency: " . $currentUser->getDefaultCurrency() . "\n";
+    echo "\tAccess Mode: " . ($currentUser->isLocalhostOnly() ? "Local Access Only" : "Network Authorized") . "\n";
+    echo "\tMaximum Fee: " . $currentUser->getMaxFee() . "%\n";
+    echo "\tMaximum Peer to Peer Level: " .  $currentUser->getMaxP2pLevel() . "\n";
+    echo "\tDefault Peer to Peer Expiration: " .  $currentUser->getP2pExpirationTime() . " seconds\n";
+    echo "\tDefault Maximum lines of balance output: " .  $currentUser->getMaxOutput() . "\n";
 }
 
 function displayHelp($argv) {
@@ -194,21 +194,11 @@ function displayHelp($argv) {
 
 function displayUserInfo($argv) {
     // Display user information
-    global $user;
-    
+    $currentUser = UserContext::getInstance();
     echo "User Information:\n";
     
     // Locators array
-    $locators = array(
-        'Tor' => $user['torAddress']
-    );
-
-    if(isset($user['hostname'])){
-        $locators['Http'] = $user['hostname'];
-        $userAddress = $user['hostname'];
-    } else{
-        $userAddress = $user['torAddress'];
-    }
+    $locators = $currentUser->getUserLocaters();
     
     // Output locators
     echo "\tLocators:\n";
@@ -217,64 +207,55 @@ function displayUserInfo($argv) {
     }
     
     // Authentication code is from the config file
-    echo "\tAuthentication Code: " . $user['authcode'] . "\n";
+    echo "\tAuthentication Code: " . $currentUser->getAuthCode() . "\n";
 
+    $pubkey = $currentUser->getPublicKey();
     // Public key is from the config file
-    $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$user['public']);
+    $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$pubkey);
     echo "\tPublic Key:" . $readablePubKey . "\n";
 
     // Calculate total sent and received
     $transactionService = ServiceContainer::getInstance()->getTransactionService();
-    $totalReceived = $transactionService->calculateTotalReceived($user['public']);
-    $totalSent = $transactionService->calculateTotalSent($user['public']);
-    $balance = ($totalReceived - $totalSent) / 100;
+    $totalReceived = $transactionService->calculateTotalReceived($pubkey);
+    $totalSent = $transactionService->calculateTotalSent($pubkey);
+    $balance = convertQuantityCurrency(($totalReceived - $totalSent));
     
     echo "\tTotal Balance: " . number_format($balance, 2) . "\n";
 
-    if(isset($argv[2]) && $argv[2] === 'detail'){
+    if (isset($argv[2]) && $argv[2] === 'detail') {
         // Define limit of output displayed
         if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
             $limit = $argv[3];                   
         } else{
-            $limit = $user['maxOutput'];
+            $limit = $currentUser->getMaxOutput();
         }
-        viewBalanceQuery("received",$userAddress,$limit); // Received Balances
-        viewBalanceQuery("sent",$userAddress,$limit); // Sent Balances
+
+        viewBalanceQuery("received","from",$transactionService->getReceivedUserTransactions(PHP_INT_MAX),$limit); // Received Balances
+        viewBalanceQuery("sent","to",$transactionService->getSentUserTransactions(PHP_INT_MAX),$limit); // Sent Balances
     }
 }
 
-function viewBalanceQuery($direction, $userAddress, $limit){
+function viewBalanceQuery($direction, $where, $results, $limit){
     $contactService = ServiceContainer::getInstance()->getContactService();
-    // View balance information based on transactions, either received or send by user
-    global $pdo;
-    if($direction === "received"){
-         $query = "SELECT sender_address, amount, currency, timestamp FROM transactions WHERE receiver_address = :userAddress ORDER BY timestamp DESC";
-         $address = "sender_address";
-         $where = "from";
-    } else{
-         $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions WHERE sender_address = :userAddress ORDER BY timestamp DESC";
-         $address = "receiver_address";
-         $where = "to";
-    }
    
-    $stmt = $pdo->prepare($query);  
-    $stmt->bindParam(':userAddress', $userAddress);
-    $stmt->execute();
-
-    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // View balance information based on transactions, either received or send by user
     $countResults = count($results);
     
     echo "\t\tBalance $direction $where:\n";
     $countrows = 1;
     foreach ($results as $res) {
-        $amount = $res['amount'] / 100;
-        printf("\t\t\t%s (%s) %s, %.2f %s\n", $contactService->lookupNameByAddress($res[$address]), $res[$address], $res['timestamp'], $amount, $res['currency']);
+        printf("\t\t\t%s (%s) %s, %.2f %s\n", 
+                $contactService->lookupNameByAddress($res['counterparty']), 
+                truncateAddress($res['counterparty']), 
+                $res['date'], 
+                $res['amount'], 
+                $res['currency']);
         if($limit !== 'all' && ($countrows >= $limit)){
             break;
         } 
         $countrows += 1;
     }
-    if($limit === 'all' || $limit > $countResults){
+    if ($limit === 'all' || $limit > $countResults) {
         $limit = $countResults;
     } 
     echo "\t\t\t----- Displaying $limit out of $countResults $direction balance(s) -----\n";
@@ -282,7 +263,8 @@ function viewBalanceQuery($direction, $userAddress, $limit){
 
 function viewBalances($data) {
     // View balance information based on transactions
-    global $pdo, $user;
+    global $pdo;
+    $currentUser = UserContext::getInstance();
     $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
     // Check if an address or name is provided
     if (isset($data[2])) {
@@ -316,7 +298,7 @@ function viewBalances($data) {
         // Calculate balance changes
         $senderAddress = $row['sender_address'];
         $receiverAddress = $row['receiver_address'];
-        $amount = $row['amount'] / 100;
+        $amount = convertQuantityCurrency($row['amount']);
         
         // Adjust balances for sender and receiver
         $balances[$senderAddress] = ($balances[$senderAddress] ?? 0) - $amount;
@@ -329,15 +311,8 @@ function viewBalances($data) {
         // Check if the address is the user's own address
         if (isMe($address)) {
             $displayName = "me";
-            $additionalAddresses = [];
-            
-            if (isset($user['hostname'])) {
-                $additionalAddresses[] = $user['hostname'];
-            }
-            
-            if (isset($user['torAddress'])) {
-                $additionalAddresses[] = $user['torAddress'];
-            }
+            $additionalAddresses = $currentUser->getUserAddresses();
+
             
             $additionalInfo = $additionalAddresses ? '(' . implode(', ', $additionalAddresses) . ')' : '';
             
@@ -368,10 +343,12 @@ function viewBalances($data) {
 
 function viewTransactionHistory($argv) {
     // View all transaction history in pretty print 'table'
-    global $pdo, $user;
+    global $pdo;
+    $currentUser = UserContext::getInstance();
+
     $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM transactions";
     $address = null;
-    $displayLimit = $user['maxOutput'];
+    $displayLimit = $currentUser->getMaxOutput();
     // Check if an address or name is provided
     if (isset($argv[2])) {
         // First if it's an HTTP or Tor address
@@ -431,7 +408,7 @@ function viewTransactionHistory($argv) {
             
             echo str_pad($senderName . " (" . $transaction['sender_address'] . ")", 56, ' ') . " | " . 
                  str_pad($receiverName . " (" . $transaction['receiver_address'] . ")", 56, ' ') . " | " . 
-                 str_pad(number_format($transaction['amount'] / 100, 2), 10, ' ') . " | " . 
+                 str_pad(number_format(convertQuantityCurrency($transaction['amount']), 2), 10, ' ') . " | " . 
                  str_pad($transaction['currency'], 10, ' ') . " | " . 
                  $transaction['timestamp'] . "\n";
             if($displayLimit !== 'all' && ($countrows >= $displayLimit)){

@@ -50,14 +50,14 @@ function jitter($value){
 
 function resolveUserAddressForTransport($address) {
     // Figure out what type of address is needed to transport payload
-    global $user;
+     $currentUser = UserContext::getInstance();
     // Check if the address is a Tor (.onion) address
     if (isTorAddress($address)) {
-        return $user["torAddress"];
+        return $currentUser->getTorAddress();
     }
     // Check if the address is an HTTP/HTTPS address
     elseif (isHttpAddress($address)) {
-        return $user["hostname"];
+        return $currentUser->getHttpAddress();
     }
     // If no specific transport type is detected, return the original address
     return false;
@@ -110,8 +110,8 @@ function sendByTor ($recipient, $signedPayload) {
 
 function sign($payload){
   // Add signature to payload
-  global $user;
-  $privateKey = $user['private'];
+  $currentUser = UserContext::getInstance();
+  $privateKey = $currentUser->getPrivateKey();
   // Get the private key resource
   $privateKeyResource = openssl_pkey_get_private($privateKey);
   // Sign the message

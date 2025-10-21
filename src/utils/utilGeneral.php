@@ -45,7 +45,7 @@ function returnMicroTime(){
  * @return string Formatted currency string
 */
 function formatCurrency(float $amountInCents, string $currency = 'USD'): string{
-    $amountInDollars = $amountInCents / 100;
+    $amountInDollars = $amountInCents / Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     return number_format($amountInDollars, 2) . ' ' . $currency;
 }
 
@@ -56,7 +56,7 @@ function formatCurrency(float $amountInCents, string $currency = 'USD'): string{
  * @return float Converted amount
 */
 function convertQuantityCurrency(float $amountInCents): float{
-    $amountInDollars = $amountInCents / 100;
+    $amountInDollars = $amountInCents / Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     return $amountInDollars;
 }
 
