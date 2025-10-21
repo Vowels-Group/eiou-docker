@@ -47,8 +47,6 @@ class RP2pService {
         $this->rp2pPayload = new Rp2pPayload($this->currentUser);
     }
 
-
-
     /**
      * Handle incoming RP2P request
      *
@@ -108,7 +106,7 @@ class RP2pService {
      * @param array|null $request Request data
      * @return bool True if RP2P possible, False otherwise.
      */
-    function checkRp2pPossible($request, $echo = true){
+    public function checkRp2pPossible($request, $echo = true){
         // Check if RP2P already exists for hash in database
         try{
             if($this->rp2pRepository->rp2pExists($request['hash'])){

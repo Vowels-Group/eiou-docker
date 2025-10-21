@@ -122,7 +122,7 @@ class P2pService {
      * @param array $request The P2P request data
      * @return float Total amount needed for p2p transaction
      */
-    function calculateRequestedAmount($request): float {
+    public function calculateRequestedAmount($request): float {
         // Calculate total amount needed for p2p through user
         $senderContact = $this->contactRepository->lookupByAddress($request['senderAddress']);
         $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee()) / 10000; //convert back to percent for math
@@ -218,7 +218,7 @@ class P2pService {
      * @param array $request Request data
      * @return array|null Contact data of corresponding user, null otherwise.
      */
-    function matchContact($request): ?array {
+    public function matchContact($request): ?array {
         // Check if contact matches transactions end-recipient
         $contacts = $this->contactRepository->getAllContacts();
         // Check if end recipient of request in contacts
@@ -240,7 +240,7 @@ class P2pService {
      * @param string $address Address 
      * @return bool True if user corresponds, False otherwise.
      */
-    function matchYourselfP2P($request,$address){
+    public function matchYourselfP2P($request,$address){
         // Check if p2p end recipient is user
         if(hash('sha256', $address . $request['salt'] . $request['time']) === $request['hash']){
             return true;
@@ -386,7 +386,7 @@ class P2pService {
      * @param array $data Request data
      * @return int (adjusted) Level of Request
      */
-    function reAdjustP2pLevel($request): int {
+    public function reAdjustP2pLevel($request): int {
         $maxP2p = $this->currentUser->getMaxP2pLevel();
         if($request['maxRequestLevel'] > $request['requestLevel'] + $maxP2p){
             return $request['requestLevel'] + $maxP2p;

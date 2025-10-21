@@ -147,7 +147,7 @@ class TransactionService {
      * @param array|null $request Request data
      * @return bool True if Transaction possible, False otherwise.
      */
-    function checkTransactionPossible(array $request, $echo = true) : bool{
+    public function checkTransactionPossible(array $request, $echo = true) : bool{
         // Check if Transaction already exists for memo in database and is a valid successor of previous txids
         // Check if Transaction is a valid successor of previous txids
        
