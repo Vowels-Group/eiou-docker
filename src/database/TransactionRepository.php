@@ -335,7 +335,7 @@ class TransactionRepository extends AbstractRepository {
                     AND timestamp > ?";
 
         // Bind parameters - addresses twice for both IN clauses, then timestamp
-        $params = array_merge($userAddresses, $userAddresses, [date('Y-m-d H:i:s', $lastCheckTime)]);
+        $params = array_merge($userAddresses, $userAddresses, [date($this->envVariables->get('DISPLAY_DATE_FORMAT'), $lastCheckTime)]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         if(!$stmt){
@@ -386,6 +386,109 @@ class TransactionRepository extends AbstractRepository {
         return $this->getTransactionHistory(PHP_INT_MAX); // Get a large number
     }
 
+
+    /**
+     * Get all sent transactions
+     *
+     * @return array
+     */
+    public function getAllSentUserTransactions(): array
+    {
+        return $this->getSentUserTransactions(PHP_INT_MAX); // Get a large number
+    }
+
+    /**
+     * Get transactions sent by user
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getSentUserTransactions($limit = 10): array {
+        $userAddresses = $this->currentUser->getUserAddresses();
+        
+        if (empty($userAddresses)) {
+            return [];
+        }
+
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions 
+                    WHERE sender_address IN ($placeholders) 
+                    ORDER BY timestamp DESC LIMIT ?";
+        
+        $params = array_merge($userAddresses, [$limit]);
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        
+        if(!$stmt){
+            return [];
+        }
+       
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $formattedTransactions = [];
+        
+        foreach ($transactions as $tx) {
+            $formattedTransactions[] = [
+                'date' => $tx['timestamp'],
+                'type' => 'sent',
+                'amount' => $tx['amount'] / $this->envVariables->get('TRANSACTION_USD_CONVERSION_FACTOR'), // Convert from cents
+                'currency' => $tx['currency'],
+                'counterparty' =>  $tx['receiver_address']
+            ];
+        }
+        return $formattedTransactions;
+    }
+
+    /**
+     * Get all received transactions
+     *
+     * @return array
+     */
+    public function getAllReceivedUserTransactions(): array
+    {
+        return $this->getReceivedUserTransactions(PHP_INT_MAX); // Get a large number
+    }
+
+    /**
+     * Get transactions received by user
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getReceivedUserTransactions($limit = 10): array{
+        $userAddresses = $this->currentUser->getUserAddresses();
+        
+        if (empty($userAddresses)) {
+            return [];
+        }
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions 
+                    WHERE receiver_address IN ($placeholders) 
+                    ORDER BY timestamp DESC LIMIT ?";
+        
+        $params = array_merge($userAddresses, [$limit]);
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        
+        if(!$stmt){
+            return [];
+        }
+        
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $formattedTransactions = [];
+        foreach ($transactions as $tx) {
+            $formattedTransactions[] = [
+                'date' => $tx['timestamp'],
+                'type' => 'received',
+                'amount' => $tx['amount'] / $this->envVariables->get('TRANSACTION_USD_CONVERSION_FACTOR'), // Convert from cents
+                'currency' => $tx['currency'],
+                'counterparty' =>  $tx['sender_address']
+            ];
+        }
+        return $formattedTransactions;
+    }
+
      /**
      * Get transaction history with limit
      *
@@ -426,7 +529,7 @@ class TransactionRepository extends AbstractRepository {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
                 'type' => $isSent ? 'sent' : 'received',
-                'amount' => $tx['amount'] / 100, // Convert from cents
+                'amount' => $tx['amount'] / $this->envVariables->get('TRANSACTION_USD_CONVERSION_FACTOR'), // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' => $counterpartyAddress
             ];
