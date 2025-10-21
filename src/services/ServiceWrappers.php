@@ -121,28 +121,6 @@ function synchContact($address, $echo = 'SILENT') {
 // ============================================================================
 
 /**
- * Lookup contact by name (wrapper)
- *
- * @param string $name Contact name
- * @return array|null Contact data or null
- */
-function lookupContactByName($name) {
-    $repo = ServiceContainer::getInstance()->getContactRepository();
-    return $repo->lookupByName($name);
-}
-
-/**
- * Lookup contact by address (wrapper)
- *
- * @param string $address Contact address
- * @return array|null Contact data or null
- */
-function lookupContactByAddress($address) {
-    $repo = ServiceContainer::getInstance()->getContactRepository();
-    return $repo->lookupByAddress($address);
-}
-
-/**
  * Get credit limit (wrapper)
  *
  * @param string $senderPublicKey Sender's public key
