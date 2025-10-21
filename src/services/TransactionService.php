@@ -560,6 +560,35 @@ class TransactionService {
     }
 
     /**
+     * Get all sent transactions
+     *
+     * @return array
+     */
+    public function getSentUserTransactions($limit): array {
+        return $this->transactionRepository->getSentUserTransactions($limit); 
+    }
+
+    /**
+     * Get all received transactions
+     *
+     * @return array
+     */
+    public function getReceivedUserTransactions($limit): array {
+        return $this->transactionRepository->getReceivedUserTransactions($limit); 
+    }
+
+    // /**
+    //  * Get all contact balances 
+    //  *
+    //  * @param string $userPubkey
+    //  * @param array $contactPubkeys
+    //  * @return array Associative array of pubkey => balance
+    //  */
+    // public function getAllContactBalances(string $userPubkey, array $contactPubkeys): array {
+    //     return $this->transactionRepository->getAllContactBalances($userPubkey,$contactPubkeys); 
+    // }
+    
+    /**
      * Get transaction statistics
      *
      * @return array Statistics array
