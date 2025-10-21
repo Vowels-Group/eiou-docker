@@ -422,6 +422,15 @@ class ContactService {
     }
 
     /**
+     * Retrieve all contacts pubkeys
+     *
+     * @return array Array of contacts with only their pubkey
+     */
+    public function getAllContactsPubkeys(): array {
+         return $this->repository->getAllContactsPubkeys();
+    }
+
+    /**
      * Get pending contact requests
      *
      * @return array Array of pending contacts
