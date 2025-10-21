@@ -4,13 +4,16 @@
  * Include this at the beginning of all PHP entry points
  */
 
+// Load constants
+require_once __DIR__ . '/core/Constants.php';
+
 // Load security classes
 require_once __DIR__ . '/utils/Security.php';
 require_once __DIR__ . '/utils/RateLimiter.php';
 require_once __DIR__ . '/utils/SecureLogger.php';
 
 // Initialize secure logging
-SecureLogger::init(getenv('LOG_FILE') ?: '/var/log/eiou/app.log', getenv('LOG_LEVEL') ?: 'INFO');
+SecureLogger::init(Constants::LOG_FILE_APP ?: '/var/log/eiou/app.log', Constants::LOG_LEVEL ?: 'INFO');
 
 // Set security headers for web requests
 if (php_sapi_name() !== 'cli') {
@@ -89,7 +92,7 @@ set_error_handler(function($severity, $message, $file, $line) {
     ]);
 
     // In production, don't display errors to users
-    if (getenv('APP_ENV') === 'production') {
+    if (Constants::APP_ENV === 'production') {
         if (php_sapi_name() !== 'cli') {
             http_response_code(500);
             echo "An error occurred. Please try again later.";
@@ -107,7 +110,7 @@ set_exception_handler(function($exception) {
     SecureLogger::logException($exception);
 
     // In production, don't display exceptions to users
-    if (getenv('APP_ENV') === 'production') {
+    if (Constants::APP_ENV === 'production') {
         if (php_sapi_name() !== 'cli') {
             http_response_code(500);
             echo "An error occurred. Please try again later.";
