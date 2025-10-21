@@ -308,8 +308,6 @@ class ServiceContainer {
             require_once __DIR__ . '/GuiService.php';
             $this->services['GuiService'] = new GuiService(
                 $this->getContactRepository(),
-                $this->getP2pRepository(),
-                $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
                 $this->getContactService(),
                 $this->getTransactionService(),

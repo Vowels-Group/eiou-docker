@@ -236,7 +236,6 @@ class TransactionService {
         return $txid;
     }
 
-
     /**
      * Check if the Transaction end-recipient is user
      *
@@ -505,7 +504,6 @@ class TransactionService {
         // Prepare transaction payload
         $payload = $this->transactionPayload->build($data);
         $this->transactionRepository->insertTransaction($payload);
-
         $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
     }
 
