@@ -96,9 +96,9 @@ class P2pService {
             }
 
             // Check if p2p's destination is not to user (i.e. you are an intermediary and not the end-recipient)
-            if (!matchYourselfP2P($request, resolveUserAddressForTransport($request['senderAddress']))) {
+            if (!$this->matchYourselfP2P($request, resolveUserAddressForTransport($request['senderAddress']))) {
                 // Check if sender has enough 'credit' to facilitate eIOU
-                $requestedAmount = calculateRequestedAmount($request);
+                $requestedAmount = $this->calculateRequestedAmount($request);
                 $availableFunds = calculateAvailableFunds($request);
                 $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderAddress']);
                 $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
@@ -114,6 +114,20 @@ class P2pService {
             error_log("Database error in checkAvailableFunds: " . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Caculate total amount required for p2p (amount + fee)
+     *
+     * @param array $request The P2P request data
+     * @return float Total amount needed for p2p transaction
+     */
+    function calculateRequestedAmount($request): float {
+        // Calculate total amount needed for p2p through user
+        $senderContact = lookupContactByAddress($request['senderAddress']);
+        $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee()) / 10000; //convert back to percent for math
+        $request['feeAmount'] = round($request['amount'] * $fee);   // Caculate fee on the amount sender wants sent
+        return $request['amount'] + $request['feeAmount'];
     }
 
     /**
@@ -172,7 +186,7 @@ class P2pService {
             $myAddress = resolveUserAddressForTransport($request['senderAddress']);
 
             // Check if p2p's destination is to user
-            if (matchYourselfP2P($request, $myAddress)) {
+            if ($this->matchYourselfP2P($request, $myAddress)) {
                 $request['status'] = 'found';
                 $this->p2pRepository->insertP2pRequest($request, $myAddress);
 
@@ -182,9 +196,9 @@ class P2pService {
                 output(outputRp2pTransactionResponse($response), 'SILENT');
             } else {
                 // Calculate fees
-                $requestedAmount = calculateRequestedAmount($request);
+                $requestedAmount = $this->calculateRequestedAmount($request);
                 $request['feeAmount'] = $requestedAmount - $request['amount'];
-                $request['maxRequestLevel'] = reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
+                $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
 
                 $this->p2pRepository->insertP2pRequest($request, NULL);
                 $this->p2pRepository->updateStatus($request['hash'], 'queued');
@@ -196,6 +210,43 @@ class P2pService {
             error_log("Error in handleP2pRequest: " . $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Check if the P2P's end-recipient is a contact of user
+     *
+     * @param array $request Request data
+     * @return array|null Contact data of corresponding user, null otherwise.
+     */
+    function matchContact($request): ?array {
+        // Check if contact matches transactions end-recipient
+        $contacts = retrieveContactAddressesPubkeys();
+        // Check if end recipient of request in contacts
+        foreach ($contacts as $contact) {
+            $contactHash = hash('sha256', $contact['address'] . $request['salt'] . $request['time']);
+            // output(outputCalculateContactHash($contact,$request), 'SILENT');
+            // output(outputCalculatedContactHash($contactHash), 'SILENT');
+            if ($contactHash === $request['hash']) {
+                output(outputContactMatched($contactHash), 'SILENT');
+                return $contact;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Check if the P2P's end-recipient is user
+     *
+     * @param array $request Request data
+     * @param string $address Address 
+     * @return bool True if user corresponds, False otherwise.
+     */
+    function matchYourselfP2P($request,$address){
+        // Check if p2p end recipient is user
+        if(hash('sha256', $address . $request['salt'] . $request['time']) === $request['hash']){
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -287,7 +338,7 @@ class P2pService {
 
             // Check if user is NOT the original sender of the p2p and has a direct contact link to end-recipient
             // If this is the case then send p2p directly
-            if(!isset($message['destination_address']) && $matchedContact = matchContact($message)){
+            if(!isset($message['destination_address']) && $matchedContact = $this->matchContact($message)){
                 $response = json_decode(send($matchedContact['address'], $p2pPayload),true);
                 output(outputP2pSendResult($response),'SILENT');
             } else{
@@ -327,6 +378,22 @@ class P2pService {
         }
 
         return isset($queuedMessages) ? count($queuedMessages) : 0;
+    }
+
+
+    /**
+     * Adjust remaining p2p chain length based on intermediary contact's config of maxP2pLevel 
+     *
+     * @param array $data Request data
+     * @return int (adjusted) Level of Request
+     */
+    function reAdjustP2pLevel($request): int {
+        $maxP2p = $this->currentUser->getMaxP2pLevel();
+        if($request['maxRequestLevel'] > $request['requestLevel'] + $maxP2p){
+            return $request['requestLevel'] + $maxP2p;
+        } else{
+            return $request['maxRequestLevel'];
+        }
     }
 
     /**

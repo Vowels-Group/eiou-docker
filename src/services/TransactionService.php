@@ -220,6 +220,23 @@ class TransactionService {
         return $txid;
     }
 
+
+    /**
+     * Check if the Transaction end-recipient is user
+     *
+     * @param array $request Request data
+     * @param string $address Address 
+     * @return bool True if user corresponds, False otherwise.
+     */
+    function matchYourselfTransaction($request,$address){
+        // Check if transaction end recipient is user
+        $p2pRequest = getP2pByHash($request['memo']);
+        if( hash('sha256', $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Prepare standard transaction data
      *
@@ -297,7 +314,7 @@ class TransactionService {
                     $request['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $request['senderPublicKey']);
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
-                } elseif (matchYourselfTransaction($request, resolveUserAddressForTransport($request['senderAddress']))) {
+                } elseif ($this->matchYourselfTransaction($request, resolveUserAddressForTransport($request['senderAddress']))) {
                     // If Transaction is for end-recipient
                     $request['previousTxid'] = $this->fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']);
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request), true);
@@ -386,7 +403,7 @@ class TransactionService {
             output(outputTransactionResponse($response),'SILENT');
         } else{
             // If receiving transaction
-            if(!matchYourselfTransaction($message,resolveUserAddressForTransport($message['sender_address']))) {
+            if(!$this->matchYourselfTransaction($message,resolveUserAddressForTransport($message['sender_address']))) {
                 // If not end-recipient of transaction
                 $this->transactionRepository->updateStatus($memo,'accepted');
                 updateIncomingP2pTxid($message['memo'], $message['txid']);
