@@ -130,6 +130,7 @@ class P2pService {
         return $request['amount'] + $request['feeAmount'];
     }
 
+
     /**
      * Check P2P is possible
      *
@@ -144,7 +145,7 @@ class P2pService {
         }
         // Check if P2P already exists for hash in database
         try{
-            if($this->p2pRepository->getByHash($request['hash'])){
+            if($this->p2pRepository->p2pExists($request['hash'])){
                 //If P2P already exists
                 if($echo){
                     echo $this->p2pPayload->buildRejection($request);

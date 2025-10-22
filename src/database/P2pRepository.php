@@ -32,6 +32,16 @@ class P2pRepository extends AbstractRepository {
         $p2p = $this->getByHash($hash);
         return $p2p && ($p2p['status'] ?? '') === 'completed';
     }
+ 
+    /**
+     * Check if P2P exists by hash
+     *
+     * @param string $hash P2P hash
+     * @return bool True if exists
+     */
+    public function p2pExists(string $hash): bool {
+        return $this->exists('hash', $hash);
+    }
 
     /**
      * Get P2P by hash
