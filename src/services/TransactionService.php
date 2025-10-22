@@ -561,20 +561,45 @@ class TransactionService {
 
     /**
      * Get all sent transactions
-     *
+     * 
+     * @param int $limit
      * @return array
      */
-    public function getSentUserTransactions($limit): array {
+    public function getSentUserTransactions(int $limit): array {
         return $this->transactionRepository->getSentUserTransactions($limit); 
+    }
+
+    /**
+     * Get all sent transactions to specific address
+     *
+     * @param string $receiverAddress Address of transaction recipient
+     * @param int $limit
+     * @return array
+     */
+    public function getSentUserTransactionsAddress(string $receiverAddress, int $limit): array {
+        return $this->transactionRepository->getSentUserTransactionsAddress($receiverAddress, $limit); 
+    }
+
+
+    /**
+     * Get all received transactions
+     * 
+     * @param int $limit
+     * @return array
+     */
+    public function getReceivedUserTransactions(int $limit): array {
+        return $this->transactionRepository->getReceivedUserTransactions($limit); 
     }
 
     /**
      * Get all received transactions
      *
+     * @param string $senderAddress Address of transaction sender
+     * @param int $limit
      * @return array
      */
-    public function getReceivedUserTransactions($limit): array {
-        return $this->transactionRepository->getReceivedUserTransactions($limit); 
+    public function getReceivedUserTransactionsAddress(string $senderAddress, int $limit): array {
+        return $this->transactionRepository->getReceivedUserTransactionsAddress($senderAddress, $limit); 
     }
 
     /**

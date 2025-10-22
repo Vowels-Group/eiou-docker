@@ -405,7 +405,7 @@ class TransactionRepository extends AbstractRepository {
      * @param int $limit
      * @return array
      */
-    public function getSentUserTransactions($limit = 10): array {
+    public function getSentUserTransactions(int $limit = 10): array {
         $userAddresses = $this->currentUser->getUserAddresses();
         
         if (empty($userAddresses)) {
@@ -457,7 +457,7 @@ class TransactionRepository extends AbstractRepository {
      * @param int $limit
      * @return array
      */
-    public function getReceivedUserTransactions($limit = 10): array{
+    public function getReceivedUserTransactions(int $limit = 10): array{
         $userAddresses = $this->currentUser->getUserAddresses();
         
         if (empty($userAddresses)) {
@@ -486,6 +486,91 @@ class TransactionRepository extends AbstractRepository {
                 'amount' => $tx['amount'] / $this->envVariables->get('TRANSACTION_USD_CONVERSION_FACTOR'), // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['sender_address']
+            ];
+        }
+        return $formattedTransactions;
+    }
+
+    /**
+     * Get transactions received by user from specific address
+     *
+     * @param string $senderAddress Address of transaction sender
+     * @param int $limit
+     * @return array
+     */
+    public function getReceivedUserTransactionsAddress(string $senderAddress, int $limit = 10): array{
+        $userAddresses = $this->currentUser->getUserAddresses();
+        
+        if (empty($userAddresses)) {
+            return [];
+        }
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions 
+                    WHERE receiver_address IN ($placeholders) AND sender_address = ?
+                    ORDER BY timestamp DESC LIMIT ?";
+        
+        $params = array_merge($userAddresses, [$senderAddress], [$limit]);
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        
+        if(!$stmt){
+            return [];
+        }
+        
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $formattedTransactions = [];
+        foreach ($transactions as $tx) {
+            $formattedTransactions[] = [
+                'date' => $tx['timestamp'],
+                'type' => 'received',
+                'amount' => $tx['amount'] / $this->envVariables->get('TRANSACTION_USD_CONVERSION_FACTOR'), // Convert from cents
+                'currency' => $tx['currency'],
+                'counterparty' =>  $tx['sender_address']
+            ];
+        }
+        return $formattedTransactions;
+    }
+
+    
+    /**
+     * Get transactions sent by user to specific address
+     *
+     * @param string $senderAddress Address of transaction sender
+     * @param int $limit
+     * @return array
+     */
+    public function getSentUserTransactionsAddress(string $senderAddress, int $limit = 10): array {
+        $userAddresses = $this->currentUser->getUserAddresses();
+        
+        if (empty($userAddresses)) {
+            return [];
+        }
+
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions 
+                    WHERE sender_address IN ($placeholders) AND receiver_address = ?
+                    ORDER BY timestamp DESC LIMIT ?";
+        
+        $params = array_merge($userAddresses, [$senderAddress], [$limit]);
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        
+        if(!$stmt){
+            return [];
+        }
+       
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $formattedTransactions = [];
+        
+        foreach ($transactions as $tx) {
+            $formattedTransactions[] = [
+                'date' => $tx['timestamp'],
+                'type' => 'sent',
+                'amount' => $tx['amount'] / $this->envVariables->get('TRANSACTION_USD_CONVERSION_FACTOR'), // Convert from cents
+                'currency' => $tx['currency'],
+                'counterparty' =>  $tx['receiver_address']
             ];
         }
         return $formattedTransactions;
