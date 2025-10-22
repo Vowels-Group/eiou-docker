@@ -4,9 +4,9 @@
 /**
  * Handler for (CLI) input changes to user settings
  *
- * @param string $argv The (CLI) input data
+ * @param array $argv The (CLI) input data
 */
-function changeSettings(string $argv) {
+function changeSettings(array $argv) {
     // Check if command line based or user input based
     if(isset($argv[2])){
         if(strtolower($argv[2]) === 'defaultfee'){
@@ -149,9 +149,9 @@ function displayCurrentSettings() {
 /**
  * Display available commands to user in the CLI
  *
- * @param string $argv The CLI input data
+ * @param array $argv The CLI input data
 */
-function displayHelp(string $argv) {
+function displayHelp(array $argv) {
     if(isset($argv[2])){
         echo "Command:\n";
         if(strtolower($argv[2]) === 'defaultfee'){
@@ -205,9 +205,9 @@ function displayHelp(string $argv) {
 /**
  * Display user information to user in the CLI
  *
- * @param string $argv The CLI input data
+ * @param array $argv The CLI input data
 */
-function displayUserInfo(string $argv) {
+function displayUserInfo(array $argv) {
     $currentUser = UserContext::getInstance();
     $transactionService = ServiceContainer::getInstance()->getTransactionService();
     
@@ -288,9 +288,9 @@ function viewBalanceQuery(string $direction, string $where, array $results, int 
 /**
  * Display balance information, based on transactions, to user in the CLI
  *
- * @param string $argv The CLI input data
+ * @param array $argv The CLI input data
 */
-function viewBalances($argv) {
+function viewBalances(array $argv) {
     $currentUser = UserContext::getInstance();
     $contactService = ServiceContainer::getInstance()->getContactService();
     $transactionService = ServiceContainer::getInstance()->getTransactionService();
@@ -336,9 +336,9 @@ function viewBalances($argv) {
 /**
  * Display all transaction history in pretty print 'table' to user in the CLI
  *
- * @param string $argv The CLI input data
+ * @param array $argv The CLI input data
 */
-function viewTransactionHistory($argv) {
+function viewTransactionHistory(array $argv) {
     $currentUser = UserContext::getInstance();
     $contactService = ServiceContainer::getInstance()->getContactService();
     $transactionService = ServiceContainer::getInstance()->getTransactionService();
