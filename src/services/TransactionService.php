@@ -179,7 +179,7 @@ class TransactionService {
             return true;  
         } catch (PDOException $e) {
             // Handle database error
-            error_log("Error retrieving existence of Transaction by memo" . $e->getMessage());
+            error_log("Error retrieving existence of Transaction by memo/txid" . $e->getMessage());
             if($echo){
                 echo json_encode([
                     "status" => "rejected",
