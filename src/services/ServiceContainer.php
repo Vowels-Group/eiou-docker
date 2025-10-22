@@ -299,26 +299,6 @@ class ServiceContainer {
     }
 
     /**
-     * Get GuiService instance
-     *
-     * @return GuiService
-     */
-    public function getGuiService(): GuiService {
-        if (!isset($this->services['GuiService'])) {
-            require_once __DIR__ . '/GuiService.php';
-            $this->services['GuiService'] = new GuiService(
-                $this->getContactRepository(),
-                $this->getTransactionRepository(),
-                $this->getContactService(),
-                $this->getTransactionService(),
-                $this->currentUser
-            );
-        }
-        return $this->services['GuiService'];
-    }
-
-
-    /**
      * Clear all cached services (useful for testing)
      */
     public function clearServices(): void {

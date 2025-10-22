@@ -14,11 +14,27 @@ require_once("/etc/eiou/config.php");
 require_once("/etc/eiou/src/gui/includes/session.php");
 
 // Start secure session
-startSecureSession();
+$secureSession = new Session();
+
+// Require Helpers
+require_once("/etc/eiou/src/gui/helpers/MessageHelper.php");
+require_once("/etc/eiou/src/gui/helpers/ViewHelper.php");
+
+// Create Services
+require_once("/etc/eiou/src/services/ServiceContainer.php");
+$contactService = ServiceContainer::getInstance()->getContactService();
+$transactionService = ServiceContainer::getInstance()->getTransactionService();
+
+// Create controllers
+require_once("/etc/eiou/src/gui/controllers/ContactController.php");
+require_once("/etc/eiou/src/gui/controllers/TransactionController.php");
+$contactController = new ContactController($secureSession, $contactService);
+$transactionController = new TransactionController($secureSession, $contactService, $transactionService);
+
 
 // Handle logout request
 if (isset($_GET['logout'])) {
-    logout();
+    $secureSession->logout();
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
@@ -27,7 +43,7 @@ if (isset($_GET['logout'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
     $submittedAuthCode = $_POST['authcode'];
 
-    if (isset($user['authcode']) && authenticate($submittedAuthCode, $user['authcode'])) {
+    if (isset($user['authcode']) && $secureSession->authenticate($submittedAuthCode, $user['authcode'])) {
         // Authentication successful, redirect to clean URL
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
@@ -38,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
 }
 
 // Check if user is authenticated
-if (!isAuthenticated()) {
+if (!$secureSession->isAuthenticated()) {
     // Show authentication form
     header('Content-Type: text/html; charset=UTF-8');
     require_once("/etc/eiou/src/gui/layout/authenticationForm.html");
@@ -46,7 +62,7 @@ if (!isAuthenticated()) {
 }
 
 // User is authenticated, check session timeout
-if (!checkSessionTimeout()) {
+if (!$secureSession->checkSessionTimeout()) {
     // Session timed out, redirect to login
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
@@ -55,10 +71,10 @@ if (!checkSessionTimeout()) {
 // If we get here, authentication is valid and session is active
 
 // Verify CSRF token for POST requests
-verifyCSRFToken();
+$secureSession->verifyCSRFToken();
 
 // Generate CSRF token for forms
-$csrfToken = getCSRFToken();
+$csrfToken = $secureSession->getCSRFToken();
 
 // This file handles wallet interaction with the eIOU network
 require_once("/etc/eiou/src/gui/functions/functions.php");

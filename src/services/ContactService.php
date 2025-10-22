@@ -11,9 +11,9 @@
 
 class ContactService {
     /**
-     * @var ContactRepository Contact repository instance
+     * @var ContactRepository Contact Repository instance
      */
-    private ContactRepository $repository;
+    private ContactRepository $contactRepository;
 
     /**
      * @var UserContext Current user data
@@ -28,11 +28,11 @@ class ContactService {
     /**
      * Constructor
      *
-     * @param ContactRepository $repository Contact repository
+     * @param ContactRepository $contactRepository Contact Repository
      * @param UserContext $currentUser Current user data
      */
-    public function __construct(ContactRepository $repository, UserContext $currentUser) {
-        $this->repository = $repository;
+    public function __construct(ContactRepository $contactRepository, UserContext $currentUser) {
+        $this->contactRepository = $contactRepository;
         $this->currentUser = $currentUser;
         $this->contactPayload = new ContactPayload($this->currentUser);
     }
@@ -58,7 +58,7 @@ class ContactService {
         }
 
         // Get contact if exists in database in some form
-        $contact = $this->repository->getContactByAddress($address);
+        $contact = $this->contactRepository->getContactByAddress($address);
 
         if($contact){
             $this->handleExistingContact($contact, $address, $name, $fee, $credit, $currency);
@@ -87,7 +87,7 @@ class ContactService {
             // Contact was blocked after user accepted contact request
             if($contact['name']){
                 // Unblock contact and add values
-                if($this->repository->updateUnblockContact($address, $name, $fee, $credit, $currency)){
+                if($this->contactRepository->updateUnblockContact($address, $name, $fee, $credit, $currency)){
                     output(outputContactUnblockedAndOverwritten());
                 } else{
                     output(outputContactUnblockedAndOverwrittenFailure());
@@ -95,7 +95,7 @@ class ContactService {
             }
             // Contact was blocked when user received contact request
             else{
-                if($this->repository->updateUnblockContact($address, $name, $fee, $credit, $currency)){
+                if($this->contactRepository->updateUnblockContact($address, $name, $fee, $credit, $currency)){
                     output(outputContactUnblockedAndAdded());
                 } else{
                     output(outputContactUnblockedAndAddedFailure());
@@ -154,14 +154,14 @@ class ContactService {
             if ($responseData['status'] === 'warning') {
                 output(returnContactCreationWarning($responseData['message']));
                 // Insert into database
-                if ($this->repository->insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
+                if ($this->contactRepository->insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
                     if(synchContact($address)){
                         output(returnContactCreationSuccessful());
                     }
                 }
             } else{
                 // Insert into database
-                if ($this->repository->insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
+                if ($this->contactRepository->insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
                     output(returnContactCreationSuccessful());
                 } else{
                     output(returnContactCreationFailed());
@@ -187,7 +187,7 @@ class ContactService {
      * @return bool Success status
      */
     public function acceptContact(string $address, string $name, float $fee, float $credit, string $currency): bool {
-        return $this->repository->acceptContact($address, $name, $fee, $credit, $currency);
+        return $this->contactRepository->acceptContact($address, $name, $fee, $credit, $currency);
     }
 
     /**
@@ -201,10 +201,10 @@ class ContactService {
         $senderPublicKey = $request['senderPublicKey'];
 
         // Check if contact already exists
-        if ($this->repository->contactExists($address)) {
+        if ($this->contactRepository->contactExists($address)) {
             return $this->contactPayload->buildAlreadyExists();
         } else{
-            return $this->repository->addPendingContact($address, $senderPublicKey);
+            return $this->contactRepository->addPendingContact($address, $senderPublicKey);
         }
     }
 
@@ -243,7 +243,7 @@ class ContactService {
      * @return array|null Contact data or null
      */
     public function lookupContactByName(string $name): ?array {
-        return $this->repository->lookupByName($name);
+        return $this->contactRepository->lookupByName($name);
     }
 
     /**
@@ -253,7 +253,7 @@ class ContactService {
      * @return array|null Contact data or null
      */
     public function lookupContactByAddress(string $address): ?array {
-        return $this->repository->lookupByAddress($address);
+        return $this->contactRepository->lookupByAddress($address);
     }
 
     /**
@@ -266,7 +266,7 @@ class ContactService {
         // Lookup contact based on their name
         $searchTerm = $data[2] ?? null;
 
-        if ($results = $this->repository->searchContacts($searchTerm)) {
+        if ($results = $this->contactRepository->searchContacts($searchTerm)) {
             output(returnContactSearchResults($results));
         } else{
             output(returnContactSearchNoResults());
@@ -291,7 +291,7 @@ class ContactService {
                 $address = $contactResult['address'] ?? null;
             }
 
-            if ($result = $this->repository->getContactByAddress($address)) {
+            if ($result = $this->contactRepository->getContactByAddress($address)) {
                 output(returnContactDetails($result));
             } else {
                 output(returnContactNotFound());
@@ -309,7 +309,7 @@ class ContactService {
      * @return bool True if exists
      */
     public function contactExists(string $address): bool {
-        return $this->repository->contactExists($address);
+        return $this->contactRepository->contactExists($address);
     }
 
     /**
@@ -319,7 +319,7 @@ class ContactService {
      * @return bool True if accepted
      */
     public function isAcceptedContact(string $address): bool {
-        return $this->repository->isAcceptedContact($address);
+        return $this->contactRepository->isAcceptedContact($address);
     }
 
     /**
@@ -329,7 +329,7 @@ class ContactService {
      * @return bool True if not blocked
      */
     public function isNotBlocked(string $address): bool {
-        return $this->repository->isNotBlocked($address);
+        return $this->contactRepository->isNotBlocked($address);
     }
 
     /**
@@ -339,7 +339,7 @@ class ContactService {
      * @return bool Success status
      */
     public function blockContact(string $address): bool {
-        return $this->repository->blockContact($address);
+        return $this->contactRepository->blockContact($address);
     }
 
     /**
@@ -349,7 +349,7 @@ class ContactService {
      * @return bool Success status
      */
     public function unblockContact(string $address): bool {
-        return $this->repository->unblockContact($address);
+        return $this->contactRepository->unblockContact($address);
     }
 
     /**
@@ -359,7 +359,7 @@ class ContactService {
      * @return bool Success status
      */
     public function deleteContact(string $address): bool {
-        return $this->repository->deleteContact($address);
+        return $this->contactRepository->deleteContact($address);
     }
 
     /**
@@ -368,7 +368,7 @@ class ContactService {
      * @param array $argv Command line arguments
      */
     public function updateContact(array $argv) {
-        return $this->repository->updateContact($argv);
+        return $this->contactRepository->updateContact($argv);
     }
 
     /**
@@ -378,7 +378,7 @@ class ContactService {
      * @return array Array of addresses
      */
     public function getAllAddresses(?string $exclude = null): array {
-        return $this->repository->getAllAddresses($exclude);
+        return $this->contactRepository->getAllAddresses($exclude);
     }
 
     /**
@@ -389,7 +389,7 @@ class ContactService {
      * @return bool Success status
      */
     public function updateStatus(string $address, string $status): bool {
-        return $this->repository->updateStatus($address, $status);
+        return $this->contactRepository->updateStatus($address, $status);
     }
 
     /**
@@ -399,7 +399,7 @@ class ContactService {
      * @return float Credit limit
      */
     public function getCreditLimit(string $senderPublicKey): float {
-        return $this->repository->getCreditLimit($senderPublicKey);
+        return $this->contactRepository->getCreditLimit($senderPublicKey);
     }
 
     /**
@@ -409,7 +409,17 @@ class ContactService {
      * @return array|null Array with pubkey or null
      */
     public function getContactPubkey(string $address): ?array {
-        return $this->repository->getContactPubkey($address);
+        return $this->contactRepository->getContactPubkey($address);
+    }
+
+    /**
+     * Check for new contact requests since last check
+     *
+     * @param int $lastCheckTime
+     * @return bool
+     */
+    public function checkForNewContactRequests($lastCheckTime): bool{
+        return $this->contactRepository->checkForNewContactRequests($lastCheckTime);
     }
 
     /**
@@ -418,7 +428,7 @@ class ContactService {
      * @return array Array of contacts
      */
     public function getAllContacts(): array {
-        return $this->repository->getAllContacts();
+        return $this->contactRepository->getAllContacts();
     }
 
     /**
@@ -427,16 +437,43 @@ class ContactService {
      * @return array Array of contacts with only their pubkey
      */
     public function getAllContactsPubkeys(): array {
-         return $this->repository->getAllContactsPubkeys();
+         return $this->contactRepository->getAllContactsPubkeys();
+    }
+
+    /**
+     * Retrieve all accepted contacts 
+     *
+     * @return array Array of accepted contacts
+     */
+    public function getAcceptedContacts(){
+        return $this->contactRepository->getAcceptedContacts();
     }
 
     /**
      * Get pending contact requests
      *
-     * @return array Array of pending contacts
+     * @return array Array of (non-user initiated) pending contacts
      */
     public function getPendingContactRequests(): array {
-        return $this->repository->getPendingContactRequests();
+        return $this->contactRepository->getPendingContactRequests();
+    }
+
+        /**
+     * Get user initiated pending contact requests
+     *
+     * @return array Array of user initiated pending contacts
+     */
+    public function getUserPendingContactRequests(): array{
+        return $this->contactRepository->getUserPendingContactRequests();
+    }
+
+    /**
+     * Get all blocked contacts
+     *
+     * @return array Array of blocked contacts
+     */
+    public function getBlockedContacts(): array {
+        return $this->contactRepository->getBlockedContacts();
     }
 
     /**
@@ -446,7 +483,7 @@ class ContactService {
      * @return string|null Contact address or null
      */
     public function lookupAddressByName(string $name): ?string {
-        return $this->repository->lookupAddressByName($name);
+        return $this->contactRepository->lookupAddressByName($name);
     }
 
     /**
@@ -456,6 +493,6 @@ class ContactService {
      * @return string|null Contact name or null
      */
     public function lookupNameByAddress(string $address): ?string {
-        return $this->repository->lookupNameByAddress($address);
+        return $this->contactRepository->lookupNameByAddress($address);
     }
 }

@@ -508,6 +508,46 @@ class TransactionService {
     }
 
     /**
+     * Convert Contact Information back to proper units for display
+     *
+     * @param array $contacts Contact Information
+     * @return array Converted contact information
+     */
+    public function contactBalanceConversion($contacts): array {
+        // If no contacts, return empty array
+        if (empty($contacts)) {
+            return [];
+        }
+
+        // Extract all pubkeys for batch processing
+        $pubkeys = array_column($contacts, 'pubkey');
+
+        // Get all balances in a single optimized query
+        $balances = $this->transactionRepository->getAllContactBalances($this->currentUser->getPublicKey(), $pubkeys);
+
+        // Build result array with balances
+        $contactsWithBalances = [];
+        foreach($contacts as $contact){
+            // Get pre-calculated balance from batch query result
+            $balance = $balances[$contact['pubkey']] ?? 0;
+
+            $fee_percent = $contact['fee_percent'];
+            $credit_limit = $contact['credit_limit'];
+
+            $contactsWithBalances[] = [
+                'name' => $contact['name'],
+                'address' => $contact['address'],
+                'balance' =>  $balance ? convertQuantityCurrency($balance) : $balance,
+                'fee' =>  $fee_percent ? convertQuantityCurrency($fee_percent) : $fee_percent,
+                'credit_limit' =>  $credit_limit ? convertQuantityCurrency($credit_limit) : $credit_limit,
+                'currency' => $contact['currency']
+            ];
+
+        }
+        return $contactsWithBalances;
+    }
+
+    /**
      * Get transaction by txid
      *
      * @param string $txid Transaction ID
@@ -631,6 +671,27 @@ class TransactionService {
      */
     public function getAllContactBalances(string $userPubkey, array $contactPubkeys): array {
         return $this->transactionRepository->getAllContactBalances($userPubkey,$contactPubkeys); 
+    }
+
+    /**
+     * Check for new transactions since last check
+     *
+     * @param int $lastCheckTime
+     * @return bool
+     */
+    public function checkForNewTransactions($lastCheckTime){
+         return $this->transactionRepository->checkForNewTransactions($lastCheckTime);
+    }
+
+    /**
+     * Get transaction history with limit
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getTransactionHistory(int $limit = 10): array
+    {
+        return $this->transactionRepository->getTransactionHistory($limit);
     }
     
     /**
