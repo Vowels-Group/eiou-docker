@@ -141,8 +141,6 @@ class TransactionService {
         }
     }
 
-
-
     /**
      * Check Transaction is Possible
      *
