@@ -624,6 +624,17 @@ class TransactionRepository extends AbstractRepository {
         return $formattedTransactions;
     }
 
+
+    /**
+     * Check if Transaction exists by memo
+     *
+     * @param string $memo Transaction memo
+     * @return bool True if exists
+     */
+    public function transactionExistsMemo(string $memo): bool {
+        return $this->exists('memo', $memo);
+    }
+
     /**
      * Get transaction by memo
      *
@@ -641,6 +652,17 @@ class TransactionRepository extends AbstractRepository {
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result ?: null;
     }
+
+    /**
+     * Check if Transaction exists by txid
+     *
+     * @param string $txid Transaction txid
+     * @return bool True if exists
+     */
+    public function transactionExistsTxid(string $txid): bool {
+        return $this->exists('txid', $txid);
+    }
+
 
     /**
      * Get transaction by txid

@@ -141,6 +141,8 @@ class TransactionService {
         }
     }
 
+
+
     /**
      * Check Transaction is Possible
      *
@@ -159,12 +161,12 @@ class TransactionService {
             $memo = $request['memo'];
             if($memo === "standard"){
                 // If direct transaction
-                $results = $this->transactionRepository->getByTxid($request['txid']);
+                $exists = $this->transactionRepository->transactionExistsTxid($request['txid']);
             } else{
                 // If p2p based transaction
-                $results = $this->transactionRepository->getByMemo($memo);
+                $exists = $this->transactionRepository->transactionExistsMemo($memo);
             }
-            if($results){
+            if($exists){
                 // if transaction already exists
                 if($echo){
                     echo $this->transactionPayload->buildRejection($request);
