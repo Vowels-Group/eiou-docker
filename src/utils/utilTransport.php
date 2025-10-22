@@ -155,7 +155,6 @@ function sendByTor (string $recipient, string $signedPayload): string {
  * Sign a payload
  *
  * @param array $payload The payload to sign
- *  // TO DO FIND OUT return type???
 */ 
 function sign(array $payload) {
   // Add signature to payload
