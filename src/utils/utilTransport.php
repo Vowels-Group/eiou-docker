@@ -84,7 +84,7 @@ function resolveUserAddressForTransport(string $address): string {
         return $currentUser->getHttpAddress();
     }
     // If no specific transport type is detected, return the original address
-    return $address; // TO DO check????? or false????
+    return $address;
 }
 
 /**
