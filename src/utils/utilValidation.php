@@ -1,7 +1,12 @@
 <?php
 # Copyright 2025
 
-function checkSingleInstance($lockfile = '/tmp/messages_lock.pid') {
+/**
+ * Make sure only one lockfile exists at a time, if none exists create a new lockfile
+ *
+ * @param string $lockfile The path of the lockfile
+*/
+function checkSingleInstance(string $lockfile = '/tmp/messages_lock.pid') {
     // Handle single instance of lockfile
     if (file_exists($lockfile)) {
         $pid = file_get_contents($lockfile);
@@ -15,12 +20,23 @@ function checkSingleInstance($lockfile = '/tmp/messages_lock.pid') {
     echo returnLockfileCreation($lockfile,getmypid());
 }
 
-function validateRequestLevel($request){
-    // Check if request level is valid
+/**
+ * Check if request level is valid
+ *
+ * @param array $request The request data
+ * @return bool True if requestlevel is valid, False otherwise
+*/
+function validateRequestLevel(array $request): bool {
     return $request['requestLevel'] <= $request['maxRequestLevel'];
 }
 
-function validateSendRequest($data) {
+/**
+ * Validate the CLI send parameters
+ *
+ * @param array $data The CLI send parameters
+ * @return bool True if all parts of the request are valid, False otherwise
+*/
+function validateSendRequest(array $data): bool {
     // Validate the send request
     if (count($data) < 4) {
         echo returnInvalidSendRequest();
@@ -46,8 +62,13 @@ function validateSendRequest($data) {
     return true;
 }
 
-function verifyRequest($request) {
-    // Check if request is valid based on signature
+/**
+ * Check if request is valid based on signature
+ *
+ * @param array $request The request data
+ * @return bool True if signature could be verified, False otherwise
+*/
+function verifyRequest(array $request): bool {
     $publicKeyResource = openssl_pkey_get_public($request['senderPublicKey']);
     $verified = openssl_verify($request['message'], base64_decode($request['signature']), $publicKeyResource);
     

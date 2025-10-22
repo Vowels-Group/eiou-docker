@@ -1,8 +1,13 @@
 <?php
 # Copyright 2025
 
-function countTorAndHttpAddresses($data){
-    // Count how many tor and http addresses
+/**
+ * Return a count of all the addresses in the contact data
+ *
+ * @param array $data The Contacts data
+ * @return array Counts of contacts addresses
+*/
+function countTorAndHttpAddresses(array $data): array {
     $result = [
         'tor' => count(array_filter($data, 'isTorAddress')),
         'http' => count(array_filter($data, 'isHttpAddress')),
@@ -11,7 +16,13 @@ function countTorAndHttpAddresses($data){
     return $result;
 }
 
-function determineTransportType($address) {
+/**
+ * Return the determined transport type from an address
+ *
+ * @param string $address The address of the sender
+ * @return string|null The type of transport used
+*/
+function determineTransportType(array $address): ?string {
     // Check if the address is a Tor (.onion) address
     if (isTorAddress($address)) {
         return 'tor';
@@ -26,23 +37,43 @@ function determineTransportType($address) {
     return null;
 }
 
-function isHttpAddress($address) {
-    // Check if is http address
+/**
+ * Determine if adress is HTTP/HTTPS
+ *
+ * @param string $address The address of the sender
+ * @return bool True if HTTP(S) address, False otherwise
+*/
+function isHttpAddress($address): bool {
     return preg_match('/^https?:\/\//', $address) === 1;
 }
 
-function isTorAddress($address) {
-    // Check if is tor address
+/**
+ * Determine if adress is TOR
+ *
+ * @param string $address The address of the sender
+ * @return bool True if Tor address, False otherwise
+*/
+function isTorAddress($address): bool {
     return preg_match('/\.onion$/', $address) === 1;
 }
 
-function jitter($value){
-    // Add random number to value (either 0 or 1)
+/**
+ *  Add random number to value (either 0 or 1)
+ *
+ * @param int A number
+ * @return int The original number incremented by 0 or 1
+*/
+function jitter(int $value): int{
     return $value + random_int(0,1);
 }
 
-function resolveUserAddressForTransport($address) {
-    // Figure out what type of address is needed to transport payload
+/**
+ * Figure out the determined transport type for the payload from an address
+ *
+ * @param string $address The address of the sender
+ * @return string The address of the user ofequivalent type
+*/
+function resolveUserAddressForTransport(string $address): string {
      $currentUser = UserContext::getInstance();
     // Check if the address is a Tor (.onion) address
     if (isTorAddress($address)) {
@@ -53,21 +84,34 @@ function resolveUserAddressForTransport($address) {
         return $currentUser->getHttpAddress();
     }
     // If no specific transport type is detected, return the original address
-    return false;
+    return $address; // TO DO check????? or false????
 }
 
-function send($recipient, $payload){
-    // Send payload to recipient 
+/**
+ * Send payload to recipient
+ *
+ * @param string $recipient The address of the recipient
+ * @param array $payload The payload to send
+ * @return string The response from the recipient
+*/
+function send(string $recipient, array $payload){
     $signedPayload = json_encode(sign($payload)); // Encode the payload as JSON
     // Determine if tor address, else send by http
-    if (preg_match('/\.onion$/', $recipient)) {
+    if (isTorAddress($recipient)) {
         return sendByTor($recipient, $signedPayload);
     } else {
         return sendByHttp($recipient, $signedPayload);
     }
 }
 
-function sendByHttp ($recipient, $signedPayload) {
+/**
+ * Send payload to recipient through HTTP(S)
+ *
+ * @param string $recipient The address of the recipient
+ * @param string $signedPayload The JSON encoded signed payload to send
+ * @return string The response from the recipient
+*/
+function sendByHttp (string $recipient, string $signedPayload): string {
     // Send payload through HTTP
     $ch = curl_init();
     
@@ -85,8 +129,14 @@ function sendByHttp ($recipient, $signedPayload) {
     return $response;
 }
 
-function sendByTor ($recipient, $signedPayload) {
-    // Send payload through TOR
+/**
+ * Send payload to recipient through TOR
+ *
+ * @param string $recipient The address of the recipient
+ * @param string $signedPayload The JSON encoded signed payload to send
+ * @return string The response from the recipient
+*/
+function sendByTor (string $recipient, string $signedPayload): string {
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou?payload=" . urlencode($signedPayload));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -101,7 +151,13 @@ function sendByTor ($recipient, $signedPayload) {
     return $response;
 }
 
-function sign($payload){
+/**
+ * Sign a payload
+ *
+ * @param array $payload The payload to sign
+ *  // TO DO FIND OUT return type???
+*/ 
+function sign(array $payload) {
   // Add signature to payload
   $currentUser = UserContext::getInstance();
   $privateKey = $currentUser->getPrivateKey();

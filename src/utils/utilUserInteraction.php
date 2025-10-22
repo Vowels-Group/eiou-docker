@@ -1,8 +1,12 @@
 <?php
 # Copyright 2025
 
-function changeSettings($argv) {
-    // Change the default settings to user-input
+/**
+ * Handler for (CLI) input changes to user settings
+ *
+ * @param string $argv The (CLI) input data
+*/
+function changeSettings(string $argv) {
     // Check if command line based or user input based
     if(isset($argv[2])){
         if(strtolower($argv[2]) === 'defaultfee'){
@@ -126,8 +130,11 @@ function changeSettings($argv) {
     
 }
 
+/**
+ * Display current settings of user in the CLI
+ *
+*/
 function displayCurrentSettings() {
-    // Display current settings of user
     $currentUser = UserContext::getInstance();
     echo "Current Settings:\n";
     echo "\tDefault fee: " . $currentUser->getDefaultFee() ."%\n";
@@ -139,8 +146,12 @@ function displayCurrentSettings() {
     echo "\tDefault Maximum lines of balance output: " .  $currentUser->getMaxOutput() . "\n";
 }
 
-function displayHelp($argv) {
-    // Display available commands to user in the CLI
+/**
+ * Display available commands to user in the CLI
+ *
+ * @param string $argv The CLI input data
+*/
+function displayHelp(string $argv) {
     if(isset($argv[2])){
         echo "Command:\n";
         if(strtolower($argv[2]) === 'defaultfee'){
@@ -189,11 +200,14 @@ function displayHelp($argv) {
         echo "\tchangesettings - Change settings.\n";
         echo "\tgenerate - Generate a new wallet.\n";
     }
-    
 }
 
-function displayUserInfo($argv) {
-    // Display user information
+/**
+ * Display user information to user in the CLI
+ *
+ * @param string $argv The CLI input data
+*/
+function displayUserInfo(string $argv) {
     $currentUser = UserContext::getInstance();
     $transactionService = ServiceContainer::getInstance()->getTransactionService();
     
@@ -236,8 +250,16 @@ function displayUserInfo($argv) {
     }
 }
 
-function viewBalanceQuery($direction, $where, $results, $displayLimit){
-     // View balance information based on transactions, either received or send by user
+/**
+ * View balance information in the CLI based on transactions, either received or send by user
+ *
+ * @param string $direction received/send
+ * @param string $where from/to 
+ * @param array $results Formated transaction data
+ * @param int $displayLimit The limit of output displayed
+*/
+function viewBalanceQuery(string $direction, string $where, array $results, int $displayLimit){
+     // 
     $contactService = ServiceContainer::getInstance()->getContactService();
    
     $countResults = count($results);
@@ -263,8 +285,12 @@ function viewBalanceQuery($direction, $where, $results, $displayLimit){
     echo "\t\t\t----- Displaying $displayLimit out of $countResults $direction balance(s) -----\n";
 }
 
-function viewBalances($data) {
-    // View balance information based on transactions
+/**
+ * Display balance information, based on transactions, to user in the CLI
+ *
+ * @param string $argv The CLI input data
+*/
+function viewBalances($argv) {
     $currentUser = UserContext::getInstance();
     $contactService = ServiceContainer::getInstance()->getContactService();
     $transactionService = ServiceContainer::getInstance()->getTransactionService();
@@ -275,16 +301,16 @@ function viewBalances($data) {
     printf("%s %s, Balance: %.2f\n", 'me', $additionalInfo, $userBalance);
 
     // Check if an address or name is provided
-    if (isset($data[2])) {
+    if (isset($argv[2])) {
         // Check if it's a HTTP or Tor address
-        if (isHttpAddress($data[2]) || isTorAddress($data[2])) {
-            $address = $data[2];
+        if (isHttpAddress($argv[2]) || isTorAddress($argv[2])) {
+            $address = $argv[2];
             if($contactService->contactExists($address)){
                 $contactResult = $contactService->lookupContactByAddress($address);
             }
         } else{
              // Check if the name yields an address
-            $contactResult = $contactService->lookupContactByName($data[2]);
+            $contactResult = $contactService->lookupContactByName($argv[2]);
         }
         if ($contactResult) {
             $contactBalance = convertQuantityCurrency($transactionService->getContactBalance($currentUser->getPublicKey(),$contactResult['pubkey']));
@@ -307,8 +333,12 @@ function viewBalances($data) {
     
 }
 
+/**
+ * Display all transaction history in pretty print 'table' to user in the CLI
+ *
+ * @param string $argv The CLI input data
+*/
 function viewTransactionHistory($argv) {
-    // View all transaction history in pretty print 'table'
     $currentUser = UserContext::getInstance();
     $contactService = ServiceContainer::getInstance()->getContactService();
     $transactionService = ServiceContainer::getInstance()->getTransactionService();
@@ -346,8 +376,14 @@ function viewTransactionHistory($argv) {
     displayHistory($receivedTransactions, 'received', $displayLimit); 
 }
 
-
-function displayHistory(array $transactions, string $direction, $displayLimit){
+/**
+ * Helper to display transaction history (sent or received) in pretty print 'table' to user in the CLI
+ *
+ * @param array $transactions The formatted transaction data
+ * @param string $direction received/send
+ * @param int $displayLimit The limit of output displayed
+*/
+function displayHistory(array $transactions, string $direction, int $displayLimit){
     if(!$transactions){
         echo "No transaction history found for $direction transactions.\n";
         return;
@@ -385,5 +421,4 @@ function displayHistory(array $transactions, string $direction, $displayLimit){
         $displayLimit = $countResults;
     }
     echo "Displaying " . $displayLimit .  " out of " . $countResults . " total transactions.\n";
-
 }

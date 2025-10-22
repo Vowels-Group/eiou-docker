@@ -1,8 +1,13 @@
 <?php
 # Copyright 2025
 
-function calculateAvailableFunds($request){
-    // Calculate funds request's sender has available with user
+/**
+ * Calculate the funds the request sender has available with user
+ *
+ * @param array $request The p2p request data
+ * @return int The funds available to handle request
+*/
+function calculateAvailableFunds(array $request): int {
     $pubkey = $request['senderPublicKey'] ?? $request['sender_public_key'];
     $totalSent = calculateTotalSent($pubkey);   // Calculate IOUs sent to sender
     $totalReceived = calculateTotalReceived($pubkey); // Calulcate IOUs received from sender
@@ -11,9 +16,14 @@ function calculateAvailableFunds($request){
     return $theirCurrentBalance + $creditLimit;
 }
 
-
-function feeInformation($p2p,$request){
-    // Return fee percent and output fee information into the log
+/**
+ * Return fee percent of request and output fee information into the log
+ *
+ * @param array $p2p The p2p request data from the database
+ * @param array $request The transaction request data
+ * @return float Fee percent of request
+*/
+function feeInformation(array $p2p, array $request): float {
     $currentUser = UserContext::getInstance();
     $feeAmount = $request['amount'] - $p2p['amount'];
     $feePercent = round(($feeAmount / $p2p['amount']) * 100,2);
@@ -21,18 +31,33 @@ function feeInformation($p2p,$request){
     return $feePercent;
 }
 
-function removeTransactionFee($request){
-    // Remove users transaction fee from request
+/**
+ * Remove users transaction fee from request
+ *
+ * @param array $request The request data
+ * @return float Amount left over after fee removal 
+*/
+function removeTransactionFee(array $request): float{
     $p2p = getP2pByHash($request['memo']);
     return $request['amount'] - $p2p['my_fee_amount'];
 }
 
-function returnconvertedMicroTime($time){
-    // Convert float of time to int by moving values behind comma to in front of comma
+/**
+ * Convert float of micrtotime to int by moving values behind comma to in front of comma
+ *
+ * @param float $time Float of microtime
+ * @return int converted microtime 
+*/
+function returnconvertedMicroTime(float $time): int {
     return $time*10000;
 }
 
-function returnMicroTime(){
+/**
+ * Get current micro-time stamp in int-form
+ *
+ * @return int (micro)-time stamp
+*/
+function returnMicroTime(): int {
     // Create current micro-time stamp
     return returnconvertedMicroTime(microtime(true));
 }
