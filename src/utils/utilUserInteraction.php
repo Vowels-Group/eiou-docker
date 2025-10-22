@@ -291,15 +291,20 @@ function viewBalances($data) {
             printf("\t%s (%s), Balance: %.2f\n", $contactResult['name'], $contactResult['address'], $contactBalance);
             return;
         } else{
-            echo "Address/Name unknown, displaying all balances\n";
+            echo "Address/Name unknown, displaying all balances.\n";
         }    
     }
     $contacts = $contactService->getAllContacts();
     $pubkeys = $contactService->getAllContactsPubkeys();
-    $balances = $transactionService->getAllContactBalances($currentUser->getPublicKey(),$pubkeys);
-    foreach($contacts as $contact){
-        printf("\t%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], convertQuantityCurrency($balances[$contact['pubkey']]));
-    } 
+    if($pubkeys){
+        $balances = $transactionService->getAllContactBalances($currentUser->getPublicKey(),$pubkeys);
+        foreach($contacts as $contact){
+            printf("\t%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], convertQuantityCurrency($balances[$contact['pubkey']]));
+        } 
+    } else{
+        echo "No Contacts exist, so no contact balances can be displayed.\n";
+    }
+    
 }
 
 function viewTransactionHistory($argv) {
