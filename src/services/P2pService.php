@@ -381,14 +381,13 @@ class P2pService {
                     output(outputResponseTransactionTimes($httpExpectedResponseTime,$torExpectedResponseTime), 'SILENT');
                 }
             }
-            // Cancel the message due to no viable contacts to send to
+            // Cancel the message due to no viable contacts to send to (user is dead-end)
             if($contactsCount['tor'] === 0 && $contactsCount['http'] === 0){  
                 $this->p2pRepository->updateStatus($message['hash'], 'cancelled');
                 continue;
             }
             $this->p2pRepository->updateStatus($message['hash'], 'sent');
         }
-
         return isset($queuedMessages) ? count($queuedMessages) : 0;
     }
 
