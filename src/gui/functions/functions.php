@@ -36,7 +36,6 @@ $totalBalance = $transactionService->getUserTotalBalance();
 $transactions = $transactionService->getTransactionHistory(10);
 
 // Contact data
-
 $allContacts = $contactService->getAllContacts();
 $pendingContacts = $contactService->getPendingContactRequests();
 $pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests());

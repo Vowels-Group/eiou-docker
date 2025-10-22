@@ -6,7 +6,6 @@
  * Provides utility functions for view rendering and display formatting.
  */
 
-
 class ViewHelper
 {
     /**
