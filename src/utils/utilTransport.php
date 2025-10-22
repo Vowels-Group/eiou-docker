@@ -31,13 +31,6 @@ function isHttpAddress($address) {
     return preg_match('/^https?:\/\//', $address) === 1;
 }
 
-function isMe($address){
-    // Check if address is mine
-    global $user;
-    return (isset($user['torAddress']) && $user['torAddress'] === $address) || 
-           (isset($user['hostname']) && $user['hostname'] === $address);
-}
-
 function isTorAddress($address) {
     // Check if is tor address
     return preg_match('/\.onion$/', $address) === 1;
