@@ -302,7 +302,7 @@ function viewBalances($data) {
             printf("\t%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], convertQuantityCurrency($balances[$contact['pubkey']]));
         } 
     } else{
-        echo "No Contacts exist, so no contact balances can be displayed.\n";
+        echo "\tNo Contacts exist, so no contact balances can be displayed.\n";
     }
     
 }
