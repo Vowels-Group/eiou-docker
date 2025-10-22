@@ -14,10 +14,10 @@ function calculateAvailableFunds($request){
 
 function feeInformation($p2p,$request){
     // Return fee percent and output fee information into the log
-    global $user;
+    $currentUser = UserContext::getInstance();
     $feeAmount = $request['amount'] - $p2p['amount'];
     $feePercent = round(($feeAmount / $p2p['amount']) * 100,2);
-    output(outputFeeInformation($feePercent,$request,$user['maxFee']), 'SILENT'); // output fee information into the log
+    output(outputFeeInformation($feePercent,$request,$currentUser->getMaxFee()), 'SILENT'); // output fee information into the log
     return $feePercent;
 }
 
