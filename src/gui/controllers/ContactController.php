@@ -6,8 +6,6 @@
  * Handles HTTP POST requests for contact-related actions.
  */
 
-
-
 class ContactController
 {
     /**
