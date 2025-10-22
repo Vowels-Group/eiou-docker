@@ -12,6 +12,9 @@ services:
     volumes:
       - cluster-a-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8101:80"
     restart: unless-stopped
 
   # Level 1 nodes
@@ -27,6 +30,9 @@ services:
     volumes:
       - cluster-a1-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8102:80"
     restart: unless-stopped
 
   cluster-a2:
@@ -41,6 +47,9 @@ services:
     volumes:
       - cluster-a2-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8103:80"
     restart: unless-stopped
 
   cluster-a3:
@@ -55,6 +64,9 @@ services:
     volumes:
       - cluster-a3-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8104:80"
     restart: unless-stopped
 
   cluster-a4:
@@ -69,6 +81,9 @@ services:
     volumes:
       - cluster-a4-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8105:80"
     restart: unless-stopped
 
   # Level 2 nodes
@@ -84,6 +99,9 @@ services:
     volumes:
       - cluster-a11-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8106:80"
     restart: unless-stopped
 
   cluster-a12:
@@ -98,6 +116,9 @@ services:
     volumes:
       - cluster-a12-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8107:80"
     restart: unless-stopped
 
   cluster-a21:
@@ -112,6 +133,9 @@ services:
     volumes:
       - cluster-a21-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8108:80"
     restart: unless-stopped
 
   cluster-a22:
@@ -126,6 +150,9 @@ services:
     volumes:
       - cluster-a22-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8109:80"
     restart: unless-stopped
 
   cluster-a31:
@@ -140,6 +167,9 @@ services:
     volumes:
       - cluster-a31-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8110:80"
     restart: unless-stopped
 
   cluster-a32:
@@ -154,6 +184,9 @@ services:
     volumes:
       - cluster-a32-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8111:80"
     restart: unless-stopped
 
   cluster-a41:
@@ -168,6 +201,9 @@ services:
     volumes:
       - cluster-a41-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8112:80"
     restart: unless-stopped
 
   cluster-a42:
@@ -182,6 +218,9 @@ services:
     volumes:
       - cluster-a42-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
+    ports:
+      - "8113:80"
     restart: unless-stopped
 
 networks:

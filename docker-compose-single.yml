@@ -8,9 +8,12 @@ services:
       - eiou-network-compose
     environment:
       - QUICKSTART=eioud
+    ports:
+      - "8080:80"
     volumes:
       - eioud-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
     restart: unless-stopped
 
 networks:

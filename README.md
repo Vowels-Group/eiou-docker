@@ -214,3 +214,292 @@ docker-compose -f docker-compose-cluster.yml exec cluster-a41 eiou add <address>
 docker-compose -f docker-compose-cluster.yml exec cluster-a4 eiou add <address> cluster-a42 <fee> <credit> <currency>
 docker-compose -f docker-compose-cluster.yml exec cluster-a42 eiou add <address> cluster-a4 <fee> <credit> <currency>
 ```
+
+## HTTP REST API
+
+The eIOU Docker nodes now include a complete HTTP REST API for programmatic access. This enables the Flutter wallet and other applications to communicate with Docker nodes.
+
+### API Port Mappings
+
+Each Docker configuration exposes HTTP API endpoints on different ports:
+
+| Configuration | Container | Host Port | API URL |
+|---------------|-----------|-----------|---------|
+| Single Node | eioud-single | 8080 | http://localhost:8080/api |
+| 4-Line | alice | 8081 | http://localhost:8081/api |
+| 4-Line | bob | 8082 | http://localhost:8082/api |
+| 4-Line | carol | 8083 | http://localhost:8083/api |
+| 4-Line | daniel | 8084 | http://localhost:8084/api |
+| 10-Line | node-a to node-j | 8091-8100 | http://localhost:809X/api |
+| Cluster | alpha to nu | 8101-8113 | http://localhost:810X/api |
+
+### Authentication
+
+All API endpoints (except `/api/health` and `/api/auth`) require authentication using a session token.
+
+#### Step 1: Get Authentication Token
+
+```bash
+curl -X POST http://localhost:8080/api/auth \
+  -H "Content-Type: application/json" \
+  -d '{"authcode": "YOUR_AUTHCODE_FROM_CONFIG"}'
+```
+
+Response:
+```json
+{
+  "status": "success",
+  "message": "Authentication successful",
+  "data": {
+    "token": "a1b2c3d4e5f6...",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+```
+
+#### Step 2: Use Token in Requests
+
+Include the token in subsequent requests using the `Authorization` header:
+
+```bash
+curl -X GET http://localhost:8080/api/wallet/info \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
+
+### API Endpoints
+
+#### Health Check
+**GET** `/api/health` - Check API status (no auth required)
+
+```bash
+curl http://localhost:8080/api/health
+```
+
+#### Wallet Endpoints
+
+**GET** `/api/wallet/info` - Get wallet information
+```bash
+curl -H "Authorization: Bearer TOKEN" http://localhost:8080/api/wallet/info
+```
+
+**GET** `/api/wallet/balance` - Get wallet balance and contact balances
+```bash
+curl -H "Authorization: Bearer TOKEN" http://localhost:8080/api/wallet/balance
+```
+
+**POST** `/api/wallet/send` - Send transaction
+```bash
+curl -X POST http://localhost:8080/api/wallet/send \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient": "contact_name_or_address",
+    "amount": 10.50,
+    "currency": "USD"
+  }'
+```
+
+#### Contact Endpoints
+
+**GET** `/api/contacts` - List all contacts
+```bash
+curl -H "Authorization: Bearer TOKEN" http://localhost:8080/api/contacts
+```
+
+**POST** `/api/contacts` - Add new contact
+```bash
+curl -X POST http://localhost:8080/api/contacts \
+  -H "Authorization: Bearer TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "http://bob/",
+    "name": "Bob",
+    "fee": 0.1,
+    "credit": 100,
+    "currency": "USD"
+  }'
+```
+
+**GET** `/api/contacts/:address` - Get contact by address
+```bash
+curl -H "Authorization: Bearer TOKEN" \
+  http://localhost:8080/api/contacts/http%3A%2F%2Fbob%2F
+```
+
+**DELETE** `/api/contacts/:address` - Delete contact
+```bash
+curl -X DELETE -H "Authorization: Bearer TOKEN" \
+  http://localhost:8080/api/contacts/http%3A%2F%2Fbob%2F
+```
+
+#### Transaction Endpoints
+
+**GET** `/api/transactions` - List all transactions (sent and received)
+```bash
+curl -H "Authorization: Bearer TOKEN" \
+  "http://localhost:8080/api/transactions?limit=50"
+```
+
+**GET** `/api/transactions/sent` - List sent transactions
+```bash
+curl -H "Authorization: Bearer TOKEN" \
+  "http://localhost:8080/api/transactions/sent?limit=50"
+```
+
+**GET** `/api/transactions/received` - List received transactions
+```bash
+curl -H "Authorization: Bearer TOKEN" \
+  "http://localhost:8080/api/transactions/received?limit=50"
+```
+
+**GET** `/api/transactions/history` - Get transaction statistics
+```bash
+curl -H "Authorization: Bearer TOKEN" \
+  http://localhost:8080/api/transactions/history
+```
+
+**GET** `/api/transactions/:txid` - Get transaction by ID
+```bash
+curl -H "Authorization: Bearer TOKEN" \
+  http://localhost:8080/api/transactions/abc123def456...
+```
+
+### API Response Format
+
+All API responses follow this standard format:
+
+**Success Response:**
+```json
+{
+  "status": "success",
+  "message": "Operation completed successfully",
+  "data": {
+    // Response data here
+  }
+}
+```
+
+**Error Response:**
+```json
+{
+  "status": "error",
+  "message": "Error description",
+  "errors": {
+    // Optional additional error details
+  }
+}
+```
+
+### HTTP Status Codes
+
+- `200 OK` - Request succeeded
+- `201 Created` - Resource created successfully
+- `204 No Content` - Request succeeded with no response body
+- `400 Bad Request` - Invalid request parameters
+- `401 Unauthorized` - Missing or invalid authentication token
+- `403 Forbidden` - Insufficient permissions
+- `404 Not Found` - Resource not found
+- `500 Internal Server Error` - Server error
+
+### CORS Support
+
+The API includes full CORS support with the following headers:
+- `Access-Control-Allow-Origin: *`
+- `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS`
+- `Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With`
+
+This allows the API to be accessed from web browsers and Flutter applications.
+
+### Getting Your Authentication Code
+
+The authentication code is generated when you first create a wallet. To view it:
+
+```bash
+# For single node
+docker-compose -f docker-compose-single.yml exec eioud-single cat /etc/eiou/config.php | grep authcode
+
+# For 4-line nodes
+docker-compose -f docker-compose-4line.yml exec alice cat /etc/eiou/config.php | grep authcode
+```
+
+### Example: Complete API Workflow
+
+```bash
+# 1. Start a single node
+docker-compose -f docker-compose-single.yml up -d --build
+
+# 2. Wait for initialization (about 10 seconds)
+sleep 10
+
+# 3. Get the authcode
+AUTHCODE=$(docker-compose -f docker-compose-single.yml exec eioud-single \
+  cat /etc/eiou/config.php | grep 'authcode' | cut -d'"' -f2)
+
+# 4. Authenticate and get token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/auth \
+  -H "Content-Type: application/json" \
+  -d "{\"authcode\": \"$AUTHCODE\"}" | jq -r '.data.token')
+
+# 5. Get wallet info
+curl -s http://localhost:8080/api/wallet/info \
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# 6. Check balance
+curl -s http://localhost:8080/api/wallet/balance \
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# 7. List contacts
+curl -s http://localhost:8080/api/contacts \
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# 8. View transactions
+curl -s http://localhost:8080/api/transactions \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+### Connecting Flutter Wallet
+
+To connect the Flutter wallet to a local Docker node:
+
+1. Start the Docker node with API port exposed (already configured in docker-compose files)
+2. Get the authentication code from the container
+3. In the Flutter app, configure the API endpoint:
+   - Development: `http://localhost:8080/api` (or appropriate port)
+   - Production: Use the container's HTTP address
+4. Use the authentication code to obtain a session token
+5. The Flutter app can now make authenticated API calls
+
+### Troubleshooting
+
+**Connection refused:**
+```bash
+# Verify container is running
+docker-compose -f docker-compose-single.yml ps
+
+# Check logs for errors
+docker-compose -f docker-compose-single.yml logs eioud-single
+```
+
+**Authentication errors:**
+```bash
+# Verify authcode is correct
+docker-compose -f docker-compose-single.yml exec eioud-single \
+  cat /etc/eiou/config.php | grep authcode
+```
+
+**API not responding:**
+```bash
+# Check if web server is running inside container
+docker-compose -f docker-compose-single.yml exec eioud-single \
+  curl http://localhost/api/health
+```
+
+### Security Notes
+
+- The authentication code is sensitive - keep it secure
+- Session tokens expire after 1 hour of inactivity
+- In production, use HTTPS and restrict CORS origins
+- Consider implementing rate limiting for production deployments
+- The current implementation uses in-memory session storage - sessions are lost on container restart
+

@@ -8,9 +8,12 @@ services:
       - eiou-network-compose
     environment:
       - QUICKSTART=alice
+    ports:
+      - "8081:80"
     volumes:
       - alice-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
     restart: unless-stopped
 
   bob:
@@ -22,9 +25,12 @@ services:
       - eiou-network-compose
     environment:
       - QUICKSTART=bob
+    ports:
+      - "8082:80"
     volumes:
       - bob-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
     restart: unless-stopped
 
   carol:
@@ -36,9 +42,12 @@ services:
       - eiou-network-compose
     environment:
       - QUICKSTART=carol
+    ports:
+      - "8083:80"
     volumes:
       - carol-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
     restart: unless-stopped
 
   daniel:
@@ -50,9 +59,12 @@ services:
       - eiou-network-compose
     environment:
       - QUICKSTART=daniel
+    ports:
+      - "8084:80"
     volumes:
       - daniel-mysql-data:/var/lib/mysql
       - ./src:/etc/eiou/src
+      - ./public:/app/public
     restart: unless-stopped
 
 networks:
