@@ -347,6 +347,15 @@ class P2pService {
                 $contactsCount = countTorAndHttpAddresses($contacts);
                 // Send p2p request to all contacts
                 foreach ($contacts as $contact) {
+                    // Do not send message to original sender
+                    if($message['sender_address'] === $contact){
+                        if(isTorAddress($message['sender_address'])){
+                            $contactsCount['tor'] -= 1;
+                        } else{
+                            $contactsCount['http'] -= 1;
+                        }
+                        continue;
+                    }
                     if(!synchContact($contact)){
                         // If contact cannot be synched in case of pending contact status, skip sending p2p to this contact
                         continue;
@@ -372,7 +381,11 @@ class P2pService {
                     output(outputResponseTransactionTimes($httpExpectedResponseTime,$torExpectedResponseTime), 'SILENT');
                 }
             }
-
+            // Cancel the message due to no viable contacts to send to
+            if($contactsCount['tor'] === 0 && $contactsCount['http'] === 0){  
+                $this->p2pRepository->updateStatus($message['hash'], 'cancelled');
+                continue;
+            }
             $this->p2pRepository->updateStatus($message['hash'], 'sent');
         }
 
