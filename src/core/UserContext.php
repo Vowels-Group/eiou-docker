@@ -3,7 +3,6 @@
  * UserContext - Singleton wrapper for user configuration
  *
  * This class provides a centralized, type-safe way to access user configuration
- * and gradually transition away from the global $user variable.
  *
  */
 
