@@ -7,7 +7,6 @@
  * Thin wrapper that bootstraps and runs the TransactionMessageProcessor.
  * Maintains backwards compatibility with existing deployment scripts.
  *
- * Issue #106: Refactored to use TransactionMessageProcessor class
  */
 
 require_once(__DIR__ . "/config.php");

@@ -7,7 +7,6 @@
  * Thin wrapper that bootstraps and runs the P2pMessageProcessor.
  * Maintains backwards compatibility with existing deployment scripts.
  *
- * Issue #106: Refactored to use P2pMessageProcessor class
  */
 
 require_once(__DIR__ . "/config.php");
