@@ -30,6 +30,16 @@ class SynchService {
     private TransactionRepository $transactionRepository;
 
     /**
+     * @var UtilityServiceContainer Utility service container
+     */
+    private UtilityServiceContainer $utilityContainer;
+
+    /**
+     * @var TransportUtilityService Transport utility service 
+     */
+    private TransportUtilityService $transportUtility;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -56,6 +66,7 @@ class SynchService {
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
@@ -63,12 +74,15 @@ class SynchService {
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
+        UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->contactRepository = $contactRepository;
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
+        $this->utilityContainer = $utilityContainer;
+        $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
         $this->contactPayload = new ContactPayload($this->currentUser);
         $this->transactionPayload = new TransactionPayload($this->currentUser);
@@ -129,7 +143,7 @@ class SynchService {
             output(outputSynchContactDueToPendingStatus($contactAddress),$echo);
             // If the contact is still pending then inquire with contact
             $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
-            $synchResponse = json_decode(send($contactAddress, $messagePayload),true);
+            $synchResponse = json_decode($this->transportUtility->send($contactAddress, $messagePayload),true);
             $status = $synchResponse['status'];
             $reason = $synchResponse['reason'] ?? NULL;
             if($status === 'accepted'){
@@ -140,13 +154,13 @@ class SynchService {
             } elseif($status === 'rejected' && $reason === 'unknown'){
                 // If no database existence of contact request on their end, resend contact request
                 $contactPayload = $this->contactPayload->buildCreateRequest();
-                $responseData = json_decode(send($contactAddress, $contactPayload), true);
+                $responseData = json_decode($this->transportUtility->send($contactAddress, $contactPayload), true);
                 if(isset($responseData['status']) && ($responseData['status'] === 'accepted')){
                     // Contact received our contact request, needs to be accepted by other user first
                     //   If acceptance is automatic then able to check through following inquiry
                     //   Otherwise would need to inquire again down the line (through synch or otherwise)
                     $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
-                    $synchResponse = send($contactAddress, $messagePayload);
+                    $synchResponse = $this->transportUtility->send($contactAddress, $messagePayload);
                     if($status === 'accepted'){
                         $this->contactRepository->updateStatus($contactAddress, $status);
                         output(outputContactSuccesfullySynched($contactAddress),$echo);

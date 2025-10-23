@@ -26,6 +26,16 @@ class MessageService {
     private TransactionRepository $transactionRepository;
 
     /**
+     * @var UtilityServiceContainer Utility service container
+     */
+    private UtilityServiceContainer $utilityContainer;
+
+    /**
+     * @var TransportUtilityService Transport utility service 
+     */
+    private TransportUtilityService $transportUtility;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -57,17 +67,21 @@ class MessageService {
      * @param ContactRepository $contactRepository Contact repository
      * @param P2pRepository $p2pRepository P2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         ContactRepository $contactRepository,
         P2pRepository $p2pRepository,
         TransactionRepository $transactionRepository,
+        UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->contactRepository = $contactRepository;
         $this->p2pRepository = $p2pRepository;
         $this->transactionRepository = $transactionRepository;
+        $this->utilityContainer = $utilityContainer;
+        $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
         $this->contactPayload = new ContactPayload($this->currentUser);
         $this->transactionPayload = new TransactionPayload($this->currentUser);
@@ -92,7 +106,7 @@ class MessageService {
 
             if($p2p){
                 // Check if source is original sender for any messages related to transactions
-                if($hash === hash('sha256', resolveUserAddressForTransport($decodedMessage['senderAddress']) . $p2p['salt'] . $p2p['time'])){
+                if($hash === hash('sha256', $this->transportUtility->resolveUserAddressForTransport($decodedMessage['senderAddress']) . $p2p['salt'] . $p2p['time'])){
                     return true;
                 }
                 return false;
@@ -210,7 +224,7 @@ class MessageService {
                     if(isset($p2p['destination_address'])){
                         // Send direct message inquiry to end recipient double checking if completion of transaction correct
                         $completedTransactionInquiry =  $this->messagePayload->buildTransactionCompletedInquiry($decodedMessage);
-                        $response = json_decode(send($p2p['destination_address'],$completedTransactionInquiry),true);
+                        $response = json_decode($this->transportUtility->send($p2p['destination_address'],$completedTransactionInquiry),true);
                         output(outputTransactionInquiryResponse($response),'SILENT');
 
                         if($response['status'] === 'completed'){
@@ -225,7 +239,7 @@ class MessageService {
                         // Send transaction completion message onwards
                         $payloadTransactionCompleted =  $this->transactionPayload->buildCompleted($decodedMessage);
                         output(outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$p2p['sender_address']),'SILENT');
-                        $response = send($p2p['sender_address'],$payloadTransactionCompleted);
+                        $response = $this->transportUtility->send($p2p['sender_address'],$payloadTransactionCompleted);
                     }
                 }
             } elseif($decodedMessage['hashType'] === 'txid'){

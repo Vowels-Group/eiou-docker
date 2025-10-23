@@ -62,7 +62,9 @@ class UtilityServiceContainer
     public function getTimeUtility(): TimeUtilityService
     {
         if (!isset($this->utilities['TimeUtilityService'])) {
-            $this->utilities['TimeUtilityService'] = new TimeUtilityService();
+            $this->utilities['TimeUtilityService'] = new TimeUtilityService(
+                Constants::getInstance()
+            );
         }
         return $this->utilities['TimeUtilityService'];
     }
@@ -91,10 +93,27 @@ class UtilityServiceContainer
     {
         if (!isset($this->utilities['ValidationUtilityService'])) {
             $this->utilities['ValidationUtilityService'] = new ValidationUtilityService(
+                Constants::getInstance(),
                 $this->mainContainer
             );
         }
         return $this->utilities['ValidationUtilityService'];
+    }
+
+    /**
+     * Get TransportUtilityService
+     *
+     * @return TransportUtilityService
+     */
+    public function getTransportUtility(): TransportUtilityService
+    {
+        if (!isset($this->utilities['TransportUtilityService'])) {
+            $this->utilities['TransportUtilityService'] = new TransportUtilityService(
+                Constants::getInstance(),
+                $this->mainContainer
+            );
+        }
+        return $this->utilities['TransportUtilityService'];
     }
 
     /**

@@ -12,6 +12,21 @@
 class TimeUtilityService
 {
     /**
+     * @var Constants Environment constants
+     */
+    private Constants $constants;
+
+    /**
+     * Constructor
+     *
+     * @param Constants $constants Environment constants
+     */
+    public function __construct(Constants $constants)
+    {
+        $this->constants = $constants;
+    }
+
+    /**
      * Get current micro-time stamp in integer form
      *
      * @return int Microtime stamp

@@ -14,6 +14,11 @@ require_once __DIR__ . '/../ServiceContainer.php';
 class ValidationUtilityService
 {
     /**
+     * @var Constants Environment constants
+     */
+    private Constants $constants;
+
+    /**
      * @var ServiceContainer Service container for accessing repositories
      */
     private ServiceContainer $container;
@@ -21,10 +26,15 @@ class ValidationUtilityService
     /**
      * Constructor
      *
+     * @param Constants $constants Environment constants
      * @param ServiceContainer $container Service container
      */
-    public function __construct(ServiceContainer $container)
+    public function __construct(
+        Constants $constants,
+        ServiceContainer $container
+        )
     {
+        $this->constants = $constants;
         $this->container = $container;
     }
 

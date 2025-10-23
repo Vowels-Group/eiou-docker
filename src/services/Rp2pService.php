@@ -20,6 +20,21 @@ class RP2pService {
     private RP2pRepository $rp2pRepository;
 
     /**
+     * @var UtilityServiceContainer Utility service container
+     */
+    private UtilityServiceContainer $utilityContainer;
+
+    /**
+     * @var ValidationUtilityService Validation utility service 
+     */
+    private ValidationUtilityService $validationUtility;
+
+    /**
+     * @var TransportUtilityService Transport utility service 
+     */
+    private TransportUtilityService $transportUtility;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -34,15 +49,20 @@ class RP2pService {
      *
      * @param P2pRepository $p2pRepository P2P repository
      * @param RP2pRepository $rp2pRepository RP2P repository
+     * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         P2pRepository $p2pRepository,
         RP2pRepository $rp2pRepository,
+        UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
+        $this->utilityContainer = $utilityContainer;
+        $this->validationUtility = $this->utilityContainer->getValidationUtility();
+        $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
         $this->rp2pPayload = new Rp2pPayload($this->currentUser);
     }
@@ -67,7 +87,7 @@ class RP2pService {
 
             //Check if intermediary sender of p2p can afford to send eIOU with fees
             if(!isset($p2p['destination_address'])) {
-                $availableFunds = calculateAvailableFunds($p2p);
+                $availableFunds =  $this->validationUtility->calculateAvailableFunds($p2p);
                 if($availableFunds < $request['amount']){
                     output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
                 }
@@ -80,7 +100,7 @@ class RP2pService {
             }
             // Check if original p2p was sent by user
             if(isset($p2p['destination_address'])) {
-                $feePercent = feeInformation($p2p,$request); // Get fee percent and output fee information in  log
+                $feePercent = $this->feeInformation($p2p,$request); // Get fee percent and output fee information in  log
                 
                 // Check if the fee percent is below the set maximum fee percent the user would pay
                 if ($feePercent <= $this->currentUser->getMaxFee()) {
@@ -92,7 +112,7 @@ class RP2pService {
                 // Send rp2p messages onwards to sender of p2p
                 $rP2pPayload = $this->rp2pPayload->build($request); // Build rp2p payload
                 $this->p2pRepository->updateStatus($request['hash'], 'found');  // Update the p2p request status to found
-                $response = json_decode(send($p2p['sender_address'], $rP2pPayload),true);
+                $response = json_decode($this->transportUtility->send($p2p['sender_address'], $rP2pPayload),true);
                 output(outputRp2pResponse($response),'SILENT');
             }
         }
@@ -129,5 +149,19 @@ class RP2pService {
             }
             return false;
         }
+    }
+
+    /**
+     * Return fee percent of request and output fee information into the log
+     *
+     * @param array $p2p The p2p request data from the database
+     * @param array $request The transaction request data
+     * @return float Fee percent of request
+    */
+    public function feeInformation(array $p2p, array $request): float {
+        $feeAmount = $request['amount'] - $p2p['amount'];
+        $feePercent = round(($feeAmount / $p2p['amount']) * 100,2);
+        output(outputFeeInformation($feePercent,$request,$this->currentUser->getMaxFee()), 'SILENT'); // output fee information into the log
+        return $feePercent;
     }
 }
