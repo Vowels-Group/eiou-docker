@@ -21,7 +21,7 @@ class Rp2pPayload extends BasePayload
     public function build(array $data): array
     {
         //output(outputBuildingRp2pPayload($data), 'SILENT');
-        $userAddress = resolveUserAddressForTransport($data['senderAddress']);
+        $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['senderAddress']);
         return [
             'type' => 'rp2p', // Return Peer to peer request type
             'hash' => $data['hash'],
@@ -43,7 +43,7 @@ class Rp2pPayload extends BasePayload
     public function buildFromDatabase(array $data): array
     {
         //output(outputBuildingRp2pPayload($data), 'SILENT');
-        $userAddress = resolveUserAddressForTransport($data['sender_address']);
+        $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['sender_address']);
         return [
             'type' => 'rp2p', // Return Peer to peer request type
             'hash' => $data['hash'],
@@ -64,7 +64,7 @@ class Rp2pPayload extends BasePayload
      */
     public function buildAcceptance(array $request): string
     {
-        $receiver = resolveUserAddressForTransport($request['senderAddress']);
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
         return json_encode([
             'status' => 'received',
             'message' => 'hash ' . print_r($request['hash'], true) . ' for RP2P received by ' . print_r($receiver, true)
@@ -79,7 +79,7 @@ class Rp2pPayload extends BasePayload
      */
     public function buildRejection(array $request): string
     {
-        $receiver = resolveUserAddressForTransport($request['senderAddress']);
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
         return json_encode([
             'status' => 'rejected',
             'message' => 'hash ' . print_r($request['hash'], true) . ' for RP2P already exists in database of ' . print_r($receiver, true)

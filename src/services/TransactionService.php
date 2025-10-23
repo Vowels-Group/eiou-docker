@@ -34,7 +34,7 @@ class TransactionService {
      */
     private UtilityServiceContainer $utilityContainer;
 
-     /**
+    /**
      * @var CurrencyUtilityService Currecy utility service 
      */
     private CurrencyUtilityService $currencyUtility;
@@ -91,8 +91,8 @@ class TransactionService {
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
-        $this->transactionPayload = new TransactionPayload($this->currentUser);
-        $this->utilPayload = new UtilPayload($this->currentUser);
+        $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
+        $this->utilPayload = new UtilPayload($this->currentUser,$this->utilityContainer);
     }
 
     /**

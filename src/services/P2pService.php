@@ -80,9 +80,9 @@ class P2pService {
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->timeUtility = $utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
-        $this->p2pPayload = new P2pPayload($this->currentUser);
-        $this->rp2pPayload = new Rp2pPayload($this->currentUser);
-        $this->utilPayload = new UtilPayload($this->currentUser);
+        $this->p2pPayload = new P2pPayload($this->currentUser,$this->utilityContainer);
+        $this->rp2pPayload = new Rp2pPayload($this->currentUser,$this->utilityContainer);
+        $this->utilPayload = new UtilPayload($this->currentUser,$this->utilityContainer);
     }
 
     /**

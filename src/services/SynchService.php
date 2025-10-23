@@ -84,9 +84,9 @@ class SynchService {
         $this->utilityContainer = $utilityContainer;
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
-        $this->contactPayload = new ContactPayload($this->currentUser);
-        $this->transactionPayload = new TransactionPayload($this->currentUser);
-        $this->messagePayload = new MessagePayload($this->currentUser);
+        $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
+        $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
+        $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
     }
 
     /**

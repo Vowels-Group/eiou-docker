@@ -25,7 +25,7 @@ class TransactionPayload extends BasePayload
             'amount', 'currency', 'txid'
         ]);
 
-        $userAddress = resolveUserAddressForTransport($data['receiverAddress']);
+        $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiverAddress']);
         $memo = $data['memo'] ?? 'standard';
 
         return [
@@ -56,7 +56,7 @@ class TransactionPayload extends BasePayload
             'amount', 'currency', 'txid'
         ]);
        
-        $userAddress = resolveUserAddressForTransport($data['receiver_address']);
+        $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiver_address']);
         $memo = $data['memo'] ?? 'standard';
 
         return [
@@ -105,7 +105,7 @@ class TransactionPayload extends BasePayload
      */
     public function buildAcceptance(array $request): string
     {
-        $receiver = resolveUserAddressForTransport($request['senderAddress'] ?? '');
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress'] ?? '');
         $hashInfo = $this->resolveHashInfo($request);
 
         return json_encode([
@@ -124,7 +124,7 @@ class TransactionPayload extends BasePayload
      */
     public function buildCompleted(array $request): array
     {
-        $receiver = resolveUserAddressForTransport(
+        $receiver = $this->transportUtility->resolveUserAddressForTransport(
             $request['senderAddress'] ?? $request['sender_address'] ?? ''
         );
         $hashInfo = $this->resolveHashInfo($request);
@@ -153,7 +153,7 @@ class TransactionPayload extends BasePayload
      */
     public function buildRejection(array $request, string $reason = null): string
     {
-        $receiver = resolveUserAddressForTransport($request['senderAddress'] ?? '');
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress'] ?? '');
         $hashInfo = $this->resolveHashInfo($request);
 
         $defaultReason = "{$hashInfo['type']} {$hashInfo['value']} for Transaction already exists in database of {$receiver}";

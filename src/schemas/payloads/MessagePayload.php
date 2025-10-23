@@ -34,7 +34,7 @@ class MessagePayload extends BasePayload
      */
     public function buildContactIsAcceptedInquiry(string $address): array
     {
-        $myAddress = resolveUserAddressForTransport($address);
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return [
             'type' => 'message', // message request type
             'typeMessage' => 'contact', // type of message
@@ -53,7 +53,7 @@ class MessagePayload extends BasePayload
      */
     public function buildContactIsAccepted(string $address): string
     {
-        $myAddress = resolveUserAddressForTransport($address);
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return json_encode([
             'type' => 'message', // message request type
             'typeMessage' => 'contact', // type of message
@@ -72,7 +72,7 @@ class MessagePayload extends BasePayload
      */
     public function buildContactIsNotYetAccepted(string $address): string
     {
-        $myAddress = resolveUserAddressForTransport($address);
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return json_encode([
             'type' => 'message', // message request type
             'typeMessage' => 'contact', // type of message
@@ -92,7 +92,7 @@ class MessagePayload extends BasePayload
      */
     public function buildContactIsUnknown(string $address): string
     {
-        $myAddress = resolveUserAddressForTransport($address);
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return json_encode([
             'type' => 'message', // message request type
             'typeMessage' => 'contact', // type of message
@@ -129,7 +129,7 @@ class MessagePayload extends BasePayload
     public function buildTransactionCompletedInquiry(array $message): array
     {
         $hash = $message['hash'];
-        $myAddress = resolveUserAddressForTransport($message['senderAddress']);
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
         return [
             'type' => 'message', // message request type
             'typeMessage' => 'transaction', // type of message

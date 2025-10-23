@@ -52,7 +52,7 @@ class ContactService {
         $this->utilityContainer = $utilityContainer;
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
-        $this->contactPayload = new ContactPayload($this->currentUser);
+        $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
     }
 
     /**

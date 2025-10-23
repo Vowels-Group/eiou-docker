@@ -12,16 +12,53 @@ require_once dirname(__DIR__,3) . '/src/core/UserContext.php';
 
 abstract class BasePayload
 {
+     /**
+     * @var UserContext Current user data
+     */
     protected UserContext $currentUser;
+
+    /**
+     * @var UtilityServiceContainer Utility service container
+     */
+    protected UtilityServiceContainer $utilityContainer;
+
+    /**
+     * @var CurrencyUtilityService Currecy utility service 
+     */
+    protected CurrencyUtilityService $currencyUtility;
+
+     /**
+     * @var TimeUtilityService Time utility service 
+     */
+    protected TimeUtilityService $timeUtility;
+
+    /**
+     * @var ValidationUtilityService Validation utility service 
+     */
+    protected ValidationUtilityService $validationUtility;
+
+    /**
+     * @var TransportUtilityService Transport utility service 
+     */
+    protected TransportUtilityService $transportUtility;
 
     /**
      * Constructor
      *
      * @param UserContext $currentUser The user context for the current session
+     * @param UtilityServiceContainer $utilityContainer Utility Container
      */
-    public function __construct(UserContext $currentUser)
+    public function __construct(
+        UserContext $currentUser,
+        UtilityServiceContainer $utilityContainer
+        )
     {
         $this->currentUser = $currentUser;
+        $this->utilityContainer = $utilityContainer;
+        $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
+        $this->timeUtility = $this->utilityContainer->getTimeUtility();
+        $this->validationUtility = $this->utilityContainer->getValidationUtility();
+        $this->transportUtility = $this->utilityContainer->getTransportUtility();
     }
 
     /**

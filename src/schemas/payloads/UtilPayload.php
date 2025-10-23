@@ -7,8 +7,7 @@ require_once __DIR__ . '/BasePayload.php';
  *
  * Copyright 2025
  * Handles building utility payloads for error responses, validation failures,
- * and other system messages. This class uses static methods as these utilities
- * don't always require user context.
+ * and other system messages. 
  */
 class UtilPayload extends BasePayload
 {
@@ -34,7 +33,7 @@ class UtilPayload extends BasePayload
      * @param float $fundsOnHold Funds on hold in cents
      * @return string JSON encoded insufficient balance payload
      */
-    public static function buildInsufficientBalance(
+    public function buildInsufficientBalance(
         float $availableFunds,
         float $requestedAmount,
         float $creditLimit,
@@ -43,10 +42,10 @@ class UtilPayload extends BasePayload
         return json_encode([
             'status' => 'rejected',
             'message' => 'Insufficient balance or credit',
-            'credit_limit' => formatCurrency($creditLimit),
-            'current_balance' => formatCurrency($availableFunds),
-            'funds_on_hold' => formatCurrency($fundsOnHold),
-            'requested_amount' => formatCurrency($requestedAmount),
+            'credit_limit' =>  $this->currencyUtility->formatCurrency($creditLimit),
+            'current_balance' => $this->currencyUtility->formatCurrency($availableFunds),
+            'funds_on_hold' => $this->currencyUtility->formatCurrency($fundsOnHold),
+            'requested_amount' => $this->currencyUtility->formatCurrency($requestedAmount),
         ]);
     }
 
@@ -92,9 +91,9 @@ class UtilPayload extends BasePayload
      * @param array $message Message data
      * @return string JSON encoded  invalid source payload
      */
-    public static function buildInvalidSource(array $message): string
+    public function buildInvalidSource(array $message): string
     {
-        $receiver = resolveUserAddressForTransport($message['senderAddress']);
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
 
         return json_encode([
             'status' => 'rejected',

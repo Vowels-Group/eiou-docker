@@ -24,14 +24,14 @@ class P2pPayload extends BasePayload
             'amount', 'minRequestLevel', 'maxRequestLevel', 'receiverAddress'
         ]);
         //output(outputBuildingP2pPayload($data),'SILENT');
-        $userAddress = resolveUserAddressForTransport($data['receiverAddress']);
+        $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiverAddress']);
 
         return [
             'type' => 'p2p',
             'hash' => $data['hash'],
             'salt' => $data['salt'],
             'time' => $data['time'],
-            'expiration' => $data['time'] + returnconvertedMicroTime($this->currentUser->getP2pExpirationTime()),
+            'expiration' => $data['time'] + $this->timeUtility->convertMicrotimeToInt($this->currentUser->getP2pExpirationTime()),
             'currency' => $this->sanitizeString($data['currency']),
             'amount' => $this->sanitizeNumber($data['amount']),
             'requestLevel' => (int) $data['minRequestLevel'],
@@ -54,7 +54,7 @@ class P2pPayload extends BasePayload
             'amount', 'request_level', 'max_request_level', 'sender_address'
         ]);
         //output(outputBuildingP2pPayload($data),'SILENT');
-        $userAddress = resolveUserAddressForTransport($data['sender_address']);
+        $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['sender_address']);
 
         return [
             'type' => 'p2p',
@@ -81,7 +81,7 @@ class P2pPayload extends BasePayload
     {
         $this->ensureRequiredFields($request, ['hash', 'senderAddress']);
 
-        $receiver = resolveUserAddressForTransport($request['senderAddress']);
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
 
         return json_encode([
             'status' => 'received',
@@ -100,7 +100,7 @@ class P2pPayload extends BasePayload
     {
         $this->ensureRequiredFields($request, ['hash', 'senderAddress']);
 
-        $receiver = resolveUserAddressForTransport($request['senderAddress']);
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
 
         return json_encode([
             'status' => 'rejected',
