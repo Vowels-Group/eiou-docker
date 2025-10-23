@@ -73,6 +73,8 @@ RUN chmod 644 /etc/eiou/src/database/*
 # Services folder
 RUN chmod 755 /etc/eiou/src/services
 RUN chmod 644 /etc/eiou/src/services/*
+RUN chmod 755 /etc/eiou/src/services/utilities
+RUN chmod 644 /etc/eiou/src/services/utilities/*
 # GUI (wallet) folder
 RUN chmod 755 /etc/eiou/src/gui
 RUN chmod 644 /etc/eiou/src/gui/*
@@ -84,8 +86,6 @@ RUN chmod 755 /etc/eiou/src/gui/assets/js
 RUN chmod 644 /etc/eiou/src/gui/assets/js/*
 RUN chmod 755 /etc/eiou/src/gui/controllers
 RUN chmod 644 /etc/eiou/src/gui/controllers/*
-RUN chmod 755 /etc/eiou/src/processors
-RUN chmod 644 /etc/eiou/src/processors/*
 RUN chmod 755 /etc/eiou/src/gui/functions
 RUN chmod 644 /etc/eiou/src/gui/functions/*
 RUN chmod 755 /etc/eiou/src/gui/helpers
@@ -96,6 +96,9 @@ RUN chmod 755 /etc/eiou/src/gui/layout
 RUN chmod 644 /etc/eiou/src/gui/layout/*
 RUN chmod 755 /etc/eiou/src/gui/layout/walletSubParts
 RUN chmod 644 /etc/eiou/src/gui/layout/walletSubParts/*
+# Processors folder
+RUN chmod 755 /etc/eiou/src/processors
+RUN chmod 644 /etc/eiou/src/processors/*
 # Schemas folder
 RUN chmod 755 /etc/eiou/src/schemas
 RUN chmod 644 /etc/eiou/src/schemas/*
