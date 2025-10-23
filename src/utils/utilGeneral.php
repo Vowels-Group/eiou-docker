@@ -8,11 +8,14 @@
  * @return int The funds available to handle request
 */
 function calculateAvailableFunds(array $request): int {
+    $contactService = ServiceContainer::getInstance()->getContactService();
+    $transactionService = ServiceContainer::getInstance()->getTransactionService();
+
     $pubkey = $request['senderPublicKey'] ?? $request['sender_public_key'];
-    $totalSent = calculateTotalSent($pubkey);   // Calculate IOUs sent to sender
-    $totalReceived = calculateTotalReceived($pubkey); // Calulcate IOUs received from sender
+    $totalSent = $transactionService->calculateTotalSent($pubkey);   // Calculate IOUs sent to sender
+    $totalReceived = $transactionService->calculateTotalReceived($pubkey); // Calulcate IOUs received from sender
     $theirCurrentBalance = $totalSent - $totalReceived; 
-    $creditLimit = getCreditLimit($pubkey);    // Get senders credit limit with user
+    $creditLimit =  $contactService->getCreditLimit($pubkey);    // Get senders credit limit with user
     return $theirCurrentBalance + $creditLimit;
 }
 
