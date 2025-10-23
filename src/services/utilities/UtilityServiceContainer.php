@@ -35,7 +35,7 @@ class UtilityServiceContainer
     /**
      * Private constructor for singleton
      */
-    private function __construct(ServiceContainer $mainContainer)
+    public function __construct(ServiceContainer $mainContainer)
     {
         $this->mainContainer = $mainContainer;
     }
