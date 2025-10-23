@@ -2,18 +2,20 @@
 # Copyright 2025
 
 // Processing transaction messages with adaptive polling
-require_once(__DIR__ . "/config.php");
-require_once(__DIR__ . "/functions.php");
-require_once(__DIR__ . "/src/core/Constants.php");
-require_once(__DIR__ . "/src/services/ServiceContainer.php");
+
+// Bootstrap the application
+require_once(__DIR__ . "/src/bootstrap.php");
+$app = Application::getInstance();
+
 require_once(__DIR__ . "/src/utils/AdaptivePoller.php");
 
 // Load polling configuration
+$constants = Constants::getInstance();
 $pollerConfig = [
-    'min_interval_ms' => Constants::TRANSACTION_MIN_INTERVAL_MS ?: 100,
-    'max_interval_ms' => Constants::TRANSACTION_MAX_INTERVAL_MS ?: 5000,
-    'idle_interval_ms' => Constants::TRANSACTION_IDLE_INTERVAL_MS ?: 2000,
-    'adaptive' => Constants::TRANSACTION_ADAPTIVE_POLLING !== 'false',
+    'min_interval_ms' => $constants->get('TRANSACTION_MIN_INTERVAL_MS') ?: 100,
+    'max_interval_ms' => $constants->get('TRANSACTION_MAX_INTERVAL_MS') ?: 5000,
+    'idle_interval_ms' => $constants->get('TRANSACTION_IDLE_INTERVAL_MS') ?: 2000,
+    'adaptive' => $constants->get('TRANSACTION_ADAPTIVE_POLLING') !== 'false',
 ];
 
 $lockfile = '/tmp/transactionmessages_lock.pid';
@@ -21,8 +23,8 @@ $lockfile = '/tmp/transactionmessages_lock.pid';
 // Ensure only one instance runs
 checkSingleInstance($lockfile);
 
-// Create PDO connection
-$pdo = createPDOConnection();
+// Get PDO connection from Application
+$pdo = $app->getDatabase();
 
 $transactionService = ServiceContainer::getInstance()->getTransactionService();
 

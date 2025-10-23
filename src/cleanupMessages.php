@@ -2,18 +2,20 @@
 # Copyright 2025
 
 // Processing cleanup messages with adaptive polling
-require_once(__DIR__ . "/config.php");
-require_once(__DIR__ . "/functions.php");
-require_once(__DIR__ . "/src/core/Constants.php");
-require_once(__DIR__ . "/src/services/ServiceContainer.php");
+
+// Bootstrap the application
+require_once(__DIR__ . "/src/bootstrap.php");
+$app = Application::getInstance();
+
 require_once(__DIR__ . "/src/utils/AdaptivePoller.php");
 
 // Load polling configuration - cleanup can run less frequently
+$constants = Constants::getInstance();
 $pollerConfig = [
-    'min_interval_ms' => Constants::CLEANUP_MIN_INTERVAL_MS ?: 1000,   // 1 second minimum
-    'max_interval_ms' => Constants::CLEANUP_MAX_INTERVAL_MS ?: 30000,  // 30 seconds maximum
-    'idle_interval_ms' => Constants::CLEANUP_IDLE_INTERVAL_MS ?: 10000, // 10 seconds when idle
-    'adaptive' => Constants::CLEANUP_ADAPTIVE_POLLING !== 'false',
+    'min_interval_ms' => $constants->get('CLEANUP_MIN_INTERVAL_MS') ?: 1000,   // 1 second minimum
+    'max_interval_ms' => $constants->get('CLEANUP_MAX_INTERVAL_MS') ?: 30000,  // 30 seconds maximum
+    'idle_interval_ms' => $constants->get('CLEANUP_IDLE_INTERVAL_MS') ?: 10000, // 10 seconds when idle
+    'adaptive' => $constants->get('CLEANUP_ADAPTIVE_POLLING') !== 'false',
 ];
 
 $lockfile = '/tmp/cleanupmessages_lock.pid';
@@ -21,8 +23,8 @@ $lockfile = '/tmp/cleanupmessages_lock.pid';
 // Ensure only one instance runs
 checkSingleInstance($lockfile);
 
-// Create PDO connection
-$pdo = createPDOConnection();
+// Get PDO connection from Application
+$pdo = $app->getDatabase();
 
 $cleanupService = ServiceContainer::getInstance()->getCleanupService();
 

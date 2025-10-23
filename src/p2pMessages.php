@@ -2,18 +2,20 @@
 # Copyright 2025
 
 // Processing P2P messages with adaptive polling
-require_once(__DIR__ . "/config.php");
-require_once(__DIR__ . "/functions.php");
-require_once(__DIR__ . "/src/core/Constants.php");
-require_once(__DIR__ . "/src/services/ServiceContainer.php");
+
+// Bootstrap the application
+require_once(__DIR__ . "/src/bootstrap.php");
+$app = Application::getInstance();
+
 require_once(__DIR__ . "/src/utils/AdaptivePoller.php");
 
 // Load polling configuration
+$constants = Constants::getInstance();
 $pollerConfig = [
-    'min_interval_ms' => Constants::P2P_MIN_INTERVAL_MS ?: 100,
-    'max_interval_ms' => Constants::P2P_MAX_INTERVAL_MS ?: 5000,
-    'idle_interval_ms' => Constants::P2P_IDLE_INTERVAL_MS ?: 2000,
-    'adaptive' => Constants::P2P_ADAPTIVE_POLLING !== 'false',
+    'min_interval_ms' => $constants->get('P2P_MIN_INTERVAL_MS') ?: 100,
+    'max_interval_ms' => $constants->get('P2P_MAX_INTERVAL_MS') ?: 5000,
+    'idle_interval_ms' => $constants->get('P2P_IDLE_INTERVAL_MS') ?: 2000,
+    'adaptive' => $constants->get('P2P_ADAPTIVE_POLLING') !== 'false',
 ];
 
 $lockfile = '/tmp/p2pmessages_lock.pid';
@@ -21,8 +23,8 @@ $lockfile = '/tmp/p2pmessages_lock.pid';
 // Ensure only one instance runs
 checkSingleInstance($lockfile);
 
-// Create PDO connection
-$pdo = createPDOConnection();
+// Get PDO connection from Application
+$pdo = $app->getDatabase();
 
 $p2pService = ServiceContainer::getInstance()->getP2pService();
 
