@@ -325,7 +325,6 @@ class ServiceContainer {
     /**
      * Get UtilityServiceContainer instance
      *
-     * Issue #103: Provides access to utility services
      *
      * @return UtilityServiceContainer
      */
