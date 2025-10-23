@@ -7,7 +7,6 @@
  * Processes cleanup messages for expired P2P and transaction messages.
  * Uses slower polling intervals as cleanup is less time-critical.
  *
- * Issue #106: Refactored from cleanupMessages.php
  */
 
 require_once(__DIR__ . "/AbstractMessageProcessor.php");

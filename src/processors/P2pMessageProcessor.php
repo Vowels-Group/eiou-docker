@@ -6,7 +6,6 @@
  *
  * Processes queued P2P messages with fast polling for time-critical routing.
  *
- * Issue #106: Refactored from p2pMessages.php
  */
 
 require_once(__DIR__ . "/AbstractMessageProcessor.php");

@@ -11,7 +11,6 @@
  * - Lockfile management
  * - Logging
  *
- * Issue #106: Extract common patterns from cleanupMessages.php, transactionMessages.php, p2pMessages.php
  */
 
 require_once(__DIR__ . "/../utils/AdaptivePoller.php");

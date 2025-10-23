@@ -6,7 +6,6 @@
  *
  * Processes pending transaction messages with fast polling for time-critical transactions.
  *
- * Issue #106: Refactored from transactionMessages.php
  */
 
 require_once(__DIR__ . "/AbstractMessageProcessor.php");
