@@ -82,15 +82,16 @@ class TransactionPayload extends BasePayload
      */
     public function buildForwarding(array $message, array $rp2pData): array
     {
+        $transactionService = ServiceContainer::getInstance()->getTransactionService();
         // This method returns data array for further processing, not final payload
         return [
             'time' => $rp2pData['time'] ?? time(),
             'receiver_address' => $rp2pData['sender_address'] ?? null,
             'receiver_public_key' => $rp2pData['sender_public_key'] ?? null,
-            'amount' => removeTransactionFee($message),
+            'amount' => $transactionService->removeTransactionFee($message),
             'currency' => $rp2pData['currency'] ?? 'EIOU',
-            'txid' => createUniqueDatabaseTxid($message),
-            'previous_txid' => fixPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key']),
+            'txid' => $transactionService->createUniqueDatabaseTxid($message),
+            'previous_txid' => $transactionService->fixPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key']),
             'memo' => $rp2pData['hash'] ?? null,
         ];
     }

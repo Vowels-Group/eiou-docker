@@ -21,29 +21,6 @@ require_once __DIR__ . '/ServiceContainer.php';
 // ============================================================================
 
 /**
- * Fix previous transaction ID (wrapper)
- *
- * @param string $senderPubKey Sender's public key
- * @param string $receiverPubKey Receiver's public key
- * @return string|null Previous transaction ID
- */
-function fixPreviousTxid($senderPubKey, $receiverPubKey) {
-    $service = ServiceContainer::getInstance()->getTransactionService();
-    return $service->fixPreviousTxid($senderPubKey, $receiverPubKey);
-}
-
-/**
- * Create unique database transaction ID (wrapper)
- *
- * @param array $data Database transaction data
- * @return string Transaction ID
- */
-function createUniqueDatabaseTxid($data) {
-    $service = ServiceContainer::getInstance()->getTransactionService();
-    return $service->createUniqueDatabaseTxid($data);
-}
-
-/**
  * Send P2P eIOU (wrapper)
  *
  * @param array $request Request data

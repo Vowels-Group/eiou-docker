@@ -245,11 +245,22 @@ class TransactionService {
      */
     public function matchYourselfTransaction($request,$address){
         // Check if transaction end recipient is user
-        $p2pRequest = getP2pByHash($request['memo']);
+        $p2pRequest = $this->p2pRepository->getByHash($request['memo']);
         if( hash('sha256', $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Remove users transaction fee from request
+     *
+     * @param array $request The request data
+     * @return float Amount left over after fee removal 
+    */
+    function removeTransactionFee(array $request): float{
+        $p2p = $this->p2pRepository->getByHash($request['memo']);
+        return $request['amount'] - $p2p['my_fee_amount'];
     }
 
     /**

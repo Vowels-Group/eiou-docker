@@ -55,7 +55,7 @@ class RP2pService {
      */
     public function handleRp2pRequest(array $request): void {
         // Check if corresponding p2p exists 
-        $p2p = getP2pByHash($request['hash']);
+        $p2p = $this->p2pRepository->getByHash($request['hash']);
         if(!$p2p){
             throw new Exception('P2P request was not found for the given hash.');
         }else{

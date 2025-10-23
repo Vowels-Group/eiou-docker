@@ -32,17 +32,6 @@ function feeInformation(array $p2p, array $request): float {
 }
 
 /**
- * Remove users transaction fee from request
- *
- * @param array $request The request data
- * @return float Amount left over after fee removal 
-*/
-function removeTransactionFee(array $request): float{
-    $p2p = getP2pByHash($request['memo']);
-    return $request['amount'] - $p2p['my_fee_amount'];
-}
-
-/**
  * Convert float of micrtotime to int by moving values behind comma to in front of comma
  *
  * @param float $time Float of microtime
