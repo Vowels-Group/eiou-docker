@@ -19,12 +19,17 @@ require_once 'src/database/Rp2pRepository.php';
 require_once 'src/database/TransactionRepository.php';
 
 // Require all files in the services directory
+require_once 'src/services/utilities/UtilityServiceContainer.php';
+require_once 'src/services/utilities/CurrencyUtilityService.php';
+require_once 'src/services/utilities/TimeUtilityService.php';
+require_once 'src/services/utilities/TransportUtilityService.php';
+require_once 'src/services/utilities/ValidationUtilityService.php';
+require_once 'src/services/ServiceContainer.php';
 require_once 'src/services/CleanupService.php';
 require_once 'src/services/ContactService.php';
 require_once 'src/services/MessageService.php';
 require_once 'src/services/P2pService.php';
 require_once 'src/services/Rp2pService.php';
-require_once 'src/services/ServiceContainer.php';
 require_once 'src/services/ServiceWrappers.php';
 require_once 'src/services/SynchService.php';
 require_once 'src/services/TransactionService.php';
@@ -47,7 +52,3 @@ require_once 'src/utils/InputValidator.php';
 require_once 'src/utils/RateLimiter.php';
 require_once 'src/utils/SecureLogger.php';
 require_once 'src/utils/Security.php';
-require_once 'src/utils/utilGeneral.php';
-require_once 'src/utils/utilTransport.php';
-require_once 'src/utils/utilUserInteraction.php';
-require_once 'src/utils/utilValidation.php';

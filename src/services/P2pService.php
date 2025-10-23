@@ -20,6 +20,26 @@ class P2pService {
     private ContactRepository $contactRepository;
 
     /**
+     * @var UtilityServiceContainer Utility service container
+     */
+    private UtilityServiceContainer $utilityContainer;
+
+    /**
+     * @var ValidationUtilityService Validation utility service 
+     */
+    private ValidationUtilityService $validationUtility;
+
+    /**
+     * @var TransportUtilityService Transport utility service 
+     */
+    private TransportUtilityService $transportUtility;
+
+    /**
+     * @var TimeUtilityService Time utility service 
+     */
+    private TimeUtilityService $timeUtility;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -44,19 +64,25 @@ class P2pService {
      *
      * @param P2pRepository $p2pRepository P2P repository
      * @param ContactRepository $contactRepository Contact repository
+     * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         P2pRepository $p2pRepository,
         ContactRepository $contactRepository,
+        UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->contactRepository = $contactRepository;
+        $this->utilityContainer = $utilityContainer;
+        $this->validationUtility = $this->utilityContainer->getValidationUtility();
+        $this->transportUtility = $this->utilityContainer->getTransportUtility();
+        $this->timeUtility = $utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
-        $this->p2pPayload = new P2pPayload($this->currentUser);
-        $this->rp2pPayload = new Rp2pPayload($this->currentUser);
-        $this->utilPayload = new UtilPayload($this->currentUser);
+        $this->p2pPayload = new P2pPayload($this->currentUser,$this->utilityContainer);
+        $this->rp2pPayload = new Rp2pPayload($this->currentUser,$this->utilityContainer);
+        $this->utilPayload = new UtilPayload($this->currentUser,$this->utilityContainer);
     }
 
     /**
@@ -74,7 +100,7 @@ class P2pService {
         }
 
         // Check validity of p2p request
-        if (!validateRequestLevel($request)) {
+        if (!$this->validationUtility->validateRequestLevel($request)) {
             echo $this->utilPayload->buildInvalidRequestLevel($request);
             return false;
         }
@@ -96,10 +122,10 @@ class P2pService {
             }
 
             // Check if p2p's destination is not to user (i.e. you are an intermediary and not the end-recipient)
-            if (!$this->matchYourselfP2P($request, resolveUserAddressForTransport($request['senderAddress']))) {
+            if (!$this->matchYourselfP2P($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
                 // Check if sender has enough 'credit' to facilitate eIOU
                 $requestedAmount = $this->calculateRequestedAmount($request);
-                $availableFunds = calculateAvailableFunds($request);
+                $availableFunds =  $this->validationUtility->calculateAvailableFunds($request);
                 $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderAddress']);
                 $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
 
@@ -184,7 +210,7 @@ class P2pService {
             }
 
             // Handler for p2p requests
-            $myAddress = resolveUserAddressForTransport($request['senderAddress']);
+            $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
 
             // Check if p2p's destination is to user
             if ($this->matchYourselfP2P($request, $myAddress)) {
@@ -193,7 +219,7 @@ class P2pService {
 
                 // Build and send corresponding rp2p request payload to sender of p2p
                 $rP2pPayload = $this->rp2pPayload->build($request);
-                $response = json_decode(send($request['senderAddress'], $rP2pPayload), true);
+                $response = json_decode($this->transportUtility->send($request['senderAddress'], $rP2pPayload), true);
                 output(outputRp2pTransactionResponse($response), 'SILENT');
             } else {
                 // Calculate fees
@@ -274,7 +300,7 @@ class P2pService {
         $data['txType'] = 'p2p';
         $data['receiverAddress'] = $request[2];
 
-        $data['time'] = returnMicroTime();
+        $data['time'] = $this->timeUtility->getCurrentMicrotime();
         $data['amount'] = round($request[3] * 100); // Convert to cents 100 (based on USD currency)
         $data['currency'] = 'USD'; // Default to USD
 
@@ -291,7 +317,7 @@ class P2pService {
         output(outputP2pComponents($data), 'SILENT');
 
         $data['minRequestLevel'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // Calculate 'random' lower bound for request level
-        $data['maxRequestLevel'] = $data['minRequestLevel'] + jitter($this->currentUser->getMaxP2pLevel()); // Add upper bound to request level, using users max
+        $data['maxRequestLevel'] = $data['minRequestLevel'] + $this->transportUtility->jitter($this->currentUser->getMaxP2pLevel()); // Add upper bound to request level, using users max
 
         return $data;
     }
@@ -307,7 +333,7 @@ class P2pService {
         $data['txType'] = 'p2p';
         $data['receiverAddress'] = $message['receiver_address'];
 
-        $data['time'] = returnMicroTime();
+        $data['time'] = $this->timeUtility->getCurrentMicrotime();
         $data['amount'] = $message['amount'];
         $data['currency'] = $message['currency'];
 
@@ -318,7 +344,7 @@ class P2pService {
         output(outputP2pComponents($data), 'SILENT');
 
         $data['minRequestLevel'] = abs(rand(300, 700) - rand(200, 500)) + rand(1, 10); // Calculate 'random' lower bound for request level
-        $data['maxRequestLevel'] = $data['minRequestLevel'] + jitter($this->currentUser->getMaxP2pLevel()); // Add upper bound to request level, using users max
+        $data['maxRequestLevel'] = $data['minRequestLevel'] + $this->transportUtility->jitter($this->currentUser->getMaxP2pLevel()); // Add upper bound to request level, using users max
 
         return $data;
     }
@@ -339,18 +365,18 @@ class P2pService {
             // Check if user is NOT the original sender of the p2p and has a direct contact link to end-recipient
             // If this is the case then send p2p directly
             if(!isset($message['destination_address']) && $matchedContact = $this->matchContact($message)){
-                $response = json_decode(send($matchedContact['address'], $p2pPayload),true);
+                $response = json_decode($this->transportUtility->send($matchedContact['address'], $p2pPayload),true);
                 output(outputP2pSendResult($response),'SILENT');
             } else{
                 // Retrieve contacts to send p2p request, excluding the sender
                 $contacts = $this->contactRepository->getAllAddresses($message['sender_address']);
                 // Count amount of contacts to send p2p request
-                $contactsCount = countTorAndHttpAddresses($contacts);
+                $contactsCount = $this->transportUtility->countTorAndHttpAddresses($contacts);
                 // Send p2p request to all contacts
                 foreach ($contacts as $contact) {
                     // Do not send message to original sender
                     if($message['sender_address'] === $contact){
-                        if(isTorAddress($message['sender_address'])){
+                        if($this->transportUtility->isTorAddress($message['sender_address'])){
                             $contactsCount['tor'] -= 1;
                         } else{
                             $contactsCount['http'] -= 1;
@@ -363,14 +389,14 @@ class P2pService {
                     }
                     // Do not send p2p to contact (end-recipient), if direct transaction failed due to insufficient funds
                     if(isset($message['destination_address']) && $contact === $message['destination_address']){
-                        if(isTorAddress($message['destination_address'])){
+                        if($this->transportUtility->isTorAddress($message['destination_address'])){
                             $contactsCount['tor'] -= 1;
                         } else{
                             $contactsCount['http'] -= 1;
                         }
                         continue;
                     }
-                    $response = json_decode(send($contact, $p2pPayload),true);
+                    $response = json_decode($this->transportUtility->send($contact, $p2pPayload),true);
                     output(outputP2pResponse($response),'SILENT');
                 }
 
@@ -416,7 +442,7 @@ class P2pService {
      */
     public function sendP2pRequest(array $data): void {
         // Check if a valid address format was supplied, if not look up the address in the case of a contact re-routing
-        if (isHttpAddress($data[2]) || isTorAddress($data[2])) {
+        if ($this->transportUtility->isAddress($data[2])) {
             $address = $data[2];
         } else{
             // Check if contact exists by Name supplied, if not then cannot send the p2p request

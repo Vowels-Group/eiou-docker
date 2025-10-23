@@ -154,6 +154,7 @@ class ServiceContainer {
             require_once __DIR__ . '/ContactService.php';
             $this->services['ContactService'] = new ContactService(
                 $this->getContactRepository(),
+                $this->getUtilityContainer(),
                 $this->currentUser
             );
         }
@@ -173,6 +174,7 @@ class ServiceContainer {
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
                 $this->getContactRepository(),
+                $this->getUtilityContainer(),
                 $this->currentUser
             );
         }
@@ -190,6 +192,7 @@ class ServiceContainer {
             $this->services['P2pService'] = new P2pService(
                 $this->getP2pRepository(),
                 $this->getContactRepository(),
+                $this->getUtilityContainer(),
                 $this->currentUser
             );
         }
@@ -208,6 +211,7 @@ class ServiceContainer {
             $this->services['Rp2pService'] = new Rp2pService(
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
+                $this->getUtilityContainer(),
                 $this->currentUser
             );
         }
@@ -239,6 +243,7 @@ class ServiceContainer {
                 $this->getContactRepository(),
                 $this->getP2pRepository(),
                 $this->getTransactionRepository(),
+                $this->getUtilityContainer(),
                 $this->currentUser
             );
         }
@@ -257,6 +262,7 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
+                $this->getUtilityContainer(),
                 $this->currentUser
             );
         }
@@ -276,6 +282,7 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
+                $this->getUtilityContainer(),
                 $this->currentUser
             );
         }
@@ -313,6 +320,20 @@ class ServiceContainer {
      */
     public function registerService(string $name, $instance): void {
         $this->services[$name] = $instance;
+    }
+
+    /**
+     * Get UtilityServiceContainer instance
+     *
+     *
+     * @return UtilityServiceContainer
+     */
+    public function getUtilityContainer(): UtilityServiceContainer {
+        if (!isset($this->services['UtilityServiceContainer'])) {
+            require_once __DIR__ . '/utilities/UtilityServiceContainer.php';
+            $this->services['UtilityServiceContainer'] = new UtilityServiceContainer($this);
+        }
+        return $this->services['UtilityServiceContainer'];
     }
 
     /**

@@ -43,7 +43,7 @@ class ContactPayload extends BasePayload
      */
     public function buildAccepted(string $address): array
     {
-        $myAddress = resolveUserAddressForTransport($address);
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return [
             'type' => 'message',
             'typeMessage' => 'contact',
@@ -77,7 +77,7 @@ class ContactPayload extends BasePayload
      */
     public function buildRejection(string $address, string $reason = 'Contact request rejected'): array
     {
-        $myAddress = resolveUserAddressForTransport($address);
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return [
             'type' => 'message',
             'typeMessage' => 'contact',
@@ -96,7 +96,7 @@ class ContactPayload extends BasePayload
      */
     public function buildPending(string $address): array
     {
-        $myAddress = resolveUserAddressForTransport($address);
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return [
             'type' => 'message',
             'typeMessage' => 'contact',

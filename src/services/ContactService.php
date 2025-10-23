@@ -16,6 +16,16 @@ class ContactService {
     private ContactRepository $contactRepository;
 
     /**
+     * @var UtilityServiceContainer Utility service container
+     */
+    private UtilityServiceContainer $utilityContainer;
+
+    /**
+     * @var TransportUtilityService Transport utility service 
+     */
+    private TransportUtilityService $transportUtility;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -29,12 +39,20 @@ class ContactService {
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact Repository
+     * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
-    public function __construct(ContactRepository $contactRepository, UserContext $currentUser) {
+    public function __construct(
+        ContactRepository $contactRepository,
+        UtilityServiceContainer $utilityContainer,
+        UserContext $currentUser
+        ) 
+    {
         $this->contactRepository = $contactRepository;
+        $this->utilityContainer = $utilityContainer;
+        $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
-        $this->contactPayload = new ContactPayload($this->currentUser);
+        $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
     }
 
     /**
@@ -101,7 +119,7 @@ class ContactService {
                     output(outputContactUnblockedAndAddedFailure());
                 }
                 // Send message of successful contact acceptance back to original contact requester
-                send($address, $this->contactPayload->buildAccepted($address));
+                $this->transportUtility->send($address, $this->contactPayload->buildAccepted($address));
             }
         }
         elseif($contact['status'] === 'pending'){
@@ -114,7 +132,7 @@ class ContactService {
                 // If contact already exists with an address, it's a contact request, skip sending a message
                 if ($this->acceptContact($address, $name, $fee, $credit, $currency)) {
                     // Send message of successful contact acceptance back to original contact requester
-                    send($address, $this->contactPayload->buildAccepted($address));
+                    $this->transportUtility->send($address, $this->contactPayload->buildAccepted($address));
                     output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
                     output(returnContactAccepted());
                 }
@@ -147,7 +165,7 @@ class ContactService {
         }
 
         // Check if the response indicates successful acceptance
-        $responseData = json_decode(send($address, $payload), true);
+        $responseData = json_decode($this->transportUtility->send($address, $payload), true);
 
         if (isset($responseData['status']) && ($responseData['status'] === 'accepted' || $responseData['status'] === 'warning')) {
             // Check if the response status is a warning
@@ -283,7 +301,7 @@ class ContactService {
         // View contact information
         if (count($data) >= 3) {
             // Check if is a HTTP or TOR address
-            if (isHttpAddress($data[2]) || isTorAddress($data[2])) {
+            if ($this->transportUtility->isAddress($data[2])) {
                 $address = $data[2];
             } else{
                 // Check if the name yields an address

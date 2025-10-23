@@ -209,7 +209,11 @@ function displayHelp(array $argv) {
 */
 function displayUserInfo(array $argv) {
     $currentUser = UserContext::getInstance();
-    $transactionService = ServiceContainer::getInstance()->getTransactionService();
+
+    $serviceContainer = ServiceContainer::getInstance();
+    $transactionService = $serviceContainer->getTransactionService();
+    $utilityContainer = UtilityServiceContainer::getInstance($serviceContainer);
+    $currencyUtility = $utilityContainer->getCurrencyUtility();
     
     echo "User Information:\n";
     
@@ -233,7 +237,7 @@ function displayUserInfo(array $argv) {
     // Calculate total sent and received
     $totalReceived = $transactionService->calculateTotalReceived($pubkey);
     $totalSent = $transactionService->calculateTotalSent($pubkey);
-    $balance = convertQuantityCurrency(($totalReceived - $totalSent));
+    $balance = $currencyUtility->convertCentsToDollars(($totalReceived - $totalSent));
     
     echo "\tTotal Balance: " . number_format($balance, 2) . "\n";
 
@@ -260,8 +264,11 @@ function displayUserInfo(array $argv) {
 */
 function viewBalanceQuery(string $direction, string $where, array $results, int $displayLimit){
      // 
-    $contactService = ServiceContainer::getInstance()->getContactService();
-   
+    $serviceContainer = ServiceContainer::getInstance();
+    $contactService = $serviceContainer->getContactService();
+    $utilityContainer = UtilityServiceContainer::getInstance($serviceContainer);
+    $transportUtility = $utilityContainer->getTransportUtility();
+
     $countResults = count($results);
     
     echo "\t\tBalance $direction $where:\n";
@@ -271,7 +278,7 @@ function viewBalanceQuery(string $direction, string $where, array $results, int 
                 $res['date'],
                 "|",
                 $contactService->lookupNameByAddress($res['counterparty']), 
-                truncateAddress($res['counterparty'],30), 
+                $transportUtility->truncateAddress($res['counterparty'],30), 
                 $res['amount'], 
                 $res['currency']);
         if($displayLimit !== 'all' && ($countrows >= $displayLimit)){
@@ -292,8 +299,13 @@ function viewBalanceQuery(string $direction, string $where, array $results, int 
 */
 function viewBalances(array $argv) {
     $currentUser = UserContext::getInstance();
-    $contactService = ServiceContainer::getInstance()->getContactService();
-    $transactionService = ServiceContainer::getInstance()->getTransactionService();
+
+    $serviceContainer = ServiceContainer::getInstance();
+    $contactService = $serviceContainer->getContactService();
+    $transactionService = $serviceContainer->getTransactionService();
+    $utilityContainer = UtilityServiceContainer::getInstance($serviceContainer);
+    $transportUtility = $utilityContainer->getTransportUtility();
+    $currencyUtility = $utilityContainer->getCurrencyUtility();
 
     $userBalance = $transactionService->getUserTotalBalance();
     $additionalAddresses = $currentUser->getUserAddresses();
@@ -303,7 +315,7 @@ function viewBalances(array $argv) {
     // Check if an address or name is provided
     if (isset($argv[2])) {
         // Check if it's a HTTP or Tor address
-        if (isHttpAddress($argv[2]) || isTorAddress($argv[2])) {
+        if ($transportUtility->isAddress($argv[2])) {
             $address = $argv[2];
             if($contactService->contactExists($address)){
                 $contactResult = $contactService->lookupContactByAddress($address);
@@ -313,7 +325,7 @@ function viewBalances(array $argv) {
             $contactResult = $contactService->lookupContactByName($argv[2]);
         }
         if ($contactResult) {
-            $contactBalance = convertQuantityCurrency($transactionService->getContactBalance($currentUser->getPublicKey(),$contactResult['pubkey']));
+            $contactBalance = $currencyUtility->convertCentsToDollars($transactionService->getContactBalance($currentUser->getPublicKey(),$contactResult['pubkey']));
             printf("\t%s (%s), Balance: %.2f\n", $contactResult['name'], $contactResult['address'], $contactBalance);
             return;
         } else{
@@ -325,7 +337,7 @@ function viewBalances(array $argv) {
     if($pubkeys){
         $balances = $transactionService->getAllContactBalances($currentUser->getPublicKey(),$pubkeys);
         foreach($contacts as $contact){
-            printf("\t%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], convertQuantityCurrency($balances[$contact['pubkey']]));
+            printf("\t%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], $currencyUtility->convertCentsToDollars($balances[$contact['pubkey']]));
         } 
     } else{
         echo "\tNo Contacts exist, so no contact balances can be displayed.\n";
@@ -340,8 +352,11 @@ function viewBalances(array $argv) {
 */
 function viewTransactionHistory(array $argv) {
     $currentUser = UserContext::getInstance();
-    $contactService = ServiceContainer::getInstance()->getContactService();
-    $transactionService = ServiceContainer::getInstance()->getTransactionService();
+    $serviceContainer = ServiceContainer::getInstance();
+    $contactService =  $serviceContainer->getContactService();
+    $transactionService =  $serviceContainer->getTransactionService();
+    $utilityContainer = UtilityServiceContainer::getInstance($serviceContainer);
+    $transportUtility = $utilityContainer->getTransportUtility();
 
     if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
         $displayLimit = $argv[3];                   
@@ -352,7 +367,7 @@ function viewTransactionHistory(array $argv) {
     // Check if an address or name is provided
     if (isset($argv[2])) {
         // First if it's an HTTP or Tor address
-        if (isHttpAddress($argv[2]) || isTorAddress($argv[2])) {
+        if ($transportUtility->isAddress($argv[2])) {
             $address = $argv[2];
             if($contactService->contactExists($address)){
                 $contactResult = $contactService->lookupContactByAddress($address);
@@ -388,7 +403,10 @@ function displayHistory(array $transactions, string $direction, int $displayLimi
         echo "No transaction history found for $direction transactions.\n";
         return;
     }
-    $contactService = ServiceContainer::getInstance()->getContactService();
+    $serviceContainer = ServiceContainer::getInstance();
+    $contactService = $serviceContainer->getContactService();
+    $utilityContainer = UtilityServiceContainer::getInstance($serviceContainer);
+    $transportUtility = $utilityContainer->getTransportUtility();
 
     echo "Transaction History for $direction transactions:\n";
     echo "-------------------------------------------\n";
@@ -405,7 +423,7 @@ function displayHistory(array $transactions, string $direction, int $displayLimi
         $contactName = $contactService->lookupNameByAddress($tx['counterparty']);
         echo str_pad($tx['date'], 19, ' ') . " | " . 
              str_pad($tx['type'], 9, ' ') . " | " . 
-             str_pad($contactName . " (" . truncateAddress($tx['counterparty'],82-(strlen($contactName)+2)) . ")", 82, ' ') . " | " . 
+             str_pad($contactName . " (" . $transportUtility->truncateAddress($tx['counterparty'],82-(strlen($contactName)+2)) . ")", 82, ' ') . " | " . 
              str_pad($tx['amount'], 10, ' ') . " | " . 
              str_pad($tx['currency'], 10, ' ') . "\n" ; 
                      

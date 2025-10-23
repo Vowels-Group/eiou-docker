@@ -30,6 +30,26 @@ class TransactionService {
     private ContactRepository $contactRepository;
 
     /**
+     * @var UtilityServiceContainer Utility service container
+     */
+    private UtilityServiceContainer $utilityContainer;
+
+    /**
+     * @var CurrencyUtilityService Currecy utility service 
+     */
+    private CurrencyUtilityService $currencyUtility;
+
+    /**
+     * @var ValidationUtilityService Validation utility service 
+     */
+    private ValidationUtilityService $validationUtility;
+
+    /**
+     * @var TransportUtilityService Transport utility service 
+     */
+    private TransportUtilityService $transportUtility;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -51,6 +71,7 @@ class TransactionService {
      * @param Rp2pRepository $rp2pRepository Rp2p repository
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param ContactRepository $contactRepository Contact repository
+     * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
@@ -58,15 +79,20 @@ class TransactionService {
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
         ContactRepository $contactRepository,
+        UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
         $this->contactRepository = $contactRepository;
+        $this->utilityContainer = $utilityContainer;
+        $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
+        $this->validationUtility = $this->utilityContainer->getValidationUtility();
+        $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
-        $this->transactionPayload = new TransactionPayload($this->currentUser);
-        $this->utilPayload = new UtilPayload($this->currentUser);
+        $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
+        $this->utilPayload = new UtilPayload($this->currentUser,$this->utilityContainer);
     }
 
     /**
@@ -275,7 +301,7 @@ class TransactionService {
         output(outputPrepareSendData($request), 'SILENT');
 
         $data['txType'] = 'standard';
-        $data['time'] = returnMicroTime();
+        $data['time'] = $this->utilityContainer->getTimeUtility()->getCurrentMicrotime();
         $data['amount'] = round($request[3] * 100); // Convert to cents
         $data['currency'] = $request[4] ?? 'USD'; // Get currency or default to USD
         $data['memo'] = 'standard';
@@ -340,7 +366,7 @@ class TransactionService {
                     $request['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $request['senderPublicKey']);
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
-                } elseif ($this->matchYourselfTransaction($request, resolveUserAddressForTransport($request['senderAddress']))) {
+                } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
                     // If Transaction is for end-recipient
                     $request['previousTxid'] = $this->fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']);
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request), true);
@@ -372,10 +398,10 @@ class TransactionService {
 
             // If direct transaction
             if($memo === 'standard'){
-                if($message['sender_address'] == resolveUserAddressForTransport($message['sender_address'])){
+                if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
                     $payload = $this->transactionPayload->buildFromDatabase($message);
                     $this->transactionRepository->updateStatus($txid,'sent',true);
-                    $response = json_decode(send($message['receiver_address'], $payload),true);
+                    $response = json_decode($this->transportUtility->send($message['receiver_address'], $payload),true);
                     output(outputTransactionInquiryResponse($response),'SILENT');
 
                     if($response['status'] === 'accepted'){
@@ -390,7 +416,7 @@ class TransactionService {
                     output(outputTransactionAmountReceived($message),'SILENT');
                     $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                     output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
-                    $response = send($message['sender_address'],$payloadTransactionCompleted);
+                    $response = $this->transportUtility->send($message['sender_address'],$payloadTransactionCompleted);
                 }
             } else{
                 // If p2p transaction
@@ -409,7 +435,7 @@ class TransactionService {
      * @param string $txid Transaction ID
      */
     private function processP2pTransaction(array $message, string $memo, string $txid): void {
-        if($message['sender_address'] == resolveUserAddressForTransport($message['sender_address'])){
+        if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
             $rp2p = $this->rp2pRepository->getByHash($memo);
             $message['time'] = $rp2p['time'];
 
@@ -418,7 +444,7 @@ class TransactionService {
             $this->p2pRepository->updateStatus($memo,'paid');
             $this->transactionRepository->updateStatus($memo,'sent');
             output(outputSendTransactionOnwards($message),'SILENT');
-            $response = json_decode(send($message['receiver_address'], $payload),true);
+            $response = json_decode($this->transportUtility->send($message['receiver_address'], $payload),true);
 
             if($response['status'] === 'accepted'){
                 $this->transactionRepository->updateStatus($txid,'accepted');
@@ -429,7 +455,7 @@ class TransactionService {
             output(outputTransactionResponse($response),'SILENT');
         } else{
             // If receiving transaction
-            if(!$this->matchYourselfTransaction($message,resolveUserAddressForTransport($message['sender_address']))) {
+            if(!$this->matchYourselfTransaction($message,$this->transportUtility->resolveUserAddressForTransport($message['sender_address']))) {
                 // If not end-recipient of transaction
                 $this->transactionRepository->updateStatus($memo,'accepted');
                 $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
@@ -450,7 +476,7 @@ class TransactionService {
                 output(outputTransactionAmountReceived($message),'SILENT');
                 $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                 output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
-                $response = send($message['sender_address'],$payloadTransactionCompleted);
+                $response = $this->transportUtility->send($message['sender_address'],$payloadTransactionCompleted);
             }
         }
     }
@@ -469,7 +495,7 @@ class TransactionService {
         }
 
         # Check if request is correctly formatted
-        if(!validateSendRequest($request)){
+        if(!$this->validationUtility->validateSendRequest($request)){
             exit(0);
         }
 
@@ -548,9 +574,9 @@ class TransactionService {
             $contactsWithBalances[] = [
                 'name' => $contact['name'],
                 'address' => $contact['address'],
-                'balance' =>  $balance ? convertQuantityCurrency($balance) : $balance,
-                'fee' =>  $fee_percent ? convertQuantityCurrency($fee_percent) : $fee_percent,
-                'credit_limit' =>  $credit_limit ? convertQuantityCurrency($credit_limit) : $credit_limit,
+                'balance' =>  $balance ? $this->currencyUtility->convertCentsToDollars($balance) : $balance,
+                'fee' =>  $fee_percent ? $this->currencyUtility->convertCentsToDollars($fee_percent) : $fee_percent,
+                'credit_limit' =>  $credit_limit ? $this->currencyUtility->convertCentsToDollars($credit_limit) : $credit_limit,
                 'currency' => $contact['currency']
             ];
 

@@ -25,6 +25,17 @@ class CleanupService {
     private TransactionRepository $transactionRepository;
 
     /**
+     * @var UtilityServiceContainer Utility service container
+     */
+    private UtilityServiceContainer $utilityContainer;
+
+    /**
+     * @var TimeUtilityService Time utility service 
+     */
+    private TimeUtilityService $timeUtility;
+
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -34,17 +45,21 @@ class CleanupService {
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
+        UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
+        $this->utilityContainer = $utilityContainer;
+        $this->timeUtility = $utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
     }
 
@@ -70,7 +85,7 @@ class CleanupService {
                 }
 
                 // If no response after set amount of time, expire the p2p (and potential transaction)
-                if (returnMicroTime() > $message['expiration']) {
+                if ($this->timeUtility->getCurrentMicrotime() > $message['expiration']) {
                     $this->expireMessage($message);
                 }
             }
