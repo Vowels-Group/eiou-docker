@@ -12,23 +12,27 @@ require_once("/etc/eiou/config.php");
 // Accept incoming connection and decode request
 $request = json_decode($_GET['payload'], true);
 
+require_once("/etc/eiou/src/services/ServiceContainer.php");
+require_once("/etc/eiou/src/services/utilities/UtilityServiceContainer.php");
+$serviceContainer = ServiceContainer::getInstance();
+$utilityContainer = UtilityServiceContainer::getInstance($serviceContainer);
+$validationUtility = $utilityContainer->getValidationUtility();
+
 // Verify the request signature before processing
-if (!verifyRequest($request)) {
+if (!$validationUtility->verifyRequestSignature($request)) {
     die;
 }
-
-require_once("/etc/eiou/src/services/ServiceContainer.php");
 
 if ($request['type'] === "create") {
   // Handle contact request
   output("Processing create request from " . print_r($request['senderAddress'],true) , 'SILENT');
-  $contactService = ServiceContainer::getInstance()->getContactService();
+  $contactService = $serviceContainer->getContactService();
   echo $contactService->handleContactCreation($request);  
 }
 elseif ($request['type'] === "send") {
   // Handle eIOU
   output("Processing send request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'] ?? $request['memo'], TRUE), 'SILENT');
-  $transactionService = ServiceContainer::getInstance()->getTransactionService();
+  $transactionService = $serviceContainer->getTransactionService();
   if($transactionService->checkTransactionPossible($request)){
     $transactionService->processTransaction($request);
   }
@@ -36,7 +40,7 @@ elseif ($request['type'] === "send") {
 elseif ($request['type'] === "p2p") {
   // Handle Peer to peer Request
   output("Processing p2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
-  $p2pService = ServiceContainer::getInstance()->getP2pService();
+  $p2pService = $serviceContainer->getP2pService();
   if($p2pService->checkP2pPossible($request)){
     $p2pService->handleP2pRequest($request);
   }
@@ -44,7 +48,7 @@ elseif ($request['type'] === "p2p") {
 elseif ($request['type'] === "rp2p") {
   // Handle Peer to peer Response
   output("Processing rp2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
-  $rp2pService = ServiceContainer::getInstance()->getRp2pService();
+  $rp2pService = $serviceContainer->getRp2pService();
   if($rp2pService->checkRp2pPossible($request)){
     $rp2pService->handleRp2pRequest($request);
   }
@@ -52,7 +56,7 @@ elseif ($request['type'] === "rp2p") {
 elseif ($request['type'] === "message") {
   // Handle messages
   output("Processing message from " . print_r($request['senderAddress'],true), 'SILENT');
-  $messageService = ServiceContainer::getInstance()->getMessageService();
+  $messageService = $serviceContainer->getMessageService();
   $messageService->handleMessageRequest($request);
 }
 else {
