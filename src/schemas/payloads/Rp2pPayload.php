@@ -7,7 +7,6 @@
  * This class handles building RP2P payloads for peer-to-peer transaction
  * requests, acceptances, and rejections.
  *
- * IMPORTANT: This codebase does NOT use namespaces.
  */
 
 require_once __DIR__ . '/BasePayload.php';
