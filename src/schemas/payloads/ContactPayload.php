@@ -5,6 +5,7 @@ require_once __DIR__ . '/BasePayload.php';
 /**
  * Contact payload builder
  *
+ * Copyright 2025
  * Handles building payloads for contact-related operations including
  * contact creation, acceptance, and status messages.
  */

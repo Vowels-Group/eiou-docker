@@ -1,9 +1,8 @@
 <?php
-// Copyright 2025
-
 /**
  * Message payload builder for contact and transaction messages
  *
+ * Copyright 2025
  * This class handles building various message payloads for contact
  * status inquiries and transaction completion confirmations.
  *

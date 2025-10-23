@@ -5,6 +5,7 @@ require_once __DIR__ . '/BasePayload.php';
 /**
  * Transaction payload builder
  *
+ * Copyright 2025
  * Handles building payloads for transaction-related operations including
  * sending, accepting, rejecting, and completing transactions.
  */

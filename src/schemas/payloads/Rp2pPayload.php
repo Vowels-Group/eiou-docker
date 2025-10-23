@@ -1,9 +1,8 @@
 <?php
-// Copyright 2025
-
 /**
  * Return Peer-to-Peer (RP2P) payload builder
  *
+ * Copyright 2025
  * This class handles building RP2P payloads for peer-to-peer transaction
  * requests, acceptances, and rejections.
  *

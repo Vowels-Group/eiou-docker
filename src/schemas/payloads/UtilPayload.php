@@ -5,6 +5,7 @@ require_once __DIR__ . '/BasePayload.php';
 /**
  * Utility payload builder
  *
+ * Copyright 2025
  * Handles building utility payloads for error responses, validation failures,
  * and other system messages. This class uses static methods as these utilities
  * don't always require user context.

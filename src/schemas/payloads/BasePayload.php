@@ -2,6 +2,7 @@
 /**
  * Abstract base class for all payload builders
  *
+ * Copyright 2025
  * This class provides common functionality for building structured payloads
  * used throughout the EIOU protocol for different message types.
  *
