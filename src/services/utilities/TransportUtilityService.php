@@ -67,8 +67,8 @@ class TransportUtilityService
     */
     public function countTorAndHttpAddresses(array $data): array {
         $result = [
-            'tor' => count(array_filter($data, 'isTorAddress')),
-            'http' => count(array_filter($data, 'isHttpAddress')),
+            'tor' => count(array_filter($data, array($this,'isTorAddress'))),
+            'http' => count(array_filter($data, array($this,'isHttpAddress'))),
             'total' => count($data)
         ];
         return $result;
