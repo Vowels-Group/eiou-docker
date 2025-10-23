@@ -316,6 +316,21 @@ class ServiceContainer {
     }
 
     /**
+     * Get UtilityServiceContainer instance
+     *
+     * Issue #103: Provides access to utility services
+     *
+     * @return UtilityServiceContainer
+     */
+    public function getUtilityContainer(): UtilityServiceContainer {
+        if (!isset($this->services['UtilityServiceContainer'])) {
+            require_once __DIR__ . '/utilities/UtilityServiceContainer.php';
+            $this->services['UtilityServiceContainer'] = new UtilityServiceContainer($this);
+        }
+        return $this->services['UtilityServiceContainer'];
+    }
+
+    /**
      * Check if a service is registered
      *
      * @param string $name Service name
