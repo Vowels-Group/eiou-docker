@@ -84,6 +84,8 @@ RUN chmod 755 /etc/eiou/src/gui/assets/js
 RUN chmod 644 /etc/eiou/src/gui/assets/js/*
 RUN chmod 755 /etc/eiou/src/gui/controllers
 RUN chmod 644 /etc/eiou/src/gui/controllers/*
+RUN chmod 755 /etc/eiou/src/processors
+RUN chmod 644 /etc/eiou/src/processors/*
 RUN chmod 755 /etc/eiou/src/gui/functions
 RUN chmod 644 /etc/eiou/src/gui/functions/*
 RUN chmod 755 /etc/eiou/src/gui/helpers
