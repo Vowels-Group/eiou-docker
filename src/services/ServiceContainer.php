@@ -305,6 +305,21 @@ class ServiceContainer {
         return $this->services['DebugService'];
     }
 
+    
+    /**
+     * Get UtilityServiceContainer instance
+     *
+     *
+     * @return UtilityServiceContainer
+     */
+    public function getUtilityContainer(): UtilityServiceContainer {
+        if (!isset($this->services['UtilityServiceContainer'])) {
+            require_once __DIR__ . '/utilities/UtilityServiceContainer.php';
+            $this->services['UtilityServiceContainer'] = new UtilityServiceContainer($this);
+        }
+        return $this->services['UtilityServiceContainer'];
+    }
+
     /**
      * Clear all cached services (useful for testing)
      */
@@ -320,20 +335,6 @@ class ServiceContainer {
      */
     public function registerService(string $name, $instance): void {
         $this->services[$name] = $instance;
-    }
-
-    /**
-     * Get UtilityServiceContainer instance
-     *
-     *
-     * @return UtilityServiceContainer
-     */
-    public function getUtilityContainer(): UtilityServiceContainer {
-        if (!isset($this->services['UtilityServiceContainer'])) {
-            require_once __DIR__ . '/utilities/UtilityServiceContainer.php';
-            $this->services['UtilityServiceContainer'] = new UtilityServiceContainer($this);
-        }
-        return $this->services['UtilityServiceContainer'];
     }
 
     /**

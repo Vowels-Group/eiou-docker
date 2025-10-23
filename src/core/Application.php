@@ -20,6 +20,33 @@ class Application {
      */
     protected $currentUser;
 
+    
+    /**
+     * @var ServiceContainer object of service container
+     */
+    protected $serviceContainer;
+
+    /**
+     * @var UtilityServiceContainer UtilityServiceContainer instance
+     */
+    protected $utilityService;
+
+
+    /**
+     * @var CleanupMessageProcessor CleanupMessageProcessor instance
+     */
+    protected $cleanupProcessor;
+
+    /**
+     * @var P2pMessageProcessor P2pMessageProcessor instance
+     */
+    protected $p2pProcessor;
+
+    /**
+     * @var TransactionMessageProcessor TransactionMessageProcessor instance
+     */
+    protected $transactionProcessor;
+
     /**
      * @var Constants object of constants data
      */
@@ -32,6 +59,10 @@ class Application {
         $this->loadConfiguration();
         $this->loadUser();
         $this->getDatabase();
+        $this->loadserviceContainer();
+        $this->getCleanupMessageProcessor();
+        $this->getP2pMessageProcessor();
+        $this->getTransactionMessageProcessor();
     }
 
     /**
@@ -54,7 +85,7 @@ class Application {
     public function getDatabase() {
         if ($this->pdo === null) {
             try {
-                require_once dirname(__DIR__, 2) . '/src/database/pdo.php';
+                require_once $this->getRootPath() . '/src/database/pdo.php';
                 $this->pdo = createPDOConnection();
             } catch (Exception $e) {
                 $this->logError("Database connection failed", $e);
@@ -77,7 +108,7 @@ class Application {
      * Load user from config
      */
     private function loadUser() {
-        require_once dirname(__DIR__) . '/core/UserContext.php';
+        require_once $this->getRootPath() . '/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
     }
 
@@ -85,9 +116,16 @@ class Application {
      * Load configuration from constants
      */
     private function loadConfiguration() {
-        // Load from environment variables 
-        require_once dirname(__DIR__) . '/core/Constants.php';
+        require_once $this->getRootPath() . '/src/core/Constants.php';
         $this->envVariables = Constants::getInstance();
+    }
+
+    /**
+     * Load services from serviceContainer
+     */
+    private function loadserviceContainer() {
+        require_once $this->getRootPath() . '/src/services/ServiceContainer.php';
+        $this->services = ServiceContainer::getInstance();
     }
 
     /**
@@ -97,7 +135,7 @@ class Application {
      */
     public function getRateLimiter() {
         if ($this->rateLimiter === null && $this->getDatabase()) {
-            require_once dirname(__DIR__) . '/utils/RateLimiter.php';
+            require_once $this->getRootPath() . '/src/utils/RateLimiter.php';
             $this->rateLimiter = new RateLimiter($this->getDatabase());
         }
         return $this->rateLimiter;
@@ -110,12 +148,57 @@ class Application {
      */
     public function getLogger() {
         if ($this->logger === null) {
-            require_once dirname(__DIR__) . '/utils/SecureLogger.php';
+            require_once $this->getRootPath() . '/src/utils/SecureLogger.php';
             SecureLogger::init($this->envVariables->get('LOG_FILE_APP'), $this->envVariables->get('LOG_LEVEL'));
             $this->logger = new SecureLogger();
         }
         return $this->logger;
     }
+
+    /**
+     * Get CleanupMessageProcessor instance
+     *
+     * @return CleanupMessageProcessor
+     */
+    public function getCleanupMessageProcessor() {
+         if ($this->cleanupProcessor === null) {
+             require_once $this->getRootPath() . '/src/processors/CleanupMessageProcessor.php';
+             $this->cleanupProcessor = new CleanupMessageProcessor();
+         }
+         return $this->cleanupProcessor;
+    }
+    /**
+     * Get P2pMessageProcessor instance
+     *
+     * @return P2pMessageProcessor
+     */
+    public function getP2pMessageProcessor() {
+         if ($this->p2pProcessor === null) {
+             require_once $this->getRootPath() . '/src/processors/P2pMessageProcessor.php';
+             $this->p2pProcessor = new P2pMessageProcessor();
+         }
+         return $this->p2pProcessor;
+    }
+
+    /**
+     * Get TransactionMessageProcessor instance
+     *
+     * @return TransactionMessageProcessor
+     */
+    public function getTransactionMessageProcessor() {
+         if ($this->transactionProcessor === null) {
+             require_once $this->getRootPath() . '/src/processors/TransactionMessageProcessor.php';
+             $this->transactionProcessor = new TransactionMessageProcessor();
+         }
+         return $this->transactionProcessor;
+    }
+
+
+
+
+
+
+
 
     /**
      * Register a service
