@@ -29,8 +29,9 @@ class Application {
      * Private constructor for singleton pattern
      */
     private function __construct() {
-        $this->loadUser();
         $this->loadConfiguration();
+        $this->loadUser();
+        $this->getDatabase();
     }
 
     /**
@@ -146,22 +147,29 @@ class Application {
     }
 
     /**
-     * Log an error
+     * Log (database) errors
      *
-     * @param string $message
-     * @param Exception $e
+     * @param string $message Error message
+     * @param PDOException|null $exception Exception object
+     * @param string|null $query SQL query that failed
      */
-    public function logError($message, $e = null) {
-        if ($this->envVariables->get('APP_DEBUG')) {
-            echo "Error: $message\n";
-            if ($e) {
-                echo $e->getMessage() . "\n";
-                echo $e->getTraceAsString() . "\n";
-            }
+    protected function logError(string $message, ?PDOException $exception = null, ?string $query = null): void {
+        $logMessage = "[" . static::class . "] $message";
+
+        if ($exception) {
+            $logMessage .= ": " . $exception->getMessage();
         }
 
-        // Log to file
-        error_log($message . ($e ? ': ' . $e->getMessage() : ''));
+        if ($query) {
+            $logMessage .= " | Query: $query";
+        }
+
+        error_log($logMessage);
+
+        // Additional logging for development
+        if ($this->envVariables->get('APP_DEBUG') === 'true' && $exception) {
+            error_log("Stack trace: " . $exception->getTraceAsString());
+        }
     }
 
     /**
