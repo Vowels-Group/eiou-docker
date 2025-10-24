@@ -8,6 +8,13 @@
  *
  */
 
-$app = Application::getInstance();
-$processor = $app->getCleanupMessageProcessor();
+require_once(__DIR__ . "/config.php");
+require_once(__DIR__ . "/functions.php");
+require_once(__DIR__ . "/src/processors/CleanupMessageProcessor.php");
+
+// Create PDO connection (required for services)
+$pdo = createPDOConnection();
+
+// Create and run the processor
+$processor = new CleanupMessageProcessor();
 $processor->run();
