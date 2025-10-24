@@ -6,19 +6,6 @@
 
 class Application {
     private static ?Application $instance = null;
-    private RateLimiter $rateLimiter;
-    private SecureLogger $logger;
-    private ServiceContainer $services;
-
-    /**
-     * @var PDO Database connection instance
-     */
-    protected $pdo;
-
-    /**
-     * @var UserContext object of user data
-     */
-    protected $currentUser;
 
     /**
      * @var Constants object of constants data
@@ -26,12 +13,50 @@ class Application {
     protected $envVariables;
 
     /**
+     * @var UserContext object of user data
+     */
+    protected $currentUser;
+
+    /**
+     * @var PDO Database connection instance
+     */
+    protected $pdo;
+    
+    /**
+     * @var ServiceContainer object of service container
+     */
+    protected $serviceContainer;
+
+    /**
+     * @var UtilityServiceContainer UtilityServiceContainer instance
+     */
+    protected $utilityService;
+
+    public ServiceContainer $services;
+
+
+    /**
+     * @var array Cached processor instances
+     */
+    private array $processors = [];
+
+    /**
+     * @var array Cached util instances
+     */
+    private array $utils = [];
+
+    /**
      * Private constructor for singleton pattern
      */
     private function __construct() {
+        // Get constants
         $this->loadConfiguration();
-        $this->loadUser();
-        $this->getDatabase();
+
+        // Setup database
+        $this->constructDatabase();
+
+        // Get logger wrapper
+        $this->getLogger();
     }
 
     /**
@@ -47,22 +72,26 @@ class Application {
     }
 
     /**
-     * Get database connection (lazy loaded)
-     *
-     * @return PDO|null
+     * Create Database
      */
-    public function getDatabase() {
-        if ($this->pdo === null) {
-            try {
-                require_once dirname(__DIR__, 2) . '/src/database/pdo.php';
-                $this->pdo = createPDOConnection();
-            } catch (Exception $e) {
-                $this->logError("Database connection failed", $e);
-                return null;
-            }
-        }
-        return $this->pdo;
+    private function constructDatabase() {
+        require_once '/etc/eiou/src/database/databaseSetup.php';
+        freshInstall();
     }
+
+    // /**
+    //  * Get database connection (lazy loaded)
+    //  *
+    //  * @return PDO|null
+    //  */
+    // public function getDatabase() {
+    //     require_once '/etc/eiou/src/database/pdo.php';
+    //     try{
+    //         $this->pdo = createPDOConnection($this->currentUser);
+    //     } catch (Exception $e) {
+    //         $this->utils['SecureLogger']->logException($e,'ERROR');
+    //     } 
+    // }
 
     /**
      * Set database connection (for testing)
@@ -74,10 +103,10 @@ class Application {
     }
 
     /**
-     * Load user from config
+     * Load current user from global scope
      */
-    private function loadUser() {
-        require_once dirname(__DIR__) . '/core/UserContext.php';
+    public function loadCurrentUser() {
+        require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
     }
 
@@ -85,9 +114,16 @@ class Application {
      * Load configuration from constants
      */
     private function loadConfiguration() {
-        // Load from environment variables 
-        require_once dirname(__DIR__) . '/core/Constants.php';
+        require_once $this->getRootPath() . '/src/core/Constants.php';
         $this->envVariables = Constants::getInstance();
+    }
+
+    /**
+     * Load services from serviceContainer
+     */
+    public function loadserviceContainer() {
+        require_once $this->getRootPath() . '/src/services/ServiceContainer.php';
+        $this->services = ServiceContainer::getInstance();
     }
 
     /**
@@ -96,11 +132,11 @@ class Application {
      * @return RateLimiter|null
      */
     public function getRateLimiter() {
-        if ($this->rateLimiter === null && $this->getDatabase()) {
-            require_once dirname(__DIR__) . '/utils/RateLimiter.php';
-            $this->rateLimiter = new RateLimiter($this->getDatabase());
+        if (!isset($this->utils['rateLimiter'])) {
+            require_once $this->getRootPath() . '/src/utils/RateLimiter.php';
+            $this->utils['rateLimiter'] = new RateLimiter($this->pdo);
         }
-        return $this->rateLimiter;
+        return $this->utils['rateLimiter'];
     }
 
     /**
@@ -109,12 +145,50 @@ class Application {
      * @return SecureLogger
      */
     public function getLogger() {
-        if ($this->logger === null) {
-            require_once dirname(__DIR__) . '/utils/SecureLogger.php';
+        if (!isset($this->utils['SecureLogger'])) {
+            require_once $this->getRootPath() . '/src/utils/SecureLogger.php';
             SecureLogger::init($this->envVariables->get('LOG_FILE_APP'), $this->envVariables->get('LOG_LEVEL'));
-            $this->logger = new SecureLogger();
+            $this->utils['SecureLogger'] = new SecureLogger();
         }
-        return $this->logger;
+        $this->utils['SecureLogger'];
+    }
+
+    /**
+     * Get CleanupMessageProcessor instance
+     *
+     * @return CleanupMessageProcessor
+     */
+    public function getCleanupMessageProcessor() {
+         if (!isset($this->processors['cleanupProcessor'])) {
+            require_once $this->getRootPath() . '/src/processors/CleanupMessageProcessor.php';
+            $this->processors['cleanupProcessor'] = new CleanupMessageProcessor();
+         }
+         return $this->processors['cleanupProcessor'];
+    }
+    /**
+     * Get P2pMessageProcessor instance
+     *
+     * @return P2pMessageProcessor
+     */
+    public function getP2pMessageProcessor() {
+         if (!isset($this->processors['p2pProcessor'])) {
+            require_once $this->getRootPath() . '/src/processors/P2pMessageProcessor.php';
+            $this->processors['p2pProcessor'] = new P2pMessageProcessor();
+         }
+         return $this->processors['p2pProcessor'];
+    }
+
+    /**
+     * Get TransactionMessageProcessor instance
+     *
+     * @return TransactionMessageProcessor
+     */
+    public function getTransactionMessageProcessor() {
+          if (!isset($this->processors['transactionProcessor'])) {
+            require_once $this->getRootPath() . '/src/processors/TransactionMessageProcessor.php';
+            $this->processors['transactionProcessor'] = new TransactionMessageProcessor();
+         }
+         return $this->processors['transactionProcessor'];
     }
 
     /**
@@ -142,34 +216,7 @@ class Application {
             // Lazy load service
             $this->services[$name] = call_user_func($this->services[$name]);
         }
-
         return $this->services[$name];
-    }
-
-    /**
-     * Log (database) errors
-     *
-     * @param string $message Error message
-     * @param PDOException|null $exception Exception object
-     * @param string|null $query SQL query that failed
-     */
-    protected function logError(string $message, ?PDOException $exception = null, ?string $query = null): void {
-        $logMessage = "[" . static::class . "] $message";
-
-        if ($exception) {
-            $logMessage .= ": " . $exception->getMessage();
-        }
-
-        if ($query) {
-            $logMessage .= " | Query: $query";
-        }
-
-        error_log($logMessage);
-
-        // Additional logging for development
-        if ($this->envVariables->get('APP_DEBUG') === 'true' && $exception) {
-            error_log("Stack trace: " . $exception->getTraceAsString());
-        }
     }
 
     /**

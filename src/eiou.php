@@ -3,25 +3,26 @@
 
 // This file is how users interact with eiou
 
-require_once("/etc/eiou/functions.php");
-// Check if config.php exists, if not run freshInstall()
+require_once '/etc/eiou/functions.php';
+
+// Check if config.php exists, if not run freshInstall() through the Application
 if (!file_exists('/etc/eiou/config.php')) {
   // Performs a fresh installation of the eIOU system by creating configuration files, database, and necessary tables
-  freshInstall();
+  $app = Application::getInstance();
 }
-require_once("/etc/eiou/config.php");
+if(!isset($app)){
+  $app = Application::getInstance();
+}
+require_once '/etc/eiou/config.php';
 
-require_once("/etc/eiou/src/services/ServiceContainer.php");
-$contactService = ServiceContainer::getInstance()->getContactService();
-$transactionService = ServiceContainer::getInstance()->getTransactionService();
-$synchService = ServiceContainer::getInstance()->getSynchService();
-$walletService = ServiceContainer::getInstance()->getWalletService();
+$app->loadserviceContainer();
+$contactService = $app->services->getContactService();
+$transactionService = $app->services->getTransactionService();
+$synchService = $app->services->getSynchService();
+$walletService = $app->services->getWalletService();
 
 // Convert request to lowercase
 $request = strtolower($argv[1]);
-
-// Create PDO (db) connection
-$pdo = createPDOConnection();
 
 // Check if user has a key set in config
 $walletService->checkWalletExists($request);
@@ -107,6 +108,7 @@ $walletService->checkWalletExists($request);
     // Generate Wallet
     output("Executing generate wallet request", 'SILENT');
     $walletService->generateWallet($argv);
+    $app->loadCurrentUser();
   }
   elseif($request === "synch"){
     // Synch
