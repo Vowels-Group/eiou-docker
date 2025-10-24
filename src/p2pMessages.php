@@ -10,11 +10,9 @@
 
 require_once(__DIR__ . "/config.php");
 require_once(__DIR__ . "/functions.php");
-require_once(__DIR__ . "/src/processors/P2pMessageProcessor.php");
 
-// Create PDO connection (required for services)
-$pdo = createPDOConnection();
+$app = Application::getInstance();
 
 // Create and run the processor
-$processor = new P2pMessageProcessor();
+$processor = $app->getP2pMessageProcessor();
 $processor->run();

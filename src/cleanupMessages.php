@@ -10,11 +10,9 @@
 
 require_once(__DIR__ . "/config.php");
 require_once(__DIR__ . "/functions.php");
-require_once(__DIR__ . "/src/processors/CleanupMessageProcessor.php");
 
-// Create PDO connection (required for services)
-$pdo = createPDOConnection();
+$app = Application::getInstance();
 
 // Create and run the processor
-$processor = new CleanupMessageProcessor();
+$processor = $app->getCleanupMessageProcessor();
 $processor->run();
