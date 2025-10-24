@@ -57,15 +57,6 @@ class Application {
 
         // Get logger wrapper
         $this->getLogger();
-
-        // Get user data
-        //$this->loadUser();
-
-        // // Get Database connection
-        //$this->getDatabase();
-
-        // Start services
-        //$this->loadserviceContainer();
     }
 
     /**
@@ -99,8 +90,7 @@ class Application {
     //         $this->pdo = createPDOConnection($this->currentUser);
     //     } catch (Exception $e) {
     //         $this->utils['SecureLogger']->logException($e,'ERROR');
-    //     }
-        
+    //     } 
     // }
 
     /**
@@ -113,9 +103,9 @@ class Application {
     }
 
     /**
-     * Load user from config
+     * Load current user from global scope
      */
-    public function loadUser() {
+    public function loadCurrentUser() {
         require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
     }
