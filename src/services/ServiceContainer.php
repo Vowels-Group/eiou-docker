@@ -91,6 +91,7 @@ class ServiceContainer {
      */
     public function getContactRepository(): ContactRepository {
         if (!isset($this->services['ContactRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/ContactRepository.php';
             $this->services['ContactRepository'] = new ContactRepository($this->pdo);
         }
         return $this->services['ContactRepository'];
@@ -103,6 +104,7 @@ class ServiceContainer {
      */
     public function getP2pRepository(): P2pRepository {
         if (!isset($this->services['P2pRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/P2pRepository.php';
             $this->services['P2pRepository'] = new P2pRepository($this->pdo);
         }
         return $this->services['P2pRepository'];
@@ -115,6 +117,7 @@ class ServiceContainer {
      */
     public function getRp2pRepository(): Rp2pRepository {
         if (!isset($this->services['Rp2pRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/Rp2pRepository.php';
             $this->services['Rp2pRepository'] = new Rp2pRepository($this->pdo);
         }
         return $this->services['Rp2pRepository'];
@@ -127,6 +130,7 @@ class ServiceContainer {
      */
     public function getTransactionRepository(): TransactionRepository {
         if (!isset($this->services['TransactionRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/TransactionRepository.php';
             $this->services['TransactionRepository'] = new TransactionRepository($this->pdo);
         }
         return $this->services['TransactionRepository'];
@@ -139,6 +143,7 @@ class ServiceContainer {
      */
     public function getDebugRepository(): DebugRepository {
         if (!isset($this->services['DebugRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/DebugRepository.php';
             $this->services['DebugRepository'] = new DebugRepository($this->pdo);
         }
         return $this->services['DebugRepository'];
