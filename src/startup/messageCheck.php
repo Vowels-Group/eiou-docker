@@ -5,11 +5,11 @@
 $passed = false;
 try{
     // Checks if config.php exists (needed for core functionality)
-    if(!file_exists("/etc/eiou/config.php")){
+    if(!file_exists('/etc/eiou/config.php')){
         return;
     }
-    require_once("/etc/eiou/config.php");
-    require_once("/etc/eiou/src/database/pdo.php");
+    require_once '/etc/eiou/config.php';
+    require_once '/etc/eiou/src/database/pdo.php';
     // create PDO connection, will return the connection or raise an exception (check if PDO functions)
     $pdo = createPDOConnection();
     $pdo = null; // reset PDO

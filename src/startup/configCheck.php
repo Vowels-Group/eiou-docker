@@ -5,11 +5,11 @@
 $run = false;
 try{
     // Check if config.php exists
-    if(!file_exists("/etc/eiou/config.php")){
+    if(!file_exists('/etc/eiou/config.php')){
         $run = true;
         return;
     }
-    require_once("/etc/eiou/config.php");
+    require_once '/etc/eiou/config.php';
     // check if the user keys are available
     if(!isset($user["public"])){
         $run = true;
