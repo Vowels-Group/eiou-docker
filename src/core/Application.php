@@ -59,13 +59,13 @@ class Application {
         $this->getLogger();
 
         // Get user data
-        $this->loadUser();
+        //$this->loadUser();
 
         // // Get Database connection
-         $this->getDatabase();
+        //$this->getDatabase();
 
         // Start services
-        $this->loadserviceContainer();
+        //$this->loadserviceContainer();
     }
 
     /**
@@ -131,7 +131,7 @@ class Application {
     /**
      * Load services from serviceContainer
      */
-    private function loadserviceContainer() {
+    public function loadserviceContainer() {
         require_once $this->getRootPath() . '/src/services/ServiceContainer.php';
         $this->services = ServiceContainer::getInstance();
     }
