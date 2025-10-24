@@ -62,6 +62,7 @@ class UtilityServiceContainer
     public function getTimeUtility(): TimeUtilityService
     {
         if (!isset($this->utilities['TimeUtilityService'])) {
+             require_once __DIR__ . '/TimeUtilityService.php';
             $this->utilities['TimeUtilityService'] = new TimeUtilityService(
                 Constants::getInstance()
             );
@@ -77,6 +78,7 @@ class UtilityServiceContainer
     public function getCurrencyUtility(): CurrencyUtilityService
     {
         if (!isset($this->utilities['CurrencyUtilityService'])) {
+             require_once __DIR__ . '/CurrencyUtilityService.php';
             $this->utilities['CurrencyUtilityService'] = new CurrencyUtilityService(
                 Constants::getInstance()
             );
@@ -92,6 +94,7 @@ class UtilityServiceContainer
     public function getValidationUtility(): ValidationUtilityService
     {
         if (!isset($this->utilities['ValidationUtilityService'])) {
+             require_once __DIR__ . '/ValidationUtilityService.php';
             $this->utilities['ValidationUtilityService'] = new ValidationUtilityService(
                 Constants::getInstance(),
                 $this->mainContainer
@@ -108,6 +111,7 @@ class UtilityServiceContainer
     public function getTransportUtility(): TransportUtilityService
     {
         if (!isset($this->utilities['TransportUtilityService'])) {
+             require_once __DIR__ . '/TransportUtilityService.php';
             $this->utilities['TransportUtilityService'] = new TransportUtilityService(
                 Constants::getInstance(),
                 $this->mainContainer
