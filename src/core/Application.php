@@ -6,20 +6,21 @@
 
 class Application {
     private static ?Application $instance = null;
-    private RateLimiter $rateLimiter;
-    private SecureLogger $logger;
-    private ServiceContainer $services;
 
     /**
-     * @var PDO Database connection instance
+     * @var Constants object of constants data
      */
-    protected $pdo;
+    protected $envVariables;
 
     /**
      * @var UserContext object of user data
      */
     protected $currentUser;
 
+    /**
+     * @var PDO Database connection instance
+     */
+    protected $pdo;
     
     /**
      * @var ServiceContainer object of service container
@@ -31,38 +32,40 @@ class Application {
      */
     protected $utilityService;
 
+    public ServiceContainer $services;
+
 
     /**
-     * @var CleanupMessageProcessor CleanupMessageProcessor instance
+     * @var array Cached processor instances
      */
-    protected $cleanupProcessor;
+    private array $processors = [];
 
     /**
-     * @var P2pMessageProcessor P2pMessageProcessor instance
+     * @var array Cached util instances
      */
-    protected $p2pProcessor;
-
-    /**
-     * @var TransactionMessageProcessor TransactionMessageProcessor instance
-     */
-    protected $transactionProcessor;
-
-    /**
-     * @var Constants object of constants data
-     */
-    protected $envVariables;
+    private array $utils = [];
 
     /**
      * Private constructor for singleton pattern
      */
     private function __construct() {
+        // Get constants
         $this->loadConfiguration();
+
+        // Setup database
+        $this->constructDatabase();
+
+        // Get logger wrapper
+        $this->getLogger();
+
+        // Get user data
         $this->loadUser();
-        $this->getDatabase();
+
+        // // Get Database connection
+         $this->getDatabase();
+
+        // Start services
         $this->loadserviceContainer();
-        $this->getCleanupMessageProcessor();
-        $this->getP2pMessageProcessor();
-        $this->getTransactionMessageProcessor();
     }
 
     /**
@@ -78,22 +81,27 @@ class Application {
     }
 
     /**
-     * Get database connection (lazy loaded)
-     *
-     * @return PDO|null
+     * Create Database
      */
-    public function getDatabase() {
-        if ($this->pdo === null) {
-            try {
-                require_once $this->getRootPath() . '/src/database/pdo.php';
-                $this->pdo = createPDOConnection();
-            } catch (Exception $e) {
-                $this->logError("Database connection failed", $e);
-                return null;
-            }
-        }
-        return $this->pdo;
+    private function constructDatabase() {
+        require_once '/etc/eiou/src/database/databaseSetup.php';
+        freshInstall();
     }
+
+    // /**
+    //  * Get database connection (lazy loaded)
+    //  *
+    //  * @return PDO|null
+    //  */
+    // public function getDatabase() {
+    //     require_once '/etc/eiou/src/database/pdo.php';
+    //     try{
+    //         $this->pdo = createPDOConnection($this->currentUser);
+    //     } catch (Exception $e) {
+    //         $this->utils['SecureLogger']->logException($e,'ERROR');
+    //     }
+        
+    // }
 
     /**
      * Set database connection (for testing)
@@ -107,8 +115,8 @@ class Application {
     /**
      * Load user from config
      */
-    private function loadUser() {
-        require_once $this->getRootPath() . '/src/core/UserContext.php';
+    public function loadUser() {
+        require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
     }
 
@@ -134,11 +142,11 @@ class Application {
      * @return RateLimiter|null
      */
     public function getRateLimiter() {
-        if ($this->rateLimiter === null && $this->getDatabase()) {
+        if (!isset($this->utils['rateLimiter'])) {
             require_once $this->getRootPath() . '/src/utils/RateLimiter.php';
-            $this->rateLimiter = new RateLimiter($this->getDatabase());
+            $this->utils['rateLimiter'] = new RateLimiter($this->pdo);
         }
-        return $this->rateLimiter;
+        return $this->utils['rateLimiter'];
     }
 
     /**
@@ -147,12 +155,12 @@ class Application {
      * @return SecureLogger
      */
     public function getLogger() {
-        if ($this->logger === null) {
+        if (!isset($this->utils['SecureLogger'])) {
             require_once $this->getRootPath() . '/src/utils/SecureLogger.php';
             SecureLogger::init($this->envVariables->get('LOG_FILE_APP'), $this->envVariables->get('LOG_LEVEL'));
-            $this->logger = new SecureLogger();
+            $this->utils['SecureLogger'] = new SecureLogger();
         }
-        return $this->logger;
+        $this->utils['SecureLogger'];
     }
 
     /**
@@ -161,11 +169,11 @@ class Application {
      * @return CleanupMessageProcessor
      */
     public function getCleanupMessageProcessor() {
-         if ($this->cleanupProcessor === null) {
-             require_once $this->getRootPath() . '/src/processors/CleanupMessageProcessor.php';
-             $this->cleanupProcessor = new CleanupMessageProcessor();
+         if (!isset($this->processors['cleanupProcessor'])) {
+            require_once $this->getRootPath() . '/src/processors/CleanupMessageProcessor.php';
+            $this->processors['cleanupProcessor'] = new CleanupMessageProcessor();
          }
-         return $this->cleanupProcessor;
+         return $this->processors['cleanupProcessor'];
     }
     /**
      * Get P2pMessageProcessor instance
@@ -173,11 +181,11 @@ class Application {
      * @return P2pMessageProcessor
      */
     public function getP2pMessageProcessor() {
-         if ($this->p2pProcessor === null) {
-             require_once $this->getRootPath() . '/src/processors/P2pMessageProcessor.php';
-             $this->p2pProcessor = new P2pMessageProcessor();
+         if (!isset($this->processors['p2pProcessor'])) {
+            require_once $this->getRootPath() . '/src/processors/P2pMessageProcessor.php';
+            $this->processors['p2pProcessor'] = new P2pMessageProcessor();
          }
-         return $this->p2pProcessor;
+         return $this->processors['p2pProcessor'];
     }
 
     /**
@@ -186,19 +194,12 @@ class Application {
      * @return TransactionMessageProcessor
      */
     public function getTransactionMessageProcessor() {
-         if ($this->transactionProcessor === null) {
-             require_once $this->getRootPath() . '/src/processors/TransactionMessageProcessor.php';
-             $this->transactionProcessor = new TransactionMessageProcessor();
+          if (!isset($this->processors['transactionProcessor'])) {
+            require_once $this->getRootPath() . '/src/processors/TransactionMessageProcessor.php';
+            $this->processors['transactionProcessor'] = new TransactionMessageProcessor();
          }
-         return $this->transactionProcessor;
+         return $this->processors['transactionProcessor'];
     }
-
-
-
-
-
-
-
 
     /**
      * Register a service
@@ -225,34 +226,7 @@ class Application {
             // Lazy load service
             $this->services[$name] = call_user_func($this->services[$name]);
         }
-
         return $this->services[$name];
-    }
-
-    /**
-     * Log (database) errors
-     *
-     * @param string $message Error message
-     * @param PDOException|null $exception Exception object
-     * @param string|null $query SQL query that failed
-     */
-    protected function logError(string $message, ?PDOException $exception = null, ?string $query = null): void {
-        $logMessage = "[" . static::class . "] $message";
-
-        if ($exception) {
-            $logMessage .= ": " . $exception->getMessage();
-        }
-
-        if ($query) {
-            $logMessage .= " | Query: $query";
-        }
-
-        error_log($logMessage);
-
-        // Additional logging for development
-        if ($this->envVariables->get('APP_DEBUG') === 'true' && $exception) {
-            error_log("Stack trace: " . $exception->getTraceAsString());
-        }
     }
 
     /**
