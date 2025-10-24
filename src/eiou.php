@@ -108,6 +108,7 @@ $walletService->checkWalletExists($request);
     // Generate Wallet
     output("Executing generate wallet request", 'SILENT');
     $walletService->generateWallet($argv);
+    $app->loadCurrentUser();
   }
   elseif($request === "synch"){
     // Synch
