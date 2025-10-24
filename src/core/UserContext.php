@@ -210,13 +210,44 @@ class UserContext {
     public function getUserLocaters(): array {
         $locaters = [];
         foreach($this->getUserAddresses() as $address){
-            if (isTorAddress($address)){
+            if ($this->isTorAddress($address)){
                 $locaters['Tor'] = $address;
-            } elseif (isHttpAddress($address)) {
+            } elseif ($this->isHttpAddress($address)) {
                 $locaters['Http'] = $address;
             }
         }
         return $locaters;
+    }
+
+    
+    /**
+     * Determine if adress is valid HTTP or TOR
+     *
+     * @param string $address The address of the sender
+     * @return bool True if HTTP(S)/TOR address, False otherwise
+    */
+    public function isAddress($address): bool {
+        return ($this->isHttpAddress($address) || $this->isTorAddress($address));
+    }
+
+    /**
+     * Determine if adress is HTTP/HTTPS
+     *
+     * @param string $address The address of the sender
+     * @return bool True if HTTP(S) address, False otherwise
+    */
+    public function isHttpAddress($address): bool {
+        return preg_match('/^https?:\/\//', $address) === 1;
+    }
+
+    /**
+     * Determine if adress is TOR
+     *
+     * @param string $address The address of the sender
+     * @return bool True if Tor address, False otherwise
+    */
+    public function isTorAddress($address): bool {
+        return preg_match('/\.onion$/', $address) === 1;
     }
 
     /**
