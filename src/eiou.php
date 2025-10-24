@@ -3,19 +3,34 @@
 
 // This file is how users interact with eiou
 
-require_once("/etc/eiou/functions.php");
+require_once '/etc/eiou/functions.php';
 // Check if config.php exists, if not run freshInstall()
 if (!file_exists('/etc/eiou/config.php')) {
   // Performs a fresh installation of the eIOU system by creating configuration files, database, and necessary tables
-  freshInstall();
+    require_once '/etc/eiou/src/database/databaseSetup.php';
+    freshInstall();
 }
-require_once("/etc/eiou/config.php");
+require_once '/etc/eiou/config.php';
 
-require_once("/etc/eiou/src/services/ServiceContainer.php");
+
+// require_once '/etc/eiou/src/core/Application.php';
+// $app = Application::getInstance();
+
+// $app->services->getContactService();
+// $app->envVariables;
+
+require_once '/etc/eiou/src/services/ServiceContainer.php';
 $contactService = ServiceContainer::getInstance()->getContactService();
 $transactionService = ServiceContainer::getInstance()->getTransactionService();
 $synchService = ServiceContainer::getInstance()->getSynchService();
 $walletService = ServiceContainer::getInstance()->getWalletService();
+
+
+
+// $contactService = $app->getService('ContactService');
+// $transactionService = $app->services->getTransactionService();
+// $synchService = $app->services->getSynchService();
+// $walletService = ServiceContainer::getInstance()->getWalletService();
 
 // Convert request to lowercase
 $request = strtolower($argv[1]);
