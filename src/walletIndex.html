@@ -21,14 +21,19 @@ require_once("/etc/eiou/src/gui/helpers/MessageHelper.php");
 require_once("/etc/eiou/src/gui/helpers/ViewHelper.php");
 
 // Create Services
-require_once("/etc/eiou/src/services/ServiceContainer.php");
-$contactService = ServiceContainer::getInstance()->getContactService();
-$transactionService = ServiceContainer::getInstance()->getTransactionService();
+$app = Application::getInstance();
+$app->loadserviceContainer();
+$serviceContainer = $app->services;
+$contactService = $serviceContainer->getContactService();
+$transactionService = $serviceContainer->getTransactionService();
+
+$utilityContainer = UtilityServiceContainer::getInstance($serviceContainer);
+$transportUtility = $utilityContainer->getTransportUtility();
 
 // Create controllers
 require_once("/etc/eiou/src/gui/controllers/ContactController.php");
-require_once("/etc/eiou/src/gui/controllers/TransactionController.php");
 $contactController = new ContactController($secureSession, $contactService);
+require_once("/etc/eiou/src/gui/controllers/TransactionController.php");
 $transactionController = new TransactionController($secureSession, $contactService, $transactionService);
 
 

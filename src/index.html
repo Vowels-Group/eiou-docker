@@ -2,19 +2,19 @@
 # Copyright 2025
 
 // This file accepts incoming messages from the eIOU network
-require_once("/etc/eiou/functions.php");
-if (!file_exists("/etc/eiou/config.php")) {
+require_once('/etc/eiou/functions.php');
+if (!file_exists('/etc/eiou/config.php')) {
   echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
   die;
 }
-require_once("/etc/eiou/config.php");
+require_once '/etc/eiou/config.php';
 
 // Accept incoming connection and decode request
 $request = json_decode($_GET['payload'], true);
 
-require_once("/etc/eiou/src/services/ServiceContainer.php");
-require_once("/etc/eiou/src/services/utilities/UtilityServiceContainer.php");
-$serviceContainer = ServiceContainer::getInstance();
+$app = Application::getInstance();
+$app->loadserviceContainer();
+$serviceContainer = $app->services;
 $utilityContainer = UtilityServiceContainer::getInstance($serviceContainer);
 $validationUtility = $utilityContainer->getValidationUtility();
 
