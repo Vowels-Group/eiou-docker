@@ -26,7 +26,7 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                         <span style="background: lightgreen; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Accepted</span>
                         <div class="contact-details">
-                            <div class="contact-address"><?php echo htmlspecialchars(truncateAddress($contact['address'])); ?></div>
+                            <div class="contact-address"><?php echo htmlspecialchars($transportUtility->truncateAddress($contact['address'])); ?></div>
                             <div>Balance: <span class="<?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>">
                                 <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?>
                             </span> <?php echo $contact['currency']; ?></div>
@@ -64,7 +64,7 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                         <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending Response</span>
                         <div class="contact-details">
-                            <div class="contact-address"><?php echo htmlspecialchars(truncateAddress($contact['address'])); ?></div>
+                            <div class="contact-address"><?php echo htmlspecialchars($transportUtility->truncateAddress($contact['address'])); ?></div>
                             <div>Balance: <span class="balance-negative">
                                 -
                             </span> <?php echo $contact['currency']; ?></div>
@@ -85,7 +85,7 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name'] ?? "-"); ?></div>
                         <span style="background: red; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Blocked</span>
                         <div class="contact-details">
-                            <div class="contact-address"><?php echo htmlspecialchars(truncateAddress($contact['address'])); ?></div>
+                            <div class="contact-address"><?php echo htmlspecialchars($transportUtility->truncateAddress($contact['address'])); ?></div>
                             <div>Balance: <span class="balance-negative">
                                 -
                             </span> <?php echo $contact['currency'] ?? "USD"; ?></div>
@@ -169,7 +169,7 @@
             <div style="margin-bottom: 0.5rem;">
                 <div class="info-label">Address:</div>
                 <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px;">
-                    <?php echo htmlspecialchars(truncateAddress($contact['address'])); ?>
+                    <?php echo htmlspecialchars($transportUtility->truncateAddress($contact['address'])); ?>
                 </div>
             </div>
             <div style="margin-bottom: 1rem;">
