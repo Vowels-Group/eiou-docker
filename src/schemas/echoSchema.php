@@ -101,10 +101,6 @@ function returnContactSearchNoResults() {
 }
 
 function returnContactSearchResults ($data) {
-    $app = Application::getInstance();
-    $app->loadserviceContainer();
-    $utilityContainer = UtilityServiceContainer::getInstance($app->services);
-    $currencyUtility = $utilityContainer->getCurrencyUtility();
     // Return contact information in a nice format
     return "Search Results:\n" .
             "--------------------------------------------\n" .
@@ -117,8 +113,8 @@ function returnContactSearchResults ($data) {
             implode("\n", array_map(function($contact) {
                 return str_pad($contact['address'], 56, ' ') . " | " . 
                         str_pad($contact['name'] ?? 'N/A', 20, ' ') . " | " . 
-                        str_pad(($contact['fee_percent'] !== null ? $currencyUtility->convertCentsToDollars($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " . 
-                        str_pad(($contact['credit_limit'] !== null ? $currencyUtility->convertCentsToDollars($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " . 
+                        str_pad(($contact['fee_percent'] !== null ? UtilityServiceContainer::getInstance(Application::getInstance()->services)->getCurrencyUtility()->convertCentsToDollars($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " . 
+                        str_pad(($contact['credit_limit'] !== null ? UtilityServiceContainer::getInstance(Application::getInstance()->services)->getCurrencyUtility()->convertCentsToDollars($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " . 
                         ($contact['currency'] ?? 'N/A');
             }, $data)) . "\n" .
             "--------------------------------------------\n" .
