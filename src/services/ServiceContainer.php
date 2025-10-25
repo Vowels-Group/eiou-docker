@@ -322,7 +322,24 @@ class ServiceContainer {
         return $this->services['DebugService'];
     }
 
-    
+    /**
+     * Get CliService instance
+     *
+     * @return CliService
+     */
+    public function getCliService(): CliService {
+        if (!isset($this->services['CliService'])) {
+            require_once __DIR__ . '/CliService.php';
+            $this->services['CliService'] = new CliService(
+                $this->getContactRepository(),
+                $this->getTransactionRepository(),
+                $this->getUtilityContainer(),
+                $this->currentUser
+            );
+        }
+        return $this->services['CliService'];
+    }
+
     /**
      * Get UtilityServiceContainer instance
      *
