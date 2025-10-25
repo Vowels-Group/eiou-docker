@@ -30,7 +30,6 @@ if (isset($_GET['message']) && isset($_GET['type'])) {
     $messageTypeForDisplay = '';
 }
 
-
 // Get user based data
 $totalBalance = $transactionService->getUserTotalBalance();
 $transactions = $transactionService->getTransactionHistory(10);
