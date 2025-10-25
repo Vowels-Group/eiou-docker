@@ -271,7 +271,15 @@ class Application {
         if ($this->pdo) {
             $this->pdo = null;
         }
+
+        foreach($this->processors as $processor){
+            $processor->shutdown();
+        }
+        $this->processors = [];
         $this->services->clearServices();
+        $this->utils = [];
+        $this->currentUser = null;
+        $this->envVariables = null;
     }
 
     /**
