@@ -8,9 +8,9 @@ require_once 'src/core/ErrorHandler.php';
 require_once 'src/core/UserContext.php';
 
 // Require database functionality
+require_once 'src/database/databaseSetup.php';
 require_once 'src/database/pdo.php';
 require_once 'src/database/AbstractRepository.php';
-require_once 'src/database/databaseSetup.php';
 
 // Require all files in the services directory
 require_once 'src/services/utilities/UtilityServiceContainer.php';
