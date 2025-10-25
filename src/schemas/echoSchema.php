@@ -38,13 +38,17 @@ function returnContactDeletedSuccesfully(){
 
 function returnContactDetails($data) {
     // Return contact details in a nice format
+    $app = Application::getInstance();
+    $app->loadserviceContainer();
+    $utilityContainer = UtilityServiceContainer::getInstance($app->services);
+    $currencyUtility = $utilityContainer->getCurrencyUtility();
     return "Contact Details:\n" .
            "---------------\n" .
            "Address: " . $data['address'] . "\n" .
            "Name: " . ($data['name'] ?? 'N/A') . "\n" .
            "Public Key: " . "..." . substr($data['pubkey'], 51, 25) . "...\n" .              
-           "Fee: " .  convertQuantityCurrency(($data['fee_percent'] ?? '0.00') ) . "%\n" .
-           "Credit Limit: " . convertQuantityCurrency(($data['credit_limit'] ?? '0.00')) . "\n" .
+           "Fee: " .  $currencyUtility->convertCentsToDollars(($data['fee_percent'] ?? '0.00') ) . "%\n" .
+           "Credit Limit: " . $currencyUtility->convertCentsToDollars(($data['credit_limit'] ?? '0.00')) . "\n" .
            "Currency: " . ($data['currency']) . "\n";
 }
 
@@ -97,6 +101,10 @@ function returnContactSearchNoResults() {
 }
 
 function returnContactSearchResults ($data) {
+    $app = Application::getInstance();
+    $app->loadserviceContainer();
+    $utilityContainer = UtilityServiceContainer::getInstance($app->services);
+    $currencyUtility = $utilityContainer->getCurrencyUtility();
     // Return contact information in a nice format
     return "Search Results:\n" .
             "--------------------------------------------\n" .
@@ -109,8 +117,8 @@ function returnContactSearchResults ($data) {
             implode("\n", array_map(function($contact) {
                 return str_pad($contact['address'], 56, ' ') . " | " . 
                         str_pad($contact['name'] ?? 'N/A', 20, ' ') . " | " . 
-                        str_pad(($contact['fee_percent'] !== null ? convertQuantityCurrency($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " . 
-                        str_pad(($contact['credit_limit'] !== null ? convertQuantityCurrency($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " . 
+                        str_pad(($contact['fee_percent'] !== null ? $currencyUtility->convertCentsToDollars($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " . 
+                        str_pad(($contact['credit_limit'] !== null ? $currencyUtility->convertCentsToDollars($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " . 
                         ($contact['currency'] ?? 'N/A');
             }, $data)) . "\n" .
             "--------------------------------------------\n" .
