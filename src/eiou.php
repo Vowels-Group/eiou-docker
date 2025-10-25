@@ -16,6 +16,7 @@ if(!isset($app)){
 require_once '/etc/eiou/config.php';
 
 $app->loadserviceContainer();
+$cliService = $app->services->getCliService();
 $contactService = $app->services->getContactService();
 $transactionService = $app->services->getTransactionService();
 $synchService = $app->services->getSynchService();
@@ -31,7 +32,7 @@ $walletService->checkWalletExists($request);
   // Call the function in the info section
   if ($request === "info") {
       output("Executing info request",  'SILENT');
-      displayUserInfo($argv);
+      $cliService->displayUserInfo($argv);
   }
 // Contacts
   elseif($request === "add"){
@@ -81,28 +82,28 @@ $walletService->checkWalletExists($request);
   elseif($request === "viewbalances"){
     // View eIOUs
     output("Executing view balances request", 'SILENT');
-    viewBalances($argv);
+    $cliService->viewBalances($argv);
   }
   elseif($request === "history"){
     // View Transaction History
     output("Executing transaction history request", 'SILENT');
-    viewTransactionHistory($argv);
+    $cliService->viewTransactionHistory($argv);
   }
 // Settings
   elseif($request === "help"){
     // Help
     output("Executing help request", 'SILENT');
-    displayHelp($argv);
+    $cliService->displayHelp($argv);
   }
   elseif($request === "viewsettings"){
     // View Settings
     output("Executing view settings request", 'SILENT');
-    displayCurrentSettings();
+    $cliService->displayCurrentSettings();
   }
   elseif($request === "changesettings"){
     // Change settings
     output("Executing change settings request", 'SILENT');
-    changeSettings($argv);
+    $cliService->changeSettings($argv);
   }
   elseif($request === "generate"){
     // Generate Wallet
@@ -114,10 +115,15 @@ $walletService->checkWalletExists($request);
     // Synch
     output("Executing synch request", 'SILENT');
     $synchService->sych($argv);
+  } 
+  elseif($request === "shutdown"){
+    // Shutdown application
+    output("Executing shutdown request", 'SILENT');
+    $app->shutdown();
   }
   else{
     // If no known input, display commands possible for input
-    displayHelp($argv);
+    $cliService->displayHelp($argv);
     echo $request . " not found, displaying help above\n";
   }
 
