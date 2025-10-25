@@ -236,8 +236,8 @@ class ContactService {
      */
     public function lookupContactInfo($request): ?array {
         // Lookup information
-        $lookupResultByName = $this->lookupContactByName($request);
-        $lookupResultByAddress = $this->lookupContactByAddress($request);
+        $lookupResultByName = $this->lookupByName($request);
+        $lookupResultByAddress = $this->lookupByAddress($request);
         $lookupResult = $lookupResultByName ?? $lookupResultByAddress;
 
         if (isset($lookupResult['name'])) {
@@ -262,7 +262,7 @@ class ContactService {
      * @param string $name Contact name
      * @return array|null Contact data or null
      */
-    public function lookupContactByName(string $name): ?array {
+    public function lookupByName(string $name): ?array {
         return $this->contactRepository->lookupByName($name);
     }
 
@@ -272,7 +272,7 @@ class ContactService {
      * @param string $address Contact address
      * @return array|null Contact data or null
      */
-    public function lookupContactByAddress(string $address): ?array {
+    public function lookupByAddress(string $address): ?array {
         return $this->contactRepository->lookupByAddress($address);
     }
 
@@ -307,7 +307,7 @@ class ContactService {
                 $address = $data[2];
             } else{
                 // Check if the name yields an address
-                $contactResult = $this->lookupContactByName($data[2]);
+                $contactResult = $this->lookupByName($data[2]);
                 $address = $contactResult['address'] ?? null;
             }
 
