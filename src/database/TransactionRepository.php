@@ -309,9 +309,13 @@ class TransactionRepository extends AbstractRepository {
      * @return string Balance 
      */
     function getUserTotalBalance() {
+        $app = Application::getInstance();
+        $app->loadserviceContainer();
+        $utilityContainer = UtilityServiceContainer::getInstance($app->services);
+        $currencyUtility = $utilityContainer->getCurrencyUtility();
         $totalReceived = $this->calculateTotalReceivedByUser($this->currentUser->getPublicKey());
         $totalSent = $this->calculateTotalSentByUser($this->currentUser->getPublicKey());
-        $balance = (string)convertQuantityCurrency($totalReceived - $totalSent);
+        $balance = (string) $currencyUtility->convertCentsToDollars($totalReceived - $totalSent);
         return $balance ?? "0.00";
     }
 
