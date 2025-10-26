@@ -8,8 +8,7 @@
  *
  */
 
-require_once(__DIR__ . "/config.php");
-require_once(__DIR__ . "/functions.php");
+require_once(__DIR__ . "/src/core/Application.php");
 
 $app = Application::getInstance();
 
