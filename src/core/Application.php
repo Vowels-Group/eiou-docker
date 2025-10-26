@@ -18,9 +18,14 @@ class Application {
     protected $currentUser;
 
     /**
+     * @var DbContext Database context instance
+     */
+    protected $currentDatabase;
+
+    /**
      * @var PDO Database connection instance
      */
-    protected $pdo;
+    public $pdo;
     
     /**
      * @var ServiceContainer object of service container
@@ -55,8 +60,21 @@ class Application {
         // Setup database
         $this->constructDatabase();
 
+        // Get DatabaseContext instance
+        $this->loadCurrentDatabase();
+
         // Get logger wrapper
         $this->getLogger();
+
+        // echo print_r($this->currentDatabase->getAll());
+
+        // Start PDO connection
+        $this->getDatabase();
+
+        // Start Processors (if not already started)
+        // $this->getCleanupMessageProcessor();
+        // $this->getP2pMessageProcessor();
+        // $this->getTransactionMessageProcessor();
     }
 
     /**
@@ -74,24 +92,24 @@ class Application {
     /**
      * Create Database
      */
-    private function constructDatabase() {
+    public function constructDatabase() {
         require_once '/etc/eiou/src/database/databaseSetup.php';
         freshInstall();
     }
 
-    // /**
-    //  * Get database connection (lazy loaded)
-    //  *
-    //  * @return PDO|null
-    //  */
-    // public function getDatabase() {
-    //     require_once '/etc/eiou/src/database/pdo.php';
-    //     try{
-    //         $this->pdo = createPDOConnection($this->currentUser);
-    //     } catch (Exception $e) {
-    //         $this->utils['SecureLogger']->logException($e,'ERROR');
-    //     } 
-    // }
+    /**
+     * Get database connection (lazy loaded)
+     *
+     * @return PDO|null
+     */
+    public function getDatabase() {
+        require_once '/etc/eiou/src/database/pdo.php';
+        try{
+            $this->pdo = createPDOConnection();
+        } catch (Exception $e) {
+            $this->utils['SecureLogger']->logException($e,'ERROR');
+        } 
+    }
 
     /**
      * Set database connection (for testing)
@@ -103,11 +121,44 @@ class Application {
     }
 
     /**
-     * Load current user from global scope
+     * Check if DatabaseContext has been loaded
+     */
+    public function currentDatabaseLoaded() {
+        return(isset($this->currentUser));
+    }
+
+    /**
+     * Load current database config from global scope
+     */
+    public function loadCurrentDatabase() {
+        require_once '/etc/eiou/src/core/DatabaseContext.php';
+        $this->currentDatabase = DatabaseContext::getInstance();
+    }
+
+    /**
+     * Check if userContext has been loaded
+     */
+    public function currentUserLoaded() {
+        return(isset($this->currentUser));
+    }
+
+    /**
+     * Load current user config from global scope
      */
     public function loadCurrentUser() {
         require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
+    }
+
+    /**
+     * Generate Wallet from CLI input
+     * 
+     * @param array $argv CLI input
+     * @return void
+     */
+    public function generateWallet(array $argv): void {
+        require_once '/etc/eiou/src/core/Wallet.php';
+        Wallet::generateWallet($argv);
     }
 
     /**
@@ -268,17 +319,20 @@ class Application {
      * Clean up resources
      */
     public function shutdown() {
-        if ($this->pdo) {
-            $this->pdo = null;
+        output("HERE1",'SILENT');
+        output("PROCESSES: " . print_r($this->processors,true),'SILENT');
+        foreach($this->processors as $processor_name => $processor_instance){
+            $success = posix_kill(trim(file_get_contents($processor_instance->lockfile)), SIGTERM);
+            output("Shutdown process " . $processor_name . " : " . $success, 'SILENT');
         }
-
-        foreach($this->processors as $processor){
-            $processor->shutdown();
-        }
+        output("HERE2",'SILENT');
         $this->processors = [];
         $this->services->clearServices();
         $this->utils = [];
         $this->currentUser = null;
+        if ($this->pdo) {
+            $this->pdo = null;
+        }
         $this->envVariables = null;
     }
 
