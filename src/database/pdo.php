@@ -12,27 +12,28 @@
  */
 
 require_once dirname(__DIR__) . '/core/Constants.php';
-require_once dirname(__DIR__) . '/core/UserContext.php';
+require_once dirname(__DIR__) . '/core/DatabaseContext.php';
 
 function createPDOConnection(): PDO {
     // Try to use UserContext if available, fallback to global $user
-    $userContext = UserContext::getInstance();
+    $databaseContext = DatabaseContext::getInstance();
     $envVariables = Constants::getInstance();
 
 
     // Get database configuration from UserContext or global $user
-    if ($userContext && $userContext->isInitialized()) {
-        $dbHost = $userContext->get('dbHost');
-        $dbName = $userContext->get('dbName');
-        $dbUser = $userContext->get('dbUser');
-        $dbPass = $userContext->get('dbPass');
+    if ($databaseContext && $databaseContext->isInitialized()) {
+        $dbHost = $databaseContext->getDbHost();
+        $dbName = $databaseContext->getDbName();
+        $dbUser = $databaseContext->getDbUser();
+        $dbPass = $databaseContext->getDbPass();
     } else {
+        echo "FALLBACK DATABASE...";
         // Fallback to global $user for backward compatibility
-        global $user;
-        $dbHost = $user['dbHost'] ?? null;
-        $dbName = $user['dbName'] ?? null;
-        $dbUser = $user['dbUser'] ?? null;
-        $dbPass = $user['dbPass'] ?? null;
+        global $database;
+        $dbHost = $database['dbHost'] ?? null;
+        $dbName = $database['dbName'] ?? null;
+        $dbUser = $database['dbUser'] ?? null;
+        $dbPass = $database['dbPass'] ?? null;
     }
 
     // Validate required configuration
