@@ -131,19 +131,3 @@ else{
   $cliService->displayHelp($argv);
   echo $request . " not found, displaying help above\n";
 }
-
-// // TO DO REMOVE?
-// // Check for pending contact requests for users with no default fee set
-// $contactService = $app->services->getContactService();
-// $pending = $contactService->getPendingContactRequests();
-// $pending_count = count($pending);
-// // If there are pending contacts without a default fee, provide guidance
-// if ($pending_count > 0) {
-//     echo "\n\nYou have {$pending_count} contact request(s) pending acceptance.\n";
-//     foreach ($pending as $contact) {
-//         echo "Pending contact request from: " . $contact['address'] . "\n";
-//         echo "To accept this contact request, use the command:\n";
-//         echo "eiou add " . $contact['address'] . " [name] [fee percent] [credit] [currency]\n";
-//         echo "Example: eiou add " . $contact['address'] . " Bob 0.1 100 USD\n\n";
-//     }
-// }
