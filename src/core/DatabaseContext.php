@@ -6,8 +6,6 @@
  *
  */
 
-// require_once '/etc/eiou/dbconfig.php';
-
 class DatabaseContext {
     private static ?DatabaseContext $instance = null;
     private array $databaseData = [];

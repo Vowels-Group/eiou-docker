@@ -6,8 +6,6 @@
  *
  */
 
-// require_once '/etc/eiou/config.php';
-
 class UserContext {
     private static ?UserContext $instance = null;
     private array $userData = [];
@@ -34,17 +32,34 @@ class UserContext {
 
     /**
      * Initialize user context from global $user variable
-     * This method allows gradual migration from global $user
      *
      * @return void
      */
-    public function initFromGlobal(): void {
-        if(!$this->initialized && file_exists('/etc/eiou/config.php')){
-            $config_content = file_get_contents('/etc/eiou/config.php');
+    private function initFromGlobal(): void {
+        if(!$this->initialized ){
+            // Parse in default config values
+            $this->parser('/etc/eiou/defaultconfig.php',"/=/","/\]/");
+            // Parse in user config information
+            $this->parser('/etc/eiou/userconfig.php',"/\]=\"/","/\[/");
+            $this->initialized = true;
+        }
+    }
+
+    /**
+     * Parse in configuration from files
+     *
+     * @param string $filepath Path to config file
+     * @param string $splitregex String regex for second split
+     * @param string $lastreplace String regex for last replacement of key
+     * @return void
+     */
+    public function parser($filepath, $splitregex, $lastreplace){
+        if (file_exists($filepath)) {
+            $config_content = file_get_contents($filepath);
             $config_content = preg_replace("/\<\?php/","",$config_content);
             $values = preg_split("/;/",$config_content);
             for ($x = 0; $x < count($values); $x++) {
-                $keyvals = preg_split("/=/",$values[$x]);
+                $keyvals = preg_split($splitregex,$values[$x]);
                 $key = trim($keyvals[0]);
                 if ($key === ""){
                     continue;
@@ -52,14 +67,16 @@ class UserContext {
                 $key = preg_replace("/\\$/","",$key);
                 $key = preg_replace("/user/","",$key);
                 $key = preg_replace("/[\"\']/","",$key);
-                $key = preg_replace("/\[/","",$key);
-                $key = trim(preg_replace("/\]/","",$key));
-                $value = trim(preg_replace("/[\"\']/","",$keyvals[1]));
+                $key = trim(preg_replace($lastreplace,"",$key));
+                if($key === 'public' || $key === 'private'){
+                    $value = preg_replace("/[\"\']/","",trim($keyvals[1]));
+                } else{
+                    $value = trim(preg_replace("/[\"\']/","",$keyvals[1]));
+                }
                 if(isset($key) && trim($key) !== ""){
                     $this->set($key, $value);
                 }
             }
-            $this->initialized = true;
         }
     }
 
