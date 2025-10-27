@@ -224,16 +224,12 @@ class TransportUtilityService
      * @param array $payload The payload to sign
     */ 
     public function sign(array $payload) {
-        // Add signature to payload
-        $privateKey = $this->currentUser->getPrivateKey();
-        // Get the private key resource
-        $privateKeyResource = openssl_pkey_get_private($privateKey);
         // Sign the message
         $payload['nonce'] = time();
         $message = json_encode($payload);
         $payload['message'] = $message;
         $signature = '';
-        if (!openssl_sign($message, $signature, $privateKeyResource)) {
+        if (!openssl_sign($message, $signature, openssl_pkey_get_private($this->currentUser->getPrivateKey()))) {
             echo "Failed to sign the message.\n";
             return false;
         }
