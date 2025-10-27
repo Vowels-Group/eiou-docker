@@ -58,23 +58,28 @@ class Application {
         $this->loadConfiguration();
 
         // Setup database
-        $this->constructDatabase();
-
-        // Get DatabaseContext instance
-        $this->loadCurrentDatabase();
-
-        // Get logger wrapper
-        $this->getLogger();
-
-        // echo print_r($this->currentDatabase->getAll());
+        if(!file_exists('/etc/eiou/dbuserconfig.php')){
+            // Performs a fresh installation of the eIOU system by creating db configuration files, database, and necessary tables
+            $this->constructDatabase();
+            $this->loadCurrentDatabase();
+        } elseif(!$this->currentDatabaseLoaded()){
+            // Get DatabaseContext instance
+            $this->loadCurrentDatabase();
+        }
 
         // Start PDO connection
         $this->getDatabase();
 
-        // Start Processors (if not already started)
-        // $this->getCleanupMessageProcessor();
-        // $this->getP2pMessageProcessor();
-        // $this->getTransactionMessageProcessor();
+        // Setup user config
+        if(file_exists('/etc/eiou/userconfig.php') && !$this->currentUserLoaded()){
+            // Get UserContext instance
+            $this->loadCurrentUser();
+            // Get ServiceContainer instance
+            $this->loadserviceContainer();
+        }
+        
+        // Get logger wrapper
+        $this->getLogger();
     }
 
     /**
@@ -124,7 +129,7 @@ class Application {
      * Check if DatabaseContext has been loaded
      */
     public function currentDatabaseLoaded() {
-        return(isset($this->currentUser));
+        return(isset($this->currentDatabase) && $this->currentDatabase !== []);
     }
 
     /**
@@ -139,7 +144,7 @@ class Application {
      * Check if userContext has been loaded
      */
     public function currentUserLoaded() {
-        return(isset($this->currentUser));
+        return(isset($this->currentUser) && $this->currentUser !== []);
     }
 
     /**
@@ -319,13 +324,9 @@ class Application {
      * Clean up resources
      */
     public function shutdown() {
-        output("HERE1",'SILENT');
-        output("PROCESSES: " . print_r($this->processors,true),'SILENT');
         foreach($this->processors as $processor_name => $processor_instance){
             $success = posix_kill(trim(file_get_contents($processor_instance->lockfile)), SIGTERM);
-            output("Shutdown process " . $processor_name . " : " . $success, 'SILENT');
         }
-        output("HERE2",'SILENT');
         $this->processors = [];
         $this->services->clearServices();
         $this->utils = [];
