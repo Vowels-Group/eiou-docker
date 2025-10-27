@@ -309,7 +309,7 @@ class UserContext {
      * @return int
      */
     public function getP2pExpirationTime(): int {
-        return (int) ($this->get('p2pExpiration') ?? 300);
+        return (int) ($this->get('p2pExpiration') ?? Constants::P2P_DEFAULT_EXPIRATION_SECONDS);
     }
 
     /**

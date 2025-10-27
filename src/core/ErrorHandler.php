@@ -163,7 +163,7 @@ class ErrorHandler {
         if (php_sapi_name() === 'cli') {
             echo Constants::ERROR_GENERIC . "\n";
         } else {
-            http_response_code(500);
+            http_response_code(Constants::HTTP_INTERNAL_SERVER_ERROR);
             echo Constants::ERROR_GENERIC;
         }
     }

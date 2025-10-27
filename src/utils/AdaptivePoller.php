@@ -87,7 +87,7 @@ class AdaptivePoller {
 
         // If we have moderate queue, scale proportionally
         if ($this->lastQueueSize > 0) {
-            $factor = max(0.1, 1 - ($this->lastQueueSize / 100));
+            $factor = max(Constants::ADAPTIVE_POLLING_MIN_FACTOR, 1 - ($this->lastQueueSize / Constants::ADAPTIVE_POLLING_QUEUE_DIVISOR));
             return max($this->minInterval, min($this->maxInterval, $this->idleInterval * $factor));
         }
 

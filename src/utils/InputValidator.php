@@ -28,12 +28,12 @@ class InputValidator {
         }
 
         // Check maximum amount (prevent overflow)
-        if ($amount > 999999999.99) {
+        if ($amount > Constants::TRANSACTION_MAX_AMOUNT) {
             return ['valid' => false, 'value' => null, 'error' => 'Amount exceeds maximum allowed value'];
         }
 
-        // Round to 2 decimal places for currency
-        $amount = round($amount, 2);
+        // Round to currency decimal precision
+        $amount = round($amount, Constants::DISPLAY_CURRENCY_DECIMALS);
 
         return ['valid' => true, 'value' => $amount, 'error' => null];
     }
@@ -50,8 +50,8 @@ class InputValidator {
 
         $currency = strtoupper(trim($currency));
 
-        if (strlen($currency) !== 3) {
-            return ['valid' => false, 'value' => null, 'error' => 'Currency code must be 3 characters'];
+        if (strlen($currency) !== Constants::VALIDATION_CURRENCY_CODE_LENGTH) {
+            return ['valid' => false, 'value' => null, 'error' => 'Currency code must be ' . Constants::VALIDATION_CURRENCY_CODE_LENGTH . ' characters'];
         }
 
         if (!in_array($currency, $allowedCurrencies)) {
@@ -73,7 +73,7 @@ class InputValidator {
         }
 
         // Check minimum length
-        if (strlen($publicKey) < 100) {
+        if (strlen($publicKey) < Constants::VALIDATION_PUBLIC_KEY_MIN_LENGTH) {
             return ['valid' => false, 'value' => null, 'error' => 'Public key is too short'];
         }
 
@@ -98,9 +98,10 @@ class InputValidator {
 
         $address = trim($address);
 
-        // Check for Tor address
-        if (preg_match('/^[a-z2-7]{16}\.onion(:\d+)?(\/.*)?$/i', $address) ||
-            preg_match('/^[a-z2-7]{56}\.onion(:\d+)?(\/.*)?$/i', $address)) {
+        // Check for Tor address (v2 or v3)
+        $torV2Pattern = '/^[a-z2-7]{' . Constants::VALIDATION_TOR_V2_ADDRESS_LENGTH . '}\.onion(:\d+)?(\/.*)?$/i';
+        $torV3Pattern = '/^[a-z2-7]{' . Constants::VALIDATION_TOR_V3_ADDRESS_LENGTH . '}\.onion(:\d+)?(\/.*)?$/i';
+        if (preg_match($torV2Pattern, $address) || preg_match($torV3Pattern, $address)) {
             return ['valid' => true, 'value' => $address, 'error' => null, 'type' => 'tor'];
         }
 
@@ -126,8 +127,8 @@ class InputValidator {
             return ['valid' => false, 'value' => null, 'error' => 'Transaction ID cannot be empty'];
         }
 
-        // SHA-256 hash is 64 characters (hex)
-        if (strlen($txid) !== 64) {
+        // SHA-256 hash length check
+        if (strlen($txid) !== Constants::VALIDATION_HASH_LENGTH_SHA256) {
             return ['valid' => false, 'value' => null, 'error' => 'Invalid transaction ID length'];
         }
 
@@ -153,8 +154,8 @@ class InputValidator {
         $name = trim($name);
 
         // Length check
-        if (strlen($name) < 2 || strlen($name) > 100) {
-            return ['valid' => false, 'value' => null, 'error' => 'Contact name must be between 2 and 100 characters'];
+        if (strlen($name) < Constants::CONTACT_MIN_NAME_LENGTH || strlen($name) > Constants::CONTACT_MAX_NAME_LENGTH) {
+            return ['valid' => false, 'value' => null, 'error' => 'Contact name must be between ' . Constants::CONTACT_MIN_NAME_LENGTH . ' and ' . Constants::CONTACT_MAX_NAME_LENGTH . ' characters'];
         }
 
         // Alphanumeric, spaces, dashes, and underscores only
@@ -178,13 +179,13 @@ class InputValidator {
 
         $fee = floatval($fee);
 
-        // Fee must be between 0 and 100%
-        if ($fee < 0 || $fee > 100) {
-            return ['valid' => false, 'value' => null, 'error' => 'Fee must be between 0 and 100 percent'];
+        // Fee must be within valid percentage range
+        if ($fee < Constants::VALIDATION_FEE_MIN_PERCENT || $fee > Constants::VALIDATION_FEE_MAX_PERCENT) {
+            return ['valid' => false, 'value' => null, 'error' => 'Fee must be between ' . Constants::VALIDATION_FEE_MIN_PERCENT . ' and ' . Constants::VALIDATION_FEE_MAX_PERCENT . ' percent'];
         }
 
-        // Round to 4 decimal places
-        $fee = round($fee, 4);
+        // Round to fee decimal precision
+        $fee = round($fee, Constants::FEE_PERCENT_DECIMAL_PRECISION + 2);
 
         return ['valid' => true, 'value' => $fee, 'error' => null];
     }
@@ -208,12 +209,12 @@ class InputValidator {
         }
 
         // Check maximum credit limit
-        if ($credit > 999999999.99) {
+        if ($credit > Constants::TRANSACTION_MAX_AMOUNT) {
             return ['valid' => false, 'value' => null, 'error' => 'Credit limit exceeds maximum allowed value'];
         }
 
-        // Round to 2 decimal places
-        $credit = round($credit, 2);
+        // Round to currency decimal precision
+        $credit = round($credit, Constants::DISPLAY_CURRENCY_DECIMALS);
 
         return ['valid' => true, 'value' => $credit, 'error' => null];
     }
@@ -233,8 +234,9 @@ class InputValidator {
 
         // Check if timestamp is reasonable (not too far in past or future)
         $now = time();
-        $oneYearAgo = $now - (365 * 24 * 60 * 60);
-        $oneYearFromNow = $now + (365 * 24 * 60 * 60);
+        $oneYear = Constants::TIME_HOURS_PER_DAY * Constants::TIME_MINUTES_PER_HOUR * Constants::TIME_SECONDS_PER_MINUTE * 365;
+        $oneYearAgo = $now - $oneYear;
+        $oneYearFromNow = $now + $oneYear;
 
         if ($timestamp < $oneYearAgo || $timestamp > $oneYearFromNow) {
             return ['valid' => false, 'value' => null, 'error' => 'Timestamp is outside acceptable range'];
@@ -250,7 +252,10 @@ class InputValidator {
      * @param int $maxLevel Maximum allowed level
      * @return array ['valid' => bool, 'value' => int|null, 'error' => string|null]
      */
-    public static function validateRequestLevel($level, $maxLevel = 1000): array {
+    public static function validateRequestLevel($level, $maxLevel = null): array {
+        if ($maxLevel === null) {
+            $maxLevel = Constants::P2P_REQUEST_LEVEL_VALIDATION_MAX;
+        }
         $sanitized = Security::sanitizeInt($level, 0, $maxLevel);
 
         if ($sanitized === null) {
@@ -277,7 +282,7 @@ class InputValidator {
         }
 
         // Check minimum length (signatures should be reasonably long)
-        if (strlen($signature) < 100) {
+        if (strlen($signature) < Constants::VALIDATION_SIGNATURE_MIN_LENGTH) {
             return ['valid' => false, 'value' => null, 'error' => 'Signature is too short'];
         }
 
@@ -291,7 +296,10 @@ class InputValidator {
      * @param int $maxLength Maximum length
      * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null]
      */
-    public static function validateMemo($memo, $maxLength = 500): array {
+    public static function validateMemo($memo, $maxLength = null): array {
+        if ($maxLength === null) {
+            $maxLength = Constants::VALIDATION_MEMO_MAX_LENGTH;
+        }
         if (!is_string($memo)) {
             return ['valid' => false, 'value' => null, 'error' => 'Memo must be a string'];
         }

@@ -67,6 +67,7 @@ class Constants {
     const CLEANUP_MAX_INTERVAL_MS = 30000;
     const CLEANUP_IDLE_INTERVAL_MS = 10000;
     const CLEANUP_ADAPTIVE_POLLING = true;
+    const CLEANUP_LOG_INTERVAL_SECONDS = 300; // 5 minutes
 
     // Load thresholds for adaptive behavior
     const HIGH_LOAD_CPU = 80;
@@ -104,6 +105,12 @@ class Constants {
     const DB_CONNECTION_TIMEOUT = 5;
     const DB_MAX_RETRIES = 3;
     const DB_RETRY_DELAY_SECONDS = 1;
+    const DB_VARCHAR_TINY = 32;
+    const DB_VARCHAR_SMALL = 64;
+    const DB_VARCHAR_MEDIUM = 100;
+    const DB_VARCHAR_STANDARD = 255;
+    const DB_VARCHAR_LARGE = 500;
+    const DB_QUERY_LIMIT_SINGLE = 1;
 
     // Crypto/Security
     const HASH_ALGORITHM = 'sha256';
@@ -119,17 +126,71 @@ class Constants {
     const P2P_MIN_REQUEST_LEVEL_RANDOM_HIGH = 500;
     const P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW = 1;
     const P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH = 10;
+    const P2P_DEFAULT_EXPIRATION_SECONDS = 300; // 5 minutes
+    const P2P_REQUEST_LEVEL_VALIDATION_MAX = 1000;
 
     // Contact management
     const CONTACT_DEFAULT_FEE_PERCENT = 0;
     const CONTACT_DEFAULT_CREDIT_LIMIT = 0;
     const CONTACT_MAX_NAME_LENGTH = 255;
+    const CONTACT_MIN_NAME_LENGTH = 2;
     const CONTACT_MAX_ADDRESS_LENGTH = 255;
+    const CONTACT_RATE_LIMIT_MAX = 10;
+    const CONTACT_RATE_LIMIT_WINDOW = 60;
+    const CONTACT_RATE_LIMIT_BLOCK = 300;
+
+    // Validation limits
+    const VALIDATION_PUBLIC_KEY_MIN_LENGTH = 100;
+    const VALIDATION_SIGNATURE_MIN_LENGTH = 100;
+    const VALIDATION_TOR_V3_ADDRESS_LENGTH = 56;
+    const VALIDATION_TOR_V2_ADDRESS_LENGTH = 16;
+    const VALIDATION_HASH_LENGTH_SHA256 = 64;
+    const VALIDATION_CURRENCY_CODE_LENGTH = 3;
+    const VALIDATION_MEMO_MAX_LENGTH = 500;
+    const VALIDATION_FEE_MIN_PERCENT = 0;
+    const VALIDATION_FEE_MAX_PERCENT = 100;
+    const VALIDATION_STRING_MAX_LENGTH = 255;
+    const VALIDATION_STRING_MIN_LENGTH = 1;
+
+    // HTTP status codes
+    const HTTP_OK = 200;
+    const HTTP_BAD_REQUEST = 400;
+    const HTTP_UNAUTHORIZED = 401;
+    const HTTP_FORBIDDEN = 403;
+    const HTTP_NOT_FOUND = 404;
+    const HTTP_TOO_MANY_REQUESTS = 429;
+    const HTTP_INTERNAL_SERVER_ERROR = 500;
+
+    // Time conversion factors
+    const TIME_MICROSECONDS_PER_MILLISECOND = 1000;
+    const TIME_SECONDS_PER_MINUTE = 60;
+    const TIME_MINUTES_PER_HOUR = 60;
+    const TIME_HOURS_PER_DAY = 24;
+    const TIME_ONE_MINUTE_SECONDS = 60;
+    const TIME_FIVE_MINUTES_SECONDS = 300;
+    const TIME_FIFTEEN_MINUTES_SECONDS = 900;
+    const TIME_ONE_HOUR_SECONDS = 3600;
+
+    // Percentage/Math constants
+    const PERCENT_MULTIPLIER = 100;
+    const FEE_CONVERSION_FACTOR = 100; // Convert percentage to basis points (0.1% = 10)
+    const FEE_PERCENT_DECIMAL_PRECISION = 2;
+
+    // Adaptive polling thresholds
+    const ADAPTIVE_POLLING_EMPTY_CYCLES_HIGH = 10;
+    const ADAPTIVE_POLLING_EMPTY_CYCLES_MID = 5;
+    const ADAPTIVE_POLLING_QUEUE_SIZE_HIGH = 50;
+    const ADAPTIVE_POLLING_QUEUE_DIVISOR = 100;
+    const ADAPTIVE_POLLING_SUCCESS_MULTIPLIER = 1.2;
+    const ADAPTIVE_POLLING_MIN_FACTOR = 0.1;
 
     // UI/Display
     const DISPLAY_TRANSACTION_HISTORY_LIMIT = 10;
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s';
     const DISPLAY_CURRENCY_DECIMALS = 2;
+    const DISPLAY_ADDRESS_COLUMN_WIDTH = 56;
+    const DISPLAY_NAME_COLUMN_WIDTH = 20;
+    const DISPLAY_NAME_ADDRESS_COLUMN_WIDTH = 82;
 
     // File paths (relative to project root)
     const PATH_LOCKFILE_PREFIX = '/tmp/';
