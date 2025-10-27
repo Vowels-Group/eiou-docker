@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo isset($user['hostname']) ? htmlspecialchars(parse_url($user['hostname'], PHP_URL_HOST) ?: $user['hostname']) . ' - ' : ''; ?>₳ Wallet</title>
+    <title><?php echo $user->has('hostname') ? htmlspecialchars(parse_url($user->getHttpAddress(), PHP_URL_HOST) ?: $user->getHttpAddress()) . ' - ' : ''; ?>₳ Wallet</title>
     <!-- Auto-refresh for users with JavaScript disabled (Tor Browser compatible) -->
     <noscript>
         <?php if (!empty($authCode)): ?>

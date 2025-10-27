@@ -32,9 +32,9 @@
         <div class="info-item">
             <div class="info-label">Address:</div>
             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                <span style="flex: 1; word-break: break-all;"><?php echo isset($user['torAddress']) ? $user['torAddress'] : 'Not available'; ?></span>
-                <?php if (isset($user['torAddress'])): ?>
-                    <textarea class="copy-textarea" readonly style="display: none;" id="tor-address"><?php echo $user['torAddress']; ?></textarea>
+                <span style="flex: 1; word-break: break-all;"><?php echo $user->has('torAddress') ? $user->getTorAddress() : 'Not available'; ?></span>
+                <?php if ($user->has('torAddress')): ?>
+                    <textarea class="copy-textarea" readonly style="display: none;" id="tor-address"><?php echo $user->getTorAddress(); ?></textarea>
                     <button class="btn btn-sm btn-outline" onclick="document.getElementById('tor-address').style.display='block'; document.getElementById('tor-address').select();" title="Copy Tor address">
                         <i class="fas fa-copy"></i> Copy
                     </button>
@@ -44,9 +44,9 @@
         <div class="info-item">
             <div class="info-label">Public Key:</div>
             <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
-                <span style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo isset($user['public']) ? $user['public'] : 'Not available'; ?></span>
-                <?php if (isset($user['public'])): ?>
-                    <textarea class="copy-textarea" readonly style="display: none;" id="public-key"><?php echo $user['public']; ?></textarea>
+                <span style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo $user->has('public') ? $user->getPublicKey() : 'Not available'; ?></span>
+                <?php if ($user->has('public')): ?>
+                    <textarea class="copy-textarea" readonly style="display: none;" id="public-key"><?php echo $user->getPublicKey(); ?></textarea>
                     <button class="btn btn-sm btn-outline" onclick="document.getElementById('public-key').style.display='block'; document.getElementById('public-key').select();" title="Copy public key">
                         <i class="fas fa-copy"></i> Copy
                     </button>
