@@ -181,10 +181,10 @@ class CliService {
         }
 
         // Save changes to config file
-        $config_content = file_get_contents('/etc/eiou/config.php');
+        $config_content = file_get_contents('/etc/eiou/defaultconfig.php');
         $config_content = preg_replace("/\['" . $key . "'\]\s*=\s*[^;]+;/", "['" . $key . "'] = " . (is_bool($value) ? ($value ? 'true' : 'false') : (is_string($value) ? "'" . $value . "'" : $value)) . ";", $config_content);
-        file_put_contents('/etc/eiou/config.php', $config_content);
-        require_once("/etc/eiou/config.php"); // reload config 
+        file_put_contents('/etc/eiou/defaultconfig.php', $config_content);
+        require_once("/etc/eiou/defaultconfig.php"); // reload config 
         echo "Setting updated successfully.\n";
         
     }
