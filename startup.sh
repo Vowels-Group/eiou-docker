@@ -17,8 +17,8 @@ while ! mysqladmin ping -h localhost --silent; do
     sleep 1
 done
 
-# Check if config.php was already made and if so if user keys exist, if not build config
-if [[ $(php -r 'require_once("/etc/eiou/src/startup/configCheck.php"); echo $run;') ]]; then
+# Check if userconfig.php was already made and if so if user keys exist, if not build config
+if [[ $(php -r 'require_once "/etc/eiou/src/startup/configCheck.php"; echo $run;') ]]; then
     # If quickstart flag is set, automatically run generate command
     if [ "$QUICKSTART" != "false" ]; then
         echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
@@ -27,16 +27,16 @@ if [[ $(php -r 'require_once("/etc/eiou/src/startup/configCheck.php"); echo $run
     fi
 fi
 
-# Check if all precursors to messages.php (also checks for cleanup.php by extension) are available and working
+# Check if all precursors to the message processors are available and working
 first=true
 while true; do
-    if [[ $(php -r 'require_once("/etc/eiou/src/startup/messageCheck.php"); echo $passed;') ]]; then
+    if [[ $(php -r 'require_once "/etc/eiou/src/startup/messageCheck.php"; echo $passed;') ]]; then
         echo "Message processing check completed successfully."  
         # Display all user info for quick access
-        http=$(php -r 'require_once("/etc/eiou/config.php"); if(isset($user["hostname"])){echo $user["hostname"];}')
-        tor=$(php -r 'require_once("/etc/eiou/config.php"); echo $user["torAddress"];')
-        pubkey=$(php -r 'require_once("/etc/eiou/config.php"); echo $user["public"];')
-        authcode=$(php -r 'require_once("/etc/eiou/config.php"); echo $user["authcode"];')
+        http=$(php -r 'require_once "/etc/eiou/userconfig.php"; if(isset($user["hostname"])){echo $user["hostname"];}')
+        tor=$(php -r 'require_once "/etc/eiou/userconfig.php"; echo $user["torAddress"];')
+        pubkey=$(php -r 'require_once "/etc/eiou/userconfig.php"; echo $user["public"];')
+        authcode=$(php -r 'require_once "/etc/eiou/userconfig.php"; echo $user["authcode"];')
         echo "User Information: "
         if [[ ! -z ${http} ]]; then
             echo -e "\t HTTP address: $http"
