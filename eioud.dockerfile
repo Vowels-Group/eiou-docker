@@ -44,7 +44,6 @@ COPY src/functions.php /etc/eiou/functions.php
 RUN chown www-data:www-data /etc/eiou/functions.php
 RUN chmod 644 /etc/eiou/functions.php
 
-
 # Copy p2pMessages.php to a common location
 COPY src/p2pMessages.php /etc/eiou/p2pMessages.php
 RUN chown www-data:www-data /etc/eiou/p2pMessages.php

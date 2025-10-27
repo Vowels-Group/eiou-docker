@@ -147,7 +147,7 @@ class SecurityTest extends TestCase {
     }
 
     public function testSafeErrorMessageProduction() {
-        $exception = new Exception("Database connection failed at /var/www/config.php:42");
+        $exception = new Exception("Database connection failed at /var/www/userconfig.php:42");
 
         $safeMessage = Security::getSafeErrorMessage($exception, false);
         $this->assertEquals("An error occurred. Please try again later.", $safeMessage, "Should return generic message in production");

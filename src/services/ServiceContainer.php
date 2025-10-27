@@ -35,7 +35,7 @@ class ServiceContainer {
      */
     private function __construct() {
         $this->loadCurrentUser();
-        $this->pdo = createPDOConnection();
+        $this->loadDatabase();
     }
 
     /**
@@ -54,6 +54,7 @@ class ServiceContainer {
      * Load current user from global scope
      */
     private function loadCurrentUser(): void {
+        require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
     }
 
@@ -73,6 +74,16 @@ class ServiceContainer {
      */
     public function getCurrentUser(): UserContext {
         return $this->currentUser;
+    }
+
+    /**
+     * Get database connection (lazy loaded)
+     *
+     * @return PDO|null
+     */
+    public function loadDatabase() {
+        require_once '/etc/eiou/src/database/pdo.php';
+        $this->pdo = createPDOConnection();
     }
 
     /**

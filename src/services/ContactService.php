@@ -9,6 +9,8 @@
  * @package Services
  */
 
+
+
 class ContactService {
     /**
      * @var ContactRepository Contact Repository instance
@@ -50,8 +52,8 @@ class ContactService {
     {
         $this->contactRepository = $contactRepository;
         $this->utilityContainer = $utilityContainer;
-        $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
+        $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
 
         require_once '/etc/eiou/src/schemas/payloads/ContactPayload.php';
         $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);

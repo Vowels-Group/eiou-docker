@@ -1,15 +1,15 @@
 <?php
 # Copyright 2025
 
-// Check if config.php already exists and if so if the user keys are available
+// Check if userconfig.php already exists and if so if the user keys are available
 $run = false;
 try{
-    // Check if config.php exists
-    if(!file_exists('/etc/eiou/config.php')){
+    // Check if userconfig.php exists
+    if(!file_exists('/etc/eiou/userconfig.php')){
         $run = true;
         return;
     }
-    require_once '/etc/eiou/config.php';
+    require_once '/etc/eiou/userconfig.php';
     // check if the user keys are available
     if(!isset($user["public"])){
         $run = true;

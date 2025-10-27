@@ -18,6 +18,11 @@ class Application {
     protected $currentUser;
 
     /**
+     * @var DbContext Database context instance
+     */
+    protected $currentDatabase;
+
+    /**
      * @var PDO Database connection instance
      */
     protected $pdo;
@@ -38,12 +43,12 @@ class Application {
     /**
      * @var array Cached processor instances
      */
-    private array $processors = [];
+    public array $processors = [];
 
     /**
      * @var array Cached util instances
      */
-    private array $utils = [];
+    public array $utils = [];
 
     /**
      * Private constructor for singleton pattern
@@ -53,8 +58,26 @@ class Application {
         $this->loadConfiguration();
 
         // Setup database
-        $this->constructDatabase();
+        if(!file_exists('/etc/eiou/dbconfig.php')){
+            // Performs a fresh installation of the eIOU system by creating db configuration files, database, and necessary tables
+            $this->constructDatabase();
+            $this->loadCurrentDatabase();
+        } elseif(!$this->currentDatabaseLoaded()){
+            // Get DatabaseContext instance
+            $this->loadCurrentDatabase();
+        }
 
+        // Start PDO connection
+        $this->getDatabase();
+
+        // Setup user config
+        if(file_exists('/etc/eiou/userconfig.php') && !$this->currentUserLoaded()){
+            // Get UserContext instance
+            $this->loadCurrentUser();
+            // Get ServiceContainer instance
+            $this->loadserviceContainer();
+        }
+        
         // Get logger wrapper
         $this->getLogger();
     }
@@ -79,19 +102,19 @@ class Application {
         freshInstall();
     }
 
-    // /**
-    //  * Get database connection (lazy loaded)
-    //  *
-    //  * @return PDO|null
-    //  */
-    // public function getDatabase() {
-    //     require_once '/etc/eiou/src/database/pdo.php';
-    //     try{
-    //         $this->pdo = createPDOConnection($this->currentUser);
-    //     } catch (Exception $e) {
-    //         $this->utils['SecureLogger']->logException($e,'ERROR');
-    //     } 
-    // }
+    /**
+     * Get database connection (lazy loaded)
+     *
+     * @return PDO|null
+     */
+    private function getDatabase() {
+        require_once '/etc/eiou/src/database/pdo.php';
+        try{
+            $this->pdo = createPDOConnection();
+        } catch (Exception $e) {
+            $this->utils['SecureLogger']->logException($e,'ERROR');
+        } 
+    }
 
     /**
      * Set database connection (for testing)
@@ -103,11 +126,44 @@ class Application {
     }
 
     /**
-     * Load current user from global scope
+     * Check if DatabaseContext has been loaded
+     */
+    public function currentDatabaseLoaded() {
+        return(isset($this->currentDatabase) && $this->currentDatabase !== []);
+    }
+
+    /**
+     * Load current database config
+     */
+    private function loadCurrentDatabase() {
+        require_once '/etc/eiou/src/core/DatabaseContext.php';
+        $this->currentDatabase = DatabaseContext::getInstance();
+    }
+
+    /**
+     * Check if userContext has been loaded
+     */
+    public function currentUserLoaded() {
+        return(isset($this->currentUser) && $this->currentUser !== []);
+    }
+
+    /**
+     * Load current user config
      */
     public function loadCurrentUser() {
         require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
+    }
+
+    /**
+     * Generate Wallet from CLI input
+     * 
+     * @param array $argv CLI input
+     * @return void
+     */
+    public function generateWallet(array $argv): void {
+        require_once '/etc/eiou/src/core/Wallet.php';
+        Wallet::generateWallet($argv);
     }
 
     /**
@@ -268,13 +324,16 @@ class Application {
      * Clean up resources
      */
     public function shutdown() {
-        if ($this->pdo) {
-            $this->pdo = null;
+        foreach($this->processors as $processor_name => $processor_instance){
+            $success = posix_kill(trim(file_get_contents($processor_instance->lockfile)), SIGTERM);
         }
         $this->processors = [];
         $this->services->clearServices();
         $this->utils = [];
         $this->currentUser = null;
+        if ($this->pdo) {
+            $this->pdo = null;
+        }
         $this->envVariables = null;
     }
 

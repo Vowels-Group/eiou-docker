@@ -32,16 +32,52 @@ class UserContext {
 
     /**
      * Initialize user context from global $user variable
-     * This method allows gradual migration from global $user
      *
      * @return void
      */
-    public function initFromGlobal(): void {
-        require_once '/etc/eiou/config.php';
-        global $user;
-        if ($user && is_array($user)) {
-            $this->userData = $user;
+    private function initFromGlobal(): void {
+        if(!$this->initialized ){
+            // Parse in default config values
+            $this->parser('/etc/eiou/defaultconfig.php',"/=/","/\]/");
+            // Parse in user config information
+            $this->parser('/etc/eiou/userconfig.php',"/\]=\"/","/\[/");
             $this->initialized = true;
+        }
+    }
+
+    /**
+     * Parse in configuration from files
+     *
+     * @param string $filepath Path to config file
+     * @param string $splitregex String regex for second split
+     * @param string $lastreplace String regex for last replacement of key
+     * @return void
+     */
+    public function parser($filepath, $splitregex, $lastreplace){
+        if (file_exists($filepath)) {
+            $config_content = file_get_contents($filepath);
+            $config_content = preg_replace("/\<\?php/","",$config_content);
+            $values = preg_split("/;/",$config_content);
+            for ($x = 0; $x < count($values); $x++) {
+                $keyvals = preg_split($splitregex,$values[$x]);
+                $key = trim($keyvals[0]);
+                if ($key === ""){
+                    continue;
+                }
+                $key = preg_replace("/\\$/","",$key);
+                $key = preg_replace("/user/","",$key);
+                $key = preg_replace("/[\"\']/","",$key);
+                $key = preg_replace("/\[/","",$key);
+                $key = trim(preg_replace($lastreplace,"",$key));
+                if($key === 'public' || $key === 'private'){
+                    $value = preg_replace("/[\"\']/","",trim($keyvals[1]));
+                } else{
+                    $value = trim(preg_replace("/[\"\']/","",$keyvals[1]));
+                }
+                if(isset($key) && trim($key) !== ""){
+                    $this->set($key, $value);
+                }
+            }
         }
     }
 
@@ -76,12 +112,6 @@ class UserContext {
      */
     public function set(string $key, $value): void {
         $this->userData[$key] = $value;
-
-        // Also update global for backward compatibility
-        global $user;
-        if (is_array($user)) {
-            $user[$key] = $value;
-        }
     }
 
     /**
@@ -169,11 +199,11 @@ class UserContext {
             $errors[] = 'Public key is missing';
         }
 
-        if (null=== $this->getPrivateKey()) {
+        if (null === $this->getPrivateKey()) {
             $errors[] = 'Private key is missing';
         }
 
-        if (null=== $this->getAuthCode()) {
+        if (null === $this->getAuthCode()) {
             $errors[] = 'Authentication code is missing';
         }
 
@@ -284,7 +314,7 @@ class UserContext {
      * @return bool
      */
     public function isLocalhostOnly(): bool {
-        return (bool) ($this->get('localhostOnly') ?? true);
+        return filter_var($this->get('localhostOnly'), FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
@@ -320,7 +350,7 @@ class UserContext {
      * @return bool
      */
     public function isDebugMode(): bool {
-        return (bool) ($this->get('debug') ?? false);
+        return filter_var($this->get('debug'), FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
@@ -330,54 +360,6 @@ class UserContext {
      */
     public function getMaxOutput(): int {
         return (int) ($this->get('maxOutput') ?? 5);
-    }
-
-    /**
-     * Get database host
-     *
-     * @return string|null
-     */
-    public function getDbHost(): ?string {
-        return $this->get('dbHost') ?? null;
-    }
-
-    /**
-     * Get database name
-     *
-     * @return string|null
-     */
-    public function getDbName(): ?string {
-        return $this->get('dbName') ?? null;
-    }
-
-    /**
-     * Get database user
-     *
-     * @return string|null
-     */
-    public function getDbUser(): ?string {
-        return $this->get('dbUser') ?? null;
-    }
-
-    /**
-     * Get database password
-     *
-     * @return string|null
-     */
-    public function getDbPass(): ?string {
-        return $this->get('dbPass') ?? null;
-    }
-
-    /**
-     * Check if database configuration is valid
-     *
-     * @return bool
-     */
-    public function hasValidDbConfig(): bool {
-        return $this->getDbHost() !== null
-            && $this->getDbName() !== null
-            && $this->getDbUser() !== null
-            && $this->getDbPass() !== null;
     }
 
     /**
