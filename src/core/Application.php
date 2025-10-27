@@ -25,7 +25,7 @@ class Application {
     /**
      * @var PDO Database connection instance
      */
-    public $pdo;
+    protected $pdo;
     
     /**
      * @var ServiceContainer object of service container
@@ -43,12 +43,12 @@ class Application {
     /**
      * @var array Cached processor instances
      */
-    private array $processors = [];
+    public array $processors = [];
 
     /**
      * @var array Cached util instances
      */
-    private array $utils = [];
+    public array $utils = [];
 
     /**
      * Private constructor for singleton pattern
@@ -97,7 +97,7 @@ class Application {
     /**
      * Create Database
      */
-    public function constructDatabase() {
+    private function constructDatabase() {
         require_once '/etc/eiou/src/database/databaseSetup.php';
         freshInstall();
     }
@@ -107,7 +107,7 @@ class Application {
      *
      * @return PDO|null
      */
-    public function getDatabase() {
+    private function getDatabase() {
         require_once '/etc/eiou/src/database/pdo.php';
         try{
             $this->pdo = createPDOConnection();
@@ -133,9 +133,9 @@ class Application {
     }
 
     /**
-     * Load current database config from global scope
+     * Load current database config
      */
-    public function loadCurrentDatabase() {
+    private function loadCurrentDatabase() {
         require_once '/etc/eiou/src/core/DatabaseContext.php';
         $this->currentDatabase = DatabaseContext::getInstance();
     }
@@ -148,7 +148,7 @@ class Application {
     }
 
     /**
-     * Load current user config from global scope
+     * Load current user config
      */
     public function loadCurrentUser() {
         require_once '/etc/eiou/src/core/UserContext.php';
