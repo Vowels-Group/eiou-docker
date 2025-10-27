@@ -67,7 +67,7 @@ class UserContext {
                 $key = preg_replace("/\\$/","",$key);
                 $key = preg_replace("/user/","",$key);
                 $key = preg_replace("/[\"\']/","",$key);
-                $key = preg_replace("/\]/","",$key);
+                $key = preg_replace("/\[/","",$key);
                 $key = trim(preg_replace($lastreplace,"",$key));
                 if($key === 'public' || $key === 'private'){
                     $value = preg_replace("/[\"\']/","",trim($keyvals[1]));
@@ -314,7 +314,7 @@ class UserContext {
      * @return bool
      */
     public function isLocalhostOnly(): bool {
-        return (bool) ($this->get('localhostOnly') ?? true);
+        return filter_var($this->get('localhostOnly'), FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
@@ -350,7 +350,7 @@ class UserContext {
      * @return bool
      */
     public function isDebugMode(): bool {
-        return (bool) ($this->get('debug') ?? false);
+        return filter_var($this->get('debug'), FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
