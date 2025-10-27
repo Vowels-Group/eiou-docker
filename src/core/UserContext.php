@@ -67,6 +67,7 @@ class UserContext {
                 $key = preg_replace("/\\$/","",$key);
                 $key = preg_replace("/user/","",$key);
                 $key = preg_replace("/[\"\']/","",$key);
+                $key = preg_replace("/\]/","",$key);
                 $key = trim(preg_replace($lastreplace,"",$key));
                 if($key === 'public' || $key === 'private'){
                     $value = preg_replace("/[\"\']/","",trim($keyvals[1]));
