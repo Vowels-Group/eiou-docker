@@ -286,9 +286,9 @@ class TransactionService {
      * Remove users transaction fee from request
      *
      * @param array $request The request data
-     * @return float Amount left over after fee removal 
+     * @return float Amount left over after fee removal
     */
-    function removeTransactionFee(array $request): float{
+    public function removeTransactionFee(array $request): float{
         $p2p = $this->p2pRepository->getByHash($request['memo']);
         return $request['amount'] - $p2p['my_fee_amount'];
     }
