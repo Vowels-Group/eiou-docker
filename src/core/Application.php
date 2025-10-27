@@ -58,7 +58,7 @@ class Application {
         $this->loadConfiguration();
 
         // Setup database
-        if(!file_exists('/etc/eiou/dbuserconfig.php')){
+        if(!file_exists('/etc/eiou/dbconfig.php')){
             // Performs a fresh installation of the eIOU system by creating db configuration files, database, and necessary tables
             $this->constructDatabase();
             $this->loadCurrentDatabase();
