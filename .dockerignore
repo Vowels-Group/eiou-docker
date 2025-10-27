@@ -1,1 +1,3 @@
-src/config.php 
+src/userconfig.php 
+src/dbconfig.php 
+src/defaultconfig.php 
