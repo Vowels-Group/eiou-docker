@@ -7,6 +7,9 @@
 // Load constants
 require_once __DIR__ . '/core/Constants.php';
 
+// Load error handler (must be loaded before other security classes)
+require_once __DIR__ . '/core/ErrorHandler.php';
+
 // Load security classes
 require_once __DIR__ . '/utils/Security.php';
 require_once __DIR__ . '/utils/RateLimiter.php';
@@ -14,6 +17,9 @@ require_once __DIR__ . '/utils/SecureLogger.php';
 
 // Initialize secure logging
 SecureLogger::init(Constants::LOG_FILE_APP ?: '/var/log/eiou/app.log', Constants::LOG_LEVEL ?: 'INFO');
+
+// Initialize error handler (must be done early)
+ErrorHandler::init();
 
 // Set security headers for web requests
 if (php_sapi_name() !== 'cli') {
@@ -81,47 +87,8 @@ if (php_sapi_name() !== 'cli') {
     }
 }
 
-// Global error handler that doesn't expose sensitive information
-set_error_handler(function($severity, $message, $file, $line) {
-    // Log the full error
-    SecureLogger::error("PHP Error", [
-        'severity' => $severity,
-        'message' => $message,
-        'file' => $file,
-        'line' => $line
-    ]);
-
-    // In production, don't display errors to users
-    if (Constants::APP_ENV === 'production') {
-        if (php_sapi_name() !== 'cli') {
-            http_response_code(500);
-            echo "An error occurred. Please try again later.";
-            exit;
-        }
-    }
-
-    // Let PHP handle the error normally in development
-    return false;
-});
-
-// Global exception handler
-set_exception_handler(function($exception) {
-    // Log the exception
-    SecureLogger::logException($exception);
-
-    // In production, don't display exceptions to users
-    if (Constants::APP_ENV === 'production') {
-        if (php_sapi_name() !== 'cli') {
-            http_response_code(500);
-            echo "An error occurred. Please try again later.";
-            exit;
-        }
-    } else {
-        // In development, show the exception
-        echo "Exception: " . $exception->getMessage() . "\n";
-        echo "File: " . $exception->getFile() . ":" . $exception->getLine() . "\n";
-    }
-});
+// Note: Error and exception handlers are now managed by ErrorHandler::init()
+// No need to set them here as ErrorHandler provides centralized error handling
 
 // Helper function for secure output encoding
 function h($string) {
