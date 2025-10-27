@@ -37,26 +37,8 @@ class DatabaseContext {
      * @return void
      */
     private function initFromGlobal(): void {
-        if(!$this->initialized && file_exists('/etc/eiou/dbconfig.php')){
-            $config_content = file_get_contents('/etc/eiou/dbconfig.php');      
-            $config_content = preg_replace("/\<\?php/","",$config_content);
-            $values = preg_split("/;/",$config_content);
-            for ($x = 0; $x < count($values); $x++) {
-                $keyvals = preg_split("/=/",$values[$x]);
-                $key = trim($keyvals[0]);
-                if ($key === ""){
-                    continue;
-                }
-                $key = preg_replace("/\\$/","",$key);
-                $key = preg_replace("/database/","",$key);
-                $key = preg_replace("/[\"\']/","",$key);
-                $key = preg_replace("/\[/","",$key);
-                $key = trim(preg_replace("/\]/","",$key));
-                $value = trim(preg_replace("/[\"\']/","",$keyvals[1]));
-                if(isset($key) && $key !== ""){
-                    $this->set($key,$value);
-                }
-            }
+        if (file_exists('/etc/eiou/dbconfig.json')){
+            $this->databaseData = json_decode(file_get_contents('/etc/eiou/dbconfig.json'),true);
             $this->initialized = true;
         }
     }

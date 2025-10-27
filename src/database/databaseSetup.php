@@ -3,14 +3,14 @@
 
 function freshInstall(){
     // Check if the configuration file exists
-    if (!file_exists('/etc/eiou/dbconfig.php')) {
+    if (!file_exists('/etc/eiou/dbconfig.json')) {
         // Create the directory if it doesn't exist
         if (!file_exists('/etc/eiou')) {
             mkdir('/etc/eiou', 0755, true);
         }
         
         // Create a default configuration file
-        $dbConfig = "<?php\n";
+        $dbConfig = [];
        
         // Create MySQL user, database, and tables
         $dbHost = 'localhost';
@@ -46,11 +46,14 @@ function freshInstall(){
             $dbConn->exec(getP2pTableSchema());
             $dbConn->exec(getRp2pTableSchema());
 
-            // Append database configuration to the config file
-            $dbConfig .= "\$database['dbHost'] = '$dbHost';\n";
-            $dbConfig .= "\$database['dbName'] = '$dbName';\n";
-            $dbConfig .= "\$database['dbUser'] = '$dbUser';\n";
-            $dbConfig .= "\$database['dbPass'] = '$dbPass';\n";
+            // Overwrite database configuration to the config file
+             $dbConfig = [
+                'dbHost' => addslashes($dbHost), // Database Host
+                'dbName' => addslashes($dbName), // Database Name
+                'dbUser' => addslashes($dbUser), // Database User
+                'dbPass' => addslashes($dbPass)  // Database password
+            ];
+
 
         } catch (PDOException $e) {
             // Handle database error
@@ -61,6 +64,8 @@ function freshInstall(){
         }
    
         // Write the default configuration
-        file_put_contents('/etc/eiou/dbconfig.php', $dbConfig, LOCK_EX);
+        if($dbConfig !== []){
+            file_put_contents('/etc/eiou/dbconfig.json', json_encode($dbConfig), LOCK_EX);
+        }   
     }
 }

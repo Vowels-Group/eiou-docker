@@ -1,17 +1,16 @@
 <?php
 # Copyright 2025
 
-// Check if userconfig.php already exists and if so if the user keys are available
+// Check if userconfig.json already exists and if so if the user keys are available
 $run = false;
 try{
-    // Check if userconfig.php exists
-    if(!file_exists('/etc/eiou/userconfig.php')){
+    // Check if userconfig.json exists
+    if(!file_exists('/etc/eiou/userconfig.json')){
         $run = true;
         return;
     }
-    require_once '/etc/eiou/userconfig.php';
     // check if the user keys are available
-    if(!isset($user["public"])){
+    if(!isset(json_decode(file_get_contents('/etc/eiou/userconfig.json'),true)["public"])){
         $run = true;
     } 
     return;

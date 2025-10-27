@@ -15,7 +15,7 @@ class UserContext {
      * Private constructor to enforce singleton pattern
      */
     private function __construct() {
-        $this->initFromGlobal();
+        $this->loadConfigFromFiles();
     }
 
     /**
@@ -31,53 +31,21 @@ class UserContext {
     }
 
     /**
-     * Initialize user context from global $user variable
+     * Load configuration from config files
      *
      * @return void
      */
-    private function initFromGlobal(): void {
+    private function loadConfigFromFiles(): void {
         if(!$this->initialized ){
-            // Parse in default config values
-            $this->parser('/etc/eiou/defaultconfig.php',"/=/","/\]/");
-            // Parse in user config information
-            $this->parser('/etc/eiou/userconfig.php',"/\]=\"/","/\[/");
-            $this->initialized = true;
-        }
-    }
-
-    /**
-     * Parse in configuration from files
-     *
-     * @param string $filepath Path to config file
-     * @param string $splitregex String regex for second split
-     * @param string $lastreplace String regex for last replacement of key
-     * @return void
-     */
-    public function parser($filepath, $splitregex, $lastreplace){
-        if (file_exists($filepath)) {
-            $config_content = file_get_contents($filepath);
-            $config_content = preg_replace("/\<\?php/","",$config_content);
-            $values = preg_split("/;/",$config_content);
-            for ($x = 0; $x < count($values); $x++) {
-                $keyvals = preg_split($splitregex,$values[$x]);
-                $key = trim($keyvals[0]);
-                if ($key === ""){
-                    continue;
+            // Load in default config values
+            if (file_exists('/etc/eiou/defaultconfig.json')){
+                $this->userData = json_decode(file_get_contents('/etc/eiou/defaultconfig.json'),true);
+                 // Load in user config information
+                if (file_exists('/etc/eiou/userconfig.json')){
+                    $this->userData = array_merge($this->userData, json_decode(file_get_contents('/etc/eiou/userconfig.json'),true));
+                    $this->initialized = true;
                 }
-                $key = preg_replace("/\\$/","",$key);
-                $key = preg_replace("/user/","",$key);
-                $key = preg_replace("/[\"\']/","",$key);
-                $key = preg_replace("/\[/","",$key);
-                $key = trim(preg_replace($lastreplace,"",$key));
-                if($key === 'public' || $key === 'private'){
-                    $value = preg_replace("/[\"\']/","",trim($keyvals[1]));
-                } else{
-                    $value = trim(preg_replace("/[\"\']/","",$keyvals[1]));
-                }
-                if(isset($key) && trim($key) !== ""){
-                    $this->set($key, $value);
-                }
-            }
+            }     
         }
     }
 

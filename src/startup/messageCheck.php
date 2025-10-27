@@ -4,8 +4,8 @@
 // Check if all needed precursors for core functionality are available and working
 $passed = false;
 try{
-    // Checks if dbconfig.php exists (needed for core functionality)
-    if(!file_exists('/etc/eiou/dbconfig.php')){
+    // Checks if dbconfig.json exists (needed for core functionality)
+    if(!file_exists('/etc/eiou/dbconfig.json')){
         return;
     }
     require_once '/etc/eiou/src/database/pdo.php';

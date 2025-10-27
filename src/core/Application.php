@@ -58,7 +58,7 @@ class Application {
         $this->loadConfiguration();
 
         // Setup database
-        if(!file_exists('/etc/eiou/dbconfig.php')){
+        if(!file_exists('/etc/eiou/dbconfig.json')){
             // Performs a fresh installation of the eIOU system by creating db configuration files, database, and necessary tables
             $this->constructDatabase();
             $this->loadCurrentDatabase();
@@ -71,7 +71,7 @@ class Application {
         $this->getDatabase();
 
         // Setup user config
-        if(file_exists('/etc/eiou/userconfig.php') && !$this->currentUserLoaded()){
+        if(file_exists('/etc/eiou/userconfig.json') && !$this->currentUserLoaded()){
             // Get UserContext instance
             $this->loadCurrentUser();
             // Get ServiceContainer instance

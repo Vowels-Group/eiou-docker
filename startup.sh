@@ -17,7 +17,7 @@ while ! mysqladmin ping -h localhost --silent; do
     sleep 1
 done
 
-# Check if userconfig.php was already made and if so if user keys exist, if not build config
+# Check if userconfig.json was already made and if so if user keys exist, if not build config
 if [[ $(php -r 'require_once "/etc/eiou/src/startup/configCheck.php"; echo $run;') ]]; then
     # If quickstart flag is set, automatically run generate command
     if [ "$QUICKSTART" != "false" ]; then
@@ -33,10 +33,10 @@ while true; do
     if [[ $(php -r 'require_once "/etc/eiou/src/startup/messageCheck.php"; echo $passed;') ]]; then
         echo "Message processing check completed successfully."  
         # Display all user info for quick access
-        http=$(php -r 'require_once "/etc/eiou/userconfig.php"; if(isset($user["hostname"])){echo $user["hostname"];}')
-        tor=$(php -r 'require_once "/etc/eiou/userconfig.php"; echo $user["torAddress"];')
-        pubkey=$(php -r 'require_once "/etc/eiou/userconfig.php"; echo $user["public"];')
-        authcode=$(php -r 'require_once "/etc/eiou/userconfig.php"; echo $user["authcode"];')
+        http=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["hostname"])){echo $json["hostname"];}')
+        tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
+        pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
+        authcode=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["authcode"])){echo $json["authcode"];}')
         echo "User Information: "
         if [[ ! -z ${http} ]]; then
             echo -e "\t HTTP address: $http"
