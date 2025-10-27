@@ -328,6 +328,7 @@ class Application {
             $success = posix_kill(trim(file_get_contents($processor_instance->lockfile)), SIGTERM);
         }
         $this->processors = [];
+        $this->services->getUtilityContainer()->clearUtilities();
         $this->services->clearServices();
         $this->utils = [];
         $this->currentUser = null;
