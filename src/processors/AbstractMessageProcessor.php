@@ -96,10 +96,14 @@ abstract class AbstractMessageProcessor {
 
             // Check if the process is still running
             if ($pid && file_exists("/proc/$pid")) {
-                die("Another instance is already running (PID: $pid)\n");
+                $message = "Another instance is already running (PID: $pid)";
+                SecureLogger::warning($message, ['lockfile' => $this->lockfile, 'pid' => $pid]);
+                echo $message . "\n";
+                exit(1); // Exit with error code - another instance is running
             }
 
             // Stale lockfile, remove it
+            SecureLogger::info("Removing stale lockfile", ['lockfile' => $this->lockfile, 'old_pid' => $pid]);
             unlink($this->lockfile);
         }
 
