@@ -60,8 +60,14 @@ class Application {
         // Setup database
         if(!file_exists('/etc/eiou/dbconfig.json')){
             // Performs a fresh installation of the eIOU system by creating db configuration files, database, and necessary tables
-            $this->constructDatabase();
-            $this->loadCurrentDatabase();
+            try {
+                $this->constructDatabase();
+                $this->loadCurrentDatabase();
+            } catch (RuntimeException $e) {
+                error_log("Application: Database setup failed - " . $e->getMessage());
+                // If database setup fails, we cannot continue initialization
+                throw new RuntimeException("Failed to initialize application: " . $e->getMessage(), 0, $e);
+            }
         } elseif(!$this->currentDatabaseLoaded()){
             // Get DatabaseContext instance
             $this->loadCurrentDatabase();
