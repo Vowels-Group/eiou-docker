@@ -100,7 +100,7 @@ class SynchService {
      *
      * @param array $argv Command line arguments
      */
-    function sych($argv): void{   
+    public function sych($argv): void{   
         if(isset($argv[2])){
             $argument = strtolower($argv[2]);
             if($argument === 'contacts'){
@@ -117,7 +117,7 @@ class SynchService {
      * Synch all possible entities
      *
      */
-    function synchAll(): void{
+    public function synchAll(): void{
         // Synch both contacts and transactions
         $this->synchAllContacts();
         $this->synchAllTransactions();
@@ -127,7 +127,7 @@ class SynchService {
      * Synch all contacts
      *
      */
-    function synchAllContacts(): void{
+    public function synchAllContacts(): void{
         // Synch all contacts
         $contacts = $this->contactRepository->getAllAddresses();
         foreach ($contacts as $contact) {
@@ -139,10 +139,10 @@ class SynchService {
      * Synch contact
      *
      * @param string $contactAddress Contact Address
-     * @param string $echo 'ECHO' (to user & log) or 'SILENT' (only to log) 
+     * @param string $echo 'ECHO' (to user & log) or 'SILENT' (only to log)
      * @return bool True if syched succesfully, false otherwise
      */
-    function synchSingleContact($contactAddress, $echo='SILENT'): bool{
+    public function synchSingleContact($contactAddress, $echo='SILENT'): bool{
         // Synch specific contact based on address
         $contact = $this->contactRepository->getContactByAddress($contactAddress); // Get contact from database
         if($contact['status'] === 'pending'){
@@ -189,7 +189,7 @@ class SynchService {
      * Synch all transactions
      *
      */
-    function synchAllTransactions(): void {
+    public function synchAllTransactions(): void {
         // Synch all transactions
     }
 
@@ -198,7 +198,7 @@ class SynchService {
      *
      * @return bool True if syched succesfully, false otherwise
      */
-    function synchTransaction(): bool {
+    public function synchTransaction(): bool {
         // Synch specific
         return true;
     }

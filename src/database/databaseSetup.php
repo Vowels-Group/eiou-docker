@@ -57,10 +57,18 @@ function freshInstall(){
 
         } catch (PDOException $e) {
             // Handle database error
-            error_log("Database setup error: " . $e->getMessage());
-            echo "An error occurred during database setup. Please check the error log for details.\n";
-            echo "Database setup error: " . $e->getMessage();
-            exit(1);
+            SecureLogger::critical("Database setup error", [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+
+            // Throw exception to let ErrorHandler handle it
+            throw new \RuntimeException(
+                'Database setup failed. Please check error log for details.',
+                500,
+                $e
+            );
         }
    
         // Write the default configuration

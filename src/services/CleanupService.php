@@ -72,7 +72,7 @@ class CleanupService {
      * @return int Number of expiring messages processed
      * @throws PDOException If database query fails
      */
-    function processCleanupMessages(): int {
+    public function processCleanupMessages(): int {
         try {
             $expiringMessages = $this->p2pRepository->getExpiringP2pMessages();
 

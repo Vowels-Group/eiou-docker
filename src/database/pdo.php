@@ -61,21 +61,19 @@ function createPDOConnection(): PDO {
         return $pdo;
     } catch (PDOException $e) {
         // Log the error securely (don't expose connection details)
-        error_log("Database connection failed: " . $e->getMessage());
+        SecureLogger::critical("Database connection failed", [
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ]);
 
-        // Return safe error message to user
-        if ($envVariables->get('APP_ENV') === 'development' || $envVariables->get('APP_DEBUG') === 'true') {
-            echo json_encode([
-                "status" => "error",
-                "message" => "Database connection failed: " . $e->getMessage()
-            ]);
-        } else {
-            echo json_encode([
-                "status" => "error",
-                "message" => "Database connection failed. Please contact system administrator."
-            ]);
-        }
-        exit(1);
+        // Throw exception to let ErrorHandler handle it
+        // This allows upper layers to decide how to handle the error
+        throw new \RuntimeException(
+            'Database connection failed. Please check configuration.',
+            500,
+            $e
+        );
     }
 }
 ?>

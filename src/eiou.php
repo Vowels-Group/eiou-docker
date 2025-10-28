@@ -13,10 +13,11 @@ if (!$app->currentUserLoaded()) {
   // Generate Wallet
   if($request === "generate"){
     $app->generateWallet($argv);
-    die();
+    exit(0); // Normal termination after wallet generation
   } else{
-    echo "Wallet does not exist, Please run the 'generate' command from the terminal.\n"; 
-    die();
+    SecureLogger::warning("Attempted to run command without wallet", ['command' => $request]);
+    echo "Wallet does not exist, Please run the 'generate' command from the terminal.\n";
+    exit(1); // Exit with error code
   }
 } 
 

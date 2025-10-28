@@ -33,7 +33,7 @@ class DebugService {
         $this->currentUser = $currentUser;
     }
 
-    function getContext(){
+    public function getContext(){
         $context = [];
 
         // Add command line arguments
@@ -80,7 +80,7 @@ class DebugService {
         return json_encode($context, JSON_PRETTY_PRINT);
     }
 
-    function output($message, $level = 'ECHO') {
+    public function output($message, $level = 'ECHO') {
         // Check if debug mode is enabled
         if ($this->currentUser->isDebugMode()) {
             $data = [
@@ -98,7 +98,7 @@ class DebugService {
         }
     }
 
-    function setupErrorLogging() {
+    public function setupErrorLogging() {
         ini_set('display_errors', 1);
         ini_set('log_errors', 1);
         error_reporting(E_ALL);
