@@ -197,7 +197,7 @@ function outputSendP2p($request){
 }
 
 function outputSendTransaction($payload){
-    return "Sending " . $payload['amount']/100 . " " . $payload['currency'] . " to " . $payload['receiverAddress']." via direct transaction!\n";
+    return "Sending " . $payload['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $payload['currency'] . " to " . $payload['receiverAddress']." via direct transaction!\n";
 }
 
 function outputSendTransactionCompletionMessageMemo($message){
@@ -221,7 +221,7 @@ function outputSynchContactDueToPendingStatus($address){
 }
 
 function outputTransactionAmountReceived($message){
-    return "Received " . $message['amount']/100 . " " . $message['currency'] . " from " . $message['sender_address']."\n";
+    return "Received " . $message['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $message['currency'] . " from " . $message['sender_address']."\n";
 }
 
 function outputTransactionExpired($message){
@@ -237,11 +237,11 @@ function outputTransactionInquiryResponse($response){
 }
 
 function outputTransactionP2pSentSuccesfully($p2p){
-    return "Sent " . $p2p['amount']/100 . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully\n";
+    return "Sent " . $p2p['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully\n";
 }
 
 function outputTransactionDirectSentSuccesfully($data){
-    return "Sent " . $data['amount']/100 . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
+    return "Sent " . $data['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
 }
 
 function outputTransactionStatusUpdated($status,$typeTransaction,$memo){

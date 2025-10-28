@@ -363,7 +363,7 @@ class InputValidator {
         }
 
         // Validate currency
-        $currency = $request['currency'] ?? 'USD';
+        $currency = $request['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
         $result = self::validateCurrency($currency);
         if (!$result['valid']) {
             $errors['currency'] = $result['error'];

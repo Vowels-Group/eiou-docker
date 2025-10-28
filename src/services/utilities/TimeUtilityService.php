@@ -46,7 +46,7 @@ class TimeUtilityService
      */
     public function convertMicrotimeToInt(float $time): int
     {
-        return (int) ($time * 10000);
+        return (int) ($time * $this->constants::TIME_MICROSECONDS_TO_INT);
     }
 
     /**
@@ -69,6 +69,6 @@ class TimeUtilityService
      */
     public function calculateExpiration(int $ttlSeconds): int
     {
-        return $this->getCurrentMicrotime() + ($ttlSeconds * 10000);
+        return $this->getCurrentMicrotime() + ($ttlSeconds * $this->constants::TIME_MICROSECONDS_TO_INT);
     }
 }

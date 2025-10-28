@@ -162,7 +162,6 @@ class P2pService {
         return $request['amount'] + $request['feeAmount'];
     }
 
-
     /**
      * Check P2P is possible
      *
@@ -308,7 +307,7 @@ class P2pService {
 
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
         $data['amount'] = round($request[3] * Constants::TRANSACTION_USD_CONVERSION_FACTOR); // Convert to cents
-        $data['currency'] = 'USD'; // Default to USD
+        $data['currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY; // Default to USD
 
         // Additional data preparation - Use cryptographically secure random
         try {

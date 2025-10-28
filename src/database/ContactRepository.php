@@ -714,19 +714,19 @@ class ContactRepository extends AbstractRepository {
             }
             elseif($field === 'fee'){
                 $query .= "fee_percent = :fee";
-                $params[':fee'] = $value * 100; // Convert percentage
+                $params[':fee'] = $value * Constants::FEE_CONVERSION_FACTOR; // Convert percentage
             }
             elseif($field === 'credit'){
                 $query .= "credit_limit = :credit, currency = :currency";
-                $params[':credit'] = $value * 100; // Convert to cents
-                $params[':currency'] = 'USD';
+                $params[':credit'] = $value * Constants::CREDIT_CONVERSION_FACTOR; // Convert to cents
+                $params[':currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY;
             }
             elseif($field === 'all'){
                 $query .= "name = :name, fee_percent = :fee, credit_limit = :credit, currency = :currency";
                 $params[':name'] = $value;
-                $params[':fee'] = $value2 * 100; // Convert percentage
-                $params[':credit'] = $value3 * 100; // Convert to cents
-                $params[':currency'] = 'USD';
+                $params[':fee'] = $value2 * Constants::FEE_CONVERSION_FACTOR; // Convert percentage
+                $params[':credit'] = $value3 * Constants::CREDIT_CONVERSION_FACTOR; // Convert to cents
+                $params[':currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY;
             }
             
             $query .= " WHERE address = :address";

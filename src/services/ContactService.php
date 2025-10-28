@@ -69,8 +69,8 @@ class ContactService {
         // Assign command line arguments to variables
         $address = filter_var($data[2], FILTER_VALIDATE_REGEXP, array("options"=>array("regexp"=>"/^[a-zA-Z0-9]{56}$|^[a-z2-7]{56}\.onion$|^https?:\/\/[a-zA-Z0-9.-]+/")));
         $name = htmlspecialchars(trim($data[3]), ENT_QUOTES, 'UTF-8');
-        $fee = filter_var($data[4], FILTER_VALIDATE_FLOAT) * 100;
-        $credit = filter_var($data[5], FILTER_VALIDATE_FLOAT) * 100;
+        $fee = filter_var($data[4], FILTER_VALIDATE_FLOAT) * Constants::FEE_CONVERSION_FACTOR;
+        $credit = filter_var($data[5], FILTER_VALIDATE_FLOAT) * Constants::CREDIT_CONVERSION_FACTOR;
         $currency = htmlspecialchars(trim($data[6]), ENT_QUOTES, 'UTF-8');
 
         // Validate input

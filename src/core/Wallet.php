@@ -8,16 +8,16 @@ class Wallet{
      * @return void
      */
     public static function generateWallet(array $argv): void {
+        // require_once '/etc/eiou/src/core/Constants.php';
         // Add default user values in defaultconfig.json
         $defaultConfig = json_encode([
-            'defaultFee' => 0.1,            // Default transaction fee in percent
-            'defaultCurrency' => 'USD',     // Default currency
-            'localhostOnly' => true,        // Network connection limited to localhost only or not
-            'maxFee' => 5,                  // Maximum total fee for a transaction in percent
-            'maxP2pLevel' => 6,             // Default maximum level for Peer to Peer propagation
-            'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,         // Default expiration time for Peer to Peer requests in seconds
-            'debug' => true,                // Enable debug mode
-            'maxOutput' => 5                // Maximum lines of output for multi-line output
+            'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,         // Default transaction fee in percent
+            'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,       // Default currency
+            'localhostOnly' => Constants::LOCAL_HOST_ONLY,                  // Network connection limited to localhost only or not
+            'maxFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX,         // Maximum total fee for a transaction in percent
+            'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,      // Default maximum level for Peer to Peer propagation
+            'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,   // Default expiration time for Peer to Peer requests in seconds
+            'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX      // Maximum lines of output for multi-line output
         ]);
         file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);
 

@@ -264,7 +264,7 @@ class UserContext {
      * @return float
      */
     public function getDefaultFee(): float {
-        return (float) ($this->get('defaultFee') ?? 0.1);
+        return (float) ($this->get('defaultFee') ?? Constants::CONTACT_DEFAULT_FEE_PERCENT);
     }
 
     /**
@@ -273,7 +273,7 @@ class UserContext {
      * @return string
      */
     public function getDefaultCurrency(): string {
-        return $this->get('defaultCurrency') ?? 'USD';
+        return $this->get('defaultCurrency') ?? Constants::TRANSACTION_DEFAULT_CURRENCY;
     }
 
     /**
@@ -282,7 +282,7 @@ class UserContext {
      * @return bool
      */
     public function isLocalhostOnly(): bool {
-        return filter_var($this->get('localhostOnly'), FILTER_VALIDATE_BOOLEAN);
+        return filter_var($this->get('localhostOnly'), FILTER_VALIDATE_BOOLEAN) ?? Constants::LOCAL_HOST_ONLY;
     }
 
     /**
@@ -291,7 +291,7 @@ class UserContext {
      * @return float
      */
     public function getMaxFee(): float {
-        return (float) ($this->get('maxFee') ?? 5.0);
+        return (float) ($this->get('maxFee') ?? Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX);
     }
 
     /**
@@ -300,7 +300,7 @@ class UserContext {
      * @return int
      */
     public function getMaxP2pLevel(): int {
-        return (int) ($this->get('maxP2pLevel') ?? 6);
+        return (int) ($this->get('maxP2pLevel') ?? Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL);
     }
 
     /**
@@ -313,21 +313,12 @@ class UserContext {
     }
 
     /**
-     * Check if debug mode is enabled
-     *
-     * @return bool
-     */
-    public function isDebugMode(): bool {
-        return filter_var($this->get('debug'), FILTER_VALIDATE_BOOLEAN);
-    }
-
-    /**
      * Get maximum output lines
      *
      * @return int
      */
     public function getMaxOutput(): int {
-        return (int) ($this->get('maxOutput') ?? 5);
+        return (int) ($this->get('maxOutput') ?? Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX);
     }
 
     /**

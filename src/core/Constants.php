@@ -117,9 +117,12 @@ class Constants {
     const RANDOM_BYTES_LENGTH = 32;
     const CSRF_TOKEN_LENGTH = 64; // 32 bytes hex encoded
 
+    // Network
+    const LOCAL_HOST_ONLY = true;
+
     // P2P Network
     const P2P_DEFAULT_REQUEST_LEVEL = 1;
-    const P2P_MAX_REQUEST_LEVEL = 10;
+    const P2P_DEFAULT_MAX_REQUEST_LEVEL = 6;
     const P2P_MIN_REQUEST_LEVEL_RANGE_LOW = 300;
     const P2P_MIN_REQUEST_LEVEL_RANGE_HIGH = 700;
     const P2P_MIN_REQUEST_LEVEL_RANDOM_LOW = 200;
@@ -129,8 +132,10 @@ class Constants {
     const P2P_DEFAULT_EXPIRATION_SECONDS = 300; // 5 minutes
     const P2P_REQUEST_LEVEL_VALIDATION_MAX = 1000;
 
+
     // Contact management
-    const CONTACT_DEFAULT_FEE_PERCENT = 0;
+    const CONTACT_DEFAULT_FEE_PERCENT = 0.1;
+    const CONTACT_DEFAULT_FEE_PERCENT_MAX = 5;
     const CONTACT_DEFAULT_CREDIT_LIMIT = 0;
     const CONTACT_MAX_NAME_LENGTH = 255;
     const CONTACT_MIN_NAME_LENGTH = 2;
@@ -163,6 +168,7 @@ class Constants {
 
     // Time conversion factors
     const TIME_MICROSECONDS_PER_MILLISECOND = 1000;
+    const TIME_MICROSECONDS_TO_INT = 10000;
     const TIME_SECONDS_PER_MINUTE = 60;
     const TIME_MINUTES_PER_HOUR = 60;
     const TIME_HOURS_PER_DAY = 24;
@@ -172,7 +178,7 @@ class Constants {
     const TIME_ONE_HOUR_SECONDS = 3600;
 
     // Percentage/Math constants
-    const PERCENT_MULTIPLIER = 100;
+    const CREDIT_CONVERSION_FACTOR = 100;
     const FEE_CONVERSION_FACTOR = 100; // Convert percentage to basis points (0.1% = 10)
     const FEE_PERCENT_DECIMAL_PRECISION = 2;
 
@@ -191,6 +197,7 @@ class Constants {
     const DISPLAY_ADDRESS_COLUMN_WIDTH = 56;
     const DISPLAY_NAME_COLUMN_WIDTH = 20;
     const DISPLAY_NAME_ADDRESS_COLUMN_WIDTH = 82;
+    const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
 
     // File paths (relative to project root)
     const PATH_LOCKFILE_PREFIX = '/tmp/';

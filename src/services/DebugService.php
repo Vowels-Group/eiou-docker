@@ -51,8 +51,7 @@ class DebugService {
             $context['user'] = [
                 'public_key' => $this->currentUser->getPublicKey(),
                 'tor_address' => $this->currentUser->getTorAddress(),
-                'hostname' => $this->currentUser->getHttpAddress(),
-                'debug' => $this->currentUser->isDebugMode()
+                'hostname' => $this->currentUser->getHttpAddress()
             ];
         }
 
@@ -82,7 +81,7 @@ class DebugService {
 
     public function output($message, $level = 'ECHO') {
         // Check if debug mode is enabled
-        if ($this->currentUser->isDebugMode()) {
+        if (Constants::get('APP_DEBUG')) {
             $data = [
                 'level' => $level,
                 'message' => trim($message),
