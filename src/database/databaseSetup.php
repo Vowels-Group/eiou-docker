@@ -56,12 +56,16 @@ function freshInstall(){
 
 
         } catch (PDOException $e) {
-            // Handle database error
-            SecureLogger::critical("Database setup error", [
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
+            // Handle database error - use SecureLogger if available, otherwise error_log
+            if (class_exists('SecureLogger')) {
+                SecureLogger::critical("Database setup error", [
+                    'error' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]);
+            } else {
+                error_log("Database setup error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+            }
 
             // Throw exception to let ErrorHandler handle it
             throw new \RuntimeException(
