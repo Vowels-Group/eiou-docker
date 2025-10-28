@@ -15,7 +15,7 @@ class Wallet{
             'localhostOnly' => true,        // Network connection limited to localhost only or not
             'maxFee' => 5,                  // Maximum total fee for a transaction in percent
             'maxP2pLevel' => 6,             // Default maximum level for Peer to Peer propagation
-            'p2pExpiration' => 300,         // Default expiration time for Peer to Peer requests in seconds
+            'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,         // Default expiration time for Peer to Peer requests in seconds
             'debug' => true,                // Enable debug mode
             'maxOutput' => 5                // Maximum lines of output for multi-line output
         ]);

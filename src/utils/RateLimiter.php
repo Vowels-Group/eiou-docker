@@ -200,7 +200,7 @@ class RateLimiter {
         $result = $this->checkLimit($ip, $action, $limits['max'], $limits['window'], $limits['block']);
 
         if (!$result['allowed']) {
-            http_response_code(429);
+            http_response_code(Constants::HTTP_TOO_MANY_REQUESTS);
             header('Retry-After: ' . $result['retry_after']);
             header('X-RateLimit-Limit: ' . $limits['max']);
             header('X-RateLimit-Remaining: 0');

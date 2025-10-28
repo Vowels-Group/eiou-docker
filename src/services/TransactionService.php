@@ -231,7 +231,7 @@ class TransactionService {
 
         while($prevID && $this->transactionRepository->existingPreviousTxid($prevID)){
             $prevID = $this->transactionRepository->getPreviousTxid($senderPubKey, $receiverPubKey);
-            usleep(1000); // Sleep for 1ms
+            usleep(Constants::TIME_MICROSECONDS_PER_MILLISECOND); // Sleep for 1ms
         }
 
         return $prevID;
@@ -306,7 +306,7 @@ class TransactionService {
 
         $data['txType'] = 'standard';
         $data['time'] = $this->utilityContainer->getTimeUtility()->getCurrentMicrotime();
-        $data['amount'] = round($request[3] * 100); // Convert to cents
+        $data['amount'] = round($request[3] * Constants::TRANSACTION_USD_CONVERSION_FACTOR); // Convert to cents
         $data['currency'] = $request[4] ?? 'USD'; // Get currency or default to USD
         $data['memo'] = 'standard';
 

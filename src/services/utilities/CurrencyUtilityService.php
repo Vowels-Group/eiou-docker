@@ -74,7 +74,7 @@ class CurrencyUtilityService
      */
     public function calculateFee(float $amount, float $feePercent): int
     {
-        return (int) round($amount * ($feePercent / 100));
+        return (int) round($amount * ($feePercent / Constants::PERCENT_MULTIPLIER));
     }
 
     /**
