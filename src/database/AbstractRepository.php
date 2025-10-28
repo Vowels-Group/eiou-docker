@@ -55,7 +55,16 @@ abstract class AbstractRepository {
         } else {
             // Get PDO from DatabaseConnection helper
             require_once __DIR__ . '/pdo.php';
-            $this->pdo = createPDOConnection();
+            try {
+                $this->pdo = createPDOConnection();
+            } catch (RuntimeException $e) {
+                error_log("[" . static::class . "] Repository initialization failed: " . $e->getMessage());
+                throw new RuntimeException(
+                    "Failed to initialize " . static::class . ": " . $e->getMessage(),
+                    $e->getCode(),
+                    $e
+                );
+            }
         }
 
         if (!$this->pdo) {

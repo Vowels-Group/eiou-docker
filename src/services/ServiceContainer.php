@@ -83,7 +83,18 @@ class ServiceContainer {
      */
     public function loadDatabase() {
         require_once '/etc/eiou/src/database/pdo.php';
-        $this->pdo = createPDOConnection();
+        try {
+            $this->pdo = createPDOConnection();
+        } catch (RuntimeException $e) {
+            // Log the error
+            if (isset($this->services['SecureLogger'])) {
+                $this->services['SecureLogger']->logException($e, 'CRITICAL');
+            } else {
+                error_log("ServiceContainer: Database connection failed - " . $e->getMessage());
+            }
+            // Set PDO to null to indicate unavailability
+            $this->pdo = null;
+        }
     }
 
     /**

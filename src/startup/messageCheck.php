@@ -6,6 +6,7 @@ $passed = false;
 try{
     // Checks if dbconfig.json exists (needed for core functionality)
     if(!file_exists('/etc/eiou/dbconfig.json')){
+        error_log("messageCheck: dbconfig.json not found at /etc/eiou/dbconfig.json");
         return;
     }
     require_once '/etc/eiou/src/database/pdo.php';
@@ -15,5 +16,6 @@ try{
     $passed = true; // All needed precursors are available and working
     return;
 } catch(Exception $e){
+    error_log("messageCheck: Database connection test failed - " . $e->getMessage());
     return;
 }
