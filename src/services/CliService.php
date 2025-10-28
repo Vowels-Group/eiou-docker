@@ -183,7 +183,7 @@ class CliService {
         // Save changes to config file
         $config_content = json_decode(file_get_contents('/etc/eiou/defaultconfig.json'),true);
         $config_content[$key] = $value;
-        file_put_contents('/etc/eiou/defaultconfig.json', $config_content, LOCK_EX);
+        file_put_contents('/etc/eiou/defaultconfig.json', json_encode($config_content,true), LOCK_EX);
         echo "Setting updated successfully.\n";
     }
 
