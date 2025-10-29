@@ -131,7 +131,8 @@ class ContactService {
             if($contact['name']){
                 // This contact was already sent a contact request, but has not yet responded to user (try resynching)
                 output(returnContactRequestAlreadyInserted());
-                $succesfullSynch = synchContact($address,'ECHO'); // resynch contact
+                // Resynch contact using SynchService directly
+                $succesfullSynch = ServiceContainer::getInstance()->getSynchService()->synchSingleContact($address, 'ECHO');
             } else{
                 // If contact already exists with an address, it's a contact request, skip sending a message
                 if ($this->acceptContact($address, $name, $fee, $credit, $currency)) {
@@ -177,7 +178,8 @@ class ContactService {
                 output(returnContactCreationWarning($responseData['message']));
                 // Insert into database
                 if ($this->contactRepository->insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
-                    if(synchContact($address)){
+                    // Sync newly created contact using SynchService directly (default SILENT)
+                    if(ServiceContainer::getInstance()->getSynchService()->synchSingleContact($address, 'SILENT')){
                         output(returnContactCreationSuccessful());
                     }
                 }
