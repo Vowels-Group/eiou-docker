@@ -503,6 +503,37 @@ class TransactionService {
             exit(0);
         }
 
+        // Enhanced validation using InputValidator for transaction data
+        require_once __DIR__ . '/../utils/InputValidator.php';
+
+        // Validate and sanitize amount if provided
+        if (isset($request[3])) {
+            $amountValidation = InputValidator::validateAmount($request[3], $request[4] ?? 'USD');
+            if (!$amountValidation['valid']) {
+                SecureLogger::warning("Invalid transaction amount", [
+                    'amount' => $request[3],
+                    'error' => $amountValidation['error']
+                ]);
+                output(outputError("Invalid amount: " . $amountValidation['error']));
+                exit(0);
+            }
+            $request[3] = $amountValidation['value'];
+        }
+
+        // Validate currency if provided
+        if (isset($request[4])) {
+            $currencyValidation = InputValidator::validateCurrency($request[4]);
+            if (!$currencyValidation['valid']) {
+                SecureLogger::warning("Invalid currency code", [
+                    'currency' => $request[4],
+                    'error' => $currencyValidation['error']
+                ]);
+                output(outputError("Invalid currency: " . $currencyValidation['error']));
+                exit(0);
+            }
+            $request[4] = $currencyValidation['value'];
+        }
+
         // Check if any contacts for eIOU
         if(!$this->contactRepository->getAllAddresses()){
             output(outputNoContactsForTransaction($request));

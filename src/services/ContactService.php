@@ -62,22 +62,82 @@ class ContactService {
     /**
      * Add a contact
      *
+     * This method validates all input data using InputValidator and Security classes
+     * to ensure data integrity and prevent injection attacks.
+     *
      * @param array $data Command line arguments
      * @return void
      */
     public function addContact(array $data): void {
-        // Assign command line arguments to variables
-        $address = filter_var($data[2], FILTER_VALIDATE_REGEXP, array("options"=>array("regexp"=>"/^[a-zA-Z0-9]{56}$|^[a-z2-7]{56}\.onion$|^https?:\/\/[a-zA-Z0-9.-]+/")));
-        $name = htmlspecialchars(trim($data[3]), ENT_QUOTES, 'UTF-8');
-        $fee = filter_var($data[4], FILTER_VALIDATE_FLOAT) * Constants::FEE_CONVERSION_FACTOR;
-        $credit = filter_var($data[5], FILTER_VALIDATE_FLOAT) * Constants::CREDIT_CONVERSION_FACTOR;
-        $currency = htmlspecialchars(trim($data[6]), ENT_QUOTES, 'UTF-8');
+        // Import security and validation classes
+        require_once __DIR__ . '/../utils/InputValidator.php';
+        require_once __DIR__ . '/../utils/Security.php';
 
-        // Validate input
-        if(!$address || !$name || !is_numeric($fee) || !is_numeric($credit) || !$currency) {
+        // Validate and sanitize address
+        $addressValidation = InputValidator::validateAddress($data[2] ?? '');
+        if (!$addressValidation['valid']) {
+            SecureLogger::warning("Invalid contact address", [
+                'address' => $data[2] ?? 'empty',
+                'error' => $addressValidation['error']
+            ]);
             output(returnContactAddInvalidInput(), 'ERROR');
             exit(1);
         }
+        $address = $addressValidation['value'];
+
+        // Validate and sanitize contact name
+        $nameValidation = InputValidator::validateContactName($data[3] ?? '');
+        if (!$nameValidation['valid']) {
+            SecureLogger::warning("Invalid contact name", [
+                'name' => $data[3] ?? 'empty',
+                'error' => $nameValidation['error']
+            ]);
+            output(returnContactAddInvalidInput(), 'ERROR');
+            exit(1);
+        }
+        $name = $nameValidation['value'];
+
+        // Validate fee percentage
+        $feeValidation = InputValidator::validateFeePercent($data[4] ?? 0);
+        if (!$feeValidation['valid']) {
+            SecureLogger::warning("Invalid fee percentage", [
+                'fee' => $data[4] ?? 'empty',
+                'error' => $feeValidation['error']
+            ]);
+            output(returnContactAddInvalidInput(), 'ERROR');
+            exit(1);
+        }
+        $fee = $feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR;
+
+        // Validate credit limit
+        $creditValidation = InputValidator::validateCreditLimit($data[5] ?? 0);
+        if (!$creditValidation['valid']) {
+            SecureLogger::warning("Invalid credit limit", [
+                'credit' => $data[5] ?? 'empty',
+                'error' => $creditValidation['error']
+            ]);
+            output(returnContactAddInvalidInput(), 'ERROR');
+            exit(1);
+        }
+        $credit = $creditValidation['value'] * Constants::CREDIT_CONVERSION_FACTOR;
+
+        // Validate currency
+        $currencyValidation = InputValidator::validateCurrency($data[6] ?? 'USD');
+        if (!$currencyValidation['valid']) {
+            SecureLogger::warning("Invalid currency", [
+                'currency' => $data[6] ?? 'empty',
+                'error' => $currencyValidation['error']
+            ]);
+            output(returnContactAddInvalidInput(), 'ERROR');
+            exit(1);
+        }
+        $currency = $currencyValidation['value'];
+
+        // Log successful validation
+        SecureLogger::info("Contact addition validated", [
+            'address_type' => $addressValidation['type'] ?? 'unknown',
+            'name_length' => strlen($name)
+        ]);
 
         // Get contact if exists in database in some form
         $contact = $this->contactRepository->getContactByAddress($address);

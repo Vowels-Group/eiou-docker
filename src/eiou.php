@@ -4,6 +4,9 @@
 // This file is how users interact with eiou
 require_once '/etc/eiou/functions.php';
 
+// Initialize security components for CLI
+require_once __DIR__ . '/security_init.php';
+
 $app = Application::getInstance();
 
 // Convert request to lowercase
@@ -24,6 +27,38 @@ if (!$app->currentUserLoaded()) {
 // Get Debug Service Instance
 $debugService = $app->services->getDebugService();
 
+// Initialize InputValidator for CLI command validation
+require_once __DIR__ . '/utils/InputValidator.php';
+
+// Apply rate limiting for CLI commands (if database is available)
+if (isset($app->pdo) && $app->pdo instanceof PDO) {
+    $rateLimiter = new RateLimiter($app->pdo);
+
+    // Get CLI identifier (user + command for more granular limiting)
+    $cliIdentifier = 'cli_' . ($app->currentUser->getPublicKey() ?? 'anonymous') . '_' . $request;
+
+    // Define rate limits for different CLI commands
+    $cliRateLimits = [
+        'send' => ['max' => 30, 'window' => 60, 'block' => 300],      // 30 transactions per minute
+        'add' => ['max' => 20, 'window' => 60, 'block' => 300],       // 20 contact additions per minute
+        'generate' => ['max' => 5, 'window' => 300, 'block' => 900],  // 5 wallet generations per 5 minutes
+        'default' => ['max' => 100, 'window' => 60, 'block' => 300]   // Default for other commands
+    ];
+
+    $limits = $cliRateLimits[$request] ?? $cliRateLimits['default'];
+    $rateLimitResult = $rateLimiter->checkLimit($cliIdentifier, 'cli_' . $request, $limits['max'], $limits['window'], $limits['block']);
+
+    if (!$rateLimitResult['allowed']) {
+        SecureLogger::warning("CLI command rate limited", [
+            'command' => $request,
+            'identifier' => $cliIdentifier,
+            'retry_after' => $rateLimitResult['retry_after']
+        ]);
+        echo "Rate limit exceeded. Please try again in " . $rateLimitResult['retry_after'] . " seconds.\n";
+        exit(1);
+    }
+}
+
 // Info
 if ($request === "info") {
   // Show user info (with/without details)
@@ -33,9 +68,12 @@ if ($request === "info") {
 }
 // Contacts
 elseif($request === "add"){
-  // Add Contact
+  // Add Contact - validate input before processing
   $debugService->output("Executing add contact request", 'SILENT');
   $contactService = $app->services->getContactService();
+
+  // Input validation will be handled within the service method
+  // This ensures consistency across CLI and GUI interfaces
   $contactService->addContact($argv);
 }
 elseif($request === "viewcontact"){
