@@ -28,23 +28,45 @@ function freshInstall(){
             $dbUser = 'eiou_user_' . bin2hex(random_bytes(8));
             $dbPass = bin2hex(random_bytes(16));
 
-            // Create database
-            $rootConn->exec("CREATE DATABASE `$dbName`");
+            // Create database if it doesn't exist
+            $rootConn->exec("CREATE DATABASE IF NOT EXISTS `$dbName`");
 
-            // Create user with limited privileges
-            $rootConn->exec("CREATE USER '$dbUser'@'$dbHost' IDENTIFIED BY '$dbPass'");
-            $rootConn->exec("GRANT ALL PRIVILEGES ON `$dbName`.* TO '$dbUser'@'$dbHost'");
-            $rootConn->exec("FLUSH PRIVILEGES");
+            // Create user with limited privileges (if not exists)
+            // Note: If user already exists, this will fail but that's OK - we'll catch it
+            try {
+                $rootConn->exec("CREATE USER '$dbUser'@'$dbHost' IDENTIFIED BY '$dbPass'");
+                $rootConn->exec("GRANT ALL PRIVILEGES ON `$dbName`.* TO '$dbUser'@'$dbHost'");
+                $rootConn->exec("FLUSH PRIVILEGES");
+            } catch (PDOException $userExists) {
+                // User might already exist - try to use existing credentials
+                // This happens if database exists but dbconfig.json was deleted
+                error_log("Database user creation failed (user might already exist): " . $userExists->getMessage());
+                throw new RuntimeException(
+                    "Database exists but cannot create user. Please restore dbconfig.json or drop the existing database.",
+                    500,
+                    $userExists
+                );
+            }
 
             // Connect to new database and create tables
             $dbConn = new PDO("mysql:host=$dbHost;dbname=$dbName", $dbUser, $dbPass);
             $dbConn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-            $dbConn->exec(getDebugTableSchema());
-            $dbConn->exec(getContactsTableSchema());
-            $dbConn->exec(getTransactionsTableSchema());
-            $dbConn->exec(getP2pTableSchema());
-            $dbConn->exec(getRp2pTableSchema());
+            // Create tables (wrapped in try-catch for better error handling)
+            try {
+                $dbConn->exec(getDebugTableSchema());
+                $dbConn->exec(getContactsTableSchema());
+                $dbConn->exec(getTransactionsTableSchema());
+                $dbConn->exec(getP2pTableSchema());
+                $dbConn->exec(getRp2pTableSchema());
+            } catch (PDOException $tableError) {
+                error_log("Table creation failed: " . $tableError->getMessage());
+                throw new RuntimeException(
+                    "Failed to create database tables: " . $tableError->getMessage(),
+                    500,
+                    $tableError
+                );
+            }
 
             // Overwrite database configuration to the config file
              $dbConfig = [
@@ -56,12 +78,16 @@ function freshInstall(){
 
 
         } catch (PDOException $e) {
-            // Handle database error
-            SecureLogger::critical("Database setup error", [
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
+            // Handle database error - use SecureLogger if available, otherwise error_log
+            if (class_exists('SecureLogger')) {
+                SecureLogger::critical("Database setup error", [
+                    'error' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]);
+            } else {
+                error_log("Database setup error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+            }
 
             // Throw exception to let ErrorHandler handle it
             throw new \RuntimeException(

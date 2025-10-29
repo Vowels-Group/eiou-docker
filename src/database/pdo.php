@@ -61,11 +61,16 @@ function createPDOConnection(): PDO {
         return $pdo;
     } catch (PDOException $e) {
         // Log the error securely (don't expose connection details)
-        SecureLogger::critical("Database connection failed", [
-            'error' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine()
-        ]);
+        // Use SecureLogger if available, otherwise error_log
+        if (class_exists('SecureLogger')) {
+            SecureLogger::critical("Database connection failed", [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+        } else {
+            error_log("Database connection failed: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+        }
 
         // Throw exception to let ErrorHandler handle it
         // This allows upper layers to decide how to handle the error
