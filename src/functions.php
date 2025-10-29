@@ -10,7 +10,7 @@ require_once 'src/database/AbstractRepository.php';
 // Require all files in the services directory
 require_once 'src/services/utilities/UtilityServiceContainer.php';
 require_once 'src/services/ServiceContainer.php';
-// Needed for temporary bridge of service functions between services
+// Still needed for the output() wrapper function (will be removed in separate refactoring)
 require_once 'src/services/ServiceWrappers.php';
 
 // Require schema (echo/output/payload) functionality

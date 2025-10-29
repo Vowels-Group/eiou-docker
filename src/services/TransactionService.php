@@ -413,7 +413,8 @@ class TransactionService {
                     } elseif($response['status'] === 'rejected'){
                         $this->transactionRepository->updateStatus($txid,'rejected',true);
                         output(outputIssueTransactionTryP2p($response),'SILENT');
-                        sendP2pRequestFromFailedDirectTransaction($message);
+                        // Send P2P request for failed direct transaction using P2pService directly
+                        ServiceContainer::getInstance()->getP2pService()->sendP2pRequestFromFailedDirectTransaction($message);
                     }
                 } else{
                     $this->transactionRepository->updateStatus($txid,'completed',true);
@@ -524,7 +525,8 @@ class TransactionService {
             output(outputSendTransaction($payload));
         } else {
             output(outputContactNotFoundTryP2p($request), 'SILENT');
-            sendP2pRequest($request);
+            // Send P2P request when contact not found using P2pService directly
+            ServiceContainer::getInstance()->getP2pService()->sendP2pRequest($request);
             output(outputSendP2p($request));
         }
     }

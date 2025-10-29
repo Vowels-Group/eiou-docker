@@ -106,7 +106,8 @@ class RP2pService {
                 
                 // Check if the fee percent is below the set maximum fee percent the user would pay
                 if ($feePercent <= $this->currentUser->getMaxFee()) {
-                    sendP2pEiou($request); // Send transaction through rp2p chain
+                    // Send transaction through rp2p chain using TransactionService directly
+                    ServiceContainer::getInstance()->getTransactionService()->sendP2pEiou($request);
                 } else {
                     output(outputFeeRejection(), 'SILENT');
                 }

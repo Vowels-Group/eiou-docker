@@ -394,7 +394,8 @@ class P2pService {
                         }
                         continue;
                     }
-                    if(!synchContact($contact)){
+                    // Check if contact can be synced using SynchService directly (default SILENT)
+                    if(!ServiceContainer::getInstance()->getSynchService()->synchSingleContact($contact, 'SILENT')){
                         // If contact cannot be synched in case of pending contact status, skip sending p2p to this contact
                         continue;
                     }
