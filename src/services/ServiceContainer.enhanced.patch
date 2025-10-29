@@ -1,0 +1,97 @@
+--- ServiceContainer.php.original
++++ ServiceContainer.php.enhanced
+@@ -10,6 +10,8 @@
+  */
+
++require_once dirname(__DIR__) . '/services/database/ConnectionManager.php';
++
+ class ServiceContainer {
+     /**
+      * @var ServiceContainer|null Singleton instance
+@@ -31,6 +33,16 @@ class ServiceContainer {
+     private PDO $pdo;
+
+     /**
++     * @var ConnectionManager|null Connection manager instance
++     */
++    private ?ConnectionManager $connectionManager = null;
++
++    /**
++     * @var bool Whether to use resilient connection manager
++     */
++    private bool $useResilientConnection = true;
++
++    /**
+      * Private constructor for singleton pattern
+      */
+     private function __construct() {
+@@ -83,8 +95,24 @@ class ServiceContainer {
+      */
+     public function loadDatabase() {
+         require_once '/etc/eiou/src/database/pdo.php';
+-        $this->pdo = createPDOConnection();
++
++        // Use resilient connection manager if enabled
++        if ($this->useResilientConnection) {
++            try {
++                $this->connectionManager = ConnectionManager::getInstance();
++                $this->pdo = $this->connectionManager->getConnection();
++            } catch (\Exception $e) {
++                // Fallback to standard connection on failure
++                SecureLogger::warning('Failed to use ConnectionManager, falling back to standard connection', [
++                    'error' => $e->getMessage()
++                ]);
++                $this->pdo = createPDOConnection();
++            }
++        } else {
++            $this->pdo = createPDOConnection();
++        }
+     }
++
+     /**
+      * Get PDO instance
+@@ -92,9 +120,43 @@ class ServiceContainer {
+      * @return PDO Database connection
+      */
+     public function getPdo(): PDO {
++        // If using connection manager, ensure connection is still valid
++        if ($this->connectionManager !== null) {
++            try {
++                $this->pdo = $this->connectionManager->getConnection();
++            } catch (\Exception $e) {
++                SecureLogger::error('Failed to get connection from ConnectionManager', [
++                    'error' => $e->getMessage()
++                ]);
++                throw $e;
++            }
++        }
++
+         return $this->pdo;
+     }
+
++    /**
++     * Get ConnectionManager instance
++     *
++     * @return ConnectionManager|null
++     */
++    public function getConnectionManager(): ?ConnectionManager {
++        if ($this->connectionManager === null && $this->useResilientConnection) {
++            $this->connectionManager = ConnectionManager::getInstance();
++        }
++        return $this->connectionManager;
++    }
++
++    /**
++     * Set whether to use resilient connection
++     *
++     * @param bool $useResilient Whether to use resilient connection
++     */
++    public function setUseResilientConnection(bool $useResilient): void {
++        $this->useResilientConnection = $useResilient;
++        // Reload database connection with new setting
++        $this->loadDatabase();
++    }
++
+     /**
+      * Get ContactRepository instance
+      *
