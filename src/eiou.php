@@ -5,7 +5,7 @@
 require_once '/etc/eiou/functions.php';
 
 // Initialize security components for CLI
-require_once __DIR__ . '/security_init.php';
+require_once '/etc/eiou/security_init.php';
 
 $app = Application::getInstance();
 
@@ -28,14 +28,14 @@ if (!$app->currentUserLoaded()) {
 $debugService = $app->services->getDebugService();
 
 // Initialize InputValidator for CLI command validation
-require_once __DIR__ . '/utils/InputValidator.php';
+require_once '/etc/eiou/src/utils/InputValidator.php';
 
 // Apply rate limiting for CLI commands (if database is available)
-if (isset($app->pdo) && $app->pdo instanceof PDO) {
-    $rateLimiter = new RateLimiter($app->pdo);
+if ($app->currentPdoLoaded()) {
+    $rateLimiter = $app->getRateLimiter();
 
     // Get CLI identifier (user + command for more granular limiting)
-    $cliIdentifier = 'cli_' . ($app->currentUser->getPublicKey() ?? 'anonymous') . '_' . $request;
+    $cliIdentifier = 'cli_' . ($app->getPublicKeyHash() ?? 'anonymous') . '_' . $request;
 
     // Define rate limits for different CLI commands
     $cliRateLimits = [
