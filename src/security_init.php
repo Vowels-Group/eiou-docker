@@ -5,15 +5,15 @@
  */
 
 // Load constants
-require_once __DIR__ . '/core/Constants.php';
+require_once __DIR__ . '/src/core/Constants.php';
 
 // Load error handler (must be loaded before other security classes)
-require_once __DIR__ . '/core/ErrorHandler.php';
+require_once __DIR__ . '/src/core/ErrorHandler.php';
 
 // Load security classes
-require_once __DIR__ . '/utils/Security.php';
-require_once __DIR__ . '/utils/RateLimiter.php';
-require_once __DIR__ . '/utils/SecureLogger.php';
+require_once __DIR__ . '/src/utils/Security.php';
+require_once __DIR__ . '/src/utils/RateLimiter.php';
+require_once __DIR__ . '/src/utils/SecureLogger.php';
 
 // Initialize secure logging
 SecureLogger::init(Constants::LOG_FILE_APP ?: '/var/log/eiou/app.log', Constants::LOG_LEVEL ?: 'INFO');
