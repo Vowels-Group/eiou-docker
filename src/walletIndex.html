@@ -6,7 +6,7 @@ require_once '/etc/eiou/functions.php';
 
 // Initialize security components for web interface
 // This sets security headers, initializes rate limiting, and secure sessions
-require_once __DIR__ . '/security_init.php';
+require_once '/etc/eiou/security_init.php';
 
 if (!file_exists("/etc/eiou/userconfig.json")) {
   echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
