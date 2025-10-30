@@ -92,7 +92,7 @@ class DebugService {
             ];
             $this->debugRepository->insertDebug($data);
         }
-        if ($level !== 'SILENT') {
+        if ($level !== 'SILENT' && php_sapi_name() === 'cli') {
             echo $message;
         }
     }
