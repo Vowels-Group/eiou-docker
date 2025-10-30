@@ -29,7 +29,7 @@ class TransactionRepository extends AbstractRepository {
      * @return float Total amount sent
      */
     public function calculateTotalSent(string $publicKey): float {
-        $publicKeyHash = hash('sha256', $publicKey);
+        $publicKeyHash = hash(Constants::HASH_ALGORITHM, $publicKey);
         $query = "SELECT SUM(amount) as total_sent FROM {$this->tableName}
                   WHERE receiver_public_key_hash = :publicKeyHash";
         $stmt = $this->execute($query, [':publicKeyHash' => $publicKeyHash]);
@@ -49,7 +49,7 @@ class TransactionRepository extends AbstractRepository {
      * @return float Total amount sent by user
      */
     public function calculateTotalSentByUser(string $userPublicKey): float {
-        $publicKeyHash = hash('sha256', $userPublicKey);
+        $publicKeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
         $query = "SELECT SUM(amount) as total_sent FROM {$this->tableName}
                   WHERE sender_public_key_hash = :publicKeyHash";
         $stmt = $this->execute($query, [':publicKeyHash' => $publicKeyHash]);
@@ -69,7 +69,7 @@ class TransactionRepository extends AbstractRepository {
      * @return float Total amount received
      */
     public function calculateTotalReceived(string $publicKey): float {
-        $publicKeyHash = hash('sha256', $publicKey);
+        $publicKeyHash = hash(Constants::HASH_ALGORITHM, $publicKey);
         $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
                   WHERE sender_public_key_hash = :publicKeyHash";
         $stmt = $this->execute($query, [':publicKeyHash' => $publicKeyHash]);
@@ -89,7 +89,7 @@ class TransactionRepository extends AbstractRepository {
      * @return float Total amount received by user
      */
     public function calculateTotalReceivedByUser(string $userPublicKey): float {
-        $publicKeyHash = hash('sha256', $userPublicKey);
+        $publicKeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
         $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
                   WHERE sender_public_key_hash != :publicKeyHash";
         $stmt = $this->execute($query, [':publicKeyHash' => $publicKeyHash]);
@@ -170,8 +170,8 @@ class TransactionRepository extends AbstractRepository {
      * @return string|null Previous txid or null
      */
     public function getPreviousTxid(string $senderPublicKey, string $receiverPublicKey): ?string {
-        $senderPublicKeyHash = hash('sha256', $senderPublicKey);
-        $receiverPublicKeyHash = hash('sha256', $receiverPublicKey);
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
 
         $query = "SELECT txid FROM {$this->tableName}
                   WHERE (sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
@@ -201,8 +201,8 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getContactBalance(string $userPubkey, string $contactPubkey): int
     {
-        $userHash = hash('sha256', $userPubkey);
-        $contactHash = hash('sha256', $contactPubkey);
+        $userHash = hash(Constants::HASH_ALGORITHM, $userPubkey);
+        $contactHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
 
         // Calculate sent to this contact
         $query = "SELECT COALESCE(SUM(amount), 0) as sent FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ?";
@@ -234,9 +234,9 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getAllContactBalances(string $userPubkey, array $contactPubkeys): array
     {
-        $userHash = hash('sha256', $userPubkey);
+        $userHash = hash(Constants::HASH_ALGORITHM, $userPubkey);
         $contactHashes = array_map(function($pubkey) {
-            return hash('sha256', $pubkey);
+            return hash(Constants::HASH_ALGORITHM, $pubkey);
         }, $contactPubkeys);
 
         // Create a mapping of hash to pubkey for later lookup
@@ -341,7 +341,7 @@ class TransactionRepository extends AbstractRepository {
                     AND timestamp > ?";
 
         // Bind parameters - addresses twice for both IN clauses, then timestamp
-        $params = array_merge($userAddresses, $userAddresses, [date($this->envVariables->get('DISPLAY_DATE_FORMAT'), $lastCheckTime)]);
+        $params = array_merge($userAddresses, $userAddresses, [date(Constants::DISPLAY_DATE_FORMAT, $lastCheckTime)]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         if(!$stmt){
@@ -437,7 +437,7 @@ class TransactionRepository extends AbstractRepository {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
                 'type' => 'sent',
-                'amount' => $tx['amount'] / $this->envVariables->get('TRANSACTION_USD_CONVERSION_FACTOR'), // Convert from cents
+                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['receiver_address']
             ];
@@ -487,7 +487,7 @@ class TransactionRepository extends AbstractRepository {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
                 'type' => 'received',
-                'amount' => $tx['amount'] / $this->envVariables->get('TRANSACTION_USD_CONVERSION_FACTOR'), // Convert from cents
+                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['sender_address']
             ];
@@ -528,7 +528,7 @@ class TransactionRepository extends AbstractRepository {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
                 'type' => 'received',
-                'amount' => $tx['amount'] / $this->envVariables->get('TRANSACTION_USD_CONVERSION_FACTOR'), // Convert from cents
+                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['sender_address']
             ];
@@ -572,7 +572,7 @@ class TransactionRepository extends AbstractRepository {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
                 'type' => 'sent',
-                'amount' => $tx['amount'] / $this->envVariables->get('TRANSACTION_USD_CONVERSION_FACTOR'), // Convert from cents
+                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['receiver_address']
             ];
@@ -620,7 +620,7 @@ class TransactionRepository extends AbstractRepository {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
                 'type' => $isSent ? 'sent' : 'received',
-                'amount' => $tx['amount'] / $this->envVariables->get('TRANSACTION_USD_CONVERSION_FACTOR'), // Convert from cents
+                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' => $counterpartyAddress
             ];
@@ -694,8 +694,8 @@ class TransactionRepository extends AbstractRepository {
      */
     public function insertTransaction(array $request): string {
         // Calculate public key hashes
-        $senderPublicKeyHash = hash('sha256', $request['senderPublicKey']);
-        $receiverPublicKeyHash = hash('sha256', $request['receiverPublicKey']);
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $request['senderPublicKey']);
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $request['receiverPublicKey']);
 
         // Determine transaction type
         $txType = ($request['memo'] === 'standard') ? 'standard' : 'p2p';

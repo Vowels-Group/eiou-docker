@@ -12,18 +12,11 @@
 class TimeUtilityService
 {
     /**
-     * @var Constants Environment constants
-     */
-    private Constants $constants;
-
-    /**
      * Constructor
      *
-     * @param Constants $constants Environment constants
      */
-    public function __construct(Constants $constants)
+    public function __construct()
     {
-        $this->constants = $constants;
     }
 
     /**
@@ -46,7 +39,7 @@ class TimeUtilityService
      */
     public function convertMicrotimeToInt(float $time): int
     {
-        return (int) ($time * $this->constants::TIME_MICROSECONDS_TO_INT);
+        return (int) ($time * Constants::TIME_MICROSECONDS_TO_INT);
     }
 
     /**
@@ -69,6 +62,6 @@ class TimeUtilityService
      */
     public function calculateExpiration(int $ttlSeconds): int
     {
-        return $this->getCurrentMicrotime() + ($ttlSeconds * $this->constants::TIME_MICROSECONDS_TO_INT);
+        return $this->getCurrentMicrotime() + ($ttlSeconds * Constants::TIME_MICROSECONDS_TO_INT);
     }
 }

@@ -26,7 +26,6 @@ class InputValidator {
         if ($amount <= 0) {
             return ['valid' => false, 'value' => null, 'error' => 'Amount must be greater than zero'];
         }
-
         // Check maximum amount (prevent overflow)
         if ($amount > Constants::TRANSACTION_MAX_AMOUNT) {
             return ['valid' => false, 'value' => null, 'error' => 'Amount exceeds maximum allowed value'];

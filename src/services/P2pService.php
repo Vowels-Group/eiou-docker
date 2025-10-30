@@ -255,7 +255,7 @@ class P2pService {
         $contacts = $this->contactRepository->getAllContacts();
         // Check if end recipient of request in contacts
         foreach ($contacts as $contact) {
-            $contactHash = hash('sha256', $contact['address'] . $request['salt'] . $request['time']);
+            $contactHash = hash(Constants::HASH_ALGORITHM, $contact['address'] . $request['salt'] . $request['time']);
             // output(outputCalculatedContactHash($contactHash), 'SILENT');
             if ($contactHash === $request['hash']) {
                 output(outputContactMatched($contactHash), 'SILENT');
@@ -274,7 +274,7 @@ class P2pService {
      */
     public function matchYourselfP2P($request,$address){
         // Check if p2p end recipient is user
-        if(hash('sha256', $address . $request['salt'] . $request['time']) === $request['hash']){
+        if(hash(Constants::HASH_ALGORITHM, $address . $request['salt'] . $request['time']) === $request['hash']){
             return true;
         }
         return false;
@@ -317,7 +317,7 @@ class P2pService {
             throw new RuntimeException("Failed to generate secure random data");
         }
 
-        $data['hash'] = hash('sha256', $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
+        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
         output(outputP2pComponents($data), 'SILENT');
 
@@ -347,7 +347,7 @@ class P2pService {
 
         // Additional data preparation
         $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
-        $data['hash'] = hash('sha256', $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
+        $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
         output(outputP2pComponents($data), 'SILENT');
 

@@ -38,11 +38,6 @@ abstract class AbstractRepository {
     protected $currentUser;
 
     /**
-     * @var Constants object of constants data
-     */
-    protected $envVariables;
-
-    /**
      * Constructor - Initializes PDO connection
      *
      * @param PDO|null $pdo Optional PDO instance (for testing/DI)
@@ -70,17 +65,7 @@ abstract class AbstractRepository {
         if (!$this->pdo) {
             throw new RuntimeException("Failed to initialize repository: Database connection unavailable");
         }
-
-        $this->loadConfiguration();
         $this->loadCurrentUser();
-    }
-
-    /**
-     * Load current constants 
-     */
-    private function loadConfiguration(): void {
-        require_once '/etc/eiou/src/core/Constants.php';
-        $this->envVariables = Constants::getInstance();
     }
 
     /**
@@ -394,7 +379,7 @@ abstract class AbstractRepository {
         error_log($logMessage);
 
         // Additional logging for development
-        if ($this->envVariables->get('APP_DEBUG') === 'true' && $exception) {
+        if (Constants::APP_DEBUG === 'true' && $exception) {
             error_log("Stack trace: " . $exception->getTraceAsString());
         }
     }

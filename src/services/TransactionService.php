@@ -250,7 +250,7 @@ class TransactionService {
         }
 
         // Create Txid for transactions
-        $txid = hash('sha256', $this->currentUser->getPublicKey() . $data['receiverPublicKey'] . $data['amount'] . $data['time']);
+        $txid = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiverPublicKey'] . $data['amount'] . $data['time']);
         return $txid;
     }
 
@@ -262,7 +262,7 @@ class TransactionService {
      */
     public function createUniqueDatabaseTxid(array $data): string {
         // Create unique Txid for transactions (from database values)
-        $txid = hash('sha256', $this->currentUser->getPublicKey() . $data['receiver_public_key'] . $data['amount'] . $data['time']);
+        $txid = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiver_public_key'] . $data['amount'] . $data['time']);
         return $txid;
     }
 
@@ -276,7 +276,7 @@ class TransactionService {
     public function matchYourselfTransaction($request,$address){
         // Check if transaction end recipient is user
         $p2pRequest = $this->p2pRepository->getByHash($request['memo']);
-        if( hash('sha256', $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
+        if( hash(Constants::HASH_ALGORITHM, $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
             return true;
         }
         return false;

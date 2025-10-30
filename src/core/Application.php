@@ -8,11 +8,6 @@ class Application {
     private static ?Application $instance = null;
 
     /**
-     * @var Constants object of constants data
-     */
-    protected $envVariables;
-
-    /**
      * @var UserContext object of user data
      */
     protected $currentUser;
@@ -54,9 +49,6 @@ class Application {
      * Private constructor for singleton pattern
      */
     private function __construct() {
-        // Get constants
-        $this->loadConfiguration();
-
         // Setup database
         if(!file_exists('/etc/eiou/dbconfig.json')){
             // Performs a fresh installation of the eIOU system by creating db configuration files, database, and necessary tables
@@ -168,6 +160,18 @@ class Application {
     }
 
     /**
+     * Get auth code loaded user
+     * 
+     * @return string|null
+     */
+    public function getAuthCode() {
+        if($this->currentUserLoaded()){
+            return $this->currentUser->getAuthCode();
+        }
+        return null;
+    }
+
+    /**
      * Get public key hash from loaded user
      * 
      * @return string|null
@@ -206,14 +210,6 @@ class Application {
     }
 
     /**
-     * Load configuration from constants
-     */
-    private function loadConfiguration() {
-        require_once $this->getRootPath() . '/src/core/Constants.php';
-        $this->envVariables = Constants::getInstance();
-    }
-
-    /**
      * Load services from serviceContainer
      */
     public function loadserviceContainer() {
@@ -242,7 +238,7 @@ class Application {
     public function getLogger() {
         if (!isset($this->utils['SecureLogger'])) {
             require_once $this->getRootPath() . '/src/utils/SecureLogger.php';
-            SecureLogger::init($this->envVariables->get('LOG_FILE_APP'), $this->envVariables->get('LOG_LEVEL'));
+            SecureLogger::init(Constants::LOG_FILE_APP, Constants::LOG_LEVEL);
             $this->utils['SecureLogger'] = new SecureLogger();
         }
         $this->utils['SecureLogger'];
@@ -329,7 +325,7 @@ class Application {
      * @return bool
      */
     public function isDevelopment() {
-        return $this->envVariables->get('APP_ENV') === 'development';
+        return Constants::APP_ENV === 'development';
     }
 
     /**
@@ -338,7 +334,7 @@ class Application {
      * @return bool
      */
     public function isDebug() {
-        return $this->envVariables->get('APP_DEBUG') === true;
+        return Constants::APP_DEBUG === true;
     }
 
     /**
@@ -356,7 +352,7 @@ class Application {
      * @return string
      */
     public function getConfigPath() {
-        return $this->envVariables->get('PATH_CONFIG_DIR') ?: '/etc/eiou';
+        return Constants::PATH_CONFIG_DIR ?: '/etc/eiou';
     }
 
     /**
@@ -374,7 +370,6 @@ class Application {
         if ($this->pdo) {
             $this->pdo = null;
         }
-        $this->envVariables = null;
     }
 
     /**

@@ -55,7 +55,7 @@ class ContactRepository extends AbstractRepository {
     public function addPendingContact(string $address, string $senderPublicKey): string {
        
         $myPublicKey = $this->currentUser->getPublicKey() ?? '';
-        $pubkeyHash = hash('sha256', $senderPublicKey);
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
 
         $data = [
             'address' => $address,
@@ -173,7 +173,7 @@ class ContactRepository extends AbstractRepository {
         $query = "SELECT COUNT(*) as count FROM {$this->tableName}
                     WHERE name IS NULL AND status = 'pending'
                     AND created_at > ?";
-        $stmt = $this->execute($query,[date($this->envVariables->get('DISPLAY_DATE_FORMAT'), $lastCheckTime)]);
+        $stmt = $this->execute($query,[date(Constants::DISPLAY_DATE_FORMAT, $lastCheckTime)]);
         if(!$stmt){
             return false;
         }
@@ -343,7 +343,7 @@ class ContactRepository extends AbstractRepository {
      * @return float Credit limit (0 if not found)
      */
     public function getCreditLimit(string $senderPublicKey): float {
-        $pubkeyHash = hash('sha256', $senderPublicKey);
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
         $query = "SELECT credit_limit FROM {$this->tableName} WHERE pubkey_hash = :pubkey_hash";
         $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
 
@@ -374,7 +374,7 @@ class ContactRepository extends AbstractRepository {
         float $credit,
         string $currency
     ): bool {
-        $pubkeyHash = hash('sha256', $contactPublicKey);
+        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
 
         $data = [
             'address' => $address,

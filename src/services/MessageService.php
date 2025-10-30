@@ -114,7 +114,7 @@ class MessageService {
 
             if($p2p){
                 // Check if source is original sender for any messages related to transactions
-                if($hash === hash('sha256', $this->transportUtility->resolveUserAddressForTransport($decodedMessage['senderAddress']) . $p2p['salt'] . $p2p['time'])){
+                if($hash === hash(Constants::HASH_ALGORITHM, $this->transportUtility->resolveUserAddressForTransport($decodedMessage['senderAddress']) . $p2p['salt'] . $p2p['time'])){
                     return true;
                 }
                 return false;

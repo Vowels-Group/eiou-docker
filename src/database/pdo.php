@@ -17,8 +17,6 @@ require_once dirname(__DIR__) . '/core/DatabaseContext.php';
 function createPDOConnection(): PDO {
     // Try to use UserContext if available, fallback to global $user
     $databaseContext = DatabaseContext::getInstance();
-    $envVariables = Constants::getInstance();
-
 
     // Get database configuration from UserContext or global $user
     if ($databaseContext && $databaseContext->isInitialized()) {

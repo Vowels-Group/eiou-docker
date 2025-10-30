@@ -14,18 +14,11 @@ require_once __DIR__ . '/../../core/Constants.php';
 class CurrencyUtilityService
 {
     /**
-     * @var Constants Environment constants
-     */
-    private Constants $constants;
-
-    /**
      * Constructor
      *
-     * @param Constants $constants Environment constants
      */
-    public function __construct(Constants $constants)
+    public function __construct()
     {
-        $this->constants = $constants;
     }
 
     /**
@@ -49,7 +42,7 @@ class CurrencyUtilityService
      */
     public function convertCentsToDollars(float $amountInCents): float
     {
-        $conversionFactor = $this->constants::TRANSACTION_USD_CONVERSION_FACTOR ?? 100;
+        $conversionFactor = Constants::TRANSACTION_USD_CONVERSION_FACTOR ?? 100;
         return $amountInCents / $conversionFactor;
     }
 
@@ -61,7 +54,7 @@ class CurrencyUtilityService
      */
     public function convertDollarsToCents(float $amountInDollars): int
     {
-        $conversionFactor = $this->constants::TRANSACTION_USD_CONVERSION_FACTOR ?? 100;
+        $conversionFactor = Constants::TRANSACTION_USD_CONVERSION_FACTOR ?? 100;
         return (int) round($amountInDollars * $conversionFactor);
     }
 
@@ -74,7 +67,7 @@ class CurrencyUtilityService
      */
     public function calculateFee(float $amount, float $feePercent): int
     {
-        return (int) round($amount * ($feePercent / $this->constants::FEE_CONVERSION_FACTOR));
+        return (int) round($amount * ($feePercent / Constants::FEE_CONVERSION_FACTOR));
     }
 
     /**
@@ -91,7 +84,7 @@ class CurrencyUtilityService
         }
 
         $feeAmount = $totalAmount - $baseAmount;
-        return round(($feeAmount / $baseAmount) * $this->constants::FEE_CONVERSION_FACTOR, $this->constants::FEE_PERCENT_DECIMAL_PRECISION);
+        return round(($feeAmount / $baseAmount) * Constants::FEE_CONVERSION_FACTOR, Constants::FEE_PERCENT_DECIMAL_PRECISION);
     }
 
     /**

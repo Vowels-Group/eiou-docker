@@ -28,7 +28,7 @@ class ServiceContainer {
     /**
      * @var PDO Database connection
      */
-    private PDO $pdo;
+    private PDO|null $pdo;
 
     /**
      * Private constructor for singleton pattern
