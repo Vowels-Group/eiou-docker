@@ -117,6 +117,15 @@ class Application {
     }
 
     /**
+     * Check if database connection has been started
+     *
+     */
+    public function currentPdoLoaded() {
+        return(isset($this->pdo) && $this->pdo instanceof PDO);
+    }
+
+
+    /**
      * Set database connection (for testing)
      *
      * @param PDO $pdo
@@ -138,6 +147,30 @@ class Application {
     private function loadCurrentDatabase() {
         require_once '/etc/eiou/src/core/DatabaseContext.php';
         $this->currentDatabase = DatabaseContext::getInstance();
+    }
+
+    /**
+     * Get public key from loaded user
+     * 
+     * @return string|null
+     */
+    public function getPublicKey() {
+        if($this->currentUserLoaded()){
+            return $this->currentUser->getPublicKey();
+        }
+        return null;
+    }
+
+    /**
+     * Get public key hash from loaded user
+     * 
+     * @return string|null
+     */
+    public function getPublicKeyHash() {
+        if($this->currentUserLoaded()){
+            return $this->currentUser->getPublicKeyHash();
+        }
+        return null;
     }
 
     /**
