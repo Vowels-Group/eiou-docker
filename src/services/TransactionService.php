@@ -514,7 +514,7 @@ class TransactionService {
                     'amount' => $request[3],
                     'error' => $amountValidation['error']
                 ]);
-                output(("Invalid amount: " . $amountValidation['error']),'ECHO');
+                output(("Invalid amount: " . $amountValidation['error']),'ERROR');
                 exit(0);
             }
             $request[3] = $amountValidation['value'];
@@ -528,7 +528,7 @@ class TransactionService {
                     'currency' => $request[4],
                     'error' => $currencyValidation['error']
                 ]);
-                output("Invalid currency: " . $currencyValidation['error'],'ECHO');
+                output("Invalid currency: " . $currencyValidation['error'],'ERROR');
                 exit(0);
             }
             $request[4] = $currencyValidation['value'];
