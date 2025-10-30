@@ -80,7 +80,7 @@ class ContactService {
                 'address' => $data[2] ?? 'empty',
                 'error' => $addressValidation['error']
             ]);
-            output(returnContactAddInvalidInput(), 'ERROR');
+            output("Invalid Address: " . $addressValidation['error'],'ECHO');
             exit(1);
         }
         $address = $addressValidation['value'];
@@ -92,7 +92,7 @@ class ContactService {
                 'name' => $data[3] ?? 'empty',
                 'error' => $nameValidation['error']
             ]);
-            output(returnContactAddInvalidInput(), 'ERROR');
+            output("Invalid name: " . $nameValidation['error'],'ECHO');
             exit(1);
         }
         $name = $nameValidation['value'];
@@ -104,7 +104,7 @@ class ContactService {
                 'fee' => $data[4] ?? 'empty',
                 'error' => $feeValidation['error']
             ]);
-            output(returnContactAddInvalidInput(), 'ERROR');
+            output("Invalid Fee: " .$feeValidation['error'], 'ECHO');
             exit(1);
         }
         $fee = $feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR;
@@ -116,7 +116,7 @@ class ContactService {
                 'credit' => $data[5] ?? 'empty',
                 'error' => $creditValidation['error']
             ]);
-            output(returnContactAddInvalidInput(), 'ERROR');
+            output("Invalid credit: " . $creditValidation['error'], 'ECHO');
             exit(1);
         }
         $credit = $creditValidation['value'] * Constants::CREDIT_CONVERSION_FACTOR;
@@ -128,7 +128,7 @@ class ContactService {
                 'currency' => $data[6] ?? 'empty',
                 'error' => $currencyValidation['error']
             ]);
-            output(returnContactAddInvalidInput(), 'ERROR');
+            output("Invalid currency: " . $currencyValidation['error'], 'ECHO');
             exit(1);
         }
         $currency = $currencyValidation['value'];
