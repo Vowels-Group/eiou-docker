@@ -111,6 +111,15 @@ class UserContext {
     }
 
     /**
+     * Get public key hash
+     *
+     * @return string|null
+     */
+    public function getPublicKeyHash(): ?string {
+        return hash(Constants::HASH_ALGORITHM,$this->get('public')) ?? null;
+    }
+
+    /**
      * Get private key
      *
      * @return string|null
