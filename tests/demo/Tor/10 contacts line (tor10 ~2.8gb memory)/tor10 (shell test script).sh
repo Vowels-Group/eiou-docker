@@ -76,14 +76,16 @@ for container in "${containers[@]}"; do
 done
 
 
-# Function to wait for a container to be ready
+# Save container Addresses in the associative array containerAddresses
+#       containerAddresses[containerName] = containerAddress (Tor)
+echo -e "\nGetting Tor addresses..."
 wait_for_container() {
     local container_name=$1
     local max_attempts=10
     local attempt=0
 
-    echo "Waiting for $container_name to be ready..."
-    while ! docker exec "$container_name" eiou generate torAddressOnly >/dev/null 2>&1; do
+    echo "Waiting for $container_name's Tor address..."
+     while ! containerAddresses[$container_name]=$(docker exec $container_name eiou generate torAddressOnly | tr -d '\n') >/dev/null 2>&1; do
         attempt=$((attempt + 1))
         if [ "$attempt" -ge "$max_attempts" ]; then
             echo "Error: $container_name did not start in time."
@@ -97,12 +99,9 @@ for container in "${containers[@]}"; do
     wait_for_container $container
 done
 
-# Save container Addresses in the associative array containerAddresses
-#       containerAddresses[containerName] = containerAddress (Tor)
-echo -e "\nGetting Tor addresses..."
-for container in "${containers[@]}"; do
-    containerAddresses[$container]=$(docker exec $container eiou generate torAddressOnly | tr -d '\n')
-done
+echo -e "\nWaiting for 15 seconds due to the nature of Tor..."
+sleep 15
+
 
 # Setup of simple fees and credit, easy edit for every person
 readonly defaultFee=0.1
@@ -114,7 +113,7 @@ containersLinkKeys=($(for x in ${!containersLinks[@]}; do echo $x; done | sort))
 for containersLinkKey in "${containersLinkKeys[@]}"; do
     values=${containersLinks[${containersLinkKey}]}
     containerKeys=(${containersLinkKey//,/ })    
-    echo -e "\n\t-> Adding ${containerKeys[0]} To ${containerKeys[1]} as a contact: "
+    echo -e "\t-> Adding ${containerKeys[0]} To ${containerKeys[1]} as a contact: "
     docker exec ${containerKeys[0]} eiou add ${containerAddresses[${containerKeys[1]}]} ${containerKeys[1]} ${values[0]} ${values[1]} ${values[2]}
 done
 
@@ -139,17 +138,32 @@ echo -e "\t-> torA sends money to torB, using name"
 docker exec torA eiou send torB 12 USD
 
 # need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances)
-echo -e "\nSleeping for 10 seconds..."
+echo -e "\nSleeping for 10 seconds for proper completion of transaction cycles..."
 sleep 10
 
 # View balances
 echo -e "\nViewing balances..."
+
+echo -e "\nViewing balances of torA"
 docker exec torA eiou viewbalances
+
+echo -e "\nViewing balances of torB"
 docker exec torB eiou viewbalances
+
+echo -e "\nViewing balances of torD"
+docker exec torB eiou viewbalances
+
 
 # View transaction history
 echo -e "\nViewing transaction history..."
+
+echo -e "\nViewing history of torA"
 docker exec torA eiou history
+
+echo -e "\nViewing history of torB"
 docker exec torB eiou history
+
+echo -e "\nViewing history of torD"
+docker exec torD eiou history
 
 echo -e "\nScript completed successfully."
