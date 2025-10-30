@@ -62,11 +62,24 @@ abstract class AbstractRepository {
             throw new RuntimeException("Failed to initialize repository: Database connection unavailable");
         }
 
-        require_once dirname(__DIR__) . '/core/UserContext.php';
-        $this->currentUser = UserContext::getInstance();
-        
-        require_once dirname(__DIR__) . '/core/Constants.php';
+        $this->loadConfiguration();
+        $this->loadCurrentUser();
+    }
+
+    /**
+     * Load current constants 
+     */
+    private function loadConfiguration(): void {
+        require_once '/etc/eiou/src/core/Constants.php';
         $this->envVariables = Constants::getInstance();
+    }
+
+    /**
+     * Load current user 
+     */
+    private function loadCurrentUser(): void {
+        require_once '/etc/eiou/src/core/UserContext.php';
+        $this->currentUser = UserContext::getInstance();
     }
 
     /**
