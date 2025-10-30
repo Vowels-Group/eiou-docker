@@ -15,7 +15,7 @@ class DatabaseContext {
      * Private constructor to enforce singleton pattern
      */
     private function __construct() {
-        $this->initFromGlobal();
+        $this->loadConfigFromFiles();
     }
 
     /**
@@ -31,12 +31,11 @@ class DatabaseContext {
     }
 
     /**
-     * Initialize db context from global $db variable
-     * This method allows gradual migration from global $db
+     * Initialize db context from File
      *
      * @return void
      */
-    private function initFromGlobal(): void {
+    private function loadConfigFromFiles(): void {
         if (file_exists('/etc/eiou/dbconfig.json')){
             $this->databaseData = json_decode(file_get_contents('/etc/eiou/dbconfig.json'),true);
             $this->initialized = true;

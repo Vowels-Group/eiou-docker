@@ -36,20 +36,69 @@ class ContactController
     /**
      * Handle add contact form submission
      *
+     * This method uses InputValidator and Security classes to validate and sanitize
+     * all user input before processing the contact addition.
+     *
      * @return void
      */
     public function handleAddContact(): void
     {
-        $address = $_POST['address'] ?? '';
-        $name = $_POST['name'] ?? '';
+        // Import validation and security classes
+        require_once __DIR__ . '/../../utils/InputValidator.php';
+        require_once __DIR__ . '/../../utils/Security.php';
+
+        // Sanitize input data
+        $address = Security::sanitizeInput($_POST['address'] ?? '');
+        $name = Security::sanitizeInput($_POST['name'] ?? '');
         $fee = $_POST['fee'] ?? '';
         $credit = $_POST['credit'] ?? '';
         $currency = $_POST['currency'] ?? '';
 
-        if (empty($address) || empty($name) || empty($fee) || empty($credit) || empty($currency)) {
+        if (empty($address) || empty($name) || $fee === '' || $credit === '' || empty($currency)) {
             $message = 'All fields are required';
             $messageType = 'error';
         } else {
+            // Validate address
+            $addressValidation = InputValidator::validateAddress($address);
+            if (!$addressValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
+                return;
+            }
+
+            // Validate contact name
+            $nameValidation = InputValidator::validateContactName($name);
+            if (!$nameValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid contact name: ' . $nameValidation['error'], 'error');
+                return;
+            }
+
+            // Validate fee percentage
+            $feeValidation = InputValidator::validateFeePercent($fee);
+            if (!$feeValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid fee: ' . $feeValidation['error'], 'error');
+                return;
+            }
+
+            // Validate credit limit
+            $creditValidation = InputValidator::validateCreditLimit($credit);
+            if (!$creditValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid credit limit: ' . $creditValidation['error'], 'error');
+                return;
+            }
+
+            // Validate currency
+            $currencyValidation = InputValidator::validateCurrency($currency);
+            if (!$currencyValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid currency: ' . $currencyValidation['error'], 'error');
+                return;
+            }
+
+            // Use sanitized and validated values
+            $address = $addressValidation['value'];
+            $name = $nameValidation['value'];
+            $fee = $feeValidation['value'];
+            $credit = $creditValidation['value'];
+            $currency = $currencyValidation['value'];
             // Create argv array for addContact function
             $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency];
 

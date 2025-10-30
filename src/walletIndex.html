@@ -4,6 +4,10 @@
 // This file accepts incoming messages from the eIOU network
 require_once '/etc/eiou/functions.php';
 
+// Initialize security components for web interface
+// This sets security headers, initializes rate limiting, and secure sessions
+require_once '/etc/eiou/security_init.php';
+
 if (!file_exists("/etc/eiou/userconfig.json")) {
   echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
   die;
@@ -49,14 +53,36 @@ if (isset($_GET['logout'])) {
 
 // Handle authentication POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
-    $submittedAuthCode = $_POST['authcode'];
+    // Sanitize and validate authentication code input
+    $submittedAuthCode = Security::sanitizeInput($_POST['authcode']);
 
-    if ($user->has('authcode') && $secureSession->authenticate($submittedAuthCode, $user->getAuthCode())) {
-        // Authentication successful, redirect to clean URL
+    // Validate authcode format (should be alphanumeric, reasonable length)
+    if (!Security::validateLength($submittedAuthCode, 1, 255)) {
+        SecureLogger::warning("Invalid authcode format attempted", [
+            'ip' => RateLimiter::getClientIp(),
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'
+        ]);
+        $authError = true;
+    } elseif ($user->has('authcode') && $secureSession->authenticate($submittedAuthCode, $user->getAuthCode())) {
+        // Authentication successful, reset rate limit for this IP
+        if (isset($rateLimiter)) {
+            $rateLimiter->reset(RateLimiter::getClientIp(), 'login_attempt');
+        }
+
+        // Log successful authentication
+        SecureLogger::info("User authenticated successfully", [
+            'ip' => RateLimiter::getClientIp()
+        ]);
+
+        // Redirect to clean URL
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
     } else {
-        // Authentication failed, show error
+        // Authentication failed, show error and log attempt
+        SecureLogger::warning("Failed authentication attempt", [
+            'ip' => RateLimiter::getClientIp(),
+            'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'
+        ]);
         $authError = true;
     }
 }

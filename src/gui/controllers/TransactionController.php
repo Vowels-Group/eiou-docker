@@ -46,22 +46,57 @@ class TransactionController
     /**
      * Handle send eIOU form submission
      *
+     * This method uses InputValidator and Security classes to validate and sanitize
+     * all user input before processing the transaction.
+     *
      * @return void
      */
     public function handleSendEIOU(): void
     {
-        $recipient = $_POST['recipient'] ?? '';
-        $manualRecipient = $_POST['manual_recipient'] ?? '';
+        // Import validation and security classes
+        require_once __DIR__ . '/../../utils/InputValidator.php';
+        require_once __DIR__ . '/../../utils/Security.php';
+
+        // Sanitize input data
+        $recipient = Security::sanitizeInput($_POST['recipient'] ?? '');
+        $manualRecipient = Security::sanitizeInput($_POST['manual_recipient'] ?? '');
         $amount = $_POST['amount'] ?? '';
         $currency = $_POST['currency'] ?? '';
 
         // Use manual recipient if provided, otherwise use selected recipient
         $finalRecipient = !empty($manualRecipient) ? $manualRecipient : $recipient;
 
+        // Validate required fields
         if (empty($finalRecipient) || empty($amount) || empty($currency)) {
             $message = 'All fields are required';
             $messageType = 'error';
         } else {
+            // Validate amount using InputValidator
+            $amountValidation = InputValidator::validateAmount($amount, $currency);
+            if (!$amountValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid amount: ' . $amountValidation['error'], 'error');
+                return;
+            }
+
+            // Validate currency
+            $currencyValidation = InputValidator::validateCurrency($currency);
+            if (!$currencyValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid currency: ' . $currencyValidation['error'], 'error');
+                return;
+            }
+
+            // Validate recipient address or contact name
+            $addressValidation = InputValidator::validateAddress($finalRecipient);
+            $contactNameValidation = InputValidator::validateContactName($finalRecipient);
+
+            if (!$addressValidation['valid'] && !$contactNameValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid recipient: must be a valid address or contact name', 'error');
+                return;
+            }
+
+            // Use sanitized values
+            $amount = $amountValidation['value'];
+            $currency = $currencyValidation['value'];
             // Create argv array for sendEiou function
             $argv = ['eiou', 'send', $finalRecipient, $amount, $currency];
 
