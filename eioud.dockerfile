@@ -39,6 +39,11 @@ COPY src/index.html /var/www/html/eiou/index.html
 RUN chown www-data:www-data /var/www/html/eiou -R
 RUN chmod 755 /var/www/html/eiou
 
+# Copy security_init.php to a common location
+COPY src/security_init.php /etc/eiou/security_init.php
+RUN chown www-data:www-data /etc/eiou/security_init.php
+RUN chmod 644 /etc/eiou/security_init.php
+
 # Copy functions.php to a common location
 COPY src/functions.php /etc/eiou/functions.php
 RUN chown www-data:www-data /etc/eiou/functions.php
