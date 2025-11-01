@@ -222,13 +222,6 @@ class ContactService {
         // Build the payload array
         $payload = $this->contactPayload->buildCreateRequest($address);
 
-        // Determine if tor, else add http hostname
-        if (preg_match('/\.onion$/', $address)) {
-            $payload['senderAddress'] = $this->currentUser->getTorAddress();
-        } else {
-            $payload['senderAddress'] = $this->currentUser->getHttpAddress();
-        }
-
         // Check if the response indicates successful acceptance
         $responseData = json_decode($this->transportUtility->send($address, $payload), true);
 
