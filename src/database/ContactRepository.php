@@ -398,7 +398,7 @@ class ContactRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function lookupByName(string $name): ?array {
-        $query = "SELECT name, address, pubkey, fee_percent FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
+        $query = "SELECT name, address, pubkey, fee_percent, status FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
         $stmt = $this->execute($query, [':name' => $name]);
 
         if (!$stmt) {
@@ -416,7 +416,7 @@ class ContactRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function lookupByAddress(string $address): ?array {
-        $query = "SELECT name, address, pubkey, fee_percent FROM {$this->tableName} WHERE address = :address";
+        $query = "SELECT name, address, pubkey, fee_percent, status FROM {$this->tableName} WHERE address = :address";
         $stmt = $this->execute($query, [':address' => $address]);
 
         if (!$stmt) {
@@ -497,6 +497,28 @@ class ContactRepository extends AbstractRepository {
             $stmt = $this->execute($query, [':exclude' => $exclude]);
         } else {
             $query = "SELECT address FROM {$this->tableName} WHERE status = 'accepted'";
+            $stmt = $this->execute($query);
+        }
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    /**
+     * Retrieve all contact addresses and their status
+     *
+     * @param string|null $exclude Address to exclude
+     * @return array Array of addresses
+     */
+    public function getAllAddressesWithStatus(?string $exclude = null): array {
+        if ($exclude) {
+            $query = "SELECT address, status FROM {$this->tableName} WHERE address != :exclude";
+            $stmt = $this->execute($query, [':exclude' => $exclude]);
+        } else {
+            $query = "SELECT address, status FROM {$this->tableName}";
             $stmt = $this->execute($query);
         }
 
