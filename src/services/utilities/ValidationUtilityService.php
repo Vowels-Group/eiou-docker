@@ -46,45 +46,6 @@ class ValidationUtilityService
     }
 
     /**
-     * Validate send request structure
-     *
-     * @param array $data Send request data
-     * @return array Validation result [valid => bool, error => string|null]
-     */
-    public function validateSendRequest(array $data): array
-    {
-        // Check minimum parameters
-        if (count($data) < 4) {
-            return [
-                'valid' => false,
-                'error' => 'Invalid send request: missing parameters'
-            ];
-        }
-
-        // Validate amount
-        $amount = $data[3];
-        if (!is_numeric($amount) || floatval($amount) <= 0) {
-            return [
-                'valid' => false,
-                'error' => 'Invalid amount: must be positive number'
-            ];
-        }
-
-        // Validate currency if provided
-        if (isset($data[4])) {
-            $currency = strtoupper($data[4]);
-            if (strlen($currency) !== 3) {
-                return [
-                    'valid' => false,
-                    'error' => 'Invalid currency: must be 3-letter code'
-                ];
-            }
-        }
-
-        return ['valid' => true, 'error' => null];
-    }
-
-    /**
      * Verify cryptographic signature on request
      *
      * @param array $request Request data with signature
