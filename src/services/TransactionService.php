@@ -499,13 +499,21 @@ class TransactionService {
             $request = $data;
         }
 
-        # Check if request is correctly formatted
-        if(!$this->validationUtility->validateSendRequest($request)){
-            exit(0);
-        }
-
         // Enhanced validation using InputValidator for transaction data
         require_once __DIR__ . '/../utils/InputValidator.php';
+
+        // Validate Parameter count
+        if (isset($request)) {
+            $amountValidation = InputValidator::validateArgvAmount($request, 4);
+            if (!$amountValidation['valid']) {
+                SecureLogger::warning("Invalid parameter amount", [
+                    'value' => $request,
+                    'error' => $amountValidation['error']
+                ]);
+                output(("Invalid parameter amount: " . $amountValidation['error']),'ERROR');
+                exit(0);
+            }
+        }
 
         // Validate and sanitize amount if provided
         if (isset($request[3])) {
@@ -536,7 +544,7 @@ class TransactionService {
         }
 
         // Check if any contacts for eIOU
-        if(!$this->contactRepository->getAllAddresses()){
+        if(!$this->contactRepository->getAllAcceptedAddresses()){
             output(outputNoContactsForTransaction($request));
             exit(0);
         }
