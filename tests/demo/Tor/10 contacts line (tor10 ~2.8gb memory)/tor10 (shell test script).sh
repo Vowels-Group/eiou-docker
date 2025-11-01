@@ -102,11 +102,6 @@ done
 echo -e "\nWaiting for 15 seconds due to the nature of Tor..."
 sleep 15
 
-
-# Setup of simple fees and credit, easy edit for every person
-readonly defaultFee=0.1
-readonly defaultCredit=1000
-
 # Add friends
 echo -e "\nAdding friends (this might take a moment)..."
 containersLinkKeys=($(for x in ${!containersLinks[@]}; do echo $x; done | sort))
