@@ -237,7 +237,7 @@ class ContactService {
             if ($responseData['status'] === 'warning') {
                 output(returnContactCreationWarning($responseData['message']));
                 // Insert into database
-                if ($this->contactRepository->insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
+                if ($this->contactRepository->insertContact($address, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
                     // Sync newly created contact using SynchService directly (default SILENT)
                     if(ServiceContainer::getInstance()->getSynchService()->synchSingleContact($address, 'SILENT')){
                         output(returnContactCreationSuccessful());
@@ -245,7 +245,7 @@ class ContactService {
                 }
             } else{
                 // Insert into database
-                if ($this->contactRepository->insertContact($address, $responseData['myPublicKey'], $name, $fee, $credit, $currency)) {
+                if ($this->contactRepository->insertContact($address, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
                     output(returnContactCreationSuccessful());
                 } else{
                     output(returnContactCreationFailed());

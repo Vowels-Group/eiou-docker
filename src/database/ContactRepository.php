@@ -53,8 +53,6 @@ class ContactRepository extends AbstractRepository {
      * @return string JSON response
      */
     public function addPendingContact(string $address, string $senderPublicKey): string {
-       
-        $myPublicKey = $this->currentUser->getPublicKey() ?? '';
         $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
 
         $data = [
@@ -74,7 +72,7 @@ class ContactRepository extends AbstractRepository {
             return json_encode([
                 "status" => "accepted",
                 "message" => "Contact request received successfully",
-                "myPublicKey" => $myPublicKey
+                "senderPublicKey" => $this->currentUser->getPublicKey(),
             ]);
         } else {
             return json_encode([

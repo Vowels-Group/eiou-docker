@@ -48,9 +48,9 @@ class ContactPayload extends BasePayload
             'type' => 'message',
             'typeMessage' => 'contact',
             'status' => 'accepted',
+            'message' => $myAddress . ' confirms that we are contacts',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'message' => $myAddress . ' confirms that we are contacts',
         ];
     }
 
@@ -64,7 +64,7 @@ class ContactPayload extends BasePayload
         return json_encode([
             'status' => 'warning',
             'message' => 'Contact already exists',
-            'myPublicKey' => $this->currentUser->getPublicKey(),
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
 
@@ -82,9 +82,9 @@ class ContactPayload extends BasePayload
             'type' => 'message',
             'typeMessage' => 'contact',
             'status' => 'rejected',
+            'message' => $reason,
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'message' => $reason,
         ];
     }
 
@@ -101,8 +101,9 @@ class ContactPayload extends BasePayload
             'type' => 'message',
             'typeMessage' => 'contact',
             'status' => 'pending',
-            'senderAddress' => $myAddress,
             'message' => "Contact request to {$address} is pending",
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
 }
