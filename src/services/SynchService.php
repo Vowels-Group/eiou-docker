@@ -159,7 +159,7 @@ class SynchService {
                 return true;
             } elseif($status === 'rejected' && $reason === 'unknown'){
                 // If no database existence of contact request on their end, resend contact request
-                $contactPayload = $this->contactPayload->buildCreateRequest();
+                $contactPayload = $this->contactPayload->buildCreateRequest($contactAddress);
                 $responseData = json_decode($this->transportUtility->send($contactAddress, $contactPayload), true);
                 if(isset($responseData['status']) && ($responseData['status'] === 'accepted')){
                     // Contact received our contact request, needs to be accepted by other user first

@@ -220,7 +220,7 @@ class ContactService {
      */
     private function handleNewContact(string $address, string $name, float $fee, float $credit, string $currency): void {
         // Build the payload array
-        $payload = $this->contactPayload->buildCreateRequest();
+        $payload = $this->contactPayload->buildCreateRequest($address);
 
         // Determine if tor, else add http hostname
         if (preg_match('/\.onion$/', $address)) {
@@ -286,7 +286,7 @@ class ContactService {
 
         // Check if contact already exists
         if ($this->contactRepository->contactExists($address)) {
-            return $this->contactPayload->buildAlreadyExists();
+            return $this->contactPayload->buildAlreadyExists($address);
         } else{
             return $this->contactRepository->addPendingContact($address, $senderPublicKey);
         }

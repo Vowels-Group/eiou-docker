@@ -19,8 +19,10 @@ class ContactPayload extends BasePayload
      */
     public function build(array $data = []): array
     {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($data['address']);
         return [
             'type' => 'create',
+            'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
@@ -28,11 +30,12 @@ class ContactPayload extends BasePayload
     /**
      * Build a contact creation request payload
      *
+     * @param string $address The address of the contact request
      * @return array The contact creation payload
      */
-    public function buildCreateRequest(): array
+    public function buildCreateRequest($address): array
     {
-        return $this->build([]);
+        return $this->build(['address' => $address]);
     }
 
     /**
@@ -57,13 +60,16 @@ class ContactPayload extends BasePayload
     /**
      * Build a contact already exists warning payload
      *
+     * @param string $address The address of the contact request
      * @return string JSON-encoded contact already exists payload
      */
-    public function buildAlreadyExists(): string
+    public function buildAlreadyExists(string $address): string
     {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return json_encode([
             'status' => 'warning',
             'message' => 'Contact already exists',
+            'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }

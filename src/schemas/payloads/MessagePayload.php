@@ -112,11 +112,13 @@ class MessagePayload extends BasePayload
      */
     public function buildTransactionCompletedCorrectly(array $message): string
     {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
         $hash = $message['hash'];
         return json_encode([
             'status' => 'completed',
             'hash' => $hash,
             'message' => 'Transaction with hash ' . print_r($hash, true) . ' was received succesfully by end-recipient',
+            'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }

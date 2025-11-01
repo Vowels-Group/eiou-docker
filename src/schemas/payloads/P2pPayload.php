@@ -127,7 +127,6 @@ class P2pPayload extends BasePayload
     //         'type' => 'p2p',
     //         'inquiry' => true,
     //         'hash' => $hash,
-    //        
     //         'senderAddress' => $this->getUserAddress(),
     //         'senderPublicKey' => $this->currentUser->getPublicKey(),
     //     ];
