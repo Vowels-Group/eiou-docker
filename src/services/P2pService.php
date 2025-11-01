@@ -422,6 +422,7 @@ class P2pService {
             }
             // Cancel the message due to no viable contacts to send to (user is dead-end)
             if($contactsCount['tor'] === 0 && $contactsCount['http'] === 0){  
+                output(outputNoViableRouteP2p($message['hash'],'SILENT'));
                 $this->p2pRepository->updateStatus($message['hash'], 'cancelled');
                 continue;
             }
