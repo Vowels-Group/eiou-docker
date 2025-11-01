@@ -39,9 +39,9 @@ class MessagePayload extends BasePayload
             'type' => 'message', // message request type
             'typeMessage' => 'contact', // type of message
             'inquiry' => true, // request for information
+            'message' => $myAddress . ' wants to know if we are contacts',
             'senderAddress' => $myAddress,
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'message' => $myAddress . ' wants to know if we are contacts'
+            'senderPublicKey' => $this->currentUser->getPublicKey()
         ];
     }
 
@@ -58,9 +58,9 @@ class MessagePayload extends BasePayload
             'type' => 'message', // message request type
             'typeMessage' => 'contact', // type of message
             'status' => 'accepted',
+            'message' => $myAddress . ' confirms that we are contacts',
             'senderAddress' => $myAddress,
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'message' => $myAddress . ' confirms that we are contacts'
+            'senderPublicKey' => $this->currentUser->getPublicKey()
         ]);
     }
 
@@ -78,9 +78,9 @@ class MessagePayload extends BasePayload
             'typeMessage' => 'contact', // type of message
             'status' => 'rejected',
             'reason' => 'pending',
+            'message' => $myAddress . ' has not yet accepted your contact request',
             'senderAddress' => $myAddress,
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'message' => $myAddress . ' has not yet accepted your contact request'
+            'senderPublicKey' => $this->currentUser->getPublicKey()
         ]);
     }
 
@@ -98,9 +98,9 @@ class MessagePayload extends BasePayload
             'typeMessage' => 'contact', // type of message
             'status' => 'rejected',
             'reason' => 'unknown',
+            'message' => $myAddress . ' and you are not contacts',
             'senderAddress' => $myAddress,
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'message' => $myAddress . ' and you are not contacts'
+            'senderPublicKey' => $this->currentUser->getPublicKey()
         ]);
     }
 
@@ -137,9 +137,9 @@ class MessagePayload extends BasePayload
             'status' => 'completed',
             'hash' => $hash,
             'hashType' => $message['hashType'],
+            'message' => $myAddress . ' is requesting information about transaction with memo ' . $hash,
             'senderAddress' => $myAddress,
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'message' => $myAddress . ' is requesting information about transaction with memo ' . $hash
+            'senderPublicKey' => $this->currentUser->getPublicKey()
         ];
     }
 }
