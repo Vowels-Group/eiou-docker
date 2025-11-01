@@ -315,6 +315,9 @@ class ContactService {
         }
         if (isset($lookupResult['address'])){
             $data['receiverAddress'] = $lookupResult['address'];
+        }  
+        if (isset($lookupResult['status'])){
+            $data['status'] = $lookupResult['status'];
         }
 
         return isset($data) ? $data : null;
