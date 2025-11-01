@@ -49,6 +49,10 @@ function outputContactRequestWasAccepted($address){
     return "Contact request was accepted by " . $address ."\n";
 }
 
+function outputContactBlockedNoTransaction(){
+    return "Contact is blocked and transaction will not be sent.\n";
+}
+
 function outputContactUnblockedAndAdded(){
     return "Contact was unblocked and name/credit/fee/currency information was added upon acceptance.\n";
 }
@@ -119,6 +123,10 @@ function outputIssueTransactionTryP2p($response){
 
 function outputLookedUpContactInfo($contactInfo){
     return "Looked up contact info: " . print_r($contactInfo, true)."\n";
+}
+
+function outputNoViableRouteP2p($hash){
+    return "No viable route for forwarding p2p message with hash" . $hash . "\n";
 }
 
 function outputNoSuppliedAddress(){
