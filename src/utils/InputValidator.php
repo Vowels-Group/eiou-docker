@@ -8,6 +8,23 @@
 class InputValidator {
 
     /**
+     * Validate CLI input
+     *
+     * @param array $argv user CLI input
+     * @param array $quantityParameters Amount of arguments needed inside argv
+     * @return array ['valid' => bool, 'value' => int|null, 'error' => string|null]
+     */
+    public static function validateArgvAmount(array $argv, int $quantityParameters): array {
+        // Check if amount parameters is correct
+        if (count($argv) < $quantityParameters) {
+            return ['valid' => false,
+                    'value' => null, 
+                    'error' => 'CLI ' . $argv[1] . ' request should constitute ' . $quantityParameters . ' parameters.'];
+        } 
+        return ['valid' => true, 'value' => null, 'error' => null];
+    }
+
+    /**
      * Validate transaction amount
      *
      * @param mixed $amount Amount to validate
