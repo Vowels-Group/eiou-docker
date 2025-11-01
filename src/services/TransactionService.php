@@ -544,7 +544,7 @@ class TransactionService {
         }
 
         // Check if any contacts for eIOU
-        if(!$this->contactRepository->getAllAcceptedAddresses()){
+        if(!$this->contactRepository->getAllAddresses()){
             output(outputNoContactsForTransaction($request));
             exit(0);
         }
@@ -552,22 +552,58 @@ class TransactionService {
         // If receiver's public key is in contacts, prepare a transaction to send directly to them
         $contactService = ServiceContainer::getInstance()->getContactService();
         if ($contactInfo = $contactService->lookupContactInfo($request[2])) {
-            output(outputLookedUpContactInfo($contactInfo), 'SILENT');
-
-            // Data preparation for eIOU
-            $data = $this->prepareStandardTransactionData($request,$contactInfo);
-            
-            // Prepare transaction payload from data
-            $payload = $this->transactionPayload->build($data);
-            $this->transactionRepository->insertTransaction($payload);
-
-            output(outputSendTransaction($payload));
+            if($contactInfo['status'] === 'accepted'){
+                // Contact is accepted
+                $this->handleDirectRoute($request, $contactInfo);
+            }elseif($contactInfo['status'] === 'pending'){
+                // Contact is still pending, try a resynch otherwise send through p2p if possible
+                $synchResult = ServiceContainer::getInstance()->getSynchService()->synchSingleContact($contactInfo['receiverAddress'],'SILENT');
+                if($synchResult){
+                    $this->handleDirectRoute($request, $contactInfo);
+                } else{
+                    $this->handleP2pRoute($request);
+                }
+            } elseif($contactInfo['status'] === 'blocked'){
+                // Contact is blocked, do not send anything
+                output(outputContactBlockedNoTransaction(),'SILENT');
+            }  
         } else {
-            output(outputContactNotFoundTryP2p($request), 'SILENT');
-            // Send P2P request when contact not found using P2pService directly
-            ServiceContainer::getInstance()->getP2pService()->sendP2pRequest($request);
-            output(outputSendP2p($request));
+            // Contact not found, try sending through p2p network
+            $this->handleP2pRoute($request);
         }
+    }
+
+    /**
+     * Send Direct eIOU
+     *
+     * @param array $request Request data
+     * @param array $contactInfo Contact information
+     * @return void
+     */
+    public function handleDirectRoute(array $request, $contactInfo): void{
+        output(outputLookedUpContactInfo($contactInfo), 'SILENT');
+
+        // Data preparation for eIOU
+        $data = $this->prepareStandardTransactionData($request, $contactInfo);
+        
+        // Prepare transaction payload from data
+        $payload = $this->transactionPayload->build($data);
+        $this->transactionRepository->insertTransaction($payload);
+
+        output(outputSendTransaction($payload));
+    }
+
+    /**
+     * Send out p2p message to find route to contact for sending a eIOU
+     *
+     * @param array $request Request data
+     * @return void
+     */
+    public function handleP2pRoute(array $request): void{
+        output(outputContactNotFoundTryP2p($request), 'SILENT');
+        // Send P2P request when contact not found using P2pService directly
+        ServiceContainer::getInstance()->getP2pService()->sendP2pRequest($request);
+        output(outputSendP2p($request));
     }
 
     /**
