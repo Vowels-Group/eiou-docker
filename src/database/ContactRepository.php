@@ -486,6 +486,28 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Retrieve all accepted contact addresses
+     *
+     * @param string|null $exclude Address to exclude
+     * @return array Array of accepted addresses
+     */
+    public function getAllAcceptedAddresses(?string $exclude = null): array {
+        if ($exclude) {
+            $query = "SELECT address FROM {$this->tableName} WHERE status = 'accepted' AND address != :exclude";
+            $stmt = $this->execute($query, [':exclude' => $exclude]);
+        } else {
+            $query = "SELECT address FROM {$this->tableName} WHERE status = 'accepted'";
+            $stmt = $this->execute($query);
+        }
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    /**
      * Retrieve contact information by address
      *
      * @param string $address Contact address
