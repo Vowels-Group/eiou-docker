@@ -41,7 +41,7 @@ class MessagePayload extends BasePayload
             'inquiry' => true, // request for information
             'message' => $myAddress . ' wants to know if we are contacts',
             'senderAddress' => $myAddress,
-            'senderPublicKey' => $this->currentUser->getPublicKey()
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
 
@@ -60,7 +60,7 @@ class MessagePayload extends BasePayload
             'status' => 'accepted',
             'message' => $myAddress . ' confirms that we are contacts',
             'senderAddress' => $myAddress,
-            'senderPublicKey' => $this->currentUser->getPublicKey()
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
 
@@ -80,7 +80,7 @@ class MessagePayload extends BasePayload
             'reason' => 'pending',
             'message' => $myAddress . ' has not yet accepted your contact request',
             'senderAddress' => $myAddress,
-            'senderPublicKey' => $this->currentUser->getPublicKey()
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
 
@@ -100,7 +100,7 @@ class MessagePayload extends BasePayload
             'reason' => 'unknown',
             'message' => $myAddress . ' and you are not contacts',
             'senderAddress' => $myAddress,
-            'senderPublicKey' => $this->currentUser->getPublicKey()
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
 
@@ -116,7 +116,8 @@ class MessagePayload extends BasePayload
         return json_encode([
             'status' => 'completed',
             'hash' => $hash,
-            'message' => 'Transaction with hash ' . print_r($hash, true) . ' was received succesfully by end-recipient'
+            'message' => 'Transaction with hash ' . print_r($hash, true) . ' was received succesfully by end-recipient',
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
 
@@ -139,7 +140,7 @@ class MessagePayload extends BasePayload
             'hashType' => $message['hashType'],
             'message' => $myAddress . ' is requesting information about transaction with memo ' . $hash,
             'senderAddress' => $myAddress,
-            'senderPublicKey' => $this->currentUser->getPublicKey()
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
 }

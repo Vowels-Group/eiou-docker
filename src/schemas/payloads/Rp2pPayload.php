@@ -28,9 +28,9 @@ class Rp2pPayload extends BasePayload
             'time' => $data['time'],
             'amount' => $data['amount'],
             'currency' => $data['currency'],
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
+            'signature' => $data['signature'],
             'senderAddress' => $userAddress,
-            'signature' => $data['signature']
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
 
@@ -50,9 +50,9 @@ class Rp2pPayload extends BasePayload
             'time' => $data['time'],
             'amount' => $data['amount'],
             'currency' => $data['currency'],
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
+            'signature' => $data['signature'],
             'senderAddress' => $userAddress,
-            'signature' => $data['signature']
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
 
@@ -67,7 +67,9 @@ class Rp2pPayload extends BasePayload
         $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
         return json_encode([
             'status' => 'received',
-            'message' => 'hash ' . print_r($request['hash'], true) . ' for RP2P received by ' . print_r($receiver, true)
+            'message' => 'hash ' . print_r($request['hash'], true) . ' for RP2P received by ' . print_r($receiver, true),
+            'senderAddress' => $receiver,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
 
@@ -82,7 +84,9 @@ class Rp2pPayload extends BasePayload
         $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
         return json_encode([
             'status' => 'rejected',
-            'message' => 'hash ' . print_r($request['hash'], true) . ' for RP2P already exists in database of ' . print_r($receiver, true)
+            'message' => 'hash ' . print_r($request['hash'], true) . ' for RP2P already exists in database of ' . print_r($receiver, true),
+            'senderAddress' => $receiver,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
 }

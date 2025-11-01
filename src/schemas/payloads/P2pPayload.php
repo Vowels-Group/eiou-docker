@@ -36,8 +36,8 @@ class P2pPayload extends BasePayload
             'amount' => $this->sanitizeNumber($data['amount']),
             'requestLevel' => (int) $data['minRequestLevel'],
             'maxRequestLevel' => (int) $data['maxRequestLevel'],
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
             'senderAddress' => $userAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
 
@@ -66,8 +66,8 @@ class P2pPayload extends BasePayload
             'amount' => $this->sanitizeNumber($data['amount']),
             'requestLevel' => ((int) $data['request_level']) + 1, // Increment request level for forwarding
             'maxRequestLevel' => (int) $data['max_request_level'],
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
             'senderAddress' => $userAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
 
@@ -86,6 +86,8 @@ class P2pPayload extends BasePayload
         return json_encode([
             'status' => 'received',
             'message' => "hash {$request['hash']} for P2P received by {$receiver}",
+            'senderAddress' => $receiver,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
 
@@ -106,6 +108,8 @@ class P2pPayload extends BasePayload
             'status' => 'rejected',
             'reason' => $reason,
             'message' => "hash {$request['hash']} for P2P already exists in database of {$receiver}",
+            'senderAddress' => $receiver,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
 
@@ -123,8 +127,9 @@ class P2pPayload extends BasePayload
     //         'type' => 'p2p',
     //         'inquiry' => true,
     //         'hash' => $hash,
-    //         'senderPublicKey' => $this->currentUser->getPublicKey(),
+    //        
     //         'senderAddress' => $this->getUserAddress(),
+    //         'senderPublicKey' => $this->currentUser->getPublicKey(),
     //     ];
     // }
 
@@ -143,9 +148,9 @@ class P2pPayload extends BasePayload
     //         'type' => 'p2p',
     //         'statusUpdate' => true,
     //         'hash' => $hash,
-    //         'status' => $status,
-    //         'senderPublicKey' => $this->currentUser->getPublicKey(),
+    //         'status' => $status,        
     //         'senderAddress' => $this->getUserAddress(),
+    //          'senderPublicKey' => $this->currentUser->getPublicKey(),
     //         'timestamp' => time(),
     //     ], $additionalData);
     // }

@@ -31,15 +31,15 @@ class TransactionPayload extends BasePayload
         return [
             'type' => 'send',
             'time' => $data['time'],
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'senderAddress' => $userAddress,
-            'receiverPublicKey' => $data['receiverPublicKey'],
             'receiverAddress' => $data['receiverAddress'],
+            'receiverPublicKey' => $data['receiverPublicKey'],
             'amount' => $this->sanitizeNumber($data['amount']),
             'currency' => $this->sanitizeString($data['currency']),
             'txid' => $data['txid'],
             'previousTxid' => $data['previousTxid'],
             'memo' => $memo,
+            'senderAddress' => $userAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
 
@@ -62,15 +62,15 @@ class TransactionPayload extends BasePayload
         return [
             'type' => 'send',
             'time' => $data['time'],
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
-            'senderAddress' => $userAddress,
-            'receiverPublicKey' => $data['receiver_public_key'],
             'receiverAddress' => $data['receiver_address'],
+            'receiverPublicKey' => $data['receiver_public_key'],
             'amount' => $this->sanitizeNumber($data['amount']),
             'currency' => $this->sanitizeString($data['currency']),
             'txid' => $data['txid'],
             'previousTxid' => $data['previous_txid'],
             'memo' => $memo,
+            'senderAddress' => $userAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
 
@@ -83,6 +83,7 @@ class TransactionPayload extends BasePayload
      */
     public function buildForwarding(array $message, array $rp2pData): array
     {
+        $userAddress = $this->transportUtility->resolveUserAddressForTransport($rp2pData['sender_address']);
         $transactionService = ServiceContainer::getInstance()->getTransactionService();
         // This method returns data array for further processing, not final payload
         return [
@@ -94,6 +95,8 @@ class TransactionPayload extends BasePayload
             'txid' => $transactionService->createUniqueDatabaseTxid($message),
             'previous_txid' => $transactionService->fixPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key']),
             'memo' => $rp2pData['hash'] ?? null,
+            'senderAddress' => $userAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
 
@@ -105,14 +108,16 @@ class TransactionPayload extends BasePayload
      */
     public function buildAcceptance(array $request): string
     {
-        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress'] ?? '');
+        $userAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress'] ?? '');
         $hashInfo = $this->resolveHashInfo($request);
 
         return json_encode([
             'status' => 'accepted',
             'txid' => $request['txid'] ?? null,
             'memo' => $request['memo'] ?? null,
-            'message' => "{$hashInfo['type']} {$hashInfo['value']} for transaction received by {$receiver}",
+            'message' => "{$hashInfo['type']} {$hashInfo['value']} for transaction received by {$userAddress}",
+            'senderAddress' => $userAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
 
@@ -124,7 +129,7 @@ class TransactionPayload extends BasePayload
      */
     public function buildCompleted(array $request): array
     {
-        $receiver = $this->transportUtility->resolveUserAddressForTransport(
+        $userAddress = $this->transportUtility->resolveUserAddressForTransport(
             $request['senderAddress'] ?? $request['sender_address'] ?? ''
         );
         $hashInfo = $this->resolveHashInfo($request);
@@ -136,11 +141,11 @@ class TransactionPayload extends BasePayload
             'status' => 'completed',
             'hash' => $hashInfo['value'],
             'hashType' => $hashInfo['type'],
-            'senderAddress' => $receiver,
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
             'amount' => $this->sanitizeNumber($request['amount'] ?? 0),
             'currency' => $this->sanitizeString($request['currency'] ?? 'EIOU'),
             'message' => "transaction for hash {$hashInfo['value']} was successfully completed through intermediary",
+            'senderAddress' => $userAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
     }
 
@@ -153,16 +158,18 @@ class TransactionPayload extends BasePayload
      */
     public function buildRejection(array $request, string $reason = null): string
     {
-        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress'] ?? '');
+        $userAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress'] ?? '');
         $hashInfo = $this->resolveHashInfo($request);
 
-        $defaultReason = "{$hashInfo['type']} {$hashInfo['value']} for Transaction already exists in database of {$receiver}";
+        $defaultReason = "{$hashInfo['type']} {$hashInfo['value']} for Transaction already exists in database of {$userAddress}";
 
         return json_encode([
             'status' => 'rejected',
             'txid' => $request['txid'] ?? null,
             'memo' => $request['memo'] ?? null,
             'message' => $reason ?? $defaultReason,
+            'senderAddress' => $userAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
 
