@@ -286,15 +286,6 @@ class UserContext {
     }
 
     /**
-     * Check if localhost only mode is enabled
-     *
-     * @return bool
-     */
-    public function isLocalhostOnly(): bool {
-        return filter_var($this->get('localhostOnly'), FILTER_VALIDATE_BOOLEAN) ?? Constants::LOCAL_HOST_ONLY;
-    }
-
-    /**
      * Get maximum fee percentage
      *
      * @return float
@@ -328,6 +319,25 @@ class UserContext {
      */
     public function getMaxOutput(): int {
         return (int) ($this->get('maxOutput') ?? Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX);
+    }
+
+    /**
+     * Check if localhost only mode is enabled
+     *
+     * @return bool
+     */
+    public function isLocalhostOnly(): bool {
+        return filter_var($this->get('localhostOnly'), FILTER_VALIDATE_BOOLEAN) ?? Constants::LOCAL_HOST_ONLY;
+    }
+
+
+    /**
+     * Get deafult transport type for messages
+     *
+     * @return string
+     */
+    public function getDefaultTransportMode(): string {
+        return $this->get('defaultTransportMode') ?? Constants::DEFAULT_TRANSPORT_MODE;
     }
 
     /**

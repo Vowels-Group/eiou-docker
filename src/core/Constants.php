@@ -119,6 +119,8 @@ class Constants {
 
     // Network
     const LOCAL_HOST_ONLY = true;
+    const DEFAULT_TRANSPORT_MODE = 'tor';
+    const ALL_TRANSPORT_MODES = ['tor','http'];
 
     // P2P Network
     const P2P_DEFAULT_REQUEST_LEVEL = 1;

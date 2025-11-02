@@ -71,29 +71,32 @@ class CliService {
             if(strtolower($argv[2]) === 'defaultfee'){
                 $key = 'defaultFee';
                 $value = floatval($argv[3]);
-            }elseif(strtolower($argv[2]) === 'defaultcurrency'){
+            } elseif(strtolower($argv[2]) === 'defaultcurrency'){
                 $key = 'defaultCurrency';
                 $value = strtoupper($argv[3]);
-            }elseif(strtolower($argv[2]) === 'localhostonly'){
-                $key = 'localhostOnly';
-                $value = ($argv[3] === '1');
-            }elseif(strtolower($argv[2]) === 'maxfee'){
+            } elseif(strtolower($argv[2]) === 'maxfee'){
                 $key = 'maxFee';
                 $value = floatval($argv[3]);
-            }elseif(strtolower($argv[2]) === 'maxp2pLevel'){
+            } elseif(strtolower($argv[2]) === 'maxp2pLevel'){
                 $key = 'maxP2pLevel';
                 $value = intval($argv[3]);
-            }elseif(strtolower($argv[2]) === 'p2pexpiration'){
+            } elseif(strtolower($argv[2]) === 'p2pexpiration'){
                 $key = 'p2pExpiration';
                 $value = intval($argv[3]);
-            }elseif(strtolower($argv[2]) === 'maxoutput'){
+            } elseif(strtolower($argv[2]) === 'maxoutput'){
                 $key = 'maxOutput';
                 if($argv[3] === 'all'){
                     $value = 'all';
                 } else{
                     $value = intval($argv[3]);
                 }    
-            }else{
+            }elseif(strtolower($argv[2]) === 'localhostonly'){
+                $key = 'localhostOnly';
+                $value = ($argv[3] === '1');
+            } elseif(strtolower($argv[2]) === 'defaulttransportmode'){
+                $key = 'defaultTransportMode';
+                $value = strtolower($argv[3]);
+            } else{
                 echo "Setting provided does not exist. No changes made.\n";
                 return;
             }        
@@ -106,12 +109,13 @@ class CliService {
             echo "Select the setting you want to change:\n";
             echo "\t1. Default Fee\n";
             echo "\t2. Default Currency\n";
-            echo "\t3. Access Mode\n";
-            echo "\t4. Maximum Fee\n";
-            echo "\t5. Maximum Peer to Peer Level\n";
-            echo "\t6. Default Peer to Peer Expiration\n";
-            echo "\t7. Maximum lines of Balance/Transaction output\n";
-            echo "\t8. Cancel\n";
+            echo "\t3. Maximum Fee\n";
+            echo "\t4. Maximum Peer to Peer Level\n";
+            echo "\t5. Default Peer to Peer Expiration\n";
+            echo "\t6. Maximum lines of Balance/Transaction output\n";
+            echo "\t7. Access Mode\n";
+            echo "\t8. Default Transport Type\n";
+            echo "\t9. Cancel\n";
 
             // Read user input
             $setting_choice = trim(fgets(STDIN));
@@ -130,30 +134,24 @@ class CliService {
                     break;
                 
                 case '3':
-                    echo "Enter access mode (0 for Network Enabled, 1 for LocalHost Only): ";
-                    $key = 'localhostOnly';
-                    $value = (trim(fgets(STDIN)) === '1');
-                    break;
-                
-                case '4':
                     echo "Enter new maximum fee percentage: ";
                     $key = 'maxFee';
                     $value = floatval(trim(fgets(STDIN)));
                     break;
                 
-                case '5':
+                case '4':
                     echo "Enter new Maximum Peer to Peer Level: ";
                     $key = 'maxP2pLevel';
                     $value = intval(trim(fgets(STDIN)));
                     break;
                 
-                case '6':
+                case '5':
                     echo "Enter new Peer to Peer Expiration (in seconds): ";
                     $key = 'p2pExpiration';
                     $value = intval(trim(fgets(STDIN)));
                     break;
 
-                case '7':
+                case '6':
                     echo "Enter new Maximum of Balance/Transaction output lines to display: ";
                     $key = 'maxOutput';
                     $read = trim(fgets(STDIN));
@@ -164,7 +162,19 @@ class CliService {
                     } 
                     break;
                 
+                case '7':
+                    echo "Enter access mode (0 for Network Enabled, 1 for LocalHost Only): ";
+                    $key = 'localhostOnly';
+                    $value = (trim(fgets(STDIN)) === '1');
+                    break;
+
                 case '8':
+                    echo "Enter new default transport type (e.g. http, tor): ";
+                    $key = 'defaultTransportMode';
+                    $value = strtolower(trim(fgets(STDIN)));
+                    break;
+                
+                case '9':
                     echo "Setting change cancelled.\n";
                     return;
                 
@@ -195,11 +205,12 @@ class CliService {
         echo "Current Settings:\n";
         echo "\tDefault fee: " . $this->currentUser->getDefaultFee() ."%\n";
         echo "\tDefault currency: " . $this->currentUser->getDefaultCurrency() . "\n";
-        echo "\tAccess Mode: " . ($this->currentUser->isLocalhostOnly() ? "Local Access Only" : "Network Authorized") . "\n";
         echo "\tMaximum Fee: " . $this->currentUser->getMaxFee() . "%\n";
         echo "\tMaximum Peer to Peer Level: " .  $this->currentUser->getMaxP2pLevel() . "\n";
         echo "\tDefault Peer to Peer Expiration: " .  $this->currentUser->getP2pExpirationTime() . " seconds\n";
         echo "\tDefault Maximum lines of balance output: " .  $this->currentUser->getMaxOutput() . "\n";
+        echo "\tAccess Mode: " . ($this->currentUser->isLocalhostOnly() ? "Local Access Only" : "Network Authorized") . "\n";
+        echo "\tDefault Transport Mode: " . $this->currentUser->getDefaultTransportMode() . "\n";
     }
 
     /**
@@ -352,7 +363,7 @@ class CliService {
             // Check if it's a HTTP or Tor address
             if ($this->transportUtility->isAddress($argv[2])) {
                 $address = $argv[2];
-                $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+                $transportIndex = $this->transportUtility->determineTransportType($address);
                 if($this->contactRepository->contactExists($transportIndex, $address)){
                     $contactResult = $this->contactRepository->lookupByAddress($address);
                 }
@@ -398,7 +409,7 @@ class CliService {
             // First if it's an HTTP or Tor address
             if ($this->transportUtility->isAddress($argv[2])) {
                 $address = $argv[2];
-                $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+                $transportIndex = $this->transportUtility->determineTransportType($address);
                 if($this->contactRepository->contactExists($transportIndex, $address)){
                     $contactResult = $this->contactRepository->lookupByAddress($address);
                 }

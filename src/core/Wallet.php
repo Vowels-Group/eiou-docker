@@ -11,13 +11,14 @@ class Wallet{
         // require_once '/etc/eiou/src/core/Constants.php';
         // Add default user values in defaultconfig.json
         $defaultConfig = json_encode([
-            'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,         // Default transaction fee in percent
-            'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,       // Default currency
-            'localhostOnly' => Constants::LOCAL_HOST_ONLY,                  // Network connection limited to localhost only or not
-            'maxFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX,         // Maximum total fee for a transaction in percent
-            'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,      // Default maximum level for Peer to Peer propagation
-            'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,   // Default expiration time for Peer to Peer requests in seconds
-            'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX      // Maximum lines of output for multi-line output
+            'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,                 // Default transaction fee in percent
+            'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,           // Default currency
+            'maxFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX,                 // Maximum total fee for a transaction in percent
+            'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,              // Default maximum level for Peer to Peer propagation
+            'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,           // Default expiration time for Peer to Peer requests in seconds
+            'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,             // Maximum lines of output for multi-line output
+            'localhostOnly' => Constants::LOCAL_HOST_ONLY,                          // Network connection limited to localhost only or not
+            'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE     // Default way to send messages (fallback in case uncertain)
         ]);
         file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);
 

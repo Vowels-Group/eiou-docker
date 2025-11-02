@@ -72,7 +72,7 @@ class TransportUtilityService
      * @param string $address The address of the sender
      * @return string|null The type of transport used
     */
-    public function determineTransportType(array $address): ?string {
+    public function determineTransportType(string $address): ?string {
         // Check if the address is a Tor (.onion) address
         if ($this->isTorAddress($address)) {
             return 'tor';
@@ -88,20 +88,20 @@ class TransportUtilityService
     }
 
     /**
-     * Return the determined database index type from an address
+     * Return the an associative array of the determined address
      *
      * @param string $address The address of the sender
-     * @return string|null The type of database index
+     * @return array|null The associative array of the transport type
     */
-    public function determineDatabaseIndexTransportType(string $address): ?string {
+    public function determineTransportTypeAssociative(string $address): ?array {
         // Check if the address is a Tor (.onion) address
         if ($this->isTorAddress($address)) {
-            return 'tor_address';
+            return ['tor' => $address];
         }
         
         // Check if the address is an HTTP/HTTPS address
         if ($this->isHttpAddress($address)) {
-            return 'http_address';
+            return ['http' => $address];
         }
         
         // If neither Tor nor HTTP, return null or a default type
@@ -109,24 +109,28 @@ class TransportUtilityService
     }
 
     /**
-     * Return the an associative array of the determined address
+     * Determine a possible fallback transport type
      *
-     * @param string $address The address of the sender
-     * @return array|null The type of database index
+     * @param string $info The address/name of the receiver
+     * @param string $contactInfo The Contact Info
+     * @return string|null The type of database index
     */
-    public function determineDatabaseIndexTransportTypeAssociative(string $address): ?array {
-        // Check if the address is a Tor (.onion) address
-        if ($this->isTorAddress($address)) {
-            return ['tor_address' => $address];
+    public function fallbackTransportType($info, $contactInfo){
+        $transportIndex = $this->determineTransportType($info) ?? Constants::DEFAULT_TRANSPORT_MODE;
+        $transportModes = Constants::ALL_TRANSPORT_MODES;
+        if(!isset($contactInfo[$transportIndex])){
+            return $transportIndex;
+        } 
+        // If default transport mode did not work, try finding the next possible
+        unset($transportModes[array_search($transportIndex,$transportModes)]);
+        $transportModes = array_values($transportModes);
+
+        // Get new first element
+        $transportIndex = array_shift($transportModes);
+        while(!isset($contactInfo[$transportIndex]) || null === $contactInfo[$transportIndex]){
+            $transportIndex = array_shift($transportModes);
         }
-        
-        // Check if the address is an HTTP/HTTPS address
-        if ($this->isHttpAddress($address)) {
-            return ['http_address' => $address];
-        }
-        
-        // If neither Tor nor HTTP, return null or a default type
-        return null;
+        return $transportIndex;
     }
 
     /**
