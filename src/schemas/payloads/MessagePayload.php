@@ -115,6 +115,8 @@ class MessagePayload extends BasePayload
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
         $hash = $message['hash'];
         return json_encode([
+            'type' => 'message', // message request type
+            'typeMessage' => 'transaction', // type of message
             'status' => 'completed',
             'hash' => $hash,
             'message' => 'Transaction with hash ' . print_r($hash, true) . ' was received succesfully by end-recipient',

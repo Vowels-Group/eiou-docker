@@ -48,13 +48,28 @@ class ContactPayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return [
-            'type' => 'message',
-            'typeMessage' => 'contact',
             'status' => 'accepted',
             'message' => $myAddress . ' confirms that we are contacts',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
+    }
+
+    /**
+     * Build a contact updated payload
+     *
+     * @param string $address The address to send the acceptance to
+     * @return string JSON-encoded contact updated payload
+     */
+    public function buildUpdated(string $address): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return json_encode([
+            'status' => 'updated',
+            'message' => $myAddress . ' confirms that contact address has been updated/added',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
     }
 
     /**
@@ -79,19 +94,17 @@ class ContactPayload extends BasePayload
      *
      * @param string $address The address of the contact request
      * @param string $reason The reason for rejection
-     * @return array The rejection payload
+     * @return string JSON-encoded contact rejection payload
      */
-    public function buildRejection(string $address, string $reason = 'Contact request rejected'): array
+    public function buildRejection(string $address, string $reason = 'Contact request rejected'): string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
-        return [
-            'type' => 'message',
-            'typeMessage' => 'contact',
+        return json_encode([
             'status' => 'rejected',
             'message' => $reason,
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-        ];
+        ]);
     }
 
     /**
@@ -104,8 +117,6 @@ class ContactPayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return [
-            'type' => 'message',
-            'typeMessage' => 'contact',
             'status' => 'pending',
             'message' => "Contact request to {$address} is pending",
             'senderAddress' => $myAddress,
