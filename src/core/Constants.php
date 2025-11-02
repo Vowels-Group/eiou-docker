@@ -134,7 +134,6 @@ class Constants {
     const P2P_DEFAULT_EXPIRATION_SECONDS = 300; // 5 minutes
     const P2P_REQUEST_LEVEL_VALIDATION_MAX = 1000;
 
-
     // Contact management
     const CONTACT_DEFAULT_FEE_PERCENT = 0.1;
     const CONTACT_DEFAULT_FEE_PERCENT_MAX = 5;
