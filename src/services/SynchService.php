@@ -131,7 +131,12 @@ class SynchService {
         // Synch all contacts
         $contacts = $this->contactRepository->getAllAddresses();
         foreach ($contacts as $contact) {
-            $this->synchSingleContact($contact);
+            if ($contact['http_address']) {
+                // Http is faster (thus preffered if possible)
+                $this->synchSingleContact($contact['http_address']);
+            } elseif ($contact['tor_address']) {
+                $this->synchSingleContact($contact['tor_address']);
+            }
         }
     }
 
@@ -144,7 +149,8 @@ class SynchService {
      */
     public function synchSingleContact($contactAddress, $echo='SILENT'): bool{
         // Synch specific contact based on address
-        $contact = $this->contactRepository->getContactByAddress($contactAddress); // Get contact from database
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($contactAddress);
+        $contact = $this->contactRepository->getContactByAddress($transportIndex,$contactAddress); // Get contact from database
         if($contact['status'] === 'pending'){
             output(outputSynchContactDueToPendingStatus($contactAddress),$echo);
             // If the contact is still pending then inquire with contact
@@ -154,7 +160,7 @@ class SynchService {
             $reason = $synchResponse['reason'] ?? NULL;
             if($status === 'accepted'){
                 // If you are accepted as a contact by the contact in question then update accordingly 
-                $this->contactRepository->updateStatus($contactAddress, $status);
+                $this->contactRepository->updateStatus($transportIndex, $contactAddress, $status);
                 output(outputContactSuccesfullySynched($contactAddress),$echo);
                 return true;
             } elseif($status === 'rejected' && $reason === 'unknown'){
@@ -168,7 +174,7 @@ class SynchService {
                     $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
                     $synchResponse = $this->transportUtility->send($contactAddress, $messagePayload);
                     if($status === 'accepted'){
-                        $this->contactRepository->updateStatus($contactAddress, $status);
+                        $this->contactRepository->updateStatus($transportIndex, $contactAddress, $status);
                         output(outputContactSuccesfullySynched($contactAddress),$echo);
                         return true;
                     }   
