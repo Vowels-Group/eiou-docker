@@ -256,7 +256,7 @@ class P2pService {
         // Check if contact matches transactions end-recipient
         $contacts = $this->contactRepository->getAllContacts();
         // Check if end recipient of request in contacts
-        $senderAddress = $request['senderAddress'];
+        $senderAddress = $request['sender_address'];
         $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
         foreach ($contacts as $contact) {
             $contactHash = hash(Constants::HASH_ALGORITHM, $contact[$transportIndex] . $request['salt'] . $request['time']);
@@ -380,7 +380,8 @@ class P2pService {
             // Check if user is NOT the original sender of the p2p and has a direct contact link to end-recipient
             // If this is the case then send p2p directly
             if(!isset($message['destination_address']) && $matchedContact = $this->matchContact($message)){
-                $response = json_decode($this->transportUtility->send($matchedContact['address'], $p2pPayload),true);
+                $transportIndex = $this->transportUtility->determineTransportType($message['sender_address']);
+                $response = json_decode($this->transportUtility->send($matchedContact[$transportIndex], $p2pPayload),true);
                 output(outputP2pSendResult($response),'SILENT');
             } else{
                 // Retrieve contacts to send p2p request, excluding the sender
