@@ -39,20 +39,20 @@ class ContactPayload extends BasePayload
     }
 
     /**
-     * Build a contact accepted payload
+     * Build a contact request received payload
      *
      * @param string $address The address to send the acceptance to
-     * @return array The contact accepted payload
+     * @return string JSON-encoded contact received payload
      */
-    public function buildAccepted(string $address): array
+    public function buildReceived(string $address): string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
-        return [
-            'status' => 'accepted',
-            'message' => $myAddress . ' confirms that we are contacts',
+        return json_encode([
+            'status' => 'received',
+            'message' => $myAddress . ' confirms that the contact request has been received',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-        ];
+        ]);
     }
 
     /**
