@@ -161,6 +161,16 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Check if contact exists
+     *
+     * @param string $pubkey Contact pubkey
+     * @return bool True if exists
+     */
+    public function contactExistsPubkey(string $pubkey): bool {
+        return $this->exists('pubkey', $pubkey);
+    }
+
+    /**
      * Check for new contact requests since last check
      *
      * @param int $lastCheckTime
@@ -426,6 +436,24 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Lookup contact by pubkey
+     *
+     * @param string $pubkey Contact pubkey
+     * @return array|null Contact data or null
+     */
+    public function lookupByPubkey(string $pubkey): ?array {
+        $query = "SELECT * FROM {$this->tableName} WHERE pubkey = :pubkey";
+        $stmt = $this->execute($query, [':pubkey' => $pubkey]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
      * Lookup contact address by name
      *
      * @param string $name Contact name (case-insensitive)
@@ -535,6 +563,16 @@ class ContactRepository extends AbstractRepository {
      */
     public function getContactByAddress(string $address): ?array {
         return $this->findByColumn('address', $address);
+    }
+
+    /**
+     * Retrieve contact information by pubkey
+     *
+     * @param string $address Contact address
+     * @return array|null Full contact data or null
+     */
+    public function getContactByPubkey(string $pubkey): ?array {
+        return $this->findByColumn('pubkey', $pubkey);
     }
 
     /**
@@ -705,16 +743,16 @@ class ContactRepository extends AbstractRepository {
     /**
      * Update specific contact fields
      *
-     * @param string $address Contact address
+     * @param string $pubkey Contact pubkey
      * @param array $fields Associative array of field => value
      * @return bool Success status
      */
-    public function updateContactFields(string $address, array $fields): bool {
+    public function updateContactFields(string $pubkey, array $fields): bool {
         if (empty($fields)) {
             return false;
         }
 
-        $affectedRows = $this->update($fields, 'address', $address);
+        $affectedRows = $this->update($fields, 'pubkey', $pubkey);
         return $affectedRows >= 0;
     }
 
