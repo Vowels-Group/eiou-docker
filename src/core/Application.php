@@ -220,9 +220,9 @@ class Application {
     /**
      * Get rate limiter instance
      *
-     * @return RateLimiter|null
+     * @return RateLimiter
      */
-    public function getRateLimiter() {
+    public function getRateLimiter(): RateLimiter {
         if (!isset($this->utils['rateLimiter'])) {
             require_once $this->getRootPath() . '/src/utils/RateLimiter.php';
             $this->utils['rateLimiter'] = new RateLimiter($this->pdo);
@@ -231,17 +231,45 @@ class Application {
     }
 
     /**
+     * Get InputValidator instance
+     *
+     *
+     * @return InputValidator
+     */
+    public function getInputValidator(): InputValidator {
+        if (!isset($this->utils['InputValidator'])) {
+            require_once $this->getRootPath() . '/src/utils/InputValidator.php';
+            $this->utils['InputValidator'] = new InputValidator();
+        }
+        return $this->utils['InputValidator'];
+    }
+
+    /**
      * Get logger instance
      *
      * @return SecureLogger
      */
-    public function getLogger() {
+    public function getLogger(): SecureLogger {
         if (!isset($this->utils['SecureLogger'])) {
             require_once $this->getRootPath() . '/src/utils/SecureLogger.php';
-            SecureLogger::init(Constants::LOG_FILE_APP, Constants::LOG_LEVEL);
-            $this->utils['SecureLogger'] = new SecureLogger();
+            $secureLogger = new SecureLogger();
+            $secureLogger->init(Constants::LOG_FILE_APP, Constants::LOG_LEVEL);
+            $this->utils['SecureLogger'] = $secureLogger;
         }
-        $this->utils['SecureLogger'];
+        return $this->utils['SecureLogger'];
+    }
+
+    /**
+     * Get Security instance
+     *
+     * @return Security
+     */
+    public function getSecurity(): Security {
+        if (!isset($this->utils['Security'])) {
+            require_once $this->getRootPath() . '/src/utils/Security.php';
+            $this->utils['Security'] = new Security();
+        }
+        return $this->utils['Security'];
     }
 
     /**
@@ -249,7 +277,7 @@ class Application {
      *
      * @return CleanupMessageProcessor
      */
-    public function getCleanupMessageProcessor() {
+    public function getCleanupMessageProcessor(): CleanupMessageProcessor {
          if (!isset($this->processors['cleanupProcessor'])) {
             require_once $this->getRootPath() . '/src/processors/CleanupMessageProcessor.php';
             $this->processors['cleanupProcessor'] = new CleanupMessageProcessor();
@@ -261,7 +289,7 @@ class Application {
      *
      * @return P2pMessageProcessor
      */
-    public function getP2pMessageProcessor() {
+    public function getP2pMessageProcessor(): P2pMessageProcessor {
          if (!isset($this->processors['p2pProcessor'])) {
             require_once $this->getRootPath() . '/src/processors/P2pMessageProcessor.php';
             $this->processors['p2pProcessor'] = new P2pMessageProcessor();
@@ -274,7 +302,7 @@ class Application {
      *
      * @return TransactionMessageProcessor
      */
-    public function getTransactionMessageProcessor() {
+    public function getTransactionMessageProcessor(): TransactionMessageProcessor {
           if (!isset($this->processors['transactionProcessor'])) {
             require_once $this->getRootPath() . '/src/processors/TransactionMessageProcessor.php';
             $this->processors['transactionProcessor'] = new TransactionMessageProcessor();

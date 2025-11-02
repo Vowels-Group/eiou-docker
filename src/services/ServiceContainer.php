@@ -16,9 +16,19 @@ class ServiceContainer {
     private static ?ServiceContainer $instance = null;
 
     /**
+     * @var array Cached repository instances
+     */
+    private array $repositories = [];
+
+    /**
      * @var array Cached service instances
      */
     private array $services = [];
+
+    /**
+     * @var array Cached Util instances
+     */
+    private array $utils = [];
 
     /**
      * @var UserContext Current user data
@@ -87,8 +97,8 @@ class ServiceContainer {
             $this->pdo = createPDOConnection();
         } catch (RuntimeException $e) {
             // Log the error
-            if (isset($this->services['SecureLogger'])) {
-                $this->services['SecureLogger']->logException($e, 'CRITICAL');
+            if (isset($this->utils['SecureLogger'])) {
+                $this->utils['SecureLogger']->logException($e, 'CRITICAL');
             } else {
                 error_log("ServiceContainer: Database connection failed - " . $e->getMessage());
             }
@@ -112,13 +122,13 @@ class ServiceContainer {
      * @return ContactRepository
      */
     public function getContactRepository(): ContactRepository {
-        if (!isset($this->services['ContactRepository'])) {
+        if (!isset($this->repositories['ContactRepository'])) {
             require_once dirname(__DIR__,2) . '/src/database/ContactRepository.php';
-            $this->services['ContactRepository'] = new ContactRepository(
+            $this->repositories['ContactRepository'] = new ContactRepository(
                 $this->pdo
             );
         }
-        return $this->services['ContactRepository'];
+        return $this->repositories['ContactRepository'];
     }
 
     /**
@@ -127,13 +137,13 @@ class ServiceContainer {
      * @return P2pRepository
      */
     public function getP2pRepository(): P2pRepository {
-        if (!isset($this->services['P2pRepository'])) {
+        if (!isset($this->repositories['P2pRepository'])) {
             require_once dirname(__DIR__,2) . '/src/database/P2pRepository.php';
-            $this->services['P2pRepository'] = new P2pRepository(
+            $this->repositories['P2pRepository'] = new P2pRepository(
                 $this->pdo
             );
         }
-        return $this->services['P2pRepository'];
+        return $this->repositories['P2pRepository'];
     }
 
     /**
@@ -142,13 +152,13 @@ class ServiceContainer {
      * @return Rp2pRepository
      */
     public function getRp2pRepository(): Rp2pRepository {
-        if (!isset($this->services['Rp2pRepository'])) {
+        if (!isset($this->repositories['Rp2pRepository'])) {
             require_once dirname(__DIR__,2) . '/src/database/Rp2pRepository.php';
-            $this->services['Rp2pRepository'] = new Rp2pRepository(
+            $this->repositories['Rp2pRepository'] = new Rp2pRepository(
                 $this->pdo
             );
         }
-        return $this->services['Rp2pRepository'];
+        return $this->repositories['Rp2pRepository'];
     }
 
     /**
@@ -157,13 +167,13 @@ class ServiceContainer {
      * @return TransactionRepository
      */
     public function getTransactionRepository(): TransactionRepository {
-        if (!isset($this->services['TransactionRepository'])) {
+        if (!isset($this->repositories['TransactionRepository'])) {
             require_once dirname(__DIR__,2) . '/src/database/TransactionRepository.php';
-            $this->services['TransactionRepository'] = new TransactionRepository(
+            $this->repositories['TransactionRepository'] = new TransactionRepository(
                 $this->pdo
             );
         }
-        return $this->services['TransactionRepository'];
+        return $this->repositories['TransactionRepository'];
     }
 
     /**
@@ -172,13 +182,13 @@ class ServiceContainer {
      * @return DebugRepository
      */
     public function getDebugRepository(): DebugRepository {
-        if (!isset($this->services['DebugRepository'])) {
+        if (!isset($this->repositories['DebugRepository'])) {
             require_once dirname(__DIR__,2) . '/src/database/DebugRepository.php';
-            $this->services['DebugRepository'] = new DebugRepository(
+            $this->repositories['DebugRepository'] = new DebugRepository(
                 $this->pdo
             );
         }
-        return $this->services['DebugRepository'];
+        return $this->repositories['DebugRepository'];
     }
 
     /**
@@ -192,6 +202,8 @@ class ServiceContainer {
             $this->services['ContactService'] = new ContactService(
                 $this->getContactRepository(),
                 $this->getUtilityContainer(),
+                $this->getInputValidator(),
+                $this->getLogger(),
                 $this->currentUser
             );
         }
@@ -212,6 +224,8 @@ class ServiceContainer {
                 $this->getTransactionRepository(),
                 $this->getContactRepository(),
                 $this->getUtilityContainer(),
+                $this->getInputValidator(),
+                $this->getLogger(),
                 $this->currentUser
             );
         }
@@ -235,7 +249,6 @@ class ServiceContainer {
         }
         return $this->services['P2pService'];
     }
-
 
     /**
      * Get R2pService instance
@@ -377,10 +390,59 @@ class ServiceContainer {
     }
 
     /**
+     * Get InputValidator instance
+     *
+     *
+     * @return InputValidator
+     */
+    public function getInputValidator(): InputValidator {
+        if (!isset($this->utils['InputValidator'])) {
+            require_once '/etc/eiou/src/utils/InputValidator.php';
+            $this->utils['InputValidator'] = new InputValidator();
+        }
+        return $this->utils['InputValidator'];
+    }
+
+    /**
+     * Get logger instance
+     *
+     * @return SecureLogger
+     */
+    public function getLogger(): SecureLogger {
+        if (!isset($this->utils['SecureLogger'])) {
+            require_once '/etc/eiou/src/utils/SecureLogger.php';
+            $secureLogger = new SecureLogger();
+            $secureLogger->init(Constants::LOG_FILE_APP, Constants::LOG_LEVEL);
+            $this->utils['SecureLogger'] = $secureLogger;
+        }
+        return $this->utils['SecureLogger'];
+    }
+    /**
+     * Get Security instance
+     *
+     *
+     * @return Security
+     */
+    public function getSecurity(): Security {
+        if (!isset($this->utils['Security'])) {
+            require_once '/etc/eiou/src/utils/Security.php';
+            $this->utils['Security'] = new Security();
+        }
+        return $this->utils['Security'];
+    }
+
+    /**
      * Clear all cached services (useful for testing)
      */
     public function clearServices(): void {
         $this->services = [];
+    }
+
+    /**
+     * Clear all cached utils (useful for testing)
+     */
+    public function clearUtils(): void {
+        $this->utils = [];
     }
 
     /**
@@ -394,6 +456,16 @@ class ServiceContainer {
     }
 
     /**
+     * Register a custom util instance
+     *
+     * @param string $name util name
+     * @param mixed $instance Util instance
+     */
+    public function registerUtil(string $name, $instance): void {
+        $this->utils[$name] = $instance;
+    }
+
+    /**
      * Check if a service is registered
      *
      * @param string $name Service name
@@ -404,6 +476,16 @@ class ServiceContainer {
     }
 
     /**
+     * Check if a util is registered
+     *
+     * @param string $name Util name
+     * @return bool True if Util exists
+     */
+    public function hasUtil(string $name): bool {
+        return isset($this->utils[$name]);
+    }
+
+    /**
      * Get a registered service by name
      *
      * @param string $name Service name
@@ -411,6 +493,16 @@ class ServiceContainer {
      */
     public function getService(string $name) {
         return $this->services[$name] ?? null;
+    }
+
+    /**
+     * Get a registered util by name
+     *
+     * @param string $name Util name
+     * @return mixed Util instance or null
+     */
+    public function getUtil(string $name) {
+        return $this->utils[$name] ?? null;
     }
 
     /**
