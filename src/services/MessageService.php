@@ -106,7 +106,7 @@ class MessageService {
     public function checkMessageValidity(array $decodedMessage): bool {
         // Check if message is from a valid source
         $senderAddress = $decodedMessage['senderAddress'];
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+        $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
         if($this->contactRepository->getContactByAddress($transportIndex, $senderAddress)){
             // The source is a contact
             return true;
@@ -171,7 +171,7 @@ class MessageService {
     private function handleContactMessageInquiryRequest(array $decodedMessage): void {
         // Handle inquiry about contact request status
         $address = $decodedMessage['senderAddress'];
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        $transportIndex = $this->transportUtility->determineTransportType($address);
         // Contact is already accepted
         if($this->contactRepository->isAcceptedContact($transportIndex, $address)){
             echo $this->messagePayload->buildContactIsAccepted($address,true);
@@ -197,7 +197,7 @@ class MessageService {
 
         if($status === 'accepted'){
             output(outputContactRequestWasAccepted($address),'SILENT');
-            $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+            $transportIndex = $this->transportUtility->determineTransportType($address);
             $this->contactRepository->updateStatus($transportIndex, $address, $status);
         }
     }

@@ -131,11 +131,11 @@ class SynchService {
         // Synch all contacts
         $contacts = $this->contactRepository->getAllAddresses();
         foreach ($contacts as $contact) {
-            if ($contact['http_address']) {
+            if ($contact['http']) {
                 // Http is faster (thus preffered if possible)
-                $this->synchSingleContact($contact['http_address']);
-            } elseif ($contact['tor_address']) {
-                $this->synchSingleContact($contact['tor_address']);
+                $this->synchSingleContact($contact['http']);
+            } elseif ($contact['tor']) {
+                $this->synchSingleContact($contact['tor']);
             }
         }
     }
@@ -149,7 +149,7 @@ class SynchService {
      */
     public function synchSingleContact($contactAddress, $echo='SILENT'): bool{
         // Synch specific contact based on address
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($contactAddress);
+        $transportIndex = $this->transportUtility->determineTransportType($contactAddress);
         $contact = $this->contactRepository->getContactByAddress($transportIndex,$contactAddress); // Get contact from database
         if($contact['status'] === 'pending'){
             output(outputSynchContactDueToPendingStatus($contactAddress),$echo);

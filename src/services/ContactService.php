@@ -28,6 +28,16 @@ class ContactService {
     private TransportUtilityService $transportUtility;
 
     /**
+     * @var InputValidator InputValidator
+     */
+    private InputValidator $inputValidator;
+
+    /**
+     * @var SecureLogger SecureLogger
+     */
+    private SecureLogger $secureLogger;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -47,16 +57,22 @@ class ContactService {
      *
      * @param ContactRepository $contactRepository Contact Repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
+     * @param InputValidator $inputValidator InputValidator Util
+     * @param SecureLogger $secureLogger SecureLogger Util
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         ContactRepository $contactRepository,
         UtilityServiceContainer $utilityContainer,
+        InputValidator $inputValidator,
+        SecureLogger $secureLogger,
         UserContext $currentUser
         ) 
     {
         $this->contactRepository = $contactRepository;
         $this->utilityContainer = $utilityContainer;
+        $this->inputValidator = $inputValidator;
+        $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
         $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
 
@@ -77,14 +93,10 @@ class ContactService {
      * @return void
      */
     public function addContact(array $data): void {
-        // Import security and validation classes
-        require_once __DIR__ . '/../utils/InputValidator.php';
-        require_once __DIR__ . '/../utils/Security.php';
-
         // Validate and sanitize address
-        $addressValidation = InputValidator::validateAddress($data[2] ?? '');
+        $addressValidation =  $this->inputValidator->validateAddress($data[2] ?? '');
         if (!$addressValidation['valid']) {
-            SecureLogger::warning("Invalid contact address", [
+            $this->secureLogger->warning("Invalid contact address", [
                 'address' => $data[2] ?? 'empty',
                 'error' => $addressValidation['error']
             ]);
@@ -94,9 +106,9 @@ class ContactService {
         $address = $addressValidation['value'];
 
         // Validate and sanitize contact name
-        $nameValidation = InputValidator::validateContactName($data[3] ?? '');
+        $nameValidation =  $this->inputValidator->validateContactName($data[3] ?? '');
         if (!$nameValidation['valid']) {
-            SecureLogger::warning("Invalid contact name", [
+            $this->secureLogger->warning("Invalid contact name", [
                 'name' => $data[3] ?? 'empty',
                 'error' => $nameValidation['error']
             ]);
@@ -106,9 +118,9 @@ class ContactService {
         $name = $nameValidation['value'];
 
         // Validate fee percentage
-        $feeValidation = InputValidator::validateFeePercent($data[4] ?? 0);
+        $feeValidation =  $this->inputValidator->validateFeePercent($data[4] ?? 0);
         if (!$feeValidation['valid']) {
-            SecureLogger::warning("Invalid fee percentage", [
+            $this->secureLogger->warning("Invalid fee percentage", [
                 'fee' => $data[4] ?? 'empty',
                 'error' => $feeValidation['error']
             ]);
@@ -118,9 +130,9 @@ class ContactService {
         $fee = $feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR;
 
         // Validate credit limit
-        $creditValidation = InputValidator::validateCreditLimit($data[5] ?? 0);
+        $creditValidation =  $this->inputValidator->validateCreditLimit($data[5] ?? 0);
         if (!$creditValidation['valid']) {
-            SecureLogger::warning("Invalid credit limit", [
+            $this->secureLogger->warning("Invalid credit limit", [
                 'credit' => $data[5] ?? 'empty',
                 'error' => $creditValidation['error']
             ]);
@@ -130,9 +142,9 @@ class ContactService {
         $credit = $creditValidation['value'] * Constants::CREDIT_CONVERSION_FACTOR;
 
         // Validate currency
-        $currencyValidation = InputValidator::validateCurrency($data[6] ?? 'USD');
+        $currencyValidation =  $this->inputValidator->validateCurrency($data[6] ?? 'USD');
         if (!$currencyValidation['valid']) {
-            SecureLogger::warning("Invalid currency", [
+            $this->secureLogger->warning("Invalid currency", [
                 'currency' => $data[6] ?? 'empty',
                 'error' => $currencyValidation['error']
             ]);
@@ -142,13 +154,13 @@ class ContactService {
         $currency = $currencyValidation['value'];
 
         // Log successful validation
-        SecureLogger::info("Contact addition validated", [
+        $this->secureLogger->info("Contact addition validated", [
             'address_type' => $addressValidation['type'] ?? 'unknown',
             'name_length' => strlen($name)
         ]);
 
         // Get contact if exists in database in some form
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        $transportIndex = $this->transportUtility->determineTransportType($address);
         $contact = $this->contactRepository->getContactByAddress($transportIndex, $address);
 
         if($contact){
@@ -169,7 +181,7 @@ class ContactService {
      * @param string $currency Currency code
      */
     private function handleExistingContact(array $contact, string $address, string $name, float $fee, float $credit, string $currency): void {
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        $transportIndex = $this->transportUtility->determineTransportType($address);
         // Check if contact is already an accepted contact
         if($contact['status'] === 'accepted'){
             output(returnContactExists(),'WARNING');
@@ -231,7 +243,7 @@ class ContactService {
     private function handleNewContact(string $address, string $name, float $fee, float $credit, string $currency): void {
         // Build the payload array
         $payload = $this->contactPayload->buildCreateRequest($address);
-        $transportIndexAssociative = $this->transportUtility->determineDatabaseIndexTransportTypeAssociative($address);
+        $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);
         // Check if the response indicates successful acceptance
         $responseData = json_decode($this->transportUtility->send($address, $payload), true);
         if (isset($responseData['status'])){
@@ -249,7 +261,7 @@ class ContactService {
             //  we are known under a different address or transport type
             elseif($responseData['status'] === 'updated'){
                 $senderAddress = $responseData['senderAddress'];
-                $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+                $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
                 if($this->contactRepository->updateContactFields($responseData['senderPublicKey'],[$transportIndex => $senderAddress])){
                     output(outputContactUpdatedAddress());
                 } else{
@@ -284,7 +296,7 @@ class ContactService {
     /**
      * Accept a contact request
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @param string $name Contact name
      * @param float $fee Fee percentage
@@ -305,7 +317,7 @@ class ContactService {
     public function handleContactCreation(array $request): string {
         $senderAddress = $request['senderAddress'];
         $senderPublicKey = $request['senderPublicKey'];
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+        $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
         // Check if contact already exists
         if ($this->contactRepository->contactExistsPubkey($senderPublicKey)) {
             $contactInfo = $this->contactRepository->lookupByPubkey($senderPublicKey);
@@ -354,11 +366,11 @@ class ContactService {
         if (isset($lookupResult['pubkey_hash'])) {
             $data['receiverPublicKeyHash'] = $lookupResult['pubkey_hash'];
         }
-        if (isset($lookupResult['http_address'])){
-            $data['http_address'] = $lookupResult['http_address'];
+        if (isset($lookupResult['http'])){
+            $data['http'] = $lookupResult['http'];
         } 
-        if (isset($lookupResult['tor_address'])){
-            $data['tor_address'] = $lookupResult['tor_address'];
+        if (isset($lookupResult['tor'])){
+            $data['tor'] = $lookupResult['tor'];
         }  
         if (isset($lookupResult['status'])){
             $data['status'] = $lookupResult['status'];
@@ -421,7 +433,7 @@ class ContactService {
                 $contactResult = $this->lookupByName($data[2]);
                 $address = $contactResult['address'] ?? null;
             }
-            $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+            $transportIndex = $this->transportUtility->determineTransportType($address);
             if ($result = $this->contactRepository->getContactByAddress($transportIndex, $address)) {
                 output(returnContactDetails($result));
             } else {
@@ -440,7 +452,7 @@ class ContactService {
      * @return bool True if exists
      */
     public function contactExists(string $address): bool {
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        $transportIndex = $this->transportUtility->determineTransportType($address);
         return $this->contactRepository->contactExists($transportIndex, $address);
     }
 
@@ -461,7 +473,7 @@ class ContactService {
      * @return bool True if accepted
      */
     public function isAcceptedContact(string $address): bool {
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        $transportIndex = $this->transportUtility->determineTransportType($address);
         return $this->contactRepository->isAcceptedContact($transportIndex, $address);
     }
 
@@ -472,7 +484,7 @@ class ContactService {
      * @return bool True if not blocked
      */
     public function isNotBlocked(string $address): bool {
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        $transportIndex = $this->transportUtility->determineTransportType($address);
         return $this->contactRepository->isNotBlocked($transportIndex, $address);
     }
 
@@ -483,7 +495,17 @@ class ContactService {
      * @return bool Success status
      */
     public function blockContact(string $address): bool {
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        $addressValidation =  $this->inputValidator->validateAddress($data[2] ?? '');
+        if (!$addressValidation['valid']) {
+            $this->secureLogger->warning("Invalid contact address", [
+                'address' => $data[2] ?? 'empty',
+                'error' => $addressValidation['error']
+            ]);
+            output("Invalid Address: " . $addressValidation['error'],'ERROR');
+            exit(1);
+        }
+        $address = $addressValidation['value'];
+        $transportIndex = $this->transportUtility->determineTransportType($address);
         return $this->contactRepository->blockContact($transportIndex, $address);
     }
 
@@ -494,7 +516,18 @@ class ContactService {
      * @return bool Success status
      */
     public function unblockContact(string $address): bool {
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        $addressValidation =  $this->inputValidator->validateAddress($data[2] ?? '');
+        if (!$addressValidation['valid']) {
+            $this->secureLogger->warning("Invalid contact address", [
+                'address' => $data[2] ?? 'empty',
+                'error' => $addressValidation['error']
+            ]);
+            output("Invalid Address: " . $addressValidation['error'],'ERROR');
+            exit(1);
+        }
+        $address = $addressValidation['value'];
+        
+        $transportIndex = $this->transportUtility->determineTransportType($address);
         return $this->contactRepository->unblockContact($transportIndex, $address);
     }
 
@@ -505,7 +538,17 @@ class ContactService {
      * @return bool Success status
      */
     public function deleteContact(string $address): bool {
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        $addressValidation =  $this->inputValidator->validateAddress($data[2] ?? '');
+        if (!$addressValidation['valid']) {
+            $this->secureLogger->warning("Invalid contact address", [
+                'address' => $data[2] ?? 'empty',
+                'error' => $addressValidation['error']
+            ]);
+            output("Invalid Address: " . $addressValidation['error'],'ERROR');
+            exit(1);
+        }
+        $address = $addressValidation['value'];
+        $transportIndex = $this->transportUtility->determineTransportType($address);
         return $this->contactRepository->deleteContact($transportIndex, $address);
     }
 
@@ -531,7 +574,7 @@ class ContactService {
     /**
      * Update contact status
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @param string $status New status
      * @return bool Success status

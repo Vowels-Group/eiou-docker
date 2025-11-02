@@ -25,7 +25,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Accept a contact request
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @param string $name Contact name
      * @param float $fee Fee percentage
@@ -72,7 +72,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Block a contact
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool Success status
      */
@@ -84,7 +84,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Unblock a contact
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool Success status
      */
@@ -96,7 +96,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Delete a contact
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool Success status
      */
@@ -108,7 +108,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Update contact status
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address
      * @param string $status
      * @return bool
@@ -126,7 +126,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Check if contact is accepted
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool True if accepted
      */
@@ -145,7 +145,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Check if contact exists
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool True if exists
      */
@@ -185,7 +185,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Check if contact is blocked
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool True if NOT blocked (returns result suitable for validation)
      */
@@ -204,7 +204,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Check contact status (returns true if status is NOT accepted)
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool True if status is not 'accepted'
      */
@@ -223,7 +223,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Check if there's a pending contact (non-user initiated)
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool True if pending
      */
@@ -243,7 +243,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Check if there's a pending contact (user initiated)
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool True if pending with name
      */
@@ -402,7 +402,7 @@ class ContactRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function lookupByName(string $name): ?array {
-        $query = "SELECT name, http_address, tor_address, pubkey, fee_percent, status FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
+        $query = "SELECT name, http, tor, pubkey, fee_percent, status FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
         $stmt = $this->execute($query, [':name' => $name]);
 
         if (!$stmt) {
@@ -420,9 +420,9 @@ class ContactRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function lookupByAddress(string $address): ?array {
-        $query = "SELECT name, http_address, tor_address, pubkey, fee_percent, status FROM {$this->tableName}";
-        $query .= " WHERE http_address = :http_address OR tor_address = :tor_address";
-        $stmt = $this->execute($query, [':http_address' => $address,':tor_address' => $address]);
+        $query = "SELECT name, http, tor, pubkey, fee_percent, status FROM {$this->tableName}";
+        $query .= " WHERE http = :http OR tor = :tor";
+        $stmt = $this->execute($query, [':http' => $address,':tor' => $address]);
 
         if (!$stmt) {
             return null;
@@ -457,7 +457,7 @@ class ContactRepository extends AbstractRepository {
      * @return string|null Contact address or null
      */
     public function lookupAddressByName(string $name): ?string {
-        $query = "SELECT http_address, tor_address FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
+        $query = "SELECT http, tor FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
         $stmt = $this->execute($query, [':name' => $name]);
 
         if (!$stmt) {
@@ -476,8 +476,8 @@ class ContactRepository extends AbstractRepository {
      */
     public function lookupNameByAddress(string $address): ?string {
         $query = "SELECT name FROM {$this->tableName}";
-        $query .= " WHERE http_address = :http_address OR tor_address = :tor_address";
-        $stmt = $this->execute($query, [':http_address' => $address,':tor_address' => $address]);
+        $query .= " WHERE http = :http OR tor = :tor";
+        $stmt = $this->execute($query, [':http' => $address,':tor' => $address]);
 
         if (!$stmt) {
             return null;
@@ -495,11 +495,11 @@ class ContactRepository extends AbstractRepository {
      */
     public function getAllAddresses(?string $exclude = null): array {
         if ($exclude) {
-            $query = "SELECT http_address, tor_address FROM {$this->tableName}";
-            $query .= " WHERE http_address != :http_address OR tor_address != :tor_address";
-            $stmt = $this->execute($query, [':http_address' => $exclude,':tor_address' => $exclude]);
+            $query = "SELECT http, tor FROM {$this->tableName}";
+            $query .= " WHERE http != :http OR tor != :tor";
+            $stmt = $this->execute($query, [':http' => $exclude,':tor' => $exclude]);
         } else {
-            $query = "SELECT http_address, tor_address FROM {$this->tableName}";
+            $query = "SELECT http, tor FROM {$this->tableName}";
             $stmt = $this->execute($query);
         }
 
@@ -518,11 +518,11 @@ class ContactRepository extends AbstractRepository {
      */
     public function getAllAcceptedAddresses(?string $exclude = null): array {
         if ($exclude) {
-            $query = "SELECT http_address, tor_address FROM {$this->tableName} WHERE status = 'accepted'";
-            $query .= " AND http_address != :http_address OR tor_address != :tor_address";
-            $stmt = $this->execute($query, [':http_address' => $exclude,':tor_address' => $exclude]);
+            $query = "SELECT http, tor FROM {$this->tableName} WHERE status = 'accepted'";
+            $query .= " AND http != :http OR tor != :tor";
+            $stmt = $this->execute($query, [':http' => $exclude,':tor' => $exclude]);
         } else {
-            $query = "SELECT http_address, tor_address FROM {$this->tableName} WHERE status = 'accepted'";
+            $query = "SELECT http, tor FROM {$this->tableName} WHERE status = 'accepted'";
             $stmt = $this->execute($query);
         }
 
@@ -541,11 +541,11 @@ class ContactRepository extends AbstractRepository {
      */
     public function getAllAddressesWithStatus(?string $exclude = null): array {
         if ($exclude) {
-            $query = "SELECT http_address, tor_address, status FROM {$this->tableName}";
-            $query .= " WHERE http_address != :http_address OR tor_address != :tor_address";
-            $stmt = $this->execute($query, [':http_address' => $exclude,':tor_address' => $exclude]);
+            $query = "SELECT http, tor, status FROM {$this->tableName}";
+            $query .= " WHERE http != :http OR tor != :tor";
+            $stmt = $this->execute($query, [':http' => $exclude,':tor' => $exclude]);
         } else {
-            $query = "SELECT http_address, tor_address, status FROM {$this->tableName}";
+            $query = "SELECT http, tor, status FROM {$this->tableName}";
             $stmt = $this->execute($query);
         }
 
@@ -559,7 +559,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Retrieve contact information by address
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return array|null Full contact data or null
      */
@@ -586,8 +586,8 @@ class ContactRepository extends AbstractRepository {
      */
     public function getContactPubkey(string $address): ?array {
         $query = "SELECT pubkey FROM {$this->tableName}";
-        $query .= " WHERE http_address = :http_address OR tor_address = :tor_address";
-        $stmt = $this->execute($query, [':http_address' => $address,':tor_address' => $address]);
+        $query .= " WHERE http = :http OR tor = :tor";
+        $stmt = $this->execute($query, [':http' => $address,':tor' => $address]);
 
         if (!$stmt) {
             return null;
@@ -603,7 +603,7 @@ class ContactRepository extends AbstractRepository {
      * @return array Array of contacts with address and pubkey
      */
     public function getAllContacts(): array {
-        $query = "SELECT name, http_address, tor_address, pubkey FROM {$this->tableName}";
+        $query = "SELECT name, http, tor, pubkey FROM {$this->tableName}";
         $stmt = $this->execute($query);
 
         if (!$stmt) {
@@ -684,7 +684,7 @@ class ContactRepository extends AbstractRepository {
      * @return array Array of contacts
      */
     public function searchContacts(?string $name = null): array {
-        $query = "SELECT http_address, tor_address, name, fee_percent, credit_limit, currency FROM {$this->tableName}";
+        $query = "SELECT http, tor, name, fee_percent, credit_limit, currency FROM {$this->tableName}";
 
         if ($name !== null) {
             $query .= " WHERE LOWER(name) LIKE LOWER(:name)";
@@ -706,7 +706,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Update contact status
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @param string $status New status
      * @return bool Success status
@@ -720,7 +720,7 @@ class ContactRepository extends AbstractRepository {
     /**
      * Update and unblock a contact
      *
-     * @param string $transportIndex Address type, i.e. http_address, tor_address
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @param string $name Contact name
      * @param float $fee Fee percentage

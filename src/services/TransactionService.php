@@ -50,6 +50,16 @@ class TransactionService {
     private TransportUtilityService $transportUtility;
 
     /**
+     * @var InputValidator InputValidator
+     */
+    private InputValidator $inputValidator;
+
+    /**
+     * @var SecureLogger SecureLogger
+     */
+    private SecureLogger $secureLogger;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -80,6 +90,8 @@ class TransactionService {
         TransactionRepository $transactionRepository,
         ContactRepository $contactRepository,
         UtilityServiceContainer $utilityContainer,
+        InputValidator $inputValidator,
+        SecureLogger $secureLogger,
         UserContext $currentUser
     ) {
         $this->p2pRepository = $p2pRepository;
@@ -90,6 +102,8 @@ class TransactionService {
         $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
+        $this->inputValidator = $inputValidator;
+        $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
        
         require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
@@ -181,7 +195,7 @@ class TransactionService {
         // Check if Transaction already exists for memo in database and is a valid successor of previous txids
         // Check if Transaction is a valid successor of previous txids
         $senderAddress = $request['senderAddress'];
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+        $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
         if(!$this->contactRepository->isNotBlocked($transportIndex, $senderAddress) || !$this->checkPreviousTxid($request) || !$this->checkAvailableFundsTransaction($request)){
             return false;
         }
@@ -311,8 +325,8 @@ class TransactionService {
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY; // Get currency or default to USD
         $data['memo'] = 'standard';
 
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($request[2]);
-
+        // Determine Transport Type (fallback on other if needed)
+        $transportIndex = $this->transportUtility->fallbackTransportType($request[2],$contactInfo);
         // Additional data preparation
         $data['receiverAddress'] = $contactInfo[$transportIndex];
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
@@ -502,14 +516,11 @@ class TransactionService {
             $request = $data;
         }
 
-        // Enhanced validation using InputValidator for transaction data
-        require_once __DIR__ . '/../utils/InputValidator.php';
-
         // Validate Parameter count
         if (isset($request)) {
-            $amountValidation = InputValidator::validateArgvAmount($request, 4);
+            $amountValidation = $this->inputValidator->validateArgvAmount($request, 4);
             if (!$amountValidation['valid']) {
-                SecureLogger::warning("Invalid parameter amount", [
+                $this->secureLogger->warning("Invalid parameter amount", [
                     'value' => $request,
                     'error' => $amountValidation['error']
                 ]);
@@ -518,11 +529,27 @@ class TransactionService {
             }
         }
 
+        // Validate address/name if provided
+        if (isset($request[2])) {
+            $addressValidation = $this->inputValidator->validateAddress($request[2]);
+            $nameValidation = $this->inputValidator->validateContactName($request[2]);
+            if (!$addressValidation['valid']){
+                if (!$nameValidation['valid']) {
+                    $this->secureLogger->warning("Invalid Address/name", [
+                        'value' => $request[2],
+                        'error' => $addressValidation['error'] . " / " . $nameValidation['error']
+                    ]);   
+                    output(("Invalid Address/name: " . $addressValidation['error'] . " / " . $nameValidation['error']),'ERROR');
+                    exit(0);
+                } 
+            }   
+        }
+
         // Validate and sanitize amount if provided
         if (isset($request[3])) {
-            $amountValidation = InputValidator::validateAmount($request[3], $request[4] ?? 'USD');
+            $amountValidation = $this->inputValidator->validateAmount($request[3], $request[4] ?? 'USD');
             if (!$amountValidation['valid']) {
-                SecureLogger::warning("Invalid transaction amount", [
+                $this->secureLogger->warning("Invalid transaction amount", [
                     'amount' => $request[3],
                     'error' => $amountValidation['error']
                 ]);
@@ -534,9 +561,9 @@ class TransactionService {
 
         // Validate currency if provided
         if (isset($request[4])) {
-            $currencyValidation = InputValidator::validateCurrency($request[4]);
+            $currencyValidation = $this->inputValidator->validateCurrency($request[4]);
             if (!$currencyValidation['valid']) {
-                SecureLogger::warning("Invalid currency code", [
+                $this->secureLogger->warning("Invalid currency code", [
                     'currency' => $request[4],
                     'error' => $currencyValidation['error']
                 ]);
@@ -560,7 +587,9 @@ class TransactionService {
                 $this->handleDirectRoute($request, $contactInfo);
             }elseif($contactInfo['status'] === 'pending'){
                 // Contact is still pending, try a resynch otherwise send through p2p if possible
-                $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+
+                // Determine Transport Type (fallback on other if needed)
+                $transportIndex = $this->transportUtility->fallbackTransportType($request[2],$contactInfo);
                 $synchResult = ServiceContainer::getInstance()->getSynchService()->synchSingleContact($contactInfo[$transportIndex],'SILENT');
                 if($synchResult){
                     $this->handleDirectRoute($request, $contactInfo);

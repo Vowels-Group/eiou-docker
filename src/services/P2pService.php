@@ -172,7 +172,7 @@ class P2pService {
         // Check if P2P already exists for hash in database, is valid and can be completed
         // & Check if P2P is valid and can be completed given credit of user requesting
         $senderAddress = $request['senderAddress'];
-        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+        $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
         if(!$this->contactRepository->isNotBlocked($transportIndex, $senderAddress) || !$this->checkRequestLevel($request) || !$this->checkAvailableFunds($request)){
             return false; 
         }
@@ -256,8 +256,10 @@ class P2pService {
         // Check if contact matches transactions end-recipient
         $contacts = $this->contactRepository->getAllContacts();
         // Check if end recipient of request in contacts
+        $senderAddress = $request['senderAddress'];
+        $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
         foreach ($contacts as $contact) {
-            $contactHash = hash(Constants::HASH_ALGORITHM, $contact['address'] . $request['salt'] . $request['time']);
+            $contactHash = hash(Constants::HASH_ALGORITHM, $contact[$transportIndex] . $request['salt'] . $request['time']);
             // output(outputCalculatedContactHash($contactHash), 'SILENT');
             if ($contactHash === $request['hash']) {
                 output(outputContactMatched($contactHash), 'SILENT');

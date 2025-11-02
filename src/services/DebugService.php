@@ -50,7 +50,7 @@ class DebugService {
         if ($this->currentUser->isInitialized()) {
             $context['user'] = [
                 'public_key' => $this->currentUser->getPublicKey(),
-                'tor_address' => $this->currentUser->getTorAddress(),
+                'tor' => $this->currentUser->getTorAddress(),
                 'hostname' => $this->currentUser->getHttpAddress()
             ];
         }
