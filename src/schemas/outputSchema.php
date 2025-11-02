@@ -69,8 +69,20 @@ function outputContactUnblockedAndOverwrittenFailure(){
     return "Contact could not be unblocked and no name/credit/fee/currency information was overwritten.\n";
 }
 
+function outputContactUpdatedAddress(){
+    return "Contact was updated succesfully with new address.\n";
+}
+
+function outputContactUpdatedAddressFailure(){
+    return "Contact could not be updated with new address.\n";
+}
+
 function outputEiouSend($request){
     return "Getting ready to send eIOU with request: " . print_r($request, true)."\n";
+}
+
+function outputFailedContactInteraction(){
+    return "Contact request address does not exist at the current time (or is unable to respond, due to downtime), Please try again later.\n";
 }
 
 function outputFailedContactRequest($payload){
@@ -78,7 +90,7 @@ function outputFailedContactRequest($payload){
 }
 
 function outputFeeInformation($feePercent,$request,$maxFee){
-    return "They want a fee of " . $feePercent . " percent, for transaction with hash " . $request['hash'] .  ", my max fee is " . $maxFee . " percent\n";
+    return "They want a fee of " . $feePercent . " percent, for transaction with hash " . $request['hash'] .  ", my max fee is " . $maxFee . " percent.\n";
 }
 
 function outputFeeRejection(){
