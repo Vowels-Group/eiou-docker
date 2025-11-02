@@ -71,9 +71,6 @@ elseif($request === "add"){
   // Add Contact - validate input before processing
   $debugService->output("Executing add contact request", 'SILENT');
   $contactService = $app->services->getContactService();
-
-  // Input validation will be handled within the service method
-  // This ensures consistency across CLI and GUI interfaces
   $contactService->addContact($argv);
 }
 elseif($request === "viewcontact"){
