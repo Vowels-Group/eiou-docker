@@ -222,13 +222,6 @@ class ContactService {
         // Build the payload array
         $payload = $this->contactPayload->buildCreateRequest($address);
 
-        // Determine if tor, else add http hostname
-        if (preg_match('/\.onion$/', $address)) {
-            $payload['senderAddress'] = $this->currentUser->getTorAddress();
-        } else {
-            $payload['senderAddress'] = $this->currentUser->getHttpAddress();
-        }
-
         // Check if the response indicates successful acceptance
         $responseData = json_decode($this->transportUtility->send($address, $payload), true);
 
@@ -281,14 +274,26 @@ class ContactService {
      * @return string Response payload
      */
     public function handleContactCreation(array $request): string {
-        $address = $request['senderAddress'];
+        $senderAddress = $request['senderAddress'];
         $senderPublicKey = $request['senderPublicKey'];
 
         // Check if contact already exists
-        if ($this->contactRepository->contactExists($address)) {
-            return $this->contactPayload->buildAlreadyExists($address);
+        if ($this->contactRepository->contactExistsPubkey($senderPublicKey)) {
+            $contactInfo = $this->contactRepository->lookupByPubkey($senderPublicKey);
+            $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+            if($contactInfo[$transportIndex] === $senderAddress){
+                // Address already exists
+                return $this->contactPayload->buildAlreadyExists($senderAddress);
+            } else{
+                // Add unknown prior address to contact
+                if($this->contactRepository->updateContactFields($senderPublicKey,[$transportIndex => $senderAddress])){
+                    return $this->contactPayload->buildUpdated($senderAddress);
+                } else{
+                    return $this->contactPayload->buildRejection($senderAddress);
+                }
+            }
         } else{
-            return $this->contactRepository->addPendingContact($address, $senderPublicKey);
+            return $this->contactRepository->addPendingContact($senderAddress, $senderPublicKey);
         }
     }
 
@@ -397,6 +402,16 @@ class ContactService {
      */
     public function contactExists(string $address): bool {
         return $this->contactRepository->contactExists($address);
+    }
+
+    /**
+     * Check if contact exists through pubkey
+     *
+     * @param string $pubkey Contact pubkey
+     * @return bool True if exists
+     */
+    public function contactExistsPubkey(string $pubkey): bool {
+        return $this->contactRepository->contactExistsPubkey($pubkey);
     }
 
     /**
