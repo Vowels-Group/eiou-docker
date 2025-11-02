@@ -117,20 +117,22 @@ class TransportUtilityService
     */
     public function fallbackTransportType($info, $contactInfo){
         $transportIndex = $this->determineTransportType($info) ?? Constants::DEFAULT_TRANSPORT_MODE;
-        $transportModes = Constants::ALL_TRANSPORT_MODES;
-        if(!isset($contactInfo[$transportIndex])){
+        if(isset($contactInfo[$transportIndex])){
             return $transportIndex;
         } 
-        // If default transport mode did not work, try finding the next possible
+        // If provided address/name did not result in a viable transport type 
+        //  and default transport mode did not work to compensate, try finding the next possible
+        $transportModes = Constants::ALL_TRANSPORT_MODES;
         unset($transportModes[array_search($transportIndex,$transportModes)]);
         $transportModes = array_values($transportModes);
-
-        // Get new first element
-        $transportIndex = array_shift($transportModes);
-        while(!isset($contactInfo[$transportIndex]) || null === $contactInfo[$transportIndex]){
+        while($transportModes !== []){
             $transportIndex = array_shift($transportModes);
+            if(isset($contactInfo[$transportIndex])){
+                return $transportIndex;
+            } 
         }
-        return $transportIndex;
+        output(outputNoViableTransportMode());
+        exit(1);
     }
 
     /**
