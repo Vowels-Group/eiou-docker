@@ -137,6 +137,10 @@ function outputLookedUpContactInfo($contactInfo){
     return "Looked up contact info: " . print_r($contactInfo, true)."\n";
 }
 
+function outputNoViableTransportMode(){
+    return "No viable transport mode for sending Transaction could be determined.\n";
+}
+
 function outputNoViableRouteP2p($hash){
     return "No viable route for forwarding p2p message with hash" . $hash . "\n";
 }
