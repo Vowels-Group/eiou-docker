@@ -9,7 +9,7 @@ SELECT id, timestamp, level, message, file, line FROM debug;
 SELECT message FROM debug;
 
 # Contacts output without a public key
-SELECT id, address, name, fee_percent, credit_limit, currency FROM contacts;
+SELECT id, http_address, tor_address, name, fee_percent, credit_limit, currency FROM contacts;
 
 # Transactions output
 SELECT id, tx_type, sender_address, receiver_address, amount, currency, timestamp, txid, previous_txid, memo FROM transactions;
