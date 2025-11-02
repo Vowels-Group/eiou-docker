@@ -5,8 +5,8 @@
 function getContactsTableSchema() {
     return "CREATE TABLE contacts (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        http_address VARCHAR(255) UNIQUE,
-        tor_address VARCHAR(255) UNIQUE,
+        http VARCHAR(255) UNIQUE,
+        tor VARCHAR(255) UNIQUE,
         pubkey TEXT NOT NULL,
         pubkey_hash VARCHAR(64),
         name VARCHAR(255),
@@ -19,11 +19,11 @@ function getContactsTableSchema() {
         credit_limit INT,
         currency VARCHAR(10),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_contacts_tor_address (tor_address),
+        INDEX idx_contacts_tor (tor),
         INDEX idx_contacts_pubkey_hash (pubkey_hash),
         INDEX idx_contacts_name (name),
         INDEX idx_contacts_status (status),
-        INDEX idx_contacts_address_status (tor_address, status)
+        INDEX idx_contacts_address_status (tor, status)
     )";
 }
 
