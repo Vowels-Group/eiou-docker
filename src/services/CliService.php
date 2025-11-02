@@ -352,7 +352,8 @@ class CliService {
             // Check if it's a HTTP or Tor address
             if ($this->transportUtility->isAddress($argv[2])) {
                 $address = $argv[2];
-                if($this->contactRepository->contactExists($address)){
+                $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+                if($this->contactRepository->contactExists($transportIndex, $address)){
                     $contactResult = $this->contactRepository->lookupByAddress($address);
                 }
             } else{
@@ -397,7 +398,8 @@ class CliService {
             // First if it's an HTTP or Tor address
             if ($this->transportUtility->isAddress($argv[2])) {
                 $address = $argv[2];
-                if($this->contactRepository->contactExists($address)){
+                $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+                if($this->contactRepository->contactExists($transportIndex, $address)){
                     $contactResult = $this->contactRepository->lookupByAddress($address);
                 }
             } else {

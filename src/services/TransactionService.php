@@ -180,8 +180,9 @@ class TransactionService {
     public function checkTransactionPossible(array $request, $echo = true) : bool{
         // Check if Transaction already exists for memo in database and is a valid successor of previous txids
         // Check if Transaction is a valid successor of previous txids
-       
-        if(!$this->contactRepository->isNotBlocked($request['senderAddress']) || !$this->checkPreviousTxid($request) || !$this->checkAvailableFundsTransaction($request)){
+        $senderAddress = $request['senderAddress'];
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+        if(!$this->contactRepository->isNotBlocked($transportIndex, $senderAddress) || !$this->checkPreviousTxid($request) || !$this->checkAvailableFundsTransaction($request)){
             return false;
         }
         // Check if Transaction already exists for txid or memo in database
@@ -310,8 +311,10 @@ class TransactionService {
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY; // Get currency or default to USD
         $data['memo'] = 'standard';
 
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($request[2]);
+
         // Additional data preparation
-        $data['receiverAddress'] = $contactInfo['receiverAddress'];
+        $data['receiverAddress'] = $contactInfo[$transportIndex];
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
         $data['txid'] = $this->createUniqueTxid($data);
         $data['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $contactInfo['receiverPublicKey']);
@@ -557,7 +560,8 @@ class TransactionService {
                 $this->handleDirectRoute($request, $contactInfo);
             }elseif($contactInfo['status'] === 'pending'){
                 // Contact is still pending, try a resynch otherwise send through p2p if possible
-                $synchResult = ServiceContainer::getInstance()->getSynchService()->synchSingleContact($contactInfo['receiverAddress'],'SILENT');
+                $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+                $synchResult = ServiceContainer::getInstance()->getSynchService()->synchSingleContact($contactInfo[$transportIndex],'SILENT');
                 if($synchResult){
                     $this->handleDirectRoute($request, $contactInfo);
                 } else{

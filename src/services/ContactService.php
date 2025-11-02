@@ -38,6 +38,11 @@ class ContactService {
     private ContactPayload $contactPayload;
 
     /**
+     * @var MessagePayload payload builder for messages
+     */
+    private MessagePayload $messagePayload;
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact Repository
@@ -57,6 +62,9 @@ class ContactService {
 
         require_once '/etc/eiou/src/schemas/payloads/ContactPayload.php';
         $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
+
+        require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
+        $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
     }
 
     /**
@@ -140,7 +148,8 @@ class ContactService {
         ]);
 
         // Get contact if exists in database in some form
-        $contact = $this->contactRepository->getContactByAddress($address);
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        $contact = $this->contactRepository->getContactByAddress($transportIndex, $address);
 
         if($contact){
             $this->handleExistingContact($contact, $address, $name, $fee, $credit, $currency);
@@ -160,16 +169,17 @@ class ContactService {
      * @param string $currency Currency code
      */
     private function handleExistingContact(array $contact, string $address, string $name, float $fee, float $credit, string $currency): void {
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
         // Check if contact is already an accepted contact
         if($contact['status'] === 'accepted'){
             output(returnContactExists(),'WARNING');
         }
         // Check if contact was blocked
         elseif($contact['status'] === 'blocked'){
-            // Contact was blocked after user accepted contact request
+            // Contact was blocked after user sent contact request
             if($contact['name']){
                 // Unblock contact and add values
-                if($this->contactRepository->updateUnblockContact($address, $name, $fee, $credit, $currency)){
+                if($this->contactRepository->updateUnblockContact($transportIndex, $address, $name, $fee, $credit, $currency)){
                     output(outputContactUnblockedAndOverwritten());
                 } else{
                     output(outputContactUnblockedAndOverwrittenFailure());
@@ -177,17 +187,17 @@ class ContactService {
             }
             // Contact was blocked when user received contact request
             else{
-                if($this->contactRepository->updateUnblockContact($address, $name, $fee, $credit, $currency)){
+                if($this->contactRepository->updateUnblockContact($transportIndex, $address, $name, $fee, $credit, $currency)){
                     output(outputContactUnblockedAndAdded());
                 } else{
                     output(outputContactUnblockedAndAddedFailure());
                 }
                 // Send message of successful contact acceptance back to original contact requester
-                $this->transportUtility->send($address, $this->contactPayload->buildAccepted($address));
+                $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
             }
         }
         elseif($contact['status'] === 'pending'){
-            // if pending with name
+            // if pending with name (contact was inserted by user for contact request)
             if($contact['name']){
                 // This contact was already sent a contact request, but has not yet responded to user (try resynching)
                 output(returnContactRequestAlreadyInserted());
@@ -195,9 +205,9 @@ class ContactService {
                 $succesfullSynch = ServiceContainer::getInstance()->getSynchService()->synchSingleContact($address, 'ECHO');
             } else{
                 // If contact already exists with an address, it's a contact request, skip sending a message
-                if ($this->acceptContact($address, $name, $fee, $credit, $currency)) {
+                if ($this->acceptContact($transportIndex, $address, $name, $fee, $credit, $currency)) {
                     // Send message of successful contact acceptance back to original contact requester
-                    $this->transportUtility->send($address, $this->contactPayload->buildAccepted($address));
+                    $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
                     output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
                     output(returnContactAccepted());
                 }
@@ -221,33 +231,51 @@ class ContactService {
     private function handleNewContact(string $address, string $name, float $fee, float $credit, string $currency): void {
         // Build the payload array
         $payload = $this->contactPayload->buildCreateRequest($address);
-
+        $transportIndexAssociative = $this->transportUtility->determineDatabaseIndexTransportTypeAssociative($address);
         // Check if the response indicates successful acceptance
         $responseData = json_decode($this->transportUtility->send($address, $payload), true);
-
-        if (isset($responseData['status']) && ($responseData['status'] === 'accepted' || $responseData['status'] === 'warning')) {
-            // Check if the response status is a warning
-            if ($responseData['status'] === 'warning') {
-                output(returnContactCreationWarning($responseData['message']));
-                // Insert into database
-                if ($this->contactRepository->insertContact($address, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
-                    // Sync newly created contact using SynchService directly (default SILENT)
-                    if(ServiceContainer::getInstance()->getSynchService()->synchSingleContact($address, 'SILENT')){
-                        output(returnContactCreationSuccessful());
-                    }
-                }
-            } else{
-                // Insert into database
-                if ($this->contactRepository->insertContact($address, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
+        if (isset($responseData['status'])){
+            // Contact request was received (initial insert on their end as pending, awaiting acceptance)
+            if($responseData['status'] === 'received'){
+                // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
+                if ($this->contactRepository->insertContact($transportIndexAssociative, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
                     output(returnContactCreationSuccessful());
                 } else{
                     output(returnContactCreationFailed());
                     exit(1);
                 }
+            } 
+            // Our contact pubkey exists on their end, but not provided address 
+            //  we are known under a different address or transport type
+            elseif($responseData['status'] === 'updated'){
+                $senderAddress = $responseData['senderAddress'];
+                $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+                if($this->contactRepository->updateContactFields($responseData['senderPublicKey'],[$transportIndex => $senderAddress])){
+                    output(outputContactUpdatedAddress());
+                } else{
+                    output(outputContactUpdatedAddressFailure());
+                }
+            } 
+            // Our contact pubkey and adress both exist on their end (Case when we delete the contact and try re-adding it)
+            elseif($responseData['status'] === 'warning'){
+                // Insert contact and try re-synching (inquiry about acceptance status)
+                if ($this->contactRepository->insertContact($transportIndexAssociative, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
+                    // Resynch contact
+                    if(ServiceContainer::getInstance()->getSynchService()->synchSingleContact($address, 'SILENT')){
+                        output(returnContactCreationSuccessful());
+                    }
+                }
+            } 
+            // Our contact request could not be processed on their end
+            elseif($responseData['status'] === 'rejection'){
+                // If not accepted, show error and display the response
+                output(returnContactRejected($responseData));
+                output(outputFailedContactRequest($payload), 'SILENT');
+                exit(1);
             }
-        } else {
-            // If not accepted, show error and display the response
-            output(returnContactRejected($responseData));
+        } else{
+            // Case when sending to an adress that does not exist at all (or is experiencing downtime)
+            output(outputFailedContactInteraction());
             output(outputFailedContactRequest($payload), 'SILENT');
             exit(1);
         }
@@ -256,6 +284,7 @@ class ContactService {
     /**
      * Accept a contact request
      *
+     * @param string $transportIndex Address type, i.e. http_address, tor_address
      * @param string $address Contact address
      * @param string $name Contact name
      * @param float $fee Fee percentage
@@ -263,8 +292,8 @@ class ContactService {
      * @param string $currency Currency code
      * @return bool Success status
      */
-    public function acceptContact(string $address, string $name, float $fee, float $credit, string $currency): bool {
-        return $this->contactRepository->acceptContact($address, $name, $fee, $credit, $currency);
+    public function acceptContact(string $transportIndex, string $address, string $name, float $fee, float $credit, string $currency): bool {
+        return $this->contactRepository->acceptContact($transportIndex, $address, $name, $fee, $credit, $currency);
     }
 
     /**
@@ -274,14 +303,33 @@ class ContactService {
      * @return string Response payload
      */
     public function handleContactCreation(array $request): string {
-        $address = $request['senderAddress'];
+        $senderAddress = $request['senderAddress'];
         $senderPublicKey = $request['senderPublicKey'];
-
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
         // Check if contact already exists
-        if ($this->contactRepository->contactExists($address)) {
-            return $this->contactPayload->buildAlreadyExists($address);
+        if ($this->contactRepository->contactExistsPubkey($senderPublicKey)) {
+            $contactInfo = $this->contactRepository->lookupByPubkey($senderPublicKey);
+           
+            if($contactInfo[$transportIndex] === $senderAddress){
+                // Address already exists (Not a new contact)
+                return $this->contactPayload->buildAlreadyExists($senderAddress);
+            } else{
+                // Address unknown prior but pubkey exists (known contact, unknown address)
+                if($this->contactRepository->updateContactFields($senderPublicKey,[$transportIndex => $senderAddress])){
+                    return $this->contactPayload->buildUpdated($senderAddress);
+                } else{
+                    // Unable to update contact
+                    return $this->contactPayload->buildRejection($senderAddress);
+                }
+            }
         } else{
-            return $this->contactRepository->addPendingContact($address, $senderPublicKey);
+            // Contact request is brand new, no prior users exist in any form
+            if($this->contactRepository->addPendingContact($senderPublicKey, [$transportIndex => $senderAddress] )){
+                return $this->contactPayload->buildReceived($senderAddress);
+            } else{
+                // Unable to insert contact
+                return $this->contactPayload->buildRejection($senderAddress);
+            }
         }
     }
 
@@ -306,8 +354,11 @@ class ContactService {
         if (isset($lookupResult['pubkey_hash'])) {
             $data['receiverPublicKeyHash'] = $lookupResult['pubkey_hash'];
         }
-        if (isset($lookupResult['address'])){
-            $data['receiverAddress'] = $lookupResult['address'];
+        if (isset($lookupResult['http_address'])){
+            $data['http_address'] = $lookupResult['http_address'];
+        } 
+        if (isset($lookupResult['tor_address'])){
+            $data['tor_address'] = $lookupResult['tor_address'];
         }  
         if (isset($lookupResult['status'])){
             $data['status'] = $lookupResult['status'];
@@ -370,8 +421,8 @@ class ContactService {
                 $contactResult = $this->lookupByName($data[2]);
                 $address = $contactResult['address'] ?? null;
             }
-
-            if ($result = $this->contactRepository->getContactByAddress($address)) {
+            $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+            if ($result = $this->contactRepository->getContactByAddress($transportIndex, $address)) {
                 output(returnContactDetails($result));
             } else {
                 output(returnContactNotFound());
@@ -389,7 +440,18 @@ class ContactService {
      * @return bool True if exists
      */
     public function contactExists(string $address): bool {
-        return $this->contactRepository->contactExists($address);
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        return $this->contactRepository->contactExists($transportIndex, $address);
+    }
+
+    /**
+     * Check if contact exists through pubkey
+     *
+     * @param string $pubkey Contact pubkey
+     * @return bool True if exists
+     */
+    public function contactExistsPubkey(string $pubkey): bool {
+        return $this->contactRepository->contactExistsPubkey($pubkey);
     }
 
     /**
@@ -399,7 +461,8 @@ class ContactService {
      * @return bool True if accepted
      */
     public function isAcceptedContact(string $address): bool {
-        return $this->contactRepository->isAcceptedContact($address);
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        return $this->contactRepository->isAcceptedContact($transportIndex, $address);
     }
 
     /**
@@ -409,7 +472,8 @@ class ContactService {
      * @return bool True if not blocked
      */
     public function isNotBlocked(string $address): bool {
-        return $this->contactRepository->isNotBlocked($address);
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        return $this->contactRepository->isNotBlocked($transportIndex, $address);
     }
 
     /**
@@ -419,7 +483,8 @@ class ContactService {
      * @return bool Success status
      */
     public function blockContact(string $address): bool {
-        return $this->contactRepository->blockContact($address);
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        return $this->contactRepository->blockContact($transportIndex, $address);
     }
 
     /**
@@ -429,7 +494,8 @@ class ContactService {
      * @return bool Success status
      */
     public function unblockContact(string $address): bool {
-        return $this->contactRepository->unblockContact($address);
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        return $this->contactRepository->unblockContact($transportIndex, $address);
     }
 
     /**
@@ -439,7 +505,8 @@ class ContactService {
      * @return bool Success status
      */
     public function deleteContact(string $address): bool {
-        return $this->contactRepository->deleteContact($address);
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+        return $this->contactRepository->deleteContact($transportIndex, $address);
     }
 
     /**
@@ -464,12 +531,13 @@ class ContactService {
     /**
      * Update contact status
      *
+     * @param string $transportIndex Address type, i.e. http_address, tor_address
      * @param string $address Contact address
      * @param string $status New status
      * @return bool Success status
      */
-    public function updateStatus(string $address, string $status): bool {
-        return $this->contactRepository->updateStatus($address, $status);
+    public function updateStatus(string $transportIndex, string $address, string $status): bool {
+        return $this->contactRepository->updateStatus($transportIndex, $address, $status);
     }
 
     /**

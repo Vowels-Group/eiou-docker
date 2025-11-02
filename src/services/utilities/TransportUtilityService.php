@@ -88,6 +88,48 @@ class TransportUtilityService
     }
 
     /**
+     * Return the determined database index type from an address
+     *
+     * @param string $address The address of the sender
+     * @return string|null The type of database index
+    */
+    public function determineDatabaseIndexTransportType(string $address): ?string {
+        // Check if the address is a Tor (.onion) address
+        if ($this->isTorAddress($address)) {
+            return 'tor_address';
+        }
+        
+        // Check if the address is an HTTP/HTTPS address
+        if ($this->isHttpAddress($address)) {
+            return 'http_address';
+        }
+        
+        // If neither Tor nor HTTP, return null or a default type
+        return null;
+    }
+
+    /**
+     * Return the an associative array of the determined address
+     *
+     * @param string $address The address of the sender
+     * @return array|null The type of database index
+    */
+    public function determineDatabaseIndexTransportTypeAssociative(string $address): ?array {
+        // Check if the address is a Tor (.onion) address
+        if ($this->isTorAddress($address)) {
+            return ['tor_address' => $address];
+        }
+        
+        // Check if the address is an HTTP/HTTPS address
+        if ($this->isHttpAddress($address)) {
+            return ['http_address' => $address];
+        }
+        
+        // If neither Tor nor HTTP, return null or a default type
+        return null;
+    }
+
+    /**
      * Determine if adress is HTTP/HTTPS
      *
      * @param string $address The address of the sender
@@ -98,16 +140,6 @@ class TransportUtilityService
     }
 
     /**
-     * Determine if adress is valid HTTP or TOR
-     *
-     * @param string $address The address of the sender
-     * @return bool True if HTTP(S)/TOR address, False otherwise
-    */
-    public function isAddress($address): bool {
-        return ($this->isHttpAddress($address) || $this->isTorAddress($address));
-    }
-
-    /**
      * Determine if adress is TOR
      *
      * @param string $address The address of the sender
@@ -115,6 +147,16 @@ class TransportUtilityService
     */
     public function isTorAddress($address): bool {
         return preg_match('/\.onion$/', $address) === 1;
+    }
+
+    /**
+     * Determine if adress is valid HTTP or TOR
+     *
+     * @param string $address The address of the sender
+     * @return bool True if HTTP(S)/TOR address, False otherwise
+    */
+    public function isAddress($address): bool {
+        return ($this->isHttpAddress($address) || $this->isTorAddress($address));
     }
 
     /**

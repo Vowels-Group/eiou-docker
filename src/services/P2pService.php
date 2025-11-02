@@ -171,7 +171,9 @@ class P2pService {
     public function checkP2pPossible(array $request, $echo = true) : bool{
         // Check if P2P already exists for hash in database, is valid and can be completed
         // & Check if P2P is valid and can be completed given credit of user requesting
-        if(!$this->contactRepository->isNotBlocked($request['senderAddress']) || !$this->checkRequestLevel($request) || !$this->checkAvailableFunds($request)){
+        $senderAddress = $request['senderAddress'];
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+        if(!$this->contactRepository->isNotBlocked($transportIndex, $senderAddress) || !$this->checkRequestLevel($request) || !$this->checkAvailableFunds($request)){
             return false; 
         }
         // Check if P2P already exists for hash in database

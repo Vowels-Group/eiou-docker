@@ -105,7 +105,9 @@ class MessageService {
      */
     public function checkMessageValidity(array $decodedMessage): bool {
         // Check if message is from a valid source
-        if($this->contactRepository->getContactByAddress($decodedMessage['senderAddress'])){
+        $senderAddress = $decodedMessage['senderAddress'];
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($senderAddress);
+        if($this->contactRepository->getContactByAddress($transportIndex, $senderAddress)){
             // The source is a contact
             return true;
         } elseif(isset($decodedMessage['hash'])){
@@ -169,13 +171,13 @@ class MessageService {
     private function handleContactMessageInquiryRequest(array $decodedMessage): void {
         // Handle inquiry about contact request status
         $address = $decodedMessage['senderAddress'];
-
+        $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
         // Contact is already accepted
-        if($this->contactRepository->isAcceptedContact($address)){
-            echo $this->messagePayload->buildContactIsAccepted($address);
+        if($this->contactRepository->isAcceptedContact($transportIndex, $address)){
+            echo $this->messagePayload->buildContactIsAccepted($address,true);
         }
         // Contact is pending
-        elseif($this->contactRepository->hasPendingContact($address)){
+        elseif($this->contactRepository->hasPendingContact($transportIndex, $address)){
             echo $this->messagePayload->buildContactIsNotYetAccepted($address);
         } else{
             echo $this->messagePayload->buildContactIsUnknown($address);
@@ -195,7 +197,8 @@ class MessageService {
 
         if($status === 'accepted'){
             output(outputContactRequestWasAccepted($address),'SILENT');
-            $this->contactRepository->updateStatus($address, $status);
+            $transportIndex = $this->transportUtility->determineDatabaseIndexTransportType($address);
+            $this->contactRepository->updateStatus($transportIndex, $address, $status);
         }
     }
 
