@@ -49,19 +49,24 @@ class MessagePayload extends BasePayload
      * Build contact accepted payload when user has accepted the contact request
      *
      * @param string $address The recipient address
-     * @return string JSON-encoded contact accepted payload
+     * @param bool Encode payload in JSON
+     * @return array|string Contact accepted payload (array if not encode, JSON otherwise)
      */
-    public function buildContactIsAccepted(string $address): string
+    public function buildContactIsAccepted(string $address, $encode = false): array|string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
-        return json_encode([
+        $data = [
             'type' => 'message', // message request type
             'typeMessage' => 'contact', // type of message
             'status' => 'accepted',
             'message' => $myAddress . ' confirms that we are contacts',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-        ]);
+        ];
+        if($encode){
+            return json_encode($data);
+        }
+        return $data;
     }
 
     /**
