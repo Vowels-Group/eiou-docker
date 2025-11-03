@@ -384,11 +384,11 @@ class P2pService {
                 $response = json_decode($this->transportUtility->send($matchedContact[$transportIndex], $p2pPayload),true);
                 output(outputP2pSendResult($response),'SILENT');
             } else{
-                // Retrieve contacts to send p2p request, excluding the sender
-                $contacts = $this->contactRepository->getAllAddresses($message['sender_address']);
+                // Retrieve accepted contacts to send p2p request, excluding the sender
+                $contacts = $this->contactRepository->getAllAcceptedAddresses($message['sender_address']);
                 // Count amount of contacts to send p2p request
                 $contactsCount = $this->transportUtility->countTorAndHttpAddresses($contacts);
-                // Send p2p request to all contacts
+                // Send p2p request to all accepted contacts
                 foreach ($contacts as $contact) {
                     // Do not send message to original sender
                     if($message['sender_address'] === $contact){
@@ -397,11 +397,6 @@ class P2pService {
                         } else{
                             $contactsCount['http'] -= 1;
                         }
-                        continue;
-                    }
-                    // Check if contact can be synced using SynchService directly (default SILENT)
-                    if(!ServiceContainer::getInstance()->getSynchService()->synchSingleContact($contact, 'SILENT')){
-                        // If contact cannot be synched in case of pending contact status, skip sending p2p to this contact
                         continue;
                     }
                     // Do not send p2p to contact (end-recipient), if direct transaction failed due to insufficient funds
