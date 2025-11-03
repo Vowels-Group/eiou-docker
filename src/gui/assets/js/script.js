@@ -256,7 +256,283 @@ function initializeSendForm() {
 // Initialize send form when page loads
 document.addEventListener('DOMContentLoaded', function() {
     initializeSendForm();
+    initializeAjaxForms();
 });
+
+/**
+ * Initialize AJAX form handlers
+ */
+function initializeAjaxForms() {
+    // Handle Add Contact form
+    const addContactForm = document.querySelector('#add-contact form');
+    if (addContactForm) {
+        addContactForm.addEventListener('submit', handleAddContactSubmit);
+    }
+
+    // Handle Send eIOU form
+    const sendForm = document.querySelector('#send-form form');
+    if (sendForm) {
+        sendForm.addEventListener('submit', handleSendTransactionSubmit);
+    }
+
+    // Handle Edit Contact modal form
+    const editContactForm = document.querySelector('#editContactModal form');
+    if (editContactForm) {
+        editContactForm.addEventListener('submit', handleEditContactSubmit);
+    }
+
+    // Add AJAX handlers for contact action buttons
+    initializeContactButtons();
+}
+
+/**
+ * Handle Add Contact form submission
+ */
+async function handleAddContactSubmit(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const submitBtn = form.querySelector('button[type="submit"]');
+
+    // Show loading state
+    LoadingIndicator.showButtonLoading(submitBtn, 'Adding Contact...');
+
+    // Get form data
+    const formData = FormUtils.getFormData(form);
+
+    try {
+        // Call API
+        const response = await EiouAPI.contacts.add(
+            formData.address,
+            formData.name,
+            formData.fee,
+            formData.credit,
+            formData.currency
+        );
+
+        // Show toast notification
+        handleApiResponse(response, 'Contact added successfully');
+
+        if (response.success) {
+            // Reset form
+            FormUtils.resetForm(form);
+
+            // Refresh page after 2 seconds
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+    } catch (error) {
+        Toast.error('Failed to add contact: ' + error.message);
+    } finally {
+        // Hide loading state
+        LoadingIndicator.hideButtonLoading(submitBtn);
+    }
+}
+
+/**
+ * Handle Send Transaction form submission
+ */
+async function handleSendTransactionSubmit(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const submitBtn = form.querySelector('button[type="submit"]');
+
+    // Show loading state
+    LoadingIndicator.showButtonLoading(submitBtn, 'Sending...');
+
+    // Get form data
+    const formData = FormUtils.getFormData(form);
+
+    try {
+        // Call API
+        const response = await EiouAPI.transactions.send(
+            formData.recipient || '',
+            formData.manual_recipient || '',
+            formData.amount,
+            formData.currency
+        );
+
+        // Show toast notification
+        handleApiResponse(response, 'Transaction sent successfully');
+
+        if (response.success) {
+            // Reset form
+            FormUtils.resetForm(form);
+
+            // Refresh page after 2 seconds to show updated balance
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+    } catch (error) {
+        Toast.error('Failed to send transaction: ' + error.message);
+    } finally {
+        // Hide loading state
+        LoadingIndicator.hideButtonLoading(submitBtn);
+    }
+}
+
+/**
+ * Handle Edit Contact form submission
+ */
+async function handleEditContactSubmit(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const submitBtn = form.querySelector('button[type="submit"]');
+
+    // Show loading state
+    LoadingIndicator.showButtonLoading(submitBtn, 'Updating...');
+
+    // Get form data
+    const formData = FormUtils.getFormData(form);
+
+    try {
+        // Call API
+        const response = await EiouAPI.contacts.edit(
+            formData.contact_address,
+            formData.contact_name,
+            formData.contact_fee,
+            formData.contact_credit,
+            formData.contact_currency
+        );
+
+        // Show toast notification
+        handleApiResponse(response, 'Contact updated successfully');
+
+        if (response.success) {
+            // Close modal
+            closeEditContactModal();
+
+            // Refresh page after 1 second
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        }
+    } catch (error) {
+        Toast.error('Failed to update contact: ' + error.message);
+    } finally {
+        // Hide loading state
+        LoadingIndicator.hideButtonLoading(submitBtn);
+    }
+}
+
+/**
+ * Initialize contact action buttons (delete, block, unblock)
+ */
+function initializeContactButtons() {
+    // Delete buttons
+    document.querySelectorAll('form[action*="deleteContact"]').forEach(form => {
+        form.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            if (!confirm('Are you sure you want to delete this contact?')) {
+                return;
+            }
+
+            const address = form.querySelector('input[name="contact_address"]').value;
+            const submitBtn = form.querySelector('button[type="submit"]');
+
+            LoadingIndicator.showButtonLoading(submitBtn, 'Deleting...');
+
+            try {
+                const response = await EiouAPI.contacts.delete(address);
+                handleApiResponse(response, 'Contact deleted successfully');
+
+                if (response.success) {
+                    setTimeout(() => window.location.reload(), 1000);
+                }
+            } catch (error) {
+                Toast.error('Failed to delete contact: ' + error.message);
+            } finally {
+                LoadingIndicator.hideButtonLoading(submitBtn);
+            }
+        });
+    });
+
+    // Block buttons
+    document.querySelectorAll('form[action*="blockContact"]').forEach(form => {
+        form.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const address = form.querySelector('input[name="contact_address"]').value;
+            const submitBtn = form.querySelector('button[type="submit"]');
+
+            LoadingIndicator.showButtonLoading(submitBtn, 'Blocking...');
+
+            try {
+                const response = await EiouAPI.contacts.block(address);
+                handleApiResponse(response, 'Contact blocked successfully');
+
+                if (response.success) {
+                    setTimeout(() => window.location.reload(), 1000);
+                }
+            } catch (error) {
+                Toast.error('Failed to block contact: ' + error.message);
+            } finally {
+                LoadingIndicator.hideButtonLoading(submitBtn);
+            }
+        });
+    });
+
+    // Unblock buttons
+    document.querySelectorAll('form[action*="unblockContact"]').forEach(form => {
+        form.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const address = form.querySelector('input[name="contact_address"]').value;
+            const submitBtn = form.querySelector('button[type="submit"]');
+
+            LoadingIndicator.showButtonLoading(submitBtn, 'Unblocking...');
+
+            try {
+                const response = await EiouAPI.contacts.unblock(address);
+                handleApiResponse(response, 'Contact unblocked successfully');
+
+                if (response.success) {
+                    setTimeout(() => window.location.reload(), 1000);
+                }
+            } catch (error) {
+                Toast.error('Failed to unblock contact: ' + error.message);
+            } finally {
+                LoadingIndicator.hideButtonLoading(submitBtn);
+            }
+        });
+    });
+
+    // Accept contact buttons
+    document.querySelectorAll('form[action*="acceptContact"]').forEach(form => {
+        form.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const formData = FormUtils.getFormData(form);
+            const submitBtn = form.querySelector('button[type="submit"]');
+
+            LoadingIndicator.showButtonLoading(submitBtn, 'Accepting...');
+
+            try {
+                const response = await EiouAPI.contacts.accept(
+                    formData.contact_address,
+                    formData.contact_name,
+                    formData.contact_fee,
+                    formData.contact_credit,
+                    formData.contact_currency
+                );
+                handleApiResponse(response, 'Contact accepted successfully');
+
+                if (response.success) {
+                    setTimeout(() => window.location.reload(), 1000);
+                }
+            } catch (error) {
+                Toast.error('Failed to accept contact: ' + error.message);
+            } finally {
+                LoadingIndicator.hideButtonLoading(submitBtn);
+            }
+        });
+    });
+}
 
 // Edit contact modal functions
 function openEditContactModal(address, name, fee, credit, currency) {
