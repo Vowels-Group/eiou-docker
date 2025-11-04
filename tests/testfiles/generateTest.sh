@@ -16,7 +16,6 @@ for container in "${containers[@]}"; do
 
     ############################ Testing #############################
 
-    # Check for success/failure
     containerAddresses[$container]=$(docker exec $container php -r '
         $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true);
         if (isset($json["hostname"])) {
