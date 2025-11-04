@@ -20,10 +20,12 @@ function succesrate(){
     local failure="$3"
     local testname="$4"
     if [[ $passed == $totaltests ]]; then
-        printf "${GREEN}${CHECK} Passed all ${testname} tests!${NC}\n"
+        printf "${GREEN}${CHECK} PASSED all ${testname} tests!${NC}\n"
+    elif [[ $passed == 0 ]]; then
+        printf "${RED}${CROSS} FAILED all ${testname} tests!${NC}\n"
     else
-        printf "${GREEN}PASSED ${passed} ${testname} tests ${NC} out of ${totaltests}\n"
-        printf "${RED}FAILED ${failure} ${testname} tests ${NC} out of ${totaltests}\n"
+        printf "${GREEN}PASSED ${passed}${NC} ${testname} tests out of ${totaltests}\n"
+        printf "${RED}FAILED ${failure}${NC} ${testname} tests out of ${totaltests}\n"
     fi
 }
 
