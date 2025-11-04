@@ -14,28 +14,56 @@ done
 
 sleep 5
 
+############################ Testing #############################
+
+testname="addContactsTest"
+totaltests=$(( "${#containersLinkKeys[@]}" + "${#containersLinkKeys[@]}" ))
+passed=0
+failure=0
+
 for containersLinkKey in "${containersLinkKeys[@]}"; do
     containerKeys=(${containersLinkKey//,/ }) 
     
-    phpstart='require_once("./etc/eiou/src/services/ServiceContainer.php"); $value=ServiceContainer::getInstance()->getContactRepository()->getContactStatus("'
-    phpending='"); echo $value;'
-
-
-#'require_once("./etc/eiou/src/services/ServiceContainer.php"); $value=ServiceContainer::getInstance()->getContactRepository()->getContactStatus("http","http://httpB");echo $value;'
-
-    transportType0=$(determineTransport ${containerAddresses[${containerKeys[0]}]})
-    contact0="${phpstart}${transportType0}\",\"${containerAddresses[${containerKeys[0]}]}$phpending"
-    printf "%s\n" ${contact0}
-
+    # httpA -> httpB (i.e forwards)
     transportType1=$(determineTransport ${containerAddresses[${containerKeys[1]}]})
-    contact1="${phpstart}${transportType1}\",\"${containerAddresses[${containerKeys[1]}]} $phpending"
-    
+    statusContact1=$(docker exec ${containerKeys[0]} php -r "
+        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        echo ServiceContainer::getInstance()->getContactRepository()->getContactStatus(
+            '""${transportType1}""','""${containerAddresses[${containerKeys[1]}]}""'
+        );
+    ")
 
-    statusContact1=$(docker exec ${containerKeys[0]} php -r ${contact1})
-    printf "%s has status %s with %s\n" ${containerKeys[1]} $statusContact1 ${containerKeys[0]}
+    printf "%s has status %s with %s\n" ${containerKeys[1]} ${statusContact1} ${containerKeys[0]}
+    if [[ "${statusContact1}" == "accepted" ]]; then
+        printf "${testname} for %s ${GREEN}PASSED${NC}\n\n" ${containerKeys[0]}
+        passed=$(( passed + 1 ))
+    else
+        printf "${testname} for %s ${RED}FAILED${NC}\n\n" ${containerKeys[0]}
+        failure=$(( failure + 1 ))
+    fi
 
-    statusContact0=$(docker exec ${containerKeys[1]} php -r ${contact0})
-    printf "%s has status %s with %s\n" ${containerKeys[0]} $statusContact0 ${containerKeys[1]}
+   
+    # httpB -> httpA (i.e backwards)
+    transportType0=$(determineTransport ${containerAddresses[${containerKeys[0]}]})
+    statusContact0=$(docker exec ${containerKeys[1]} php -r "
+        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        echo ServiceContainer::getInstance()->getContactRepository()->getContactStatus(
+            '""${transportType0}""','""${containerAddresses[${containerKeys[0]}]}""'
+        );
+    ")
+
+    printf "%s has status %s with %s\n" ${containerKeys[0]} ${statusContact0} ${containerKeys[1]}  
+    if [[ "${statusContact0}" == "accepted" ]]; then
+        printf "${testname} for %s ${GREEN}PASSED${NC}\n\n" ${containerKeys[1]}
+        passed=$(( passed + 1 ))
+    else
+        printf "${testname} for %s ${RED}FAILED${NC}\n\n" ${containerKeys[1]}
+        failure=$(( failure + 1 ))
+    fi
+
+
 done
 
+succesrate "${totaltests}" "${passed}" "${failure}" "'add'"
 
+##################################################################
