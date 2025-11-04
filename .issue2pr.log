@@ -1,0 +1,1401 @@
+[0;32m[2025-10-30 17:39:13][0m ================================================================================
+[0;32m[2025-10-30 17:39:13][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 17:39:13][0m ================================================================================
+[0;34m[2025-10-30 17:39:13] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 17:39:14] MODEL:[0m Model: opus
+[0;32m[2025-10-30 17:39:14][0m ================================================================================
+[0;34m[2025-10-30 17:39:14] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 17:39:14][0m Lock acquired (PID: 73199)
+[0;34m[2025-10-30 17:39:14] INFO:[0m Checking for open pull requests...
+[0;34m[2025-10-30 17:39:14] INFO:[0m Found 1 open PR(s)
+  - #133: feat: Implement comprehensive caching system for performance optimization (#130)
+[1;33m[2025-10-30 17:39:14] WARN:[0m Open PRs exist. Skipping automated issue processing.
+[0;34m[2025-10-30 17:39:14] INFO:[0m Please review and merge existing PRs before running this script.
+[0;32m[2025-10-30 17:39:14][0m Lock released
+[0;32m[2025-10-30 17:56:28][0m ================================================================================
+[0;32m[2025-10-30 17:56:28][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 17:56:28][0m ================================================================================
+[0;34m[2025-10-30 17:56:28] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 17:56:28] MODEL:[0m Model: opus
+[0;32m[2025-10-30 17:56:28][0m ================================================================================
+[0;34m[2025-10-30 17:56:28] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 17:56:28][0m Lock acquired (PID: 74432)
+[0;34m[2025-10-30 17:56:28] INFO:[0m Checking for open pull requests...
+[0;34m[2025-10-30 17:56:28] INFO:[0m Found 1 open PR(s)
+  - #133: feat: Implement comprehensive caching system for performance optimization (#130)
+[1;33m[2025-10-30 17:56:28] WARN:[0m Open PRs exist. Skipping automated issue processing.
+[0;34m[2025-10-30 17:56:28] INFO:[0m Please review and merge existing PRs before running this script.
+[0;32m[2025-10-30 17:56:28][0m Lock released
+[0;32m[2025-10-30 19:13:25][0m ================================================================================
+[0;32m[2025-10-30 19:13:25][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 19:13:25][0m ================================================================================
+[0;34m[2025-10-30 19:13:25] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 19:13:25] MODEL:[0m Model: opus
+[0;32m[2025-10-30 19:13:25][0m ================================================================================
+[0;34m[2025-10-30 19:13:25] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 19:13:25][0m Lock acquired (PID: 81521)
+[0;34m[2025-10-30 19:13:25] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 19:13:25][0m No open PRs found
+[0;32m[2025-10-30 19:13:25][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 19:13:25] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 19:13:26] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 19:13:27] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 19:13:28] INFO:[0m Found  open issue(s)
+[0;34m[2025-10-30 19:13:28] INFO:[0m Analyzing issues with heuristic scoring...
+[0;34m[2025-10-30 19:13:28] INFO:[0m Excluding issues with existing PRs: [0;34m[2025-10-30 19:13:26] INFO:[0m Checking which issues already have PRs...
+[0;31m[2025-10-30 19:13:28] ERROR:[0m Failed to select an issue
+[0;32m[2025-10-30 19:13:28][0m 
+[0;32m[2025-10-30 19:13:28][0m ==========================================================================
+[0;32m[2025-10-30 19:13:28][0m SELECTED ISSUE
+[0;32m[2025-10-30 19:13:28][0m ==========================================================================
+[0;32m[2025-10-30 19:13:28][0m   Number: #
+[0;32m[2025-10-30 19:13:28][0m   Title: 
+[0;32m[2025-10-30 19:13:28][0m   Labels: 
+[0;32m[2025-10-30 19:13:28][0m   Score: 
+[0;32m[2025-10-30 19:13:28][0m   Model: opus
+[0;32m[2025-10-30 19:13:28][0m ==========================================================================
+[0;32m[2025-10-30 19:13:28][0m 
+[0;34m[2025-10-30 19:13:28] INFO:[0m Creating branch: claudeflow-251030-1913
+[0;34m[2025-10-30 19:13:28] INFO:[0m Working on Issue #: 
+[0;36m[2025-10-30 19:13:28] MODEL:[0m Using model: opus
+[0;34m[2025-10-30 19:13:28] INFO:[0m Issue details retrieved. Length: 0 characters
+[0;32m[2025-10-30 19:13:28][0m 
+[0;32m[2025-10-30 19:13:28][0m ==========================================================================
+[0;32m[2025-10-30 19:13:28][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-10-30 19:13:28][0m ==========================================================================
+[0;32m[2025-10-30 19:13:28][0m 
+[0;32m[2025-10-30 19:13:28][0m Model: [0;36mopus[0m
+[0;32m[2025-10-30 19:13:28][0m Issue: #
+[0;32m[2025-10-30 19:13:28][0m Prompt saved to: /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:13:28][0m 
+[0;32m[2025-10-30 19:13:28][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-10-30 19:13:28][0m 
+[0;32m[2025-10-30 19:13:28][0m Quick copy command:
+[0;34m[2025-10-30 19:13:28] INFO:[0m   cat /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:13:28][0m 
+[0;32m[2025-10-30 19:13:28][0m ==========================================================================
+[0;32m[2025-10-30 19:13:28][0m 
+[0;32m[2025-10-30 19:13:28][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-10-30 19:13:28][0m press ENTER to continue with PR creation...
+[0;31m[2025-10-30 19:13:28] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-10-30 19:13:28] WARN:[0m Checking commit log...
+[0;31m[2025-10-30 19:13:28] ERROR:[0m No commits found on this branch
+[0;31m[2025-10-30 19:13:28] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-10-30 19:13:28][0m Lock released
+[0;32m[2025-10-30 19:15:56][0m ================================================================================
+[0;32m[2025-10-30 19:15:56][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 19:15:56][0m ================================================================================
+[0;34m[2025-10-30 19:15:56] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 19:15:56] MODEL:[0m Model: opus
+[0;32m[2025-10-30 19:15:56][0m ================================================================================
+[0;34m[2025-10-30 19:15:56] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 19:15:56][0m Lock acquired (PID: 82191)
+[0;34m[2025-10-30 19:15:56] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 19:15:56][0m No open PRs found
+[0;32m[2025-10-30 19:15:56][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 19:15:56] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 19:15:57] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 19:15:57] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 19:15:58] INFO:[0m Found  open issue(s)
+[0;34m[2025-10-30 19:15:58] INFO:[0m Analyzing issues with heuristic scoring...
+[0;34m[2025-10-30 19:15:58] INFO:[0m Excluding issues with existing PRs: [0;34m[2025-10-30 19:15:57] INFO:[0m Checking which issues already have PRs...
+[0;31m[2025-10-30 19:15:58] ERROR:[0m Failed to select an issue
+[0;32m[2025-10-30 19:15:58][0m 
+[0;32m[2025-10-30 19:15:58][0m ==========================================================================
+[0;32m[2025-10-30 19:15:58][0m SELECTED ISSUE
+[0;32m[2025-10-30 19:15:58][0m ==========================================================================
+[0;32m[2025-10-30 19:15:58][0m   Number: #
+[0;32m[2025-10-30 19:15:58][0m   Title: 
+[0;32m[2025-10-30 19:15:58][0m   Labels: 
+[0;32m[2025-10-30 19:15:58][0m   Score: 
+[0;32m[2025-10-30 19:15:58][0m   Model: opus
+[0;32m[2025-10-30 19:15:58][0m ==========================================================================
+[0;32m[2025-10-30 19:15:58][0m 
+[0;34m[2025-10-30 19:15:58] INFO:[0m Creating branch: claudeflow-251030-1915
+[0;34m[2025-10-30 19:15:58] INFO:[0m Working on Issue #: 
+[0;36m[2025-10-30 19:15:58] MODEL:[0m Using model: opus
+[0;34m[2025-10-30 19:15:58] INFO:[0m Issue details retrieved. Length: 0 characters
+[0;32m[2025-10-30 19:15:58][0m 
+[0;32m[2025-10-30 19:15:58][0m ==========================================================================
+[0;32m[2025-10-30 19:15:58][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-10-30 19:15:58][0m ==========================================================================
+[0;32m[2025-10-30 19:15:58][0m 
+[0;32m[2025-10-30 19:15:58][0m Model: [0;36mopus[0m
+[0;32m[2025-10-30 19:15:58][0m Issue: #
+[0;32m[2025-10-30 19:15:58][0m Prompt saved to: /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:15:58][0m 
+[0;32m[2025-10-30 19:15:58][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-10-30 19:15:58][0m 
+[0;32m[2025-10-30 19:15:58][0m Quick copy command:
+[0;34m[2025-10-30 19:15:58] INFO:[0m   cat /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:15:58][0m 
+[0;32m[2025-10-30 19:15:58][0m ==========================================================================
+[0;32m[2025-10-30 19:15:58][0m 
+[0;32m[2025-10-30 19:15:58][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-10-30 19:15:58][0m press ENTER to continue with PR creation...
+[0;31m[2025-10-30 19:15:58] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-10-30 19:15:58] WARN:[0m Checking commit log...
+[0;31m[2025-10-30 19:15:58] ERROR:[0m No commits found on this branch
+[0;31m[2025-10-30 19:15:58] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-10-30 19:15:58][0m Lock released
+[0;32m[2025-10-30 19:17:40][0m ================================================================================
+[0;32m[2025-10-30 19:17:40][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 19:17:40][0m ================================================================================
+[0;34m[2025-10-30 19:17:40] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 19:17:40] MODEL:[0m Model: opus
+[0;32m[2025-10-30 19:17:40][0m ================================================================================
+[0;34m[2025-10-30 19:17:40] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 19:17:40][0m Lock acquired (PID: 82723)
+[0;34m[2025-10-30 19:17:40] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 19:17:40][0m No open PRs found
+[0;32m[2025-10-30 19:17:40][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 19:17:40] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 19:17:41] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 19:17:42] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 19:17:43] INFO:[0m Found  open issue(s)
+[0;34m[2025-10-30 19:17:43] INFO:[0m Analyzing issues with heuristic scoring...
+[0;34m[2025-10-30 19:17:43] INFO:[0m Excluding issues with existing PRs: [0;34m[2025-10-30 19:17:41] INFO:[0m Checking which issues already have PRs...
+[0;31m[2025-10-30 19:17:43] ERROR:[0m Failed to select an issue
+[0;32m[2025-10-30 19:17:43][0m 
+[0;32m[2025-10-30 19:17:43][0m ==========================================================================
+[0;32m[2025-10-30 19:17:43][0m SELECTED ISSUE
+[0;32m[2025-10-30 19:17:43][0m ==========================================================================
+[0;32m[2025-10-30 19:17:43][0m   Number: #
+[0;32m[2025-10-30 19:17:43][0m   Title: 
+[0;32m[2025-10-30 19:17:43][0m   Labels: 
+[0;32m[2025-10-30 19:17:43][0m   Score: 
+[0;32m[2025-10-30 19:17:43][0m   Model: opus
+[0;32m[2025-10-30 19:17:43][0m ==========================================================================
+[0;32m[2025-10-30 19:17:43][0m 
+[0;34m[2025-10-30 19:17:43] INFO:[0m Creating branch: claudeflow-251030-1917
+[0;34m[2025-10-30 19:17:43] INFO:[0m Working on Issue #: 
+[0;36m[2025-10-30 19:17:43] MODEL:[0m Using model: opus
+[0;34m[2025-10-30 19:17:43] INFO:[0m Issue details retrieved. Length: 0 characters
+[0;32m[2025-10-30 19:17:43][0m 
+[0;32m[2025-10-30 19:17:43][0m ==========================================================================
+[0;32m[2025-10-30 19:17:43][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-10-30 19:17:43][0m ==========================================================================
+[0;32m[2025-10-30 19:17:43][0m 
+[0;32m[2025-10-30 19:17:43][0m Model: [0;36mopus[0m
+[0;32m[2025-10-30 19:17:43][0m Issue: #
+[0;32m[2025-10-30 19:17:43][0m Prompt saved to: /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:17:43][0m 
+[0;32m[2025-10-30 19:17:43][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-10-30 19:17:43][0m 
+[0;32m[2025-10-30 19:17:43][0m Quick copy command:
+[0;34m[2025-10-30 19:17:43] INFO:[0m   cat /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:17:43][0m 
+[0;32m[2025-10-30 19:17:43][0m ==========================================================================
+[0;32m[2025-10-30 19:17:43][0m 
+[0;32m[2025-10-30 19:17:43][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-10-30 19:17:43][0m press ENTER to continue with PR creation...
+[0;31m[2025-10-30 19:17:43] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-10-30 19:17:43] WARN:[0m Checking commit log...
+[0;31m[2025-10-30 19:17:43] ERROR:[0m No commits found on this branch
+[0;31m[2025-10-30 19:17:43] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-10-30 19:17:43][0m Lock released
+[0;32m[2025-10-30 19:22:36][0m ================================================================================
+[0;32m[2025-10-30 19:22:36][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 19:22:36][0m ================================================================================
+[0;34m[2025-10-30 19:22:36] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 19:22:36] MODEL:[0m Model: opus
+[0;32m[2025-10-30 19:22:36][0m ================================================================================
+[0;34m[2025-10-30 19:22:36] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 19:22:36][0m Lock acquired (PID: 83257)
+[0;34m[2025-10-30 19:22:36] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 19:22:37][0m No open PRs found
+[0;32m[2025-10-30 19:22:37][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 19:22:37] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 19:22:37] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 19:22:38] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 19:22:39] INFO:[0m Raw gh output (first 500 chars): [{"comments":[{"id":"IC_kwDON9d28c7Ov9I1","author":{"login":"linear"},"authorAssociation":"NONE","body":"<p><a href=\"https://linear.app/eiou/issue/A-432/gui-modernization-roadmap-alternative-to-flutter-refactoring-125\">A-432</a></p>","createdAt":"2025-10-30T15:43:48Z","includesCreatedEdit":false,"isMinimized":false,"minimizedReason":"","reactionGroups":[],"url":"https://github.com/eiou-org/eiou-docker/issues/132#issuecomment-3468677685","viewerDidAuthor":false}],"createdAt":"2025-10-30T15:43:4
+[0;34m[2025-10-30 19:22:39] INFO:[0m Found  open issue(s)
+[0;34m[2025-10-30 19:22:39] INFO:[0m Analyzing issues with heuristic scoring...
+[0;34m[2025-10-30 19:22:39] INFO:[0m Excluding issues with existing PRs: [0;34m[2025-10-30 19:22:37] INFO:[0m Checking which issues already have PRs...
+[0;31m[2025-10-30 19:22:39] ERROR:[0m Failed to select an issue
+[0;32m[2025-10-30 19:22:39][0m 
+[0;32m[2025-10-30 19:22:39][0m ==========================================================================
+[0;32m[2025-10-30 19:22:39][0m SELECTED ISSUE
+[0;32m[2025-10-30 19:22:39][0m ==========================================================================
+[0;32m[2025-10-30 19:22:39][0m   Number: #
+[0;32m[2025-10-30 19:22:39][0m   Title: 
+[0;32m[2025-10-30 19:22:39][0m   Labels: 
+[0;32m[2025-10-30 19:22:39][0m   Score: 
+[0;32m[2025-10-30 19:22:39][0m   Model: opus
+[0;32m[2025-10-30 19:22:39][0m ==========================================================================
+[0;32m[2025-10-30 19:22:39][0m 
+[0;34m[2025-10-30 19:22:39] INFO:[0m Creating branch: claudeflow-251030-1922
+[0;34m[2025-10-30 19:22:39] INFO:[0m Working on Issue #: 
+[0;36m[2025-10-30 19:22:39] MODEL:[0m Using model: opus
+[0;34m[2025-10-30 19:22:39] INFO:[0m Issue details retrieved. Length: 0 characters
+[0;32m[2025-10-30 19:22:39][0m 
+[0;32m[2025-10-30 19:22:39][0m ==========================================================================
+[0;32m[2025-10-30 19:22:39][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-10-30 19:22:39][0m ==========================================================================
+[0;32m[2025-10-30 19:22:39][0m 
+[0;32m[2025-10-30 19:22:39][0m Model: [0;36mopus[0m
+[0;32m[2025-10-30 19:22:39][0m Issue: #
+[0;32m[2025-10-30 19:22:39][0m Prompt saved to: /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:22:39][0m 
+[0;32m[2025-10-30 19:22:39][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-10-30 19:22:39][0m 
+[0;32m[2025-10-30 19:22:39][0m Quick copy command:
+[0;34m[2025-10-30 19:22:39] INFO:[0m   cat /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:22:39][0m 
+[0;32m[2025-10-30 19:22:39][0m ==========================================================================
+[0;32m[2025-10-30 19:22:39][0m 
+[0;32m[2025-10-30 19:22:39][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-10-30 19:22:39][0m press ENTER to continue with PR creation...
+[0;31m[2025-10-30 19:22:39] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-10-30 19:22:39] WARN:[0m Checking commit log...
+[0;31m[2025-10-30 19:22:39] ERROR:[0m No commits found on this branch
+[0;31m[2025-10-30 19:22:39] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-10-30 19:22:39][0m Lock released
+[0;32m[2025-10-30 19:24:02][0m ================================================================================
+[0;32m[2025-10-30 19:24:02][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 19:24:02][0m ================================================================================
+[0;34m[2025-10-30 19:24:02] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 19:24:02] MODEL:[0m Model: opus
+[0;32m[2025-10-30 19:24:02][0m ================================================================================
+[0;34m[2025-10-30 19:24:02] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 19:24:02][0m Lock acquired (PID: 83658)
+[0;34m[2025-10-30 19:24:02] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 19:24:03][0m No open PRs found
+[0;32m[2025-10-30 19:24:03][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 19:24:03] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 19:24:04] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 19:24:04] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 19:24:05] INFO:[0m Raw gh output (first 500 chars): [{"comments":[{"id":"IC_kwDON9d28c7Ov9I1","author":{"login":"linear"},"authorAssociation":"NONE","body":"<p><a href=\"https://linear.app/eiou/issue/A-432/gui-modernization-roadmap-alternative-to-flutter-refactoring-125\">A-432</a></p>","createdAt":"2025-10-30T15:43:48Z","includesCreatedEdit":false,"isMinimized":false,"minimizedReason":"","reactionGroups":[],"url":"https://github.com/eiou-org/eiou-docker/issues/132#issuecomment-3468677685","viewerDidAuthor":false}],"createdAt":"2025-10-30T15:43:4
+[0;31m[2025-10-30 19:24:05] ERROR:[0m Failed to parse issue count
+[0;31m[2025-10-30 19:24:05] ERROR:[0m Issues JSON: [0;34m[2025-10-30 19:24:04] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 19:24:05] INFO:[0m Raw gh output (first 500 chars): [{"comments":[{"id":"IC_kwDON9d28c7Ov9I1","author":{"login":"linear"},"authorAssociation":"NONE","body":"<p><a href=\"https://linear.app/eiou/issue/A-432/gui-modernization-roadmap-alternative-to-flutter-refactoring-125\">A-432</a></p>","createdAt":"2025-10-30T15:43:48Z","includesCreatedEdit":false,"isMinimized":false,"minimizedReason":"","reactionGroups":[],"url"
+[0;32m[2025-10-30 19:24:05][0m Lock released
+[0;32m[2025-10-30 19:24:42][0m ================================================================================
+[0;32m[2025-10-30 19:24:42][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 19:24:42][0m ================================================================================
+[0;34m[2025-10-30 19:24:42] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 19:24:42] MODEL:[0m Model: opus
+[0;32m[2025-10-30 19:24:42][0m ================================================================================
+[0;34m[2025-10-30 19:24:42] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 19:24:42][0m Lock acquired (PID: 83839)
+[0;34m[2025-10-30 19:24:42] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 19:24:42][0m No open PRs found
+[0;32m[2025-10-30 19:24:42][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 19:24:42] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 19:24:43] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 19:24:43] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 19:24:44] INFO:[0m Found 19 open issue(s)
+[0;34m[2025-10-30 19:24:44] INFO:[0m Analyzing issues with heuristic scoring...
+[0;34m[2025-10-30 19:24:44] INFO:[0m Excluding issues with existing PRs: [0;34m[2025-10-30 19:24:43] INFO:[0m Checking which issues already have PRs...
+[0;31m[2025-10-30 19:24:44] ERROR:[0m Failed to select an issue
+[0;32m[2025-10-30 19:24:44][0m 
+[0;32m[2025-10-30 19:24:44][0m ==========================================================================
+[0;32m[2025-10-30 19:24:44][0m SELECTED ISSUE
+[0;32m[2025-10-30 19:24:44][0m ==========================================================================
+[0;32m[2025-10-30 19:24:44][0m   Number: #
+[0;32m[2025-10-30 19:24:44][0m   Title: 
+[0;32m[2025-10-30 19:24:44][0m   Labels: 
+[0;32m[2025-10-30 19:24:44][0m   Score: 
+[0;32m[2025-10-30 19:24:44][0m   Model: opus
+[0;32m[2025-10-30 19:24:44][0m ==========================================================================
+[0;32m[2025-10-30 19:24:44][0m 
+[0;34m[2025-10-30 19:24:44] INFO:[0m Creating branch: claudeflow-251030-1924
+[0;34m[2025-10-30 19:24:44] INFO:[0m Working on Issue #: 
+[0;36m[2025-10-30 19:24:44] MODEL:[0m Using model: opus
+[0;34m[2025-10-30 19:24:44] INFO:[0m Issue details retrieved. Length: 0 characters
+[0;32m[2025-10-30 19:24:44][0m 
+[0;32m[2025-10-30 19:24:44][0m ==========================================================================
+[0;32m[2025-10-30 19:24:44][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-10-30 19:24:44][0m ==========================================================================
+[0;32m[2025-10-30 19:24:44][0m 
+[0;32m[2025-10-30 19:24:44][0m Model: [0;36mopus[0m
+[0;32m[2025-10-30 19:24:44][0m Issue: #
+[0;32m[2025-10-30 19:24:44][0m Prompt saved to: /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:24:44][0m 
+[0;32m[2025-10-30 19:24:44][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-10-30 19:24:44][0m 
+[0;32m[2025-10-30 19:24:44][0m Quick copy command:
+[0;34m[2025-10-30 19:24:44] INFO:[0m   cat /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:24:44][0m 
+[0;32m[2025-10-30 19:24:44][0m ==========================================================================
+[0;32m[2025-10-30 19:24:44][0m 
+[0;32m[2025-10-30 19:24:44][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-10-30 19:24:44][0m press ENTER to continue with PR creation...
+[0;31m[2025-10-30 19:24:44] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-10-30 19:24:44] WARN:[0m Checking commit log...
+[0;31m[2025-10-30 19:24:44] ERROR:[0m No commits found on this branch
+[0;31m[2025-10-30 19:24:44] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-10-30 19:24:44][0m Lock released
+[0;32m[2025-10-30 19:25:11][0m ================================================================================
+[0;32m[2025-10-30 19:25:11][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 19:25:11][0m ================================================================================
+[0;34m[2025-10-30 19:25:11] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 19:25:11] MODEL:[0m Model: opus
+[0;32m[2025-10-30 19:25:11][0m ================================================================================
+[0;34m[2025-10-30 19:25:11] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 19:25:11][0m Lock acquired (PID: 84165)
+[0;34m[2025-10-30 19:25:11] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 19:25:12][0m No open PRs found
+[0;32m[2025-10-30 19:25:12][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 19:25:12] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 19:25:12] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 19:25:13] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 19:25:13] INFO:[0m Found 19 open issue(s)
+[0;34m[2025-10-30 19:25:13] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-10-30 19:25:13][0m 
+[0;32m[2025-10-30 19:25:13][0m ==========================================================================
+[0;32m[2025-10-30 19:25:13][0m SELECTED ISSUE
+[0;32m[2025-10-30 19:25:13][0m ==========================================================================
+[0;32m[2025-10-30 19:25:13][0m   Number: #
+[0;32m[2025-10-30 19:25:13][0m   Title: 
+[0;32m[2025-10-30 19:25:13][0m   Labels: 
+[0;32m[2025-10-30 19:25:13][0m   Score: 
+[0;32m[2025-10-30 19:25:13][0m   Model: opus
+[0;32m[2025-10-30 19:25:13][0m ==========================================================================
+[0;32m[2025-10-30 19:25:13][0m 
+[0;34m[2025-10-30 19:25:13] INFO:[0m Creating branch: claudeflow-251030-1925
+[0;34m[2025-10-30 19:25:13] INFO:[0m Working on Issue #: 
+[0;36m[2025-10-30 19:25:13] MODEL:[0m Using model: opus
+[0;34m[2025-10-30 19:25:13] INFO:[0m Issue details retrieved. Length: 0 characters
+[0;32m[2025-10-30 19:25:13][0m 
+[0;32m[2025-10-30 19:25:13][0m ==========================================================================
+[0;32m[2025-10-30 19:25:13][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-10-30 19:25:13][0m ==========================================================================
+[0;32m[2025-10-30 19:25:13][0m 
+[0;32m[2025-10-30 19:25:13][0m Model: [0;36mopus[0m
+[0;32m[2025-10-30 19:25:13][0m Issue: #
+[0;32m[2025-10-30 19:25:13][0m Prompt saved to: /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:25:13][0m 
+[0;32m[2025-10-30 19:25:13][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-10-30 19:25:13][0m 
+[0;32m[2025-10-30 19:25:13][0m Quick copy command:
+[0;34m[2025-10-30 19:25:13] INFO:[0m   cat /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:25:13][0m 
+[0;32m[2025-10-30 19:25:13][0m ==========================================================================
+[0;32m[2025-10-30 19:25:13][0m 
+[0;32m[2025-10-30 19:25:13][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-10-30 19:25:13][0m press ENTER to continue with PR creation...
+[0;31m[2025-10-30 19:25:13] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-10-30 19:25:13] WARN:[0m Checking commit log...
+[0;31m[2025-10-30 19:25:13] ERROR:[0m No commits found on this branch
+[0;31m[2025-10-30 19:25:13] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-10-30 19:25:13][0m Lock released
+[0;32m[2025-10-30 19:25:38][0m ================================================================================
+[0;32m[2025-10-30 19:25:38][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 19:25:38][0m ================================================================================
+[0;34m[2025-10-30 19:25:38] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 19:25:38] MODEL:[0m Model: opus
+[0;32m[2025-10-30 19:25:38][0m ================================================================================
+[0;34m[2025-10-30 19:25:38] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 19:25:38][0m Lock acquired (PID: 84473)
+[0;34m[2025-10-30 19:25:38] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 19:25:39][0m No open PRs found
+[0;32m[2025-10-30 19:25:39][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 19:25:39] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 19:25:39] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 19:25:40] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 19:25:41] INFO:[0m Found 19 open issue(s)
+[0;34m[2025-10-30 19:25:41] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-10-30 19:25:41][0m 
+[0;32m[2025-10-30 19:25:41][0m ==========================================================================
+[0;32m[2025-10-30 19:25:41][0m SELECTED ISSUE
+[0;32m[2025-10-30 19:25:41][0m ==========================================================================
+[0;32m[2025-10-30 19:25:41][0m   Number: #
+[0;32m[2025-10-30 19:25:41][0m   Title: 
+[0;32m[2025-10-30 19:25:41][0m   Labels: 
+[0;32m[2025-10-30 19:25:41][0m   Score: 
+[0;32m[2025-10-30 19:25:41][0m   Model: opus
+[0;32m[2025-10-30 19:25:41][0m ==========================================================================
+[0;32m[2025-10-30 19:25:41][0m 
+[0;34m[2025-10-30 19:25:41] INFO:[0m Creating branch: claudeflow-251030-1925
+[0;34m[2025-10-30 19:25:41] INFO:[0m Working on Issue #: 
+[0;36m[2025-10-30 19:25:41] MODEL:[0m Using model: opus
+[0;34m[2025-10-30 19:25:41] INFO:[0m Issue details retrieved. Length: 0 characters
+[0;32m[2025-10-30 19:25:41][0m 
+[0;32m[2025-10-30 19:25:41][0m ==========================================================================
+[0;32m[2025-10-30 19:25:41][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-10-30 19:25:41][0m ==========================================================================
+[0;32m[2025-10-30 19:25:41][0m 
+[0;32m[2025-10-30 19:25:41][0m Model: [0;36mopus[0m
+[0;32m[2025-10-30 19:25:41][0m Issue: #
+[0;32m[2025-10-30 19:25:41][0m Prompt saved to: /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:25:41][0m 
+[0;32m[2025-10-30 19:25:41][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-10-30 19:25:41][0m 
+[0;32m[2025-10-30 19:25:41][0m Quick copy command:
+[0;34m[2025-10-30 19:25:41] INFO:[0m   cat /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 19:25:41][0m 
+[0;32m[2025-10-30 19:25:41][0m ==========================================================================
+[0;32m[2025-10-30 19:25:41][0m 
+[0;32m[2025-10-30 19:25:41][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-10-30 19:25:41][0m press ENTER to continue with PR creation...
+[0;31m[2025-10-30 19:25:41] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-10-30 19:25:41] WARN:[0m Checking commit log...
+[0;31m[2025-10-30 19:25:41] ERROR:[0m No commits found on this branch
+[0;31m[2025-10-30 19:25:41] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-10-30 19:25:41][0m Lock released
+[0;32m[2025-10-30 19:26:26][0m ================================================================================
+[0;32m[2025-10-30 19:26:26][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 19:26:26][0m ================================================================================
+[0;34m[2025-10-30 19:26:26] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 19:26:26] MODEL:[0m Model: sonnet
+[0;32m[2025-10-30 19:26:26][0m ================================================================================
+[0;34m[2025-10-30 19:26:26] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 19:26:26][0m Lock acquired (PID: 84816)
+[0;34m[2025-10-30 19:26:26] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 19:26:27][0m No open PRs found
+[0;32m[2025-10-30 19:26:27][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 19:26:27] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 19:26:27] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 19:26:28] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 19:26:28] INFO:[0m Found 19 open issue(s)
+[0;34m[2025-10-30 19:26:28] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-10-30 19:26:28][0m 
+[0;32m[2025-10-30 19:26:28][0m ==========================================================================
+[0;32m[2025-10-30 19:26:28][0m SELECTED ISSUE
+[0;32m[2025-10-30 19:26:28][0m ==========================================================================
+[0;32m[2025-10-30 19:26:28][0m   Number: #132
+[0;32m[2025-10-30 19:26:28][0m   Title: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;32m[2025-10-30 19:26:28][0m   Labels: documentation, enhancement
+[0;32m[2025-10-30 19:26:28][0m   Score: 6
+[0;32m[2025-10-30 19:26:28][0m   Model: sonnet
+[0;32m[2025-10-30 19:26:28][0m ==========================================================================
+[0;32m[2025-10-30 19:26:28][0m 
+[0;34m[2025-10-30 19:26:28] INFO:[0m Creating branch: claudeflow-251030-1926
+[0;34m[2025-10-30 19:26:28] INFO:[0m Working on Issue #132: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;36m[2025-10-30 19:26:28] MODEL:[0m Using model: sonnet
+[0;34m[2025-10-30 19:26:29] INFO:[0m Issue details retrieved. Length: 7119 characters
+[0;32m[2025-10-30 19:26:29][0m 
+[0;32m[2025-10-30 19:26:29][0m ==========================================================================
+[0;32m[2025-10-30 19:26:29][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-10-30 19:26:29][0m ==========================================================================
+[0;32m[2025-10-30 19:26:29][0m 
+[0;32m[2025-10-30 19:26:29][0m Model: [0;36msonnet[0m
+[0;32m[2025-10-30 19:26:29][0m Issue: #132
+[0;32m[2025-10-30 19:26:29][0m Prompt saved to: /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-10-30 19:26:29][0m 
+[0;32m[2025-10-30 19:26:29][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-10-30 19:26:29][0m 
+[0;32m[2025-10-30 19:26:29][0m Quick copy command:
+[0;34m[2025-10-30 19:26:29] INFO:[0m   cat /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-10-30 19:26:29][0m 
+[0;32m[2025-10-30 19:26:29][0m ==========================================================================
+[0;32m[2025-10-30 19:26:29][0m 
+[0;32m[2025-10-30 19:26:29][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-10-30 19:26:29][0m press ENTER to continue with PR creation...
+[0;31m[2025-10-30 19:26:29] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-10-30 19:26:29] WARN:[0m Checking commit log...
+[0;31m[2025-10-30 19:26:29] ERROR:[0m No commits found on this branch
+[0;31m[2025-10-30 19:26:29] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-10-30 19:26:29][0m Lock released
+[0;32m[2025-10-30 21:19:27][0m ================================================================================
+[0;32m[2025-10-30 21:19:27][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 21:19:27][0m ================================================================================
+[0;34m[2025-10-30 21:19:27] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 21:19:27] MODEL:[0m Model: sonnet
+[0;32m[2025-10-30 21:19:27][0m ================================================================================
+[0;34m[2025-10-30 21:19:27] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 21:19:27][0m Lock acquired (PID: 90210)
+[0;34m[2025-10-30 21:19:27] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 21:19:27][0m No open PRs found
+[0;32m[2025-10-30 21:19:27][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 21:19:27] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 21:19:28] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 21:19:28] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 21:19:29] INFO:[0m Found  open issue(s)
+[0;34m[2025-10-30 21:19:29] INFO:[0m Analyzing issues with heuristic scoring...
+[0;34m[2025-10-30 21:19:29] INFO:[0m Excluding issues with existing PRs: [0;34m[2025-10-30 21:19:28] INFO:[0m Checking which issues already have PRs...
+[0;31m[2025-10-30 21:19:29] ERROR:[0m Failed to select an issue
+[0;32m[2025-10-30 21:19:29][0m 
+[0;32m[2025-10-30 21:19:29][0m ==========================================================================
+[0;32m[2025-10-30 21:19:29][0m SELECTED ISSUE
+[0;32m[2025-10-30 21:19:29][0m ==========================================================================
+[0;32m[2025-10-30 21:19:29][0m   Number: #
+[0;32m[2025-10-30 21:19:29][0m   Title: 
+[0;32m[2025-10-30 21:19:29][0m   Labels: 
+[0;32m[2025-10-30 21:19:29][0m   Score: 
+[0;32m[2025-10-30 21:19:29][0m   Model: sonnet
+[0;32m[2025-10-30 21:19:29][0m ==========================================================================
+[0;32m[2025-10-30 21:19:29][0m 
+[0;34m[2025-10-30 21:19:29] INFO:[0m Creating branch: claudeflow-251030-2119
+[0;34m[2025-10-30 21:19:29] INFO:[0m Working on Issue #: 
+[0;36m[2025-10-30 21:19:29] MODEL:[0m Using model: sonnet
+[0;34m[2025-10-30 21:19:29] INFO:[0m Issue details retrieved. Length: 0 characters
+[0;32m[2025-10-30 21:19:29][0m 
+[0;32m[2025-10-30 21:19:29][0m ==========================================================================
+[0;32m[2025-10-30 21:19:29][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-10-30 21:19:29][0m ==========================================================================
+[0;32m[2025-10-30 21:19:29][0m 
+[0;32m[2025-10-30 21:19:29][0m Model: [0;36msonnet[0m
+[0;32m[2025-10-30 21:19:29][0m Issue: #
+[0;32m[2025-10-30 21:19:29][0m Prompt saved to: /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 21:19:29][0m 
+[0;32m[2025-10-30 21:19:29][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-10-30 21:19:29][0m 
+[0;32m[2025-10-30 21:19:29][0m Quick copy command:
+[0;34m[2025-10-30 21:19:29] INFO:[0m   cat /tmp/claude_prompt_issue_.txt
+[0;32m[2025-10-30 21:19:29][0m 
+[0;32m[2025-10-30 21:19:29][0m ==========================================================================
+[0;32m[2025-10-30 21:19:29][0m 
+[0;32m[2025-10-30 21:19:29][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-10-30 21:19:29][0m press ENTER to continue with PR creation...
+[0;31m[2025-10-30 21:19:29] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-10-30 21:19:29] WARN:[0m Checking commit log...
+[0;31m[2025-10-30 21:19:29] ERROR:[0m No commits found on this branch
+[0;31m[2025-10-30 21:19:29] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-10-30 21:19:29][0m Lock released
+[0;32m[2025-10-30 23:02:26][0m ================================================================================
+[0;32m[2025-10-30 23:02:26][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 23:02:26][0m ================================================================================
+[0;34m[2025-10-30 23:02:26] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 23:02:26] MODEL:[0m Model: sonnet
+[0;32m[2025-10-30 23:02:26][0m ================================================================================
+[0;34m[2025-10-30 23:02:26] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 23:02:26][0m Lock acquired (PID: 91907)
+[0;34m[2025-10-30 23:02:26] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 23:02:27][0m No open PRs found
+[0;32m[2025-10-30 23:02:27][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 23:02:27] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 23:02:28] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 23:02:28] INFO:[0m Fetching open issues...
+[0;31m[2025-10-30 23:02:29] ERROR:[0m Invalid JSON returned from get_open_issues
+[0;31m[2025-10-30 23:02:29] ERROR:[0m Raw output: [0;34m[2025-10-30 23:02:28] INFO:[0m Fetching open issues...
+[
+  {
+    "number": 132,
+    "title": "GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)",
+    "labels": "documentation, enhancement",
+    "created": "2025-10-30T15:43:42Z",
+    "updated": "2025-10-30T15:43:48Z",
+    "comments": 1
+  },
+  {
+    "number": 131,
+    "title": "Refactor PHP GUI to proper MVC architecture",
+    "labels": "enhancement, Backend",
+    "created": "2025-10-30T15:40:34Z",
+    "updated": "2025-10-30T15:40:38Z",
+    "comments": 1
+  },
+  {
+    "number": 130,
+    "title": "Optimize Docker API calls and implement caching",
+    "labels": "enhancement, Backend",
+    "created": "2025-10-30T15:39:41Z",
+    "updated": "2025-10-30T15:39:45Z",
+    "comments": 1
+  },
+  {
+    "number": 129,
+    "title": "Add real-time updates for container status and wallet data",
+    "labels": "enhancement, Wallet",
+    "created": "2025-10-30T15:38:31Z",
+    "updated": "2025-10-30T15:38:37Z",
+    "comments": 1
+  },
+  {
+    "number": 128,
+    "title": "Improve error handling and user feedback in GUI",
+    "labels": "enhancement, Wallet",
+    "created": "2025-10-30T15:35:59Z",
+    "updated": "2025-10-30T15:36:04Z",
+    "comments": 1
+  },
+  {
+    "number": 120,
+    "title": "Figure out why /10000 and not /100 in calculateRequestedAmount",
+    "labels": "",
+    "created": "2025-10-28T14:18:22Z",
+    "updated": "2025-10-28T14:18:25Z",
+    "comments": 1
+  },
+  {
+    "number": 118,
+    "title": "Create transaction message retry system",
+    "labels": "",
+    "created": "2025-10-28T14:15:11Z",
+    "updated": "2025-10-28T14:15:15Z",
+    "comments": 1
+  },
+  {
+    "number": 110,
+    "title": "Shutdown of message processors how to do through posix_kill",
+    "labels": "",
+    "created": "2025-10-27T21:00:53Z",
+    "updated": "2025-10-27T21:00:56Z",
+    "comments": 1
+  },
+  {
+    "number": 105,
+    "title": "GUI walletIndex.html needs revamp to work with proper service structure, remove require_once calls",
+    "labels": "",
+    "created": "2025-10-23T12:50:51Z",
+    "updated": "2025-10-23T12:50:56Z",
+    "comments": 1
+  },
+  {
+    "number": 101,
+    "title": "Future feature: add ability to restore wallet",
+    "labels": "",
+    "created": "2025-10-23T08:07:54Z",
+    "updated": "2025-10-23T08:07:57Z",
+    "comments": 1
+  },
+  {
+    "number": 99,
+    "title": "Proper handling of transaction messages (currently loss possible)",
+    "labels": "",
+    "created": "2025-10-22T21:39:35Z",
+    "updated": "2025-10-22T21:39:39Z",
+    "comments": 1
+  },
+  {
+    "number": 98,
+    "title": "Add contact in GUI is slow",
+    "labels": "",
+    "created": "2025-10-22T21:29:03Z",
+    "updated": "2025-10-22T21:31:02Z",
+    "comments": 1
+  },
+  {
+    "number": 97,
+    "title": "HTTP and TOR addresses viewed as separate contacts",
+    "labels": "",
+    "created": "2025-10-22T17:46:27Z",
+    "updated": "2025-10-22T17:46:31Z",
+    "comments": 1
+  },
+  {
+    "number": 96,
+    "title": "Revise private-key storage protocol",
+    "labels": "",
+    "created": "2025-10-21T15:46:05Z",
+    "updated": "2025-10-21T15:46:10Z",
+    "comments": 1
+  },
+  {
+    "number": 95,
+    "title": "Check test framework for compatibility new refactorisation",
+    "labels": "",
+    "created": "2025-10-21T10:33:01Z",
+    "updated": "2025-10-21T10:33:05Z",
+    "comments": 1
+  },
+  {
+    "number": 94,
+    "title": "Use classes from utils folder and core folder where possible",
+    "labels": "",
+    "created": "2025-10-21T10:10:19Z",
+    "updated": "2025-10-27T21:56:56Z",
+    "comments": 1
+  },
+  {
+    "number": 68,
+    "title": "🐝 Hive Mind Code Review - Master Tracking Issue for All Findings",
+    "labels": "",
+    "created": "2025-10-03T22:31:58Z",
+    "updated": "2025-10-03T22:32:04Z",
+    "comments": 1
+  },
+  {
+    "number": 44,
+    "title": "API integration",
+    "labels": "Feature, Backend",
+    "created": "2025-10-03T15:19:59Z",
+    "updated": "2025-10-03T15:20:00Z",
+    "comments": 1
+  }
+]
+[0;32m[2025-10-30 23:02:29][0m Lock released
+[0;32m[2025-10-30 23:04:15][0m ================================================================================
+[0;32m[2025-10-30 23:04:15][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-10-30 23:04:15][0m ================================================================================
+[0;34m[2025-10-30 23:04:15] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-10-30 23:04:15] MODEL:[0m Model: haiku
+[0;32m[2025-10-30 23:04:15][0m ================================================================================
+[0;34m[2025-10-30 23:04:15] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-10-30 23:04:15][0m Lock acquired (PID: 92123)
+[0;34m[2025-10-30 23:04:15] INFO:[0m Checking for open pull requests...
+[0;32m[2025-10-30 23:04:15][0m No open PRs found
+[0;32m[2025-10-30 23:04:15][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-10-30 23:04:15] INFO:[0m Updating main branch...
+[0;34m[2025-10-30 23:04:16] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-10-30 23:04:17] INFO:[0m Fetching open issues...
+[0;34m[2025-10-30 23:04:17] INFO:[0m Found 18 open issue(s)
+[0;34m[2025-10-30 23:04:17] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-10-30 23:04:17][0m 
+[0;32m[2025-10-30 23:04:17][0m ==========================================================================
+[0;32m[2025-10-30 23:04:17][0m SELECTED ISSUE
+[0;32m[2025-10-30 23:04:17][0m ==========================================================================
+[0;32m[2025-10-30 23:04:17][0m   Number: #132
+[0;32m[2025-10-30 23:04:17][0m   Title: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;32m[2025-10-30 23:04:17][0m   Labels: documentation, enhancement
+[0;32m[2025-10-30 23:04:17][0m   Score: 6
+[0;32m[2025-10-30 23:04:17][0m   Model: haiku
+[0;32m[2025-10-30 23:04:17][0m ==========================================================================
+[0;32m[2025-10-30 23:04:17][0m 
+[0;34m[2025-10-30 23:04:17] INFO:[0m Creating branch: claudeflow-251030-2304
+[0;34m[2025-10-30 23:04:17] INFO:[0m Working on Issue #132: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;36m[2025-10-30 23:04:17] MODEL:[0m Using model: haiku
+[0;34m[2025-10-30 23:04:18] INFO:[0m Issue details retrieved. Length: 7119 characters
+[0;32m[2025-10-30 23:04:18][0m 
+[0;32m[2025-10-30 23:04:18][0m ==========================================================================
+[0;32m[2025-10-30 23:04:18][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-10-30 23:04:18][0m ==========================================================================
+[0;32m[2025-10-30 23:04:18][0m 
+[0;32m[2025-10-30 23:04:18][0m Model: [0;36mhaiku[0m
+[0;32m[2025-10-30 23:04:18][0m Issue: #132
+[0;32m[2025-10-30 23:04:18][0m Prompt saved to: /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-10-30 23:04:18][0m 
+[0;32m[2025-10-30 23:04:18][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-10-30 23:04:18][0m 
+[0;32m[2025-10-30 23:04:18][0m Quick copy command:
+[0;34m[2025-10-30 23:04:18] INFO:[0m   cat /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-10-30 23:04:18][0m 
+[0;32m[2025-10-30 23:04:18][0m ==========================================================================
+[0;32m[2025-10-30 23:04:18][0m 
+[0;32m[2025-10-30 23:04:18][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-10-30 23:04:18][0m press ENTER to continue with PR creation...
+[0;31m[2025-10-30 23:04:18] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-10-30 23:04:18] WARN:[0m Checking commit log...
+[0;31m[2025-10-30 23:04:18] ERROR:[0m No commits found on this branch
+[0;31m[2025-10-30 23:04:18] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-10-30 23:04:18][0m Lock released
+[0;32m[2025-11-03 20:08:46][0m ================================================================================
+[0;32m[2025-11-03 20:08:46][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-11-03 20:08:46][0m ================================================================================
+[0;34m[2025-11-03 20:08:46] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-11-03 20:08:46] MODEL:[0m Model: sonnet
+[0;32m[2025-11-03 20:08:46][0m ================================================================================
+[0;34m[2025-11-03 20:08:46] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-11-03 20:08:46][0m Lock acquired (PID: 116826)
+[0;34m[2025-11-03 20:08:46] INFO:[0m Checking for open pull requests...
+[0;32m[2025-11-03 20:08:47][0m No open PRs found
+[0;32m[2025-11-03 20:08:47][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-11-03 20:08:47] INFO:[0m Updating main branch...
+[0;34m[2025-11-03 20:08:48] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-11-03 20:08:48] INFO:[0m Fetching open issues...
+[0;34m[2025-11-03 20:08:49] INFO:[0m Found 17 open issue(s)
+[0;34m[2025-11-03 20:08:49] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-11-03 20:08:49][0m 
+[0;32m[2025-11-03 20:08:49][0m ==========================================================================
+[0;32m[2025-11-03 20:08:49][0m SELECTED ISSUE
+[0;32m[2025-11-03 20:08:49][0m ==========================================================================
+[0;32m[2025-11-03 20:08:49][0m   Number: #132
+[0;32m[2025-11-03 20:08:49][0m   Title: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;32m[2025-11-03 20:08:49][0m   Labels: documentation, enhancement
+[0;32m[2025-11-03 20:08:49][0m   Score: 6
+[0;32m[2025-11-03 20:08:49][0m   Model: sonnet
+[0;32m[2025-11-03 20:08:49][0m ==========================================================================
+[0;32m[2025-11-03 20:08:49][0m 
+[0;34m[2025-11-03 20:08:49] INFO:[0m Creating branch: claudeflow-251103-2008
+[0;34m[2025-11-03 20:08:49] INFO:[0m Working on Issue #132: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;36m[2025-11-03 20:08:49] MODEL:[0m Using model: sonnet
+[0;34m[2025-11-03 20:08:49] INFO:[0m Issue details retrieved. Length: 7119 characters
+[0;32m[2025-11-03 20:08:49][0m 
+[0;32m[2025-11-03 20:08:49][0m ==========================================================================
+[0;32m[2025-11-03 20:08:49][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-11-03 20:08:49][0m ==========================================================================
+[0;32m[2025-11-03 20:08:49][0m 
+[0;32m[2025-11-03 20:08:49][0m Model: [0;36msonnet[0m
+[0;32m[2025-11-03 20:08:49][0m Issue: #132
+[0;32m[2025-11-03 20:08:49][0m Prompt saved to: /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:08:49][0m 
+[0;32m[2025-11-03 20:08:49][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-11-03 20:08:49][0m 
+[0;32m[2025-11-03 20:08:49][0m Quick copy command:
+[0;34m[2025-11-03 20:08:49] INFO:[0m   cat /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:08:49][0m 
+[0;32m[2025-11-03 20:08:49][0m ==========================================================================
+[0;32m[2025-11-03 20:08:49][0m 
+[0;32m[2025-11-03 20:08:49][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-11-03 20:08:49][0m press ENTER to continue with PR creation...
+[0;31m[2025-11-03 20:08:49] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-11-03 20:08:49] WARN:[0m Checking commit log...
+[0;31m[2025-11-03 20:08:49] ERROR:[0m No commits found on this branch
+[0;31m[2025-11-03 20:08:49] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-11-03 20:08:49][0m Lock released
+[0;32m[2025-11-03 20:23:45][0m ================================================================================
+[0;32m[2025-11-03 20:23:45][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-11-03 20:23:45][0m ================================================================================
+[0;34m[2025-11-03 20:23:45] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-11-03 20:23:45] MODEL:[0m Model: opus
+[0;32m[2025-11-03 20:23:45][0m ================================================================================
+[0;34m[2025-11-03 20:23:45] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-11-03 20:23:45][0m Lock acquired (PID: 117505)
+[0;34m[2025-11-03 20:23:45] INFO:[0m Checking for open pull requests...
+[0;32m[2025-11-03 20:23:45][0m No open PRs found
+[0;32m[2025-11-03 20:23:45][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-11-03 20:23:45] INFO:[0m Updating main branch...
+[0;34m[2025-11-03 20:23:46] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-11-03 20:23:46] INFO:[0m Fetching open issues...
+[0;34m[2025-11-03 20:23:47] INFO:[0m Found 17 open issue(s)
+[0;34m[2025-11-03 20:23:47] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-11-03 20:23:47][0m 
+[0;32m[2025-11-03 20:23:47][0m ==========================================================================
+[0;32m[2025-11-03 20:23:47][0m SELECTED ISSUE
+[0;32m[2025-11-03 20:23:47][0m ==========================================================================
+[0;32m[2025-11-03 20:23:47][0m   Number: #132
+[0;32m[2025-11-03 20:23:47][0m   Title: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;32m[2025-11-03 20:23:47][0m   Labels: documentation, enhancement
+[0;32m[2025-11-03 20:23:47][0m   Score: 6
+[0;32m[2025-11-03 20:23:47][0m   Model: opus
+[0;32m[2025-11-03 20:23:47][0m ==========================================================================
+[0;32m[2025-11-03 20:23:47][0m 
+[0;34m[2025-11-03 20:23:47] INFO:[0m Creating branch: claudeflow-251103-2023
+[0;34m[2025-11-03 20:23:47] INFO:[0m Working on Issue #132: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;36m[2025-11-03 20:23:47] MODEL:[0m Using model: opus
+[0;34m[2025-11-03 20:23:48] INFO:[0m Issue details retrieved. Length: 7119 characters
+[0;32m[2025-11-03 20:23:48][0m 
+[0;32m[2025-11-03 20:23:48][0m ==========================================================================
+[0;32m[2025-11-03 20:23:48][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-11-03 20:23:48][0m ==========================================================================
+[0;32m[2025-11-03 20:23:48][0m 
+[0;32m[2025-11-03 20:23:48][0m Model: [0;36mopus[0m
+[0;32m[2025-11-03 20:23:48][0m Issue: #132
+[0;32m[2025-11-03 20:23:48][0m Prompt saved to: /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:23:48][0m 
+[0;32m[2025-11-03 20:23:48][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-11-03 20:23:48][0m 
+[0;32m[2025-11-03 20:23:48][0m Quick copy command:
+[0;34m[2025-11-03 20:23:48] INFO:[0m   cat /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:23:48][0m 
+[0;32m[2025-11-03 20:23:48][0m ==========================================================================
+[0;32m[2025-11-03 20:23:48][0m 
+[0;32m[2025-11-03 20:23:48][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-11-03 20:23:48][0m press ENTER to continue with PR creation...
+[0;31m[2025-11-03 20:23:48] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-11-03 20:23:48] WARN:[0m Checking commit log...
+[0;31m[2025-11-03 20:23:48] ERROR:[0m No commits found on this branch
+[0;31m[2025-11-03 20:23:48] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-11-03 20:23:48][0m Lock released
+[0;32m[2025-11-03 20:23:58][0m ================================================================================
+[0;32m[2025-11-03 20:23:58][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-11-03 20:23:58][0m ================================================================================
+[0;34m[2025-11-03 20:23:58] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-11-03 20:23:58] MODEL:[0m Model: opus
+[0;32m[2025-11-03 20:23:58][0m ================================================================================
+[0;34m[2025-11-03 20:23:58] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-11-03 20:23:58][0m Lock acquired (PID: 117811)
+[0;34m[2025-11-03 20:23:58] INFO:[0m Checking for open pull requests...
+[0;32m[2025-11-03 20:23:58][0m No open PRs found
+[0;32m[2025-11-03 20:23:58][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-11-03 20:23:58] INFO:[0m Updating main branch...
+[0;34m[2025-11-03 20:23:59] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-11-03 20:23:59] INFO:[0m Fetching open issues...
+[0;34m[2025-11-03 20:24:00] INFO:[0m Found 17 open issue(s)
+[0;34m[2025-11-03 20:24:00] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-11-03 20:24:00][0m 
+[0;32m[2025-11-03 20:24:00][0m ==========================================================================
+[0;32m[2025-11-03 20:24:00][0m SELECTED ISSUE
+[0;32m[2025-11-03 20:24:00][0m ==========================================================================
+[0;32m[2025-11-03 20:24:00][0m   Number: #132
+[0;32m[2025-11-03 20:24:00][0m   Title: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;32m[2025-11-03 20:24:00][0m   Labels: documentation, enhancement
+[0;32m[2025-11-03 20:24:00][0m   Score: 6
+[0;32m[2025-11-03 20:24:00][0m   Model: opus
+[0;32m[2025-11-03 20:24:00][0m ==========================================================================
+[0;32m[2025-11-03 20:24:00][0m 
+[0;34m[2025-11-03 20:24:00] INFO:[0m Creating branch: claudeflow-251103-2024
+[0;34m[2025-11-03 20:24:00] INFO:[0m Working on Issue #132: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;36m[2025-11-03 20:24:00] MODEL:[0m Using model: opus
+[0;34m[2025-11-03 20:24:00] INFO:[0m Issue details retrieved. Length: 7119 characters
+[0;32m[2025-11-03 20:24:00][0m 
+[0;32m[2025-11-03 20:24:00][0m ==========================================================================
+[0;32m[2025-11-03 20:24:00][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-11-03 20:24:00][0m ==========================================================================
+[0;32m[2025-11-03 20:24:00][0m 
+[0;32m[2025-11-03 20:24:00][0m Model: [0;36mopus[0m
+[0;32m[2025-11-03 20:24:00][0m Issue: #132
+[0;32m[2025-11-03 20:24:00][0m Prompt saved to: /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:24:00][0m 
+[0;32m[2025-11-03 20:24:00][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-11-03 20:24:00][0m 
+[0;32m[2025-11-03 20:24:00][0m Quick copy command:
+[0;34m[2025-11-03 20:24:00] INFO:[0m   cat /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:24:00][0m 
+[0;32m[2025-11-03 20:24:00][0m ==========================================================================
+[0;32m[2025-11-03 20:24:00][0m 
+[0;32m[2025-11-03 20:24:00][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-11-03 20:24:00][0m press ENTER to continue with PR creation...
+[0;31m[2025-11-03 20:24:00] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-11-03 20:24:00] WARN:[0m Checking commit log...
+[0;31m[2025-11-03 20:24:00] ERROR:[0m No commits found on this branch
+[0;31m[2025-11-03 20:24:00] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-11-03 20:24:00][0m Lock released
+[0;32m[2025-11-03 20:24:40][0m ================================================================================
+[0;32m[2025-11-03 20:24:40][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-11-03 20:24:40][0m ================================================================================
+[0;34m[2025-11-03 20:24:40] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-11-03 20:24:40] MODEL:[0m Model: opus
+[0;32m[2025-11-03 20:24:40][0m ================================================================================
+[0;34m[2025-11-03 20:24:40] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-11-03 20:24:40][0m Lock acquired (PID: 118151)
+[0;34m[2025-11-03 20:24:40] INFO:[0m Checking for open pull requests...
+[0;32m[2025-11-03 20:24:41][0m No open PRs found
+[0;32m[2025-11-03 20:24:41][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-11-03 20:24:41] INFO:[0m Updating main branch...
+[0;34m[2025-11-03 20:24:41] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-11-03 20:24:42] INFO:[0m Fetching open issues...
+[0;34m[2025-11-03 20:24:42] INFO:[0m Found 17 open issue(s)
+[0;34m[2025-11-03 20:24:42] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-11-03 20:24:42][0m 
+[0;32m[2025-11-03 20:24:42][0m ==========================================================================
+[0;32m[2025-11-03 20:24:42][0m SELECTED ISSUE
+[0;32m[2025-11-03 20:24:42][0m ==========================================================================
+[0;32m[2025-11-03 20:24:42][0m   Number: #132
+[0;32m[2025-11-03 20:24:42][0m   Title: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;32m[2025-11-03 20:24:42][0m   Labels: documentation, enhancement
+[0;32m[2025-11-03 20:24:42][0m   Score: 6
+[0;32m[2025-11-03 20:24:42][0m   Model: opus
+[0;32m[2025-11-03 20:24:42][0m ==========================================================================
+[0;32m[2025-11-03 20:24:42][0m 
+[0;34m[2025-11-03 20:24:42] INFO:[0m Creating branch: claudeflow-251103-2024
+[0;34m[2025-11-03 20:24:42] INFO:[0m Working on Issue #132: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;36m[2025-11-03 20:24:42] MODEL:[0m Using model: opus
+[0;34m[2025-11-03 20:24:43] INFO:[0m Issue details retrieved. Length: 7119 characters
+[0;32m[2025-11-03 20:24:43][0m 
+[0;32m[2025-11-03 20:24:43][0m ==========================================================================
+[0;32m[2025-11-03 20:24:43][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-11-03 20:24:43][0m ==========================================================================
+[0;32m[2025-11-03 20:24:43][0m 
+[0;32m[2025-11-03 20:24:43][0m Model: [0;36mopus[0m
+[0;32m[2025-11-03 20:24:43][0m Issue: #132
+[0;32m[2025-11-03 20:24:43][0m Prompt saved to: /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:24:43][0m 
+[0;32m[2025-11-03 20:24:43][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-11-03 20:24:43][0m 
+[0;32m[2025-11-03 20:24:43][0m Quick copy command:
+[0;34m[2025-11-03 20:24:43] INFO:[0m   cat /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:24:43][0m 
+[0;32m[2025-11-03 20:24:43][0m ==========================================================================
+[0;32m[2025-11-03 20:24:43][0m 
+[0;32m[2025-11-03 20:24:43][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-11-03 20:24:43][0m press ENTER to continue with PR creation...
+[0;31m[2025-11-03 20:24:43] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-11-03 20:24:43] WARN:[0m Checking commit log...
+[0;31m[2025-11-03 20:24:43] ERROR:[0m No commits found on this branch
+[0;31m[2025-11-03 20:24:43] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-11-03 20:24:43][0m Lock released
+[0;32m[2025-11-03 20:31:17][0m ================================================================================
+[0;32m[2025-11-03 20:31:17][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-11-03 20:31:17][0m ================================================================================
+[0;34m[2025-11-03 20:31:17] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-11-03 20:31:17] MODEL:[0m Model: opus
+[0;32m[2025-11-03 20:31:17][0m ================================================================================
+[0;34m[2025-11-03 20:31:17] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-11-03 20:31:17][0m Lock acquired (PID: 118627)
+[0;34m[2025-11-03 20:31:17] INFO:[0m Checking for open pull requests...
+[0;32m[2025-11-03 20:31:17][0m No open PRs found
+[0;32m[2025-11-03 20:31:17][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-11-03 20:31:17] INFO:[0m Updating main branch...
+[0;34m[2025-11-03 20:31:18] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-11-03 20:31:18] INFO:[0m Fetching open issues...
+[0;34m[2025-11-03 20:31:19] INFO:[0m Found 17 open issue(s)
+[0;34m[2025-11-03 20:31:19] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-11-03 20:31:19][0m 
+[0;32m[2025-11-03 20:31:19][0m ==========================================================================
+[0;32m[2025-11-03 20:31:19][0m SELECTED ISSUE
+[0;32m[2025-11-03 20:31:19][0m ==========================================================================
+[0;32m[2025-11-03 20:31:19][0m   Number: #132
+[0;32m[2025-11-03 20:31:19][0m   Title: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;32m[2025-11-03 20:31:19][0m   Labels: documentation, enhancement
+[0;32m[2025-11-03 20:31:19][0m   Score: 6
+[0;32m[2025-11-03 20:31:19][0m   Model: opus
+[0;32m[2025-11-03 20:31:19][0m ==========================================================================
+[0;32m[2025-11-03 20:31:19][0m 
+[0;34m[2025-11-03 20:31:19] INFO:[0m Creating branch: claudeflow-251103-203119
+[0;34m[2025-11-03 20:31:19] INFO:[0m Working on Issue #132: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;36m[2025-11-03 20:31:19] MODEL:[0m Using model: opus
+[0;34m[2025-11-03 20:31:19] INFO:[0m Issue details retrieved. Length: 7119 characters
+[0;32m[2025-11-03 20:31:19][0m 
+[0;32m[2025-11-03 20:31:19][0m ==========================================================================
+[0;32m[2025-11-03 20:31:19][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-11-03 20:31:19][0m ==========================================================================
+[0;32m[2025-11-03 20:31:19][0m 
+[0;32m[2025-11-03 20:31:19][0m Model: [0;36mopus[0m
+[0;32m[2025-11-03 20:31:19][0m Issue: #132
+[0;32m[2025-11-03 20:31:19][0m Prompt saved to: /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:31:19][0m 
+[0;32m[2025-11-03 20:31:19][0m Please run Claude Code and paste the prompt from the file above.
+[0;32m[2025-11-03 20:31:19][0m 
+[0;32m[2025-11-03 20:31:19][0m Quick copy command:
+[0;34m[2025-11-03 20:31:19] INFO:[0m   cat /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:31:19][0m 
+[0;32m[2025-11-03 20:31:19][0m ==========================================================================
+[0;32m[2025-11-03 20:31:19][0m 
+[0;32m[2025-11-03 20:31:19][0m After Claude Code completes the work and commits changes,
+[0;32m[2025-11-03 20:31:19][0m press ENTER to continue with PR creation...
+[0;31m[2025-11-03 20:31:19] ERROR:[0m No changes detected. Did Claude Code make commits?
+[1;33m[2025-11-03 20:31:19] WARN:[0m Checking commit log...
+[0;31m[2025-11-03 20:31:19] ERROR:[0m No commits found on this branch
+[0;31m[2025-11-03 20:31:19] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-11-03 20:31:19][0m Lock released
+[0;32m[2025-11-03 20:37:20][0m ================================================================================
+[0;32m[2025-11-03 20:37:20][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-11-03 20:37:20][0m ================================================================================
+[0;34m[2025-11-03 20:37:20] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-11-03 20:37:20] MODEL:[0m Model: opus
+[0;34m[2025-11-03 20:37:20] INFO:[0m Mode: AUTOMATED
+[0;32m[2025-11-03 20:37:20][0m ================================================================================
+[0;34m[2025-11-03 20:37:20] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-11-03 20:37:20][0m Lock acquired (PID: 119133)
+[0;34m[2025-11-03 20:37:20] INFO:[0m Checking for open pull requests...
+[0;32m[2025-11-03 20:37:20][0m No open PRs found
+[0;32m[2025-11-03 20:37:20][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-11-03 20:37:20] INFO:[0m Updating main branch...
+[0;34m[2025-11-03 20:37:21] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-11-03 20:37:21] INFO:[0m Fetching open issues...
+[0;34m[2025-11-03 20:37:22] INFO:[0m Found 17 open issue(s)
+[0;34m[2025-11-03 20:37:22] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-11-03 20:37:22][0m 
+[0;32m[2025-11-03 20:37:22][0m ==========================================================================
+[0;32m[2025-11-03 20:37:22][0m SELECTED ISSUE
+[0;32m[2025-11-03 20:37:22][0m ==========================================================================
+[0;32m[2025-11-03 20:37:22][0m   Number: #132
+[0;32m[2025-11-03 20:37:22][0m   Title: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;32m[2025-11-03 20:37:22][0m   Labels: documentation, enhancement
+[0;32m[2025-11-03 20:37:22][0m   Score: 6
+[0;32m[2025-11-03 20:37:22][0m   Model: opus
+[0;32m[2025-11-03 20:37:22][0m ==========================================================================
+[0;32m[2025-11-03 20:37:22][0m 
+[0;34m[2025-11-03 20:37:22] INFO:[0m Creating branch: claudeflow-251103-203722
+[0;34m[2025-11-03 20:37:22] INFO:[0m Working on Issue #132: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;36m[2025-11-03 20:37:22] MODEL:[0m Using model: opus
+[0;34m[2025-11-03 20:37:22] INFO:[0m Issue details retrieved. Length: 7119 characters
+[0;32m[2025-11-03 20:37:22][0m 
+[0;32m[2025-11-03 20:37:22][0m ==========================================================================
+[0;32m[2025-11-03 20:37:22][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-11-03 20:37:22][0m ==========================================================================
+[0;32m[2025-11-03 20:37:22][0m 
+[0;32m[2025-11-03 20:37:22][0m Model: [0;36mopus[0m
+[0;32m[2025-11-03 20:37:22][0m Issue: #132
+[0;32m[2025-11-03 20:37:22][0m Prompt saved to: /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:37:22][0m 
+[0;34m[2025-11-03 20:37:22] INFO:[0m Running in AUTOMATED mode - calling Claude CLI directly...
+[0;32m[2025-11-03 20:37:22][0m 
+[0;34m[2025-11-03 20:37:22] INFO:[0m Executing Claude CLI with opus model...
+[0;34m[2025-11-03 20:37:22] INFO:[0m This may take several minutes depending on the complexity...
+[0;32m[2025-11-03 20:37:22][0m 
+[0;34m[2025-11-03 20:37:22] INFO:[0m Running: claude --model opus --print --dangerously-skip-permissions
+[0;32m[2025-11-03 20:50:44][0m ================================================================================
+[0;32m[2025-11-03 20:50:44][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-11-03 20:50:44][0m ================================================================================
+[0;34m[2025-11-03 20:50:44] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-11-03 20:50:44] MODEL:[0m Model: sonnet
+[0;34m[2025-11-03 20:50:44] INFO:[0m Mode: AUTOMATED
+[0;32m[2025-11-03 20:50:44][0m ================================================================================
+[0;34m[2025-11-03 20:50:44] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-11-03 20:50:44][0m Lock acquired (PID: 119943)
+[0;34m[2025-11-03 20:50:44] INFO:[0m Checking for open pull requests...
+[0;32m[2025-11-03 20:50:44][0m No open PRs found
+[0;32m[2025-11-03 20:50:44][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-11-03 20:50:44] INFO:[0m Updating main branch...
+[0;34m[2025-11-03 20:50:45] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-11-03 20:50:45] INFO:[0m Fetching open issues...
+[0;34m[2025-11-03 20:50:46] INFO:[0m Found 17 open issue(s)
+[0;34m[2025-11-03 20:50:46] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-11-03 20:50:46][0m 
+[0;32m[2025-11-03 20:50:46][0m ==========================================================================
+[0;32m[2025-11-03 20:50:46][0m SELECTED ISSUE
+[0;32m[2025-11-03 20:50:46][0m ==========================================================================
+[0;32m[2025-11-03 20:50:46][0m   Number: #132
+[0;32m[2025-11-03 20:50:46][0m   Title: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;32m[2025-11-03 20:50:46][0m   Labels: documentation, enhancement
+[0;32m[2025-11-03 20:50:46][0m   Score: 6
+[0;32m[2025-11-03 20:50:46][0m   Model: sonnet
+[0;32m[2025-11-03 20:50:46][0m ==========================================================================
+[0;32m[2025-11-03 20:50:46][0m 
+[0;34m[2025-11-03 20:50:46] INFO:[0m Creating branch: claudeflow-251103-205046
+[0;34m[2025-11-03 20:50:46] INFO:[0m Working on Issue #132: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;36m[2025-11-03 20:50:46] MODEL:[0m Using model: sonnet
+[0;34m[2025-11-03 20:50:46] INFO:[0m Issue details retrieved. Length: 7119 characters
+[0;32m[2025-11-03 20:50:46][0m 
+[0;32m[2025-11-03 20:50:46][0m ==========================================================================
+[0;32m[2025-11-03 20:50:46][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-11-03 20:50:46][0m ==========================================================================
+[0;32m[2025-11-03 20:50:46][0m 
+[0;32m[2025-11-03 20:50:46][0m Model: [0;36msonnet[0m
+[0;32m[2025-11-03 20:50:46][0m Issue: #132
+[0;32m[2025-11-03 20:50:46][0m Prompt saved to: /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:50:46][0m 
+[0;34m[2025-11-03 20:50:46] INFO:[0m Running in AUTOMATED mode - calling Claude CLI directly...
+[0;32m[2025-11-03 20:50:47][0m 
+[0;34m[2025-11-03 20:50:47] INFO:[0m Executing Claude CLI with sonnet model...
+[0;34m[2025-11-03 20:50:47] INFO:[0m This may take several minutes depending on the complexity...
+[0;34m[2025-11-03 20:50:47] INFO:[0m Streaming output in real-time...
+[0;32m[2025-11-03 20:50:47][0m 
+[0;34m[2025-11-03 20:50:47] INFO:[0m Running: claude --model sonnet --dangerously-skip-permissions
+[0;32m[2025-11-03 20:50:47][0m 
+[0;32m[2025-11-03 20:50:47][0m ==========================================================================
+[0;32m[2025-11-03 20:50:47][0m CLAUDE OUTPUT (STREAMING)
+[0;32m[2025-11-03 20:50:47][0m ==========================================================================
+[0;32m[2025-11-03 20:51:55][0m ================================================================================
+[0;32m[2025-11-03 20:51:55][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-11-03 20:51:55][0m ================================================================================
+[0;34m[2025-11-03 20:51:55] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-11-03 20:51:55] MODEL:[0m Model: sonnet
+[0;34m[2025-11-03 20:51:55] INFO:[0m Mode: AUTOMATED
+[0;32m[2025-11-03 20:51:55][0m ================================================================================
+[0;34m[2025-11-03 20:51:55] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-11-03 20:51:55][0m Lock acquired (PID: 120445)
+[0;34m[2025-11-03 20:51:55] INFO:[0m Checking for open pull requests...
+[0;32m[2025-11-03 20:51:55][0m No open PRs found
+[0;32m[2025-11-03 20:51:55][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-11-03 20:51:55] INFO:[0m Updating main branch...
+[0;34m[2025-11-03 20:51:56] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-11-03 20:51:56] INFO:[0m Fetching open issues...
+[0;34m[2025-11-03 20:51:57] INFO:[0m Found 17 open issue(s)
+[0;34m[2025-11-03 20:51:57] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-11-03 20:51:57][0m 
+[0;32m[2025-11-03 20:51:57][0m ==========================================================================
+[0;32m[2025-11-03 20:51:57][0m SELECTED ISSUE
+[0;32m[2025-11-03 20:51:57][0m ==========================================================================
+[0;32m[2025-11-03 20:51:57][0m   Number: #132
+[0;32m[2025-11-03 20:51:57][0m   Title: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;32m[2025-11-03 20:51:57][0m   Labels: documentation, enhancement
+[0;32m[2025-11-03 20:51:57][0m   Score: 6
+[0;32m[2025-11-03 20:51:57][0m   Model: sonnet
+[0;32m[2025-11-03 20:51:57][0m ==========================================================================
+[0;32m[2025-11-03 20:51:57][0m 
+[0;34m[2025-11-03 20:51:57] INFO:[0m Creating branch: claudeflow-251103-205157
+[0;34m[2025-11-03 20:51:57] INFO:[0m Working on Issue #132: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;36m[2025-11-03 20:51:57] MODEL:[0m Using model: sonnet
+[0;34m[2025-11-03 20:51:57] INFO:[0m Issue details retrieved. Length: 7119 characters
+[0;32m[2025-11-03 20:51:57][0m 
+[0;32m[2025-11-03 20:51:57][0m ==========================================================================
+[0;32m[2025-11-03 20:51:57][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-11-03 20:51:57][0m ==========================================================================
+[0;32m[2025-11-03 20:51:57][0m 
+[0;32m[2025-11-03 20:51:57][0m Model: [0;36msonnet[0m
+[0;32m[2025-11-03 20:51:57][0m Issue: #132
+[0;32m[2025-11-03 20:51:57][0m Prompt saved to: /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:51:57][0m 
+[0;34m[2025-11-03 20:51:57] INFO:[0m Running in AUTOMATED mode - calling Claude CLI directly...
+[0;32m[2025-11-03 20:51:57][0m 
+[0;34m[2025-11-03 20:51:57] INFO:[0m Executing Claude CLI with sonnet model...
+[0;34m[2025-11-03 20:51:57] INFO:[0m This may take several minutes depending on the complexity...
+[0;34m[2025-11-03 20:51:57] INFO:[0m Streaming output in real-time...
+[0;32m[2025-11-03 20:51:57][0m 
+[0;34m[2025-11-03 20:51:57] INFO:[0m Running: claude --model sonnet --print --output-format stream-json --dangerously-skip-permissions
+[0;32m[2025-11-03 20:51:57][0m 
+[0;32m[2025-11-03 20:51:57][0m ==========================================================================
+[0;32m[2025-11-03 20:51:57][0m CLAUDE OUTPUT (STREAMING)
+[0;32m[2025-11-03 20:51:57][0m ==========================================================================
+Error: When using --print, --output-format=stream-json requires --verbose
+[0;32m[2025-11-03 20:52:01][0m 
+[0;32m[2025-11-03 20:52:01][0m ==========================================================================
+[0;31m[2025-11-03 20:52:01] ERROR:[0m Claude CLI execution failed
+[0;31m[2025-11-03 20:52:01] ERROR:[0m See full output at: /tmp/claude_output_132.txt
+[0;31m[2025-11-03 20:52:01] ERROR:[0m Failed to complete work on issue
+[0;32m[2025-11-03 20:52:01][0m Lock released
+[0;32m[2025-11-03 20:52:31][0m ================================================================================
+[0;32m[2025-11-03 20:52:31][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-11-03 20:52:31][0m ================================================================================
+[0;34m[2025-11-03 20:52:31] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-11-03 20:52:31] MODEL:[0m Model: sonnet
+[0;34m[2025-11-03 20:52:31] INFO:[0m Mode: AUTOMATED
+[0;32m[2025-11-03 20:52:31][0m ================================================================================
+[0;34m[2025-11-03 20:52:31] INFO:[0m Attempting to acquire lock...
+[0;32m[2025-11-03 20:52:31][0m Lock acquired (PID: 120859)
+[0;34m[2025-11-03 20:52:31] INFO:[0m Checking for open pull requests...
+[0;32m[2025-11-03 20:52:31][0m No open PRs found
+[0;32m[2025-11-03 20:52:31][0m No open PRs found. Proceeding with issue analysis...
+[0;34m[2025-11-03 20:52:31] INFO:[0m Updating main branch...
+[0;34m[2025-11-03 20:52:32] INFO:[0m Checking which issues already have PRs...
+[0;34m[2025-11-03 20:52:32] INFO:[0m Fetching open issues...
+[0;34m[2025-11-03 20:52:33] INFO:[0m Found 17 open issue(s)
+[0;34m[2025-11-03 20:52:33] INFO:[0m Analyzing issues with heuristic scoring...
+[0;32m[2025-11-03 20:52:33][0m 
+[0;32m[2025-11-03 20:52:33][0m ==========================================================================
+[0;32m[2025-11-03 20:52:33][0m SELECTED ISSUE
+[0;32m[2025-11-03 20:52:33][0m ==========================================================================
+[0;32m[2025-11-03 20:52:33][0m   Number: #132
+[0;32m[2025-11-03 20:52:33][0m   Title: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;32m[2025-11-03 20:52:33][0m   Labels: documentation, enhancement
+[0;32m[2025-11-03 20:52:33][0m   Score: 6
+[0;32m[2025-11-03 20:52:33][0m   Model: sonnet
+[0;32m[2025-11-03 20:52:33][0m ==========================================================================
+[0;32m[2025-11-03 20:52:33][0m 
+[0;34m[2025-11-03 20:52:33] INFO:[0m Creating branch: claudeflow-251103-205233
+[0;34m[2025-11-03 20:52:33] INFO:[0m Working on Issue #132: GUI Modernization Roadmap - Alternative to Flutter Refactoring (#125)
+[0;36m[2025-11-03 20:52:33] MODEL:[0m Using model: sonnet
+[0;34m[2025-11-03 20:52:33] INFO:[0m Issue details retrieved. Length: 7119 characters
+[0;32m[2025-11-03 20:52:33][0m 
+[0;32m[2025-11-03 20:52:33][0m ==========================================================================
+[0;32m[2025-11-03 20:52:33][0m CLAUDE CODE PROMPT GENERATED
+[0;32m[2025-11-03 20:52:33][0m ==========================================================================
+[0;32m[2025-11-03 20:52:33][0m 
+[0;32m[2025-11-03 20:52:33][0m Model: [0;36msonnet[0m
+[0;32m[2025-11-03 20:52:33][0m Issue: #132
+[0;32m[2025-11-03 20:52:33][0m Prompt saved to: /tmp/claude_prompt_issue_132.txt
+[0;32m[2025-11-03 20:52:33][0m 
+[0;34m[2025-11-03 20:52:33] INFO:[0m Running in AUTOMATED mode - calling Claude CLI directly...
+[0;32m[2025-11-03 20:52:33][0m 
+[0;34m[2025-11-03 20:52:33] INFO:[0m Executing Claude CLI with sonnet model...
+[0;34m[2025-11-03 20:52:33] INFO:[0m This may take several minutes depending on the complexity...
+[0;34m[2025-11-03 20:52:33] INFO:[0m Streaming output in real-time...
+[0;32m[2025-11-03 20:52:33][0m 
+[0;34m[2025-11-03 20:52:33] INFO:[0m Running: claude --model sonnet --print --output-format stream-json --verbose --dangerously-skip-permissions
+[0;32m[2025-11-03 20:52:33][0m 
+[0;32m[2025-11-03 20:52:33][0m ==========================================================================
+[0;32m[2025-11-03 20:52:33][0m CLAUDE OUTPUT (STREAMING)
+[0;32m[2025-11-03 20:52:33][0m ==========================================================================
+[0;32m[2025-11-03 21:00:48][0m 
+[0;32m[2025-11-03 21:00:48][0m ==========================================================================
+[0;32m[2025-11-03 21:00:48][0m Claude CLI execution completed successfully
+[0;34m[2025-11-03 21:00:48] INFO:[0m Full output saved to: /tmp/claude_output_132.txt
+[0;32m[2025-11-03 21:00:50][0m 
+[0;32m[2025-11-03 21:00:50][0m Waiting for git operations to complete...
+[0;34m[2025-11-03 21:00:53] INFO:[0m Verifying commits...
+[0;32m[2025-11-03 21:00:53][0m Changes detected on branch
+[0;32m[2025-11-03 21:00:53][0m Commits found:
+213f60f feat: Implement GUI Modernization Roadmap - AJAX + Toast Notifications [Issue #132]
+[0;34m[2025-11-03 21:00:53] INFO:[0m Creating pull request for Issue #132
+[0;34m[2025-11-03 21:00:53] INFO:[0m Pushing branch to remote...
+[0;34m[2025-11-03 21:00:53] INFO:[0m Creating pull request...
+[0;32m[2025-11-03 21:00:54][0m Pull request created: 
+[0;32m[2025-11-03 21:00:54][0m 
+[0;32m[2025-11-03 21:00:54][0m ================================================================================
+[0;32m[2025-11-03 21:00:54][0m SUCCESS!
+[0;32m[2025-11-03 21:00:54][0m ================================================================================
+[0;32m[2025-11-03 21:00:54][0m   Issue: #132
+[0;32m[2025-11-03 21:00:54][0m   Branch: [0;34m[2025-11-03 20:52:33] INFO:[0m Creating branch: claudeflow-251103-205233
+claudeflow-251103-205233
+[0;32m[2025-11-03 21:00:54][0m   Model: sonnet
+[0;32m[2025-11-03 21:00:54][0m   PR: [0;34m[2025-11-03 21:00:53] INFO:[0m Creating pull request for Issue #132
+[0;34m[2025-11-03 21:00:53] INFO:[0m Pushing branch to remote...
+[0;34m[2025-11-03 21:00:53] INFO:[0m Creating pull request...
+[0;32m[2025-11-03 21:00:54][0m Pull request created: 
+[0;32m[2025-11-03 21:00:54][0m ================================================================================
+[0;32m[2025-11-03 21:00:54][0m 
+[0;32m[2025-11-03 21:00:54][0m Lock released
+[0;32m[2025-11-04 05:13:01][0m ================================================================================
+[0;32m[2025-11-04 05:13:01][0m issue2pr.sh - Automated Issue to Pull Request Workflow
+[0;32m[2025-11-04 05:13:01][0m ================================================================================
+[0;34m[2025-11-04 05:13:01] INFO:[0m Repository: /home/admin/eiou/ai-dev/github/eiou-docker
+[0;36m[2025-11-04 05:13:01] MODEL:[0m Model: opus
+[0;32m[2025-11-04 05:13:01][0m ================================================================================
+[0;34m[2025-11-04 05:13:01] INFO:[0m Attempting to acquire lock...
+[0;34m[2025-11-04 05:13:02] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:02] INFO:[0m Waiting for lock... (0/300 seconds)
+[0;34m[2025-11-04 05:13:07] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:07] INFO:[0m Waiting for lock... (5/300 seconds)
+[0;34m[2025-11-04 05:13:12] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:12] INFO:[0m Waiting for lock... (10/300 seconds)
+[0;34m[2025-11-04 05:13:17] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:17] INFO:[0m Waiting for lock... (15/300 seconds)
+[0;34m[2025-11-04 05:13:22] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:22] INFO:[0m Waiting for lock... (20/300 seconds)
+[0;34m[2025-11-04 05:13:27] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:27] INFO:[0m Waiting for lock... (25/300 seconds)
+[0;34m[2025-11-04 05:13:32] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:32] INFO:[0m Waiting for lock... (30/300 seconds)
+[0;34m[2025-11-04 05:13:37] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:37] INFO:[0m Waiting for lock... (35/300 seconds)
+[0;34m[2025-11-04 05:13:42] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:42] INFO:[0m Waiting for lock... (40/300 seconds)
+[0;34m[2025-11-04 05:13:47] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:47] INFO:[0m Waiting for lock... (45/300 seconds)
+[0;34m[2025-11-04 05:13:52] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:52] INFO:[0m Waiting for lock... (50/300 seconds)
+[0;34m[2025-11-04 05:13:57] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:13:57] INFO:[0m Waiting for lock... (55/300 seconds)
+[0;34m[2025-11-04 05:14:02] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:02] INFO:[0m Waiting for lock... (60/300 seconds)
+[0;34m[2025-11-04 05:14:07] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:07] INFO:[0m Waiting for lock... (65/300 seconds)
+[0;34m[2025-11-04 05:14:12] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:12] INFO:[0m Waiting for lock... (70/300 seconds)
+[0;34m[2025-11-04 05:14:17] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:17] INFO:[0m Waiting for lock... (75/300 seconds)
+[0;34m[2025-11-04 05:14:22] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:22] INFO:[0m Waiting for lock... (80/300 seconds)
+[0;34m[2025-11-04 05:14:27] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:27] INFO:[0m Waiting for lock... (85/300 seconds)
+[0;34m[2025-11-04 05:14:32] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:32] INFO:[0m Waiting for lock... (90/300 seconds)
+[0;34m[2025-11-04 05:14:37] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:37] INFO:[0m Waiting for lock... (95/300 seconds)
+[0;34m[2025-11-04 05:14:42] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:42] INFO:[0m Waiting for lock... (100/300 seconds)
+[0;34m[2025-11-04 05:14:47] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:47] INFO:[0m Waiting for lock... (105/300 seconds)
+[0;34m[2025-11-04 05:14:52] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:52] INFO:[0m Waiting for lock... (110/300 seconds)
+[0;34m[2025-11-04 05:14:57] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:14:57] INFO:[0m Waiting for lock... (115/300 seconds)
+[0;34m[2025-11-04 05:15:02] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:02] INFO:[0m Waiting for lock... (120/300 seconds)
+[0;34m[2025-11-04 05:15:07] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:07] INFO:[0m Waiting for lock... (125/300 seconds)
+[0;34m[2025-11-04 05:15:12] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:12] INFO:[0m Waiting for lock... (130/300 seconds)
+[0;34m[2025-11-04 05:15:17] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:17] INFO:[0m Waiting for lock... (135/300 seconds)
+[0;34m[2025-11-04 05:15:22] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:22] INFO:[0m Waiting for lock... (140/300 seconds)
+[0;34m[2025-11-04 05:15:27] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:27] INFO:[0m Waiting for lock... (145/300 seconds)
+[0;34m[2025-11-04 05:15:32] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:32] INFO:[0m Waiting for lock... (150/300 seconds)
+[0;34m[2025-11-04 05:15:37] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:37] INFO:[0m Waiting for lock... (155/300 seconds)
+[0;34m[2025-11-04 05:15:42] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:42] INFO:[0m Waiting for lock... (160/300 seconds)
+[0;34m[2025-11-04 05:15:47] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:47] INFO:[0m Waiting for lock... (165/300 seconds)
+[0;34m[2025-11-04 05:15:52] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:52] INFO:[0m Waiting for lock... (170/300 seconds)
+[0;34m[2025-11-04 05:15:57] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:15:57] INFO:[0m Waiting for lock... (175/300 seconds)
+[0;34m[2025-11-04 05:16:02] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:02] INFO:[0m Waiting for lock... (180/300 seconds)
+[0;34m[2025-11-04 05:16:07] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:07] INFO:[0m Waiting for lock... (185/300 seconds)
+[0;34m[2025-11-04 05:16:12] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:12] INFO:[0m Waiting for lock... (190/300 seconds)
+[0;34m[2025-11-04 05:16:17] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:17] INFO:[0m Waiting for lock... (195/300 seconds)
+[0;34m[2025-11-04 05:16:22] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:22] INFO:[0m Waiting for lock... (200/300 seconds)
+[0;34m[2025-11-04 05:16:27] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:27] INFO:[0m Waiting for lock... (205/300 seconds)
+[0;34m[2025-11-04 05:16:32] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:32] INFO:[0m Waiting for lock... (210/300 seconds)
+[0;34m[2025-11-04 05:16:37] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:37] INFO:[0m Waiting for lock... (215/300 seconds)
+[0;34m[2025-11-04 05:16:42] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:42] INFO:[0m Waiting for lock... (220/300 seconds)
+[0;34m[2025-11-04 05:16:47] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:47] INFO:[0m Waiting for lock... (225/300 seconds)
+[0;34m[2025-11-04 05:16:52] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:52] INFO:[0m Waiting for lock... (230/300 seconds)
+[0;34m[2025-11-04 05:16:57] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:16:57] INFO:[0m Waiting for lock... (235/300 seconds)
+[0;34m[2025-11-04 05:17:02] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:02] INFO:[0m Waiting for lock... (240/300 seconds)
+[0;34m[2025-11-04 05:17:08] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:08] INFO:[0m Waiting for lock... (245/300 seconds)
+[0;34m[2025-11-04 05:17:13] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:13] INFO:[0m Waiting for lock... (250/300 seconds)
+[0;34m[2025-11-04 05:17:18] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:18] INFO:[0m Waiting for lock... (255/300 seconds)
+[0;34m[2025-11-04 05:17:23] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:23] INFO:[0m Waiting for lock... (260/300 seconds)
+[0;34m[2025-11-04 05:17:28] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:28] INFO:[0m Waiting for lock... (265/300 seconds)
+[0;34m[2025-11-04 05:17:33] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:33] INFO:[0m Waiting for lock... (270/300 seconds)
+[0;34m[2025-11-04 05:17:38] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:38] INFO:[0m Waiting for lock... (275/300 seconds)
+[0;34m[2025-11-04 05:17:43] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:43] INFO:[0m Waiting for lock... (280/300 seconds)
+[0;34m[2025-11-04 05:17:48] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:48] INFO:[0m Waiting for lock... (285/300 seconds)
+[0;34m[2025-11-04 05:17:53] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:53] INFO:[0m Waiting for lock... (290/300 seconds)
+[0;34m[2025-11-04 05:17:58] INFO:[0m Lock held by PID 127655 (working on: /home/admin/eiou/ai-dev/github/a-website-dev)
+[0;34m[2025-11-04 05:17:58] INFO:[0m Waiting for lock... (295/300 seconds)
+[0;31m[2025-11-04 05:18:03] ERROR:[0m Failed to acquire lock after 300 seconds
+[0;31m[2025-11-04 05:18:03] ERROR:[0m Failed to acquire lock. Exiting.
