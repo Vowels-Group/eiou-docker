@@ -35,7 +35,7 @@
                 <span style="flex: 1; word-break: break-all;"><?php echo $user->has('hostname') ? $user->getHttpAddress() : 'Not available'; ?></span>
                 <?php if ($user->has('hostname')): ?>
                     <textarea class="copy-textarea" readonly style="display: none;" id="http-address"><?php echo $user->getHttpAddress(); ?></textarea>
-                    <button class="btn btn-sm btn-outline" onclick="document.getElementById('http-address').style.display='block'; document.getElementById('tor-address').select();" title="Copy Http address">
+                    <button class="btn btn-sm btn-outline" onclick="document.getElementById('http-address').style.display='block'; document.getElementById('http-address').select();" title="Copy Http address">
                         <i class="fas fa-copy"></i> Copy
                     </button>
                 <?php endif; ?>
