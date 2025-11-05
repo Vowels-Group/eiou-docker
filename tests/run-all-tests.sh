@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Automated test runner for EIOU Docker test suite
 # Runs all tests in correct dependency order without user interaction
@@ -16,7 +16,7 @@ CHECK='\u2714'
 CROSS='\u274c'
 
 # Load base configuration
-source './tests/baseconfig/config.sh'
+. './tests/baseconfig/config.sh'
 
 # Check command line argument
 if [ $# -eq 0 ]; then
@@ -60,7 +60,7 @@ run_test() {
 
     # Run the test and capture its exit status
     set +e  # Temporarily allow errors
-    source "$test_file"
+    . "$test_file"
     local test_exit_code=$?
     set -e
 
@@ -96,7 +96,7 @@ printf "\n"
 
 # Step 1: Build the topology
 printf "${GREEN}[Step 1/3]${NC} Building topology '${BUILD_NAME}'...\n"
-source "$BUILD_FILE"
+. "$BUILD_FILE"
 
 if [ $? -ne 0 ]; then
     printf "${RED}${CROSS} Build failed!${NC}\n"
