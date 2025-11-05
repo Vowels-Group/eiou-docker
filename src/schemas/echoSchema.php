@@ -44,7 +44,8 @@ function returnContactDetails($data) {
     $currencyUtility = $utilityContainer->getCurrencyUtility();
     return "Contact Details:\n" .
            "---------------\n" .
-           "Address: " . $data['address'] . "\n" .
+           "Http Address: " . $data['htt['] ?? 'Http address not available' . "\n" .
+           "Tor Address: " . $data['tor'] ?? 'Tor address not available'. "\n" .
            "Name: " . ($data['name'] ?? 'N/A') . "\n" .
            "Public Key: " . "..." . substr($data['pubkey'], 51, 25) . "...\n" .              
            "Fee: " .  $currencyUtility->convertCentsToDollars(($data['fee_percent'] ?? '0.00') ) . "%\n" .
@@ -104,14 +105,16 @@ function returnContactSearchResults ($data) {
     // Return contact information in a nice format
     return "Search Results:\n" .
             "--------------------------------------------\n" .
-            str_pad("Address", 56, ' ') . " | " . 
+            str_pad("Http address", 56, ' ') . " | " . 
+            str_pad("Tor address", 56, ' ') . " | " . 
             str_pad("Name", 20, ' ') . " | " . 
             str_pad("Fee %", 10, ' ') . " | " . 
             str_pad("Credit Limit", 15, ' ') . " | " . 
             "Currency\n" .
             "--------------------------------------------\n" .
             implode("\n", array_map(function($contact) {
-                return str_pad($contact['address'], 56, ' ') . " | " . 
+                return str_pad($contact['http'] ?? '', 56, ' ') . " | " . 
+                        str_pad($contact['tor'] ?? '', 56, ' ') . " | " . 
                         str_pad($contact['name'] ?? 'N/A', 20, ' ') . " | " . 
                         str_pad(($contact['fee_percent'] !== null ? UtilityServiceContainer::getInstance(Application::getInstance()->services)->getCurrencyUtility()->convertCentsToDollars($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " . 
                         str_pad(($contact['credit_limit'] !== null ? UtilityServiceContainer::getInstance(Application::getInstance()->services)->getCurrencyUtility()->convertCentsToDollars($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " . 

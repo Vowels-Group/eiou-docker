@@ -495,7 +495,7 @@ class ContactService {
      * @return bool Success status
      */
     public function blockContact(string $address): bool {
-        $addressValidation =  $this->inputValidator->validateAddress($data[2] ?? '');
+        $addressValidation =  $this->inputValidator->validateAddress($address);
         if (!$addressValidation['valid']) {
             $this->secureLogger->warning("Invalid contact address", [
                 'address' => $data[2] ?? 'empty',
@@ -516,7 +516,7 @@ class ContactService {
      * @return bool Success status
      */
     public function unblockContact(string $address): bool {
-        $addressValidation =  $this->inputValidator->validateAddress($data[2] ?? '');
+        $addressValidation =  $this->inputValidator->validateAddress($address);
         if (!$addressValidation['valid']) {
             $this->secureLogger->warning("Invalid contact address", [
                 'address' => $data[2] ?? 'empty',
@@ -538,7 +538,7 @@ class ContactService {
      * @return bool Success status
      */
     public function deleteContact(string $address): bool {
-        $addressValidation =  $this->inputValidator->validateAddress($data[2] ?? '');
+        $addressValidation =  $this->inputValidator->validateAddress($address);
         if (!$addressValidation['valid']) {
             $this->secureLogger->warning("Invalid contact address", [
                 'address' => $data[2] ?? 'empty',
