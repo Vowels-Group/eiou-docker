@@ -82,6 +82,8 @@ RUN chmod 644 /etc/eiou/src/services/utilities/*
 # GUI (wallet) folder
 RUN chmod 755 /etc/eiou/src/gui
 RUN chmod 644 /etc/eiou/src/gui/*
+RUN chmod 755 /etc/eiou/src/gui/api
+RUN chmod 644 /etc/eiou/src/gui/api/*
 RUN chmod 755 /etc/eiou/src/gui/assets
 RUN chmod 644 /etc/eiou/src/gui/assets/*
 RUN chmod 755 /etc/eiou/src/gui/assets/css
