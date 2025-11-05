@@ -19,7 +19,7 @@ class ContactRepository extends AbstractRepository {
     public function __construct(?PDO $pdo = null) {
         parent::__construct($pdo);
         $this->tableName = 'contacts';
-        $this->primaryKey = 'address';
+        $this->primaryKey = 'tor';
     }
 
     /**
@@ -333,10 +333,10 @@ class ContactRepository extends AbstractRepository {
         if ($pending_count > 0) {
             echo "\n\nYou have {$pending_count} contact request(s) pending acceptance.\n";
             foreach ($results as $contact) {
-                echo "Pending contact request from: " . $contact['address'] . "\n";
+                echo "Pending contact request from: " . $contact['http'] ?? $contact['tor'] . "\n";
                 echo "To accept this contact request, use the command:\n";
-                echo "eiou add " . $contact['address'] . " [name] [fee percent] [credit] [currency]\n";
-                echo "Example: eiou add " . $contact['address'] . " Bob 0.1 100 USD\n\n";
+                echo "eiou add " . $contact['http'] ?? $contact['tor'] . " [name] [fee percent] [credit] [currency]\n";
+                echo "Example: eiou add " . $contact['http'] ?? $contact['tor'] . " Bob 0.1 100 USD\n\n";
             }
         }
     }
@@ -582,9 +582,9 @@ class ContactRepository extends AbstractRepository {
      * Retrieve contact public key by address
      *
      * @param string $address Contact address
-     * @return array|null Array with 'pubkey' key or null
+     * @return string|null Contact's publice key or null
      */
-    public function getContactPubkey(string $address): ?array {
+    public function getContactPubkey(string $address): ?string {
         $query = "SELECT pubkey FROM {$this->tableName}";
         $query .= " WHERE http = :http OR tor = :tor";
         $stmt = $this->execute($query, [':http' => $address,':tor' => $address]);
@@ -593,7 +593,7 @@ class ContactRepository extends AbstractRepository {
             return null;
         }
 
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $result = $stmt->fetchColumn();
         return $result ?: null;
     }
 
@@ -821,7 +821,7 @@ class ContactRepository extends AbstractRepository {
 
             $query .= " WHERE pubkey = :pubkey";
             $params[':pubkey'] = $this->getContactPubkey($address);
-            
+            output("paramts:" .print_r($params,true),'SILENT');
            
             if ($this->execute($query,$params)) {
                 // If succesful update, respond of success
