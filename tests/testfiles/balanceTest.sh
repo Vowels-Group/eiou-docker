@@ -16,7 +16,7 @@ for container in "${containers[@]}"; do
     echo -e "\n\t-> Checking balance for ${container}"
 
     # Method 1: Using eiou command
-    balanceOutput=$(docker exec ${container} eiou balance 2>&1)
+    balanceOutput=$(docker exec ${container} eiou viewbalances 2>&1)
 
     # Method 2: Direct PHP query for verification
     phpBalance=$(docker exec ${container} php -r "
@@ -98,10 +98,15 @@ if [[ "$firstLink" ]]; then
     totaltests=$(( totaltests + 1 ))
 
     # Verify sender's balance decreased and receiver's increased
-    senderDiff=$(echo "$senderInitial - $senderFinal" | bc)
-    receiverDiff=$(echo "$receiverFinal - $receiverInitial" | bc)
+    # Use awk instead of bc for floating point arithmetic
+    senderDiff=$(awk "BEGIN {print $senderInitial - $senderFinal}")
+    receiverDiff=$(awk "BEGIN {print $receiverFinal - $receiverInitial}")
 
-    if [[ $(echo "$senderDiff > 0" | bc) -eq 1 ]] && [[ $(echo "$receiverDiff > 0" | bc) -eq 1 ]]; then
+    # Check if differences are positive (balances changed correctly)
+    senderChanged=$(awk "BEGIN {print ($senderDiff > 0) ? 1 : 0}")
+    receiverChanged=$(awk "BEGIN {print ($receiverDiff > 0) ? 1 : 0}")
+
+    if [[ "$senderChanged" -eq 1 ]] && [[ "$receiverChanged" -eq 1 ]]; then
         printf "Balance change verification ${GREEN}PASSED${NC}\n"
         printf "\t%s sent ~%s USD, %s received ~%s USD\n" ${sender} ${senderDiff} ${receiver} ${receiverDiff}
         passed=$(( passed + 1 ))

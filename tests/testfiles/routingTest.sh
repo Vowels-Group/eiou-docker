@@ -74,8 +74,9 @@ for routingPair in "${!routingTests[@]}"; do
                 echo \$balance ?: '0';
             " 2>/dev/null || echo "0")
 
-            balanceDiff=$(echo "$newRelayBalance - ${initialRelayBalances[$relay]}" | bc)
-            if [[ $(echo "$balanceDiff > 0" | bc) -eq 1 ]]; then
+            balanceDiff=$(awk "BEGIN {print $newRelayBalance - ${initialRelayBalances[$relay]}}")
+            balanceIncreased=$(awk "BEGIN {print ($balanceDiff > 0) ? 1 : 0}")
+            if [[ "$balanceIncreased" -eq 1 ]]; then
                 echo -e "\t   Relay ${relay} earned fee: ${balanceDiff} USD"
                 relayFeesDetected=$(( relayFeesDetected + 1 ))
             fi
@@ -168,7 +169,8 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
             echo \$stmt->fetchColumn();
         " 2>/dev/null || echo "0")
 
-        if [[ $(echo "$finalState > $initialState" | bc) -eq 1 ]]; then
+        stateIncreased=$(awk "BEGIN {print ($finalState > $initialState) ? 1 : 0}")
+        if [[ "$stateIncreased" -eq 1 ]]; then
             printf "\tEnd-to-end delivery ${GREEN}PASSED${NC} (${firstContainer} -> ${lastContainer})\n"
             passed=$(( passed + 1 ))
         else

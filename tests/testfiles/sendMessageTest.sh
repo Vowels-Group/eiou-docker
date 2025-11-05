@@ -47,10 +47,11 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
 
     # Calculate expected balance (initial + amount - fee if applicable)
     # Note: The exact fee calculation depends on the network configuration
-    expectedIncrease=$(echo "$testAmount" | bc)
+    expectedIncrease=$testAmount
 
     # Verify message was sent and balance changed
-    if [[ "$sendResult" =~ "success" ]] || [[ "$sendResult" =~ "sent" ]] || [[ $(echo "$newBalance > $initialBalance" | bc) -eq 1 ]]; then
+    balanceIncreased=$(awk "BEGIN {print ($newBalance > $initialBalance) ? 1 : 0}")
+    if [[ "$sendResult" =~ "success" ]] || [[ "$sendResult" =~ "sent" ]] || [[ "$balanceIncreased" -eq 1 ]]; then
         printf "${testname} from %s to %s ${GREEN}PASSED${NC} (Balance: %s -> %s)\n" ${containerKeys[0]} ${containerKeys[1]} ${initialBalance} ${newBalance}
         passed=$(( passed + 1 ))
     else
@@ -88,7 +89,8 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     totaltests=$(( totaltests + 1 ))
 
     # Check if multi-hop succeeded
-    if [[ "$multiHopResult" =~ "success" ]] || [[ "$multiHopResult" =~ "sent" ]] || [[ $(echo "$newBalanceD > $initialBalanceD" | bc) -eq 1 ]]; then
+    balanceIncreasedD=$(awk "BEGIN {print ($newBalanceD > $initialBalanceD) ? 1 : 0}")
+    if [[ "$multiHopResult" =~ "success" ]] || [[ "$multiHopResult" =~ "sent" ]] || [[ "$balanceIncreasedD" -eq 1 ]]; then
         printf "Multi-hop routing httpA->httpD ${GREEN}PASSED${NC} (Balance: %s -> %s)\n" ${initialBalanceD} ${newBalanceD}
         passed=$(( passed + 1 ))
     else
