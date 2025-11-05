@@ -30,7 +30,20 @@
         </div>
 
         <div class="info-item">
-            <div class="info-label">Address:</div>
+            <div class="info-label">Http Address:</div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <span style="flex: 1; word-break: break-all;"><?php echo $user->has('hostname') ? $user->getHttpAddress() : 'Not available'; ?></span>
+                <?php if ($user->has('hostname')): ?>
+                    <textarea class="copy-textarea" readonly style="display: none;" id="http-address"><?php echo $user->getHttpAddress(); ?></textarea>
+                    <button class="btn btn-sm btn-outline" onclick="document.getElementById('http-address').style.display='block'; document.getElementById('tor-address').select();" title="Copy Http address">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="info-item">
+            <div class="info-label">Tor Address:</div>
             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                 <span style="flex: 1; word-break: break-all;"><?php echo $user->has('torAddress') ? $user->getTorAddress() : 'Not available'; ?></span>
                 <?php if ($user->has('torAddress')): ?>

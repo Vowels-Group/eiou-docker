@@ -687,7 +687,8 @@ class TransactionService {
 
             $contactsWithBalances[] = [
                 'name' => $contact['name'],
-                'address' => $contact['address'],
+                'http' => $contact['http'] ?? '',
+                'tor' => $contact['tor'] ?? '',
                 'balance' =>  $balance ? $this->currencyUtility->convertCentsToDollars($balance) : $balance,
                 'fee' =>  $fee_percent ? $this->currencyUtility->convertCentsToDollars($fee_percent) : $fee_percent,
                 'credit_limit' =>  $credit_limit ? $this->currencyUtility->convertCentsToDollars($credit_limit) : $credit_limit,

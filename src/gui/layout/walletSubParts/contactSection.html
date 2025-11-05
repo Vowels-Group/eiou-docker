@@ -18,7 +18,7 @@
         <?php else: ?>
         <!-- Accepted Contacts (with Balance) -->
             <?php foreach ($acceptedContacts as $contact): ?>
-                <div class="contact-card" onclick="openEditContactModal('<?php echo htmlspecialchars($contact['address']); ?>', '<?php echo htmlspecialchars($contact['name']); ?>', '<?php echo $contact['fee']; ?>', '<?php echo $contact['credit_limit']; ?>', '<?php echo htmlspecialchars($contact['currency']); ?>')" style="cursor: pointer;">
+                <div class="contact-card" onclick="openEditContactModal('<?php if(isset($contact['http'])) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>','<?php echo htmlspecialchars($contact['name']); ?>', '<?php echo $contact['fee']; ?>', '<?php echo $contact['credit_limit']; ?>', '<?php echo htmlspecialchars($contact['currency']); ?>')" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
                         <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                     </div>
@@ -26,7 +26,8 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                         <span style="background: lightgreen; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Accepted</span>
                         <div class="contact-details">
-                            <div class="contact-address"><?php echo htmlspecialchars($transportUtility->truncateAddress($contact['address'])); ?></div>
+                            <div class="contact-address"><?php  if (isset($contact['http'])){echo htmlspecialchars($transportUtility->truncateAddress($contact['http']));} else{echo 'Http Not available';} ?></div>
+                            <div class="contact-address"><?php  if (isset($contact['tor'])){echo htmlspecialchars($transportUtility->truncateAddress($contact['tor']));} else{echo 'Tor Not available';} ?></div>            
                             <div>Balance: <span class="<?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>">
                                 <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?>
                             </span> <?php echo $contact['currency']; ?></div>
@@ -37,7 +38,7 @@
                             <form method="POST" style="flex: 1;" onclick="event.stopPropagation();">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                                 <input type="hidden" name="action" value="blockContact">
-                                <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                                <input type="hidden" name="contact_address" value="<?php if(isset($contact['http'])) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>">
                                 <button type="submit" class="btn btn-danger btn-sm" style="width: 100%;" onclick="return confirm('Are you sure you want to block this contact?')">
                                     <i class="fas fa-ban"></i> Block
                                 </button>
@@ -45,7 +46,7 @@
                             <form method="POST" style="flex: 1; display: none;" onclick="event.stopPropagation();">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                                 <input type="hidden" name="action" value="unblockContact">
-                                <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                                <input type="hidden" name="contact_address" value="<?php if(isset($contact['http'])) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>">
                                 <button type="submit" class="btn btn-success btn-sm" style="width: 100%;">
                                     <i class="fas fa-check"></i> Unblock
                                 </button>
@@ -64,7 +65,8 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                         <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending Response</span>
                         <div class="contact-details">
-                            <div class="contact-address"><?php echo htmlspecialchars($transportUtility->truncateAddress($contact['address'])); ?></div>
+                            <div class="contact-address"><?php  if (isset($contact['http'])) { echo htmlspecialchars($transportUtility->truncateAddress($contact['http']));} else{ echo 'Http not available';} ?></div>
+                            <div class="contact-address"><?php  if (isset($contact['tor'])) {echo htmlspecialchars($transportUtility->truncateAddress($contact['tor']));} else{ echo 'Tor not available';} ?></div>           
                             <div>Balance: <span class="balance-negative">
                                 -
                             </span> <?php echo $contact['currency']; ?></div>
@@ -85,7 +87,8 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name'] ?? "-"); ?></div>
                         <span style="background: red; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Blocked</span>
                         <div class="contact-details">
-                            <div class="contact-address"><?php echo htmlspecialchars($transportUtility->truncateAddress($contact['address'])); ?></div>
+                            <div class="contact-address"><?php  if (isset($contact['http'])){echo htmlspecialchars($transportUtility->truncateAddress($contact['http']));} else{echo 'Http not available';} ?></div>
+                            <div class="contact-address"><?php  if (isset($contact['tor'])){echo htmlspecialchars($transportUtility->truncateAddress($contact['tor']));} else{echo 'Tor not available';} ?></div>      
                             <div>Balance: <span class="balance-negative">
                                 -
                             </span> <?php echo $contact['currency'] ?? "USD"; ?></div>
@@ -96,7 +99,7 @@
                             <form method="POST" style="flex: 1;" onclick="event.stopPropagation();">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                                 <input type="hidden" name="action" value="unblockContact">
-                                <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                                <input type="hidden" name="contact_address" value="<?php if(isset($contact['http'])) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>">
                                 <button type="submit" class="btn btn-success btn-sm" style="width: 100%;" onclick="return confirm('Are you sure you want to unblock this contact?')">
                                     <i class="fas fa-check"></i> Unblock
                                 </button>
@@ -167,9 +170,15 @@
                 <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending</span>
             </div>
             <div style="margin-bottom: 0.5rem;">
-                <div class="info-label">Address:</div>
+                <div class="info-label">Http Address:</div>
                 <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px;">
-                    <?php echo htmlspecialchars($transportUtility->truncateAddress($contact['address'])); ?>
+                    <?php if (isset($contact['http'])){echo htmlspecialchars($contact['http']);} else{echo 'Http not available';} ?>
+                </div>
+            </div>
+            <div style="margin-bottom: 0.5rem;">
+                <div class="info-label">Tor Address:</div>
+                <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px;">
+                    <?php if (isset($contact['tor'])){echo htmlspecialchars($contact['tor']);} else{echo 'Tor not available';} ?>
                 </div>
             </div>
             <div style="margin-bottom: 1rem;">
@@ -185,9 +194,9 @@
                     <i class="fas fa-user-check"></i> Accept this contact request
                 </h4>
                 <form method="POST" style="margin-bottom: 1rem;">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="acceptContact">
-                    <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                    <input type="hidden" name="contact_address" value="<?php if(isset($contact['http'])) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);} ?>">
                     <input type="hidden" name="contact_pubkey" value="<?php echo htmlspecialchars($contact['pubkey']); ?>">
                     
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
@@ -224,7 +233,7 @@
                 <form method="POST" style="flex: 1; min-width: 120px;">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="deleteContact">
-                    <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                    <input type="hidden" name="contact_address" value="<?php if(isset($contact['http'])) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>">
                     <button type="submit" class="btn btn-secondary" style="width: 100%;" onclick="return confirm('Are you sure you want to delete this contact request?')">
                         <i class="fas fa-trash"></i> Delete Request
                     </button>
@@ -233,7 +242,7 @@
                 <form method="POST" style="flex: 1; min-width: 120px;">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="blockContact">
-                    <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['address']); ?>">
+                    <input type="hidden" name="contact_address" value="<?php if(isset($contact['http'])) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>">
                     <button type="submit" class="btn btn-danger" style="width: 100%;" onclick="return confirm('Are you sure you want to block this contact? This action cannot be undone.')">
                         <i class="fas fa-ban"></i> Block Contact
                     </button>
