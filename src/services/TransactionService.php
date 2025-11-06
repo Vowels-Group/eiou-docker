@@ -420,7 +420,7 @@ class TransactionService {
             // If direct transaction
             if($memo === 'standard'){
                 if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
-                    $payload = $this->transactionPayload->buildFromDatabase($message);
+                    $payload = $this->transactionPayload->buildStandardFromDatabase($message);
                     $this->transactionRepository->updateStatus($txid,'sent',true);
                     $response = json_decode($this->transportUtility->send($message['receiver_address'], $payload),true);
                     output(outputTransactionInquiryResponse($response),'SILENT');

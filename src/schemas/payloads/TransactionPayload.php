@@ -12,7 +12,7 @@ require_once __DIR__ . '/BasePayload.php';
 class TransactionPayload extends BasePayload
 {
     /**
-     * Build the main send transaction payload
+     * Build the main send transaction payload (used for saving into database)
      *
      * @param array $data Transaction data with keys: time, receiverAddress, receiverPublicKey,
      *                    amount, currency, txid, previousTxid, memo (optional)
@@ -21,7 +21,7 @@ class TransactionPayload extends BasePayload
     public function build(array $data): array
     {
         $this->ensureRequiredFields($data, [
-            'receiverAddress', 'receiverPublicKey',
+            'time', 'receiverAddress', 'receiverPublicKey',
             'amount', 'currency', 'txid'
         ]);
 
@@ -44,7 +44,7 @@ class TransactionPayload extends BasePayload
     }
 
     /**
-     * Build a send transaction payload from database data
+     * Build a send (P2P) transaction payload from database data
      *
      * @param array $data Database transaction data with snake_case keys
      * @return array The send transaction payload
@@ -52,16 +52,47 @@ class TransactionPayload extends BasePayload
     public function buildFromDatabase(array $data): array
     {
         $this->ensureRequiredFields($data, [
+            'time', 'receiver_address', 'receiver_public_key',
+            'amount', 'currency', 'txid'
+        ]);
+       
+        $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiver_address']);
+        $memo = $data['memo'];
+
+        return [
+            'type' => 'send',
+            'time' => $data['time'],   
+            'receiverAddress' => $data['receiver_address'],
+            'receiverPublicKey' => $data['receiver_public_key'],
+            'amount' => $this->sanitizeNumber($data['amount']),
+            'currency' => $this->sanitizeString($data['currency']),
+            'txid' => $data['txid'],
+            'previousTxid' => $data['previous_txid'],
+            'memo' => $memo,
+            'senderAddress' => $userAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+    }
+
+    /**
+     * Build a send (Standard/Direct) transaction payload from database data
+     *
+     * @param array $data Database transaction data with snake_case keys
+     * @return array The send transaction payload
+     */
+    public function buildStandardFromDatabase(array $data): array
+    {
+        // Note no 'time' component
+        $this->ensureRequiredFields($data, [
             'receiver_address', 'receiver_public_key',
             'amount', 'currency', 'txid'
         ]);
        
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiver_address']);
-        $memo = $data['memo'] ?? 'standard';
+        $memo = 'standard';
 
         return [
             'type' => 'send',
-            'time' => $data['time'],
             'receiverAddress' => $data['receiver_address'],
             'receiverPublicKey' => $data['receiver_public_key'],
             'amount' => $this->sanitizeNumber($data['amount']),
@@ -87,7 +118,7 @@ class TransactionPayload extends BasePayload
         $transactionService = ServiceContainer::getInstance()->getTransactionService();
         // This method returns data array for further processing, not final payload
         return [
-            'time' => $rp2pData['time'] ?? time(),
+            'time' => $rp2pData['time'],
             'receiver_address' => $rp2pData['sender_address'] ?? null,
             'receiver_public_key' => $rp2pData['sender_public_key'] ?? null,
             'amount' => $transactionService->removeTransactionFee($message),
