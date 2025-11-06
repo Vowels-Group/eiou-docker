@@ -67,7 +67,7 @@ class CurrencyUtilityService
      */
     public function calculateFee(float $amount, float $feePercent): int
     {
-        return (int) round($amount * ($feePercent / Constants::FEE_CONVERSION_FACTOR));
+        return (int) round(($amount / Constants::TRANSACTION_USD_CONVERSION_FACTOR)  * ($feePercent / Constants::FEE_CONVERSION_FACTOR));
     }
 
     /**

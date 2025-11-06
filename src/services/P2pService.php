@@ -40,6 +40,12 @@ class P2pService {
     private TimeUtilityService $timeUtility;
 
     /**
+     * @var CurrencyUtilityService Currency utility service 
+     */
+    private CurrencyUtilityService $currencyUtility;
+
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -78,6 +84,7 @@ class P2pService {
         $this->utilityContainer = $utilityContainer;
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
+        $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
         $this->timeUtility = $utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
        
@@ -152,14 +159,13 @@ class P2pService {
      * Caculate total amount required for p2p (amount + fee)
      *
      * @param array $request The P2P request data
-     * @return float Total amount needed for p2p transaction
+     * @return int Total amount needed for p2p transaction
      */
-    public function calculateRequestedAmount($request): float {
-        // Calculate total amount needed for p2p through user
+    public function calculateRequestedAmount($request): int {
+         // Calculate total amount needed for p2p through user
         $senderContact = $this->contactRepository->lookupByAddress($request['senderAddress']);
-        $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee()) / 10000; //convert back to percent for math
-        $request['feeAmount'] = round($request['amount'] * $fee);   // Caculate fee on the amount sender wants sent
-        return $request['amount'] + $request['feeAmount'];
+        $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee()); 
+        return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'],$fee);
     }
 
     /**
@@ -349,8 +355,14 @@ class P2pService {
         $data['amount'] = $message['amount'];
         $data['currency'] = $message['currency'];
 
-        // Additional data preparation
-        $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
+        // Additional data preparation - Use cryptographically secure random
+        try {
+            $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
+        } catch (Exception $e) {
+            error_log("Failed to generate random salt: " . $e->getMessage());
+            throw new RuntimeException("Failed to generate secure random data");
+        }
+
         $data['hash'] = hash(Constants::HASH_ALGORITHM, $data['receiverAddress'] . $data['salt'] . $data['time']); // Create hash
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
         output(outputP2pComponents($data), 'SILENT');
