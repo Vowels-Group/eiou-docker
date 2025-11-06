@@ -722,3 +722,143 @@ html {
 .contact-card:hover .contact-avatar {
     transform: scale(1.1);
 }
+
+/* AJAX Loading Indicators */
+.form-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    z-index: 1000;
+}
+
+.form-loading-spinner {
+    font-size: 2rem;
+    color: #0d6efd;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(1.1);
+    }
+}
+
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* AJAX Notifications */
+.ajax-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    min-width: 300px;
+    max-width: 500px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    z-index: 10000;
+    opacity: 0;
+    transform: translateX(400px);
+    transition: all 0.3s ease-out;
+}
+
+.ajax-notification.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.ajax-notification-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+.ajax-notification-message {
+    flex: 1;
+    color: #212529;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.ajax-notification-close {
+    background: none;
+    border: none;
+    color: #6c757d;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+.ajax-notification-close:hover {
+    background: #f8f9fa;
+}
+
+/* Notification types */
+.ajax-notification-success {
+    border-left: 4px solid #28a745;
+}
+
+.ajax-notification-success .fas {
+    color: #28a745;
+    font-size: 1.5rem;
+}
+
+.ajax-notification-error {
+    border-left: 4px solid #dc3545;
+}
+
+.ajax-notification-error .fas {
+    color: #dc3545;
+    font-size: 1.5rem;
+}
+
+.ajax-notification-warning {
+    border-left: 4px solid #ffc107;
+}
+
+.ajax-notification-warning .fas {
+    color: #ffc107;
+    font-size: 1.5rem;
+}
+
+.ajax-notification-info {
+    border-left: 4px solid #0d6efd;
+}
+
+.ajax-notification-info .fas {
+    color: #0d6efd;
+    font-size: 1.5rem;
+}
+
+/* Mobile responsiveness for notifications */
+@media (max-width: 768px) {
+    .ajax-notification {
+        right: 10px;
+        left: 10px;
+        min-width: auto;
+        max-width: none;
+    }
+}

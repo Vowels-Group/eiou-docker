@@ -128,6 +128,12 @@ class MessageHelper
      */
     public static function redirectMessage(string $message, string $messageType, ?string $url = null): void
     {
+        // If in AJAX mode, just echo the message instead of redirecting
+        if (isset($_SERVER['AJAX_MODE']) && $_SERVER['AJAX_MODE']) {
+            echo $message;
+            return;
+        }
+
         if ($url === null) {
             $url = $_SERVER['PHP_SELF'];
         }
