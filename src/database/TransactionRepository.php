@@ -174,13 +174,15 @@ class TransactionRepository extends AbstractRepository {
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
 
         $query = "SELECT txid FROM {$this->tableName}
-                  WHERE (sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
-                    --  OR (sender_public_key_hash = :receiver_public_key_hash AND receiver_public_key_hash = :sender_public_key_hash)
+                  WHERE (sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash) 
+                        OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash)
                   ORDER BY timestamp DESC LIMIT 1";
 
         $stmt = $this->execute($query, [
             ':sender_public_key_hash' => $senderPublicKeyHash,
-            ':receiver_public_key_hash' => $receiverPublicKeyHash
+            ':receiver_public_key_hash' => $receiverPublicKeyHash,
+            ':second_receiver_public_key_hash' => $receiverPublicKeyHash,
+            ':second_sender_public_key_hash' => $senderPublicKeyHash
         ]);
 
         if (!$stmt) {
