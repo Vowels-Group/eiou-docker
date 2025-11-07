@@ -4,19 +4,69 @@
  *
  * Copyright 2025
  * Provides utility functions for view rendering and display formatting.
+ *
+ * SECURITY NOTE: This class now uses OutputEncoder for XSS protection.
+ * Always use appropriate encoding methods based on output context.
  */
+
+require_once '/etc/eiou/src/security/OutputEncoder.php';
 
 class ViewHelper
 {
     /**
      * Sanitize output for HTML display
      *
+     * @deprecated Use OutputEncoder::html() instead for better XSS protection
      * @param string $text
      * @return string
      */
     public static function sanitize(string $text): string
     {
-        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+        return OutputEncoder::html($text);
+    }
+
+    /**
+     * Encode for HTML context (alias for backward compatibility)
+     *
+     * @param mixed $value
+     * @return string
+     */
+    public static function html($value): string
+    {
+        return OutputEncoder::html($value);
+    }
+
+    /**
+     * Encode for HTML attribute context
+     *
+     * @param mixed $value
+     * @return string
+     */
+    public static function attr($value): string
+    {
+        return OutputEncoder::attribute($value);
+    }
+
+    /**
+     * Encode for JavaScript context
+     *
+     * @param mixed $value
+     * @return string
+     */
+    public static function js($value): string
+    {
+        return OutputEncoder::javascript($value);
+    }
+
+    /**
+     * Encode for URL context
+     *
+     * @param mixed $value
+     * @return string
+     */
+    public static function url($value): string
+    {
+        return OutputEncoder::url($value);
     }
 
     /**

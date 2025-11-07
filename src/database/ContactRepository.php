@@ -108,14 +108,21 @@ class ContactRepository extends AbstractRepository {
     /**
      * Update contact status
      *
+     * SECURITY: Fixed SQL injection vulnerability by validating transportIndex
+     * against whitelist before using in query. Column names cannot be parameterized.
+     *
      * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address
      * @param string $status
      * @return bool
+     * @throws InvalidArgumentException If transportIndex is invalid
      */
     public function updateContactStatus(string $transportIndex, string $address, string $status): bool
     {
-        $query ="UPDATE contacts SET status = ? WHERE {$transportIndex} = ?";
+        // SECURITY: Validate transportIndex to prevent SQL injection
+        $safeTransportIndex = $this->validateTransportIndex($transportIndex);
+
+        $query ="UPDATE contacts SET status = ? WHERE {$safeTransportIndex} = ?";
         $stmt = $this->execute($query,[$status, $address]);
         if(!$stmt){
             return false;
@@ -126,12 +133,19 @@ class ContactRepository extends AbstractRepository {
     /**
      * Check if contact is accepted
      *
+     * SECURITY: Fixed SQL injection vulnerability by validating transportIndex
+     * against whitelist before using in query.
+     *
      * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool True if accepted
+     * @throws InvalidArgumentException If transportIndex is invalid
      */
     public function isAcceptedContact(string $transportIndex, string $address): bool {
-        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE {$transportIndex} = :address AND status = 'accepted'";
+        // SECURITY: Validate transportIndex to prevent SQL injection
+        $safeTransportIndex = $this->validateTransportIndex($transportIndex);
+
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE {$safeTransportIndex} = :address AND status = 'accepted'";
         $stmt = $this->execute($query, [':address' => $address]);
 
         if (!$stmt) {
@@ -185,12 +199,19 @@ class ContactRepository extends AbstractRepository {
     /**
      * Check if contact is blocked
      *
+     * SECURITY: Fixed SQL injection vulnerability by validating transportIndex
+     * against whitelist before using in query.
+     *
      * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool True if NOT blocked (returns result suitable for validation)
+     * @throws InvalidArgumentException If transportIndex is invalid
      */
     public function isNotBlocked(string $transportIndex, string $address): bool {
-        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE {$transportIndex} = :address AND status = 'blocked'";
+        // SECURITY: Validate transportIndex to prevent SQL injection
+        $safeTransportIndex = $this->validateTransportIndex($transportIndex);
+
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE {$safeTransportIndex} = :address AND status = 'blocked'";
         $stmt = $this->execute($query, [':address' => $address]);
 
         if (!$stmt) {
@@ -204,12 +225,19 @@ class ContactRepository extends AbstractRepository {
     /**
      * Check contact status (returns true if status is NOT accepted)
      *
+     * SECURITY: Fixed SQL injection vulnerability by validating transportIndex
+     * against whitelist before using in query.
+     *
      * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool True if status is not 'accepted'
+     * @throws InvalidArgumentException If transportIndex is invalid
      */
     public function hasNonAcceptedStatus(string $transportIndex, string $address): bool {
-        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE {$transportIndex} = :address AND status != 'accepted'";
+        // SECURITY: Validate transportIndex to prevent SQL injection
+        $safeTransportIndex = $this->validateTransportIndex($transportIndex);
+
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE {$safeTransportIndex} = :address AND status != 'accepted'";
         $stmt = $this->execute($query, [':address' => $address]);
 
         if (!$stmt) {
@@ -223,13 +251,20 @@ class ContactRepository extends AbstractRepository {
     /**
      * Check if there's a pending contact (non-user initiated)
      *
+     * SECURITY: Fixed SQL injection vulnerability by validating transportIndex
+     * against whitelist before using in query.
+     *
      * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool True if pending
+     * @throws InvalidArgumentException If transportIndex is invalid
      */
     public function hasPendingContact(string $transportIndex, string $address): bool {
+        // SECURITY: Validate transportIndex to prevent SQL injection
+        $safeTransportIndex = $this->validateTransportIndex($transportIndex);
+
         $query = "SELECT COUNT(*) as count FROM {$this->tableName}
-                  WHERE {$transportIndex} = :address AND name IS NULL AND status = 'pending'";
+                  WHERE {$safeTransportIndex} = :address AND name IS NULL AND status = 'pending'";
         $stmt = $this->execute($query, [':address' => $address]);
 
         if (!$stmt) {
@@ -243,13 +278,20 @@ class ContactRepository extends AbstractRepository {
     /**
      * Check if there's a pending contact (user initiated)
      *
+     * SECURITY: Fixed SQL injection vulnerability by validating transportIndex
+     * against whitelist before using in query.
+     *
      * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return bool True if pending with name
+     * @throws InvalidArgumentException If transportIndex is invalid
      */
     public function hasPendingContactInserted(string $transportIndex, string $address): bool {
+        // SECURITY: Validate transportIndex to prevent SQL injection
+        $safeTransportIndex = $this->validateTransportIndex($transportIndex);
+
         $query = "SELECT COUNT(*) as count FROM {$this->tableName}
-                  WHERE {$transportIndex} = :address AND name IS NOT NULL AND status = 'pending'";
+                  WHERE {$safeTransportIndex} = :address AND name IS NOT NULL AND status = 'pending'";
         $stmt = $this->execute($query, [':address' => $address]);
 
         if (!$stmt) {

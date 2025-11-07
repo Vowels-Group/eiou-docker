@@ -15,6 +15,10 @@ require_once '/etc/eiou/src/gui/includes/session.php';
 // Start secure session
 $secureSession = new Session();
 
+// Initialize CSRF Protection
+require_once '/etc/eiou/src/security/CSRFProtection.php';
+$csrfProtection = new CSRFProtection($secureSession);
+
 // Require Helpers
 require_once '/etc/eiou/src/gui/helpers/MessageHelper.php';
 require_once '/etc/eiou/src/gui/helpers/ViewHelper.php';
@@ -49,10 +53,18 @@ if (isset($_GET['logout'])) {
 
 // Handle authentication POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
+    // Validate CSRF token for authentication
+    $token = $_POST['csrf_token'] ?? '';
+    if (!$csrfProtection->validateToken($token)) {
+        http_response_code(403);
+        die('CSRF token validation failed. Please refresh the page and try again.');
+    }
+
     $submittedAuthCode = $_POST['authcode'];
 
     if ($user->has('authcode') && $secureSession->authenticate($submittedAuthCode, $user->getAuthCode())) {
-        // Authentication successful, redirect to clean URL
+        // Authentication successful, rotate CSRF token for security
+        $csrfProtection->rotateToken();
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
     } else {
@@ -63,6 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
 
 // Check if user is authenticated
 if (!$secureSession->isAuthenticated()) {
+    // Generate CSRF token for authentication form
+    $csrfToken = $csrfProtection->getToken();
     // Show authentication form
     header('Content-Type: text/html; charset=UTF-8');
     require_once("/etc/eiou/src/gui/layout/authenticationForm.html");
@@ -78,11 +92,13 @@ if (!$secureSession->checkSessionTimeout()) {
 
 // If we get here, authentication is valid and session is active
 
-// Verify CSRF token for POST requests
-$secureSession->verifyCSRFToken();
+// Verify CSRF token for POST requests (excluding authentication which was already validated)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['authcode'])) {
+    $csrfProtection->verifyRequest(true); // Auto-rotate token after validation
+}
 
 // Generate CSRF token for forms
-$csrfToken = $secureSession->getCSRFToken();
+$csrfToken = $csrfProtection->getToken();
 
 // This file handles wallet interaction with the eIOU network
 require_once("/etc/eiou/src/gui/functions/functions.php");

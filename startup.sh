@@ -5,6 +5,11 @@
 # Check for quickstart flag
 QUICKSTART=${QUICKSTART:-false}
 
+# Create log directory for CSRF violations
+mkdir -p /var/log/eiou
+chown www-data:www-data /var/log/eiou
+chmod 755 /var/log/eiou
+
 # Start services
 service cron start
 service tor start

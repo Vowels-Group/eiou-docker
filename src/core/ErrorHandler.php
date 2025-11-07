@@ -117,7 +117,18 @@ class ErrorHandler {
      * @param int $line
      */
     private static function logError($type, $message, $file, $line) {
+        // Mask sensitive data in error message
+        if (class_exists('SecureLogger')) {
+            $message = SecureLogger::maskSensitive($message);
+        }
+
         $logMessage = "[$type] $message in $file:$line";
+
+        // Add sanitized request URI to context
+        if (isset($_SERVER['REQUEST_URI']) && class_exists('SecureLogger')) {
+            $sanitizedUri = SecureLogger::sanitizeRequestUri();
+            $logMessage .= " [URI: $sanitizedUri]";
+        }
 
         error_log($logMessage);
 

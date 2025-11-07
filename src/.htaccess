@@ -1,0 +1,248 @@
+# Copyright 2025
+# EIOU Docker - Apache Security Configuration
+# This file configures security headers and protections for the EIOU application
+
+# Enable rewrite engine for security rules
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+</IfModule>
+
+# ==============================================================================
+# SECURITY HEADERS
+# ==============================================================================
+
+<IfModule mod_headers.c>
+    # Content Security Policy (CSP) - Tor Browser Compatible
+    # Allows inline scripts/styles for compatibility while blocking external resources
+    Header always set Content-Security-Policy "\
+        default-src 'self'; \
+        script-src 'self' 'unsafe-inline'; \
+        style-src 'self' 'unsafe-inline'; \
+        img-src 'self' data:; \
+        font-src 'self'; \
+        connect-src 'self'; \
+        frame-ancestors 'none'; \
+        base-uri 'self'; \
+        form-action 'self'; \
+        object-src 'none'; \
+        upgrade-insecure-requests"
+
+    # X-Frame-Options - Prevent clickjacking
+    Header always set X-Frame-Options "DENY"
+
+    # X-Content-Type-Options - Prevent MIME sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # X-XSS-Protection - Enable XSS filter (legacy browsers)
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # Referrer-Policy - Control referrer information
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Permissions-Policy - Restrict browser features
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()"
+
+    # Strict-Transport-Security (HSTS) - Force HTTPS (only if served over HTTPS)
+    # Note: This is conditionally set in PHP (Security.php) to avoid issues over HTTP
+    # Uncomment the line below if you are serving over HTTPS:
+    # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+    # Hide server information
+    Header always unset X-Powered-By
+    Header always unset Server
+
+    # Rate limit headers (set by PHP RateLimiter class)
+    # X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+
+    # Cache control for sensitive pages
+    <FilesMatch "\.(html|php)$">
+        Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+        Header always set Pragma "no-cache"
+        Header always set Expires "0"
+    </FilesMatch>
+</IfModule>
+
+# ==============================================================================
+# SERVER INFORMATION HIDING
+# ==============================================================================
+
+# Hide Apache version and OS information
+ServerSignature Off
+
+# Disable directory listing
+Options -Indexes
+
+# Disable server-side includes and CGI execution
+Options -Includes -ExecCGI
+
+# ==============================================================================
+# FILE ACCESS RESTRICTIONS
+# ==============================================================================
+
+# Deny access to sensitive files
+<FilesMatch "(^#.*#|\.(bak|conf|dist|fla|in[ci]|log|orig|psd|sh|sql|sw[op])|~)$">
+    Require all denied
+</FilesMatch>
+
+# Protect configuration files
+<FilesMatch "\.(env|ini|config)$">
+    Require all denied
+</FilesMatch>
+
+# Protect database files
+<FilesMatch "\.(db|sqlite|mdb)$">
+    Require all denied
+</FilesMatch>
+
+# Protect backup and temporary files
+<FilesMatch "\.(bak|backup|old|tmp|temp)$">
+    Require all denied
+</FilesMatch>
+
+# Block access to hidden files and directories (except .well-known)
+<IfModule mod_rewrite.c>
+    RewriteCond %{REQUEST_URI} !^/\.well-known/
+    RewriteRule (^|/)\. - [F]
+</IfModule>
+
+# ==============================================================================
+# REQUEST METHOD RESTRICTIONS
+# ==============================================================================
+
+# Only allow GET, POST, HEAD methods
+<IfModule mod_rewrite.c>
+    RewriteCond %{REQUEST_METHOD} !^(GET|POST|HEAD)$
+    RewriteRule .* - [F,L]
+</IfModule>
+
+# ==============================================================================
+# PROTECTION AGAINST COMMON ATTACKS
+# ==============================================================================
+
+<IfModule mod_rewrite.c>
+    # Block access to PHP files in uploads directory (if exists)
+    RewriteCond %{REQUEST_URI} uploads/.*\.php$ [NC]
+    RewriteRule .* - [F,L]
+
+    # Block directory traversal attempts
+    RewriteCond %{QUERY_STRING} \.\.\/ [NC,OR]
+    RewriteCond %{QUERY_STRING} \.\.\\ [NC,OR]
+    RewriteCond %{QUERY_STRING} \.(bash|git|hg|log|svn|swp|cvs) [NC,OR]
+    RewriteCond %{QUERY_STRING} etc/passwd [NC,OR]
+    RewriteCond %{QUERY_STRING} boot\.ini [NC]
+    RewriteRule .* - [F,L]
+
+    # Block SQL injection attempts
+    RewriteCond %{QUERY_STRING} (union.*select|insert.*into|delete.*from|drop.*table) [NC]
+    RewriteRule .* - [F,L]
+
+    # Block script injection attempts
+    RewriteCond %{QUERY_STRING} (<script|<iframe|<object|<embed|<applet) [NC]
+    RewriteRule .* - [F,L]
+
+    # Block base64 encoded strings in URL
+    RewriteCond %{QUERY_STRING} base64_encode.*\(.*\) [NC,OR]
+    RewriteCond %{QUERY_STRING} base64_(en|de)code[^(]*\([^)]*\) [NC]
+    RewriteRule .* - [F,L]
+
+    # Block PHP globals in URL
+    RewriteCond %{QUERY_STRING} GLOBALS(=|\[|\%[0-9A-Z]{0,2}) [OR]
+    RewriteCond %{QUERY_STRING} _REQUEST(=|\[|\%[0-9A-Z]{0,2})
+    RewriteRule .* - [F,L]
+
+    # Block suspicious user agents
+    RewriteCond %{HTTP_USER_AGENT} (libwww-perl|wget|python|nikto|curl|scan|java|winhttp|clshttp|loader) [NC,OR]
+    RewriteCond %{HTTP_USER_AGENT} (<|>|'|%0A|%0D|%27|%3C|%3E|%00) [NC,OR]
+    RewriteCond %{HTTP_USER_AGENT} (;|<|>|'|"|\)|\(|%0A|%0D|%27|%3C|%3E|%00).*(libwww-perl|wget|python|nikto|curl|scan|java|winhttp|HTTrack|clshttp|archiver|loader|email|harvest|extract|grab|miner) [NC]
+    RewriteRule .* - [F,L]
+</IfModule>
+
+# ==============================================================================
+# REQUEST SIZE LIMITS (DOS Protection)
+# ==============================================================================
+
+# Note: Request timeout and field limits are not allowed in .htaccess
+# Configure these in apache2.conf or virtual host configuration:
+#   RequestReadTimeout header=20-40,MinRate=500 body=20-40,MinRate=500
+#   LimitRequestBody 10485760
+#   LimitRequestFields 100
+#   LimitRequestFieldSize 8190
+#   LimitRequestLine 8190
+
+# ==============================================================================
+# MIME TYPE SECURITY
+# ==============================================================================
+
+<IfModule mod_mime.c>
+    # Force download for executable files
+    AddType application/octet-stream .exe .dll .bat .cmd .sh
+
+    # Proper MIME types for web files
+    AddType text/html .html .htm
+    AddType text/css .css
+    AddType application/javascript .js
+    AddType application/json .json
+
+    # PHP files handling (already configured in apache2.conf)
+    # AddType application/x-httpd-php .html is set globally
+</IfModule>
+
+# ==============================================================================
+# COMPRESSION (Performance & Security)
+# ==============================================================================
+
+<IfModule mod_deflate.c>
+    # Compress HTML, CSS, JavaScript, JSON
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css
+    AddOutputFilterByType DEFLATE application/javascript application/json
+    AddOutputFilterByType DEFLATE application/xml application/rss+xml
+
+    # Don't compress images (already compressed)
+    SetEnvIfNoCase Request_URI \.(?:gif|jpe?g|png|ico)$ no-gzip dont-vary
+
+    # Set proper vary header for proxies
+    Header append Vary Accept-Encoding env=!dont-vary
+</IfModule>
+
+# ==============================================================================
+# ERROR PAGES (Optional - uncomment if custom error pages exist)
+# ==============================================================================
+
+# ErrorDocument 400 /error/400.html
+# ErrorDocument 401 /error/401.html
+# ErrorDocument 403 /error/403.html
+# ErrorDocument 404 /error/404.html
+# ErrorDocument 500 /error/500.html
+# ErrorDocument 503 /error/503.html
+
+# ==============================================================================
+# LOG CONFIGURATION
+# ==============================================================================
+
+# Note: Logging is handled by Apache's main configuration and SecureLogger.php
+# CustomLog and ErrorLog are set in apache2.conf
+
+# ==============================================================================
+# SESSION SECURITY
+# ==============================================================================
+
+# Note: PHP configuration is handled in php.ini and security_init.php
+# mod_php directives are not allowed in .htaccess with PHP-FPM
+# Session security is enforced programmatically in security_init.php
+
+# ==============================================================================
+# CORS POLICY (Strict - only allow same-origin)
+# ==============================================================================
+
+<IfModule mod_headers.c>
+    # CORS headers for API endpoints (if needed)
+    # Uncomment and configure if you need CORS support
+    # Header always set Access-Control-Allow-Origin "https://yourdomain.com"
+    # Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    # Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+    # Header always set Access-Control-Max-Age "3600"
+</IfModule>
+
+# ==============================================================================
+# END OF CONFIGURATION
+# ==============================================================================

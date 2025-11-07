@@ -10,7 +10,29 @@ if (!file_exists('/etc/eiou/userconfig.json')) {
 }
 
 // Accept incoming connection and decode request
-$request = json_decode($_GET['payload'], true);
+// SECURITY: Use POST for network payloads to prevent URL logging exposure
+$payload = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Read from POST body (preferred method)
+    $rawPayload = file_get_contents('php://input');
+    $payload = $rawPayload;
+} elseif (isset($_GET['payload'])) {
+    // Fallback to GET for backward compatibility (will be deprecated)
+    $payload = $_GET['payload'];
+    error_log('WARNING: Network payload received via GET parameter. This is deprecated and will be removed in future versions. Please use POST method.');
+}
+
+if (empty($payload)) {
+    http_response_code(400);
+    die(json_encode(['error' => 'No payload received']));
+}
+
+$request = json_decode($payload, true);
+
+if ($request === null) {
+    http_response_code(400);
+    die(json_encode(['error' => 'Invalid JSON payload']));
+}
 
 $app = Application::getInstance();
 $serviceContainer = $app->services;

@@ -17,10 +17,20 @@
             </div>
         <?php else: ?>
         <!-- Accepted Contacts (with Balance) -->
-            <?php foreach ($acceptedContacts as $contact): ?>
-                <div class="contact-card" onclick="openEditContactModal('<?php if($contact['http']){ echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>','<?php echo htmlspecialchars($contact['name']); ?>', '<?php echo $contact['fee']; ?>', '<?php echo $contact['credit_limit']; ?>', '<?php echo htmlspecialchars($contact['currency']); ?>')" style="cursor: pointer;">
+            <?php
+            require_once '/etc/eiou/src/security/OutputEncoder.php';
+            foreach ($acceptedContacts as $contact):
+                $contactData = [
+                    'address' => $contact['http'] ?: $contact['tor'],
+                    'name' => $contact['name'],
+                    'fee' => $contact['fee'],
+                    'credit_limit' => $contact['credit_limit'],
+                    'currency' => $contact['currency']
+                ];
+            ?>
+                <div class="contact-card editable-contact" <?php echo OutputEncoder::clickData($contactData); ?> style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
-                        <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
+                        <?php echo strtoupper(substr(OutputEncoder::html($contact['name']), 0, 1)); ?>
                     </div>
                     <div class="contact-info">
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>

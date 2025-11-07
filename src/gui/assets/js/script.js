@@ -266,15 +266,48 @@ function openEditContactModal(address, name, fee, credit, currency) {
     document.getElementById('edit_contact_fee').value = fee;
     document.getElementById('edit_contact_credit').value = credit;
     document.getElementById('edit_contact_currency').value = currency;
-    
+
     // Show the modal
     document.getElementById('editContactModal').style.display = 'flex';
-    
+
     // Pause polling during form interaction
     if (typeof pausePollingForInteraction === 'function') {
         pausePollingForInteraction();
     }
 }
+
+// Handle contact card clicks using data attributes (XSS-safe)
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click listeners to all contact cards with data attributes
+    const contactCards = document.querySelectorAll('.editable-contact');
+    contactCards.forEach(function(card) {
+        card.addEventListener('click', function(e) {
+            // Don't trigger if clicking on a button inside the card
+            if (e.target.closest('button') || e.target.closest('form')) {
+                return;
+            }
+
+            // Get safely encoded data from data attribute
+            const clickDataStr = this.dataset.clickData;
+            if (!clickDataStr) {
+                return;
+            }
+
+            try {
+                const data = JSON.parse(clickDataStr);
+                openEditContactModal(
+                    data.address,
+                    data.name,
+                    data.fee,
+                    data.credit_limit,
+                    data.currency
+                );
+            } catch (error) {
+                console.error('Failed to parse contact data:', error);
+            }
+        });
+    });
+});
 
 function closeEditContactModal() {
     document.getElementById('editContactModal').style.display = 'none';

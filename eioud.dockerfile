@@ -11,7 +11,13 @@ RUN apt-get update && apt-get install -y \
     php \
     php-curl \
     php-mysql \
-    tor 
+    tor
+
+# Enable Apache modules for security and performance
+RUN a2enmod headers rewrite deflate mime reqtimeout
+
+# Enable AllowOverride for .htaccess
+RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
 
 # Edit /etc/tor/torrc
 RUN  chmod o+w /etc/tor/torrc
@@ -38,6 +44,11 @@ COPY src/walletIndex.html /var/www/html/index.html
 COPY src/index.html /var/www/html/eiou/index.html
 RUN chown www-data:www-data /var/www/html/eiou -R
 RUN chmod 755 /var/www/html/eiou
+
+# Copy .htaccess file for security headers and hardening
+COPY src/.htaccess /var/www/html/.htaccess
+RUN chown www-data:www-data /var/www/html/.htaccess
+RUN chmod 644 /var/www/html/.htaccess
 
 # Copy security_init.php to a common location
 COPY src/security_init.php /etc/eiou/security_init.php
@@ -114,6 +125,9 @@ RUN chmod 644 /etc/eiou/src/startup/*
 # Utils folder
 RUN chmod 755 /etc/eiou/src/utils
 RUN chmod 644 /etc/eiou/src/utils/*
+# Security folder
+RUN chmod 755 /etc/eiou/src/security
+RUN chmod 644 /etc/eiou/src/security/*
 
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini

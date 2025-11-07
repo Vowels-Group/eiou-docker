@@ -14,6 +14,7 @@
         <p>Please enter your authentication code to access your wallet</p>
         
         <form class="auth-form" method="POST">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken ?? $secureSession->getCSRFToken()); ?>">
             <input type="password" name="authcode" class="auth-input" placeholder="Enter auth code" required autocomplete="off">
             <button type="submit" class="auth-button">
                 <i class="fas fa-unlock"></i> Access Wallet

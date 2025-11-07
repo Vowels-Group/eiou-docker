@@ -8,12 +8,28 @@
 
 class SecureLogger {
     private static $sensitivePatterns = [
+        // URL parameter patterns (must come first for proper matching)
+        '/[?&]authcode=[^&\s]+/i' => '?authcode=***MASKED***',
+        '/[?&]password=[^&\s]+/i' => '&password=***MASKED***',
+        '/[?&]pwd=[^&\s]+/i' => '&pwd=***MASKED***',
+        '/[?&]token=[^&\s]+/i' => '&token=***MASKED***',
+        '/[?&]key=[^&\s]+/i' => '&key=***MASKED***',
+        '/[?&]secret=[^&\s]+/i' => '&secret=***MASKED***',
+        '/[?&]private[_-]?key=[^&\s]+/i' => '&private_key=***MASKED***',
+        '/[?&]api[_-]?key=[^&\s]+/i' => '&api_key=***MASKED***',
+        '/[?&]auth=[^&\s]+/i' => '&auth=***MASKED***',
+        '/[?&]credential=[^&\s]+/i' => '&credential=***MASKED***',
+        '/[?&]session=[^&\s]+/i' => '&session=***MASKED***',
+
+        // Generic key=value patterns
         '/authcode=[^&\s]+/i' => 'authcode=***MASKED***',
         '/password["\']?\s*[:=]\s*["\']?[^"\',\s]+/i' => 'password=***MASKED***',
         '/private[_\s]?key["\']?\s*[:=]\s*["\']?[^"\',\s]+/i' => 'private_key=***MASKED***',
         '/secret["\']?\s*[:=]\s*["\']?[^"\',\s]+/i' => 'secret=***MASKED***',
         '/token["\']?\s*[:=]\s*["\']?[^"\',\s]+/i' => 'token=***MASKED***',
         '/api[_\s]?key["\']?\s*[:=]\s*["\']?[^"\',\s]+/i' => 'api_key=***MASKED***',
+
+        // PII patterns
         '/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/' => '***EMAIL***',
         '/\b(?:\d{4}[\s\-]?){3}\d{4}\b/' => '***CREDIT_CARD***',
         '/\b\d{3}-\d{2}-\d{4}\b/' => '***SSN***',
@@ -93,7 +109,7 @@ class SecureLogger {
      * @param string $string String to mask
      * @return string Masked string
      */
-    private static function maskSensitive($string) {
+    public static function maskSensitive($string) {
         foreach (self::$sensitivePatterns as $pattern => $replacement) {
             $string = preg_replace($pattern, $replacement, $string);
         }
@@ -124,6 +140,73 @@ class SecureLogger {
         });
 
         return $context;
+    }
+
+    /**
+     * Sanitize URL to mask sensitive parameters
+     *
+     * @param string $url URL to sanitize
+     * @return string Sanitized URL
+     */
+    public static function sanitizeUrl($url) {
+        if (empty($url) || !is_string($url)) {
+            return $url;
+        }
+
+        // Parse URL to separate components
+        $parsedUrl = parse_url($url);
+
+        if (!isset($parsedUrl['query'])) {
+            // No query string, return as-is
+            return $url;
+        }
+
+        // Mask sensitive parameters in query string
+        $maskedQuery = self::maskSensitive($parsedUrl['query']);
+
+        // Rebuild URL with masked query
+        $sanitizedUrl = '';
+        if (isset($parsedUrl['scheme'])) {
+            $sanitizedUrl .= $parsedUrl['scheme'] . '://';
+        }
+        if (isset($parsedUrl['user'])) {
+            $sanitizedUrl .= '***USER***';
+            if (isset($parsedUrl['pass'])) {
+                $sanitizedUrl .= ':***PASS***';
+            }
+            $sanitizedUrl .= '@';
+        }
+        if (isset($parsedUrl['host'])) {
+            $sanitizedUrl .= $parsedUrl['host'];
+        }
+        if (isset($parsedUrl['port'])) {
+            $sanitizedUrl .= ':' . $parsedUrl['port'];
+        }
+        if (isset($parsedUrl['path'])) {
+            $sanitizedUrl .= $parsedUrl['path'];
+        }
+        if (!empty($maskedQuery)) {
+            $sanitizedUrl .= '?' . $maskedQuery;
+        }
+        if (isset($parsedUrl['fragment'])) {
+            $sanitizedUrl .= '#' . $parsedUrl['fragment'];
+        }
+
+        return $sanitizedUrl;
+    }
+
+    /**
+     * Sanitize REQUEST_URI to mask sensitive parameters
+     *
+     * @return string Sanitized REQUEST_URI
+     */
+    public static function sanitizeRequestUri() {
+        if (!isset($_SERVER['REQUEST_URI'])) {
+            return '';
+        }
+
+        $requestUri = $_SERVER['REQUEST_URI'];
+        return self::sanitizeUrl($requestUri);
     }
 
     /**

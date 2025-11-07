@@ -401,4 +401,52 @@ abstract class AbstractRepository {
     public function getTableName(): string {
         return $this->tableName;
     }
+
+    /**
+     * Validate and whitelist column name to prevent SQL injection
+     *
+     * SECURITY: This method protects against SQL injection by ensuring
+     * only valid column names are used in dynamic queries. Column names
+     * cannot be parameterized in prepared statements, so we must validate
+     * them against a whitelist.
+     *
+     * @param string $columnName Column name to validate
+     * @param array $allowedColumns Array of allowed column names
+     * @return string Validated column name
+     * @throws InvalidArgumentException If column name is not whitelisted
+     */
+    protected function validateColumnName(string $columnName, array $allowedColumns): string {
+        // Security: Only allow alphanumeric characters and underscores
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $columnName)) {
+            throw new InvalidArgumentException("Invalid column name format: $columnName");
+        }
+
+        // Security: Check against whitelist of allowed columns
+        if (!in_array($columnName, $allowedColumns, true)) {
+            throw new InvalidArgumentException("Column name not in whitelist: $columnName");
+        }
+
+        return $columnName;
+    }
+
+    /**
+     * Validate transport index (address type) to prevent SQL injection
+     *
+     * SECURITY: Transport index is used in WHERE clauses and cannot be
+     * parameterized. We validate it against a strict whitelist.
+     *
+     * @param string $transportIndex Address type (http, tor, etc.)
+     * @return string Validated transport index
+     * @throws InvalidArgumentException If transport index is invalid
+     */
+    protected function validateTransportIndex(string $transportIndex): string {
+        // Security: Whitelist of allowed transport types
+        $allowedTransports = ['http', 'tor', 'pubkey', 'pubkey_hash'];
+
+        if (!in_array($transportIndex, $allowedTransports, true)) {
+            throw new InvalidArgumentException("Invalid transport index: $transportIndex");
+        }
+
+        return $transportIndex;
+    }
 }
