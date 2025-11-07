@@ -32,7 +32,11 @@ function getBalancesTableSchema() {
     return "CREATE TABLE balances (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         pubkey TEXT NOT NULL,
-        balance INTEGER NOT NULL,
+        direction ENUM(
+            'received', /* Received from Contact */ 
+            'sent'      /* Sent to Contact */ 
+        ) NOT NULL,
+        balance INTEGER,
         currency VARCHAR(10),
         INDEX idx_balances_pubkey (pubkey)
     )";
