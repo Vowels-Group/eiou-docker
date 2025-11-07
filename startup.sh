@@ -65,17 +65,110 @@ while true; do
     fi
 done
 
+# Ensure log directory exists
+mkdir -p /var/log/eiou
+chmod 755 /var/log/eiou
+
 # Start p2p message processing in background
-nohup php /etc/eiou/p2pMessages.php > /dev/null 2>&1 &
-echo "P2p message processing started successfully."  
+php /etc/eiou/p2pMessages.php > /var/log/eiou/p2p.log 2>&1 &
+P2P_PID=$!
+echo "P2p message processing started successfully (PID: $P2P_PID)"
 
 # Start transaction message processing in background
-nohup php /etc/eiou/transactionMessages.php > /dev/null 2>&1 &
-echo "Transaction message processing started successfully."  
+php /etc/eiou/transactionMessages.php > /var/log/eiou/transaction.log 2>&1 &
+TRANSACTION_PID=$!
+echo "Transaction message processing started successfully (PID: $TRANSACTION_PID)"
 
 # Start cleanup message processing in background
-nohup php /etc/eiou/cleanupMessages.php > /dev/null 2>&1 &
-echo "Cleanup processing started successfully."  
+php /etc/eiou/cleanupMessages.php > /var/log/eiou/cleanup.log 2>&1 &
+CLEANUP_PID=$!
+echo "Cleanup processing started successfully (PID: $CLEANUP_PID)"
 
-# Keep container running
-tail -f /dev/null
+# Store PIDs for shutdown handler
+echo "$P2P_PID" > /tmp/p2p.pid
+echo "$TRANSACTION_PID" > /tmp/transaction.pid
+echo "$CLEANUP_PID" > /tmp/cleanup.pid
+
+# Function to handle graceful shutdown
+graceful_shutdown() {
+    echo "Received shutdown signal, initiating graceful shutdown..."
+
+    # Send SIGTERM to all PHP processes
+    if [ -f /tmp/p2p.pid ]; then
+        PID=$(cat /tmp/p2p.pid)
+        if kill -0 $PID 2>/dev/null; then
+            echo "Stopping P2P processor (PID: $PID)..."
+            kill -TERM $PID
+        fi
+    fi
+
+    if [ -f /tmp/transaction.pid ]; then
+        PID=$(cat /tmp/transaction.pid)
+        if kill -0 $PID 2>/dev/null; then
+            echo "Stopping Transaction processor (PID: $PID)..."
+            kill -TERM $PID
+        fi
+    fi
+
+    if [ -f /tmp/cleanup.pid ]; then
+        PID=$(cat /tmp/cleanup.pid)
+        if kill -0 $PID 2>/dev/null; then
+            echo "Stopping Cleanup processor (PID: $PID)..."
+            kill -TERM $PID
+        fi
+    fi
+
+    # Wait for processes to exit gracefully (max 30 seconds)
+    echo "Waiting for processors to shutdown gracefully (timeout: 30s)..."
+    TIMEOUT=30
+    ELAPSED=0
+
+    while [ $ELAPSED -lt $TIMEOUT ]; do
+        ALL_STOPPED=true
+
+        for PIDFILE in /tmp/p2p.pid /tmp/transaction.pid /tmp/cleanup.pid; do
+            if [ -f $PIDFILE ]; then
+                PID=$(cat $PIDFILE)
+                if kill -0 $PID 2>/dev/null; then
+                    ALL_STOPPED=false
+                    break
+                fi
+            fi
+        done
+
+        if $ALL_STOPPED; then
+            echo "All processors stopped gracefully"
+            break
+        fi
+
+        sleep 1
+        ELAPSED=$((ELAPSED + 1))
+    done
+
+    # Force kill any remaining processes
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        echo "Timeout reached, forcing shutdown..."
+        for PIDFILE in /tmp/p2p.pid /tmp/transaction.pid /tmp/cleanup.pid; do
+            if [ -f $PIDFILE ]; then
+                PID=$(cat $PIDFILE)
+                if kill -0 $PID 2>/dev/null; then
+                    echo "Force killing PID: $PID"
+                    kill -KILL $PID 2>/dev/null || true
+                fi
+            fi
+        done
+    fi
+
+    # Cleanup PID files
+    rm -f /tmp/p2p.pid /tmp/transaction.pid /tmp/cleanup.pid
+
+    echo "Shutdown complete"
+    exit 0
+}
+
+# Register signal handlers
+trap graceful_shutdown SIGTERM SIGINT
+
+# Keep container running and wait for signals
+echo "All processors running. Container ready. Press Ctrl+C to stop."
+wait
