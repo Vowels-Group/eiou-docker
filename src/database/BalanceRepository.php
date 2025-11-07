@@ -23,15 +23,14 @@ class BalanceRepository extends AbstractRepository {
     }
 
     /**
-     * Get balance for receiving 
-     *  If you want to send money towards some contact check how much balance you have with them
+     * Lookup contact balance
      *
      * @param string $pubkey Contact pubkey
      * @param string $currency currency
      * @return int Contact Balance
      */
-    public function getBalanceForSendingTowards(string $pubkey, string $currency): int{
-        $query = "SELECT balance FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
+    public function getContactBalance(string $pubkey, string $currency): int{
+        $query = "SELECT balance, direction FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
         $stmt = $this->execute($query, [':pubkey' => $pubkey,':currency' => $currency]);
         if (!$stmt) {
             return 0;
@@ -41,35 +40,31 @@ class BalanceRepository extends AbstractRepository {
     }
 
     /**
-     * Get balance for sending 
-     *  If a contact requests a p2p, check how much balance they have with you for sending
-     *  This is the negative of the stored balance
+     * Lookup contact received balance
      *
      * @param string $pubkey Contact pubkey
      * @param string $currency currency
-     * @return int Contact Balance
+     * @return int Contact received Balance
      */
-    public function getBalanceForSendingOnwards(string $pubkey, string $currency): int{
-        $query = "SELECT balance FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
+    public function getContactReceivedBalance(string $pubkey, string $currency): int{
+        $query = "SELECT balance FROM {$this->tableName} WHERE direction = 'received' AND pubkey = :pubkey AND currency = :currency";
         $stmt = $this->execute($query, [':pubkey' => $pubkey,':currency' => $currency]);
         if (!$stmt) {
             return 0;
         }
         $result = $stmt->fetchColumn();
-
-        // Substract the result, 
-        return (0-$result) ?: 0;
+        return $result ?: 0;
     }
 
     /**
-     * Lookup contact balance
+     * Lookup contact sent balance
      *
      * @param string $pubkey Contact pubkey
      * @param string $currency currency
-     * @return int Contact Balance
+     * @return int Contact sent Balance
      */
-    public function getContactBalance(string $pubkey, string $currency): int{
-        $query = "SELECT balance FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
+    public function getContactSentBalance(string $pubkey, string $currency): int{
+        $query = "SELECT balance FROM {$this->tableName} WHERE direction = 'sent' AND pubkey = :pubkey AND currency = :currency";
         $stmt = $this->execute($query, [':pubkey' => $pubkey,':currency' => $currency]);
         if (!$stmt) {
             return 0;
@@ -85,7 +80,7 @@ class BalanceRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function getContactBalances(string $pubkey): null{
-        $query = "SELECT balance, currency FROM {$this->tableName} WHERE pubkey = :pubkey";
+        $query = "SELECT balance, direction, currency FROM {$this->tableName} WHERE pubkey = :pubkey";
         $stmt = $this->execute($query, [':pubkey' => $pubkey]);
         if (!$stmt) {
             return null;
@@ -98,13 +93,15 @@ class BalanceRepository extends AbstractRepository {
      * Insert (initial) contact balance
      *
      * @param string $pubkey Contact pubkey
-     * @param int $amount Amount of Balance (0)
+     * @param string $direction direction of balance (received or sent)
+     * @param int $amount Amount of Balance (DEFAULT 0)
      * @param string $currency currency
      * @return bool Success/Failure
      */
-    public function insertBalance(string $pubkey, int $amount, string $currency): bool{
+    public function insertBalance(string $pubkey, string $direction, int $amount, string $currency): bool{
         $data = [
             'pubkey' => $pubkey,
+            'direction' => $direction,
             'balance' => $amount,
             'currency' => $currency
         ];
@@ -114,20 +111,75 @@ class BalanceRepository extends AbstractRepository {
     }
 
     /**
+     * Handle new contact balance creation
+     *
+     * @param string $pubkey Contact pubkey
+     * @param string $currency currency
+     */
+    public function insertInitialContactBalances(string $pubkey, string $currency){
+        $this->insertBalance($pubkey, 'received', 0, $currency);
+        $this->insertBalance($pubkey, 'sent', 0, $currency);
+    }
+
+
+    /**
      * Update contact balance
      *
      * @param string $pubkey Contact pubkey
-     * @param int $amount Amount of Balance (0)
+     * @param string $direction direction of balance (sent/received)
+     * @param int $amount Amount of Balance to add
      * @param string $currency currency
-     * @return bool Success/Failure
+     * @return bool Success/Failure of balance update
      */
-    public function updateBalance(string $pubkey, int $amount, string $currency): bool{
-        $query = "UPDATE {$this->tableName} SET balance = balance + :amount WHERE pubkey = :pubkey AND currency = :currency";
-        $stmt = $this->execute($query, [':amount' => $amount,':pubkey' => $pubkey,':currency' => $currency]);    
+    public function updateBalance(string $pubkey, string $direction, int $amount, string $currency): bool{
+        $query = "UPDATE {$this->tableName} SET balance = balance + :amount WHERE direction = :direction AND pubkey = :pubkey AND currency = :currency";
+        $stmt = $this->execute($query, [':direction' => $direction, ':amount' => $amount,':pubkey' => $pubkey,':currency' => $currency]);    
         if(!$stmt){
             return false;
         }
         return true;
     }
 
+
+    /**
+     * Update contact balance(s) on transaction completion
+     *
+     * @param array $transactions Transaction Data
+    * @return bool Success/Failure of balance(s) update
+     */
+    public function updateBalanceGivenTransactions($transactions): bool{
+        $userAddresses = $this->currentUser->getUserAddresses();
+        $amountTransactions = count($transactions);
+
+        foreach($transactions as $transaction){
+            // P2P Transaction
+            if($transaction['tx_type'] == 'p2p'){
+                // Intermediary or original sender of P2P Transaction
+                if(in_array($transaction['sender_address'],$userAddresses)){
+                    $updateSender = $this->updateBalance($transaction['receiver_public_key'], 'sent', $transaction['amount'], $transaction['currency']);
+                } 
+                // Intermediary or end receiver of P2P Transaction
+                elseif(in_array($transaction['receiver_address'],$userAddresses)){
+                    $updateReceiver = $this->updateBalance($transaction['sender_public_key'], 'received', $transaction['amount'], $transaction['currency']);
+                }
+            }
+            // Direct Transaction
+            elseif($transaction['tx_type'] == 'standard'){
+                // Original sender of Direct Transaction
+                if(in_array($transaction['sender_address'],$userAddresses)){
+                    $updateSender = $this->updateBalance($transaction['receiver_public_key'], 'sent', $transaction['amount'], $transaction['currency']);
+                } 
+                // Receiver of Direct Transaction
+                elseif($transaction['tx_type'] == 'standard' && in_array($transaction['receiver_address'],$userAddresses)){
+                    $updateReceiver = $this->updateBalance($transaction['sender_public_key'], 'received', $transaction['amount'], $transaction['currency']);
+                }
+            }
+        }
+        if($amountTransactions == 2 && $updateReceiver && $updateSender){
+            return true;
+        } elseif($amountTransactions == 1 && ($updateReceiver || $updateSender)){
+            return true;
+        }
+        return false;
+    }
 }
