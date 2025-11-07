@@ -70,7 +70,7 @@ abstract class AbstractMessageProcessor {
             $before = microtime(true);
             $processed = $this->processMessages();
             $hadWork = $processed > 0;
-
+            
             if ($hadWork) {
                 $this->totalProcessed += $processed;
             }
