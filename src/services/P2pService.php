@@ -10,14 +10,14 @@
  */
 class P2pService {
     /**
-     * @var P2pRepository P2P repository instance
-     */
-    private P2pRepository $p2pRepository;
-
-    /**
      * @var ContactRepository Contact repository instance
      */
     private ContactRepository $contactRepository;
+
+    /**
+     * @var P2pRepository P2P repository instance
+     */
+    private P2pRepository $p2pRepository;
 
     /**
      * @var BalanceRepository Balance repository instance
@@ -72,21 +72,21 @@ class P2pService {
     /**
      * Constructor
      *
-     * @param P2pRepository $p2pRepository P2P repository
      * @param ContactRepository $contactRepository Contact repository
+     * @param P2pRepository $p2pRepository P2P repository
      * @param BalanceRepository $balanceRepository Balance repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
-        P2pRepository $p2pRepository,
         ContactRepository $contactRepository,
+        P2pRepository $p2pRepository,
         BalanceRepository $balanceRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
-        $this->p2pRepository = $p2pRepository;
         $this->contactRepository = $contactRepository;
+        $this->p2pRepository = $p2pRepository;
         $this->balanceRepository = $balanceRepository;
         $this->utilityContainer = $utilityContainer;
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
@@ -407,45 +407,38 @@ class P2pService {
                 // Retrieve accepted contacts to send p2p request, excluding the sender
                 $contacts = $this->contactRepository->getAllAcceptedAddresses($message['sender_address']);
                 // Count amount of contacts to send p2p request
-                $contactsCount = $this->transportUtility->countTorAndHttpAddresses($contacts);
+                $sentMessages = 0;
                 // Send p2p request to all accepted contacts
                 foreach ($contacts as $contact) {
                     // Do not send message to original sender
                     if($message['sender_address'] === $contact){
-                        if($this->transportUtility->isTorAddress($message['sender_address'])){
-                            $contactsCount['tor'] -= 1;
-                        } else{
-                            $contactsCount['http'] -= 1;
-                        }
                         continue;
                     }
                     // Do not send p2p to contact (end-recipient), if direct transaction failed due to insufficient funds
                     if(isset($message['destination_address']) && $contact === $message['destination_address']){
-                        if($this->transportUtility->isTorAddress($message['destination_address'])){
-                            $contactsCount['tor'] -= 1;
-                        } else{
-                            $contactsCount['http'] -= 1;
-                        }
                         continue;
                     }
                     $response = json_decode($this->transportUtility->send($contact, $p2pPayload),true);
+                    $sentMessages += 1;
                     output(outputP2pResponse($response),'SILENT');
                 }
 
                 if(isset($message['destination_address'])){
-                    output(outputSendP2PToAmountContacts($contactsCount), 'SILENT');
+                    output(outputSendP2PToAmountContacts($sentMessages), 'SILENT');
                     //Inform user (in debug) about expected response time
                     $httpExpectedResponseTime = $this->currentUser->getMaxP2pLevel(); // Use maxP2pLevel seconds for http
                     $torExpectedResponseTime = 5 * 2 * $this->currentUser->getMaxP2pLevel(); //5 seconds for a tor request, 2 times for a round trip, multiplied by maxP2pLevel
-                    output(outputResponseTransactionTimes($httpExpectedResponseTime,$torExpectedResponseTime), 'SILENT');
+                    output(outputResponseTransactionTimes($httpExpectedResponseTime, $torExpectedResponseTime), 'SILENT');
+                }
+
+                // Cancel the message due to no viable contacts to send to (user is dead-end)
+                if($sentMessages === 0){  
+                    output(outputNoViableRouteP2p($message['hash'],'SILENT'));
+                    $this->p2pRepository->updateStatus($message['hash'], 'cancelled');
+                    continue;
                 }
             }
-            // Cancel the message due to no viable contacts to send to (user is dead-end)
-            if(!isset($contactsCount) || ($contactsCount['tor'] === 0 && $contactsCount['http'] === 0)){  
-                output(outputNoViableRouteP2p($message['hash'],'SILENT'));
-                $this->p2pRepository->updateStatus($message['hash'], 'cancelled');
-                continue;
-            }
+            
             $this->p2pRepository->updateStatus($message['hash'], 'sent');
         }
         return isset($queuedMessages) ? count($queuedMessages) : 0;
