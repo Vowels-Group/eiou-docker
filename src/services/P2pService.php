@@ -145,7 +145,8 @@ class P2pService {
             if (!$this->matchYourselfP2P($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
                 // Check if sender has enough 'credit' to facilitate eIOU
                 $requestedAmount = $this->calculateRequestedAmount($request);
-                $availableFunds = $this->balanceRepository->getBalanceForSendingOnwards($request['senderPublicKey'],$request['currency']);
+                $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
+
                 $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderAddress']);
                 $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
 
@@ -440,7 +441,7 @@ class P2pService {
                 }
             }
             // Cancel the message due to no viable contacts to send to (user is dead-end)
-            if($contactsCount['tor'] === 0 && $contactsCount['http'] === 0){  
+            if(!isset($contactsCount) || ($contactsCount['tor'] === 0 && $contactsCount['http'] === 0)){  
                 output(outputNoViableRouteP2p($message['hash'],'SILENT'));
                 $this->p2pRepository->updateStatus($message['hash'], 'cancelled');
                 continue;

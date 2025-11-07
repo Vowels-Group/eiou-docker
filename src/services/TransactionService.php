@@ -169,19 +169,15 @@ class TransactionService {
                 return false;
             }
 
-            // Check if there is enough funds to complete the transaction
-            $currentBalance =  $this->balanceRepository->getBalanceForSendingTowards($request['senderPublicKey'],$request['currency']);
-            output("CURRENTBALANCE: " .$request['senderAddress'] . " " . $currentBalance,'SILENT');
-            // Get credit limit of sender
+            // Check if there is enough funds to complete the transaction (sufficient balance or credit limit)
+            $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
             $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
+            $requestedAmount = $request['amount'];
 
-            // Check if sender has sufficient balance or credit limit
-            $requiredAmount = $request['amount'];
-
-            if ($currentBalance + $creditLimit > $requiredAmount) {
+            if (($availableFunds + $creditLimit) > $requestedAmount) {
                 return true;
             } else {
-                echo $this->utilPayload->buildInsufficientBalance($currentBalance, $requiredAmount, $creditLimit, 0, $request['currency']);
+                echo $this->utilPayload->buildInsufficientBalance($availableFunds, $requestedAmount, $creditLimit, 0, $request['currency']);
                 return false;
             }
         } catch (PDOException $e) {
@@ -256,10 +252,10 @@ class TransactionService {
         // Make sure that the previous transactions txid in the chain is not already being used as a previous_txid for another transaction
         $prevID = $this->transactionRepository->getPreviousTxid($senderPubKey, $receiverPubKey);
 
-        while($prevID && $this->transactionRepository->existingPreviousTxid($prevID)){
-            $prevID = $this->transactionRepository->getPreviousTxid($senderPubKey, $receiverPubKey);
-            usleep(Constants::TIME_MICROSECONDS_PER_MILLISECOND); // Sleep for 1ms
-        }
+        // while($prevID && $this->transactionRepository->existingPreviousTxid($prevID)){
+        //     $prevID = $this->transactionRepository->getPreviousTxid($senderPubKey, $receiverPubKey);
+        //     usleep(Constants::TIME_MICROSECONDS_PER_MILLISECOND); // Sleep for 1ms
+        // }
 
         return $prevID;
     }
@@ -289,7 +285,7 @@ class TransactionService {
      */
     public function createUniqueDatabaseTxid(array $data): string {
         // Create unique Txid for transactions (from database values)
-        $txid = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiver_public_key'] . $data['amount'] . $data['time'] . $data['hash']);
+        $txid = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiver_public_key'] . $data['amount'] . $data['time']);
         return $txid;
     }
 
@@ -431,6 +427,7 @@ class TransactionService {
 
             // If direct transaction
             if($memo === 'standard'){
+                // If you're sending the direct transaction 
                 if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
                     $payload = $this->transactionPayload->buildStandardFromDatabase($message);
                     $this->transactionRepository->updateStatus($txid,'sent',true);
@@ -445,9 +442,11 @@ class TransactionService {
                         // Send P2P request for failed direct transaction using P2pService directly
                         ServiceContainer::getInstance()->getP2pService()->sendP2pRequestFromFailedDirectTransaction($message);
                     }
-                } else{
+                }
+                // If you received the direct transaction 
+                else{
                     $this->transactionRepository->updateStatus($txid,'completed',true);
-                    $this->balanceRepository->updateBalance($message['sender_public_key'], $message['amount'], $message['currency']);
+                    $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
                     output(outputTransactionAmountReceived($message),'SILENT');
                     $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                     output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
@@ -470,6 +469,7 @@ class TransactionService {
      * @param string $txid Transaction ID
      */
     private function processP2pTransaction(array $message, string $memo, string $txid): void {
+        // If you're sending the transaction
         if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
             $rp2p = $this->rp2pRepository->getByHash($memo);
             $message['time'] = $rp2p['time'];
@@ -488,10 +488,11 @@ class TransactionService {
                 $this->transactionRepository->updateStatus($memo,'rejected');
             }
             output(outputTransactionResponse($response),'SILENT');
-        } else{
-            // If receiving transaction
+        } 
+         // If receiving transaction
+        else{
+            // If not end-recipient of transaction
             if(!$this->matchYourselfTransaction($message,$this->transportUtility->resolveUserAddressForTransport($message['sender_address']))) {
-                // If not end-recipient of transaction
                 $this->transactionRepository->updateStatus($memo,'accepted');
                 $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
 
@@ -503,11 +504,12 @@ class TransactionService {
                 $payload = $this->transactionPayload->buildFromDatabase($data);
                 $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($payload),true);
                 output(outputTransactionInsertion($insertTransactionResponse));
-            } else{
-                // If end-recipient of transaction
+            } 
+             // If end-recipient of transaction
+            else{
                 $this->p2pRepository->updateStatus($memo,'completed',true);
                 $this->transactionRepository->updateStatus($memo,'completed');
-                $this->balanceRepository->updateBalance($message['sender_public_key'], $message['amount'], $message['currency']);
+                $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
                 $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
                 output(outputTransactionAmountReceived($message),'SILENT');
                 $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);

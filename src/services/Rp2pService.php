@@ -97,7 +97,7 @@ class RP2pService {
 
             //Check if intermediary sender of p2p can afford to send eIOU with fees
             if(!isset($p2p['destination_address'])) {
-                $availableFunds =  $this->balanceRepository->getBalanceForSendingOnwards($request['senderPublicKey'],$request['currency']);
+                $availableFunds =  $this->validationUtility->calculateAvailableFunds($p2p);
                 if($availableFunds < $request['amount']){
                     output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
                 }
