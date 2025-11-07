@@ -744,12 +744,14 @@ class TransactionRepository extends AbstractRepository {
 
             return json_encode([
                 "status" => "accepted",
-                "message" => "Transaction recorded successfully",
-                "txid" => $request['txid']
+                "txid" => $request['txid'],
+                "message" => "Transaction recorded successfully"
+            
             ]);
         } else {
             return json_encode([
                 "status" => "rejected",
+                "txid" => $request['txid'],
                 "message" => "Failed to record transaction"
             ]);
         }
