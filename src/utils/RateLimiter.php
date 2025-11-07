@@ -39,7 +39,13 @@ class RateLimiter {
         try {
             $this->pdo->exec($sql);
         } catch (PDOException $e) {
-            error_log("Failed to create rate_limits table: " . $e->getMessage());
+            if (class_exists('SecureLogger')) {
+                SecureLogger::error("Failed to create rate_limits table", [
+                    'error' => $e->getMessage()
+                ]);
+            } else {
+                error_log("Failed to create rate_limits table: " . $e->getMessage());
+            }
         }
     }
 
@@ -165,7 +171,13 @@ class RateLimiter {
             ");
             $stmt->execute([$olderThanSeconds]);
         } catch (PDOException $e) {
-            error_log("Rate limit cleanup failed: " . $e->getMessage());
+            if (class_exists('SecureLogger')) {
+                SecureLogger::warning("Rate limit cleanup failed", [
+                    'error' => $e->getMessage()
+                ]);
+            } else {
+                error_log("Rate limit cleanup failed: " . $e->getMessage());
+            }
         }
     }
 

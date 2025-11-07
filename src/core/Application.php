@@ -56,7 +56,13 @@ class Application {
                 $this->constructDatabase();
                 $this->loadCurrentDatabase();
             } catch (RuntimeException $e) {
-                error_log("Application: Database setup failed - " . $e->getMessage());
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::critical("Application: Database setup failed", [
+                        'error' => $e->getMessage()
+                    ]);
+                } else {
+                    error_log("Application: Database setup failed - " . $e->getMessage());
+                }
                 // If database setup fails, we cannot continue initialization
                 throw new RuntimeException("Failed to initialize application: " . $e->getMessage(), 0, $e);
             }

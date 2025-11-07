@@ -3,7 +3,7 @@
 
 // Contacts table
 function getContactsTableSchema() {
-    return "CREATE TABLE contacts (
+    return "CREATE TABLE IF NOT EXISTS contacts (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         http VARCHAR(255) UNIQUE,
         tor VARCHAR(255) UNIQUE,
@@ -29,7 +29,7 @@ function getContactsTableSchema() {
 
 // Debug table
 function getDebugTableSchema() {
-    return "CREATE TABLE debug (
+    return "CREATE TABLE IF NOT EXISTS debug (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
         level ENUM('SILENT', 'ECHO', 'INFO', 'WARNING', 'ERROR', 'CRITICAL') NOT NULL,
@@ -46,7 +46,7 @@ function getDebugTableSchema() {
 
 // P2p table
 function getP2pTableSchema() {
-    return "CREATE TABLE p2p (
+    return "CREATE TABLE IF NOT EXISTS p2p (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         hash VARCHAR(255) NOT NULL UNIQUE, /* This is the hash of the final recipient address + salt + time*/
         salt VARCHAR(255) NOT NULL,
@@ -92,7 +92,7 @@ function getP2pTableSchema() {
 
 // Response to peer to peer request table
 function getRp2pTableSchema() {
-    return "CREATE TABLE rp2p (
+    return "CREATE TABLE IF NOT EXISTS rp2p (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         hash VARCHAR(255) NOT NULL UNIQUE, /*This is the hash of the final recipient address + salt + time*/
         time BIGINT NOT NULL,
@@ -110,7 +110,7 @@ function getRp2pTableSchema() {
 
 // Transactions table
 function getTransactionsTableSchema() {
-    return "CREATE TABLE transactions (
+    return "CREATE TABLE IF NOT EXISTS transactions (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         tx_type ENUM(
             'standard', 

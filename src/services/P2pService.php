@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../utils/InputValidator.php';
+
 /**
  * P2P Service
  *
@@ -107,7 +109,10 @@ class P2pService {
     public function checkRequestLevel(array $request): bool {
         // Validate input
         if (!isset($request['requestLevel']) || !isset($request['maxRequestLevel'])) {
-            error_log("Missing requestLevel or maxRequestLevel in request");
+            SecureLogger::warning("Missing requestLevel or maxRequestLevel in request", [
+                'method' => 'checkRequestLevel',
+                'request_keys' => array_keys($request)
+            ]);
             echo $this->utilPayload->buildInvalidRequestLevel($request);
             return false;
         }
@@ -130,7 +135,10 @@ class P2pService {
         try {
             // Validate required fields
             if (!isset($request['senderAddress'], $request['senderPublicKey'])) {
-                error_log("Missing required fields in P2P request for funds check");
+                SecureLogger::warning("Missing required fields in P2P request for funds check", [
+                    'method' => 'checkAvailableFunds',
+                    'request_keys' => array_keys($request)
+                ]);
                 return false;
             }
 
@@ -150,7 +158,11 @@ class P2pService {
             // If you are the end-recipient you do not need to pay
             return true;
         } catch (PDOException $e) {
-            error_log("Database error in checkAvailableFunds: " . $e->getMessage());
+            // Use SecureLogger's exception logging
+            SecureLogger::logException($e, [
+                'method' => 'checkAvailableFunds',
+                'context' => 'p2p_funds_validation'
+            ]);
             throw $e;
         }
     }
@@ -306,17 +318,23 @@ class P2pService {
             die;
         }
 
-        // Validate amount
-        if (!isset($request[3]) || !is_numeric($request[3]) || $request[3] <= 0) {
-            throw new InvalidArgumentException("Invalid amount for P2P request");
+        // Validate amount using InputValidator
+        if (!isset($request[3])) {
+            throw new InvalidArgumentException("Amount is required for P2P request");
         }
+
+        $validation = InputValidator::validateAmount($request[3], Constants::TRANSACTION_DEFAULT_CURRENCY);
+        if (!$validation['valid']) {
+            throw new InvalidArgumentException("Invalid amount for P2P request: " . $validation['error']);
+        }
+        $validatedAmount = $validation['value'];
 
         // Initial data preparation
         $data['txType'] = 'p2p';
         $data['receiverAddress'] = $request[2];
 
         $data['time'] = $this->timeUtility->getCurrentMicrotime();
-        $data['amount'] = round($request[3] * Constants::TRANSACTION_USD_CONVERSION_FACTOR); // Convert to cents
+        $data['amount'] = round($validatedAmount * Constants::TRANSACTION_USD_CONVERSION_FACTOR); // Convert to cents
         $data['currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY; // Default to USD
 
         // Additional data preparation - Use cryptographically secure random

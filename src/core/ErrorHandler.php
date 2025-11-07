@@ -119,7 +119,16 @@ class ErrorHandler {
     private static function logError($type, $message, $file, $line) {
         $logMessage = "[$type] $message in $file:$line";
 
-        error_log($logMessage);
+        // Use SecureLogger if available
+        if (class_exists('SecureLogger')) {
+            SecureLogger::error($logMessage, [
+                'type' => $type,
+                'file' => $file,
+                'line' => $line
+            ]);
+        } else {
+            error_log($logMessage);
+        }
 
         // Also log to application logger if available
         if (class_exists('Application')) {
@@ -136,16 +145,20 @@ class ErrorHandler {
      * @param Throwable $exception
      */
     private static function logException($exception) {
-        $logMessage = sprintf(
-            "Uncaught %s: %s in %s:%d\nStack trace:\n%s",
-            get_class($exception),
-            $exception->getMessage(),
-            $exception->getFile(),
-            $exception->getLine(),
-            $exception->getTraceAsString()
-        );
-
-        error_log($logMessage);
+        // Use SecureLogger first if available
+        if (class_exists('SecureLogger')) {
+            SecureLogger::logException($exception, 'CRITICAL');
+        } else {
+            $logMessage = sprintf(
+                "Uncaught %s: %s in %s:%d\nStack trace:\n%s",
+                get_class($exception),
+                $exception->getMessage(),
+                $exception->getFile(),
+                $exception->getLine(),
+                $exception->getTraceAsString()
+            );
+            error_log($logMessage);
+        }
 
         // Also log to application logger if available
         if (class_exists('Application') && class_exists('SecureLogger')) {

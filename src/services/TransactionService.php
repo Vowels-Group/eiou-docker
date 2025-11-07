@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../utils/InputValidator.php';
+
 /**
  * Transaction Service
  *
@@ -123,7 +125,9 @@ class TransactionService {
         try {
             // Validate required fields
             if (!isset($request['senderPublicKey'], $request['receiverAddress'])) {
-                error_log("Missing required fields for previous txid check");
+                $this->secureLogger->error("Missing required fields for previous txid check", [
+                    'request_keys' => array_keys($request)
+                ]);
                 return false;
             }
 
@@ -136,7 +140,11 @@ class TransactionService {
             }
             return true;
         } catch (PDOException $e) {
-            error_log("Database error in checkPreviousTxid: " . $e->getMessage());
+            // Use SecureLogger's exception logging
+            SecureLogger::logException($e, [
+                'method' => 'checkPreviousTxid',
+                'context' => 'transaction_validation'
+            ]);
             throw $e;
         }
     }
@@ -151,15 +159,23 @@ class TransactionService {
         try {
             // Validate required fields
             if (!isset($request['senderPublicKey'], $request['amount'], $request['currency'])) {
-                error_log("Missing required fields for funds check");
+                $this->secureLogger->error("Missing required fields for funds check", [
+                    'request_keys' => array_keys($request)
+                ]);
                 return false;
             }
 
-            // Validate amount is numeric and positive
-            if (!is_numeric($request['amount']) || $request['amount'] <= 0) {
-                error_log("Invalid amount in transaction request: " . $request['amount']);
+            // Validate amount using InputValidator
+            $validation = InputValidator::validateAmount($request['amount'], $request['currency']);
+            if (!$validation['valid']) {
+                $this->secureLogger->error("Invalid amount in transaction request", [
+                    'amount' => $request['amount'],
+                    'error' => $validation['error']
+                ]);
                 return false;
             }
+            // Use validated and sanitized amount
+            $request['amount'] = $validation['value'];
 
             // Check if there is enough funds to complete the transaction
             $totalSent = $this->transactionRepository->calculateTotalSentByUser($request['senderPublicKey']);
@@ -180,7 +196,11 @@ class TransactionService {
                 return false;
             }
         } catch (PDOException $e) {
-            error_log("Database error in checkAvailableFundsTransaction: " . $e->getMessage());
+            // Use SecureLogger's exception logging
+            SecureLogger::logException($e, [
+                'method' => 'checkAvailableFundsTransaction',
+                'context' => 'transaction_funds_validation'
+            ]);
             throw $e;
         }
     }
@@ -219,15 +239,18 @@ class TransactionService {
             if($echo){
                 echo $this->transactionPayload->buildAcceptance($request);            
             }
-            return true;  
+            return true;
         } catch (PDOException $e) {
-            // Handle database error
-            error_log("Error retrieving existence of Transaction by memo/txid" . $e->getMessage());
+            // Use SecureLogger's exception logging
+            SecureLogger::logException($e, [
+                'method' => 'checkTransactionPossible',
+                'context' => 'transaction_existence_check'
+            ]);
             if($echo){
-                echo json_encode([
-                    "status" => "rejected",
-                    "message" => "Could not retrieve existence of Transaction with receiver"
-                ]);
+                echo json_encode(ErrorHandler::createErrorResponse(
+                    "Could not retrieve existence of Transaction with receiver",
+                    500
+                ));
             }
             return false;
         }
@@ -369,7 +392,9 @@ class TransactionService {
         try {
             // Validate required fields
             if (!isset($request['memo'], $request['senderAddress'])) {
-                error_log("Missing required fields in transaction request");
+                $this->secureLogger->error("Missing required fields in transaction request", [
+                    'request_keys' => array_keys($request)
+                ]);
                 throw new InvalidArgumentException("Invalid transaction request structure");
             }
 
@@ -395,10 +420,18 @@ class TransactionService {
                 }
             }
         } catch (PDOException $e) {
-            error_log("Database error in processTransaction: " . $e->getMessage());
+            // Use SecureLogger's exception logging
+            SecureLogger::logException($e, [
+                'method' => 'processTransaction',
+                'context' => 'transaction_processing'
+            ]);
             throw $e;
         } catch (Exception $e) {
-            error_log("Error in processTransaction: " . $e->getMessage());
+            // Use SecureLogger's exception logging
+            SecureLogger::logException($e, [
+                'method' => 'processTransaction',
+                'context' => 'transaction_processing'
+            ]);
             throw $e;
         }
     }

@@ -53,7 +53,15 @@ abstract class AbstractRepository {
             try {
                 $this->pdo = createPDOConnection();
             } catch (RuntimeException $e) {
-                error_log("[" . static::class . "] Repository initialization failed: " . $e->getMessage());
+                // Use SecureLogger if available, otherwise fallback
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::logException($e, [
+                        'repository' => static::class,
+                        'context' => 'repository_initialization'
+                    ]);
+                } else {
+                    error_log("[" . static::class . "] Repository initialization failed: " . $e->getMessage());
+                }
                 throw new RuntimeException(
                     "Failed to initialize " . static::class . ": " . $e->getMessage(),
                     $e->getCode(),
@@ -63,7 +71,16 @@ abstract class AbstractRepository {
         }
 
         if (!$this->pdo) {
-            throw new RuntimeException("Failed to initialize repository: Database connection unavailable");
+            $errorMessage = "Failed to initialize repository: Database connection unavailable";
+            if (class_exists('SecureLogger')) {
+                SecureLogger::error($errorMessage, [
+                    'repository' => static::class,
+                    'context' => 'repository_initialization'
+                ]);
+            } else {
+                error_log("[" . static::class . "] $errorMessage");
+            }
+            throw new RuntimeException($errorMessage);
         }
         $this->loadCurrentUser();
     }
@@ -359,28 +376,40 @@ abstract class AbstractRepository {
     }
 
     /**
-     * Log database errors
+     * Log database errors using SecureLogger
      *
      * @param string $message Error message
      * @param PDOException|null $exception Exception object
      * @param string|null $query SQL query that failed
      */
     protected function logError(string $message, ?PDOException $exception = null, ?string $query = null): void {
-        $logMessage = "[" . static::class . "] $message";
-
-        if ($exception) {
-            $logMessage .= ": " . $exception->getMessage();
-        }
+        // Prepare context for logging
+        $context = [
+            'repository' => static::class,
+            'message' => $message
+        ];
 
         if ($query) {
-            $logMessage .= " | Query: $query";
+            $context['query'] = $query;
         }
 
-        error_log($logMessage);
-
-        // Additional logging for development
-        if (Constants::APP_DEBUG === 'true' && $exception) {
-            error_log("Stack trace: " . $exception->getTraceAsString());
+        // Use SecureLogger for consistent error logging
+        if (class_exists('SecureLogger')) {
+            if ($exception) {
+                SecureLogger::logException($exception, $context);
+            } else {
+                SecureLogger::error($message, $context);
+            }
+        } else {
+            // Fallback to error_log if SecureLogger not available
+            $logMessage = "[" . static::class . "] $message";
+            if ($exception) {
+                $logMessage .= ": " . $exception->getMessage();
+            }
+            if ($query) {
+                $logMessage .= " | Query: $query";
+            }
+            error_log($logMessage);
         }
     }
 

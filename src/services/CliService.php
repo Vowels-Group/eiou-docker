@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../utils/InputValidator.php';
+
 /**
  * Cli Service
  *
@@ -70,26 +72,56 @@ class CliService {
         if(isset($argv[2])){
             if(strtolower($argv[2]) === 'defaultfee'){
                 $key = 'defaultFee';
-                $value = floatval($argv[3]);
+                $validation = InputValidator::validateFeePercent($argv[3]);
+                if (!$validation['valid']) {
+                    echo "Error: " . $validation['error'] . "\n";
+                    return;
+                }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'defaultcurrency'){
                 $key = 'defaultCurrency';
-                $value = strtoupper($argv[3]);
+                $validation = InputValidator::validateCurrency($argv[3]);
+                if (!$validation['valid']) {
+                    echo "Error: " . $validation['error'] . "\n";
+                    return;
+                }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'maxfee'){
                 $key = 'maxFee';
-                $value = floatval($argv[3]);
+                $validation = InputValidator::validateFeePercent($argv[3]);
+                if (!$validation['valid']) {
+                    echo "Error: " . $validation['error'] . "\n";
+                    return;
+                }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'maxp2pLevel'){
                 $key = 'maxP2pLevel';
-                $value = intval($argv[3]);
+                $validation = InputValidator::validateRequestLevel($argv[3]);
+                if (!$validation['valid']) {
+                    echo "Error: " . $validation['error'] . "\n";
+                    return;
+                }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'p2pexpiration'){
                 $key = 'p2pExpiration';
-                $value = intval($argv[3]);
+                $validation = InputValidator::validateTimestamp($argv[3]);
+                if (!$validation['valid']) {
+                    echo "Error: " . $validation['error'] . "\n";
+                    return;
+                }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'maxoutput'){
                 $key = 'maxOutput';
                 if($argv[3] === 'all'){
                     $value = 'all';
                 } else{
+                    // Validate as positive integer using Security::sanitizeInt
+                    if (!is_numeric($argv[3]) || intval($argv[3]) <= 0) {
+                        echo "Error: Max output must be a positive integer or 'all'\n";
+                        return;
+                    }
                     $value = intval($argv[3]);
-                }    
+                }
             }elseif(strtolower($argv[2]) === 'localhostonly'){
                 $key = 'localhostOnly';
                 $value = ($argv[3] === '1');
@@ -99,7 +131,7 @@ class CliService {
             } else{
                 echo "Setting provided does not exist. No changes made.\n";
                 return;
-            }        
+            }
         } else{
 
             // Display current settings
@@ -124,31 +156,56 @@ class CliService {
                 case '1':
                     echo "Enter new default fee percentage: ";
                     $key = 'defaultFee';
-                    $value = floatval(trim(fgets(STDIN)));
+                    $validation = InputValidator::validateFeePercent(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
                     break;
-                
+
                 case '2':
                     echo "Enter new default currency (e.g., USD): ";
                     $key = 'defaultCurrency';
-                    $value = strtoupper(trim(fgets(STDIN)));
+                    $validation = InputValidator::validateCurrency(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
                     break;
-                
+
                 case '3':
                     echo "Enter new maximum fee percentage: ";
                     $key = 'maxFee';
-                    $value = floatval(trim(fgets(STDIN)));
+                    $validation = InputValidator::validateFeePercent(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
                     break;
-                
+
                 case '4':
                     echo "Enter new Maximum Peer to Peer Level: ";
                     $key = 'maxP2pLevel';
-                    $value = intval(trim(fgets(STDIN)));
+                    $validation = InputValidator::validateRequestLevel(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
                     break;
-                
+
                 case '5':
                     echo "Enter new Peer to Peer Expiration (in seconds): ";
                     $key = 'p2pExpiration';
-                    $value = intval(trim(fgets(STDIN)));
+                    $validation = InputValidator::validateTimestamp(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
                     break;
 
                 case '6':
@@ -158,10 +215,14 @@ class CliService {
                     if($read === 'all'){
                         $value = 'all';
                     } else{
+                        if (!is_numeric($read) || intval($read) <= 0) {
+                            echo "Error: Max output must be a positive integer or 'all'\n";
+                            return;
+                        }
                         $value = intval($read);
-                    } 
+                    }
                     break;
-                
+
                 case '7':
                     echo "Enter access mode (0 for Network Enabled, 1 for LocalHost Only): ";
                     $key = 'localhostOnly';
@@ -173,21 +234,15 @@ class CliService {
                     $key = 'defaultTransportMode';
                     $value = strtolower(trim(fgets(STDIN)));
                     break;
-                
+
                 case '9':
                     echo "Setting change cancelled.\n";
                     return;
-                
+
                 default:
                     echo "Invalid selection. No changes made.\n";
                     return;
             }
-        }
-
-        // Check for zero value due to typecasting actual text to number or using zero (or less than) where not possible
-        if($value < 0 || ($value === 0 && $key != 'defaultFee')){
-            echo "Value is invalid for setting. No changes made.\n";
-            return;
         }
 
         // Save changes to config file
