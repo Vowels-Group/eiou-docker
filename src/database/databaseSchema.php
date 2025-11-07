@@ -27,6 +27,17 @@ function getContactsTableSchema() {
     )";
 }
 
+// Balance table
+function getBalancesTableSchema() {
+    return "CREATE TABLE balances (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        pubkey TEXT NOT NULL,
+        balance INTEGER NOT NULL,
+        currency VARCHAR(10),
+        INDEX idx_balances_pubkey (pubkey)
+    )";
+}
+
 // Debug table
 function getDebugTableSchema() {
     return "CREATE TABLE debug (
