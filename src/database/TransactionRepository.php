@@ -29,10 +29,9 @@ class TransactionRepository extends AbstractRepository {
      * @return float Total amount sent
      */
     public function calculateTotalSent(string $publicKey): float {
-        $publicKeyHash = hash(Constants::HASH_ALGORITHM, $publicKey);
         $query = "SELECT SUM(amount) as total_sent FROM {$this->tableName}
-                  WHERE receiver_public_key_hash = :publicKeyHash";
-        $stmt = $this->execute($query, [':publicKeyHash' => $publicKeyHash]);
+                  WHERE receiver_public_key = :publicKey";
+        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
 
         if (!$stmt) {
             return 0;
@@ -48,11 +47,10 @@ class TransactionRepository extends AbstractRepository {
      * @param string $userPublicKey User's public key
      * @return float Total amount sent by user
      */
-    public function calculateTotalSentByUser(string $userPublicKey): float {
-        $publicKeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
+    public function calculateTotalSentByUser(string $publicKey): float {
         $query = "SELECT SUM(amount) as total_sent FROM {$this->tableName}
-                  WHERE sender_public_key_hash = :publicKeyHash";
-        $stmt = $this->execute($query, [':publicKeyHash' => $publicKeyHash]);
+                  WHERE sender_public_key = :publicKey";
+        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
 
         if (!$stmt) {
             return 0;
@@ -69,10 +67,9 @@ class TransactionRepository extends AbstractRepository {
      * @return float Total amount received
      */
     public function calculateTotalReceived(string $publicKey): float {
-        $publicKeyHash = hash(Constants::HASH_ALGORITHM, $publicKey);
         $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
-                  WHERE sender_public_key_hash = :publicKeyHash";
-        $stmt = $this->execute($query, [':publicKeyHash' => $publicKeyHash]);
+                  WHERE sender_public_key = :publicKey";
+        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
 
         if (!$stmt) {
             return 0;
@@ -88,11 +85,10 @@ class TransactionRepository extends AbstractRepository {
      * @param string $userPublicKey User's public key
      * @return float Total amount received by user
      */
-    public function calculateTotalReceivedByUser(string $userPublicKey): float {
-        $publicKeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
+    public function calculateTotalReceivedByUser(string $publicKey): float {
         $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
-                  WHERE sender_public_key_hash != :publicKeyHash";
-        $stmt = $this->execute($query, [':publicKeyHash' => $publicKeyHash]);
+                  WHERE sender_public_key != :publicKey";
+        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
 
         if (!$stmt) {
             return 0;

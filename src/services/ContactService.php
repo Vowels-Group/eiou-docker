@@ -18,6 +18,11 @@ class ContactService {
     private ContactRepository $contactRepository;
 
     /**
+     * @var BalanceRepository Balance repository instance
+     */
+    private BalanceRepository $balanceRepository;
+
+    /**
      * @var UtilityServiceContainer Utility service container
      */
     private UtilityServiceContainer $utilityContainer;
@@ -56,6 +61,7 @@ class ContactService {
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact Repository
+     * @param BalanceRepository $balanceRepository Balance repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param InputValidator $inputValidator InputValidator Util
      * @param SecureLogger $secureLogger SecureLogger Util
@@ -63,6 +69,7 @@ class ContactService {
      */
     public function __construct(
         ContactRepository $contactRepository,
+        BalanceRepository $balanceRepository,
         UtilityServiceContainer $utilityContainer,
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
@@ -70,6 +77,7 @@ class ContactService {
         ) 
     {
         $this->contactRepository = $contactRepository;
+        $this->balanceRepository = $balanceRepository;
         $this->utilityContainer = $utilityContainer;
         $this->inputValidator = $inputValidator;
         $this->secureLogger = $secureLogger;
@@ -219,6 +227,7 @@ class ContactService {
                 // If contact already exists with an address, it's a contact request, skip sending a message
                 if ($this->acceptContact($transportIndex, $address, $name, $fee, $credit, $currency)) {
                     // Send message of successful contact acceptance back to original contact requester
+                    $this->balanceRepository->insertBalance($this->contactRepository->getContactPubkey($address),0,$currency);
                     $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
                     output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
                     output(returnContactAccepted());
@@ -251,6 +260,7 @@ class ContactService {
             if($responseData['status'] === 'received'){
                 // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
                 if ($this->contactRepository->insertContact($transportIndexAssociative, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
+                    $this->balanceRepository->insertBalance($responseData['senderPublicKey'],0,$currency);
                     output(returnContactCreationSuccessful());
                 } else{
                     output(returnContactCreationFailed());
@@ -272,6 +282,7 @@ class ContactService {
             elseif($responseData['status'] === 'warning'){
                 // Insert contact and try re-synching (inquiry about acceptance status)
                 if ($this->contactRepository->insertContact($transportIndexAssociative, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
+                    $this->balanceRepository->insertBalance($responseData['senderPublicKey'],0,$currency);
                     // Resynch contact
                     if(ServiceContainer::getInstance()->getSynchService()->synchSingleContact($address, 'SILENT')){
                         output(returnContactCreationSuccessful());
@@ -484,6 +495,7 @@ class ContactService {
      * @return bool True if not blocked
      */
     public function isNotBlocked(string $address): bool {
+        // TO DO ECHO FAILURE TO CONTACT
         $transportIndex = $this->transportUtility->determineTransportType($address);
         return $this->contactRepository->isNotBlocked($transportIndex, $address);
     }

@@ -117,6 +117,21 @@ class ServiceContainer {
     }
 
     /**
+     * Get BalanceRepository instance
+     *
+     * @return BalanceRepository
+     */
+    public function getBalanceRepository(): BalanceRepository {
+        if (!isset($this->repositories['BalanceRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/BalanceRepository.php';
+            $this->repositories['BalanceRepository'] = new BalanceRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['BalanceRepository'];
+    }
+
+    /**
      * Get ContactRepository instance
      *
      * @return ContactRepository
@@ -201,6 +216,7 @@ class ServiceContainer {
             require_once __DIR__ . '/ContactService.php';
             $this->services['ContactService'] = new ContactService(
                 $this->getContactRepository(),
+                $this->getBalanceRepository(),
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->getLogger(),
@@ -219,10 +235,11 @@ class ServiceContainer {
         if (!isset($this->services['TransactionService'])) {
             require_once __DIR__ . '/TransactionService.php';
             $this->services['TransactionService'] = new TransactionService(
+                $this->getContactRepository(),
+                $this->getBalanceRepository(),
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
-                $this->getContactRepository(),
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->getLogger(),
@@ -243,6 +260,7 @@ class ServiceContainer {
             $this->services['P2pService'] = new P2pService(
                 $this->getP2pRepository(),
                 $this->getContactRepository(),
+                $this->getBalanceRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser
             );
@@ -261,6 +279,7 @@ class ServiceContainer {
             $this->services['Rp2pService'] = new Rp2pService(
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
+                $this->getBalanceRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser
             );
@@ -293,6 +312,7 @@ class ServiceContainer {
             require_once __DIR__ . '/MessageService.php';
             $this->services['MessageService'] = new MessageService(
                 $this->getContactRepository(),
+                $this->getBalanceRepository(),
                 $this->getP2pRepository(),
                 $this->getTransactionRepository(),
                 $this->getUtilityContainer(),

@@ -10,6 +10,16 @@
  */
 class TransactionService {
     /**
+     * @var ContactRepository Contact repository instance
+     */
+    private ContactRepository $contactRepository;
+
+    /**
+     * @var BalanceRepository Balance repository instance
+     */
+    private BalanceRepository $balanceRepository;
+
+    /**
      * @var P2pRepository P2p repository instance
      */
     private P2pRepository $p2pRepository;
@@ -23,11 +33,6 @@ class TransactionService {
      * @var TransactionRepository Transaction repository instance
      */
     private TransactionRepository $transactionRepository;
-
-    /**
-     * @var ContactRepository Contact repository instance
-     */
-    private ContactRepository $contactRepository;
 
     /**
      * @var UtilityServiceContainer Utility service container
@@ -77,27 +82,30 @@ class TransactionService {
     /**
      * Constructor
      *
+     * @param ContactRepository $contactRepository Contact repository
+     * @param BalanceRepository $balanceRepository Balance repository
      * @param P2pRepository $p2pRepository P2p repository
      * @param Rp2pRepository $rp2pRepository Rp2p repository
      * @param TransactionRepository $transactionRepository Transaction repository
-     * @param ContactRepository $contactRepository Contact repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
+        ContactRepository $contactRepository,
+        BalanceRepository $balanceRepository,
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
-        ContactRepository $contactRepository,
         UtilityServiceContainer $utilityContainer,
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
         UserContext $currentUser
     ) {
+        $this->contactRepository = $contactRepository;
+        $this->balanceRepository = $balanceRepository;
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
-        $this->contactRepository = $contactRepository;
         $this->utilityContainer = $utilityContainer;
         $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
@@ -162,21 +170,18 @@ class TransactionService {
             }
 
             // Check if there is enough funds to complete the transaction
-            $totalSent = $this->transactionRepository->calculateTotalSentByUser($request['senderPublicKey']);
-            $totalReceived = $this->transactionRepository->calculateTotalReceived($request['senderPublicKey']);
-            $currentBalance = $totalReceived - $totalSent;
-
+            $currentBalance =  $this->balanceRepository->getBalanceForSendingTowards($request['senderPublicKey'],$request['currency']);
+            output("CURRENTBALANCE: " .$request['senderAddress'] . " " . $currentBalance,'SILENT');
             // Get credit limit of sender
             $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
 
             // Check if sender has sufficient balance or credit limit
             $requiredAmount = $request['amount'];
-            $availableFunds = $currentBalance + $creditLimit;
 
-            if ($availableFunds > $requiredAmount) {
+            if ($currentBalance + $creditLimit > $requiredAmount) {
                 return true;
             } else {
-                echo $this->utilPayload->buildInsufficientBalance($availableFunds, $requiredAmount, $creditLimit, 0, $request['currency']);
+                echo $this->utilPayload->buildInsufficientBalance($currentBalance, $requiredAmount, $creditLimit, 0, $request['currency']);
                 return false;
             }
         } catch (PDOException $e) {
@@ -192,11 +197,18 @@ class TransactionService {
      * @return bool True if Transaction possible, False otherwise.
      */
     public function checkTransactionPossible(array $request, $echo = true) : bool{
-        // Check if Transaction already exists for memo in database and is a valid successor of previous txids
-        // Check if Transaction is a valid successor of previous txids
         $senderAddress = $request['senderAddress'];
         $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
-        if(!$this->contactRepository->isNotBlocked($transportIndex, $senderAddress) || !$this->checkPreviousTxid($request) || !$this->checkAvailableFundsTransaction($request)){
+        // Check if USer is not blocked
+        if(!$this->contactRepository->isNotBlocked($transportIndex, $senderAddress)){
+            return false;
+        } 
+        // Check if transaction is a valid successor of previous txids
+        elseif(!$this->checkPreviousTxid($request)){
+            return false;
+        } 
+        // Check if Contact has enough funds for Transaction
+        elseif(!$this->checkAvailableFundsTransaction($request)){
             return false;
         }
         // Check if Transaction already exists for txid or memo in database
@@ -277,7 +289,7 @@ class TransactionService {
      */
     public function createUniqueDatabaseTxid(array $data): string {
         // Create unique Txid for transactions (from database values)
-        $txid = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiver_public_key'] . $data['amount'] . $data['time']);
+        $txid = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiver_public_key'] . $data['amount'] . $data['time'] . $data['hash']);
         return $txid;
     }
 
@@ -435,6 +447,7 @@ class TransactionService {
                     }
                 } else{
                     $this->transactionRepository->updateStatus($txid,'completed',true);
+                    $this->balanceRepository->updateBalance($message['sender_public_key'], $message['amount'], $message['currency']);
                     output(outputTransactionAmountReceived($message),'SILENT');
                     $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                     output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
@@ -494,6 +507,7 @@ class TransactionService {
                 // If end-recipient of transaction
                 $this->p2pRepository->updateStatus($memo,'completed',true);
                 $this->transactionRepository->updateStatus($memo,'completed');
+                $this->balanceRepository->updateBalance($message['sender_public_key'], $message['amount'], $message['currency']);
                 $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
                 output(outputTransactionAmountReceived($message),'SILENT');
                 $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);

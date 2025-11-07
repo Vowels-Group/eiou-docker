@@ -20,6 +20,11 @@ class RP2pService {
     private RP2pRepository $rp2pRepository;
 
     /**
+     * @var BalanceRepository Balance repository instance
+     */
+    private BalanceRepository $balanceRepository;
+
+    /**
      * @var UtilityServiceContainer Utility service container
      */
     private UtilityServiceContainer $utilityContainer;
@@ -49,17 +54,20 @@ class RP2pService {
      *
      * @param P2pRepository $p2pRepository P2P repository
      * @param RP2pRepository $rp2pRepository RP2P repository
+     * @param BalanceRepository $balanceRepository Balance repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         P2pRepository $p2pRepository,
         RP2pRepository $rp2pRepository,
+        BalanceRepository $balanceRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
+        $this->balanceRepository = $balanceRepository;
         $this->utilityContainer = $utilityContainer;
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
@@ -89,7 +97,7 @@ class RP2pService {
 
             //Check if intermediary sender of p2p can afford to send eIOU with fees
             if(!isset($p2p['destination_address'])) {
-                $availableFunds =  $this->validationUtility->calculateAvailableFunds($p2p);
+                $availableFunds =  $this->balanceRepository->getBalanceForSendingOnwards($request['senderPublicKey'],$request['currency']);
                 if($availableFunds < $request['amount']){
                     output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
                 }

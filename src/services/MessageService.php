@@ -16,6 +16,11 @@ class MessageService {
     private ContactRepository $contactRepository;
 
     /**
+     * @var BalanceRepository Balance repository instance
+     */
+    private BalanceRepository $balanceRepository;
+
+    /**
      * @var P2pRepository P2P repository instance
      */
     private P2pRepository $p2pRepository;
@@ -65,6 +70,7 @@ class MessageService {
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
+     * @param BalanceRepository $balanceRepository Balance repository
      * @param P2pRepository $p2pRepository P2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
@@ -72,12 +78,14 @@ class MessageService {
      */
     public function __construct(
         ContactRepository $contactRepository,
+        BalanceRepository $balanceRepository,
         P2pRepository $p2pRepository,
         TransactionRepository $transactionRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->contactRepository = $contactRepository;
+        $this->balanceRepository = $balanceRepository;
         $this->p2pRepository = $p2pRepository;
         $this->transactionRepository = $transactionRepository;
         $this->utilityContainer = $utilityContainer;
@@ -241,6 +249,7 @@ class MessageService {
                         if($response['status'] === 'completed'){
                             $this->p2pRepository->updateStatus($hash,'completed',true);
                             $this->transactionRepository->updateStatus($hash,'completed');
+                            $this->balanceRepository->updateBalance($decodedMessage['senderPublicKey'], 0-$transaction['amount'], $transaction['currency']);
                             output(outputTransactionP2pSentSuccesfully($p2p),'SILENT');
                         }
                     } else{
@@ -250,15 +259,16 @@ class MessageService {
                         // Send transaction completion message onwards
                         $payloadTransactionCompleted =  $this->transactionPayload->buildCompleted($decodedMessage);
                         output(outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$p2p['sender_address']),'SILENT');
+                        $this->balanceRepository->updateBalance($decodedMessage['senderPublicKey'], 0-$transaction['amount'], $transaction['currency']);
                         $response = $this->transportUtility->send($p2p['sender_address'],$payloadTransactionCompleted);
                     }
                 }
             } elseif($decodedMessage['hashType'] === 'txid'){
                 // End recipient (contact) sent us direct confirmation, thus transaction completed successfully
                 $transaction = $this->transactionRepository->getByTxid($hash);
-
                 if($transaction){
                     $this->transactionRepository->updateStatus($hash,'completed',true);
+                    $this->balanceRepository->updateBalance($decodedMessage['senderPublicKey'], 0-$transaction['amount'], $transaction['currency']);
                     output(outputTransactionDirectSentSuccesfully($decodedMessage),'SILENT');
                 }
             }

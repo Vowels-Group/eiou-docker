@@ -20,6 +20,11 @@ class P2pService {
     private ContactRepository $contactRepository;
 
     /**
+     * @var BalanceRepository Balance repository instance
+     */
+    private BalanceRepository $balanceRepository;
+
+    /**
      * @var UtilityServiceContainer Utility service container
      */
     private UtilityServiceContainer $utilityContainer;
@@ -43,7 +48,6 @@ class P2pService {
      * @var CurrencyUtilityService Currency utility service 
      */
     private CurrencyUtilityService $currencyUtility;
-
 
     /**
      * @var UserContext Current user data
@@ -70,17 +74,20 @@ class P2pService {
      *
      * @param P2pRepository $p2pRepository P2P repository
      * @param ContactRepository $contactRepository Contact repository
+     * @param BalanceRepository $balanceRepository Balance repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         P2pRepository $p2pRepository,
         ContactRepository $contactRepository,
+        BalanceRepository $balanceRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->contactRepository = $contactRepository;
+        $this->balanceRepository = $balanceRepository;
         $this->utilityContainer = $utilityContainer;
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
@@ -138,11 +145,11 @@ class P2pService {
             if (!$this->matchYourselfP2P($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
                 // Check if sender has enough 'credit' to facilitate eIOU
                 $requestedAmount = $this->calculateRequestedAmount($request);
-                $availableFunds =  $this->validationUtility->calculateAvailableFunds($request);
+                $availableFunds = $this->balanceRepository->getBalanceForSendingOnwards($request['senderPublicKey'],$request['currency']);
                 $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderAddress']);
                 $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
 
-                if ($availableFunds < ($requestedAmount + $fundsOnHold)) {
+                if (($availableFunds + $creditLimit) < ($requestedAmount + $fundsOnHold)) {
                     echo $this->utilPayload->buildInsufficientBalance($availableFunds, $requestedAmount, $creditLimit, $fundsOnHold);
                     return false;
                 }
