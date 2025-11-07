@@ -376,6 +376,21 @@ class ServiceContainer {
     }
 
     /**
+     * Get EventBroadcaster instance
+     *
+     * @return EventBroadcaster
+     */
+    public function getEventBroadcaster(): EventBroadcaster {
+        if (!isset($this->services['EventBroadcaster'])) {
+            require_once __DIR__ . '/EventBroadcaster.php';
+            $this->services['EventBroadcaster'] = new EventBroadcaster(
+                $this->currentUser->getHomeDirectory()
+            );
+        }
+        return $this->services['EventBroadcaster'];
+    }
+
+    /**
      * Get UtilityServiceContainer instance
      *
      *
@@ -429,6 +444,32 @@ class ServiceContainer {
             $this->utils['Security'] = new Security();
         }
         return $this->utils['Security'];
+    }
+
+    /**
+     * Get ApiCache instance
+     *
+     * @return ApiCache
+     */
+    public function getApiCache(): ApiCache {
+        if (!isset($this->utils['ApiCache'])) {
+            require_once __DIR__ . '/ApiCache.php';
+            $this->utils['ApiCache'] = new ApiCache();
+        }
+        return $this->utils['ApiCache'];
+    }
+
+    /**
+     * Get DockerApiOptimizer instance
+     *
+     * @return DockerApiOptimizer
+     */
+    public function getDockerApiOptimizer(): DockerApiOptimizer {
+        if (!isset($this->utils['DockerApiOptimizer'])) {
+            require_once __DIR__ . '/DockerApiOptimizer.php';
+            $this->utils['DockerApiOptimizer'] = new DockerApiOptimizer();
+        }
+        return $this->utils['DockerApiOptimizer'];
     }
 
     /**

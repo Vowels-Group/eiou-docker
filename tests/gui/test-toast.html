@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toast Notification Tests - EIOU GUI Modernization</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-header {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .test-pass {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+        .test-fail {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+        .test-skip {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+        .summary {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            background: #007bff;
+            color: white;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        /* Toast styles (inline for testing) */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            pointer-events: none;
+        }
+        .toast {
+            background: white;
+            padding: 16px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 300px;
+            max-width: 500px;
+            pointer-events: auto;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        }
+        .toast-show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .toast-hide {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        .toast-success {
+            border-left: 4px solid #28a745;
+        }
+        .toast-error {
+            border-left: 4px solid #dc3545;
+        }
+        .toast-warning {
+            border-left: 4px solid #ffc107;
+        }
+        .toast-info {
+            border-left: 4px solid #17a2b8;
+        }
+        .toast-icon {
+            flex-shrink: 0;
+        }
+        .toast-message {
+            flex-grow: 1;
+            color: #333;
+        }
+        .toast-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #999;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+        }
+        .toast-close:hover {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Toast Notification Unit Tests</h1>
+    <p>Testing toast notification system for EIOU GUI modernization (Issue #137)</p>
+
+    <div class="test-section">
+        <div class="test-header">Manual Tests</div>
+        <p>Click buttons to manually test toast notifications:</p>
+        <button onclick="testSuccess()">Test Success Toast</button>
+        <button onclick="testError()">Test Error Toast</button>
+        <button onclick="testWarning()">Test Warning Toast</button>
+        <button onclick="testInfo()">Test Info Toast</button>
+        <button onclick="testMultiple()">Test Multiple Toasts</button>
+        <button onclick="testLongMessage()">Test Long Message</button>
+        <button onclick="testXSS()">Test XSS Protection</button>
+        <button onclick="Toast.clearAll()">Clear All</button>
+    </div>
+
+    <div class="test-section">
+        <div class="test-header">Automated Test Results</div>
+        <div id="test-results"></div>
+        <div id="test-summary" class="summary"></div>
+    </div>
+
+    <!-- Load toast.js -->
+    <script src="../../src/gui/assets/js/toast.js"></script>
+
+    <script>
+        // Test framework
+        const TestRunner = {
+            tests: [],
+            passed: 0,
+            failed: 0,
+            skipped: 0,
+
+            pass: function(name, message) {
+                this.passed++;
+                this.addResult('PASS', name, message);
+            },
+
+            fail: function(name, message) {
+                this.failed++;
+                this.addResult('FAIL', name, message);
+            },
+
+            skip: function(name, reason) {
+                this.skipped++;
+                this.addResult('SKIP', name, reason);
+            },
+
+            addResult: function(status, name, message) {
+                const result = document.createElement('div');
+                result.className = 'test-result test-' + status.toLowerCase();
+                result.textContent = status + ': ' + name + (message ? ' - ' + message : '');
+                document.getElementById('test-results').appendChild(result);
+            },
+
+            summary: function() {
+                const total = this.passed + this.failed + this.skipped;
+                const summary = document.getElementById('test-summary');
+                summary.innerHTML = `
+                    Total: ${total} |
+                    Passed: ${this.passed} ✅ |
+                    Failed: ${this.failed} ❌ |
+                    Skipped: ${this.skipped} ⏭️
+                `;
+            },
+
+            run: async function(testFn, name) {
+                try {
+                    await testFn();
+                } catch (error) {
+                    this.fail(name, error.message);
+                }
+            }
+        };
+
+        // Manual test functions
+        function testSuccess() {
+            Toast.success('Operation completed successfully!');
+        }
+
+        function testError() {
+            Toast.error('An error occurred during the operation.');
+        }
+
+        function testWarning() {
+            Toast.warning('This action may have unintended consequences.');
+        }
+
+        function testInfo() {
+            Toast.info('This is an informational message.');
+        }
+
+        function testMultiple() {
+            Toast.info('First notification');
+            setTimeout(() => Toast.success('Second notification'), 200);
+            setTimeout(() => Toast.warning('Third notification'), 400);
+            setTimeout(() => Toast.error('Fourth notification'), 600);
+        }
+
+        function testLongMessage() {
+            Toast.info('This is a very long message that should wrap properly within the toast notification container without breaking the layout or causing overflow issues.');
+        }
+
+        function testXSS() {
+            Toast.info('<script>alert("XSS")</script>This should not execute JavaScript');
+        }
+
+        // Automated tests
+        async function runAutomatedTests() {
+            console.log('Starting automated tests...');
+
+            // Test 1: Toast initialization
+            await TestRunner.run(async function() {
+                Toast.init();
+                if (!Toast.container) {
+                    throw new Error('Container not created');
+                }
+                if (!document.getElementById('toast-container')) {
+                    throw new Error('Container not in DOM');
+                }
+                TestRunner.pass('Toast initialization', 'Container created successfully');
+            }, 'Toast initialization');
+
+            // Test 2: Show success toast
+            await TestRunner.run(async function() {
+                const toast = Toast.success('Test success');
+                if (!toast) {
+                    throw new Error('Toast not created');
+                }
+                if (!toast.classList.contains('toast-success')) {
+                    throw new Error('Wrong toast type');
+                }
+                TestRunner.pass('Success toast creation', 'Toast created with correct type');
+                Toast.dismiss(toast);
+            }, 'Success toast creation');
+
+            // Test 3: Show error toast
+            await TestRunner.run(async function() {
+                const toast = Toast.error('Test error');
+                if (!toast.classList.contains('toast-error')) {
+                    throw new Error('Wrong toast type');
+                }
+                TestRunner.pass('Error toast creation', 'Toast created with correct type');
+                Toast.dismiss(toast);
+            }, 'Error toast creation');
+
+            // Test 4: Show warning toast
+            await TestRunner.run(async function() {
+                const toast = Toast.warning('Test warning');
+                if (!toast.classList.contains('toast-warning')) {
+                    throw new Error('Wrong toast type');
+                }
+                TestRunner.pass('Warning toast creation', 'Toast created with correct type');
+                Toast.dismiss(toast);
+            }, 'Warning toast creation');
+
+            // Test 5: Show info toast
+            await TestRunner.run(async function() {
+                const toast = Toast.info('Test info');
+                if (!toast.classList.contains('toast-info')) {
+                    throw new Error('Wrong toast type');
+                }
+                TestRunner.pass('Info toast creation', 'Toast created with correct type');
+                Toast.dismiss(toast);
+            }, 'Info toast creation');
+
+            // Test 6: XSS protection
+            await TestRunner.run(async function() {
+                const toast = Toast.info('<script>alert("XSS")</script>');
+                const message = toast.querySelector('.toast-message');
+                if (message.innerHTML.includes('<script>')) {
+                    throw new Error('XSS vulnerability detected');
+                }
+                TestRunner.pass('XSS protection', 'HTML properly escaped');
+                Toast.dismiss(toast);
+            }, 'XSS protection');
+
+            // Test 7: Toast dismiss
+            await TestRunner.run(async function() {
+                const toast = Toast.info('Test dismiss');
+                const initialCount = Toast.toasts.length;
+                Toast.dismiss(toast);
+
+                await new Promise(resolve => setTimeout(resolve, 350)); // Wait for animation
+
+                if (toast.parentNode) {
+                    throw new Error('Toast not removed from DOM');
+                }
+                TestRunner.pass('Toast dismiss', 'Toast removed successfully');
+            }, 'Toast dismiss');
+
+            // Test 8: Multiple toasts
+            await TestRunner.run(async function() {
+                Toast.clearAll();
+                Toast.info('Toast 1');
+                Toast.success('Toast 2');
+                Toast.warning('Toast 3');
+
+                if (Toast.toasts.length !== 3) {
+                    throw new Error('Expected 3 toasts, got ' + Toast.toasts.length);
+                }
+                TestRunner.pass('Multiple toasts', '3 toasts created successfully');
+                Toast.clearAll();
+            }, 'Multiple toasts');
+
+            // Test 9: Max toasts limit
+            await TestRunner.run(async function() {
+                Toast.clearAll();
+                for (let i = 0; i < 10; i++) {
+                    Toast.info('Toast ' + i);
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                if (Toast.toasts.length > Toast.maxToasts) {
+                    throw new Error('Too many toasts: ' + Toast.toasts.length + ' (max: ' + Toast.maxToasts + ')');
+                }
+                TestRunner.pass('Max toasts limit', 'Oldest toasts auto-dismissed');
+                Toast.clearAll();
+            }, 'Max toasts limit');
+
+            // Test 10: Clear all toasts
+            await TestRunner.run(async function() {
+                Toast.info('Toast 1');
+                Toast.info('Toast 2');
+                Toast.info('Toast 3');
+                Toast.clearAll();
+
+                await new Promise(resolve => setTimeout(resolve, 350));
+
+                if (Toast.toasts.length !== 0) {
+                    throw new Error('Toasts not cleared: ' + Toast.toasts.length + ' remaining');
+                }
+                TestRunner.pass('Clear all toasts', 'All toasts cleared successfully');
+            }, 'Clear all toasts');
+
+            // Test 11: Error handler initialization
+            await TestRunner.run(async function() {
+                if (typeof window.ErrorHandler === 'undefined') {
+                    throw new Error('ErrorHandler not loaded');
+                }
+                TestRunner.pass('ErrorHandler initialization', 'ErrorHandler available');
+            }, 'ErrorHandler initialization');
+
+            // Test 12: User-friendly error messages
+            await TestRunner.run(async function() {
+                const msg404 = ErrorHandler.getUserFriendlyMessage(404, '');
+                if (!msg404.includes('not found')) {
+                    throw new Error('404 message not user-friendly: ' + msg404);
+                }
+
+                const msg500 = ErrorHandler.getUserFriendlyMessage(500, '');
+                if (!msg500.includes('Server error')) {
+                    throw new Error('500 message not user-friendly: ' + msg500);
+                }
+
+                TestRunner.pass('User-friendly errors', 'Error messages are user-friendly');
+            }, 'User-friendly errors');
+
+            // Test 13: Transient error detection
+            await TestRunner.run(async function() {
+                const mockResponse500 = { status: 500 };
+                if (!ErrorHandler.isTransientError(mockResponse500)) {
+                    throw new Error('500 should be transient');
+                }
+
+                const mockResponse404 = { status: 404 };
+                if (ErrorHandler.isTransientError(mockResponse404)) {
+                    throw new Error('404 should not be transient');
+                }
+
+                TestRunner.pass('Transient error detection', 'Correctly identifies retryable errors');
+            }, 'Transient error detection');
+
+            // Test 14: RetryHandler initialization
+            await TestRunner.run(async function() {
+                if (typeof window.RetryHandler === 'undefined') {
+                    throw new Error('RetryHandler not loaded');
+                }
+                TestRunner.pass('RetryHandler initialization', 'RetryHandler available');
+            }, 'RetryHandler initialization');
+
+            // Test 15: Sleep function
+            await TestRunner.run(async function() {
+                const start = Date.now();
+                await RetryHandler.sleep(100);
+                const elapsed = Date.now() - start;
+
+                if (elapsed < 90 || elapsed > 150) {
+                    throw new Error('Sleep timing off: ' + elapsed + 'ms');
+                }
+                TestRunner.pass('Sleep function', 'Sleep duration accurate');
+            }, 'Sleep function');
+
+            TestRunner.summary();
+            console.log('Automated tests completed');
+        }
+
+        // Run tests when page loads
+        window.addEventListener('DOMContentLoaded', function() {
+            setTimeout(runAutomatedTests, 100);
+        });
+    </script>
+</body>
+</html>

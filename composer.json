@@ -1,0 +1,56 @@
+{
+    "name": "eiou/eiou-docker",
+    "description": "EIOU Protocol Docker Implementation with MVC Architecture",
+    "type": "project",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "EIOU Team"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "ext-pdo": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "phpstan/phpstan": "^1.10",
+        "squizlabs/php_codesniffer": "^3.7"
+    },
+    "autoload": {
+        "psr-4": {
+            "Eiou\\": "src/",
+            "Eiou\\Gui\\Controllers\\": "src/gui/controllers/",
+            "Eiou\\Gui\\Models\\": "src/gui/models/",
+            "Eiou\\Gui\\Views\\": "src/gui/views/",
+            "Eiou\\Services\\": "src/services/",
+            "Eiou\\Core\\": "src/core/",
+            "Eiou\\Database\\": "src/database/",
+            "Eiou\\Utils\\": "src/utils/"
+        },
+        "files": [
+            "src/functions.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Eiou\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit --testdox",
+        "test-coverage": "phpunit --coverage-html coverage/",
+        "phpstan": "phpstan analyse src/ --level=5",
+        "phpcs": "phpcs --standard=PSR12 src/",
+        "phpcbf": "phpcbf --standard=PSR12 src/"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

@@ -34,7 +34,8 @@ RUN echo '#!/bin/bash\nphp /usr/local/bin/eiou.php "$@"' > /usr/local/bin/eiou &
     chmod +x /usr/local/bin/eiou
 
 # Copy wallet and index files to web directory
-COPY src/walletIndex.html /var/www/html/index.html
+# COPY src/walletIndex.html /var/www/html/index.html  # File doesn't exist - commented out
+COPY src/index.html /var/www/html/index.html
 COPY src/index.html /var/www/html/eiou/index.html
 RUN chown www-data:www-data /var/www/html/eiou -R
 RUN chmod 755 /var/www/html/eiou
@@ -100,6 +101,8 @@ RUN chmod 755 /etc/eiou/src/gui/layout
 RUN chmod 644 /etc/eiou/src/gui/layout/*
 RUN chmod 755 /etc/eiou/src/gui/layout/walletSubParts
 RUN chmod 644 /etc/eiou/src/gui/layout/walletSubParts/*
+RUN chmod 755 /etc/eiou/src/gui/api
+RUN chmod 644 /etc/eiou/src/gui/api/*
 # Processors folder
 RUN chmod 755 /etc/eiou/src/processors
 RUN chmod 644 /etc/eiou/src/processors/*
@@ -114,6 +117,9 @@ RUN chmod 644 /etc/eiou/src/startup/*
 # Utils folder
 RUN chmod 755 /etc/eiou/src/utils
 RUN chmod 644 /etc/eiou/src/utils/*
+# API folder
+RUN chmod 755 /etc/eiou/src/api
+RUN chmod 644 /etc/eiou/src/api/*
 
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini

@@ -3,10 +3,22 @@
  * Transaction Controller
  *
  * Copyright 2025
- * Handles HTTP POST requests for transaction-related actions.
+ * Handles HTTP POST requests for transaction-related actions using MVC pattern.
  */
 
+namespace Eiou\Gui\Controllers;
 
+require_once __DIR__ . '/../includes/session.php';
+require_once __DIR__ . '/../models/Transaction.php';
+require_once __DIR__ . '/../helpers/MessageHelper.php';
+require_once __DIR__ . '/../../utils/InputValidator.php';
+require_once __DIR__ . '/../../utils/Security.php';
+
+use Session;
+use Eiou\Gui\Models\Transaction as TransactionModel;
+use MessageHelper;
+use InputValidator;
+use Security;
 
 class TransactionController
 {
@@ -16,12 +28,17 @@ class TransactionController
     private Session $session;
 
     /**
-     * @var ContactService Contact service from ServiceContainer
+     * @var TransactionModel Transaction model
+     */
+    private TransactionModel $transactionModel;
+
+    /**
+     * @var mixed ContactService Contact service from ServiceContainer (legacy)
      */
     private $contactService;
 
     /**
-     * @var TransactionService Transaction service from ServiceContainer
+     * @var mixed TransactionService Transaction service from ServiceContainer (legacy)
      */
     private $transactionService;
 
@@ -29,34 +46,35 @@ class TransactionController
      * Constructor
      *
      * @param Session $session
-     * @param ContactService $contactService
-     * @param TransactionService $transactionService
+     * @param mixed $contactService
+     * @param mixed $transactionService
      */
     public function __construct(
-        Session $session, 
-        ContactService $contactService,
-        TransactionService $transactionService
-        )
+        Session $session,
+        $contactService,
+        $transactionService
+    )
     {
         $this->session = $session;
         $this->contactService = $contactService;
         $this->transactionService = $transactionService;
+
+        // Initialize Transaction Model
+        require_once __DIR__ . '/../../services/ServiceContainer.php';
+        $serviceContainer = \ServiceContainer::getInstance();
+        $this->transactionModel = new TransactionModel($serviceContainer);
     }
 
     /**
      * Handle send eIOU form submission
      *
      * This method uses InputValidator and Security classes to validate and sanitize
-     * all user input before processing the transaction.
+     * all user input before processing the transaction using the Transaction Model.
      *
      * @return void
      */
     public function handleSendEIOU(): void
     {
-        // Import validation and security classes
-        require_once __DIR__ . '/../../utils/InputValidator.php';
-        require_once __DIR__ . '/../../utils/Security.php';
-
         // Sanitize input data
         $recipient = Security::sanitizeInput($_POST['recipient'] ?? '');
         $manualRecipient = Security::sanitizeInput($_POST['manual_recipient'] ?? '');
@@ -66,64 +84,32 @@ class TransactionController
         // Use manual recipient if provided, otherwise use selected recipient
         $finalRecipient = !empty($manualRecipient) ? $manualRecipient : $recipient;
 
-        // Validate required fields
-        if (empty($finalRecipient) || empty($amount) || empty($currency)) {
-            $message = 'All fields are required';
-            $messageType = 'error';
-        } else {
-            // Validate amount using InputValidator
-            $amountValidation = InputValidator::validateAmount($amount, $currency);
-            if (!$amountValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid amount: ' . $amountValidation['error'], 'error');
-                return;
-            }
+        // Validate using Transaction Model
+        $validation = $this->transactionModel->validate([
+            'recipient' => $finalRecipient,
+            'amount' => $amount,
+            'currency' => $currency
+        ]);
 
-            // Validate currency
-            $currencyValidation = InputValidator::validateCurrency($currency);
-            if (!$currencyValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid currency: ' . $currencyValidation['error'], 'error');
-                return;
-            }
-
-            // Validate recipient address or contact name
-            $addressValidation = InputValidator::validateAddress($finalRecipient);
-            $contactNameValidation = InputValidator::validateContactName($finalRecipient);
-
-            if (!$addressValidation['valid'] && !$contactNameValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid recipient: must be a valid address or contact name', 'error');
-                return;
-            }
-
-            // Use sanitized values
-            $amount = $amountValidation['value'];
-            $currency = $currencyValidation['value'];
-            // Create argv array for sendEiou function
-            $argv = ['eiou', 'send', $finalRecipient, $amount, $currency];
-
-            // Capture output
-            ob_start();
-            try {
-                if (method_exists($this->transactionService,'sendEiou')) {
-                    $this->transactionService->sendEiou($argv);
-                    $output = ob_get_clean();
-                    $message = trim($output);
-                    if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
-                        $messageType = 'error';
-                    } else {
-                        $messageType = 'success';
-                    }
-                } else {
-                    ob_end_clean();
-                    $message = 'Transaction service not available';
-                    $messageType = 'error';
-                }
-            } catch (\Exception $e) {
-                ob_end_clean();
-                $message = 'Internal server error: ' . $e->getMessage();
-                $messageType = 'error';
-            }
+        if (!$validation['valid']) {
+            $errors = $validation['errors'];
+            $message = 'Validation failed: ' . implode(', ', $errors);
+            MessageHelper::redirectMessage($message, 'error');
+            return;
         }
-        MessageHelper::redirectMessage($message, $messageType);
+
+        // Send transaction using Model
+        $result = $this->transactionModel->send(
+            $finalRecipient,
+            (float)$amount,
+            $currency
+        );
+
+        if ($result['success']) {
+            MessageHelper::redirectMessage($result['message'], 'success');
+        } else {
+            MessageHelper::redirectMessage($result['message'], 'error');
+        }
     }
 
     /**

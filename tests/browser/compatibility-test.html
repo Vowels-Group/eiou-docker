@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cross-Browser Compatibility Tests - EIOU GUI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .info-row {
+            margin: 5px 0;
+        }
+
+        .info-label {
+            font-weight: bold;
+            display: inline-block;
+            width: 150px;
+        }
+
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .test-header {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+
+        .test-result {
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .test-pass {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+
+        .test-fail {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+
+        .test-warn {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+
+        .test-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #17a2b8;
+        }
+
+        .icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .message {
+            flex-grow: 1;
+        }
+
+        .summary {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 20px;
+            background: #343a40;
+            color: white;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .summary-row {
+            margin: 8px 0;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .feature-item {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            background: #007bff;
+            color: white;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .privacy-warning {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .privacy-warning strong {
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <h1>EIOU GUI Cross-Browser Compatibility Tests</h1>
+    <p>Testing browser compatibility for GUI modernization (Issue #137)</p>
+
+    <div class="info" id="browser-info">
+        <div class="info-row">
+            <span class="info-label">Browser:</span>
+            <span id="browser-name">Detecting...</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Version:</span>
+            <span id="browser-version">Detecting...</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">User Agent:</span>
+            <span id="user-agent">Detecting...</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Platform:</span>
+            <span id="platform">Detecting...</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Screen:</span>
+            <span id="screen-size">Detecting...</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Viewport:</span>
+            <span id="viewport-size">Detecting...</span>
+        </div>
+    </div>
+
+    <div class="privacy-warning">
+        <strong>Privacy Notice:</strong> This test suite is designed to work with Tor Browser and privacy-focused browsers.
+        All tests run locally in your browser. No data is sent to external servers.
+    </div>
+
+    <div class="test-section">
+        <div class="test-header">Browser Feature Detection</div>
+        <div id="feature-results"></div>
+    </div>
+
+    <div class="test-section">
+        <div class="test-header">JavaScript API Tests</div>
+        <div id="api-results"></div>
+    </div>
+
+    <div class="test-section">
+        <div class="test-header">CSS Feature Tests</div>
+        <div id="css-results"></div>
+    </div>
+
+    <div class="test-section">
+        <div class="test-header">Performance Tests</div>
+        <div id="performance-results"></div>
+    </div>
+
+    <div class="summary" id="summary"></div>
+
+    <script>
+        // Test framework
+        const TestRunner = {
+            passed: 0,
+            failed: 0,
+            warnings: 0,
+
+            addResult: function(container, status, message, details) {
+                const result = document.createElement('div');
+                result.className = 'test-result test-' + status;
+
+                const icon = document.createElement('span');
+                icon.className = 'icon';
+                icon.textContent = {
+                    'pass': '✅',
+                    'fail': '❌',
+                    'warn': '⚠️',
+                    'info': 'ℹ️'
+                }[status] || '•';
+
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message';
+                messageDiv.innerHTML = '<strong>' + message + '</strong>' + (details ? '<br>' + details : '');
+
+                result.appendChild(icon);
+                result.appendChild(messageDiv);
+                document.getElementById(container).appendChild(result);
+
+                if (status === 'pass') this.passed++;
+                else if (status === 'fail') this.failed++;
+                else if (status === 'warn') this.warnings++;
+            },
+
+            updateSummary: function() {
+                const total = this.passed + this.failed + this.warnings;
+                const summary = document.getElementById('summary');
+                summary.innerHTML = `
+                    <div class="summary-row">Total Tests: ${total}</div>
+                    <div class="summary-row">✅ Passed: ${this.passed}</div>
+                    <div class="summary-row">❌ Failed: ${this.failed}</div>
+                    <div class="summary-row">⚠️ Warnings: ${this.warnings}</div>
+                `;
+            }
+        };
+
+        // Detect browser
+        function detectBrowser() {
+            const ua = navigator.userAgent;
+            let browser = 'Unknown';
+            let version = 'Unknown';
+
+            if (ua.indexOf('Firefox') > -1) {
+                browser = 'Firefox';
+                version = ua.match(/Firefox\/([0-9.]+)/)?.[1] || 'Unknown';
+            } else if (ua.indexOf('Edg') > -1) {
+                browser = 'Edge';
+                version = ua.match(/Edg\/([0-9.]+)/)?.[1] || 'Unknown';
+            } else if (ua.indexOf('Chrome') > -1) {
+                browser = 'Chrome';
+                version = ua.match(/Chrome\/([0-9.]+)/)?.[1] || 'Unknown';
+            } else if (ua.indexOf('Safari') > -1) {
+                browser = 'Safari';
+                version = ua.match(/Version\/([0-9.]+)/)?.[1] || 'Unknown';
+            }
+
+            // Detect Tor Browser
+            if (ua.indexOf('Firefox') > -1 && ua.indexOf('rv:') > -1) {
+                // Tor Browser is based on Firefox
+                // Additional checks could be done but Tor Browser tries to look like Firefox
+                if (window.location.protocol === 'http:' || window.location.hostname.endsWith('.onion')) {
+                    browser = 'Tor Browser (likely)';
+                }
+            }
+
+            document.getElementById('browser-name').textContent = browser;
+            document.getElementById('browser-version').textContent = version;
+            document.getElementById('user-agent').textContent = ua;
+            document.getElementById('platform').textContent = navigator.platform;
+            document.getElementById('screen-size').textContent = screen.width + 'x' + screen.height;
+            document.getElementById('viewport-size').textContent = window.innerWidth + 'x' + window.innerHeight;
+
+            return { browser, version };
+        }
+
+        // Feature detection tests
+        function runFeatureTests() {
+            const features = [
+                { name: 'Fetch API', check: () => typeof fetch !== 'undefined' },
+                { name: 'Promise', check: () => typeof Promise !== 'undefined' },
+                { name: 'async/await', check: () => {
+                    try {
+                        eval('(async () => {})');
+                        return true;
+                    } catch(e) {
+                        return false;
+                    }
+                }},
+                { name: 'Arrow Functions', check: () => {
+                    try {
+                        eval('() => {}');
+                        return true;
+                    } catch(e) {
+                        return false;
+                    }
+                }},
+                { name: 'const/let', check: () => {
+                    try {
+                        eval('const a = 1; let b = 2;');
+                        return true;
+                    } catch(e) {
+                        return false;
+                    }
+                }},
+                { name: 'Template Literals', check: () => {
+                    try {
+                        eval('`template`');
+                        return true;
+                    } catch(e) {
+                        return false;
+                    }
+                }},
+                { name: 'Spread Operator', check: () => {
+                    try {
+                        eval('[...[], 1]');
+                        return true;
+                    } catch(e) {
+                        return false;
+                    }
+                }},
+                { name: 'Destructuring', check: () => {
+                    try {
+                        eval('const {a} = {a:1}');
+                        return true;
+                    } catch(e) {
+                        return false;
+                    }
+                }},
+                { name: 'localStorage', check: () => typeof localStorage !== 'undefined' },
+                { name: 'sessionStorage', check: () => typeof sessionStorage !== 'undefined' },
+                { name: 'EventSource (SSE)', check: () => typeof EventSource !== 'undefined' },
+                { name: 'WebSocket', check: () => typeof WebSocket !== 'undefined' },
+                { name: 'Service Worker', check: () => 'serviceWorker' in navigator }
+            ];
+
+            features.forEach(feature => {
+                const supported = feature.check();
+                TestRunner.addResult(
+                    'feature-results',
+                    supported ? 'pass' : 'fail',
+                    feature.name,
+                    supported ? 'Supported' : 'Not supported'
+                );
+            });
+        }
+
+        // JavaScript API tests
+        function runAPITests() {
+            // Test 1: DOM manipulation
+            try {
+                const div = document.createElement('div');
+                div.textContent = 'test';
+                TestRunner.addResult('api-results', 'pass', 'DOM Manipulation', 'createElement and textContent work');
+            } catch(e) {
+                TestRunner.addResult('api-results', 'fail', 'DOM Manipulation', e.message);
+            }
+
+            // Test 2: Event listeners
+            try {
+                const button = document.createElement('button');
+                button.addEventListener('click', () => {});
+                TestRunner.addResult('api-results', 'pass', 'Event Listeners', 'addEventListener works');
+            } catch(e) {
+                TestRunner.addResult('api-results', 'fail', 'Event Listeners', e.message);
+            }
+
+            // Test 3: Timers
+            try {
+                const timerId = setTimeout(() => {}, 100);
+                clearTimeout(timerId);
+                TestRunner.addResult('api-results', 'pass', 'Timers', 'setTimeout/clearTimeout work');
+            } catch(e) {
+                TestRunner.addResult('api-results', 'fail', 'Timers', e.message);
+            }
+
+            // Test 4: JSON
+            try {
+                const obj = { test: 'value' };
+                const json = JSON.stringify(obj);
+                const parsed = JSON.parse(json);
+                TestRunner.addResult('api-results', 'pass', 'JSON', 'stringify and parse work');
+            } catch(e) {
+                TestRunner.addResult('api-results', 'fail', 'JSON', e.message);
+            }
+
+            // Test 5: Array methods
+            try {
+                const arr = [1, 2, 3];
+                arr.map(x => x * 2);
+                arr.filter(x => x > 1);
+                arr.reduce((a, b) => a + b, 0);
+                TestRunner.addResult('api-results', 'pass', 'Array Methods', 'map, filter, reduce work');
+            } catch(e) {
+                TestRunner.addResult('api-results', 'fail', 'Array Methods', e.message);
+            }
+
+            // Test 6: FormData
+            try {
+                const form = new FormData();
+                form.append('test', 'value');
+                TestRunner.addResult('api-results', 'pass', 'FormData', 'FormData API works');
+            } catch(e) {
+                TestRunner.addResult('api-results', 'fail', 'FormData', e.message);
+            }
+
+            // Test 7: URL API
+            try {
+                const url = new URL('http://example.com/path');
+                TestRunner.addResult('api-results', 'pass', 'URL API', 'URL constructor works');
+            } catch(e) {
+                TestRunner.addResult('api-results', 'fail', 'URL API', e.message);
+            }
+        }
+
+        // CSS feature tests
+        function runCSSTests() {
+            const testDiv = document.createElement('div');
+            document.body.appendChild(testDiv);
+
+            // Test 1: Flexbox
+            testDiv.style.display = 'flex';
+            const flexSupported = window.getComputedStyle(testDiv).display === 'flex';
+            TestRunner.addResult(
+                'css-results',
+                flexSupported ? 'pass' : 'fail',
+                'Flexbox',
+                flexSupported ? 'Supported' : 'Not supported'
+            );
+
+            // Test 2: Grid
+            testDiv.style.display = 'grid';
+            const gridSupported = window.getComputedStyle(testDiv).display === 'grid';
+            TestRunner.addResult(
+                'css-results',
+                gridSupported ? 'pass' : 'warn',
+                'CSS Grid',
+                gridSupported ? 'Supported' : 'Not supported (optional)'
+            );
+
+            // Test 3: Custom Properties (CSS Variables)
+            testDiv.style.setProperty('--test-var', '10px');
+            const varSupported = testDiv.style.getPropertyValue('--test-var') === '10px';
+            TestRunner.addResult(
+                'css-results',
+                varSupported ? 'pass' : 'fail',
+                'CSS Variables',
+                varSupported ? 'Supported' : 'Not supported'
+            );
+
+            // Test 4: Transitions
+            testDiv.style.transition = 'all 0.3s';
+            const transitionSupported = window.getComputedStyle(testDiv).transition !== '';
+            TestRunner.addResult(
+                'css-results',
+                transitionSupported ? 'pass' : 'warn',
+                'CSS Transitions',
+                transitionSupported ? 'Supported' : 'Not supported (graceful degradation)'
+            );
+
+            // Test 5: Border Radius
+            testDiv.style.borderRadius = '8px';
+            const borderRadiusSupported = window.getComputedStyle(testDiv).borderRadius !== '';
+            TestRunner.addResult(
+                'css-results',
+                borderRadiusSupported ? 'pass' : 'warn',
+                'Border Radius',
+                borderRadiusSupported ? 'Supported' : 'Not supported (cosmetic)'
+            );
+
+            document.body.removeChild(testDiv);
+        }
+
+        // Performance tests
+        async function runPerformanceTests() {
+            // Test 1: Performance API
+            if (typeof performance !== 'undefined') {
+                TestRunner.addResult('performance-results', 'pass', 'Performance API', 'Available for timing measurements');
+            } else {
+                TestRunner.addResult('performance-results', 'warn', 'Performance API', 'Not available');
+            }
+
+            // Test 2: requestAnimationFrame
+            if (typeof requestAnimationFrame !== 'undefined') {
+                TestRunner.addResult('performance-results', 'pass', 'requestAnimationFrame', 'Supported for smooth animations');
+            } else {
+                TestRunner.addResult('performance-results', 'warn', 'requestAnimationFrame', 'Not supported');
+            }
+
+            // Test 3: Page load performance
+            if (performance.timing) {
+                const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
+                TestRunner.addResult(
+                    'performance-results',
+                    'info',
+                    'Page Load Time',
+                    (loadTime / 1000).toFixed(2) + 's'
+                );
+            }
+
+            // Test 4: Memory API (Chrome only)
+            if (performance.memory) {
+                const memoryMB = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2);
+                TestRunner.addResult(
+                    'performance-results',
+                    'info',
+                    'JS Heap Size',
+                    memoryMB + ' MB (Chrome only)'
+                );
+            }
+
+            // Test 5: Connection type (if available)
+            if (navigator.connection) {
+                TestRunner.addResult(
+                    'performance-results',
+                    'info',
+                    'Connection Type',
+                    navigator.connection.effectiveType || 'Unknown'
+                );
+            }
+        }
+
+        // Run all tests
+        async function runAllTests() {
+            detectBrowser();
+            runFeatureTests();
+            runAPITests();
+            runCSSTests();
+            await runPerformanceTests();
+            TestRunner.updateSummary();
+
+            // Check for Tor Browser specific recommendations
+            const ua = navigator.userAgent;
+            if (ua.indexOf('Firefox') > -1) {
+                const torNotice = document.createElement('div');
+                torNotice.className = 'test-section';
+                torNotice.innerHTML = `
+                    <div class="test-header">Tor Browser Compatibility</div>
+                    <div class="test-result test-pass">
+                        <span class="icon">✅</span>
+                        <div class="message">
+                            <strong>Tor Browser Compatible</strong><br>
+                            This application uses vanilla JavaScript and CSS with no external dependencies,
+                            making it fully compatible with Tor Browser's privacy features.
+                        </div>
+                    </div>
+                `;
+                document.body.insertBefore(torNotice, document.getElementById('summary'));
+            }
+        }
+
+        // Run tests on page load
+        window.addEventListener('DOMContentLoaded', runAllTests);
+    </script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UX Components Test</title>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Our CSS -->
+    <link rel="stylesheet" href="assets/css/page.css">
+    <link rel="stylesheet" href="assets/css/loading.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>UX Components Test</h1>
+        </div>
+
+        <div class="alert alert-success">
+            <i class="alert-icon fas fa-check-circle"></i>
+            <div class="alert-content">
+                <div class="alert-title">Success</div>
+                <div class="alert-message">Enhanced alerts are working!</div>
+            </div>
+        </div>
+
+        <div style="background: white; padding: 2rem; border-radius: 8px; margin-bottom: 1rem;">
+            <h2>Loading Spinners</h2>
+            <div style="display: flex; gap: 2rem; align-items: center;">
+                <div class="spinner"></div>
+                <div class="spinner spinner-success"></div>
+                <div class="spinner spinner-warning"></div>
+                <div class="spinner spinner-error"></div>
+            </div>
+        </div>
+
+        <div style="background: white; padding: 2rem; border-radius: 8px; margin-bottom: 1rem;">
+            <h2>Button Loading</h2>
+            <button id="test-btn" class="btn btn-primary">
+                <i class="fas fa-paper-plane"></i> Click Me
+            </button>
+            <p style="margin-top: 1rem; color: #6c757d;">
+                Click the button to see loading state (resets after 3 seconds)
+            </p>
+        </div>
+
+        <div style="background: white; padding: 2rem; border-radius: 8px; margin-bottom: 1rem;">
+            <h2>Progress Bar</h2>
+            <div class="progress">
+                <div class="progress-bar" style="width: 60%"></div>
+            </div>
+            <p style="margin-top: 1rem;">60% Complete</p>
+        </div>
+
+        <div style="background: white; padding: 2rem; border-radius: 8px; margin-bottom: 1rem;">
+            <h2>Toast Notifications</h2>
+            <button class="btn btn-success" onclick="UIFeedback.showToast('Success message', 'success')">
+                Show Success Toast
+            </button>
+            <button class="btn btn-danger" onclick="UIFeedback.showToast('Error message', 'error')">
+                Show Error Toast
+            </button>
+        </div>
+    </div>
+
+    <script src="assets/js/ui-feedback.js"></script>
+    <script>
+        document.getElementById('test-btn').addEventListener('click', function() {
+            UIFeedback.showButtonLoading(this, 'Loading...');
+            setTimeout(() => {
+                UIFeedback.hideButtonLoading(this);
+                UIFeedback.showToast('Button action completed!', 'success');
+            }, 3000);
+        });
+    </script>
+</body>
+</html>

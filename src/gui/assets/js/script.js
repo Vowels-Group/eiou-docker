@@ -78,23 +78,34 @@
             }
         }
         
-        // Check for updates using a simple fetch
+        // Check for updates using a simple fetch with retry logic
         function checkForUpdates() {
             const currentUrl = window.location.href;
-            
-            // Create a simple request to check for updates
-            fetch(currentUrl + '&check_updates=1', {
-                method: 'GET',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
+
+            // Use retry handler for robust update checking
+            window.RetryHandler.retryFetch(
+                () => fetch(currentUrl + '&check_updates=1', {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }),
+                {
+                    maxAttempts: 2, // Only retry once for background updates
+                    initialDelay: 2000
                 }
+            )
+            .then(response => {
+                if (!response.ok) {
+                    throw response;
+                }
+                return response.text();
             })
-            .then(response => response.text())
             .then(data => {
                 // Parse the response for updates
                 if (data.includes('new_transaction') || data.includes('new_contact_request')) {
-                    // Show notification and refresh page
-                    showUpdateNotification();
+                    // Show notification using toast system
+                    window.Toast.info('New updates available! Refreshing...', 2000);
                     setTimeout(() => {
                         // Preserve auth code when refreshing
                         const url = new URL(window.location.href);
@@ -103,37 +114,12 @@
                 }
             })
             .catch(error => {
-                // Silently fail - don't show errors to user
+                // Silently fail for background updates - don't spam user
                 console.log('Update check failed (normal in Tor)');
             });
         }
-        
-        // Show a simple notification
-        function showUpdateNotification() {
-            const notification = document.createElement('div');
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: #0d6efd;
-                color: white;
-                padding: 1rem;
-                border-radius: 4px;
-                z-index: 10000;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-                animation: slideIn 0.3s ease-out;
-            `;
-            notification.innerHTML = '<i class="fas fa-sync-alt"></i> New updates available! Refreshing...';
-            document.body.appendChild(notification);
-            
-            // Remove after 3 seconds
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 3000);
-        }
-        
+
+
         // Page visibility API (works in Tor Browser)
         if (typeof document.hidden !== "undefined") {
             document.addEventListener("visibilitychange", function() {

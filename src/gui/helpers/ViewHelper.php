@@ -158,4 +158,28 @@ class ViewHelper
         $html .= '</ol></nav>';
         return $html;
     }
+
+    /**
+     * Include toast notification system CSS
+     *
+     * @return string
+     */
+    public static function includeToastCSS(): string
+    {
+        ob_start();
+        require_once("/etc/eiou/src/gui/assets/css/toast.css");
+        return ob_get_clean();
+    }
+
+    /**
+     * Include toast notification system JavaScript
+     *
+     * @return string
+     */
+    public static function includeToastJS(): string
+    {
+        ob_start();
+        require_once("/etc/eiou/src/gui/assets/js/toast.js");
+        return ob_get_clean();
+    }
 }
