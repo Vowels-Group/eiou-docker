@@ -92,7 +92,7 @@ class TransactionPayload extends BasePayload
         $memo = 'standard';
 
         return [
-            'type' => 'send',
+            'type' => 'send', 
             'receiverAddress' => $data['receiver_address'],
             'receiverPublicKey' => $data['receiver_public_key'],
             'amount' => $this->sanitizeNumber($data['amount']),
@@ -122,7 +122,7 @@ class TransactionPayload extends BasePayload
             'receiver_address' => $rp2pData['sender_address'] ?? null,
             'receiver_public_key' => $rp2pData['sender_public_key'] ?? null,
             'amount' => $transactionService->removeTransactionFee($message),
-            'currency' => $rp2pData['currency'] ?? 'EIOU',
+            'currency' => $rp2pData['currency'] ?? 'USD',
             'txid' => $transactionService->createUniqueDatabaseTxid($message),
             'previous_txid' => $transactionService->fixPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key']),
             'memo' => $rp2pData['hash'] ?? null,
