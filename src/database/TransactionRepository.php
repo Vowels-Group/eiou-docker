@@ -105,8 +105,14 @@ class TransactionRepository extends AbstractRepository {
      * @return bool True if completed
      */
     public function isCompletedByMemo(string $memo): bool {
-        $transaction = $this->getByMemo($memo);
-        return $transaction && ($transaction['status'] ?? '') === 'completed';
+        $transactions = $this->getByMemo($memo);
+        $completed = 0;
+        foreach($transactions as $transaction){
+            if($transaction['status'] === 'completed'){
+                $completed+=1;
+            }
+        }
+        return $completed == count($transaction);
     }
 
     /**
@@ -116,8 +122,14 @@ class TransactionRepository extends AbstractRepository {
      * @return bool True if completed
      */
     public function isCompletedByTxid(string $txid): bool {
-        $transaction = $this->getByTxid($txid);
-        return $transaction && ($transaction['status'] ?? '') === 'completed';
+        $transactions = $this->getByTxid($txid);
+        $completed = 0;
+        foreach($transactions as $transaction){
+            if($transaction['status'] === 'completed'){
+                $completed+=1;
+            }
+        }
+        return $completed == count($transaction);
     }
 
     /**
@@ -651,7 +663,7 @@ class TransactionRepository extends AbstractRepository {
             return null;
         }
 
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return $result ?: null;
     }
 
@@ -680,7 +692,7 @@ class TransactionRepository extends AbstractRepository {
             return null;
         }
 
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
         return $result ?: null;
     }
 
