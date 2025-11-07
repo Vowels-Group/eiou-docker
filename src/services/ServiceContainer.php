@@ -258,8 +258,8 @@ class ServiceContainer {
         if (!isset($this->services['P2pService'])) {
             require_once __DIR__ . '/P2pService.php';
             $this->services['P2pService'] = new P2pService(
-                $this->getP2pRepository(),
                 $this->getContactRepository(),
+                $this->getP2pRepository(),
                 $this->getBalanceRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser
@@ -277,6 +277,7 @@ class ServiceContainer {
         if (!isset($this->services['Rp2pService'])) {
             require_once __DIR__ . '/Rp2pService.php';
             $this->services['Rp2pService'] = new Rp2pService(
+                $this->getContactRepository(),
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getBalanceRepository(),
