@@ -174,12 +174,11 @@ class TransactionService {
             $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
             $requestedAmount = $request['amount'];
 
-            if (($availableFunds + $creditLimit) > $requestedAmount) {
-                return true;
-            } else {
+            if (($availableFunds + $creditLimit) < $requestedAmount) {
                 echo $this->utilPayload->buildInsufficientBalance($availableFunds, $requestedAmount, $creditLimit, 0, $request['currency']);
                 return false;
             }
+            return true;
         } catch (PDOException $e) {
             error_log("Database error in checkAvailableFundsTransaction: " . $e->getMessage());
             throw $e;
@@ -281,11 +280,12 @@ class TransactionService {
      * Create unique database transaction ID
      *
      * @param array $data Database transaction data
+     * @param array $rp2p Database rp2p data
      * @return string The generated transaction ID
      */
-    public function createUniqueDatabaseTxid(array $data): string {
+    public function createUniqueDatabaseTxid(array $data, array $rp2p): string {
         // Create unique Txid for transactions (from database values)
-        $txid = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiver_public_key'] . $data['amount'] . $data['time']);
+        $txid = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $rp2p['sender_public_key'] . $data['amount'] . $rp2p['time']);
         return $txid;
     }
 
@@ -498,7 +498,7 @@ class TransactionService {
 
                 // Create new transaction, from received prior transaction, for sending onwards to sender of rp2p
                 $rp2p = $this->rp2pRepository->getByHash($message['memo']);
-                $data = $this->transactionPayload->buildForwarding($message,$rp2p);
+                $data = $this->transactionPayload->buildForwarding($message, $rp2p);
                 $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
 
                 $payload = $this->transactionPayload->buildFromDatabase($data);
