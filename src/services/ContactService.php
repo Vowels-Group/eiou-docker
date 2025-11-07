@@ -227,7 +227,7 @@ class ContactService {
                 // If contact already exists with an address, it's a contact request, skip sending a message
                 if ($this->acceptContact($transportIndex, $address, $name, $fee, $credit, $currency)) {
                     // Send message of successful contact acceptance back to original contact requester
-                    $this->balanceRepository->insertBalance($this->contactRepository->getContactPubkey($address),0,$currency);
+                   
                     $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
                     output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
                     output(returnContactAccepted());
@@ -260,7 +260,7 @@ class ContactService {
             if($responseData['status'] === 'received'){
                 // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
                 if ($this->contactRepository->insertContact($transportIndexAssociative, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
-                    $this->balanceRepository->insertBalance($responseData['senderPublicKey'],0,$currency);
+                    $this->balanceRepository->insertInitialContactBalances($responseData['senderPublicKey'], $currency);
                     output(returnContactCreationSuccessful());
                 } else{
                     output(returnContactCreationFailed());
@@ -282,9 +282,10 @@ class ContactService {
             elseif($responseData['status'] === 'warning'){
                 // Insert contact and try re-synching (inquiry about acceptance status)
                 if ($this->contactRepository->insertContact($transportIndexAssociative, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
-                    $this->balanceRepository->insertBalance($responseData['senderPublicKey'],0,$currency);
+                    $this->balanceRepository->insertInitialContactBalances($responseData['senderPublicKey'], $currency);
                     // Resynch contact
                     if(ServiceContainer::getInstance()->getSynchService()->synchSingleContact($address, 'SILENT')){
+                        // TO DO ALSO SYNCH BALANCES
                         output(returnContactCreationSuccessful());
                     }
                 }
@@ -316,7 +317,9 @@ class ContactService {
      * @return bool Success status
      */
     public function acceptContact(string $transportIndex, string $address, string $name, float $fee, float $credit, string $currency): bool {
-        return $this->contactRepository->acceptContact($transportIndex, $address, $name, $fee, $credit, $currency);
+        $success = $this->contactRepository->acceptContact($transportIndex, $address, $name, $fee, $credit, $currency);
+        $this->balanceRepository->insertInitialContactBalances($this->contactRepository->getContactPubkey($address), $currency);
+        return $success;
     }
 
     /**

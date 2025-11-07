@@ -219,7 +219,7 @@ class MessageService {
     private function handleTransactionMessageInquiryRequest(array $decodedMessage): void {
         // Handle inquiry about transaction status
         output(outputHandleTransactionMessageResponse($decodedMessage),'SILENT');
-        echo  $this->messagePayload->buildTransactionCompletedCorrectly($decodedMessage);
+        echo $this->messagePayload->buildTransactionCompletedCorrectly($decodedMessage);
     }
 
     /**
@@ -236,39 +236,40 @@ class MessageService {
             // check if hash exists for p2p and check if hash exists for transaction
             if($decodedMessage['hashType'] === 'memo'){
                 $p2p = $this->p2pRepository->getByHash($hash);
-                $transaction = $this->transactionRepository->getByMemo($hash);
-
-                if($p2p && $transaction){
+                // P2P has two transactions, one to you and one you send forwards (unless you are the end recipient, then only one transaction towards you)
+                $transactions = $this->transactionRepository->getByMemo($hash);
+                if($p2p && $transactions){
                     // Check if user was original sender of transaction
                     if(isset($p2p['destination_address'])){
                         // Send direct message inquiry to end recipient double checking if completion of transaction correct
-                        $completedTransactionInquiry =  $this->messagePayload->buildTransactionCompletedInquiry($decodedMessage);
+                        $completedTransactionInquiry = $this->messagePayload->buildTransactionCompletedInquiry($decodedMessage);
                         $response = json_decode($this->transportUtility->send($p2p['destination_address'],$completedTransactionInquiry),true);
                         output(outputTransactionInquiryResponse($response),'SILENT');
 
                         if($response['status'] === 'completed'){
                             $this->p2pRepository->updateStatus($hash,'completed',true);
                             $this->transactionRepository->updateStatus($hash,'completed');
-                            $this->balanceRepository->updateBalance($decodedMessage['senderPublicKey'], 0-$transaction['amount'], $transaction['currency']);
+                            $this->balanceRepository->updateBalanceGivenTransactions($transactions);
                             output(outputTransactionP2pSentSuccesfully($p2p),'SILENT');
                         }
                     } else{
                         $this->p2pRepository->updateStatus($hash,'completed',true);
                         $this->transactionRepository->updateStatus($hash,'completed');
+                        $this->balanceRepository->updateBalanceGivenTransactions($transactions);
 
                         // Send transaction completion message onwards
                         $payloadTransactionCompleted =  $this->transactionPayload->buildCompleted($decodedMessage);
                         output(outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$p2p['sender_address']),'SILENT');
-                        $this->balanceRepository->updateBalance($decodedMessage['senderPublicKey'], 0-$transaction['amount'], $transaction['currency']);
                         $response = $this->transportUtility->send($p2p['sender_address'],$payloadTransactionCompleted);
                     }
                 }
             } elseif($decodedMessage['hashType'] === 'txid'){
                 // End recipient (contact) sent us direct confirmation, thus transaction completed successfully
+                // Singular direct transaction
                 $transaction = $this->transactionRepository->getByTxid($hash);
                 if($transaction){
                     $this->transactionRepository->updateStatus($hash,'completed',true);
-                    $this->balanceRepository->updateBalance($decodedMessage['senderPublicKey'], 0-$transaction['amount'], $transaction['currency']);
+                    $this->balanceRepository->updateBalanceGivenTransactions($transaction);
                     output(outputTransactionDirectSentSuccesfully($decodedMessage),'SILENT');
                 }
             }

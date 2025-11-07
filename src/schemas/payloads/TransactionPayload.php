@@ -117,6 +117,7 @@ class TransactionPayload extends BasePayload
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($rp2pData['sender_address']);
         $transactionService = ServiceContainer::getInstance()->getTransactionService();
         // This method returns data array for further processing, not final payload
+        //$message['time'] = $rp2pData['time']; // Add time component needed for createUniqueDatabaseTxid($message)
         return [
             'time' => $rp2pData['time'],
             'receiver_address' => $rp2pData['sender_address'] ?? null,
@@ -124,7 +125,7 @@ class TransactionPayload extends BasePayload
             'amount' => $transactionService->removeTransactionFee($message),
             'currency' => $rp2pData['currency'] ?? 'USD',
             'txid' => $transactionService->createUniqueDatabaseTxid($message),
-            'previous_txid' => $transactionService->fixPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key']),
+            'previous_txid' => $transactionService->fixPreviousTxid($this->currentUser->getPublicKey(), $rp2pData['sender_public_key']),
             'memo' => $rp2pData['hash'] ?? null,
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
