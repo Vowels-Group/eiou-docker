@@ -100,9 +100,18 @@ RUN chmod 755 /etc/eiou/src/gui/layout
 RUN chmod 644 /etc/eiou/src/gui/layout/*
 RUN chmod 755 /etc/eiou/src/gui/layout/walletSubParts
 RUN chmod 644 /etc/eiou/src/gui/layout/walletSubParts/*
+# Admin folder (includes DLQ interface)
+RUN chmod 755 /etc/eiou/src/gui/admin
+RUN chmod 644 /etc/eiou/src/gui/admin/*
+# API folder
+RUN chmod 755 /etc/eiou/src/api
+RUN chmod 755 /etc/eiou/src/api/*
 # Processors folder
 RUN chmod 755 /etc/eiou/src/processors
-RUN chmod 644 /etc/eiou/src/processors/*
+RUN chmod 755 /etc/eiou/src/processors/*
+# Cron folder (retry processor)
+RUN chmod 755 /etc/eiou/src/cron
+RUN chmod 755 /etc/eiou/src/cron/*
 # Schemas folder
 RUN chmod 755 /etc/eiou/src/schemas
 RUN chmod 644 /etc/eiou/src/schemas/*

@@ -226,7 +226,8 @@ class ServiceContainer {
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->getLogger(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getDeduplicationService()
             );
         }
         return $this->services['TransactionService'];
@@ -244,7 +245,8 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getContactRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getDeduplicationService()
             );
         }
         return $this->services['P2pService'];
@@ -315,7 +317,8 @@ class ServiceContainer {
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getDeduplicationService()
             );
         }
         return $this->services['CleanupService'];
@@ -355,6 +358,80 @@ class ServiceContainer {
             );
         }
         return $this->services['DebugService'];
+    }
+
+    /**
+     * Get DeduplicationService instance
+     *
+     * @return DeduplicationService
+     */
+    public function getDeduplicationService(): DeduplicationService {
+        if (!isset($this->services['DeduplicationService'])) {
+            require_once __DIR__ . '/DeduplicationService.php';
+            // Get dedup window from constants or use default (3600 seconds = 1 hour)
+            $dedupWindow = defined('Constants::DEDUP_WINDOW_SECONDS')
+                ? Constants::DEDUP_WINDOW_SECONDS
+                : 3600;
+            $hashAlgorithm = defined('Constants::HASH_ALGORITHM')
+                ? Constants::HASH_ALGORITHM
+                : 'sha256';
+            $this->services['DeduplicationService'] = new DeduplicationService(
+                $this->pdo,
+                $dedupWindow,
+                $hashAlgorithm
+            );
+        }
+        return $this->services['DeduplicationService'];
+    }
+
+    /**
+     * Get RetryService instance
+     *
+     * @return RetryService
+     */
+    public function getRetryService(): RetryService {
+        if (!isset($this->services['RetryService'])) {
+            require_once __DIR__ . '/RetryService.php';
+            $this->services['RetryService'] = new RetryService(
+                $this->pdo,
+                $this->getLogger()
+            );
+        }
+        return $this->services['RetryService'];
+    }
+
+    /**
+     * Get DeadLetterQueueRepository instance
+     *
+     * @return DeadLetterQueueRepository
+     */
+    public function getDeadLetterQueueRepository(): DeadLetterQueueRepository {
+        if (!isset($this->repositories['DeadLetterQueueRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/DeadLetterQueueRepository.php';
+            $this->repositories['DeadLetterQueueRepository'] = new DeadLetterQueueRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['DeadLetterQueueRepository'];
+    }
+
+    /**
+     * Get DeadLetterQueueService instance
+     *
+     * @return DeadLetterQueueService
+     */
+    public function getDeadLetterQueueService(): DeadLetterQueueService {
+        if (!isset($this->services['DeadLetterQueueService'])) {
+            require_once __DIR__ . '/DeadLetterQueueService.php';
+            $this->services['DeadLetterQueueService'] = new DeadLetterQueueService(
+                $this->getDeadLetterQueueRepository(),
+                $this->getMessageService(),
+                $this->getUtilityContainer(),
+                $this->getLogger(),
+                $this->currentUser
+            );
+        }
+        return $this->services['DeadLetterQueueService'];
     }
 
     /**

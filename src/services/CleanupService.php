@@ -41,19 +41,26 @@ class CleanupService {
     private UserContext $currentUser;
 
     /**
+     * @var DeduplicationService|null Deduplication service for cleanup
+     */
+    private ?DeduplicationService $deduplicationService;
+
+    /**
      * Constructor
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
+     * @param DeduplicationService|null $deduplicationService Deduplication service (optional)
      */
     public function __construct(
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
         UtilityServiceContainer $utilityContainer,
-        UserContext $currentUser
+        UserContext $currentUser,
+        ?DeduplicationService $deduplicationService = null
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
@@ -61,6 +68,7 @@ class CleanupService {
         $this->utilityContainer = $utilityContainer;
         $this->timeUtility = $utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
+        $this->deduplicationService = $deduplicationService;
     }
 
     /**
@@ -68,6 +76,7 @@ class CleanupService {
      *
      * This function retrieves all expiring P2P messages from the database and
      * expires those that have exceeded their expiration time.
+     * Also cleans up expired deduplication records.
      *
      * @return int Number of expiring messages processed
      * @throws PDOException If database query fails
@@ -89,6 +98,15 @@ class CleanupService {
                     $this->expireMessage($message);
                 }
             }
+
+            // Clean up expired deduplication records
+            if ($this->deduplicationService !== null) {
+                $cleanedCount = $this->deduplicationService->cleanupExpired();
+                if ($cleanedCount > 0) {
+                    output(outputDedupCleanup($cleanedCount), 'SILENT');
+                }
+            }
+
             return isset($expiringMessages) ? count($expiringMessages) : 0;
         } catch (PDOException $e) {
             error_log("Error processing cleanup messages: " . $e->getMessage());

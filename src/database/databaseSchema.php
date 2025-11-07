@@ -108,17 +108,33 @@ function getRp2pTableSchema() {
     )";
 }
 
+// Message deduplication table
+function getMessageDeduplicationTableSchema() {
+    return "CREATE TABLE message_deduplication (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        fingerprint VARCHAR(64) NOT NULL UNIQUE,
+        message_type ENUM('p2p', 'rp2p', 'transaction', 'contact', 'other') NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_fingerprint_expires (fingerprint, expires_at),
+        INDEX idx_expires_at (expires_at),
+        INDEX idx_message_type (message_type),
+        INDEX idx_created_at (created_at)
+    )";
+}
+
 // Transactions table
 function getTransactionsTableSchema() {
     return "CREATE TABLE transactions (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         tx_type ENUM(
-            'standard', 
+            'standard',
             'p2p'
         ) DEFAULT 'standard',
         status ENUM(
-            'pending',   /* Transaction has been created */ 
-            'sent',      /* Transaction has been sent onwards*/ 
+            'pending',   /* Transaction has been created */
+            'sent',      /* Transaction has been sent onwards*/
             'accepted',  /* Transaction has been accepted by peer */
             'rejected',  /* Transaction has been rejected by peer */
             'cancelled', /* Transaction has not been received by peer in time */
@@ -147,5 +163,65 @@ function getTransactionsTableSchema() {
         INDEX idx_transactions_txid (txid),
         INDEX idx_transactions_previous_txid (previous_txid),
         INDEX idx_transactions_memo (memo(255))
+    )";
+}
+
+// Message retries table
+function getMessageRetriesTableSchema() {
+    return "CREATE TABLE message_retries (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        message_id VARCHAR(255) NOT NULL,
+        message_type ENUM('transaction', 'p2p', 'rp2p') NOT NULL,
+        recipient_address VARCHAR(255) NOT NULL,
+        attempt_number INTEGER NOT NULL DEFAULT 0,
+        status ENUM(
+            'scheduled',  /* Retry is scheduled for future */
+            'sent',       /* Retry attempt was sent */
+            'failed',     /* Retry permanently failed */
+            'completed'   /* Message successfully delivered */
+        ) DEFAULT 'scheduled',
+        error_message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        next_retry_at TIMESTAMP NULL,
+        completed_at TIMESTAMP NULL,
+        INDEX idx_message_retries_message_id (message_id),
+        INDEX idx_message_retries_status (status),
+        INDEX idx_message_retries_next_retry (next_retry_at),
+        INDEX idx_message_retries_recipient (recipient_address),
+        INDEX idx_message_retries_type (message_type),
+        INDEX idx_message_retries_status_next_retry (status, next_retry_at),
+        INDEX idx_message_retries_message_attempt (message_id, attempt_number DESC),
+        INDEX idx_message_retries_recipient_created (recipient_address, created_at DESC)
+    )";
+}
+
+// Dead Letter Queue table
+function getDeadLetterQueueTableSchema() {
+    return "CREATE TABLE dead_letter_queue (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        message_type VARCHAR(50) NOT NULL,
+        sender_address VARCHAR(255),
+        transaction_hash VARCHAR(255),
+        original_message TEXT NOT NULL,
+        failure_reason VARCHAR(255) NOT NULL,
+        last_error TEXT,
+        retry_count INT DEFAULT 0,
+        manual_retry_count INT DEFAULT 0,
+        status ENUM(
+            'failed',      /* Message failed all retry attempts */
+            'retrying',    /* Manual retry in progress */
+            'resolved',    /* Successfully retried and processed */
+            'archived'     /* Manually archived/dismissed */
+        ) DEFAULT 'failed',
+        failed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_retry_at TIMESTAMP NULL,
+        resolved_at TIMESTAMP NULL,
+        resolution_notes TEXT,
+        INDEX idx_dlq_status (status),
+        INDEX idx_dlq_message_type (message_type),
+        INDEX idx_dlq_failed_at (failed_at),
+        INDEX idx_dlq_status_failed_at (status, failed_at DESC),
+        INDEX idx_dlq_transaction_hash (transaction_hash),
+        INDEX idx_dlq_failure_reason (failure_reason)
     )";
 }

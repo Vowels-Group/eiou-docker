@@ -66,18 +66,25 @@ class P2pService {
     private UtilPayload $utilPayload;
 
     /**
+     * @var DeduplicationService|null Deduplication service for preventing duplicate messages
+     */
+    private ?DeduplicationService $deduplicationService;
+
+    /**
      * Constructor
      *
      * @param P2pRepository $p2pRepository P2P repository
      * @param ContactRepository $contactRepository Contact repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
+     * @param DeduplicationService|null $deduplicationService Deduplication service (optional)
      */
     public function __construct(
         P2pRepository $p2pRepository,
         ContactRepository $contactRepository,
         UtilityServiceContainer $utilityContainer,
-        UserContext $currentUser
+        UserContext $currentUser,
+        ?DeduplicationService $deduplicationService = null
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->contactRepository = $contactRepository;
@@ -87,13 +94,14 @@ class P2pService {
         $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
         $this->timeUtility = $utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
-       
+        $this->deduplicationService = $deduplicationService;
+
         require_once '/etc/eiou/src/schemas/payloads/P2pPayload.php';
         $this->p2pPayload = new P2pPayload($this->currentUser,$this->utilityContainer);
-       
+
         require_once '/etc/eiou/src/schemas/payloads/Rp2pPayload.php';
         $this->rp2pPayload = new Rp2pPayload($this->currentUser,$this->utilityContainer);
-      
+
         require_once '/etc/eiou/src/schemas/payloads/UtilPayload.php';
         $this->utilPayload = new UtilPayload($this->currentUser,$this->utilityContainer);
     }
@@ -220,6 +228,16 @@ class P2pService {
             if (!isset($request['senderAddress'], $request['hash'], $request['amount'])) {
                 error_log("Missing required fields in P2P request: " . json_encode(Security::maskSensitiveData($request)));
                 throw new InvalidArgumentException("Invalid P2P request structure");
+            }
+
+            // Check for duplicate message
+            if ($this->deduplicationService !== null) {
+                if (!$this->deduplicationService->checkAndRecord('p2p', $request)) {
+                    error_log("Duplicate P2P request rejected - Hash: " . ($request['hash'] ?? 'unknown') .
+                             ", Sender: " . ($request['senderAddress'] ?? 'unknown'));
+                    echo $this->p2pPayload->buildRejection($request, 'duplicate message');
+                    return;
+                }
             }
 
             // Handler for p2p requests

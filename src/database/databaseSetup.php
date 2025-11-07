@@ -59,6 +59,9 @@ function freshInstall(){
                 $dbConn->exec(getTransactionsTableSchema());
                 $dbConn->exec(getP2pTableSchema());
                 $dbConn->exec(getRp2pTableSchema());
+                $dbConn->exec(getMessageDeduplicationTableSchema());
+                $dbConn->exec(getMessageRetriesTableSchema());
+                $dbConn->exec(getDeadLetterQueueTableSchema());
             } catch (PDOException $tableError) {
                 error_log("Table creation failed: " . $tableError->getMessage());
                 throw new RuntimeException(

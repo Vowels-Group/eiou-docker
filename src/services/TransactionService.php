@@ -75,6 +75,11 @@ class TransactionService {
     private UtilPayload $utilPayload;
 
     /**
+     * @var DeduplicationService|null Deduplication service for preventing duplicate messages
+     */
+    private ?DeduplicationService $deduplicationService;
+
+    /**
      * Constructor
      *
      * @param P2pRepository $p2pRepository P2p repository
@@ -82,7 +87,10 @@ class TransactionService {
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param ContactRepository $contactRepository Contact repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
+     * @param InputValidator $inputValidator Input validator
+     * @param SecureLogger $secureLogger Secure logger
      * @param UserContext $currentUser Current user data
+     * @param DeduplicationService|null $deduplicationService Deduplication service (optional)
      */
     public function __construct(
         P2pRepository $p2pRepository,
@@ -92,7 +100,8 @@ class TransactionService {
         UtilityServiceContainer $utilityContainer,
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
-        UserContext $currentUser
+        UserContext $currentUser,
+        ?DeduplicationService $deduplicationService = null
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
@@ -105,10 +114,11 @@ class TransactionService {
         $this->inputValidator = $inputValidator;
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
-       
+        $this->deduplicationService = $deduplicationService;
+
         require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
-      
+
         require_once '/etc/eiou/src/schemas/payloads/UtilPayload.php';
         $this->utilPayload = new UtilPayload($this->currentUser,$this->utilityContainer);
     }
@@ -371,6 +381,16 @@ class TransactionService {
             if (!isset($request['memo'], $request['senderAddress'])) {
                 error_log("Missing required fields in transaction request");
                 throw new InvalidArgumentException("Invalid transaction request structure");
+            }
+
+            // Check for duplicate message
+            if ($this->deduplicationService !== null) {
+                if (!$this->deduplicationService->checkAndRecord('transaction', $request)) {
+                    error_log("Duplicate transaction rejected - TxID: " . ($request['txid'] ?? 'unknown') .
+                             ", Sender: " . ($request['senderAddress'] ?? 'unknown'));
+                    echo $this->transactionPayload->buildRejection($request, 'duplicate message');
+                    return;
+                }
             }
 
             // Process incoming transactions

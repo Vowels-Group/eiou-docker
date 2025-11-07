@@ -195,20 +195,121 @@ class TransportUtilityService
     }
 
     /**
-     * Send payload to recipient
+     * Send payload to recipient with retry support
      *
      * @param string $recipient The address of the recipient
      * @param array $payload The payload to send
+     * @param bool $enableRetry Whether to enable retry mechanism (default: true)
      * @return string The response from the recipient
     */
-    public function send(string $recipient, array $payload){
+    public function send(string $recipient, array $payload, bool $enableRetry = true){
         $signedPayload = json_encode($this->sign($payload)); // Encode the payload as JSON
-        // Determine if tor address, else send by http
-        if ($this->isTorAddress($recipient)) {
-            return $this->sendByTor($recipient, $signedPayload);
-        } else {
-            return $this->sendByHttp($recipient, $signedPayload);
+
+        // Determine message ID for retry tracking
+        $messageId = $this->getMessageIdFromPayload($payload);
+        $messageType = $this->getMessageTypeFromPayload($payload);
+
+        // Try to send the message
+        try {
+            // Determine if tor address, else send by http
+            if ($this->isTorAddress($recipient)) {
+                $response = $this->sendByTor($recipient, $signedPayload);
+            } else {
+                $response = $this->sendByHttp($recipient, $signedPayload);
+            }
+
+            // Check if response indicates success
+            if ($this->isSuccessfulResponse($response) && $enableRetry) {
+                // Mark retry as completed if it exists
+                $retryService = $this->container->getRetryService();
+                $retryService->markCompleted($messageId);
+            }
+
+            return $response;
+        } catch (Exception $e) {
+            // If retry is enabled and message has an ID, schedule retry
+            if ($enableRetry && $messageId && $messageType) {
+                $retryService = $this->container->getRetryService();
+
+                // Check if we should retry
+                if ($retryService->shouldRetry($messageId)) {
+                    $attemptNumber = $retryService->getCurrentAttemptNumber($messageId);
+
+                    // Record the retry attempt
+                    $retryService->recordRetryAttempt(
+                        $messageId,
+                        $messageType,
+                        $recipient,
+                        $attemptNumber,
+                        $e->getMessage(),
+                        'scheduled'
+                    );
+
+                    error_log("Message send failed, scheduled for retry: {$messageId} (attempt {$attemptNumber})");
+                } else {
+                    // Max retries exceeded, mark as failed
+                    $retryService->markFailed($messageId, "Max retries exceeded: " . $e->getMessage());
+                    error_log("Message send permanently failed after max retries: {$messageId}");
+                }
+            }
+
+            // Return error response
+            return json_encode([
+                'status' => 'error',
+                'message' => 'Failed to send message: ' . $e->getMessage()
+            ]);
         }
+    }
+
+    /**
+     * Extract message ID from payload for retry tracking
+     *
+     * @param array $payload The payload
+     * @return string|null Message ID or null
+     */
+    private function getMessageIdFromPayload(array $payload): ?string {
+        // For transactions, use txid
+        if (isset($payload['txid'])) {
+            return $payload['txid'];
+        }
+        // For P2P/RP2P, use hash
+        if (isset($payload['hash'])) {
+            return $payload['hash'];
+        }
+        return null;
+    }
+
+    /**
+     * Extract message type from payload
+     *
+     * @param array $payload The payload
+     * @return string Message type
+     */
+    private function getMessageTypeFromPayload(array $payload): string {
+        if (isset($payload['txid'])) {
+            return 'transaction';
+        }
+        if (isset($payload['hash']) && isset($payload['salt'])) {
+            return 'p2p';
+        }
+        if (isset($payload['hash']) && !isset($payload['salt'])) {
+            return 'rp2p';
+        }
+        return 'transaction'; // Default
+    }
+
+    /**
+     * Check if response indicates successful delivery
+     *
+     * @param string $response The response from recipient
+     * @return bool True if successful
+     */
+    private function isSuccessfulResponse(string $response): bool {
+        $decoded = json_decode($response, true);
+        if ($decoded && isset($decoded['status'])) {
+            return in_array($decoded['status'], ['accepted', 'completed', 'found']);
+        }
+        return false;
     }
 
     /**
@@ -217,11 +318,12 @@ class TransportUtilityService
      * @param string $recipient The address of the recipient
      * @param string $signedPayload The JSON encoded signed payload to send
      * @return string The response from the recipient
+     * @throws RuntimeException if the request fails
     */
     public function sendByHttp (string $recipient, string $signedPayload): string {
         // Send payload through HTTP
         $ch = curl_init();
-        
+
         // Determine the protocol based on the recipient format
         $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'http://';
 
@@ -230,8 +332,25 @@ class TransportUtilityService
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
         curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30); // 30 second timeout
         $response = curl_exec($ch);
+
+        // Check for cURL errors
+        if ($response === false) {
+            $error = curl_error($ch);
+            $errno = curl_errno($ch);
+            curl_close($ch);
+            throw new RuntimeException("HTTP request failed: {$error} (errno: {$errno})");
+        }
+
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+
+        // Check for HTTP errors
+        if ($httpCode >= 400) {
+            throw new RuntimeException("HTTP request returned error code: {$httpCode}");
+        }
+
         // Return the response from the recipient
         return $response;
     }
@@ -242,6 +361,7 @@ class TransportUtilityService
      * @param string $recipient The address of the recipient
      * @param string $signedPayload The JSON encoded signed payload to send
      * @return string The response from the recipient
+     * @throws RuntimeException if the request fails
     */
     public function sendByTor (string $recipient, string $signedPayload): string {
         $ch = curl_init();
@@ -252,8 +372,25 @@ class TransportUtilityService
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
         curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60); // 60 second timeout for Tor
         $response = curl_exec($ch);
+
+        // Check for cURL errors
+        if ($response === false) {
+            $error = curl_error($ch);
+            $errno = curl_errno($ch);
+            curl_close($ch);
+            throw new RuntimeException("Tor request failed: {$error} (errno: {$errno})");
+        }
+
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+
+        // Check for HTTP errors
+        if ($httpCode >= 400) {
+            throw new RuntimeException("Tor request returned error code: {$httpCode}");
+        }
+
         // Return the response from the recipient
         return $response;
     }
