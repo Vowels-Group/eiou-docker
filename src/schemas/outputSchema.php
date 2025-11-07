@@ -142,7 +142,7 @@ function outputNoViableTransportMode(){
 }
 
 function outputNoViableRouteP2p($hash){
-    return "No viable route for forwarding p2p message with hash" . $hash . "\n";
+    return "No viable route for forwarding p2p message with hash " . $hash . "\n";
 }
 
 function outputNoSuppliedAddress(){
@@ -189,7 +189,7 @@ function outputP2pStatusUpdated($status,$hash){
 }
 
 function outputSendP2PToAmountContacts($contactsCount){
-    return "Sent Peer to peer request to " . $contactsCount['tor'] . " tor contacts and " . $contactsCount['http'] . " http(s) contacts.\n";
+    return "Sent Peer to peer request to " . $contactsCount . " contacts.\n";
 }
 
 function outputP2pUnableToAffordRp2p($result,$request){
