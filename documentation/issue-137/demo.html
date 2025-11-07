@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UX Improvements Demo - Issue #137</title>
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Our CSS files -->
+    <link rel="stylesheet" href="../../src/gui/assets/css/page.css">
+    <link rel="stylesheet" href="../../src/gui/assets/css/loading.css">
+
+    <style>
+        .demo-section {
+            background: white;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .demo-section h2 {
+            margin-top: 0;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 0.5rem;
+        }
+
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .demo-item {
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .demo-controls {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        code {
+            background: #f8f9fa;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-palette"></i> UX Improvements Demo</h1>
+            <span>Issue #137</span>
+        </div>
+
+        <!-- Alerts Section -->
+        <div class="demo-section">
+            <h2>Enhanced Alerts</h2>
+            <p>Alerts now have icons, better styling, and slide-in animations.</p>
+
+            <div class="alert alert-success">
+                <i class="alert-icon fas fa-check-circle"></i>
+                <div class="alert-content">
+                    <div class="alert-title">Success!</div>
+                    <div class="alert-message">Your transaction was completed successfully.</div>
+                </div>
+            </div>
+
+            <div class="alert alert-error">
+                <i class="alert-icon fas fa-times-circle"></i>
+                <div class="alert-content">
+                    <div class="alert-title">Error</div>
+                    <div class="alert-message">Failed to process transaction. Please try again.</div>
+                </div>
+            </div>
+
+            <div class="alert alert-warning">
+                <i class="alert-icon fas fa-exclamation-triangle"></i>
+                <div class="alert-content">
+                    <div class="alert-title">Warning</div>
+                    <div class="alert-message">Your balance is running low.</div>
+                </div>
+            </div>
+
+            <div class="alert alert-info alert-dismissible">
+                <i class="alert-icon fas fa-info-circle"></i>
+                <div class="alert-content">
+                    <div class="alert-title">Information</div>
+                    <div class="alert-message">This alert can be dismissed.</div>
+                </div>
+                <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+            </div>
+        </div>
+
+        <!-- Loading Spinners Section -->
+        <div class="demo-section">
+            <h2>Loading Spinners</h2>
+            <p>Various spinner sizes and colors for different contexts.</p>
+
+            <div class="demo-grid">
+                <div class="demo-item">
+                    <div class="spinner spinner-small"></div>
+                    <p><code>.spinner-small</code></p>
+                </div>
+                <div class="demo-item">
+                    <div class="spinner"></div>
+                    <p><code>.spinner</code></p>
+                </div>
+                <div class="demo-item">
+                    <div class="spinner spinner-large"></div>
+                    <p><code>.spinner-large</code></p>
+                </div>
+                <div class="demo-item">
+                    <div class="spinner spinner-success"></div>
+                    <p><code>.spinner-success</code></p>
+                </div>
+                <div class="demo-item">
+                    <div class="spinner spinner-warning"></div>
+                    <p><code>.spinner-warning</code></p>
+                </div>
+                <div class="demo-item">
+                    <div class="spinner spinner-error"></div>
+                    <p><code>.spinner-error</code></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Button Loading States Section -->
+        <div class="demo-section">
+            <h2>Button Loading States</h2>
+            <p>Buttons show loading spinners during async operations.</p>
+
+            <div class="demo-controls">
+                <button id="demo-btn-1" class="btn btn-primary">
+                    <i class="fas fa-paper-plane"></i> Send Transaction
+                </button>
+                <button id="demo-btn-2" class="btn btn-success">
+                    <i class="fas fa-save"></i> Save Contact
+                </button>
+                <button id="demo-btn-3" class="btn btn-danger">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+                <button class="btn btn-secondary" onclick="resetButtons()">
+                    <i class="fas fa-redo"></i> Reset Buttons
+                </button>
+            </div>
+
+            <p style="margin-top: 1rem;">
+                <small><i class="fas fa-info-circle"></i> Click any button to see loading state (auto-resets after 3 seconds)</small>
+            </p>
+        </div>
+
+        <!-- Progress Bars Section -->
+        <div class="demo-section">
+            <h2>Progress Bars</h2>
+            <p>Show progress of long-running operations.</p>
+
+            <div style="margin-bottom: 1.5rem;">
+                <h4>Determinate Progress</h4>
+                <div class="progress">
+                    <div class="progress-bar" style="width: 25%"></div>
+                </div>
+                <p><code>25%</code></p>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <div class="progress">
+                    <div class="progress-bar progress-bar-success" style="width: 75%"></div>
+                </div>
+                <p><code>75% (success)</code></p>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <h4>Indeterminate Progress</h4>
+                <div class="progress">
+                    <div class="progress-bar progress-bar-indeterminate"></div>
+                </div>
+                <p><code>Indeterminate (unknown duration)</code></p>
+            </div>
+
+            <div class="demo-controls">
+                <button class="btn btn-primary" onclick="simulateProgress()">
+                    <i class="fas fa-play"></i> Simulate Progress
+                </button>
+            </div>
+            <div id="progress-demo" style="margin-top: 1rem;"></div>
+        </div>
+
+        <!-- Skeleton Screens Section -->
+        <div class="demo-section">
+            <h2>Skeleton Screens</h2>
+            <p>Placeholder content while data is loading.</p>
+
+            <div class="demo-grid">
+                <div class="demo-item">
+                    <div class="skeleton skeleton-text"></div>
+                    <div class="skeleton skeleton-text" style="width: 80%"></div>
+                    <div class="skeleton skeleton-text-small" style="width: 60%"></div>
+                    <p><code>Text skeletons</code></p>
+                </div>
+                <div class="demo-item">
+                    <div class="skeleton skeleton-circle" style="margin: 0 auto"></div>
+                    <p><code>Circle skeleton</code></p>
+                </div>
+                <div class="demo-item">
+                    <div class="skeleton skeleton-rect"></div>
+                    <p><code>Rectangle skeleton</code></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Validation Section -->
+        <div class="demo-section">
+            <h2>Form Validation Feedback</h2>
+            <p>Real-time validation with visual feedback.</p>
+
+            <form id="demo-form">
+                <div class="form-group">
+                    <label for="demo-email">Email Address:</label>
+                    <input type="email" id="demo-email" class="form-control" placeholder="user@example.com">
+                    <button type="button" class="btn btn-primary" style="margin-top: 0.5rem;" onclick="validateEmail()">Validate</button>
+                    <button type="button" class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="clearEmail()">Clear</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Toast Notifications Section -->
+        <div class="demo-section">
+            <h2>Toast Notifications</h2>
+            <p>Non-intrusive notifications that auto-dismiss.</p>
+
+            <div class="demo-controls">
+                <button class="btn btn-success" onclick="UIFeedback.showToast('Operation completed successfully!', 'success', 5000, 'Success')">
+                    <i class="fas fa-check-circle"></i> Show Success Toast
+                </button>
+                <button class="btn btn-danger" onclick="UIFeedback.showToast('Something went wrong. Please try again.', 'error', 5000, 'Error')">
+                    <i class="fas fa-times-circle"></i> Show Error Toast
+                </button>
+                <button class="btn" style="background: #ffc107; color: white;" onclick="UIFeedback.showToast('This is a warning message.', 'warning', 5000, 'Warning')">
+                    <i class="fas fa-exclamation-triangle"></i> Show Warning Toast
+                </button>
+                <button class="btn btn-primary" onclick="UIFeedback.showToast('Here is some information for you.', 'info', 5000, 'Info')">
+                    <i class="fas fa-info-circle"></i> Show Info Toast
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading Overlay Section -->
+        <div class="demo-section">
+            <h2>Loading Overlays</h2>
+            <p>Block UI during critical operations.</p>
+
+            <div class="demo-controls">
+                <button class="btn btn-primary" onclick="demoLoadingOverlay()">
+                    <i class="fas fa-spinner"></i> Show Loading Overlay (3s)
+                </button>
+                <button class="btn btn-secondary" onclick="demoInlineLoading()">
+                    <i class="fas fa-spinner"></i> Show Inline Loading (3s)
+                </button>
+            </div>
+
+            <div id="inline-demo" style="margin-top: 1rem; padding: 2rem; background: #f8f9fa; border-radius: 4px;">
+                <h4>Sample Content Area</h4>
+                <p>This area can show inline loading state.</p>
+            </div>
+        </div>
+
+        <!-- Complete Example Section -->
+        <div class="demo-section">
+            <h2>Complete Example: Send Transaction</h2>
+            <p>Demonstrates multiple UX improvements in a realistic scenario.</p>
+
+            <form id="complete-demo-form">
+                <div class="form-group">
+                    <label for="recipient">Recipient:</label>
+                    <input type="text" id="recipient" name="recipient" required placeholder="Enter recipient address">
+                </div>
+
+                <div class="form-group">
+                    <label for="amount">Amount:</label>
+                    <input type="number" id="amount" name="amount" required placeholder="100" min="0" step="0.01">
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary" onclick="demoCompleteFlow()">
+                        <i class="fas fa-paper-plane"></i> Send Transaction
+                    </button>
+                </div>
+            </form>
+
+            <div id="complete-demo-progress" style="margin-top: 1rem;"></div>
+        </div>
+    </div>
+
+    <!-- Our JavaScript -->
+    <script src="../../src/gui/assets/js/ui-feedback.js"></script>
+
+    <script>
+        // Button loading demo
+        document.getElementById('demo-btn-1').addEventListener('click', function() {
+            UIFeedback.showButtonLoading(this, 'Sending...');
+            setTimeout(() => UIFeedback.hideButtonLoading(this), 3000);
+        });
+
+        document.getElementById('demo-btn-2').addEventListener('click', function() {
+            UIFeedback.showButtonLoading(this, 'Saving...');
+            setTimeout(() => UIFeedback.hideButtonLoading(this), 3000);
+        });
+
+        document.getElementById('demo-btn-3').addEventListener('click', function() {
+            UIFeedback.showButtonLoading(this, 'Deleting...');
+            setTimeout(() => UIFeedback.hideButtonLoading(this), 3000);
+        });
+
+        function resetButtons() {
+            UIFeedback.hideButtonLoading('#demo-btn-1');
+            UIFeedback.hideButtonLoading('#demo-btn-2');
+            UIFeedback.hideButtonLoading('#demo-btn-3');
+        }
+
+        // Progress bar demo
+        function simulateProgress() {
+            const container = document.getElementById('progress-demo');
+            container.innerHTML = '<div class="progress"><div class="progress-bar"></div></div>';
+
+            let progress = 0;
+            const interval = setInterval(function() {
+                progress += 10;
+                UIFeedback.updateProgress(container, progress, 'primary');
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    UIFeedback.updateProgress(container, 100, 'success');
+                    UIFeedback.showToast('Progress complete!', 'success');
+                }
+            }, 300);
+        }
+
+        // Email validation demo
+        function validateEmail() {
+            const input = document.getElementById('demo-email');
+            const email = input.value;
+
+            if (!email) {
+                UIFeedback.showFieldError(input, 'Email is required');
+                return;
+            }
+
+            UIFeedback.showFieldLoading(input, 'Validating email...');
+
+            setTimeout(function() {
+                const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+                if (isValid) {
+                    UIFeedback.showFieldSuccess(input, 'Email is valid!');
+                } else {
+                    UIFeedback.showFieldError(input, 'Please enter a valid email address');
+                }
+            }, 1500);
+        }
+
+        function clearEmail() {
+            const input = document.getElementById('demo-email');
+            UIFeedback.clearFieldFeedback(input);
+            input.value = '';
+        }
+
+        // Loading overlay demos
+        function demoLoadingOverlay() {
+            UIFeedback.showLoadingOverlay('Processing transaction...');
+            setTimeout(function() {
+                UIFeedback.hideLoadingOverlay();
+                UIFeedback.showToast('Transaction completed!', 'success');
+            }, 3000);
+        }
+
+        function demoInlineLoading() {
+            UIFeedback.showInlineLoading('#inline-demo');
+            setTimeout(function() {
+                UIFeedback.hideInlineLoading('#inline-demo');
+                UIFeedback.showToast('Content loaded!', 'success');
+            }, 3000);
+        }
+
+        // Complete flow demo
+        function demoCompleteFlow() {
+            const btn = event.target;
+            const form = document.getElementById('complete-demo-form');
+            const progressContainer = document.getElementById('complete-demo-progress');
+
+            // Validate form
+            if (!form.checkValidity()) {
+                UIFeedback.showToast('Please fill in all required fields', 'error');
+                return;
+            }
+
+            // Show button loading
+            UIFeedback.showButtonLoading(btn, 'Processing...');
+
+            // Show progress
+            progressContainer.innerHTML = '<div class="progress"><div class="progress-bar"></div></div>';
+
+            // Simulate multi-step process
+            let step = 0;
+            const steps = [
+                { progress: 33, message: 'Validating transaction...' },
+                { progress: 66, message: 'Sending to network...' },
+                { progress: 100, message: 'Confirming...' }
+            ];
+
+            const interval = setInterval(function() {
+                if (step < steps.length) {
+                    const currentStep = steps[step];
+                    UIFeedback.updateProgress(progressContainer, currentStep.progress, 'primary');
+                    UIFeedback.showToast(currentStep.message, 'info', 2000);
+                    step++;
+                } else {
+                    clearInterval(interval);
+                    UIFeedback.updateProgress(progressContainer, 100, 'success');
+                    UIFeedback.hideButtonLoading(btn);
+                    UIFeedback.showToast('Transaction sent successfully!', 'success', 5000, 'Success!');
+
+                    // Reset form after 2 seconds
+                    setTimeout(function() {
+                        form.reset();
+                        progressContainer.innerHTML = '';
+                    }, 2000);
+                }
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

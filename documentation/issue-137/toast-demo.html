@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toast Notification System Demo</title>
+    <style>
+        /* Include toast CSS inline for demo */
+        <?php
+        // In production, this would be loaded from toast.css
+        // For demo, copy the contents here
+        ?>
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .demo-container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .demo-button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .demo-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-error {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .btn-info {
+            background: #0dcaf0;
+            color: white;
+        }
+
+        .btn-clear {
+            background: #6c757d;
+            color: white;
+        }
+
+        .section {
+            margin-bottom: 40px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section h2 {
+            color: #444;
+            margin-bottom: 15px;
+        }
+
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+        }
+
+        .demo-form {
+            max-width: 500px;
+            margin: 20px 0;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .submit-button {
+            background: #0d6efd;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+    </style>
+
+    <!-- Load toast.css from actual file -->
+    <link rel="stylesheet" href="../../src/gui/assets/css/toast.css">
+</head>
+<body>
+    <div class="demo-container">
+        <h1>Toast Notification System Demo</h1>
+        <p class="subtitle">Interactive demonstration of error handling and toast notifications</p>
+
+        <!-- Basic Toast Examples -->
+        <div class="section">
+            <h2>1. Basic Toast Notifications</h2>
+            <p>Click buttons to show different types of toast notifications:</p>
+
+            <div class="button-group">
+                <button class="demo-button btn-success" onclick="showSuccessToast()">
+                    Show Success
+                </button>
+                <button class="demo-button btn-error" onclick="showErrorToast()">
+                    Show Error
+                </button>
+                <button class="demo-button btn-warning" onclick="showWarningToast()">
+                    Show Warning
+                </button>
+                <button class="demo-button btn-info" onclick="showInfoToast()">
+                    Show Info
+                </button>
+                <button class="demo-button btn-clear" onclick="clearAllToasts()">
+                    Clear All
+                </button>
+            </div>
+
+            <div class="code-block">
+Toast.success('Operation completed successfully!');<br>
+Toast.error('An error occurred. Please try again.');<br>
+Toast.warning('Warning: This action cannot be undone.');<br>
+Toast.info('Processing your request...');
+            </div>
+        </div>
+
+        <!-- Multiple Toasts -->
+        <div class="section">
+            <h2>2. Multiple Toasts (Stack Test)</h2>
+            <p>Test multiple toasts stacking vertically (max 5 visible):</p>
+
+            <div class="button-group">
+                <button class="demo-button btn-info" onclick="showMultipleToasts(3)">
+                    Show 3 Toasts
+                </button>
+                <button class="demo-button btn-info" onclick="showMultipleToasts(5)">
+                    Show 5 Toasts
+                </button>
+                <button class="demo-button btn-info" onclick="showMultipleToasts(10)">
+                    Show 10 Toasts (overflow test)
+                </button>
+            </div>
+
+            <div class="code-block">
+for (let i = 0; i < 10; i++) {<br>
+&nbsp;&nbsp;Toast.info('Message ' + (i + 1));<br>
+}<br>
+// Only 5 toasts will be visible (oldest removed)
+            </div>
+        </div>
+
+        <!-- Custom Timeouts -->
+        <div class="section">
+            <h2>3. Custom Timeouts</h2>
+            <p>Control how long toasts stay visible:</p>
+
+            <div class="button-group">
+                <button class="demo-button btn-success" onclick="Toast.success('Quick message!', 2000)">
+                    2 Second Toast
+                </button>
+                <button class="demo-button btn-info" onclick="Toast.info('Standard message', 5000)">
+                    5 Second Toast (Default)
+                </button>
+                <button class="demo-button btn-error" onclick="Toast.error('Important error!', 10000)">
+                    10 Second Toast
+                </button>
+                <button class="demo-button btn-warning" onclick="Toast.warning('Persistent warning', 0)">
+                    Persistent Toast (No Auto-Dismiss)
+                </button>
+            </div>
+
+            <div class="code-block">
+Toast.success('Quick message!', 2000);&nbsp;&nbsp;// 2 seconds<br>
+Toast.error('Important!', 10000);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// 10 seconds<br>
+Toast.warning('Persistent', 0);&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// No auto-dismiss
+            </div>
+        </div>
+
+        <!-- Error Handler Demo -->
+        <div class="section">
+            <h2>4. Error Handler (HTTP Status Codes)</h2>
+            <p>Simulate different HTTP error responses:</p>
+
+            <div class="button-group">
+                <button class="demo-button btn-error" onclick="simulateError(400)">
+                    400 Bad Request
+                </button>
+                <button class="demo-button btn-error" onclick="simulateError(401)">
+                    401 Unauthorized
+                </button>
+                <button class="demo-button btn-error" onclick="simulateError(403)">
+                    403 Forbidden
+                </button>
+                <button class="demo-button btn-error" onclick="simulateError(404)">
+                    404 Not Found
+                </button>
+                <button class="demo-button btn-error" onclick="simulateError(500)">
+                    500 Server Error
+                </button>
+                <button class="demo-button btn-error" onclick="simulateError(503)">
+                    503 Service Unavailable
+                </button>
+            </div>
+
+            <div class="code-block">
+const message = ErrorHandler.getUserFriendlyMessage(400);<br>
+// Returns: "Invalid request. Please check your input and try again."
+            </div>
+        </div>
+
+        <!-- Retry Logic Demo -->
+        <div class="section">
+            <h2>5. Retry Logic (Exponential Backoff)</h2>
+            <p>Simulate network errors with automatic retry:</p>
+
+            <div class="button-group">
+                <button class="demo-button btn-warning" onclick="simulateRetry(true)">
+                    Retry Success (after 2 attempts)
+                </button>
+                <button class="demo-button btn-error" onclick="simulateRetry(false)">
+                    Retry Failure (all 3 attempts fail)
+                </button>
+            </div>
+
+            <div class="code-block">
+// Automatically retries on transient errors (500, 502, 503, 504)<br>
+await RetryHandler.retryFetch(() => fetch('/api/endpoint'), {<br>
+&nbsp;&nbsp;maxAttempts: 3,<br>
+&nbsp;&nbsp;initialDelay: 1000,<br>
+&nbsp;&nbsp;backoffMultiplier: 2<br>
+});
+            </div>
+        </div>
+
+        <!-- Form Handler Demo -->
+        <div class="section">
+            <h2>6. Form Handler with Toast Notifications</h2>
+            <p>Complete form submission with loading state and notifications:</p>
+
+            <form class="demo-form" id="demo-form" onsubmit="handleDemoSubmit(event)">
+                <div class="form-group">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-control" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Simulate Error</label>
+                    <select class="form-control" name="error_type">
+                        <option value="none">No Error (Success)</option>
+                        <option value="400">400 Bad Request</option>
+                        <option value="500">500 Server Error (Retry)</option>
+                        <option value="network">Network Error</option>
+                    </select>
+                </div>
+                <button type="submit" class="submit-button">
+                    Submit Form
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Load toast.js and form-handler.js from actual files -->
+    <script src="../../src/gui/assets/js/toast.js"></script>
+
+    <!-- Demo JavaScript -->
+    <script>
+        // Basic toast examples
+        function showSuccessToast() {
+            Toast.success('Transaction sent successfully! Your balance has been updated.');
+        }
+
+        function showErrorToast() {
+            Toast.error('Failed to send transaction. Insufficient balance.');
+        }
+
+        function showWarningToast() {
+            Toast.warning('Warning: This contact is not verified. Proceed with caution.');
+        }
+
+        function showInfoToast() {
+            Toast.info('Checking for updates... Please wait.');
+        }
+
+        function clearAllToasts() {
+            Toast.clearAll();
+        }
+
+        // Multiple toasts
+        function showMultipleToasts(count) {
+            const types = ['success', 'error', 'warning', 'info'];
+            for (let i = 0; i < count; i++) {
+                const type = types[i % types.length];
+                Toast[type]('Message ' + (i + 1) + ' - ' + type);
+            }
+        }
+
+        // Error simulation
+        function simulateError(statusCode) {
+            const message = ErrorHandler.getUserFriendlyMessage(statusCode);
+            Toast.error('Error ' + statusCode + ': ' + message);
+        }
+
+        // Retry simulation
+        async function simulateRetry(shouldSucceed) {
+            let attemptCount = 0;
+
+            try {
+                await RetryHandler.retryFetch(
+                    async () => {
+                        attemptCount++;
+                        console.log('Attempt', attemptCount);
+
+                        // Simulate server response
+                        if (shouldSucceed && attemptCount === 2) {
+                            // Success on 2nd attempt
+                            return new Response(JSON.stringify({success: true}), {
+                                status: 200,
+                                headers: {'Content-Type': 'application/json'}
+                            });
+                        } else {
+                            // Simulate 503 error (retryable)
+                            return new Response('Service temporarily unavailable', {
+                                status: 503
+                            });
+                        }
+                    },
+                    {
+                        maxAttempts: 3,
+                        initialDelay: 1000
+                    }
+                );
+
+                Toast.success('Request succeeded after ' + attemptCount + ' attempts!');
+
+            } catch (error) {
+                await ErrorHandler.handleError(error, 'testing retry logic');
+            }
+        }
+
+        // Form handler demo
+        async function handleDemoSubmit(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            const errorType = form.error_type.value;
+
+            // Show loading state
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+            // Simulate network delay
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            // Simulate different responses
+            if (errorType === 'none') {
+                Toast.success('Form submitted successfully!');
+                form.reset();
+            } else if (errorType === '400') {
+                Toast.error('Invalid input. Please check your email address.');
+            } else if (errorType === '500') {
+                Toast.error('Server error. The request will be retried automatically.');
+            } else if (errorType === 'network') {
+                Toast.error('Network error. Please check your connection and try again.');
+            }
+
+            // Restore button
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
+        }
+    </script>
+</body>
+</html>
