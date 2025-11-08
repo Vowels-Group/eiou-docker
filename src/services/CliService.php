@@ -283,6 +283,13 @@ class CliService {
      * @param array $argv The CLI input data
     */
     public function displayUserInfo(array $argv) {    
+       // Define limit of output displayed
+        if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
+            $displayLimit = $argv[3];                   
+        } else{
+            $displayLimit = $this->currentUser->getMaxOutput();
+        }
+
         echo "User Information:\n";
         
         // Locators array
@@ -302,22 +309,15 @@ class CliService {
         $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$pubkey);
         echo "\tPublic Key:" . $readablePubKey . "\n";
 
+
         // Get total sent and received by currency
         $balances = $this->balanceRepository->getUserBalance();
         foreach($balances as $balance){
             printf("\tTotal Balance %s : %s\n", $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2));
-        }
-       
-        if (isset($argv[2]) && $argv[2] === 'detail') {
-            // Define limit of output displayed
-            if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
-                $displayLimit = $argv[3];                   
-            } else{
-                $displayLimit = $this->currentUser->getMaxOutput();
+            if (isset($argv[2]) && $argv[2] === 'detail') { 
+                $this->viewBalanceQuery("received","from",$this->transactionRepository->getReceivedUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit); // Received Balances
+                $this->viewBalanceQuery("sent","to",$this->transactionRepository->getSentUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit); // Sent Balances
             }
-
-            $this->viewBalanceQuery("received","from",$this->transactionRepository->getReceivedUserTransactions(PHP_INT_MAX),$displayLimit); // Received Balances
-            $this->viewBalanceQuery("sent","to",$this->transactionRepository->getSentUserTransactions(PHP_INT_MAX),$displayLimit); // Sent Balances
         }
     }
 
@@ -359,13 +359,8 @@ class CliService {
      * @param array $argv The CLI input data
     */
     public function viewBalances(array $argv) {
-     
-        $userBalance = $this->transactionRepository->getUserTotalBalance();
-        $additionalAddresses = $this->currentUser->getUserAddresses();
-        $additionalInfo = $additionalAddresses ? '(' . implode(', ', $additionalAddresses) . ')' : '';
-        printf("%s %s, Balance: %.2f\n", 'me', $additionalInfo, $userBalance);
-
         // Check if an address or name is provided
+        $contactResult = null;
         if (isset($argv[2])) {
             // Check if it's a HTTP or Tor address
             if ($this->transportUtility->isAddress($argv[2])) {
@@ -378,29 +373,38 @@ class CliService {
                 // Check if the name yields an address
                 $contactResult = $this->contactRepository->lookupByName($argv[2]);
             }
+        }
+
+        $additionalAddresses = $this->currentUser->getUserAddresses();
+        $additionalInfo = $additionalAddresses ? '(' . implode(', ', $additionalAddresses) . ')' : '';
+
+        if(!$contactResult){
+            echo "Address/Name unknown or not provided, displaying all balances.\n";
+            $contacts = $this->contactRepository->getAllContacts();
+        }
+        $balances = $this->balanceRepository->getUserBalance();
+        foreach($balances as $balance){
+            printf("%s %s, Balance %s : %.2f\n", 'me', $additionalInfo, $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)); 
             if ($contactResult) {
-                $contactBalances= $this->balanceRepository->getContactBalances($contactResult['pubkey']);
+                $contactBalances= $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'],$balance['currency']);
                 foreach($contactBalances as $contactBalance){
-                    printf("\t%s (%s, %s), Balance: %.2f %s\n", $contactResult['name'], $contactResult['tor'], $contactResult['http'], $contactBalance['balance'], $contactBalance['currency']);
+                    printf("\t%s (%s), Balance %s : %.2f %s\n", $contactResult['name'], $contactResult['tor'] ?? $contactResult['http'], $contactBalance['direction'], $contactBalance['balance'], $contactBalance['currency']);
                 }
-              
-                
                 return;
             } else{
-                echo "Address/Name unknown, displaying all balances.\n";
+                if(!$contacts){
+                    echo "\tNo Contacts exist, so no contact balances can be displayed.\n";
+                    continue;
+                } else{
+                    foreach($contacts as $contact){
+                        $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contact['pubkey'], $balance['currency']);
+                        foreach($contactBalances as $contactBalance){
+                            printf("\t%s (%s), Balance %s : %.2f %s\n", $contact['name'], $contact['http'] ?? $contact['tor'], $contactBalance['direction'], $contactBalance['balance'], $contactBalance['currency']);
+                        }
+                    }
+                }    
             }    
-        }
-        $contacts = $this->contactRepository->getAllContacts();
-        $pubkeys = $this->contactRepository->getAllContactsPubkeys();
-        if($pubkeys){
-            $balances = $this->transactionRepository->getAllContactBalances($this->currentUser->getPublicKey(),$pubkeys);
-            foreach($contacts as $contact){
-                printf("\t%s (%s), Balance: %.2f\n", $contact['name'], $contact['address'], $this->currencyUtility->convertCentsToDollars($balances[$contact['pubkey']]));
-            } 
-        } else{
-            echo "\tNo Contacts exist, so no contact balances can be displayed.\n";
-        }
-        
+        }     
     }
 
     /**
@@ -458,7 +462,7 @@ class CliService {
 
         echo "Transaction History for $direction transactions:\n";
         echo "-------------------------------------------\n";
-        echo str_pad("Timestamp", 19, ' ') . " | " . 
+        echo str_pad("Timestamp", 26, ' ') . " | " . 
             str_pad("Direction", 9, ' ') . " | " . 
             str_pad("Name (Address)", 82, ' ') . " | " .
             str_pad("Amount", 10, ' ') . " | " . 
@@ -469,7 +473,7 @@ class CliService {
         $countrows = 1;
         foreach ($transactions as $tx) {
             $contactName = $this->contactRepository->lookupNameByAddress($tx['counterparty']);
-            echo str_pad($tx['date'], 19, ' ') . " | " . 
+            echo str_pad($tx['date'], 26, ' ') . " | " . 
                 str_pad($tx['type'], 9, ' ') . " | " . 
                 str_pad($contactName . " (" . $this->transportUtility->truncateAddress($tx['counterparty'],82-(strlen($contactName)+2)) . ")", 82, ' ') . " | " . 
                 str_pad($tx['amount'], 10, ' ') . " | " . 
