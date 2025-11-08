@@ -15,6 +15,11 @@ class CliService {
     private ContactRepository $contactRepository;
 
     /**
+     * @var BalanceRepository Balance repository instance
+     */
+    private BalanceRepository $balanceRepository;
+
+    /**
      * @var TransactionRepository Transaction repository instance
      */
     private TransactionRepository $transactionRepository;
@@ -43,16 +48,19 @@ class CliService {
      * Constructor
      * 
      * @param ContactRepository $contactRepository Contact Repository
+     * @param BalanceRepository $balanceRepository Balance repository
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         ContactRepository $contactRepository,
+        BalanceRepository $balanceRepository,
         TransactionRepository $transactionRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->contactRepository = $contactRepository;
+        $this->balanceRepository = $balanceRepository;
         $this->transactionRepository = $transactionRepository;
         $this->utilityContainer = $utilityContainer;
         $this->currentUser = $currentUser;
@@ -294,13 +302,12 @@ class CliService {
         $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$pubkey);
         echo "\tPublic Key:" . $readablePubKey . "\n";
 
-        // Calculate total sent and received
-        $totalReceived = $this->transactionRepository->calculateTotalReceived($pubkey);
-        $totalSent = $this->transactionRepository->calculateTotalSent($pubkey);
-        $balance = $this->currencyUtility->convertCentsToDollars(($totalReceived - $totalSent));
-        
-        echo "\tTotal Balance: " . number_format($balance, 2) . "\n";
-
+        // Get total sent and received by currency
+        $balances = $this->balanceRepository->getUserBalance();
+        foreach($balances as $balance){
+            printf("\tTotal Balance %s : %s\n", $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2));
+        }
+       
         if (isset($argv[2]) && $argv[2] === 'detail') {
             // Define limit of output displayed
             if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
@@ -372,8 +379,12 @@ class CliService {
                 $contactResult = $this->contactRepository->lookupByName($argv[2]);
             }
             if ($contactResult) {
-                $contactBalance = $this->currencyUtility->convertCentsToDollars($this->transactionRepository->getContactBalance($this->currentUser->getPublicKey(),$contactResult['pubkey']));
-                printf("\t%s (%s), Balance: %.2f\n", $contactResult['name'], $contactResult['address'], $contactBalance);
+                $contactBalances= $this->balanceRepository->getContactBalances($contactResult['pubkey']);
+                foreach($contactBalances as $contactBalance){
+                    printf("\t%s (%s, %s), Balance: %.2f %s\n", $contactResult['name'], $contactResult['tor'], $contactResult['http'], $contactBalance['balance'], $contactBalance['currency']);
+                }
+              
+                
                 return;
             } else{
                 echo "Address/Name unknown, displaying all balances.\n";
@@ -418,8 +429,8 @@ class CliService {
                 $contactResult = $this->contactRepository->lookupByName($argv[2]);           
             }
             if ($contactResult) {
-                $sentTransactions = $this->transactionRepository->getSentUserTransactionsAddress($contactResult['address'],PHP_INT_MAX);
-                $receivedTransactions = $this->transactionRepository->getReceivedUserTransactionsAddress($contactResult['address'],PHP_INT_MAX);
+                $sentTransactions = $this->transactionRepository->getSentUserTransactionsAddress($contactResult[$transportIndex],PHP_INT_MAX);
+                $receivedTransactions = $this->transactionRepository->getReceivedUserTransactionsAddress($contactResult[$transportIndex],PHP_INT_MAX);
                 $this->displayHistory($sentTransactions, 'sent', $displayLimit);
                 $this->displayHistory($receivedTransactions, 'received', $displayLimit);
                 return;
