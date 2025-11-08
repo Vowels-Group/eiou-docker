@@ -23,24 +23,24 @@ class BalanceRepository extends AbstractRepository {
     }
 
     /**
-     * Lookup contact balance (both ways)
+     * Lookup contact balance (both ways) subsetted on currency
      *
      * @param string $pubkey Contact pubkey
      * @param string $currency currency
-     * @return int Contact Balance
+     * @return array|null Array of Balances
      */
-    public function getContactBalance(string $pubkey, string $currency): int{
+    public function getContactBalance(string $pubkey, string $currency): array|null{
         $query = "SELECT balance, direction FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
         $stmt = $this->execute($query, [':pubkey' => $pubkey,':currency' => $currency]);
         if (!$stmt) {
-            return 0;
+            return null;
         }
-        $result = $stmt->fetchColumn();
-        return $result ?: 0;
+        $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
+        return $result ?: null;
     }
 
     /**
-     * Lookup contact received balance
+     * Lookup contact received balance (subsetted on currency)
      *
      * @param string $pubkey Contact pubkey
      * @param string $currency currency
@@ -57,7 +57,7 @@ class BalanceRepository extends AbstractRepository {
     }
 
     /**
-     * Lookup contact sent balance
+     * Lookup contact sent balance (subsetted on currency)
      *
      * @param string $pubkey Contact pubkey
      * @param string $currency currency
@@ -85,7 +85,24 @@ class BalanceRepository extends AbstractRepository {
         if (!$stmt) {
             return null;
         }
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
+     * Lookup contact balances subsetted on currency (both ways)
+     *
+     * @param string $pubkey Contact pubkey
+     * @param string $currency currency
+     * @return array|null Contact data or null
+     */
+    public function getContactBalancesCurrency(string $pubkey, string $currency): array|null{
+        $query = "SELECT balance, direction, currency FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
+        $stmt = $this->execute($query, [':pubkey' => $pubkey, ':currency' => $currency]);
+        if (!$stmt) {
+            return null;
+        }
+        $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
         return $result ?: null;
     }
 
@@ -138,25 +155,6 @@ class BalanceRepository extends AbstractRepository {
         }
         
         $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return $result ?: null;
-    }
-
-    /**
-     * Lookup contact balances with currency (directions substracted)
-     *
-     * @param string $pubkey Contact pubkey
-     * @return array|null Contact data or null
-     */
-    public function getContactBalancesSubstracted(string $pubkey): array|null{
-
-
-
-        $query = "SELECT balance, direction, currency FROM {$this->tableName} WHERE pubkey = :pubkey";
-        $stmt = $this->execute($query, [':pubkey' => $pubkey]);
-        if (!$stmt) {
-            return null;
-        }
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result ?: null;
     }
 
