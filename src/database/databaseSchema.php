@@ -18,7 +18,7 @@ function getContactsTableSchema() {
         fee_percent INT,
         credit_limit INT,
         currency VARCHAR(10),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_contacts_tor (tor),
         INDEX idx_contacts_pubkey_hash (pubkey_hash),
         INDEX idx_contacts_name (name),
@@ -46,7 +46,7 @@ function getBalancesTableSchema() {
 function getDebugTableSchema() {
     return "CREATE TABLE debug (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        timestamp DATETIME(6) DEFAULT CURRENT_TIMESTAMP,
         level ENUM('SILENT', 'ECHO', 'INFO', 'WARNING', 'ERROR', 'CRITICAL') NOT NULL,
         message TEXT NOT NULL,
         context JSON,
@@ -88,10 +88,10 @@ function getP2pTableSchema() {
             'cancelled',    /* Transaction cancelled or failed */
             'expired'       /* Request timed out */
         ) DEFAULT 'initial',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
         incoming_txid VARCHAR(255),
         outgoing_txid VARCHAR(255),
-        completed_at TIMESTAMP NULL,
+        completed_at TIMESTAMP(6) NULL,
         INDEX idx_p2p_hash (hash),
         INDEX idx_p2p_status (status),
         INDEX idx_p2p_created_at (created_at),
@@ -116,7 +116,7 @@ function getRp2pTableSchema() {
         sender_public_key TEXT NOT NULL,
         sender_address VARCHAR(255) NOT NULL,
         sender_signature TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_rp2p_hash (hash),
         INDEX idx_rp2p_created_at (created_at),
         INDEX idx_rp2p_sender_address (sender_address)
@@ -147,7 +147,7 @@ function getTransactionsTableSchema() {
         receiver_public_key_hash VARCHAR(64),
         amount INT NOT NULL,
         currency VARCHAR(10) NOT NULL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        timestamp DATETIME(6) DEFAULT CURRENT_TIMESTAMP,
         txid VARCHAR(255) UNIQUE NOT NULL,
         previous_txid VARCHAR(255),
         sender_signature TEXT,

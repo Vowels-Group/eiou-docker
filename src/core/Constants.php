@@ -193,7 +193,7 @@ class Constants {
 
     // UI/Display
     const DISPLAY_TRANSACTION_HISTORY_LIMIT = 10;
-    const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s';
+    const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
     const DISPLAY_CURRENCY_DECIMALS = 2;
     const DISPLAY_ADDRESS_COLUMN_WIDTH = 56;
     const DISPLAY_NAME_COLUMN_WIDTH = 20;
