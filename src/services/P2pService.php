@@ -15,14 +15,14 @@ class P2pService {
     private ContactRepository $contactRepository;
 
     /**
-     * @var P2pRepository P2P repository instance
-     */
-    private P2pRepository $p2pRepository;
-
-    /**
      * @var BalanceRepository Balance repository instance
      */
     private BalanceRepository $balanceRepository;
+
+    /**
+     * @var P2pRepository P2P repository instance
+     */
+    private P2pRepository $p2pRepository;
 
     /**
      * @var UtilityServiceContainer Utility service container
@@ -80,14 +80,14 @@ class P2pService {
      */
     public function __construct(
         ContactRepository $contactRepository,
-        P2pRepository $p2pRepository,
         BalanceRepository $balanceRepository,
+        P2pRepository $p2pRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->contactRepository = $contactRepository;
-        $this->p2pRepository = $p2pRepository;
         $this->balanceRepository = $balanceRepository;
+        $this->p2pRepository = $p2pRepository;
         $this->utilityContainer = $utilityContainer;
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();

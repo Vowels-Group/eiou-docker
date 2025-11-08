@@ -15,6 +15,11 @@ class RP2pService {
     private ContactRepository $contactRepository;
 
     /**
+     * @var BalanceRepository Balance repository instance
+     */
+    private BalanceRepository $balanceRepository;
+
+    /**
      * @var P2pRepository P2P repository instance
      */
     private P2pRepository $p2pRepository;
@@ -23,11 +28,6 @@ class RP2pService {
      * @var RP2pRepository RP2P repository instance
      */
     private RP2pRepository $rp2pRepository;
-
-    /**
-     * @var BalanceRepository Balance repository instance
-     */
-    private BalanceRepository $balanceRepository;
 
     /**
      * @var UtilityServiceContainer Utility service container
@@ -58,24 +58,24 @@ class RP2pService {
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
+     * @param BalanceRepository $balanceRepository Balance repository
      * @param P2pRepository $p2pRepository P2P repository
      * @param RP2pRepository $rp2pRepository RP2P repository
-     * @param BalanceRepository $balanceRepository Balance repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         ContactRepository $contactRepository,
+        BalanceRepository $balanceRepository,
         P2pRepository $p2pRepository,
         RP2pRepository $rp2pRepository,
-        BalanceRepository $balanceRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->contactRepository = $contactRepository;
+        $this->balanceRepository = $balanceRepository;
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
-        $this->balanceRepository = $balanceRepository;
         $this->utilityContainer = $utilityContainer;
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();

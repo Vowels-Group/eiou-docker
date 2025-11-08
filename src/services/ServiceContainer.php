@@ -259,8 +259,8 @@ class ServiceContainer {
             require_once __DIR__ . '/P2pService.php';
             $this->services['P2pService'] = new P2pService(
                 $this->getContactRepository(),
-                $this->getP2pRepository(),
                 $this->getBalanceRepository(),
+                $this->getP2pRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser
             );
@@ -278,9 +278,9 @@ class ServiceContainer {
             require_once __DIR__ . '/Rp2pService.php';
             $this->services['Rp2pService'] = new Rp2pService(
                 $this->getContactRepository(),
+                $this->getBalanceRepository(),
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
-                $this->getBalanceRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser
             );
@@ -388,6 +388,7 @@ class ServiceContainer {
             require_once __DIR__ . '/CliService.php';
             $this->services['CliService'] = new CliService(
                 $this->getContactRepository(),
+                $this->getBalanceRepository(),
                 $this->getTransactionRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser
