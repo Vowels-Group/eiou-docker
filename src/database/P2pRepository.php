@@ -213,7 +213,6 @@ class P2pRepository extends AbstractRepository {
         if (function_exists('output') && function_exists('outputUpdatedTxid')) {
             output(outputUpdatedTxid($txid, 'outgoing_txid', $hash), 'SILENT');
         }
-
         return $affectedRows >= 0;
     }
 
@@ -231,7 +230,7 @@ class P2pRepository extends AbstractRepository {
         if ($completed) {
             // Use raw SQL for CURRENT_TIMESTAMP
             $query = "UPDATE {$this->tableName}
-                      SET status = :status, completed_at = CURRENT_TIMESTAMP
+                      SET status = :status, completed_at = CURRENT_TIMESTAMP(6)
                       WHERE hash = :hash";
             $stmt = $this->execute($query, [':status' => $status, ':hash' => $hash]);
             $success = $stmt !== false;
