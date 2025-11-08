@@ -182,9 +182,9 @@ class TransactionRepository extends AbstractRepository {
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
 
         $query = "SELECT txid FROM {$this->tableName}
-                  WHERE (sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash) 
-                        OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash)
-                  ORDER BY timestamp DESC LIMIT 1";
+                WHERE (sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash) 
+                    OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash)
+                ORDER BY timestamp DESC LIMIT 1";
 
         $stmt = $this->execute($query, [
             ':sender_public_key_hash' => $senderPublicKeyHash,
@@ -198,7 +198,8 @@ class TransactionRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ? $result['txid'] : null;
+    
+        return $result ? $result['txid'] : null;        
     }
 
 
@@ -703,30 +704,52 @@ class TransactionRepository extends AbstractRepository {
      * @return string JSON response
      */
     public function insertTransaction(array $request): string {
+
         // Calculate public key hashes
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $request['senderPublicKey']);
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $request['receiverPublicKey']);
 
         // Determine transaction type
         $txType = ($request['memo'] === 'standard') ? 'standard' : 'p2p';
+        $result = false;
+        try{
+            $this->beginTransaction();
+            output("BEGIN TRANSACTION FOR: " . $request['memo'], 'SILENT');
+            $query = "SELECT txid FROM {$this->tableName}
+                    WHERE (sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash) 
+                        OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash)
+                    ORDER BY timestamp DESC LIMIT 1";
 
-        $data = [
-            'tx_type' => $txType,
-            'sender_address' => $request['senderAddress'],
-            'sender_public_key' => $request['senderPublicKey'],
-            'sender_public_key_hash' => $senderPublicKeyHash,
-            'receiver_address' => $request['receiverAddress'],
-            'receiver_public_key' => $request['receiverPublicKey'],
-            'receiver_public_key_hash' => $receiverPublicKeyHash,
-            'amount' => $request['amount'],
-            'currency' => $request['currency'],
-            'txid' => $request['txid'],
-            'previous_txid' => $request['previousTxid'],
-            'sender_signature' => $request['signature'] ?? null, // upon initial inserting a standard transaction in database of original sender it is null
-            'memo' => $request['memo']
-        ];
+            $stmt = $this->execute($query, [
+                ':sender_public_key_hash' => $senderPublicKeyHash,
+                ':receiver_public_key_hash' => $receiverPublicKeyHash,
+                ':second_receiver_public_key_hash' => $receiverPublicKeyHash,
+                ':second_sender_public_key_hash' => $senderPublicKeyHash
+            ]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $result = $this->insert($data);
+            $data = [
+                'tx_type' => $txType,
+                'sender_address' => $request['senderAddress'],
+                'sender_public_key' => $request['senderPublicKey'],
+                'sender_public_key_hash' => $senderPublicKeyHash,
+                'receiver_address' => $request['receiverAddress'],
+                'receiver_public_key' => $request['receiverPublicKey'],
+                'receiver_public_key_hash' => $receiverPublicKeyHash,
+                'amount' => $request['amount'],
+                'currency' => $request['currency'],
+                'txid' => $request['txid'],
+                'previous_txid' => $result ? $result['txid'] : null,
+                'sender_signature' => $request['signature'] ?? null, // upon initial inserting a standard transaction in database of original sender it is null
+                'memo' => $request['memo']
+            ];
+            $result = $this->insert($data);
+            $this->commit();
+            output("COMMITED TRANSACTION FOR: " . $request['memo'], 'SILENT');
+        } catch (PDOException $e) {
+            $this->rollBack();
+        }
+                
 
         if ($result !== false) {
             // Output silent logging if function exists
