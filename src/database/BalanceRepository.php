@@ -23,7 +23,7 @@ class BalanceRepository extends AbstractRepository {
     }
 
     /**
-     * Lookup contact balance
+     * Lookup contact balance (both ways)
      *
      * @param string $pubkey Contact pubkey
      * @param string $currency currency
@@ -74,12 +74,83 @@ class BalanceRepository extends AbstractRepository {
     }
 
     /**
-     * Lookup contact balances with currency
+     * Lookup contact balances with currency (both ways)
      *
      * @param string $pubkey Contact pubkey
      * @return array|null Contact data or null
      */
-    public function getContactBalances(string $pubkey): null{
+    public function getContactBalances(string $pubkey): array|null{
+        $query = "SELECT balance, direction, currency FROM {$this->tableName} WHERE pubkey = :pubkey";
+        $stmt = $this->execute($query, [':pubkey' => $pubkey]);
+        if (!$stmt) {
+            return null;
+        }
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    
+    /**
+     * Lookup User balances (grouped by currency)
+     *
+     * @return array|null Contact data or null
+     */
+    public function getUserBalance(): array|null{
+
+        $query = "SELECT currency, 
+            Sum(CASE direction 
+                    WHEN 'received' THEN balance 
+                    WHEN 'sent' THEN -balance 
+                END) AS total_balance 
+        FROM {$this->tableName}
+        GROUP BY currency";
+
+        $stmt = $this->execute($query);
+        
+        if (!$stmt) {
+            return null;
+        }
+        
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
+     * Lookup User balances regarding Contact (grouped by currency)
+     *
+     * @param string $pubkey Contact pubkey
+     * @return array|null Contact data or null
+     */
+    public function getUserBalanceContact(string $pubkey): array|null{
+
+        $query = "SELECT currency, 
+            Sum(CASE direction 
+                    WHEN 'received' THEN balance 
+                    WHEN 'sent' THEN -balance 
+                END) AS total_balance 
+        FROM {$this->tableName} WHERE pubkey = :pubkey
+        GROUP BY currency";
+
+        $stmt = $this->execute($query, [':pubkey' => $pubkey]);
+        
+        if (!$stmt) {
+            return null;
+        }
+        
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
+     * Lookup contact balances with currency (directions substracted)
+     *
+     * @param string $pubkey Contact pubkey
+     * @return array|null Contact data or null
+     */
+    public function getContactBalancesSubstracted(string $pubkey): array|null{
+
+
+
         $query = "SELECT balance, direction, currency FROM {$this->tableName} WHERE pubkey = :pubkey";
         $stmt = $this->execute($query, [':pubkey' => $pubkey]);
         if (!$stmt) {
