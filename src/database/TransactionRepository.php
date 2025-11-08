@@ -969,7 +969,6 @@ class TransactionRepository extends AbstractRepository {
         $result = false;
         try{
             $this->beginTransaction();
-            output("BEGIN TRANSACTION FOR: " . $request['memo'], 'SILENT');
             $query = "SELECT txid FROM {$this->tableName}
                     WHERE (sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash) 
                         OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash)
@@ -1000,7 +999,6 @@ class TransactionRepository extends AbstractRepository {
             ];
             $result = $this->insert($data);
             $this->commit();
-            output("COMMITED TRANSACTION FOR: " . $request['memo'], 'SILENT');
         } catch (PDOException $e) {
             $this->rollBack();
         }
@@ -1019,7 +1017,6 @@ class TransactionRepository extends AbstractRepository {
                     }
                 }
             }
-
             return json_encode([
                 "status" => "accepted",
                 "txid" => $request['txid'],
