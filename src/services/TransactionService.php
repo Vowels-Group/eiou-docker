@@ -240,24 +240,18 @@ class TransactionService {
         }
     }
 
-    /**
-     * Fix previous transaction ID to avoid duplicates
-     *
-     * @param string $senderPubKey Sender's public key
-     * @param string $receiverPubKey Receiver's public key
-     * @return string|null Previous transaction ID
-     */
-    public function fixPreviousTxid(string $senderPubKey, string $receiverPubKey): ?string {
-        // Make sure that the previous transactions txid in the chain is not already being used as a previous_txid for another transaction
-        $prevID = $this->transactionRepository->getPreviousTxid($senderPubKey, $receiverPubKey);
-
-        // while($prevID && $this->transactionRepository->existingPreviousTxid($prevID)){
-        //     $prevID = $this->transactionRepository->getPreviousTxid($senderPubKey, $receiverPubKey);
-        //     usleep(Constants::TIME_MICROSECONDS_PER_MILLISECOND); // Sleep for 1ms
-        // }
-
-        return $prevID;
-    }
+    // /**
+    //  * Fix previous transaction ID to avoid duplicates
+    //  *
+    //  * @param string $senderPubKey Sender's public key
+    //  * @param string $receiverPubKey Receiver's public key
+    //  * @return string|null Previous transaction ID
+    //  */
+    // public function fixPreviousTxid(string $senderPubKey, string $receiverPubKey): ?string {
+    //     // Make sure that the previous transactions txid in the chain is not already being used as a previous_txid for another transaction
+    //     $prevID = $this->transactionRepository->getPreviousTxid($senderPubKey, $receiverPubKey);
+    //     return $prevID;
+    // }
 
     /**
      * Create unique transaction ID from transaction data
@@ -339,7 +333,7 @@ class TransactionService {
         $data['receiverAddress'] = $contactInfo[$transportIndex];
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
         $data['txid'] = $this->createUniqueTxid($data);
-        $data['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $contactInfo['receiverPublicKey']);
+        //$data['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $contactInfo['receiverPublicKey']);
 
         return $data;
     }
@@ -361,7 +355,7 @@ class TransactionService {
         $data['amount'] = $request['amount'];
         $data['currency'] = $request['currency'];
         $data['txid'] = $this->createUniqueTxid($data);
-        $data['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $request['senderPublicKey']);
+        //$data['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $request['senderPublicKey']);
         $data['memo'] = $request['hash'];
 
         return $data;
@@ -392,12 +386,12 @@ class TransactionService {
                 // Check if precursors to transactions exist and correspond
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
                     $request['txid'] = $this->createUniqueTxid($request);
-                    $request['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $request['senderPublicKey']);
+                    //$request['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $request['senderPublicKey']);
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
                     // If Transaction is for end-recipient
-                    $request['previousTxid'] = $this->fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']);
+                    //$request['previousTxid'] = $this->fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']);
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 }
@@ -498,11 +492,14 @@ class TransactionService {
 
                 // Create new transaction, from received prior transaction, for sending onwards to sender of rp2p
                 $rp2p = $this->rp2pRepository->getByHash($message['memo']);
+                
+                
                 $data = $this->transactionPayload->buildForwarding($message, $rp2p);
-                $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
-
                 $payload = $this->transactionPayload->buildFromDatabase($data);
+
                 $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($payload),true);
+                
+                $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
                 output(outputTransactionInsertion($insertTransactionResponse));
             } 
              // If end-recipient of transaction
