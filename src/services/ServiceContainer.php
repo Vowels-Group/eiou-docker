@@ -261,6 +261,7 @@ class ServiceContainer {
                 $this->getContactRepository(),
                 $this->getBalanceRepository(),
                 $this->getP2pRepository(),
+                $this->getTransactionRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser
             );
