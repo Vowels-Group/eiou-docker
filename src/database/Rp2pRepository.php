@@ -93,6 +93,26 @@ class Rp2pRepository extends AbstractRepository {
     }
 
     /**
+     * Retrieve credit currently in RP2P for a pubkey
+     *
+     * @param string $pubkey Sender pubkey
+     * @return float Total amount on hold
+     */
+    public function getCreditInRp2p(string $pubkey): float {
+        $query = "SELECT SUM(amount) as total_amount FROM {$this->tableName}
+                  WHERE sender_public_key = :pubkey
+                    AND status NOT IN ('cancelled', 'completed')";
+        $stmt = $this->execute($query, [':pubkey' => $pubkey]);
+
+        if (!$stmt) {
+            return 0;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (float) ($result['total_amount'] ?? 0);
+    }
+
+    /**
      * Get RP2P messages by sender address
      *
      * @param string $address Sender address
