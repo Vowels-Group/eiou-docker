@@ -162,16 +162,16 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
-     * Retrieve credit currently on hold in P2P for an address
+     * Retrieve credit currently on hold in P2P for a pubkey
      *
-     * @param string $address Sender address
+     * @param string $pubkey Sender pubkey
      * @return float Total amount on hold
      */
-    public function getCreditInP2p(string $address): float {
+    public function getCreditInP2p(string $pubkey): float {
         $query = "SELECT SUM(amount) as total_amount FROM {$this->tableName}
-                  WHERE sender_address = :address
+                  WHERE sender_public_key = :pubkey
                     AND status IN ('initial', 'queued', 'sent', 'found')";
-        $stmt = $this->execute($query, [':address' => $address]);
+        $stmt = $this->execute($query, [':pubkey' => $pubkey]);
 
         if (!$stmt) {
             return 0;
