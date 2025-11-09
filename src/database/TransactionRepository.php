@@ -25,10 +25,10 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Calculate total amount sent to a public key
      *
-     * @param string $publicKey Public key
+     * @param string $publicKey Public key of contact
      * @return float Total amount sent
      */
-    public function calculateTotalSent(string $publicKey): float {
+    public function calculateTotalSentToContact(string $publicKey): float {
         $query = "SELECT SUM(amount) as total_sent FROM {$this->tableName}
                   WHERE receiver_public_key = :publicKey";
         $stmt = $this->execute($query, [':publicKey' => $publicKey]);
@@ -63,10 +63,10 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Calculate total amount received from a public key
      *
-     * @param string $publicKey Public key
+     * @param string $publicKey Public key of contact
      * @return float Total amount received
      */
-    public function calculateTotalReceived(string $publicKey): float {
+    public function calculateTotalReceivedFromContact(string $publicKey): float {
         $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
                   WHERE sender_public_key = :publicKey";
         $stmt = $this->execute($query, [':publicKey' => $publicKey]);

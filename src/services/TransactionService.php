@@ -737,8 +737,8 @@ class TransactionService {
      * @param string $publicKey User's public key
      * @return float Total amount sent
      */
-    public function calculateTotalSent(string $publicKey): float {
-        return $this->transactionRepository->calculateTotalSentByUser($publicKey);
+    public function calculateTotalSentToContact(string $publicKey): float {
+        return $this->transactionRepository->calculateTotalSentToContact($publicKey);
     }
 
     /**
@@ -747,8 +747,8 @@ class TransactionService {
      * @param string $publicKey User's public key
      * @return float Total amount received
      */
-    public function calculateTotalReceived(string $publicKey): float {
-        return $this->transactionRepository->calculateTotalReceivedByUser($publicKey);
+    public function calculateTotalReceivedFromContact(string $publicKey): float {
+        return $this->transactionRepository->calculateTotalReceivedFromContact($publicKey);
     }
 
     /**
