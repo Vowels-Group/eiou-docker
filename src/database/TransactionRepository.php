@@ -1099,7 +1099,7 @@ class TransactionRepository extends AbstractRepository {
     public function getTransactionsBetweenAddresses(string $address1, string $address2, int $limit = 0): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE (sender_address = :address1 AND receiver_address = :address2)
-                     OR (sender_address = :address2 AND receiver_address = :address1)
+                     OR (sender_address = :address3 AND receiver_address = :address4)
                   ORDER BY timestamp DESC";
 
         if ($limit > 0) {
@@ -1109,6 +1109,8 @@ class TransactionRepository extends AbstractRepository {
         $stmt = $this->pdo->prepare($query);
         $stmt->bindValue(':address1', $address1);
         $stmt->bindValue(':address2', $address2);
+        $stmt->bindValue(':address3', $address2);
+        $stmt->bindValue(':address4', $address1);
 
         if ($limit > 0) {
             $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
@@ -1119,6 +1121,47 @@ class TransactionRepository extends AbstractRepository {
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve transactions between addresses", $e);
+            return [];
+        }
+    }
+
+     /**
+     * Get transactions between two pubkeys
+     *
+     * @param string $pubkey1 First pubkey
+     * @param string $pubkey2 Second pubkey
+     * @param int $limit Maximum number of transactions
+     * @return array Array of transactions
+     */
+    public function getTransactionsBetweenPubkeys(string $pubkey1, string $pubkey2, int $limit = 0): array {
+        // Who sent or received does not matter, we check both directions
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $pubkey1);
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $pubkey2);
+
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE (sender_public_key_hash = :sender_pubkey_hash1 AND receiver_public_key_hash = :receiver_pubkey_hash1)
+                     OR (sender_public_key_hash = :receiver_pubkey_hash2 AND receiver_public_key_hash = :sender_pubkey_hash2)
+                  ORDER BY timestamp DESC";
+
+        if ($limit > 0) {
+            $query .= " LIMIT :limit";
+        }
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':sender_pubkey_hash1', $senderPublicKeyHash);
+        $stmt->bindValue(':receiver_pubkey_hash1', $receiverPublicKeyHash);
+        $stmt->bindValue(':receiver_pubkey_hash2', $receiverPublicKeyHash);
+        $stmt->bindValue(':sender_pubkey_hash2', $senderPublicKeyHash);
+
+        if ($limit > 0) {
+            $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        }
+
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve transactions between pubkeys", $e);
             return [];
         }
     }
