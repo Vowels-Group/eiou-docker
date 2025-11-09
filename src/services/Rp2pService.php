@@ -103,12 +103,13 @@ class RP2pService {
             // Add users fee to request
             $request['amount'] += $p2p['my_fee_amount'];
 
-            //Check if intermediary sender of p2p can afford to send eIOU with fees
+            //Check if previous (intermediary) sender of p2p can afford to send eIOU with fees through you
             if(!isset($p2p['destination_address'])) {
                 $availableFunds =  $this->validationUtility->calculateAvailableFunds($p2p);
-                $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
+                $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key']);
                 if(($creditLimit + $availableFunds) < $request['amount']){
                     output(outputP2pUnableToAffordRp2p($p2p,$request), 'SILENT');
+                    return;
                 }
             }
 
