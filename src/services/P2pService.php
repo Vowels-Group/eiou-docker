@@ -204,7 +204,7 @@ class P2pService {
         // Check if Contact has enough funds for P2P without fees
         elseif(!$this->checkAvailableFunds($request)){
             return false;
-        }
+        } 
 
         // Check if P2P already exists for hash in database
         try{
