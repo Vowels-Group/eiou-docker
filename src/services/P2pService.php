@@ -25,6 +25,11 @@ class P2pService {
     private P2pRepository $p2pRepository;
 
     /**
+     * @var TransactionRepository Transaction repository instance
+     */
+    private TransactionRepository $transactionRepository;
+
+    /**
      * @var UtilityServiceContainer Utility service container
      */
     private UtilityServiceContainer $utilityContainer;
@@ -73,8 +78,9 @@ class P2pService {
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
-     * @param P2pRepository $p2pRepository P2P repository
      * @param BalanceRepository $balanceRepository Balance repository
+     * @param P2pRepository $p2pRepository P2P repository
+     * @param TransactionRepository $transactionRepository Transaction repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
@@ -82,12 +88,14 @@ class P2pService {
         ContactRepository $contactRepository,
         BalanceRepository $balanceRepository,
         P2pRepository $p2pRepository,
+        TransactionRepository $transactionRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
         $this->contactRepository = $contactRepository;
         $this->balanceRepository = $balanceRepository;
         $this->p2pRepository = $p2pRepository;
+        $this->transactionRepository = $transactionRepository;
         $this->utilityContainer = $utilityContainer;
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
@@ -147,7 +155,7 @@ class P2pService {
                 $requestedAmount = $this->calculateRequestedAmount($request);
                 $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
 
-                $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderAddress']);
+                $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderPublicKey']);
                 $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
 
                 if (($availableFunds + $creditLimit) < ($requestedAmount + $fundsOnHold)) {
@@ -183,13 +191,21 @@ class P2pService {
      * @return bool True if P2P possible, False otherwise.
      */
     public function checkP2pPossible(array $request, $echo = true) : bool{
-        // Check if P2P already exists for hash in database, is valid and can be completed
-        // & Check if P2P is valid and can be completed given credit of user requesting
         $senderAddress = $request['senderAddress'];
         $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
-        if(!$this->contactRepository->isNotBlocked($transportIndex, $senderAddress) || !$this->checkRequestLevel($request) || !$this->checkAvailableFunds($request)){
+        // Check if User is not blocked
+        if(!$this->contactRepository->isNotBlocked($transportIndex, $senderAddress)){
             return false; 
         }
+        // Check if P2P message has not reached max intermediary hop amount
+        elseif(!$this->checkRequestLevel($request)){
+            return false;
+        } 
+        // Check if Contact has enough funds for P2P without fees
+        elseif(!$this->checkAvailableFunds($request)){
+            return false;
+        }
+
         // Check if P2P already exists for hash in database
         try{
             if($this->p2pRepository->p2pExists($request['hash'])){
@@ -549,11 +565,11 @@ class P2pService {
     /**
      * Get credit currently on hold in P2P
      *
-     * @param string $address Sender address
+     * @param string $pubkey Sender pubkey
      * @return float Total amount on hold
      */
-    public function getCreditInP2p(string $address): float {
-        return $this->p2pRepository->getCreditInP2p($address);
+    public function getCreditInP2p(string $pubkey): float {
+        return $this->p2pRepository->getCreditInP2p($pubkey);
     }
 
     /**
