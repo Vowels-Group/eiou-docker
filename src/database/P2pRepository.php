@@ -165,12 +165,12 @@ class P2pRepository extends AbstractRepository {
      * Retrieve credit currently on hold in P2P for a pubkey
      *
      * @param string $pubkey Sender pubkey
-     * @return float Total amount on hold
+     * @return int Total amount on hold
      */
-    public function getCreditInP2p(string $pubkey): float {
+    public function getCreditInP2p(string $pubkey): int {
         $query = "SELECT SUM(amount) as total_amount FROM {$this->tableName}
                   WHERE sender_public_key = :pubkey
-                    AND status IN ('initial', 'queued', 'sent', 'found')";
+                    AND status NOT IN ('cancelled', 'completed', 'expired')";
         $stmt = $this->execute($query, [':pubkey' => $pubkey]);
 
         if (!$stmt) {
@@ -178,7 +178,7 @@ class P2pRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['total_amount'] ?? 0);
+        return (int) ($result['total_amount'] ?? 0);
     }
 
     /**
