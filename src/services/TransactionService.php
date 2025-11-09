@@ -194,7 +194,7 @@ class TransactionService {
     public function checkTransactionPossible(array $request, $echo = true) : bool{
         $senderAddress = $request['senderAddress'];
         $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
-        // Check if USer is not blocked
+        // Check if User is not blocked
         if(!$this->contactRepository->isNotBlocked($transportIndex, $senderAddress)){
             return false;
         } 
@@ -240,19 +240,6 @@ class TransactionService {
         }
     }
 
-    // /**
-    //  * Fix previous transaction ID to avoid duplicates
-    //  *
-    //  * @param string $senderPubKey Sender's public key
-    //  * @param string $receiverPubKey Receiver's public key
-    //  * @return string|null Previous transaction ID
-    //  */
-    // public function fixPreviousTxid(string $senderPubKey, string $receiverPubKey): ?string {
-    //     // Make sure that the previous transactions txid in the chain is not already being used as a previous_txid for another transaction
-    //     $prevID = $this->transactionRepository->getPreviousTxid($senderPubKey, $receiverPubKey);
-    //     return $prevID;
-    // }
-
     /**
      * Create unique transaction ID from transaction data
      *
@@ -290,7 +277,7 @@ class TransactionService {
      * @param string $address Address 
      * @return bool True if user corresponds, False otherwise.
      */
-    public function matchYourselfTransaction($request,$address){
+    public function matchYourselfTransaction($request, $address){
         // Check if transaction end recipient is user
         $p2pRequest = $this->p2pRepository->getByHash($request['memo']);
         if( hash(Constants::HASH_ALGORITHM, $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
