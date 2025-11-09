@@ -246,7 +246,7 @@ class BalanceRepository extends AbstractRepository {
         }
         if($amountTransactions == 2 && $updateReceiver && $updateSender){
             return true;
-        } elseif($amountTransactions == 1 && ($updateReceiver || $updateSender)){
+        } elseif($amountTransactions == 1 && ((isset($updateReceiver) && $updateReceiver) ||  (isset($updateSender) && $updateSender))){
             return true;
         }
         return false;
