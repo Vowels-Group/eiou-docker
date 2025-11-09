@@ -423,23 +423,32 @@ class P2pService {
                 // Retrieve accepted contacts to send p2p request, excluding the sender
                 $contacts = $this->contactRepository->getAllAcceptedAddresses($message['sender_address']);
                 // Count amount of contacts to send p2p request
+                $contactsCount = count($contacts);
                 $sentMessages = 0;
                 // Send p2p request to all accepted contacts
                 foreach ($contacts as $contact) {
                     // Do not send message to original sender
                     if($message['sender_address'] === $contact){
+                        $contactsCount -= 1;
                         continue;
                     }
                     // Do not send p2p to contact (end-recipient), if direct transaction failed due to insufficient funds
                     if(isset($message['destination_address']) && $contact === $message['destination_address']){
+                        $contactsCount -= 1;
                         continue;
                     }
                     $response = json_decode($this->transportUtility->send($contact, $p2pPayload),true);
+                    // If rejection from sole possible contact then cancel p2p immediately
+                    if($response['status'] === 'rejected' && $contactsCount === 1){
+                        $this->p2pRepository->updateStatus($message['hash'], 'cancelled');
+                        $contactsCount -= 1;
+                        continue;
+                    } 
                     $sentMessages += 1;
                     output(outputP2pResponse($response),'SILENT');
                 }
 
-                if(isset($message['destination_address'])){
+                if(isset($message['destination_address']) && $contactsCount > 0){
                     output(outputSendP2PToAmountContacts($sentMessages), 'SILENT');
                     //Inform user (in debug) about expected response time
                     $httpExpectedResponseTime = $this->currentUser->getMaxP2pLevel(); // Use maxP2pLevel seconds for http
