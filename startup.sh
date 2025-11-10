@@ -62,15 +62,15 @@ done
 
 # Start p2p message processing in background
 nohup php /etc/eiou/p2pMessages.php > /dev/null 2>&1 &
-echo "P2p message processing started successfully."  
+echo "P2p message processing started successfully (PID: $!)"
 
 # Start transaction message processing in background
 nohup php /etc/eiou/transactionMessages.php > /dev/null 2>&1 &
-echo "Transaction message processing started successfully."  
+echo "Transaction message processing started successfully (PID: $!)"
 
 # Start cleanup message processing in background
 nohup php /etc/eiou/cleanupMessages.php > /dev/null 2>&1 &
-echo "Cleanup processing started successfully."  
+echo "Cleanup processing started successfully (PID: $!)"
 
 # Keep container running
 tail -f /dev/null
