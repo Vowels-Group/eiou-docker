@@ -133,6 +133,28 @@ class InputValidator {
     }
 
     /**
+     * Validate address format og hostname
+     *
+     * @param string $address Address to validate
+     * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null, 'type' => string|null]
+     */
+    public static function validateHostname($address){
+        if (!is_string($address) || empty($address)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Address cannot be empty', 'type' => null];
+        }
+
+        // Check for HTTP/HTTPS address
+        if (filter_var($address, FILTER_VALIDATE_URL) !== false) {
+            $scheme = parse_url($address, PHP_URL_SCHEME);
+            if (in_array($scheme, ['http', 'https'])) {
+                return ['valid' => true, 'value' => $address, 'error' => null, 'type' => 'http'];
+            }
+        }
+
+        return ['valid' => false, 'value' => null, 'error' => 'Invalid address format', 'type' => null];
+    }
+
+    /**
      * Validate transaction ID (hash)
      *
      * @param string $txid Transaction ID to validate
