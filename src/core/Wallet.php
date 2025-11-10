@@ -2,34 +2,6 @@
 
 class Wallet{
     /**
-     * Handle generate wallet request
-     *
-     * @param array $argv Command line arguments
-     * @return void
-     */
-    public function generateHandler(array $argv): void{
-        if(!file_exists('/etc/eiou/userconfig.json')){
-            $this->generateWallet($argv);
-        } else{
-            if(isset($argv[2]) && filter_var($argv[2], FILTER_VALIDATE_URL)){
-                $validation = InputValidator::validateHostname($argv[2]);
-                if (!$validation['valid']) {
-                    echo "Error: " . $validation['error'] . "\n";
-                    return;
-                } 
-                $key = 'hostname';
-                $value = $validation['value'];
-                $config_content = json_decode(file_get_contents('/etc/eiou/userconfig.json'),true);
-                $config_content[$key] = $value;
-                file_put_contents('/etc/eiou/userconfig.json', json_encode($config_content,true), LOCK_EX);
-                echo returnWalletUpdatedSuccesfully($key);
-            } else{
-                echo returnWalletAlreadyExists();
-            }   
-        }   
-    }
-
-    /**
      * Generate wallet
      *
      * @param array $argv Command line arguments
