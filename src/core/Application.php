@@ -212,7 +212,8 @@ class Application {
      */
     public function generateWallet(array $argv): void {
         require_once '/etc/eiou/src/core/Wallet.php';
-        Wallet::generateWallet($argv);
+        $wallet = new Wallet();
+        $wallet->generateHandler($argv);
     }
 
     /**
