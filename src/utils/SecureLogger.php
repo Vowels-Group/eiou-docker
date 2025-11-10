@@ -6,6 +6,9 @@
  * Prevents sensitive information from being logged
  */
 
+// Require Constants for DISPLAY_DATE_FORMAT
+require_once __DIR__ . '/../core/Constants.php';
+
 class SecureLogger {
     private static $sensitivePatterns = [
         '/authcode=[^&\s]+/i' => 'authcode=***MASKED***',

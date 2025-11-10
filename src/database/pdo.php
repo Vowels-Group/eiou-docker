@@ -36,7 +36,16 @@ function createPDOConnection(): PDO {
 
     // Validate required configuration
     if (!$dbHost || !$dbName || !$dbUser || !$dbPass) {
-        error_log("Missing database configuration parameters");
+        if (class_exists('SecureLogger')) {
+            SecureLogger::error("Missing database configuration parameters", [
+                'has_host' => !empty($dbHost),
+                'has_name' => !empty($dbName),
+                'has_user' => !empty($dbUser),
+                'has_pass' => !empty($dbPass)
+            ]);
+        } else {
+            error_log("Missing database configuration parameters");
+        }
         throw new RuntimeException("Database configuration incomplete");
     }
 

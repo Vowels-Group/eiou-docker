@@ -40,7 +40,13 @@ function freshInstall(){
             } catch (PDOException $userExists) {
                 // User might already exist - try to use existing credentials
                 // This happens if database exists but dbconfig.json was deleted
-                error_log("Database user creation failed (user might already exist): " . $userExists->getMessage());
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::warning("Database user creation failed (user might already exist)", [
+                        'error' => $userExists->getMessage()
+                    ]);
+                } else {
+                    error_log("Database user creation failed (user might already exist): " . $userExists->getMessage());
+                }
                 throw new RuntimeException(
                     "Database exists but cannot create user. Please restore dbconfig.json or drop the existing database.",
                     500,
@@ -61,7 +67,13 @@ function freshInstall(){
                 $dbConn->exec(getP2pTableSchema());
                 $dbConn->exec(getRp2pTableSchema());
             } catch (PDOException $tableError) {
-                error_log("Table creation failed: " . $tableError->getMessage());
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::error("Table creation failed", [
+                        'error' => $tableError->getMessage()
+                    ]);
+                } else {
+                    error_log("Table creation failed: " . $tableError->getMessage());
+                }
                 throw new RuntimeException(
                     "Failed to create database tables: " . $tableError->getMessage(),
                     500,

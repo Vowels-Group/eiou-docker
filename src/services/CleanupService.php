@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../utils/InputValidator.php';
+
 /**
  * Cleanup Service
  *
@@ -79,13 +81,20 @@ class CleanupService {
             // Process each not completed message
             foreach ($expiringMessages as $message) {
                 // Validate message structure
-                if (!isset($message['expiration']) || !is_numeric($message['expiration'])) {
-                    error_log("Invalid message expiration: " . json_encode($message));
+                if (!isset($message['expiration'])) {
+                    error_log("Invalid message expiration: missing field. Message: " . json_encode($message));
+                    continue;
+                }
+
+                // Validate expiration timestamp using InputValidator
+                $validation = InputValidator::validateTimestamp($message['expiration']);
+                if (!$validation['valid']) {
+                    error_log("Invalid message expiration: " . $validation['error'] . ". Message: " . json_encode($message));
                     continue;
                 }
 
                 // If no response after set amount of time, expire the p2p (and potential transaction)
-                if ($this->timeUtility->getCurrentMicrotime() > $message['expiration']) {
+                if ($this->timeUtility->getCurrentMicrotime() > $validation['value']) {
                     $this->expireMessage($message);
                 }
             }

@@ -125,8 +125,13 @@ class Security {
      * @return string Safe error message
      */
     public static function getSafeErrorMessage($e, $debug = false) {
-        // Log the full error internally
-        error_log("Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+        // Log the full error internally using SecureLogger
+        if (class_exists('SecureLogger')) {
+            SecureLogger::logException($e, 'ERROR');
+        } else {
+            // Fallback to error_log if SecureLogger not available
+            error_log("Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+        }
 
         // Return generic message to user
         if ($debug && (Constants::get('APP_ENV') === 'development' || Constants::get('APP_DEBUG') === 'true')) {
@@ -216,7 +221,13 @@ class Security {
         try {
             return bin2hex(random_bytes($length));
         } catch (Exception $e) {
-            error_log("Failed to generate secure token: " . $e->getMessage());
+            if (class_exists('SecureLogger')) {
+                SecureLogger::error("Failed to generate secure token", [
+                    'error' => $e->getMessage()
+                ]);
+            } else {
+                error_log("Failed to generate secure token: " . $e->getMessage());
+            }
             throw new RuntimeException("Failed to generate secure random token");
         }
     }
@@ -347,7 +358,11 @@ class Security {
      */
     public static function logSecurityEvent($event, $context = []) {
         $maskedContext = self::maskSensitiveData($context);
-        $logMessage = "SECURITY EVENT: $event | Context: " . json_encode($maskedContext);
-        error_log($logMessage);
+        if (class_exists('SecureLogger')) {
+            SecureLogger::warning("SECURITY EVENT: $event", $maskedContext);
+        } else {
+            $logMessage = "SECURITY EVENT: $event | Context: " . json_encode($maskedContext);
+            error_log($logMessage);
+        }
     }
 }

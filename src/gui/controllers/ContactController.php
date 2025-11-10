@@ -114,7 +114,14 @@ class ContactController
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {
                 ob_end_clean();
-                $message = 'Internal server error: ' . $e->getMessage();
+                // Use SecureLogger for exception logging
+                SecureLogger::logException($e, [
+                    'controller' => 'ContactController',
+                    'action' => __FUNCTION__
+                ]);
+                $message = Constants::APP_ENV !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error';
                 $messageType = 'error';
             }
         }
@@ -153,7 +160,14 @@ class ContactController
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {
                 ob_end_clean();
-                $message = 'Internal server error: ' . $e->getMessage();
+                // Use SecureLogger for exception logging
+                SecureLogger::logException($e, [
+                    'controller' => 'ContactController',
+                    'action' => __FUNCTION__
+                ]);
+                $message = Constants::APP_ENV !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error';
                 $messageType = 'error';
             }
         }
@@ -185,7 +199,14 @@ class ContactController
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {
                 ob_end_clean();
-                $message = 'Internal server error: ' . $e->getMessage();
+                // Use SecureLogger for exception logging
+                SecureLogger::logException($e, [
+                    'controller' => 'ContactController',
+                    'action' => __FUNCTION__
+                ]);
+                $message = Constants::APP_ENV !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error';
                 $messageType = 'error';
             }
         }
@@ -217,7 +238,14 @@ class ContactController
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {
                 ob_end_clean();
-                $message = 'Internal server error: ' . $e->getMessage();
+                // Use SecureLogger for exception logging
+                SecureLogger::logException($e, [
+                    'controller' => 'ContactController',
+                    'action' => __FUNCTION__
+                ]);
+                $message = Constants::APP_ENV !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error';
                 $messageType = 'error';
             }
         }
@@ -249,7 +277,14 @@ class ContactController
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {
                 ob_end_clean();
-                $message = 'Internal server error: ' . $e->getMessage();
+                // Use SecureLogger for exception logging
+                SecureLogger::logException($e, [
+                    'controller' => 'ContactController',
+                    'action' => __FUNCTION__
+                ]);
+                $message = Constants::APP_ENV !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error';
                 $messageType = 'error';
             }
         }
@@ -288,7 +323,14 @@ class ContactController
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {
                 ob_end_clean();
-                $message = 'Internal server error: ' . $e->getMessage();
+                // Use SecureLogger for exception logging
+                SecureLogger::logException($e, [
+                    'controller' => 'ContactController',
+                    'action' => __FUNCTION__
+                ]);
+                $message = Constants::APP_ENV !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error';
                 $messageType = 'error';
             }
         }
