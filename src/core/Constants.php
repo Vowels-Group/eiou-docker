@@ -38,7 +38,7 @@ class Constants {
     // Development/Production
     const APP_ENV = 'development';
     const APP_DEBUG = true;
-    
+
     // Transaction limits
     const TRANSACTION_MIN_AMOUNT = 0;
     const TRANSACTION_MAX_AMOUNT = 999999999;
