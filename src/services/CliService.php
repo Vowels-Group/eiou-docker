@@ -130,12 +130,20 @@ class CliService {
                     }
                     $value = intval($argv[3]);
                 }
-            }elseif(strtolower($argv[2]) === 'localhostonly'){
+            } elseif(strtolower($argv[2]) === 'localhostonly'){
                 $key = 'localhostOnly';
                 $value = ($argv[3] === '1');
             } elseif(strtolower($argv[2]) === 'defaulttransportmode'){
                 $key = 'defaultTransportMode';
                 $value = strtolower($argv[3]);
+            } elseif(strtolower($argv[2]) === 'hostname'){
+                $key = 'hostname';
+                $validation = InputValidator::validateHostname($argv[3]);
+                if (!$validation['valid']) {
+                    echo "Error: " . $validation['error'] . "\n";
+                    return;
+                }
+                $value = $validation['value'];
             } else{
                 echo "Setting provided does not exist. No changes made.\n";
                 return;
@@ -155,7 +163,8 @@ class CliService {
             echo "\t6. Maximum lines of Balance/Transaction output\n";
             echo "\t7. Access Mode\n";
             echo "\t8. Default Transport Type\n";
-            echo "\t9. Cancel\n";
+            echo "\t9. Hostname\n";
+            echo "\t0. Cancel\n";
 
             // Read user input
             $setting_choice = trim(fgets(STDIN));
@@ -244,6 +253,17 @@ class CliService {
                     break;
 
                 case '9':
+                    echo "Enter new hostname (e.g. http://httpA): ";
+                    $key = 'hostname';
+                    $validation = InputValidator::validateHostname(strtolower(trim(fgets(STDIN))));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '0':
                     echo "Setting change cancelled.\n";
                     return;
 
@@ -252,11 +272,16 @@ class CliService {
                     return;
             }
         }
-
         // Save changes to config file
-        $config_content = json_decode(file_get_contents('/etc/eiou/defaultconfig.json'),true);
+        if($key == 'hostname'){
+            $configFile = 'userconfig.json';
+        } else{
+            $configFile = 'defaultconfig.json';
+        }
+        
+        $config_content = json_decode(file_get_contents('/etc/eiou/' . $configFile),true);
         $config_content[$key] = $value;
-        file_put_contents('/etc/eiou/defaultconfig.json', json_encode($config_content,true), LOCK_EX);
+        file_put_contents('/etc/eiou/'. $configFile, json_encode($config_content,true), LOCK_EX);
         echo "Setting updated successfully.\n";
     }
 
@@ -364,16 +389,21 @@ class CliService {
         $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$pubkey);
         echo "\tPublic Key:" . $readablePubKey . "\n";
 
-
-        // Get total sent and received by currency
-        $balances = $this->balanceRepository->getUserBalance();
-        foreach($balances as $balance){
-            printf("\tTotal Balance %s : %s\n", $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2));
-            if (isset($argv[2]) && $argv[2] === 'detail') { 
-                $this->viewBalanceQuery("received","from",$this->transactionRepository->getReceivedUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit); // Received Balances
-                $this->viewBalanceQuery("sent","to",$this->transactionRepository->getSentUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit); // Sent Balances
-            }
-        }
+        if (isset($argv[2]) && strtolower($argv[2]) === 'detail'){
+            // Get total sent and received by currency
+            $balances = $this->balanceRepository->getUserBalance();
+            if(isset($balances)){
+                foreach($balances as $balance){
+                    printf("\tTotal Balance %s : %s\n", $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2));
+                    if (isset($argv[2]) && $argv[2] === 'detail') { 
+                        $this->viewBalanceQuery("received","from",$this->transactionRepository->getReceivedUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit); // Received Balances
+                        $this->viewBalanceQuery("sent","to",$this->transactionRepository->getSentUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit); // Sent Balances
+                    }
+                }
+            } else{
+                printf("\tNo balances available yet.\n");
+            }      
+        }   
     }
 
     /**
