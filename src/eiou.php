@@ -7,6 +7,7 @@ require_once '/etc/eiou/functions.php';
 // Initialize security components for CLI
 require_once '/etc/eiou/security_init.php';
 
+// Get application instance (if first time build database)
 $app = Application::getInstance();
 
 // Convert request to lowercase
@@ -155,7 +156,10 @@ elseif($request === "synch"){
   $debugService->output("Executing synch request", 'SILENT');
   $synchService = $app->services->getSynchService();
   $synchService->sych($argv);
-} 
+} elseif($request === "generate"){
+  // Handle for Wallet request after wallet has been created 
+  $app->generateWallet($argv);
+}
 elseif($request === "shutdown"){
   // Shutdown application
   $debugService->output("Executing shutdown request", 'SILENT');
