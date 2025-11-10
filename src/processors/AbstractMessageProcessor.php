@@ -41,6 +41,8 @@ abstract class AbstractMessageProcessor {
         // Set up signal handlers for graceful shutdown
         pcntl_signal(SIGTERM, [$this, 'handleShutdownSignal']);
         pcntl_signal(SIGINT, [$this, 'handleShutdownSignal']);
+        pcntl_signal(SIGHUP, [$this, 'handleReloadSignal']);
+        
     }
 
     /**
@@ -156,6 +158,17 @@ abstract class AbstractMessageProcessor {
         echo "\n[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
         echo "Received shutdown signal ($signal), stopping gracefully...\n";
         $this->shouldStop = true;
+    }
+
+    /**
+     * Handle Reload signals
+     *
+     * @param int $signal The signal received
+     */
+    public function handleReloadSignal(int $signal): void {
+        echo "\n[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+        echo "Received reload signal ($signal), reloading config...\n";
+        // To do add reload
     }
 
     /**
