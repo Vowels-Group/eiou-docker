@@ -212,8 +212,7 @@ class Application {
      */
     public function generateWallet(array $argv): void {
         require_once '/etc/eiou/src/core/Wallet.php';
-        $wallet = new Wallet();
-        $wallet->generateHandler($argv);
+        Wallet::generateWallet($argv);
     }
 
     /**
@@ -391,11 +390,26 @@ class Application {
     }
 
     /**
+     * Reload processor configs
+     */
+    public function reloadProcessors() {
+        $items = glob('/tmp/' . '*.pid');
+        foreach ($items as $item) {
+            if (is_file($item)) {
+                posix_kill(trim(file_get_contents($item)), SIGHUP);
+            }
+        }
+    }
+
+    /**
      * Clean up resources
      */
     public function shutdown() {
-        foreach($this->processors as $processor_name => $processor_instance){
-            $success = posix_kill(trim(file_get_contents($processor_instance->lockfile)), SIGTERM);
+        $items = glob('/tmp/' . '*.pid');
+        foreach ($items as $item) {
+            if (is_file($item)) {
+                posix_kill(trim(file_get_contents($item)), SIGTERM);
+            }
         }
         $this->processors = [];
         $this->services->getUtilityContainer()->clearUtilities();
