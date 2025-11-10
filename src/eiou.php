@@ -158,7 +158,7 @@ elseif($request === "synch"){
   $synchService->sych($argv);
 } elseif($request === "generate"){
   // Handle for Wallet request after wallet has been created 
-  $app->generateWallet($argv);
+   echo returnWalletAlreadyExists();
 }
 elseif($request === "shutdown"){
   // Shutdown application
