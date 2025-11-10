@@ -170,8 +170,20 @@ function returnOverwritingExistingWalletCancelled(){
     return "Wallet will not be overwritten.\n";
 }
 
+function returnTorSaved($toraddress){
+    return "Tor saved: " . $toraddress . "\n";
+}
+
 function returnUserInputRequestOverwritingWallet(){
     return "A wallet already exists, do you want to overwrite the existing wallet?\n" .
            "\tWARNING: this act is irreversible!\n" .
            "\tenter 'y' to continue overwriting, anything else to abort.\n";
+}
+
+function returnWalletAlreadyExists(){
+    return "Wallet already exists";
+}
+
+function returnWalletUpdatedSuccesfully($key){
+    return "Wallet " . $key ." updated successfully.\n";;
 }
