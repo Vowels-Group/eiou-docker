@@ -24,6 +24,10 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/configCheck.php"; echo $run;
         echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
         eiou generate http://$QUICKSTART
         echo "Generate command completed."
+    else
+        # Run automatically without hostname (only tor)
+        eiou generate
+        echo "Generate command completed."
     fi
 fi
 
@@ -49,15 +53,6 @@ while true; do
     else
         if $first; then
             echo "Message processing check failed to complete. Retrying every 5 seconds..."
-            if [ "$QUICKSTART" = "false" ]; then
-                echo "Please run the 'generate' command to generate a new wallet and setup message processing"
-                echo -e "\t 'docker exec [containerName] eiou generate (torAddressOnly) from thr CLI'"
-                echo -e "\t or 'eiou generate (torAddressOnly)' from within the container"
-                echo -e "\t where (torAddressOnly) is an optional parameter"
-                echo -e "\t or use QUICKSTART=[name] environment variable for automatic setup"
-            else
-                echo "Quickstart mode: generate command was already run with parameter $QUICKSTART, but message processing still not ready. Retrying..."
-            fi
             first=false
         fi
         sleep 5
