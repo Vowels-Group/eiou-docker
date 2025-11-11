@@ -84,10 +84,10 @@ for routingPair in "${!routingTests[@]}"; do
 
         # Check if routing succeeded
         if [[ "$routingResult" =~ "success" ]] || [[ "$routingResult" =~ "sent" ]] || [[ $relayFeesDetected -gt 0 ]]; then
-            printf "\tRouting %s -> %s ${GREEN}PASSED${NC} (%d relays detected fees)\n" ${sender} ${receiver} ${relayFeesDetected}
+            printf "\t   Routing %s -> %s ${GREEN}PASSED${NC} (%d relays detected fees)\n" ${sender} ${receiver} ${relayFeesDetected}
             passed=$(( passed + 1 ))
         else
-            printf "\tRouting %s -> %s ${RED}FAILED${NC}\n" ${sender} ${receiver}
+            printf "\t   Routing %s -> %s ${RED}FAILED${NC}\n" ${sender} ${receiver}
             printf "\t   Result: %s\n" "${routingResult:0:100}"
             failure=$(( failure + 1 ))
         fi
@@ -171,10 +171,10 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
 
         stateIncreased=$(awk "BEGIN {print ($finalState > $initialState) ? 1 : 0}")
         if [[ "$stateIncreased" -eq 1 ]]; then
-            printf "\tEnd-to-end delivery ${GREEN}PASSED${NC} (${firstContainer} -> ${lastContainer})\n"
+            printf "\t   End-to-end delivery ${GREEN}PASSED${NC} (${firstContainer} -> ${lastContainer})\n"
             passed=$(( passed + 1 ))
         else
-            printf "\tEnd-to-end delivery ${RED}FAILED${NC}\n"
+            printf "\t   End-to-end delivery ${RED}FAILED${NC}\n"
             printf "\t   Result: %s\n" "${e2eResult:0:100}"
             failure=$(( failure + 1 ))
         fi
