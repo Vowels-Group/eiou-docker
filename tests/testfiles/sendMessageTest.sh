@@ -80,7 +80,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     multiHopResult=$(docker exec httpA eiou send ${containerAddresses[httpD]} 10 USD 2>&1)
 
     # Wait for routing
-    echo -e "\t   Waiting for 20 seconds for complete routing..."
+    echo -e "\t   Waiting for 20 seconds for complete routing (faster but certainty)..."
     sleep 20
 
     # Get new balance of httpD
