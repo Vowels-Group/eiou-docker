@@ -18,10 +18,10 @@ for container in "${containers[@]}"; do
     ')
 
     if [[ "${containerAddresses[${container}]}" == $containerAddress ]]; then
-        printf "${testname} for %s ${GREEN}PASSED${NC}\n\n" ${container}
+        printf "\t   ${testname} for %s ${GREEN}PASSED${NC}\n\n" ${container}
         passed=$(( passed + 1 ))
     else
-        printf "${testname} for %s ${RED}FAILED${NC}\n\n" ${container}
+        printf "\t   ${testname} for %s ${RED}FAILED${NC}\n\n" ${container}
         failure=$(( failure + 1 ))
     fi
 
