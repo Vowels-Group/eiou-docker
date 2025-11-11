@@ -29,99 +29,41 @@ RUN echo "AddType application/x-httpd-php .html" | tee -a /etc/apache2/apache2.c
 RUN echo "ServerName localhost" | tee -a /etc/apache2/apache2.conf
 
 # Copy eiou.php file to /usr/local/bin and create a wrapper script
-COPY src/eiou.php /usr/local/bin/eiou.php
+COPY files/eiou/eiou.php /usr/local/bin/eiou.php
 RUN echo '#!/bin/bash\nphp /usr/local/bin/eiou.php "$@"' > /usr/local/bin/eiou && \
     chmod +x /usr/local/bin/eiou
 
 # Copy wallet and index files to web directory
-COPY src/walletIndex.html /var/www/html/index.html
-COPY src/index.html /var/www/html/eiou/index.html
+COPY files/index/walletIndex.html /var/www/html/index.html
+COPY files/index/index.html /var/www/html/eiou/index.html
 RUN chown www-data:www-data /var/www/html/eiou -R
 RUN chmod 755 /var/www/html/eiou
 
-# Copy security_init.php to a common location
-COPY src/security_init.php /etc/eiou/security_init.php
-RUN chown www-data:www-data /etc/eiou/security_init.php
-RUN chmod 644 /etc/eiou/security_init.php
-
-# Copy functions.php to a common location
-COPY src/functions.php /etc/eiou/functions.php
-RUN chown www-data:www-data /etc/eiou/functions.php
-RUN chmod 644 /etc/eiou/functions.php
-
-# Copy p2pMessages.php to a common location
-COPY src/p2pMessages.php /etc/eiou/p2pMessages.php
-RUN chown www-data:www-data /etc/eiou/p2pMessages.php
-RUN chmod 644 /etc/eiou/p2pMessages.php
-
-# Copy transactionMessages.php to a common location
-COPY src/transactionMessages.php /etc/eiou/transactionMessages.php
-RUN chown www-data:www-data /etc/eiou/transactionMessages.php
-RUN chmod 644 /etc/eiou/transactionMessages.php
-
-# Copy cleanupMessages.php to a common location
-COPY src/cleanupMessages.php /etc/eiou/cleanupMessages.php
-RUN chown www-data:www-data /etc/eiou/cleanupMessages.php
-RUN chmod 644 /etc/eiou/cleanupMessages.php
+# Copy root files to a /etc/eiou/
+COPY files/root/ /etc/eiou/
 
 # Copy src folder to /etc/eiou/src
-COPY src /etc/eiou/src
-RUN chmod 755 /etc/eiou/src
-RUN chmod 644 /etc/eiou/src/*
-# Core folder
-RUN chmod 755 /etc/eiou/src/core
-RUN chmod 644 /etc/eiou/src/core/*
-# Database folder
-RUN chmod 755 /etc/eiou/src/database
-RUN chmod 644 /etc/eiou/src/database/*
-# Services folder
-RUN chmod 755 /etc/eiou/src/services
-RUN chmod 644 /etc/eiou/src/services/*
-RUN chmod 755 /etc/eiou/src/services/utilities
-RUN chmod 644 /etc/eiou/src/services/utilities/*
-# GUI (wallet) folder
-RUN chmod 755 /etc/eiou/src/gui
-RUN chmod 644 /etc/eiou/src/gui/*
-RUN chmod 755 /etc/eiou/src/gui/assets
-RUN chmod 644 /etc/eiou/src/gui/assets/*
-RUN chmod 755 /etc/eiou/src/gui/assets/css
-RUN chmod 644 /etc/eiou/src/gui/assets/css/*
-RUN chmod 755 /etc/eiou/src/gui/assets/js
-RUN chmod 644 /etc/eiou/src/gui/assets/js/*
-RUN chmod 755 /etc/eiou/src/gui/controllers
-RUN chmod 644 /etc/eiou/src/gui/controllers/*
-RUN chmod 755 /etc/eiou/src/gui/functions
-RUN chmod 644 /etc/eiou/src/gui/functions/*
-RUN chmod 755 /etc/eiou/src/gui/helpers
-RUN chmod 644 /etc/eiou/src/gui/helpers/*
-RUN chmod 755 /etc/eiou/src/gui/includes
-RUN chmod 644 /etc/eiou/src/gui/includes/*
-RUN chmod 755 /etc/eiou/src/gui/layout
-RUN chmod 644 /etc/eiou/src/gui/layout/*
-RUN chmod 755 /etc/eiou/src/gui/layout/walletSubParts
-RUN chmod 644 /etc/eiou/src/gui/layout/walletSubParts/*
-# Processors folder
-RUN chmod 755 /etc/eiou/src/processors
-RUN chmod 644 /etc/eiou/src/processors/*
-# Schemas folder
-RUN chmod 755 /etc/eiou/src/schemas
-RUN chmod 644 /etc/eiou/src/schemas/*
-RUN chmod 755 /etc/eiou/src/schemas/payloads
-RUN chmod 644 /etc/eiou/src/schemas/payloads/*
-# Startup folder
-RUN chmod 755 /etc/eiou/src/startup
-RUN chmod 644 /etc/eiou/src/startup/*
-# Utils folder
-RUN chmod 755 /etc/eiou/src/utils
-RUN chmod 644 /etc/eiou/src/utils/*
+COPY files/src/ /etc/eiou/src/
 
+RUN chown www-data:www-data /etc/eiou/security_init.php
+RUN chown www-data:www-data /etc/eiou/functions.php
+RUN chown www-data:www-data /etc/eiou/p2pMessages.php
+RUN chown www-data:www-data /etc/eiou/transactionMessages.php
+RUN chown www-data:www-data /etc/eiou/cleanupMessages.php
+
+# Set _directories_ in the /etc/eiou/ directory to 755
+RUN find /etc/eiou/ -type d -exec chmod 755 "{}" \;
+
+# Set _files_ in the /etc/eiou/ directory and its subdirectories to 644
+RUN find /etc/eiou/ -type f -exec chmod 644 "{}" \;
+  
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini
 RUN touch /var/log/php_errors.log
 RUN chmod 666 /var/log/php_errors.log
 
 # Declare volumes for data persistence
-VOLUME ["/var/lib/mysql", "/etc/eiou"]
+VOLUME ["/var/lib/mysql", "/etc/eiou", "/usr/local/bin/", "/var/www/html/"]
 
 # Copy and set up startup script
 COPY startup.sh /startup.sh

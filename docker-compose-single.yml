@@ -10,7 +10,9 @@ services:
       - QUICKSTART=eioud
     volumes:
       - eioud-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - eioud-files:/etc/eiou/
+      - eioud-index:/var/www/html
+      - eioud-eiou:/usr/local/bin/
     restart: unless-stopped
 
 networks:
@@ -21,3 +23,9 @@ networks:
 volumes:
   eioud-mysql-data:
     name: eioud-mysql-data
+  eioud-files:
+    name: eioud-files
+  eioud-index:
+    name: eioud-index
+  eioud-eiou:
+    name: eioud-eiou
