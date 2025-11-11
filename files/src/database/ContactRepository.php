@@ -261,6 +261,25 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Get status of contact
+     *
+     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string $address Contact address
+     * @return string status of contact
+     */
+    public function getContactStatus(string $transportIndex, string $address): string{
+        $query = "SELECT status FROM contacts WHERE {$transportIndex} = :address";
+        $stmt = $this->execute($query, [':address' => $address]);
+
+        if (!$stmt) {
+            return '';
+        }
+        
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result['status'];
+    }
+
+    /**
      * Get all pending contact requests (non-user initiated)
      *
      * @return array Array of pending contacts
