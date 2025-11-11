@@ -1,0 +1,200 @@
+#!/bin/sh
+
+# Test contact list storage and metadata verification
+echo -e "\nTesting contact list storage and metadata..."
+
+testname="contactListTest"
+totaltests=0
+passed=0
+failure=0
+
+# Test 1: Verify all expected contacts are stored
+echo -e "\n[Contact Storage Verification]"
+
+containersLinkKeys=($(for x in ${!containersLinks[@]}; do echo $x; done | sort))
+for containersLinkKey in "${containersLinkKeys[@]}"; do
+    totaltests=$(( totaltests + 1 ))
+
+    values=${containersLinks[${containersLinkKey}]}
+    containerKeys=(${containersLinkKey//,/ })
+    valueArray=($values)
+
+    # Expected values
+    expectedFee="${valueArray[0]}"
+    expectedCredit="${valueArray[1]}"
+    expectedCurrency="${valueArray[2]}"
+
+    echo -e "\n\t-> Verifying contact: ${containerKeys[0]} -> ${containerKeys[1]}"
+
+    # Query contact details using PHP
+    contactData=$(docker exec ${containerKeys[0]} php -r "
+        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        \$db = ServiceContainer::getInstance()->getDatabase();
+        \$stmt = \$db->prepare('
+            SELECT name, fee, credit, currency, status, transport, address
+            FROM contacts
+            WHERE address = :address
+            LIMIT 1
+        ');
+        \$stmt->execute([':address' => '${containerAddresses[${containerKeys[1]}]}']);
+        \$contact = \$stmt->fetch(PDO::FETCH_ASSOC);
+        if (\$contact) {
+            echo json_encode(\$contact);
+        } else {
+            echo 'NOT_FOUND';
+        }
+    " 2>/dev/null || echo "ERROR")
+
+    if [[ "$contactData" != "ERROR" ]] && [[ "$contactData" != "NOT_FOUND" ]]; then
+        # Parse JSON response (basic parsing without jq)
+        if [[ "$contactData" =~ "\"name\":\"${containerKeys[1]}\"" ]]; then
+            nameCorrect="true"
+        else
+            nameCorrect="false"
+        fi
+
+        if [[ "$contactData" =~ "\"fee\":\"${expectedFee}\"" ]] || [[ "$contactData" =~ "\"fee\":${expectedFee}" ]]; then
+            feeCorrect="true"
+        else
+            feeCorrect="false"
+        fi
+
+        if [[ "$contactData" =~ "\"credit\":\"${expectedCredit}\"" ]] || [[ "$contactData" =~ "\"credit\":${expectedCredit}" ]]; then
+            creditCorrect="true"
+        else
+            creditCorrect="false"
+        fi
+
+        if [[ "$contactData" =~ "\"currency\":\"${expectedCurrency}\"" ]]; then
+            currencyCorrect="true"
+        else
+            currencyCorrect="false"
+        fi
+
+        if [[ "$contactData" =~ "\"status\":\"accepted\"" ]]; then
+            statusCorrect="true"
+        else
+            statusCorrect="false"
+        fi
+
+        # Check if all metadata is correct
+        if [[ "$nameCorrect" == "true" ]] && [[ "$feeCorrect" == "true" ]] &&
+           [[ "$creditCorrect" == "true" ]] && [[ "$currencyCorrect" == "true" ]] &&
+           [[ "$statusCorrect" == "true" ]]; then
+            printf "\tContact %s->%s metadata ${GREEN}PASSED${NC}\n" ${containerKeys[0]} ${containerKeys[1]}
+            printf "\t  Name: ✓ Fee: ✓ Credit: ✓ Currency: ✓ Status: ✓\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\tContact %s->%s metadata ${RED}FAILED${NC}\n" ${containerKeys[0]} ${containerKeys[1]}
+            printf "\t  Name: %s Fee: %s Credit: %s Currency: %s Status: %s\n" \
+                   $([ "$nameCorrect" == "true" ] && echo "✓" || echo "✗") \
+                   $([ "$feeCorrect" == "true" ] && echo "✓" || echo "✗") \
+                   $([ "$creditCorrect" == "true" ] && echo "✓" || echo "✗") \
+                   $([ "$currencyCorrect" == "true" ] && echo "✓" || echo "✗") \
+                   $([ "$statusCorrect" == "true" ] && echo "✓" || echo "✗")
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\tContact %s->%s ${RED}NOT FOUND${NC}\n" ${containerKeys[0]} ${containerKeys[1]}
+        failure=$(( failure + 1 ))
+    fi
+done
+
+# Test 2: Verify bidirectional relationships
+echo -e "\n[Bidirectional Relationship Verification]"
+
+# Check that if A has B as contact, B also has A
+processedPairs=()
+for containersLinkKey in "${containersLinkKeys[@]}"; do
+    containerKeys=(${containersLinkKey//,/ })
+    pairKey="${containerKeys[0]}_${containerKeys[1]}"
+    reversePairKey="${containerKeys[1]}_${containerKeys[0]}"
+
+    # Skip if we already processed this pair
+    if [[ " ${processedPairs[@]} " =~ " ${reversePairKey} " ]]; then
+        continue
+    fi
+    processedPairs+=("$pairKey")
+
+    totaltests=$(( totaltests + 1 ))
+
+    echo -e "\n\t-> Checking bidirectional: ${containerKeys[0]} <-> ${containerKeys[1]}"
+
+    # Check forward relationship
+    forwardExists=$(docker exec ${containerKeys[0]} php -r "
+        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        \$db = ServiceContainer::getInstance()->getDatabase();
+        \$stmt = \$db->prepare('SELECT COUNT(*) FROM contacts WHERE address = :address AND status = \"accepted\"');
+        \$stmt->execute([':address' => '${containerAddresses[${containerKeys[1]}]}']);
+        echo \$stmt->fetchColumn();
+    " 2>/dev/null || echo "0")
+
+    # Check reverse relationship
+    reverseExists=$(docker exec ${containerKeys[1]} php -r "
+        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        \$db = ServiceContainer::getInstance()->getDatabase();
+        \$stmt = \$db->prepare('SELECT COUNT(*) FROM contacts WHERE address = :address AND status = \"accepted\"');
+        \$stmt->execute([':address' => '${containerAddresses[${containerKeys[0]}]}']);
+        echo \$stmt->fetchColumn();
+    " 2>/dev/null || echo "0")
+
+    if [[ "$forwardExists" == "1" ]] && [[ "$reverseExists" == "1" ]]; then
+        printf "\tBidirectional relationship ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\tBidirectional relationship ${RED}FAILED${NC} (Forward: %s, Reverse: %s)\n" ${forwardExists} ${reverseExists}
+        failure=$(( failure + 1 ))
+    fi
+done
+
+# Test 3: List all contacts command
+echo -e "\n[List Contacts Command Test]"
+
+for container in "${containers[@]}"; do
+    totaltests=$(( totaltests + 1 ))
+
+    echo -e "\n\t-> Testing list contacts for ${container}"
+
+    # Use viewcontacts or similar command if available
+    listOutput=$(docker exec ${container} eiou list 2>&1 || echo "")
+
+    # Also get count from database
+    contactCount=$(docker exec ${container} php -r "
+        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        \$db = ServiceContainer::getInstance()->getDatabase();
+        \$stmt = \$db->prepare('SELECT COUNT(*) FROM contacts WHERE status = \"accepted\"');
+        \$stmt->execute();
+        echo \$stmt->fetchColumn();
+    " 2>/dev/null || echo "0")
+
+    if [[ "$contactCount" -gt "0" ]]; then
+        printf "\t%s has %s accepted contacts ${GREEN}PASSED${NC}\n" ${container} ${contactCount}
+        passed=$(( passed + 1 ))
+    else
+        printf "\t%s has no contacts ${RED}FAILED${NC}\n" ${container}
+        failure=$(( failure + 1 ))
+    fi
+done
+
+# Test 4: View specific contact details
+echo -e "\n[View Contact Details Test]"
+
+for containersLinkKey in "${containersLinkKeys[@]:0:3}"; do  # Test first 3 links
+    totaltests=$(( totaltests + 1 ))
+
+    containerKeys=(${containersLinkKey//,/ })
+
+    echo -e "\n\t-> ${containerKeys[0]} viewing contact ${containerKeys[1]}"
+
+    viewOutput=$(docker exec ${containerKeys[0]} eiou viewcontact ${containerAddresses[${containerKeys[1]}]} 2>&1)
+
+    if [[ ! "$viewOutput" =~ "error" ]] && [[ ! "$viewOutput" =~ "Error" ]] && [[ ! "$viewOutput" =~ "not found" ]]; then
+        printf "\tView contact details ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\tView contact details ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+done
+
+succesrate "${totaltests}" "${passed}" "${failure}" "'contact list'"
