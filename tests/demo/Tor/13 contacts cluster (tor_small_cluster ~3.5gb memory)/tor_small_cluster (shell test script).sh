@@ -84,27 +84,14 @@ for container in "${containers[@]}"; do
     docker run -d --network=eioud-network --name $container eioud
 done
 
+echo -e "\nWaiting for 5 seconds for proper container startup..."
+sleep 5
+
 # Save container Addresses in the associative array containerAddresses
 #       containerAddresses[containerName] = containerAddress (Tor)
 echo -e "\nGetting Tor addresses..."
-wait_for_container() {
-    local container_name=$1
-    local max_attempts=10
-    local attempt=0
-
-    echo "Waiting for $container_name's Tor address..."
-     while ! containerAddresses[$container_name]=$(docker exec $container_name eiou generate torAddressOnly | tr -d '\n') >/dev/null 2>&1; do
-        attempt=$((attempt + 1))
-        if [ "$attempt" -ge "$max_attempts" ]; then
-            echo "Error: $container_name did not start in time."
-            exit 1
-        fi
-        sleep 1
-    done
-}
-
 for container in "${containers[@]}"; do
-    wait_for_container $container
+    containerAddresses[$container]=$(docker exec $container php -r 'echo json_decode(file_get_contents("/etc/eiou/userconfig.json"),true)["torAddress"];')
 done
 
 echo -e "\nWaiting for 15 seconds due to the nature of Tor..."
@@ -127,16 +114,15 @@ docker exec torA eiou send ${containerAddresses[torA42]} 100 USD
 docker exec torA eiou send ${containerAddresses[torA31]} 100 USD
 docker exec torA eiou send ${containerAddresses[torA2]} 100 USD
 
+# need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances)
+echo -e "\nSleeping for 10 seconds for proper completion of transaction cycles..."
+sleep 10
 
 echo -e "\nTesting other functions..."
 
 # View contacts
 echo -e "\nViewing contacts..."
 docker exec torA eiou viewcontact ${containerAddresses[torA4]}
-
-# need a moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances/transaction history)
-echo -e "\nSleeping for 10 seconds for proper completion of transaction cycles..."
-sleep 10 
 
 # View balances
 echo -e "\nViewing balances..."

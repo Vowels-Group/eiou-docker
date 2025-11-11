@@ -14,7 +14,7 @@ fi
 remove_container_if_exists() {
     local container_name=$1
     if docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
-        echo "Removing existing container: $container_name..."
+        echo -e "\tRemoving existing container: $container_name..."
         docker rm -f "$container_name"
     fi
 }
@@ -199,10 +199,13 @@ done
 
 # Save container Addresses in the associative array containerAddresses
 #       containerAddresses[containerName] = containerAddress (HTTP)
-echo -e "\nSave hostnames..."
+echo -e "\nSaving hostnames..."
 for container in "${containers[@]}"; do
     containerAddresses[$container]="http://"$container
 done
+
+echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
+sleep 5
 
 # Add friends
 echo -e "\nAdding friends..."
@@ -224,6 +227,8 @@ docker exec A0 eiou send ${containerAddresses[A21]} 100 USD
 docker exec A0 eiou send ${containerAddresses[A412]} 100 USD
 docker exec A0 eiou send ${containerAddresses[A121]} 100 USD
 
+echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
+sleep 5
 
 echo -e "\nTesting other functions..."
 
@@ -233,7 +238,7 @@ docker exec A0 eiou viewcontact ${containerAddresses[A4]}
 docker exec A421 eiou viewcontact ${containerAddresses[A113]}
 
 # need A0 moment for the whole P2P/RP2P/Transaction to be completed (otherwise it's not available yet in the balances)
-echo -e "\nSleeping for 5 seconds..."
+echo -e "\nSleeping for 5 seconds for proper transaction completion..."
 sleep 5
 
 # View balances

@@ -14,7 +14,7 @@ fi
 remove_container_if_exists() {
     local container_name=$1
     if docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
-        echo "Removing existing container: $container_name..."
+        echo -e "\tRemoving existing container: $container_name..."
         docker rm -f "$container_name"
     fi
 }
@@ -59,10 +59,13 @@ done
 
 # Save container Addresses in the associative array containerAddresses
 #       containerAddresses[containerName] = containerAddress (HTTP)
-echo -e "\nSave hostnames..."
+echo -e "\nSaving hostnames..."
 for container in "${containers[@]}"; do
     containerAddresses[$container]="http://"$container
 done
+
+echo -e "\nSleeping for 5 seconds for proper startup of all containers..."
+sleep 5
 
 # Add friends
 echo -e "\nAdding friends..."
@@ -79,6 +82,9 @@ echo -e "\nSending money..."
 docker exec httpA eiou send ${containerAddresses[httpB]} 100 USD
 docker exec httpA eiou send ${containerAddresses[httpC]} 100 USD
 docker exec httpA eiou send ${containerAddresses[httpD]} 100 USD # first complicated path
+
+echo -e "\nSleeping for 5 seconds for proper transaction completion..."
+sleep 5
 
 echo -e "\nTesting other functions..."
 
