@@ -190,6 +190,7 @@ for container in "${containers[@]}"; do
 done
 
 echo "Building base image..."
+cd ../
 docker build -f eioud.dockerfile -t eioud .
 
 echo -e "\nCreating containers..."
