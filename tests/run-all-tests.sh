@@ -2,29 +2,35 @@
 
 # Automated test runner for EIOU Docker test suite
 # Runs all tests in correct dependency order without user interaction
-# Usage: ./tests/run-all-tests.sh [build_name]
-# Example: ./tests/run-all-tests.sh http4
+# Usage: ./run-all-tests.sh [build_name]
+# Example: ./run-all-tests.sh http4
 
 set -e  # Exit on error
 
 # Load base configuration
-. './tests/baseconfig/config.sh'
+. './baseconfig/config.sh'
 
 # Check command line argument
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <build_name>"
+    echo "Usage: $0 <build_name> <mode>"
     echo "Available builds: http4, http10, http13, http37"
+    echo "Available modes: tor, http"
     exit 1
 fi
 
 BUILD_NAME="$1"
-BUILD_FILE="./tests/buildfiles/${BUILD_NAME}.sh"
+BUILD_FILE="./buildfiles/${BUILD_NAME}.sh"
+if [ $# -eq 1 ]; then
+    MODE="http"
+else
+    MODE="$2"
+fi
 
 # Verify build file exists
 if [ ! -f "$BUILD_FILE" ]; then
     printf "${RED}Error: Build file '${BUILD_FILE}' not found${NC}\n"
     echo "Available builds:"
-    ls -1 ./tests/buildfiles/*.sh 2>/dev/null | xargs -n1 basename | sed 's/\.sh$//' | sed 's/^/  - /'
+    ls -1 ./buildfiles/*.sh 2>/dev/null | xargs -n1 basename | sed 's/\.sh$//' | sed 's/^/  - /'
     exit 1
 fi
 
@@ -83,7 +89,7 @@ printf "========================================\n"
 printf "  EIOU Docker Automated Test Runner\n"
 printf "========================================\n"
 printf "Build: ${BUILD_NAME}\n"
-printf "Time: $(date '+%Y-%m-%d %H:%M:%S')\n"
+printf "Time:  $(date '+%Y-%m-%d %H:%M:%S')\n"
 printf "\n"
 
 # Step 1: Build the topology
@@ -98,14 +104,18 @@ fi
 printf "${GREEN}${CHECK} Build completed successfully${NC}\n"
 sleep 2
 
-# Step 2: Run prerequisite test (generateTest)
+# Step 2: Run prerequisite test (torAddressTest (TOR) or hostnameTest (HTTP))
 printf "\n${GREEN}[Step 2/3]${NC} Running prerequisite test...\n"
-run_test "generateTest" "./tests/testfiles/generateTest.sh" "true"
+if [ "$MODE" == 'tor' ]; then
+    run_test "torAddressTest" "./tests/testfiles/torAddressTest.sh" "true"
+elif [ "$MODE" == 'http' ]; then
+    run_test "hostnameTest" "./tests/testfiles/hostnameTest.sh" "true"
+fi
 
 # Step 3: Run all tests in dependency order
-printf "\n${GREEN}[Step 3/3]${NC} Running test suite...\n"
+printf "\n${GREEN}[Step 2/3]${NC} Running test suite...\n"
 
-# Define test order (excluding generateTest as it's already run)
+# Define test order (excluding hostnameTest as it's already run)
 TEST_ORDER="
 addContactsTest
 sendMessageTest
