@@ -1,0 +1,36 @@
+#!/bin/sh
+
+############################ Testing #############################
+
+testname="torAddressTest"
+totaltests="${#containers[@]}"
+passed=0
+failure=0
+
+for container in "${containers[@]}"; do
+    # Get Tor addresses (exists by default if container created succesfully)
+    containerAddresses[$container]=$(docker exec $container php -r '
+        $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true);
+        if (isset($json["torAddress"])) {
+            echo $json["torAddress"];
+        }
+    ')
+
+    if [[ ! -z "${containerAddresses[${container}]}" ]]; then
+        printf "${testname} for %s ${GREEN}PASSED${NC}\n\n" ${container}
+        passed=$(( passed + 1 ))
+    else
+        printf "${testname} for %s ${RED}FAILED${NC}\n\n" ${container}
+        failure=$(( failure + 1 ))
+    fi
+
+done
+
+succesrate "${totaltests}" "${passed}" "${failure}" "'generate'"
+
+##################################################################
+
+
+
+
+
