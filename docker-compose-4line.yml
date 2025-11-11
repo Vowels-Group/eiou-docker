@@ -10,7 +10,9 @@ services:
       - QUICKSTART=alice
     volumes:
       - alice-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - alice-files:/etc/eiou/
+      - alice-index:/var/www/html
+      - alice-eiou:/usr/local/bin/
     restart: unless-stopped
 
   bob:
@@ -24,7 +26,9 @@ services:
       - QUICKSTART=bob
     volumes:
       - bob-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - bob-files:/etc/eiou/
+      - bob-index:/var/www/html
+      - bob-eiou:/usr/local/bin/
     restart: unless-stopped
 
   carol:
@@ -38,7 +42,9 @@ services:
       - QUICKSTART=carol
     volumes:
       - carol-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - carol-files:/etc/eiou/
+      - carol-index:/var/www/html
+      - carol-eiou:/usr/local/bin/
     restart: unless-stopped
 
   daniel:
@@ -52,7 +58,9 @@ services:
       - QUICKSTART=daniel
     volumes:
       - daniel-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - daniel-files:/etc/eiou/
+      - daniel-index:/var/www/html
+      - daniel-eiou:/usr/local/bin/
     restart: unless-stopped
 
 networks:
@@ -63,9 +71,36 @@ networks:
 volumes:
   alice-mysql-data:
     name: alice-mysql-data
+  alice-files:
+    name: alice-files
+  alice-index:
+    name: alice-index
+  alice-eiou:
+    name: alice-eiou
+
   bob-mysql-data:
     name: bob-mysql-data
+  bob-files:
+    name: bob-files
+  bob-index:
+    name: bob-index
+  bob-eiou:
+    name: bob-eiou
+
   carol-mysql-data:
     name: carol-mysql-data
+  carol-files:
+    name: carol-files
+  carol-index:
+    name: carol-index
+  carol-eiou:
+    name: carol-eiou
+
   daniel-mysql-data:
     name: daniel-mysql-data
+  daniel-files:
+    name: daniel-files
+  daniel-index:
+    name: daniel-index
+  daniel-eiou:
+    name: daniel-eiou

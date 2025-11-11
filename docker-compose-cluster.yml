@@ -11,7 +11,9 @@ services:
       - QUICKSTART=cluster-a
     volumes:
       - cluster-a-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a-files:/etc/eiou/
+      - cluster-a-index:/var/www/html
+      - cluster-a-eiou:/usr/local/bin/
     restart: unless-stopped
 
   # Level 1 nodes
@@ -26,7 +28,9 @@ services:
       - QUICKSTART=cluster-a1
     volumes:
       - cluster-a1-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a1-files:/etc/eiou/
+      - cluster-a1-index:/var/www/html
+      - cluster-a1-eiou:/usr/local/bin/
     restart: unless-stopped
 
   cluster-a2:
@@ -40,7 +44,9 @@ services:
       - QUICKSTART=cluster-a2
     volumes:
       - cluster-a2-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a2-files:/etc/eiou/
+      - cluster-a2-index:/var/www/html
+      - cluster-a2-eiou:/usr/local/bin/
     restart: unless-stopped
 
   cluster-a3:
@@ -54,7 +60,9 @@ services:
       - QUICKSTART=cluster-a3
     volumes:
       - cluster-a3-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a3-files:/etc/eiou/
+      - cluster-a3-index:/var/www/html
+      - cluster-a3-eiou:/usr/local/bin/
     restart: unless-stopped
 
   cluster-a4:
@@ -68,7 +76,9 @@ services:
       - QUICKSTART=cluster-a4
     volumes:
       - cluster-a4-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a4-files:/etc/eiou/
+      - cluster-a4-index:/var/www/html
+      - cluster-a4-eiou:/usr/local/bin/
     restart: unless-stopped
 
   # Level 2 nodes
@@ -83,7 +93,9 @@ services:
       - QUICKSTART=cluster-a11
     volumes:
       - cluster-a11-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a11-files:/etc/eiou/
+      - cluster-a11-index:/var/www/html
+      - cluster-a11-eiou:/usr/local/bin/
     restart: unless-stopped
 
   cluster-a12:
@@ -97,7 +109,9 @@ services:
       - QUICKSTART=cluster-a12
     volumes:
       - cluster-a12-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a12-files:/etc/eiou/
+      - cluster-a12-index:/var/www/html
+      - cluster-a12-eiou:/usr/local/bin/
     restart: unless-stopped
 
   cluster-a21:
@@ -111,7 +125,9 @@ services:
       - QUICKSTART=cluster-a21
     volumes:
       - cluster-a21-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a21-files:/etc/eiou/
+      - cluster-a21-index:/var/www/html
+      - cluster-a21-eiou:/usr/local/bin/
     restart: unless-stopped
 
   cluster-a22:
@@ -125,7 +141,9 @@ services:
       - QUICKSTART=cluster-a22
     volumes:
       - cluster-a22-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a22-files:/etc/eiou/
+      - cluster-a22-index:/var/www/html
+      - cluster-a22-eiou:/usr/local/bin/
     restart: unless-stopped
 
   cluster-a31:
@@ -139,7 +157,9 @@ services:
       - QUICKSTART=cluster-a31
     volumes:
       - cluster-a31-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a31-files:/etc/eiou/
+      - cluster-a31-index:/var/www/html
+      - cluster-a31-eiou:/usr/local/bin/
     restart: unless-stopped
 
   cluster-a32:
@@ -153,7 +173,9 @@ services:
       - QUICKSTART=cluster-a32
     volumes:
       - cluster-a32-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a32-files:/etc/eiou/
+      - cluster-a32-index:/var/www/html
+      - cluster-a32-eiou:/usr/local/bin/
     restart: unless-stopped
 
   cluster-a41:
@@ -167,7 +189,9 @@ services:
       - QUICKSTART=cluster-a41
     volumes:
       - cluster-a41-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a41-files:/etc/eiou/
+      - cluster-a41-index:/var/www/html
+      - cluster-a41-eiou:/usr/local/bin/
     restart: unless-stopped
 
   cluster-a42:
@@ -181,7 +205,9 @@ services:
       - QUICKSTART=cluster-a42
     volumes:
       - cluster-a42-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - cluster-a42-files:/etc/eiou/
+      - cluster-a42-index:/var/www/html
+      - cluster-a42-eiou:/usr/local/bin/
     restart: unless-stopped
 
 networks:
@@ -192,27 +218,117 @@ networks:
 volumes:
   cluster-a-mysql-data:
     name: cluster-a-mysql-data
+  cluster-a-files:
+    name: cluster-a-files
+  cluster-a-index:
+    name: cluster-a-index
+  cluster-a-eiou:
+    name: cluster-a-eiou
+
   cluster-a1-mysql-data:
     name: cluster-a1-mysql-data
+  cluster-a1-files:
+    name: cluster-a1-files
+  cluster-a1-index:
+    name: cluster-a1-index
+  cluster-a1-eiou:
+    name: cluster-a1-eiou
+
   cluster-a2-mysql-data:
     name: cluster-a2-mysql-data
+  cluster-a2-files:
+    name: cluster-a2-files
+  cluster-a2-index:
+    name: cluster-a2-index
+  cluster-a2-eiou:
+    name: cluster-a2-eiou
+
   cluster-a3-mysql-data:
     name: cluster-a3-mysql-data
+  cluster-a3-files:
+    name: cluster-a3-files
+  cluster-a3-index:
+    name: cluster-a3-index
+  cluster-a3-eiou:
+    name: cluster-a3-eiou
+
   cluster-a4-mysql-data:
     name: cluster-a4-mysql-data
+  cluster-a4-files:
+    name: cluster-a4-files
+  cluster-a4-index:
+    name: cluster-a4-index
+  cluster-a4-eiou:
+    name: cluster-a4-eiou
+
   cluster-a11-mysql-data:
     name: cluster-a11-mysql-data
+  cluster-a11-files:
+    name: cluster-a11-files
+  cluster-a11-index:
+    name: cluster-a11-index
+  cluster-a11-eiou:
+    name: cluster-a11-eiou
+
   cluster-a12-mysql-data:
     name: cluster-a12-mysql-data
+  cluster-a12-files:
+    name: cluster-a12-files
+  cluster-a12-index:
+    name: cluster-a12-index
+  cluster-a12-eiou:
+    name: cluster-a12-eiou
+
   cluster-a21-mysql-data:
     name: cluster-a21-mysql-data
+  cluster-a21-files:
+    name: cluster-a21-files
+  cluster-a21-index:
+    name: cluster-a21-index
+  cluster-a21-eiou:
+    name: cluster-a21-eiou
+
   cluster-a22-mysql-data:
     name: cluster-a22-mysql-data
-  cluster-a31-mysql-data:
+  cluster-a22-files:
+    name: cluster-a22-files
+  cluster-a22-index:
+    name: cluster-a22-index
+  cluster-a22-eiou:
+    name: cluster-a22-eiou
+
+  cluster-a31-cluster-a31-mysql-data:
     name: cluster-a31-mysql-data
+  cluster-a31-files:
+    name: cluster-a31-files
+  cluster-a31-index:
+    name: cluster-a31-index
+  cluster-a31-eiou:
+    name: cluster-a31-eiou
+
   cluster-a32-mysql-data:
     name: cluster-a32-mysql-data
+  cluster-a32-files:
+    name: cluster-a32-files
+  cluster-a32-index:
+    name: cluster-a32-index
+  cluster-a32-eiou:
+    name: cluster-a32-eiou
+
   cluster-a41-mysql-data:
     name: cluster-a41-mysql-data
+  cluster-a41-files:
+    name:  cluster-a41-files
+  cluster-a41-index:
+    name:  cluster-a41-index
+  cluster-a41-eiou:
+    name:  cluster-a41-eiou
+
   cluster-a42-mysql-data:
     name: cluster-a42-mysql-data
+  cluster-a42-files:
+    name: cluster-a42-files
+  cluster-a42-index:
+    name: cluster-a42-index
+  cluster-a42-eiou:
+    name: cluster-a42-eiou

@@ -10,7 +10,9 @@ services:
       - QUICKSTART=node-a
     volumes:
       - node-a-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - node-a-files:/etc/eiou/
+      - node-a-index:/var/www/html
+      - node-a-eiou:/usr/local/bin/
     restart: unless-stopped
 
   node-b:
@@ -24,7 +26,9 @@ services:
       - QUICKSTART=node-b
     volumes:
       - node-b-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - node-b-files:/etc/eiou/
+      - node-b-index:/var/www/html
+      - node-b-eiou:/usr/local/bin/
     restart: unless-stopped
 
   node-c:
@@ -38,7 +42,9 @@ services:
       - QUICKSTART=node-c
     volumes:
       - node-c-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - node-c-files:/etc/eiou/
+      - node-c-index:/var/www/html
+      - node-c-eiou:/usr/local/bin/
     restart: unless-stopped
 
   node-d:
@@ -52,7 +58,9 @@ services:
       - QUICKSTART=node-d
     volumes:
       - node-d-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - node-d-files:/etc/eiou/
+      - node-d-index:/var/www/html
+      - node-d-eiou:/usr/local/bin/
     restart: unless-stopped
 
   node-e:
@@ -66,7 +74,9 @@ services:
       - QUICKSTART=node-e
     volumes:
       - node-e-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - node-e-files:/etc/eiou/
+      - node-e-index:/var/www/html
+      - node-e-eiou:/usr/local/bin/
     restart: unless-stopped
 
   node-f:
@@ -80,7 +90,9 @@ services:
       - QUICKSTART=node-f
     volumes:
       - node-f-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - node-f-files:/etc/eiou/
+      - node-f-index:/var/www/html
+      - node-f-eiou:/usr/local/bin/
     restart: unless-stopped
 
   node-g:
@@ -94,7 +106,9 @@ services:
       - QUICKSTART=node-g
     volumes:
       - node-g-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - node-g-files:/etc/eiou/
+      - node-g-index:/var/www/html
+      - node-g-eiou:/usr/local/bin/
     restart: unless-stopped
 
   node-h:
@@ -108,7 +122,9 @@ services:
       - QUICKSTART=node-h
     volumes:
       - node-h-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - node-h-files:/etc/eiou/
+      - node-h-index:/var/www/html
+      - node-h-eiou:/usr/local/bin/
     restart: unless-stopped
 
   node-i:
@@ -122,7 +138,9 @@ services:
       - QUICKSTART=node-i
     volumes:
       - node-i-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - node-i-files:/etc/eiou/
+      - node-i-index:/var/www/html
+      - node-i-eiou:/usr/local/bin/
     restart: unless-stopped
 
   node-j:
@@ -136,7 +154,9 @@ services:
       - QUICKSTART=node-j
     volumes:
       - node-j-mysql-data:/var/lib/mysql
-      - ./src:/etc/eiou/src
+      - node-j-files:/etc/eiou/
+      - node-j-index:/var/www/html
+      - node-j-eiou:/usr/local/bin/
     restart: unless-stopped
 
 networks:
@@ -147,21 +167,90 @@ networks:
 volumes:
   node-a-mysql-data:
     name: node-a-mysql-data
+  node-a-files:
+    name: node-a-files
+  node-a-index:
+    name: node-a-index
+  node-a-eiou:
+    name: node-a-eiou
+
   node-b-mysql-data:
     name: node-b-mysql-data
+  node-b-files:
+    name: node-b-files
+  node-b-index:
+    name: node-b-index
+  node-b-eiou:
+    name: node-b-eiou
+
   node-c-mysql-data:
     name: node-c-mysql-data
+  node-c-files:
+    name: node-c-files
+  node-c-index:
+    name: node-c-index
+  node-c-eiou:
+    name: node-c-eiou
+    
   node-d-mysql-data:
     name: node-d-mysql-data
+  node-d-files:
+    name: node-d-files
+  node-d-index:
+    name: node-d-index
+  node-d-eiou:
+    name: node-d-eiou
+
   node-e-mysql-data:
     name: node-e-mysql-data
+  node-e-files:
+    name: node-e-files
+  node-e-index:
+    name: node-e-index
+  node-e-eiou:
+    name: node-e-eiou
+
   node-f-mysql-data:
     name: node-f-mysql-data
+  node-f-files:
+    name: node-f-files
+  node-f-index:
+    name: node-f-index
+  node-f-eiou:
+    name: node-f-eiou
+
   node-g-mysql-data:
     name: node-g-mysql-data
+  node-g-files:
+    name: node-g-files
+  node-g-index:
+    name: node-g-index
+  node-g-eiou:
+    name: node-g-eiou
+
   node-h-mysql-data:
     name: node-h-mysql-data
+  node-h-files:
+    name: node-h-files
+  node-h-index:
+    name: node-h-index
+  node-h-eiou:
+    name: node-h-eiou
+
   node-i-mysql-data:
     name: node-i-mysql-data
+  node-i-files:
+    name: node-i-files
+  node-i-index:
+    name: node-i-index
+  node-i-eiou:
+    name: node-i-eiou
+
   node-j-mysql-data:
     name: node-j-mysql-data
+  node-j-files:
+    name: node-j-files
+  node-j-index:
+    name: node-j-index
+  node-j-eiou:
+    name: node-j-eiou
