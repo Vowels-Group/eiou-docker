@@ -22,6 +22,23 @@ class BalanceRepository extends AbstractRepository {
         $this->primaryKey = 'pubkey';
     }
 
+
+    /**
+     * Get all balances in the table
+     *
+     * @return array|null Array of Balances
+     */
+    public function getAllBalances(): array|null{
+        $query = "SELECT * FROM {$this->tableName}";
+        $stmt = $this->execute($query);
+        if (!$stmt) {
+            return null;
+        }
+        $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+
     /**
      * Lookup contact balance (both ways) subsetted on currency
      *
@@ -37,6 +54,18 @@ class BalanceRepository extends AbstractRepository {
         }
         $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
         return $result ?: null;
+    }
+
+
+    /**
+     * Lookup current contact balance given contact pubkey
+     *
+     * @param string $pubkey Contact pubkey
+     * @param string $currency currency
+     * @return iny Balance
+     */
+    public function getCurrentContactBalance(string $pubkey, string $currency): int{
+        return $this->getContactReceivedBalance($pubkey, $currency) - $this->getContactSentBalance($pubkey, $currency);
     }
 
     /**
