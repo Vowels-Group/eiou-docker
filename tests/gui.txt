@@ -35,9 +35,9 @@ docker run -d --name Carol --network eiou-network -v "$(pwd)/files/src/:/etc/eio
 docker run -d --name Daniel --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -v "${PWD}/files/index/:/var/www/html" -e QUICKSTART=Daniel eioud
 
 # Alternative absolute path examples:
-# Windows: -v "C:\path\to\your\eiou\src\walletIndex.html:/var/www/html/index.html"
-# Linux: -v "/home/user/eiou/src/walletIndex.html:/var/www/html/index.html"
-# macOS: -v "/Users/user/eiou/src/walletIndex.html:/var/www/html/index.html"
+# Windows: -v "C:\path\to\your\eiou\files\index\walletIndex.html:/var/www/html/index.html"
+# Linux: -v "/home/user/eiou/files/src/walletIndex.html:/var/www/html/index.html"
+# macOS: -v "/Users/user/eiou/files/src/walletIndex.html:/var/www/html/index.html"
 
 
 ### Option 2: Alice, Carol, and Daniel (standard containers)
