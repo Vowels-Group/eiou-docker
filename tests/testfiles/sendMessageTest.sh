@@ -23,7 +23,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     testAmount="5"
     testCurrency="${valueArray[2]}"
 
-    echo -e "\t-> ${containerKeys[0]} sending ${testAmount} ${testCurrency} to ${containerKeys[1]}"
+    echo -e "\t > ${containerKeys[0]} sending ${testAmount} ${testCurrency} to ${containerKeys[1]}"
 
     # Get initial balance of recipient
     initialBalance=$(docker exec ${containerKeys[1]} php -r "
@@ -37,7 +37,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     sendResult=$(docker exec ${containerKeys[0]} eiou send ${containerAddresses[${containerKeys[1]}]} ${testAmount} ${testCurrency} 2>&1)
 
     # Wait for transaction to process
-    echo -e "\tWaiting 5 seconds for routing process (faster but certainty)"
+    echo -e "\t > Waiting 5 seconds for routing process (faster but certainty)..."
     sleep 5
 
     # Get new balance of recipient
@@ -58,14 +58,14 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         printf "\t${testname} from %s to %s ${GREEN}PASSED${NC} (Balance: %s -> %s)\n\n" ${containerKeys[0]} ${containerKeys[1]} ${initialBalance} ${newBalance}
         passed=$(( passed + 1 ))
     else
-        printf "\t${testname} from %s to %s ${RED}FAILED${NC} (Balance unchanged: %s)\n\n" ${containerKeys[0]} ${containerKeys[1]} ${initialBalance}
-        printf "\t\tSend result: %s\n" "${sendResult}"
+        printf "\t${testname} from %s to %s ${RED}FAILED${NC} (Balance unchanged: %s)\n" ${containerKeys[0]} ${containerKeys[1]} ${initialBalance}
+        printf "\tSend result: %s\n" "${sendResult}"
         failure=$(( failure + 1 ))
     fi
 done
 
 # Test multi-hop routing (A->D requires routing through B and C)
-echo -e "\n\t-> Testing multi-hop: httpA sending to httpD (should route through httpB and httpC)"
+echo -e "\t > Testing multi-hop: httpA sending to httpD (should route through httpB and httpC)"
 if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]]; then
 
     # Get initial balance of httpD
@@ -80,7 +80,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     multiHopResult=$(docker exec httpA eiou send ${containerAddresses[httpD]} 10 USD 2>&1)
 
     # Wait for routing
-    echo -e "\tWaiting for 20 seconds for complete routing"
+    echo -e "\t > Waiting for 20 seconds for complete routing..."
     sleep 20
 
     # Get new balance of httpD
@@ -101,7 +101,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
         passed=$(( passed + 1 ))
     else
         printf "\tMulti-hop routing httpA->httpD ${RED}FAILED${NC}\n"
-        printf "\t\tResult: %s\n" "${multiHopResult}"
+        printf "\tResult: %s\n" "${multiHopResult}"
         failure=$(( failure + 1 ))
     fi
 fi
