@@ -44,13 +44,13 @@ function returnContactDetails($data) {
     $currencyUtility = $utilityContainer->getCurrencyUtility();
     return "Contact Details:\n" .
            "---------------\n" .
-           "Http Address: " . $data['htt['] ?? 'Http address not available' . "\n" .
-           "Tor Address: " . $data['tor'] ?? 'Tor address not available'. "\n" .
+           "Http Address: " . ($data['http'] ?? 'Http address not available') . "\n" .
+           "Tor Address: " . ($data['tor'] ?? 'Tor address not available'). "\n" .
            "Name: " . ($data['name'] ?? 'N/A') . "\n" .
            "Public Key: " . "..." . substr($data['pubkey'], 51, 25) . "...\n" .              
-           "Fee: " .  $currencyUtility->convertCentsToDollars(($data['fee_percent'] ?? '0.00') ) . "%\n" .
+           "Fee: " .  $currencyUtility->convertCentsToDollars(($data['fee_percent'] ?? '0.00')) . "%\n" .
            "Credit Limit: " . $currencyUtility->convertCentsToDollars(($data['credit_limit'] ?? '0.00')) . "\n" .
-           "Currency: " . ($data['currency']) . "\n";
+           "Currency: " . $data['currency'] . "\n";
 }
 
 function returnContactExists() {
