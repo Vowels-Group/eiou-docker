@@ -23,7 +23,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     testAmount="5"
     testCurrency="${valueArray[2]}"
 
-    echo -e "\n\t-> ${containerKeys[0]} sending ${testAmount} ${testCurrency} to ${containerKeys[1]}"
+    echo -e "\t-> ${containerKeys[0]} sending ${testAmount} ${testCurrency} to ${containerKeys[1]}"
 
     # Get initial balance of recipient
     initialBalance=$(docker exec ${containerKeys[1]} php -r "
@@ -37,7 +37,8 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     sendResult=$(docker exec ${containerKeys[0]} eiou send ${containerAddresses[${containerKeys[1]}]} ${testAmount} ${testCurrency} 2>&1)
 
     # Wait for transaction to process
-    sleep 3
+    echo -e "\tWaiting 5 seconds for routing process (faster but certainty)"
+    sleep 5
 
     # Get new balance of recipient
     newBalance=$(docker exec ${containerKeys[1]} php -r "
@@ -54,11 +55,11 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Verify message was sent and balance changed
     balanceIncreased=$(awk "BEGIN {print ($newBalance > $initialBalance) ? 1 : 0}")
     if [[ "$sendResult" =~ "success" ]] || [[ "$sendResult" =~ "sent" ]] || [[ "$balanceIncreased" -eq 1 ]]; then
-        printf "${testname} from %s to %s ${GREEN}PASSED${NC} (Balance: %s -> %s)\n" ${containerKeys[0]} ${containerKeys[1]} ${initialBalance} ${newBalance}
+        printf "\t${testname} from %s to %s ${GREEN}PASSED${NC} (Balance: %s -> %s)\n\n" ${containerKeys[0]} ${containerKeys[1]} ${initialBalance} ${newBalance}
         passed=$(( passed + 1 ))
     else
-        printf "${testname} from %s to %s ${RED}FAILED${NC} (Balance unchanged: %s)\n" ${containerKeys[0]} ${containerKeys[1]} ${initialBalance}
-        printf "\tSend result: %s\n" "${sendResult}"
+        printf "\t${testname} from %s to %s ${RED}FAILED${NC} (Balance unchanged: %s)\n\n" ${containerKeys[0]} ${containerKeys[1]} ${initialBalance}
+        printf "\t\tSend result: %s\n" "${sendResult}"
         failure=$(( failure + 1 ))
     fi
 done
@@ -70,7 +71,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     # Get initial balance of httpD
     initialBalanceD=$(docker exec httpD php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[httpA]}');
+        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[httpC]}');
         \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")
@@ -79,12 +80,13 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     multiHopResult=$(docker exec httpA eiou send ${containerAddresses[httpD]} 10 USD 2>&1)
 
     # Wait for routing
-    sleep 5
+    echo -e "\tWaiting for 20 seconds for complete routing"
+    sleep 20
 
     # Get new balance of httpD
     newBalanceD=$(docker exec httpD php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[httpA]}');
+        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[httpC]}');
         \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")
@@ -95,11 +97,11 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     # Check if multi-hop succeeded
     balanceIncreasedD=$(awk "BEGIN {print ($newBalanceD > $initialBalanceD) ? 1 : 0}")
     if [[ "$multiHopResult" =~ "success" ]] || [[ "$multiHopResult" =~ "sent" ]] || [[ "$balanceIncreasedD" -eq 1 ]]; then
-        printf "Multi-hop routing httpA->httpD ${GREEN}PASSED${NC} (Balance: %s -> %s)\n" ${initialBalanceD} ${newBalanceD}
+        printf "\tMulti-hop routing httpA->httpD ${GREEN}PASSED${NC} (Balance: %s -> %s)\n" ${initialBalanceD} ${newBalanceD}
         passed=$(( passed + 1 ))
     else
-        printf "Multi-hop routing httpA->httpD ${RED}FAILED${NC}\n"
-        printf "\tResult: %s\n" "${multiHopResult}"
+        printf "\tMulti-hop routing httpA->httpD ${RED}FAILED${NC}\n"
+        printf "\t\tResult: %s\n" "${multiHopResult}"
         failure=$(( failure + 1 ))
     fi
 fi
