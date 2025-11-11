@@ -33,12 +33,12 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         );
     ")
 
-    printf "%s has status %s with %s\n" ${containerKeys[1]} ${statusContact1} ${containerKeys[0]}
+    printf "\t   %s has status %s with %s\n" ${containerKeys[1]} ${statusContact1} ${containerKeys[0]}
     if [[ "${statusContact1}" == "accepted" ]]; then
-        printf "${testname} for %s ${GREEN}PASSED${NC}\n\n" ${containerKeys[0]}
+        printf "\t   ${testname} for %s ${GREEN}PASSED${NC}\n\n" ${containerKeys[0]}
         passed=$(( passed + 1 ))
     else
-        printf "${testname} for %s ${RED}FAILED${NC}\n\n" ${containerKeys[0]}
+        printf "\t   ${testname} for %s ${RED}FAILED${NC}\n\n" ${containerKeys[0]}
         failure=$(( failure + 1 ))
     fi
 
@@ -52,12 +52,12 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         );
     ")
 
-    printf "%s has status %s with %s\n" ${containerKeys[0]} ${statusContact0} ${containerKeys[1]}  
+    printf "\t   %s has status %s with %s\n" ${containerKeys[0]} ${statusContact0} ${containerKeys[1]}  
     if [[ "${statusContact0}" == "accepted" ]]; then
-        printf "${testname} for %s ${GREEN}PASSED${NC}\n\n" ${containerKeys[1]}
+        printf "\t   ${testname} for %s ${GREEN}PASSED${NC}\n\n" ${containerKeys[1]}
         passed=$(( passed + 1 ))
     else
-        printf "${testname} for %s ${RED}FAILED${NC}\n\n" ${containerKeys[1]}
+        printf "\t   ${testname} for %s ${RED}FAILED${NC}\n\n" ${containerKeys[1]}
         failure=$(( failure + 1 ))
     fi
 
