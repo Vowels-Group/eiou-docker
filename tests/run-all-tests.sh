@@ -113,7 +113,7 @@ elif [ "$MODE" == 'http' ]; then
 fi
 
 # Step 3: Run all tests in dependency order
-printf "\n${GREEN}[Step 2/3]${NC} Running test suite...\n"
+printf "\n${GREEN}[Step 3/3]${NC} Running test suite...\n"
 
 # Define test order (excluding hostnameTest as it's already run)
 TEST_ORDER="
