@@ -29,7 +29,7 @@ function getContactsTableSchema() {
 
 // Balance table
 function getBalancesTableSchema() {
-    return "CREATE TABLE balances (
+    return "CREATE TABLE IF NOT EXISTS balances (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         pubkey TEXT NOT NULL,
         direction ENUM(
