@@ -28,21 +28,23 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Get initial balance of recipient
     initialBalance=$(docker exec ${containerKeys[1]} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getBalance('${testCurrency}');
-        echo \$balance;
+        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[${containerKeys[0]}]}');
+        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'${testCurrency}');
+        echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")
 
     # Send the message
     sendResult=$(docker exec ${containerKeys[0]} eiou send ${containerAddresses[${containerKeys[1]}]} ${testAmount} ${testCurrency} 2>&1)
 
     # Wait for transaction to process
-    sleep 2
+    sleep 3
 
     # Get new balance of recipient
     newBalance=$(docker exec ${containerKeys[1]} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getBalance('${testCurrency}');
-        echo \$balance;
+        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[${containerKeys[0]}]}');
+        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'${testCurrency}');
+        echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")
 
     # Calculate expected balance (initial + amount - fee if applicable)
@@ -68,21 +70,23 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     # Get initial balance of httpD
     initialBalanceD=$(docker exec httpD php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getBalance('USD');
-        echo \$balance;
+        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[httpA]}');
+        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+        echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")
 
     # Send from httpA to httpD (multi-hop)
     multiHopResult=$(docker exec httpA eiou send ${containerAddresses[httpD]} 10 USD 2>&1)
 
     # Wait for routing
-    sleep 3
+    sleep 5
 
     # Get new balance of httpD
     newBalanceD=$(docker exec httpD php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getBalance('USD');
-        echo \$balance;
+        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[httpA]}');
+        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+        echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")
 
     # Add to test count

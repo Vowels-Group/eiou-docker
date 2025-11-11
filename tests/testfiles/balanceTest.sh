@@ -59,13 +59,15 @@ if [[ "$firstLink" ]]; then
     # Get initial balances
     senderInitial=$(docker exec ${sender} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getBalance('USD');
+        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey(${containerAddresses[${sender}]});
+        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance ?: '0';
     " 2>/dev/null || echo "0")
 
     receiverInitial=$(docker exec ${receiver} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getBalance('USD');
+        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey(${containerAddresses[${receiver}]});
+        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance ?: '0';
     " 2>/dev/null || echo "0")
 
@@ -85,13 +87,15 @@ if [[ "$firstLink" ]]; then
     # Get new balances
     senderFinal=$(docker exec ${sender} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getBalance('USD');
+        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey(${containerAddresses[${sender}]});
+        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance ?: '0';
     " 2>/dev/null || echo "0")
 
     receiverFinal=$(docker exec ${receiver} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getBalance('USD');
+        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey(${containerAddresses[${receiver}]});
+        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance ?: '0';
     " 2>/dev/null || echo "0")
 
