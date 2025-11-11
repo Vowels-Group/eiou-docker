@@ -4,32 +4,21 @@ docker network create -d bridge demo-net
 # Remove any existing containers
 powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
 
+# Build base image
+docker build -f eioud.dockerfile -t eioud .
 
-# build and start containers
-docker build -f .\eioud.dockerfile -t eioud .
-docker run -d  --network=demo-net --name httpA eioud
-docker run -d  --network=demo-net --name httpB eioud
-docker run -d  --network=demo-net --name httpC eioud
-docker run -d  --network=demo-net --name httpD eioud
-docker run -d  --network=demo-net --name httpE eioud
-docker run -d  --network=demo-net --name httpF eioud
-docker run -d  --network=demo-net --name httpG eioud
-docker run -d  --network=demo-net --name httpH eioud
-docker run -d  --network=demo-net --name httpI eioud
-docker run -d  --network=demo-net --name httpJ eioud
+# Start containers
+docker run -d  --network=demo-net --name httpA -e QUICKSTART=httpA eioud
+docker run -d  --network=demo-net --name httpB -e QUICKSTART=httpB eioud
+docker run -d  --network=demo-net --name httpC -e QUICKSTART=httpC eioud
+docker run -d  --network=demo-net --name httpD -e QUICKSTART=httpD eioud
+docker run -d  --network=demo-net --name httpE -e QUICKSTART=httpE eioud
+docker run -d  --network=demo-net --name httpF -e QUICKSTART=httpF eioud
+docker run -d  --network=demo-net --name httpG -e QUICKSTART=httpG eioud
+docker run -d  --network=demo-net --name httpH -e QUICKSTART=httpH eioud
+docker run -d  --network=demo-net --name httpI -e QUICKSTART=httpI eioud
+docker run -d  --network=demo-net --name httpJ -e QUICKSTART=httpJ eioud
 sleep 5
-
-# generate pubkeys and set hostname
-docker exec httpA eiou generate http://httpA
-docker exec httpB eiou generate http://httpB
-docker exec httpC eiou generate http://httpC
-docker exec httpD eiou generate http://httpD
-docker exec httpE eiou generate http://httpE
-docker exec httpF eiou generate http://httpF
-docker exec httpG eiou generate http://httpG
-docker exec httpH eiou generate http://httpH
-docker exec httpI eiou generate http://httpI
-docker exec httpJ eiou generate http://httpJ
 
 # add contacts
 docker exec httpA eiou add http://httpB httpB 0.1 1000 USD

@@ -8,36 +8,20 @@ powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else {
 docker build -f eioud.dockerfile -t eioud .
 
 # Start containers
-docker run -d --network=demo-net --name A0 eioud
-docker run -d --network=demo-net --name A1 eioud
-docker run -d --network=demo-net --name A11 eioud
-docker run -d --network=demo-net --name A12 eioud
-docker run -d --network=demo-net --name A2 eioud
-docker run -d --network=demo-net --name A21 eioud
-docker run -d --network=demo-net --name A22 eioud
-docker run -d --network=demo-net --name A3 eioud
-docker run -d --network=demo-net --name A31 eioud
-docker run -d --network=demo-net --name A32 eioud
-docker run -d --network=demo-net --name A4 eioud
-docker run -d --network=demo-net --name A41 eioud
-docker run -d --network=demo-net --name A42 eioud
-
-
-# Generate pubkeys and set hostnames
-docker exec A0 eiou generate http://A0
-docker exec A1 eiou generate http://A1
-docker exec A11 eiou generate http://A11
-docker exec A12 eiou generate http://A12
-docker exec A2 eiou generate http://A2
-docker exec A21 eiou generate http://A21
-docker exec A22 eiou generate http://A22
-docker exec A3 eiou generate http://A3
-docker exec A31 eiou generate http://A31
-docker exec A32 eiou generate http://A32
-docker exec A4 eiou generate http://A4
-docker exec A41 eiou generate http://A41
-docker exec A42 eiou generate http://A42
-
+docker run -d --network=demo-net --name A0 -e QUICKSTART=A0 eioud
+docker run -d --network=demo-net --name A1 -e QUICKSTART=A1 eioud
+docker run -d --network=demo-net --name A11 -e QUICKSTART=A11 eioud
+docker run -d --network=demo-net --name A12 -e QUICKSTART=A12 eioud
+docker run -d --network=demo-net --name A2 -e QUICKSTART=A2 eioud
+docker run -d --network=demo-net --name A21 -e QUICKSTART=A21 eioud
+docker run -d --network=demo-net --name A22 -e QUICKSTART=A22 eioud
+docker run -d --network=demo-net --name A3 -e QUICKSTART=A3 eioud
+docker run -d --network=demo-net --name A31 -e QUICKSTART=A31 eioud
+docker run -d --network=demo-net --name A32 -e QUICKSTART=A32 eioud
+docker run -d --network=demo-net --name A4 -e QUICKSTART=A4 eioud
+docker run -d --network=demo-net --name A41 -e QUICKSTART=A41 eioud
+docker run -d --network=demo-net --name A42 -e QUICKSTART=A42 eioud
+sleep 5
 
 # Add friends (NOTE that names are NOT arbitrary)
 docker exec A0 eiou add http://A1 A1 0.1 1000 USD

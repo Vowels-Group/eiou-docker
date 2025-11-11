@@ -4,19 +4,15 @@ docker network create -d bridge demo-net
 # Remove any existing containers
 powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
 
-# build and start containers
+# Build base image
 docker build -f eioud.dockerfile -t eioud .
-docker run -d  --network=demo-net --name Alice eioud
-docker run -d  --network=demo-net --name Bob eioud
-docker run -d  --network=demo-net --name Carol eioud
-docker run -d  --network=demo-net --name Daniel eioud
-sleep 5
 
-# generate pubkeys and set hostname
-docker exec Alice eiou generate http://Alice
-docker exec Bob eiou generate http://Bob
-docker exec Carol eiou generate http://Carol
-docker exec Daniel eiou generate http://Daniel
+# Start containers
+docker run -d  --network=demo-net --name Alice -e QUICKSTART=Alice eioud
+docker run -d  --network=demo-net --name Bob -e QUICKSTART=Bob eioud
+docker run -d  --network=demo-net --name Carol -e QUICKSTART=Carol eioud
+docker run -d  --network=demo-net --name Daniel -e QUICKSTART=Daniel eioud
+sleep 5
 
 # add contacts
 docker exec Alice eiou add http://Bob Bob 0.1 1000 USD

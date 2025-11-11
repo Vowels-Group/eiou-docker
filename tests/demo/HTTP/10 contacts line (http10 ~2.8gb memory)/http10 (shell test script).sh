@@ -72,16 +72,14 @@ docker build -f eioud.dockerfile -t eioud .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
-    docker run -d --network=eioud-network --name $container eioud
+    docker run -d --network=eioud-network --name $container -e QUICKSTART=$container eioud
 done
 
 # Save container Addresses in the associative array containerAddresses
 #       containerAddresses[containerName] = containerAddress (HTTP)
-echo -e "\nGenerate pubkeys and set hostnames..."
+echo -e "\nSave hostnames..."
 for container in "${containers[@]}"; do
-    containerAddress="http://"$container
-    docker exec $container eiou generate $containerAddress
-    containerAddresses[$container]=$containerAddress
+    containerAddresses[$container]="http://"$container
 done
 
 # Add friends
