@@ -15,21 +15,24 @@ docker network create -d bridge eiou-network
 
 
 ### Option 1: Bob with Volume Mount (for development/testing)
-# This links the local src/walletIndex.html with the container's /var/www/html/index.html
-# This links the local src/functions folder with the container's /var/www/etc/eiou/src/functions folder
+# This links the local src/ folder with the container's /var/www/etc/eiou/src/ folder
+# This links the local index/ folder with the container's /var/www/html/ folder
 # Use this when you want to modify the GUI locally and see changes immediately
 
-# Windows (PowerShell/Command Prompt)
-docker run -d --name Alice --network eiou-network -v "${PWD}\src\gui:/etc/eiou/src/gui" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Alice eioud
-docker run -d --name Bob --network eiou-network -v "${PWD}\src\gui:/etc/eiou/src/gui" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Bob eioud
-docker run -d --name Carol --network eiou-network -v "${PWD}\src\gui:/etc/eiou/src/gui" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Carol eioud
-docker run -d --name Daniel --network eiou-network -v "${PWD}\src\gui:/etc/eiou/src/gui" -v "${PWD}\src\functions:/etc/eiou/src/functions" -e QUICKSTART=Daniel eioud
+
+-v "${PWD}\files\index\:/var/www/html"
+
+# Windows (PowerShell/Command Prompt) 
+docker run -d --name Alice --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -v "${PWD}\files\index\:/var/www/html" -e QUICKSTART=Alice eioud
+docker run -d --name Bob --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -v "${PWD}\files\index\:/var/www/html" -e QUICKSTART=Bob eioud
+docker run -d --name Carol --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -v "${PWD}\files\index\:/var/www/html" -e QUICKSTART=Carol eioud
+docker run -d --name Daniel --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -v "${PWD}\files\index\:/var/www/html" -e QUICKSTART=Daniel eioud
 
 # Linux/macOS (Bash/Zsh)
-docker run -d --name Alice --network eiou-network -v "$(pwd)/src/gui:/etc/eiou/src/gui" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Alice eioud
-docker run -d --name Bob --network eiou-network -v "$(pwd)/src/gui:/etc/eiou/src/gui" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Bob eioud
-docker run -d --name Carol --network eiou-network -v "$(pwd)/src/gui:/etc/eiou/src/gui" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Carol eioud
-docker run -d --name Daniel --network eiou-network -v "$(pwd)/src/gui:/etc/eiou/src/gui" -v "${PWD}/src/functions:/etc/eiou/src/functions" -e QUICKSTART=Daniel eioud
+docker run -d --name Alice --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -v "${PWD}/files/index/:/var/www/html" -e QUICKSTART=Alice eioud
+docker run -d --name Bob --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -v "${PWD}/files/index/:/var/www/html" -e QUICKSTART=Bob eioud
+docker run -d --name Carol --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -v "${PWD}/files/index/:/var/www/html" -e QUICKSTART=Carol eioud
+docker run -d --name Daniel --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -v "${PWD}/files/index/:/var/www/html" -e QUICKSTART=Daniel eioud
 
 # Alternative absolute path examples:
 # Windows: -v "C:\path\to\your\eiou\src\walletIndex.html:/var/www/html/index.html"
