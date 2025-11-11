@@ -52,12 +52,12 @@ class Wallet{
             if (filter_var($argv[2], FILTER_VALIDATE_URL)) {
                 // Save the hostname to the configuration
                 $userconfig['hostname'] = addslashes($argv[2]); // HTTP address
-                echo returnHostnameSaved($argv[2]);
+                //echo returnHostnameSaved($argv[2]);
             } else {
                 echo returnInvalidHostnameFormat();
             }
         } else{
-            echo returnTorSaved($userconfig['torAddress']);     // Tor address
+            //echo returnTorSaved($userconfig['torAddress']);     // Tor address
         }
 
         file_put_contents('/etc/eiou/userconfig.json', json_encode($userconfig), LOCK_EX);
