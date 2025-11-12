@@ -23,25 +23,27 @@ for container in "${containers[@]}"; do
         require_once('./etc/eiou/src/services/ServiceContainer.php');
         \$balances = ServiceContainer::getInstance()->getBalanceRepository()->getAllBalances();
         if (!empty(\$balances)) {
+            \$total_string = '';
             foreach (\$balances as \$balance) {
                 \$contactResult = ServiceContainer::getInstance()->getContactRepository()->lookupByPubkey(\$balance['pubkey']);
-                printf('\t%s (%s), Balance %s : %.2f %s\n', \$contactResult['name'], (\$contactResult['tor'] ?? \$contactResult['http']), \$balance['direction'], \$balance['balance']/Constants::TRANSACTION_USD_CONVERSION_FACTOR, \$balance['currency']);
+                \$total_string .= '\t   ' . \$contactResult['name'] . ' (' . (\$contactResult['tor'] ?? \$contactResult['http']) . ') ' . \$balance['direction'] . ' : ' . \$balance['balance']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . ' ' . \$balance['currency'] . '\n';
             }
+            echo \$total_string;
         } else {
             echo 'NO_BALANCES';
         }
     " 2>/dev/null || echo "ERROR")
 
     # Check if balance command executed successfully
-    # We check for "Balance:" in output which indicates command worked
+    # We check for "Balance received :" in output which indicates command worked
     # Ignore PHP warnings ([Warning]) as they don't prevent functionality
-    if [[ "$balanceOutput" =~ "Balance:" ]] && [[ "$phpBalance" != "ERROR" ]]; then
+    if [[ "$balanceOutput" =~ "Balance received :" ]] && [[ "$phpBalance" != "ERROR" ]]; then
         printf "\t   Balance query for %s ${GREEN}PASSED${NC}\n" ${container}
-        printf "\t   Balances: %s\n" "${phpBalance}"
+        printf "${phpBalance}"
         passed=$(( passed + 1 ))
     else
         printf "\t   Balance query for %s ${RED}FAILED${NC}\n" ${container}
-        printf "\t   Output: %s\n" "${balanceOutput}"
+        printf "\t   %s\n" "${balanceOutput}"
         failure=$(( failure + 1 ))
     fi
 done
@@ -141,8 +143,8 @@ for container in "${containers[@]}"; do
 
     viewBalancesOutput=$(docker exec ${container} eiou viewbalances 2>&1)
 
-    # Check for "Balance:" in output, ignore PHP warnings
-    if [[ "$viewBalancesOutput" =~ "Balance:" ]]; then
+    # Check for "Balance received :" in output, ignore PHP warnings
+    if [[ "$viewBalancesOutput" =~ "Balance received :" ]]; then
         printf "viewbalances command for %s ${GREEN}PASSED${NC}\n" ${container}
         passed=$(( passed + 1 ))
     else
