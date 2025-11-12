@@ -14,10 +14,10 @@ RUN apt-get update && apt-get install -y \
     tor 
 
 # Edit /etc/tor/torrc
-RUN  chmod o+w /etc/tor/torrc
+RUN chmod o+w /etc/tor/torrc
 RUN echo "HiddenServiceDir /var/lib/tor/hidden_service/" >> /etc/tor/torrc
 RUN echo "HiddenServicePort 80 127.0.0.1:80" >> /etc/tor/torrc
-RUN  chmod o-w /etc/tor/torrc
+RUN chmod o-w /etc/tor/torrc
 
 # Expose Tor hidden service port
 EXPOSE 80

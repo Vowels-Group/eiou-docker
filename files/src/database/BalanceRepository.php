@@ -38,7 +38,6 @@ class BalanceRepository extends AbstractRepository {
         return $result ?: null;
     }
 
-
     /**
      * Lookup contact balance (both ways) subsetted on currency
      *
