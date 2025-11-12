@@ -473,7 +473,7 @@ class CliService {
             if ($contactResult) {
                 $contactBalances= $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'],$balance['currency']);
                 foreach($contactBalances as $contactBalance){
-                    printf("\t%s (%s), Balance %s : %.2f %s\n", $contactResult['name'], $contactResult['tor'] ?? $contactResult['http'], $contactBalance['direction'], $contactBalance['balance'], $contactBalance['currency']);
+                    printf("\t%s (%s), Balance %s : %.2f %s\n", $contactResult['name'], $contactResult['tor'] ?? $contactResult['http'], $contactBalance['direction'], number_format($contactBalance['balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), $contactBalance['currency']);
                 }
                 return;
             } else{
@@ -484,7 +484,7 @@ class CliService {
                     foreach($contacts as $contact){
                         $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contact['pubkey'], $balance['currency']);
                         foreach($contactBalances as $contactBalance){
-                            printf("\t%s (%s), Balance %s : %.2f %s\n", $contact['name'], $contact['http'] ?? $contact['tor'], $contactBalance['direction'], $contactBalance['balance'], $contactBalance['currency']);
+                            printf("\t%s (%s), Balance %s : %.2f %s\n", $contact['name'], $contact['http'] ?? $contact['tor'], $contactBalance['direction'], number_format($contactBalance['balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), $contactBalance['currency']);
                         }
                     }
                 }    
