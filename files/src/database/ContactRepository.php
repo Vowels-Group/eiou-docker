@@ -553,6 +553,31 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Retrieve all accepted contact addresses of singular type
+     *
+     * @param string $addressType Addresstype (tor/http)
+     * @param string|null $exclude Address to exclude
+     * @return array Array of accepted addresses
+     */
+    public function getAllSingleAcceptedAddresses(string $addressType, ?string $exclude = null): array {
+        if ($exclude) {
+            $query = "SELECT $addressType FROM {$this->tableName} WHERE status = 'accepted'";
+            $query .= " AND $addressType != :toExclude";
+            $stmt = $this->execute($query, [':toExclude' => $exclude]);
+        } else {
+            $query = "SELECT http, tor FROM {$this->tableName} WHERE status = 'accepted'";
+            $stmt = $this->execute($query);
+        }
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+
+    /**
      * Retrieve all contact addresses and their status
      *
      * @param string|null $exclude Address to exclude
