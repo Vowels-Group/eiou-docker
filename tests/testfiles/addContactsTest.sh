@@ -13,8 +13,8 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
 done
 
 # Wait for contacts to be added
-echo -e "\n\t   Waiting 5 seconds for contact requests to be properly processed (faster but certainty)..."
-sleep 5
+echo -e "\n\t   Waiting 3 seconds for contact requests to be properly processed (faster but certainty)..."
+sleep 3
 
 ############################ Testing #############################
 
