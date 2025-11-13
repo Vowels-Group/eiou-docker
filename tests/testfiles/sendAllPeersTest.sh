@@ -16,19 +16,26 @@ echo "[Building contact map]"
 for container in "${containers[@]}"; do
     echo "  -> Getting contacts for ${container}"
 
-    # Get all accepted contacts for this container
-    contacts=$(docker exec ${container} php -r "
-        require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$db = ServiceContainer::getInstance()->getDatabase();
-        \$stmt = \$db->prepare('
-            SELECT address FROM contacts
-            WHERE status = \"accepted\"
-        ');
-        \$stmt->execute();
-        \$contacts = \$stmt->fetchAll(PDO::FETCH_COLUMN);
-        echo implode(' ', \$contacts);
-    " 2>/dev/null || echo "")
+    if [[ "${MODE}" == "http" ]]; then
+         contacts=$(docker exec ${container} php -r "
+            require_once('./etc/eiou/src/services/ServiceContainer.php');
+            \$contacts = ServiceContainer::getInstance()->getContactRepository()->getAllAcceptedAddresses();
+            echo implode(' ', \$contacts);
+        " 2>/dev/null || echo "")
 
+    elif [[ "${MODE}" == "tor" ]]; then
+            contacts=$(docker exec ${container} php -r "
+            require_once('./etc/eiou/src/services/ServiceContainer.php');
+            \$contacts = ServiceContainer::getInstance()->getContactRepository()->getAllAcceptedAddresses();
+            \$contacts = \$stmt->fetchAll(PDO::FETCH_COLUMN);
+            echo implode(' ', \$contacts);
+        " 2>/dev/null || echo "")
+    fi
+    # IF MODE == 'http' ->
+    # IF MODE == 'tor'  ->
+
+    # Get all accepted contacts for this container
+   
     containerContacts[$container]="$contacts"
 
     # Count contacts for this container
@@ -69,17 +76,10 @@ for sender in "${containers[@]}"; do
         # Get initial balance of recipient
         initialBalance=$(docker exec ${sender} php -r "
             require_once('./etc/eiou/src/services/ServiceContainer.php');
-            \$db = ServiceContainer::getInstance()->getDatabase();
-
-            // Get recipient's current balance from sender's perspective
-            \$stmt = \$db->prepare('
-                SELECT credit_balance
-                FROM contacts
-                WHERE address = :address
-            ');
-            \$stmt->execute([':address' => '${contactAddress}']);
-            \$credit = \$stmt->fetchColumn();
-            echo \$credit ?: '0';
+            \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${contactAddress}');
+            \$balanceRepository = ServiceContainer::getInstance()->getBalanceRepository();
+            \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+            echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
         " 2>/dev/null || echo "0")
 
         # Send test amount
@@ -88,21 +88,15 @@ for sender in "${containers[@]}"; do
         sendResult=$(docker exec ${sender} eiou send ${contactAddress} ${testAmount} ${testCurrency} 2>&1)
 
         # Wait for transaction to process
-        sleep 1
+        sleep 5
 
         # Get new balance
         newBalance=$(docker exec ${sender} php -r "
             require_once('./etc/eiou/src/services/ServiceContainer.php');
-            \$db = ServiceContainer::getInstance()->getDatabase();
-
-            \$stmt = \$db->prepare('
-                SELECT credit_balance
-                FROM contacts
-                WHERE address = :address
-            ');
-            \$stmt->execute([':address' => '${contactAddress}']);
-            \$credit = \$stmt->fetchColumn();
-            echo \$credit ?: '0';
+            \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${contactAddress}');
+            \$balanceRepository = ServiceContainer::getInstance()->getBalanceRepository();
+            \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+            echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
         " 2>/dev/null || echo "0")
 
         # Check if send succeeded (balance changed or success message)
@@ -151,7 +145,7 @@ if [[ -n "${containers[0]}" ]]; then
             # Send broadcast amount
             broadcastResult=$(docker exec ${broadcaster} eiou send ${contactAddress} ${broadcastAmount} ${broadcastCurrency} 2>&1)
 
-            if [[ "$broadcastResult" =~ "success" ]] || [[ "$broadcastResult" =~ "sent" ]]; then
+            if [[ "$broadcastResult" =~ "Sending" ]] || [[ "$broadcastResult" =~ "Success" ]]; then
                 printf "${GREEN}SENT${NC}\n"
                 broadcastSuccess=$(( broadcastSuccess + 1 ))
             else
@@ -192,16 +186,19 @@ for sender in "${containers[@]}"; do
 
         # Check if receiver is in sender's contacts
         receiverAddress="${containerAddresses[$receiver]}"
-        hasContact=$(docker exec ${sender} php -r "
-            require_once('./etc/eiou/src/services/ServiceContainer.php');
-            \$db = ServiceContainer::getInstance()->getDatabase();
-            \$stmt = \$db->prepare('
-                SELECT COUNT(*) FROM contacts
-                WHERE address = :address AND status = \"accepted\"
-            ');
-            \$stmt->execute([':address' => '${receiverAddress}']);
-            echo \$stmt->fetchColumn();
-        " 2>/dev/null || echo "0")
+        if [[ "${MODE}" == 'http' ]]; then
+            hasContact=$(docker exec ${sender} php -r "
+                require_once('./etc/eiou/src/services/ServiceContainer.php');
+                echo ServiceContainer::getInstance()->getContactRepository()->isAcceptedContact('http','${receiverAddress}');
+            " 2>/dev/null || echo "0")
+
+        elif [[ "${MODE}" == 'tor' ]]; then
+            hasContact=$(docker exec ${sender} php -r "
+                require_once('./etc/eiou/src/services/ServiceContainer.php');
+                echo ServiceContainer::getInstance()->getContactRepository()->isAcceptedContact('tor','${receiverAddress}');
+            " 2>/dev/null || echo "0")
+
+        fi
 
         if [[ "$hasContact" -eq "1" ]]; then
             meshTestPassed=$(( meshTestPassed + 1 ))
