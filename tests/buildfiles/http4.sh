@@ -10,14 +10,20 @@ else
     docker network create --driver bridge eioud-network
 fi
 
-# Function to remove a container if it exists
+# Function to remove a container if it exists and any volumes
 remove_container_if_exists() {
     local container_name=$1
     if docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
         echo "Removing existing container: $container_name..."
         docker rm -f "$container_name"
+        echo "Removing any (dangling) volumes of container: $container_name..."
+        docker volume rm "$container_name-mysql-data"
+        docker volume rm "$container_name-files"
+        docker volume rm "$container_name-index"
+        docker volume rm "$container_name-eiou"
     fi
 }
+
 
 declare -A containerAddresses
 
@@ -44,7 +50,7 @@ declare -A containersLinks=(
     [httpD,httpC]="$defaultFee $defaultCredit USD"
 )
 
-echo "Removing existing containers (if any)..."
+echo "Removing existing containers and associated volumes (if any)..."
 for container in "${containers[@]}"; do
     remove_container_if_exists $container
 done
@@ -55,5 +61,5 @@ docker build -f eioud.dockerfile -t eioud .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
-    docker run -d --network=eioud-network --name $container -e QUICKSTART=$container eioud
+    docker run -d --network=eioud-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-files:/etc/eiou/" -v "${container}-index:/var/www/html" -v "${container}-eiou:/usr/local/bin/" -e QUICKSTART=$container eioud
 done
