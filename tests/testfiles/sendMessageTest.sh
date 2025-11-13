@@ -59,7 +59,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         passed=$(( passed + 1 ))
     else
         printf "\t   ${testname} from %s to %s ${RED}FAILED${NC} (Balance unchanged: %s)\n" ${containerKeys[0]} ${containerKeys[1]} ${initialBalance}
-        printf "\t   Send result: %s\n" "${sendResult}"
+        printf "\t   Send result: %s\n\n" "${sendResult}"
         failure=$(( failure + 1 ))
     fi
 done
@@ -101,7 +101,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
         passed=$(( passed + 1 ))
     else
         printf "\t   Multi-hop routing httpA->httpD ${RED}FAILED${NC}\n"
-        printf "\t   Result: %s\n" "${multiHopResult}"
+        printf "\t   Result: %s\n\n" "${multiHopResult}"
         failure=$(( failure + 1 ))
     fi
 fi
