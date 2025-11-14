@@ -343,7 +343,6 @@ class TransactionService {
         $data['receiverAddress'] = $contactInfo[$transportIndex];
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
         $data['txid'] = $this->createUniqueTxid($data);
-        //$data['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $contactInfo['receiverPublicKey']);
 
         return $data;
     }
@@ -365,7 +364,6 @@ class TransactionService {
         $data['amount'] = $request['amount'];
         $data['currency'] = $request['currency'];
         $data['txid'] = $this->createUniqueTxid($data);
-        //$data['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $request['senderPublicKey']);
         $data['memo'] = $request['hash'];
 
         return $data;
@@ -390,7 +388,7 @@ class TransactionService {
             // Process incoming transactions
             if ($request['memo'] === 'standard') {
                 // If direct transaction
-                $insertTransactionResponse = $this->transactionRepository->insertTransaction($request);
+                $insertTransactionResponse = $this->transactionRepository->insertTransaction($request,'received');
             } else {
                 // If p2p type transaction
                 $memo = $request['memo'];
@@ -398,13 +396,11 @@ class TransactionService {
                 // Check if precursors to transactions exist and correspond
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
                     $request['txid'] = $this->createUniqueTxid($request);
-                    //$request['previousTxid'] = $this->fixPreviousTxid($this->currentUser->getPublicKey(), $request['senderPublicKey']);
-                    $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request), true);
+                    $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'relay'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
                     // If Transaction is for end-recipient
-                    //$request['previousTxid'] = $this->fixPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey']);
-                    $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request), true);
+                    $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'received'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 }
             }
@@ -517,7 +513,7 @@ class TransactionService {
                 $data = $this->transactionPayload->buildForwarding($message, $rp2p);
                 $payload = $this->transactionPayload->buildFromDatabase($data);
 
-                $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($payload),true);
+                $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($payload,'relay'),true);
                 
                 $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
                 output(outputTransactionInsertion($insertTransactionResponse));
@@ -654,7 +650,7 @@ class TransactionService {
         
         // Prepare transaction payload from data
         $payload = $this->transactionPayload->build($data);
-        $this->transactionRepository->insertTransaction($payload);
+        $this->transactionRepository->insertTransaction($payload,'sent');
 
         output(outputSendTransaction($payload));
     }
@@ -687,7 +683,7 @@ class TransactionService {
 
         // Prepare transaction payload
         $payload = $this->transactionPayload->build($data);
-        $this->transactionRepository->insertTransaction($payload);
+        $this->transactionRepository->insertTransaction($payload,'sent');
         $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
     }
 
