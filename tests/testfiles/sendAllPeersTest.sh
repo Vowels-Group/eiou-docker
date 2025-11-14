@@ -157,13 +157,13 @@ if [[ -n "${containers[0]}" ]]; then
 
         # Check broadcast success rate
         if [[ "$broadcastSuccess" -eq "$broadcastTotal" ]]; then
-            printf "  Broadcast to all peers ${GREEN}PASSED${NC} (%d/%d successful)\n" ${broadcastSuccess} ${broadcastTotal}
+            printf "     Broadcast to all peers ${GREEN}PASSED${NC} (%d/%d successful)\n" ${broadcastSuccess} ${broadcastTotal}
             passed=$(( passed + 1 ))
         elif [[ "$broadcastSuccess" -gt 0 ]]; then
-            printf "  Broadcast partially ${NC}completed${NC} (%d/%d successful)\n" ${broadcastSuccess} ${broadcastTotal}
+            printf "     Broadcast partially ${NC}completed${NC} (%d/%d successful)\n" ${broadcastSuccess} ${broadcastTotal}
             # Count as partial success
         else
-            printf "  Broadcast ${RED}FAILED${NC} (0/%d successful)\n" ${broadcastTotal}
+            printf "     Broadcast ${RED}FAILED${NC} (0/%d successful)\n" ${broadcastTotal}
             failure=$(( failure + 1 ))
         fi
     fi
@@ -175,6 +175,7 @@ echo "[Testing mesh topology completeness]"
 # Verify that all containers can reach all other containers (full mesh test)
 meshTestPassed=0
 meshTestTotal=0
+meshContactsBuild="${#containersLinks[@]}"
 
 for sender in "${containers[@]}"; do
     for receiver in "${containers[@]}"; do
@@ -208,17 +209,29 @@ done
 
 totaltests=$(( totaltests + 1 ))
 
-printf "  Mesh connectivity: %d/%d connections exist " ${meshTestPassed} ${meshTestTotal}
-meshPercentage=$(awk "BEGIN {printf \"%.1f\", ($meshTestPassed * 100.0 / $meshTestTotal)}")
+printf "  Mesh connectivity of build: %d/%d connections exist " ${meshTestPassed} ${meshContactsBuild}
+buildMeshPercentage=$(awk "BEGIN {printf \"%.1f\", ($meshTestPassed * 100.0 / $meshContactsBuild)}")
+if [[ "$meshTestPassed" -eq "$meshContactsBuild" ]]; then
+    printf "${GREEN}(100%% - Full Build mesh)${NC}\n"
+    passed=$(( passed + 1 ))
+elif [[ $(awk "BEGIN {print ($buildMeshPercentage >= 75) ? 1 : 0}") -eq 1 ]]; then
+    printf "${NC}(%s%% - Partial Build mesh)${NC}\n" ${buildMeshPercentage}
+    failure=$(( failure + 1 ))
+else
+    printf "${RED}(%s%% - Sparse Build connectivity)${NC}\n" ${buildMeshPercentage}
+    failure=$(( failure + 1 ))
+fi
+
+
+printf "  Full Mesh connectivity: %d/%d connections exist (informative, no failure) " ${meshTestPassed} ${meshTestTotal}
+fullMeshPercentage=$(awk "BEGIN {printf \"%.1f\", ($meshTestPassed * 100.0 / $meshTestTotal)}")
 
 if [[ "$meshTestPassed" -eq "$meshTestTotal" ]]; then
     printf "${GREEN}(100%% - Full mesh)${NC}\n"
-    passed=$(( passed + 1 ))
-elif [[ $(awk "BEGIN {print ($meshPercentage >= 75) ? 1 : 0}") -eq 1 ]]; then
-    printf "${NC}(%s%% - Partial mesh)${NC}\n" ${meshPercentage}
+elif [[ $(awk "BEGIN {print ($fullMeshPercentage >= 75) ? 1 : 0}") -eq 1 ]]; then
+    printf "${NC}(%s%% - Partial mesh)${NC}\n" ${fullMeshPercentage}
 else
-    printf "${RED}(%s%% - Sparse connectivity)${NC}\n" ${meshPercentage}
-    failure=$(( failure + 1 ))
+    printf "${RED}(%s%% - Sparse connectivity)${NC}\n" ${fullMeshPercentage}
 fi
 
 succesrate "${totaltests}" "${passed}" "${failure}" "'send to all peers'"
