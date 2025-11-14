@@ -128,9 +128,14 @@ function getTransactionsTableSchema() {
     return "CREATE TABLE IF NOT EXISTS transactions (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         tx_type ENUM(
-            'standard', 
-            'p2p'
+            'standard',  /* Transaction is direct to known contact */ 
+            'p2p'        /* Transaction is p2p to unknown contact (or part of p2p chain to known contact) */ 
         ) DEFAULT 'standard',
+        type ENUM(
+            'received',  /* Transaction was received by user */ 
+            'sent',      /* Transaction was sent by user */ 
+            'relay'      /* Transaction was a relay, user is intermediary */ 
+        ) DEFAULT 'sent',
         status ENUM(
             'pending',   /* Transaction has been created */ 
             'sent',      /* Transaction has been sent onwards*/ 
