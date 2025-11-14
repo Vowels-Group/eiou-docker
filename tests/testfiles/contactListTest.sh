@@ -20,8 +20,8 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     valueArray=($values)
 
     # Expected values
-    expectedFee="${valueArray[0]}"
-    expectedCredit="${valueArray[1]}"
+    expectedFee=$(awk '{print $1*$2}' <<<"${valueArray[0]} 100")
+    expectedCredit=$(awk '{print $1*$2}' <<<"${valueArray[1]} 100")
     expectedCurrency="${valueArray[2]}"
 
     echo -e "\n\t-> Verifying contact: ${containerKeys[0]} -> ${containerKeys[1]}"
@@ -29,15 +29,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Query contact details using PHP
     contactData=$(docker exec ${containerKeys[0]} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$db = ServiceContainer::getInstance()->getDatabase();
-        \$stmt = \$db->prepare('
-            SELECT name, fee, credit, currency, status, transport, address
-            FROM contacts
-            WHERE address = :address
-            LIMIT 1
-        ');
-        \$stmt->execute([':address' => '${containerAddresses[${containerKeys[1]}]}']);
-        \$contact = \$stmt->fetch(PDO::FETCH_ASSOC);
+        \$contact = ServiceContainer::getInstance()->getContactRepository()->lookupByAddress('${containerAddresses[${containerKeys[1]}]}');
         if (\$contact) {
             echo json_encode(\$contact);
         } else {
@@ -53,13 +45,13 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
             nameCorrect="false"
         fi
 
-        if [[ "$contactData" =~ "\"fee\":\"${expectedFee}\"" ]] || [[ "$contactData" =~ "\"fee\":${expectedFee}" ]]; then
+        if  [[ "$contactData" =~ "\"fee_percent\":${expectedFee}" ]] || [[ "$contactData" =~ "\"fee_percent\":\"${expectedFee}\"" ]]; then
             feeCorrect="true"
         else
             feeCorrect="false"
         fi
 
-        if [[ "$contactData" =~ "\"credit\":\"${expectedCredit}\"" ]] || [[ "$contactData" =~ "\"credit\":${expectedCredit}" ]]; then
+        if [[ "$contactData" =~ "\"credit_limit\":${expectedCredit}" ]] || [[ "$contactData" =~ "\"credit_limit\":\"${expectedCredit}\"" ]]; then
             creditCorrect="true"
         else
             creditCorrect="false"
@@ -123,19 +115,15 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Check forward relationship
     forwardExists=$(docker exec ${containerKeys[0]} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$db = ServiceContainer::getInstance()->getDatabase();
-        \$stmt = \$db->prepare('SELECT COUNT(*) FROM contacts WHERE address = :address AND status = \"accepted\"');
-        \$stmt->execute([':address' => '${containerAddresses[${containerKeys[1]}]}']);
-        echo \$stmt->fetchColumn();
+        if(ServiceContainer::getInstance()->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
+        echo '1';} else{ echo '0';}
     " 2>/dev/null || echo "0")
 
     # Check reverse relationship
     reverseExists=$(docker exec ${containerKeys[1]} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$db = ServiceContainer::getInstance()->getDatabase();
-        \$stmt = \$db->prepare('SELECT COUNT(*) FROM contacts WHERE address = :address AND status = \"accepted\"');
-        \$stmt->execute([':address' => '${containerAddresses[${containerKeys[0]}]}']);
-        echo \$stmt->fetchColumn();
+        if(ServiceContainer::getInstance()->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
+        echo '1';} else{ echo '0';}
     " 2>/dev/null || echo "0")
 
     if [[ "$forwardExists" == "1" ]] && [[ "$reverseExists" == "1" ]]; then
@@ -156,15 +144,12 @@ for container in "${containers[@]}"; do
     echo -e "\n\t-> Testing list contacts for ${container}"
 
     # Use viewcontacts or similar command if available
-    listOutput=$(docker exec ${container} eiou list 2>&1 || echo "")
+    #listOutput=$(docker exec ${container} eiou list 2>&1 || echo "")
 
-    # Also get count from database
+    # Get contact count from database
     contactCount=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$db = ServiceContainer::getInstance()->getDatabase();
-        \$stmt = \$db->prepare('SELECT COUNT(*) FROM contacts WHERE status = \"accepted\"');
-        \$stmt->execute();
-        echo \$stmt->fetchColumn();
+        echo ServiceContainer::getInstance()->getContactRepository()->countAcceptedContacts();
     " 2>/dev/null || echo "0")
 
     if [[ "$contactCount" -gt "0" ]]; then
