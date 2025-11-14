@@ -797,7 +797,40 @@ class TransactionRepository extends AbstractRepository {
         return $formattedTransactions;
     }
 
-     /**
+    /**
+     * Get transactions (all data) with limit
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getTransactions(int $limit = 10): array
+    {
+        $userAddresses = $this->currentUser->getUserAddresses();
+        
+        if (empty($userAddresses)) {
+            return [];
+        }
+
+        // Create placeholders for IN clause
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        $query = "SELECT * FROM {$this->tableName}
+                    WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
+                    ORDER BY timestamp DESC LIMIT ?";
+
+        // Bind parameters - addresses twice for both IN clauses, then limit
+        $params = array_merge($userAddresses, $userAddresses, [$limit]);
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+        if(!$stmt){
+            return [];
+        }
+
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $transactions ?: [];
+    }
+
+    /**
      * Get transaction history with limit
      *
      * @param int $limit
@@ -956,9 +989,10 @@ class TransactionRepository extends AbstractRepository {
      * Insert a new transaction
      *
      * @param array $request Transaction request data
+     * @param string $transType Transaction type (received, sent, relay)
      * @return string JSON response
      */
-    public function insertTransaction(array $request): string {
+    public function insertTransaction(array $request, string $type): string {
 
         // Calculate public key hashes
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $request['senderPublicKey']);
@@ -984,6 +1018,7 @@ class TransactionRepository extends AbstractRepository {
 
             $data = [
                 'tx_type' => $txType,
+                'type' => $type,
                 'sender_address' => $request['senderAddress'],
                 'sender_public_key' => $request['senderPublicKey'],
                 'sender_public_key_hash' => $senderPublicKeyHash,
@@ -1164,6 +1199,58 @@ class TransactionRepository extends AbstractRepository {
             $this->logError("Failed to retrieve transactions between pubkeys", $e);
             return [];
         }
+    }
+
+    /**
+     * Get transactions type statistics
+     *
+     * @return array Array of transactions types with counts and sum of amount statistics
+     */
+    public function getTransactionsTypeStatistics(): array {
+        $query = "SELECT type, COUNT(*) as count, SUM(amount) as total FROM {$this->tableName} GROUP BY type";
+        $stmt = $this->pdo->prepare($query);
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve transactions type counts", $e);
+            return [];
+        }
+    }
+
+    /**
+     * Get specific transactions type statistics
+     *
+     * @param string $type type of transaction
+     * @return array Array of transactions type with count and sum of amount statistics
+     */
+    public function getTransactionsSpecificTypeStatistics(string $type): array {
+        $query = "SELECT type, COUNT(*) as count, SUM(amount) as total FROM {$this->tableName} WHERE type = :type";
+        $stmt = $this->execute($query,[':type' => $type]);
+        
+        if (!$stmt) {
+            return [];
+        }
+         $result = $stmt->fetch();
+        return $result ?: [];
+    }
+
+    /**
+     * Get specific transactions type counts
+     *
+     * @param string $type type of transaction
+     * @return int Count of transactions type
+     */
+    public function getTransactionsSpecificTypeCount(string $type): int {
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE type = :type";
+        $stmt = $this->execute($query,[':type' => $type]);
+
+        if (!$stmt) {
+            return 0;
+        }
+        
+        $result = $stmt->fetchColumn();
+        return $result ?: 0;
     }
 
     /**

@@ -161,6 +161,32 @@ class BalanceRepository extends AbstractRepository {
     }
 
     /**
+     * Lookup User balance for specific currency
+     *
+     * @param string $currency currency
+     * @return int User balance of specific currency
+     */
+    public function getUserBalanceCurrency($currency): int{
+
+        $query = "SELECT
+            Sum(CASE direction 
+                    WHEN 'received' THEN balance 
+                    WHEN 'sent' THEN -balance 
+                END) AS total_balance 
+        FROM {$this->tableName}
+        WHERE currency = :currency";
+
+       $stmt = $this->execute($query, [':currency' => $currency]);
+        
+        if (!$stmt) {
+            return 0;
+        }
+        
+        $result = $stmt->fetchColumn();
+        return $result ?: 0;
+    }
+
+    /**
      * Lookup User balances regarding Contact (grouped by currency)
      *
      * @param string $pubkey Contact pubkey

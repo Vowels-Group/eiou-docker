@@ -138,8 +138,26 @@ class ContactRepository extends AbstractRepository {
             return false;
         }
 
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (int) ($result['count'] ?? 0) > 0;
+        $result = $stmt->fetchColumn();
+        return (int) $result ?? 0;
+    }
+
+
+    /**
+     * Check how many contacts are accepted
+     *
+     * @return int amount accepted contacts
+     */
+    public function countAcceptedContacts(): int {
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE status = 'accepted'";
+        $stmt = $this->execute($query);
+
+        if (!$stmt) {
+            return 0;
+        }
+
+        $result = $stmt->fetchColumn();
+        return (int) $result ?? 0;
     }
 
     /**
@@ -421,7 +439,7 @@ class ContactRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function lookupByName(string $name): ?array {
-        $query = "SELECT name, http, tor, pubkey, fee_percent, status FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
+        $query = "SELECT * FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
         $stmt = $this->execute($query, [':name' => $name]);
 
         if (!$stmt) {
@@ -439,7 +457,7 @@ class ContactRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function lookupByAddress(string $address): ?array {
-        $query = "SELECT name, http, tor, pubkey, fee_percent, status FROM {$this->tableName}";
+        $query = "SELECT * FROM {$this->tableName}";
         $query .= " WHERE http = :http OR tor = :tor";
         $stmt = $this->execute($query, [':http' => $address,':tor' => $address]);
 
