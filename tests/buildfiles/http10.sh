@@ -16,7 +16,7 @@ remove_container_if_exists() {
     if docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
         echo "Removing existing container: $container_name..."
         docker rm -f "$container_name"
-        echo "Removing any (dangling) volumes of container: $container_name..."
+        echo "Removing any volumes of container: $container_name..."
         docker volume rm "$container_name-mysql-data"
         docker volume rm "$container_name-files"
         docker volume rm "$container_name-index"
@@ -65,6 +65,23 @@ declare -A containersLinks=(
     [httpI,httpH]="$defaultFee $defaultCredit USD"
     [httpI,httpJ]="$defaultFee $defaultCredit USD"
     [httpJ,httpI]="$defaultFee $defaultCredit USD"
+)
+
+# For 10-line topology: A-B-C-D-E-F-G-H-I-J
+# Test A->C (should route through B)
+# Test A->D (should route through B and C)
+# Test A->E (should route through B, C and D)
+# Test A->F (should route through B, C, D and E)
+# Test A->G (should route through B, C, D, E and F)
+# Test G->J (should route through H and I)
+### Note that by default the p2pRequestLevel of 6 does not result in a succesfull p2p > 6 contacts so A->I does not work
+declare -A routingTests=(
+    [httpA,httpC]="httpB"
+    [httpA,httpD]="httpB,httpC"
+    [httpA,httpE]="httpB,httpC,httpD"
+    [httpA,httpF]="httpB,httpC,httpD,httpE"
+    [httpA,httpG]="httpB,httpC,httpD,httpE,httpF"
+    [httpG,httpJ]="httpH,httpI"    
 )
 
 echo "Removing existing containers and associated volumes (if any)..."

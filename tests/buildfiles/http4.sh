@@ -16,7 +16,7 @@ remove_container_if_exists() {
     if docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
         echo "Removing existing container: $container_name..."
         docker rm -f "$container_name"
-        echo "Removing any (dangling) volumes of container: $container_name..."
+        echo "Removing any volumes of container: $container_name..."
         docker volume rm "$container_name-mysql-data"
         docker volume rm "$container_name-files"
         docker volume rm "$container_name-index"
@@ -48,6 +48,16 @@ declare -A containersLinks=(
     [httpC,httpB]="$defaultFee $defaultCredit USD"
     [httpC,httpD]="$defaultFee $defaultCredit USD"
     [httpD,httpC]="$defaultFee $defaultCredit USD"
+)
+
+# For 4-line topology: A-B-C-D
+# Test A->C (should route through B)
+# Test A->D (should route through B and C)
+# Test B->D (should route through C)
+declare -A routingTests=(
+    [httpA,httpC]="httpB"
+    [httpA,httpD]="httpB,httpC"
+    [httpB,httpD]="httpC"
 )
 
 echo "Removing existing containers and associated volumes (if any)..."
