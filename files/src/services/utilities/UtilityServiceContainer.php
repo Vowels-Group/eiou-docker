@@ -115,6 +115,22 @@ class UtilityServiceContainer
     }
 
     /**
+     * Get GeneralUtilityService
+     *
+     * @return GeneralUtilityService
+     */
+    public function getGeneralUtility(): GeneralUtilityService
+    {
+        if (!isset($this->utilities['GeneralUtilityService'])) {
+             require_once __DIR__ . '/GeneralUtilityService.php';
+            $this->utilities['GeneralUtilityService'] = new GeneralUtilityService(
+                $this->mainContainer
+            );
+        }
+        return $this->utilities['GeneralUtilityService'];
+    }
+
+    /**
      * Clear all cached utilities (useful for testing)
      */
     public function clearUtilities(): void
