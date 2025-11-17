@@ -1202,6 +1202,41 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Get timestamp column Tranasactions (for ordering check)
+     *
+     * @return array Timestamp column
+     */
+    public function getTimestampsTransactions(int $limit = 5): array {
+        $query = "SELECT timestamp FROM {$this->tableName}
+                  ORDER BY timestamp DESC LIMIT ?";
+        $stmt = $this->pdo->prepare($query);
+        try {
+            $stmt->execute([$limit]);
+            return $stmt->fetchAll();
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve transactions timestamps", $e);
+            return [];
+        }
+    }
+
+    /**
+     * Get transactions count
+     *
+     * @return int Count of transactions in databae
+     */
+    public function getTotalCountTransactions(): int {
+        $query = "SELECT COUNT(*) as count FROM {$this->tableName}";
+        $stmt = $this->pdo->prepare($query);
+        try {
+            $stmt->execute();
+            return $stmt->fetchColumn();
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve transactions type counts", $e);
+            return 0;
+        }
+    }
+
+    /**
      * Get transactions type statistics
      *
      * @return array Array of transactions types with counts and sum of amount statistics
@@ -1213,7 +1248,7 @@ class TransactionRepository extends AbstractRepository {
             $stmt->execute();
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
-            $this->logError("Failed to retrieve transactions type counts", $e);
+            $this->logError("Failed to retrieve specific transactions type counts", $e);
             return [];
         }
     }
@@ -1231,7 +1266,7 @@ class TransactionRepository extends AbstractRepository {
         if (!$stmt) {
             return [];
         }
-         $result = $stmt->fetch();
+        $result = $stmt->fetch();
         return $result ?: [];
     }
 
