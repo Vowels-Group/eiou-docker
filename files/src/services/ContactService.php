@@ -421,7 +421,8 @@ class ContactService {
      */
     public function searchContacts(array $data): void {
         // Lookup contact based on their name
-        if($data[2]){
+
+        if(isset($data[2])){
             $nameValidation =  $this->inputValidator->validateContactName($data[2]);
             if (!$nameValidation['valid']) {
                 $this->secureLogger->warning("Invalid contact name", [
@@ -450,35 +451,40 @@ class ContactService {
      */
     public function viewContact(array $data): void {
         // View contact information
-        if (count($data) >= 3) {
-            // Check if is a HTTP or TOR address
-            if ($this->transportUtility->isAddress($data[2])) {
-                $addressValidation = $this->inputValidator->validateAddress($data[2] ?? '');
-                if (!$addressValidation['valid']) {
-                    $this->secureLogger->warning("Invalid contact address", [
-                        'address' => $data[2] ?? 'empty',
-                        'error' => $addressValidation['error']
-                    ]);
-                    output("Invalid Address: " . $addressValidation['error'],'ERROR');
-                    exit(1);
-                }
-                $address = $addressValidation['value'];
-                $transportIndex = $this->transportUtility->determineTransportType($address);
-                $contactResult = $this->contactRepository->getContactByAddress($transportIndex, $address);
-            } else{
-                // Check if the name yields an address
-                $contactResult = $this->lookupByName($data[2]);
-            }
-           
-            if ($contactResult) {
-                output(returnContactDetails($contactResult));
-            } else {
-                output(returnContactNotFound());
-            }
-        } else {
-            output(returnContactReadInvalidInput());
-            exit(1);
+        $amountValidation = $this->inputValidator->validateArgvAmount($data, 3);
+        if (!$amountValidation['valid']) {
+            $this->secureLogger->warning("Invalid parameter amount", [
+                'value' => $data,
+                'error' => $amountValidation['error']
+            ]);
+            output(("Invalid parameter amount: " . $amountValidation['error']),'ERROR');
+            exit(0);
         }
+
+        if ($this->transportUtility->isAddress($data[2])) {
+            $addressValidation = $this->inputValidator->validateAddress($data[2] ?? '');
+            if (!$addressValidation['valid']) {
+                $this->secureLogger->warning("Invalid contact address", [
+                    'address' => $data[2] ?? 'empty',
+                    'error' => $addressValidation['error']
+                ]);
+                output("Invalid Address: " . $addressValidation['error'],'ERROR');
+                exit(1);
+            }
+            $address = $addressValidation['value'];
+            $transportIndex = $this->transportUtility->determineTransportType($address);
+            $contactResult = $this->contactRepository->getContactByAddress($transportIndex, $address);
+        } else{
+            // Check if the name yields an address
+            $contactResult = $this->lookupByName($data[2]);
+        }
+        
+        if ($contactResult) {
+            output(returnContactDetails($contactResult));
+        } else {
+            output(returnContactNotFound());
+        }
+        
     }
 
     /**

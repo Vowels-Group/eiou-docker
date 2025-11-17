@@ -334,6 +334,8 @@ class CliService {
                 echo "\tinfo ([detail]) - Display user information.\n";
             } elseif(strtolower($argv[2]) === 'add'){
                 echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
+            } elseif(strtolower($argv[2]) === 'search'){
+                echo "\tsearch ([name]) - Search for contact.\n";
             } elseif(strtolower($argv[2]) === 'viewcontact'){
                 echo "\tviewcontact [address/name] - View contact information.\n";
             } elseif(strtolower($argv[2]) === 'update'){
@@ -365,6 +367,7 @@ class CliService {
             echo "Available commands:\n";
             echo "\tinfo ([detail]) - Display user information.\n";
             echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
+            echo "\tsearch ([name]) - Search for contact.\n";
             echo "\tviewcontact [address/name] - View contact information.\n";
             echo "\tupdate [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
             echo "\tblock [address/name] - Block a contact.\n";
@@ -376,7 +379,6 @@ class CliService {
             echo "\thelp - Display this help information.\n";
             echo "\tviewsettings - View current settings.\n";
             echo "\tchangesettings - Change settings.\n";
-            echo "\tgenerate - Generate a new wallet.\n";
         }
     }
 
