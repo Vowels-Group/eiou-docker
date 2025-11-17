@@ -42,6 +42,11 @@ class CliService {
     private TransportUtilityService $transportUtility;
 
     /**
+     * @var GeneralUtilityService General utility service 
+     */
+    private GeneralUtilityService $generalUtility;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -68,6 +73,7 @@ class CliService {
         $this->currentUser = $currentUser;
         $this->currencyUtility = $utilityContainer->getCurrencyUtility();
         $this->transportUtility = $utilityContainer->getTransportUtility();
+        $this->generalUtility = $utilityContainer->getGeneralUtility();
     }
 
     /**
@@ -334,6 +340,8 @@ class CliService {
                 echo "\tinfo ([detail]) - Display user information.\n";
             } elseif(strtolower($argv[2]) === 'add'){
                 echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
+            } elseif(strtolower($argv[2]) === 'search'){
+                echo "\tsearch ([name]) - Search for contact.\n";
             } elseif(strtolower($argv[2]) === 'viewcontact'){
                 echo "\tviewcontact [address/name] - View contact information.\n";
             } elseif(strtolower($argv[2]) === 'update'){
@@ -365,6 +373,7 @@ class CliService {
             echo "Available commands:\n";
             echo "\tinfo ([detail]) - Display user information.\n";
             echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
+            echo "\tsearch ([name]) - Search for contact.\n";
             echo "\tviewcontact [address/name] - View contact information.\n";
             echo "\tupdate [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
             echo "\tblock [address/name] - Block a contact.\n";
@@ -376,7 +385,6 @@ class CliService {
             echo "\thelp - Display this help information.\n";
             echo "\tviewsettings - View current settings.\n";
             echo "\tchangesettings - Change settings.\n";
-            echo "\tgenerate - Generate a new wallet.\n";
         }
     }
 
@@ -447,7 +455,7 @@ class CliService {
                     $res['date'],
                     "|",
                     $this->contactRepository->lookupNameByAddress($res['counterparty']), 
-                    $this->transportUtility->truncateAddress($res['counterparty'],30), 
+                    $this->generalUtility->truncateAddress($res['counterparty'],30), 
                     $res['amount'], 
                     $res['currency']);
             if($displayLimit !== 'all' && ($countrows >= $displayLimit)){
@@ -583,7 +591,7 @@ class CliService {
             $contactName = $this->contactRepository->lookupNameByAddress($tx['counterparty']);
             echo str_pad($tx['date'], 26, ' ') . " | " . 
                 str_pad($tx['type'], 9, ' ') . " | " . 
-                str_pad($contactName . " (" . $this->transportUtility->truncateAddress($tx['counterparty'],82-(strlen($contactName)+2)) . ")", 82, ' ') . " | " . 
+                str_pad($contactName . " (" . $this->generalUtility->truncateAddress($tx['counterparty'],82-(strlen($contactName)+2)) . ")", 82, ' ') . " | " . 
                 str_pad($tx['amount'], 10, ' ') . " | " . 
                 str_pad($tx['currency'], 10, ' ') . "\n" ; 
                         

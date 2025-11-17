@@ -493,8 +493,62 @@ class ContactRepository extends AbstractRepository {
      * @param string $name Contact name (case-insensitive)
      * @return string|null Contact address or null
      */
-    public function lookupAddressByName(string $name): ?string {
+    public function lookupAddressesByName(string $name): ?string {
         $query = "SELECT http, tor FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
+        $stmt = $this->execute($query, [':name' => $name]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
+     * Lookup specific contact address by name
+     *
+     * @param string $name Contact name (case-insensitive)
+     * @return string|null Contact address or null
+     */
+    public function lookupSpecificAddressByName(string $name, string $transportIndex): ?string {
+        $query = "SELECT $transportIndex FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
+        $stmt = $this->execute($query, [':name' => $name]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetchColumn();
+        return $result ?: null;
+    }
+
+    /**
+     * Lookup contact HTTP address by name
+     *
+     * @param string $name Contact name (case-insensitive)
+     * @return string|null Contact HTTP address or null
+     */
+    public function lookupHttpAddressByName(string $name): ?string {
+        $query = "SELECT tor FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
+        $stmt = $this->execute($query, [':name' => $name]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetchColumn();
+        return $result ?: null;
+    }
+
+    /**
+     * Lookup contact Tor address by name
+     *
+     * @param string $name Contact name (case-insensitive)
+     * @return string|null Contact Tor address or null
+     */
+    public function lookupTorAddressByName(string $name): ?string {
+        $query = "SELECT tor FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
         $stmt = $this->execute($query, [':name' => $name]);
 
         if (!$stmt) {
@@ -582,6 +636,7 @@ class ContactRepository extends AbstractRepository {
             $query = "SELECT $addressType FROM {$this->tableName} WHERE status = 'accepted'";
             $query .= " AND $addressType != :toExclude";
             $stmt = $this->execute($query, [':toExclude' => $exclude]);
+            
         } else {
             $query = "SELECT http, tor FROM {$this->tableName} WHERE status = 'accepted'";
             $stmt = $this->execute($query);
@@ -590,10 +645,9 @@ class ContactRepository extends AbstractRepository {
         if (!$stmt) {
             return [];
         }
-
-        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
     }
-
 
     /**
      * Retrieve all contact addresses and their status
@@ -615,7 +669,7 @@ class ContactRepository extends AbstractRepository {
             return [];
         }
 
-        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /**

@@ -515,10 +515,12 @@ class P2pService {
             $address = $data[2];
         } else{
             // Check if contact exists by Name supplied, if not then cannot send the p2p request
-            $contactAddress = $this->contactRepository->lookupAddressByName($data[2]);
-            if($contactAddress){
-                $address = $contactAddress;
-                $data[2] = $address;
+            $contactAddresses = $this->contactRepository->lookupAddressesByName($data[2]);
+            if($contactAddresses){
+                $address = $this->transportUtility->fallbackTransportAddress($contactAddresses);
+                if($address){
+                    $data[2] = $address;
+                }     
             } else{
                 output(outputAdressOrContactIssue($data),'SILENT');
                 die;

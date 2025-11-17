@@ -37,21 +37,6 @@ class TransportUtilityService
     }
 
     /**
-     * Truncate address for easier display
-     *
-     * @param string $address The address
-     * @param int $length Point of truncation
-     * @return string Truncated address
-     */
-    public function truncateAddress(string $address, int $length = 10): string
-    {
-        if (strlen($address) <= $length) {
-            return $address;
-        }
-        return substr($address, 0, $length) . '...';
-    }
-
-    /**
      * Return a count of all the addresses in the contact data
      *
      * @param array $data The Contacts data
@@ -132,6 +117,25 @@ class TransportUtilityService
             } 
         }
         output(outputNoViableTransportMode());
+        exit(1);
+    }
+
+    /**
+     * Determine a possible fallback contact address
+     *
+     * @param string $contactInfo The Contact Info (with addresses)
+     * @return string|null The fallback address
+    */
+    public function fallbackTransportAddress($contactInfo){
+        $transportModes = Constants::ALL_TRANSPORT_MODES;
+        $transportModes = array_values($transportModes);
+        while($transportModes !== []){
+            $transportIndex = array_shift($transportModes);
+            if(isset($contactInfo[$transportIndex])){
+                return $contactInfo[$transportIndex];
+            } 
+        }
+        output(outputNoViableTransportAddress());
         exit(1);
     }
 
