@@ -42,6 +42,11 @@ class CliService {
     private TransportUtilityService $transportUtility;
 
     /**
+     * @var GeneralUtilityService General utility service 
+     */
+    private GeneralUtilityService $generalUtility;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -68,6 +73,7 @@ class CliService {
         $this->currentUser = $currentUser;
         $this->currencyUtility = $utilityContainer->getCurrencyUtility();
         $this->transportUtility = $utilityContainer->getTransportUtility();
+        $this->generalUtility = $utilityContainer->getGeneralUtility();
     }
 
     /**
@@ -449,7 +455,7 @@ class CliService {
                     $res['date'],
                     "|",
                     $this->contactRepository->lookupNameByAddress($res['counterparty']), 
-                    $this->transportUtility->truncateAddress($res['counterparty'],30), 
+                    $this->generalUtility->truncateAddress($res['counterparty'],30), 
                     $res['amount'], 
                     $res['currency']);
             if($displayLimit !== 'all' && ($countrows >= $displayLimit)){
@@ -585,7 +591,7 @@ class CliService {
             $contactName = $this->contactRepository->lookupNameByAddress($tx['counterparty']);
             echo str_pad($tx['date'], 26, ' ') . " | " . 
                 str_pad($tx['type'], 9, ' ') . " | " . 
-                str_pad($contactName . " (" . $this->transportUtility->truncateAddress($tx['counterparty'],82-(strlen($contactName)+2)) . ")", 82, ' ') . " | " . 
+                str_pad($contactName . " (" . $this->generalUtility->truncateAddress($tx['counterparty'],82-(strlen($contactName)+2)) . ")", 82, ' ') . " | " . 
                 str_pad($tx['amount'], 10, ' ') . " | " . 
                 str_pad($tx['currency'], 10, ' ') . "\n" ; 
                         

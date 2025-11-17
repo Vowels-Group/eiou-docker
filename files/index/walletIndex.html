@@ -28,6 +28,7 @@ $transactionService = $serviceContainer->getTransactionService();
 
 $utilityContainer = UtilityServiceContainer::getInstance($serviceContainer);
 $transportUtility = $utilityContainer->getTransportUtility();
+$generalUtility = $utilityContainer->getGeneralUtility();
 
 // Require UserContext instance
 require_once '/etc/eiou/src/core/UserContext.php';
