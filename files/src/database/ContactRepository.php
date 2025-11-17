@@ -649,7 +649,6 @@ class ContactRepository extends AbstractRepository {
         
     }
 
-
     /**
      * Retrieve all contact addresses and their status
      *
