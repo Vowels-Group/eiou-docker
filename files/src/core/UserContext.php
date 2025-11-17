@@ -268,6 +268,16 @@ class UserContext {
     }
 
     /**
+     * Get mimumum fee amount
+     *
+     * @return float
+     */
+    public function getMinimumFee(): float {
+        return (float) ($this->get('minFee') ?? Constants::TRANSACTION_MINIMUM_FEE);
+    }
+
+
+    /**
      * Get default fee percentage
      *
      * @return float

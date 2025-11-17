@@ -94,6 +94,14 @@ class CliService {
                     return;
                 }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'minfee'){
+                $key = 'minFee';
+                $validation = InputValidator::validateAmountFee($argv[3]);
+                if (!$validation['valid']) {
+                    echo "Error: " . $validation['error'] . "\n";
+                    return;
+                }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'maxfee'){
                 $key = 'maxFee';
                 $validation = InputValidator::validateFeePercent($argv[3]);
@@ -157,13 +165,14 @@ class CliService {
             echo "Select the setting you want to change:\n";
             echo "\t1. Default Fee\n";
             echo "\t2. Default Currency\n";
-            echo "\t3. Maximum Fee\n";
-            echo "\t4. Maximum Peer to Peer Level\n";
-            echo "\t5. Default Peer to Peer Expiration\n";
-            echo "\t6. Maximum lines of Balance/Transaction output\n";
-            echo "\t7. Access Mode\n";
-            echo "\t8. Default Transport Type\n";
-            echo "\t9. Hostname\n";
+            echo "\t3. Minimum Fee\n";
+            echo "\t4. Maximum Fee\n";
+            echo "\t5. Maximum Peer to Peer Level\n";
+            echo "\t6. Default Peer to Peer Expiration\n";
+            echo "\t7. Maximum lines of Balance/Transaction output\n";
+            echo "\t8. Access Mode\n";
+            echo "\t9. Default Transport Type\n";
+            echo "\t10. Hostname\n";
             echo "\t0. Cancel\n";
 
             // Read user input
@@ -193,6 +202,17 @@ class CliService {
                     break;
 
                 case '3':
+                    echo "Enter new mimum fee: ";
+                    $key = 'minFee';
+                    $validation = InputValidator::validateAmountFee(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+                case '4':
                     echo "Enter new maximum fee percentage: ";
                     $key = 'maxFee';
                     $validation = InputValidator::validateFeePercent(trim(fgets(STDIN)));
@@ -203,7 +223,7 @@ class CliService {
                     $value = $validation['value'];
                     break;
 
-                case '4':
+                case '5':
                     echo "Enter new Maximum Peer to Peer Level: ";
                     $key = 'maxP2pLevel';
                     $validation = InputValidator::validateRequestLevel(trim(fgets(STDIN)));
@@ -214,7 +234,7 @@ class CliService {
                     $value = $validation['value'];
                     break;
 
-                case '5':
+                case '6':
                     echo "Enter new Peer to Peer Expiration (in seconds): ";
                     $key = 'p2pExpiration';
                     $validation = InputValidator::validateTimestamp(trim(fgets(STDIN)));
@@ -225,7 +245,7 @@ class CliService {
                     $value = $validation['value'];
                     break;
 
-                case '6':
+                case '7':
                     echo "Enter new Maximum of Balance/Transaction output lines to display: ";
                     $key = 'maxOutput';
                     $read = trim(fgets(STDIN));
@@ -240,19 +260,19 @@ class CliService {
                     }
                     break;
 
-                case '7':
+                case '8':
                     echo "Enter access mode (0 for Network Enabled, 1 for LocalHost Only): ";
                     $key = 'localhostOnly';
                     $value = (trim(fgets(STDIN)) === '1');
                     break;
 
-                case '8':
+                case '9':
                     echo "Enter new default transport type (e.g. http, tor): ";
                     $key = 'defaultTransportMode';
                     $value = strtolower(trim(fgets(STDIN)));
                     break;
 
-                case '9':
+                case '10':
                     echo "Enter new hostname (e.g. http://httpA): ";
                     $key = 'hostname';
                     $validation = InputValidator::validateHostname(strtolower(trim(fgets(STDIN))));

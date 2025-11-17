@@ -63,11 +63,17 @@ class CurrencyUtilityService
      *
      * @param float $amount Base amount
      * @param float $feePercent Fee percentage (e.g., 2.5 for 2.5%)
+     * @param float $minumFee Fee amount (e.g., 0.01 for 1 cent)
      * @return int Fee amount in cents
      */
-    public function calculateFee(float $amount, float $feePercent): int
+    public function calculateFee(float $amount, float $feePercent, float $minumFee): int
     {
-        return (int) round(($amount / Constants::TRANSACTION_USD_CONVERSION_FACTOR)  * ($feePercent / Constants::FEE_CONVERSION_FACTOR));
+        $amount = (int) round(($amount / Constants::TRANSACTION_USD_CONVERSION_FACTOR)  * ($feePercent / Constants::FEE_CONVERSION_FACTOR));
+        $minumFee = $minumFee * Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+        if($amount < $minumFee){
+            return  (int) round($minumFee);
+        }
+        return $amount;
     }
 
     /**

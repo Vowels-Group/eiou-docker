@@ -193,7 +193,7 @@ class P2pService {
          // Calculate total amount needed for p2p through user
         $senderContact = $this->contactRepository->lookupByAddress($request['senderAddress']);
         $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee()); 
-        return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'],$fee);
+        return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'],$fee, $this->currentUser->getMinimumFee());
     }
 
     /**

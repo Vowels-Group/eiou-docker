@@ -43,6 +43,7 @@ class Constants {
     const TRANSACTION_MIN_AMOUNT = 0;
     const TRANSACTION_MAX_AMOUNT = 999999999;
     const TRANSACTION_DEFAULT_CURRENCY = 'USD';
+    const TRANSACTION_MINIMUM_FEE = 0.01;
     const TRANSACTION_USD_CONVERSION_FACTOR = 100; // Store cents as integers
 
     // Time intervals (milliseconds)
