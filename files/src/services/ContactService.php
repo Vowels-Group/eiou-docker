@@ -683,13 +683,13 @@ class ContactService {
     }
 
     /**
-     * Lookup contact address by name
+     * Lookup contact addresses by name
      *
      * @param string $name Contact name
-     * @return string|null Contact address or null
+     * @return string|null Contact addresses or null
      */
-    public function lookupAddressByName(string $name): ?string {
-        return $this->contactRepository->lookupAddressByName($name);
+    public function lookupAddressesByName(string $name): ?string {
+        return $this->contactRepository->lookupAddressesByName($name);
     }
 
     /**
