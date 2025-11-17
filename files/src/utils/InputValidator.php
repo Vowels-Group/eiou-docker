@@ -55,6 +55,32 @@ class InputValidator {
     }
 
     /**
+     * Validate Fee amount
+     *
+     * @param mixed $amount Amount to validate
+     * @return array ['valid' => bool, 'value' => float|null, 'error' => string|null]
+     */
+    public static function validateAmountFee($amount): array {
+        // Check if amount is numeric
+        if (!is_numeric($amount)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Amount must be a number'];
+        }
+
+        $amount = floatval($amount);
+
+        // Check if amount is positive
+        if ($amount <= 0) {
+            return ['valid' => false, 'value' => null, 'error' => 'Amount must be greater than zero'];
+        }
+
+        // Round to currency decimal precision
+        $amount = round($amount, Constants::DISPLAY_CURRENCY_DECIMALS);
+
+        return ['valid' => true, 'value' => $amount, 'error' => null];
+    }
+
+
+    /**
      * Validate currency code
      *
      * @param string $currency Currency code to validate
@@ -62,7 +88,7 @@ class InputValidator {
      */
     public static function validateCurrency($currency): array {
         // Allowed currencies (ISO 4217)
-        $allowedCurrencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'];
+        $allowedCurrencies = ['USD'];
 
         $currency = strtoupper(trim($currency));
 
