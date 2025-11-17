@@ -13,7 +13,7 @@ set -e  # Exit on error
 # Check command line argument
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <build_name> <mode>"
-    echo "Available builds: http4, http10, http13, http37"
+    echo "Available builds: http4, http10, http13"
     echo "Available modes: tor, http"
     exit 1
 fi
