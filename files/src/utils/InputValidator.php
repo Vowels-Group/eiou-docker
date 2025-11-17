@@ -79,7 +79,6 @@ class InputValidator {
         return ['valid' => true, 'value' => $amount, 'error' => null];
     }
 
-
     /**
      * Validate currency code
      *

@@ -102,7 +102,54 @@ if [ $? -ne 0 ]; then
 fi
 
 printf "${GREEN}${CHECK} Build completed successfully${NC}\n"
-sleep 2
+
+# Wait for containers to be fully initialized
+printf "\n${GREEN}Waiting for containers to initialize...${NC}\n"
+MAX_WAIT=30  # Maximum wait time per container in seconds
+
+# Get list of eioud containers from docker
+CONTAINER_LIST=$(docker ps --filter "ancestor=eioud" --format "{{.Names}}" 2>/dev/null)
+
+if [ -z "$CONTAINER_LIST" ]; then
+    printf "${RED}No eioud containers found!${NC}\n"
+    exit 1
+fi
+
+for container in $CONTAINER_LIST; do
+    printf "Checking ${container}... "
+    elapsed=0
+    while [ $elapsed -lt $MAX_WAIT ]; do
+        # Check if container is still running
+        if ! docker ps | grep -q "$container"; then
+            printf "${RED}Container stopped unexpectedly!${NC}\n"
+            exit 1
+        fi
+
+        # Check if userconfig.json exists and is valid JSON
+        if docker exec "$container" test -f /etc/eiou/userconfig.json 2>/dev/null; then
+            # Verify it's valid JSON and has required fields
+            if docker exec "$container" php -r '
+                $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                exit(isset($json["hostname"]) && isset($json["authcode"]) ? 0 : 1);
+            ' 2>/dev/null; then
+                printf "${GREEN}Ready${NC}\n"
+                break
+            fi
+        fi
+
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    if [ $elapsed -ge $MAX_WAIT ]; then
+        printf "${RED}Timeout waiting for initialization!${NC}\n"
+        docker logs "$container" | tail -n 20
+        exit 1
+    fi
+done
+
+printf "${GREEN}${CHECK} All containers initialized successfully${NC}\n"
+sleep 2  # Additional buffer time for message processors
 
 # Step 2: Run prerequisite test (torAddressTest (TOR) or hostnameTest (HTTP))
 printf "\n${GREEN}[Step 2/3]${NC} Running prerequisite test...\n"

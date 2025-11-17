@@ -137,6 +137,10 @@ function outputLookedUpContactInfo($contactInfo){
     return "Looked up contact info: " . print_r($contactInfo, true)."\n";
 }
 
+function outputNoViableTransportAddress(){
+    return "No viable transport address for sending Transaction could be determined.\n";
+}
+
 function outputNoViableTransportMode(){
     return "No viable transport mode for sending Transaction could be determined.\n";
 }

@@ -92,19 +92,4 @@ class CurrencyUtilityService
         $feeAmount = $totalAmount - $baseAmount;
         return round(($feeAmount / $baseAmount) * Constants::FEE_CONVERSION_FACTOR, Constants::FEE_PERCENT_DECIMAL_PRECISION);
     }
-
-    /**
-     * Truncate address for easier display
-     *
-     * @param string $address The address
-     * @param int $length Point of truncation
-     * @return string Truncated address
-     */
-    public function truncateAddress(string $address, int $length = 10): string
-    {
-        if (strlen($address) <= $length) {
-            return $address;
-        }
-        return substr($address, 0, $length) . '...';
-    }
 }

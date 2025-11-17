@@ -421,7 +421,20 @@ class ContactService {
      */
     public function searchContacts(array $data): void {
         // Lookup contact based on their name
-        $searchTerm = $data[2] ?? null;
+
+        if(isset($data[2])){
+            $nameValidation =  $this->inputValidator->validateContactName($data[2]);
+            if (!$nameValidation['valid']) {
+                $this->secureLogger->warning("Invalid contact name", [
+                    'name' => $data[2] ?? 'empty',
+                    'error' => $nameValidation['error']
+                ]);
+                output("Invalid name: " . $nameValidation['error'],'ERROR');
+                exit(1);
+            }
+            $name = $nameValidation['value'];
+        }
+        $searchTerm = $name ?? null;
 
         if ($results = $this->contactRepository->searchContacts($searchTerm)) {
             output(returnContactSearchResults($results));
@@ -438,25 +451,40 @@ class ContactService {
      */
     public function viewContact(array $data): void {
         // View contact information
-        if (count($data) >= 3) {
-            // Check if is a HTTP or TOR address
-            if ($this->transportUtility->isAddress($data[2])) {
-                $address = $data[2];
-            } else{
-                // Check if the name yields an address
-                $contactResult = $this->lookupByName($data[2]);
-                $address = $contactResult['address'] ?? null;
-            }
-            $transportIndex = $this->transportUtility->determineTransportType($address);
-            if ($result = $this->contactRepository->getContactByAddress($transportIndex, $address)) {
-                output(returnContactDetails($result));
-            } else {
-                output(returnContactNotFound());
-            }
-        } else {
-            output(returnContactReadInvalidInput());
-            exit(1);
+        $amountValidation = $this->inputValidator->validateArgvAmount($data, 3);
+        if (!$amountValidation['valid']) {
+            $this->secureLogger->warning("Invalid parameter amount", [
+                'value' => $data,
+                'error' => $amountValidation['error']
+            ]);
+            output(("Invalid parameter amount: " . $amountValidation['error']),'ERROR');
+            exit(0);
         }
+
+        if ($this->transportUtility->isAddress($data[2])) {
+            $addressValidation = $this->inputValidator->validateAddress($data[2] ?? '');
+            if (!$addressValidation['valid']) {
+                $this->secureLogger->warning("Invalid contact address", [
+                    'address' => $data[2] ?? 'empty',
+                    'error' => $addressValidation['error']
+                ]);
+                output("Invalid Address: " . $addressValidation['error'],'ERROR');
+                exit(1);
+            }
+            $address = $addressValidation['value'];
+            $transportIndex = $this->transportUtility->determineTransportType($address);
+            $contactResult = $this->contactRepository->getContactByAddress($transportIndex, $address);
+        } else{
+            // Check if the name yields an address
+            $contactResult = $this->lookupByName($data[2]);
+        }
+        
+        if ($contactResult) {
+            output(returnContactDetails($contactResult));
+        } else {
+            output(returnContactNotFound());
+        }
+        
     }
 
     /**
@@ -498,7 +526,6 @@ class ContactService {
      * @return bool True if not blocked
      */
     public function isNotBlocked(string $address): bool {
-        // TO DO ECHO FAILURE TO CONTACT
         $transportIndex = $this->transportUtility->determineTransportType($address);
         return $this->contactRepository->isNotBlocked($transportIndex, $address);
     }
@@ -683,13 +710,13 @@ class ContactService {
     }
 
     /**
-     * Lookup contact address by name
+     * Lookup contact addresses by name
      *
      * @param string $name Contact name
-     * @return string|null Contact address or null
+     * @return string|null Contact addresses or null
      */
-    public function lookupAddressByName(string $name): ?string {
-        return $this->contactRepository->lookupAddressByName($name);
+    public function lookupAddressesByName(string $name): ?string {
+        return $this->contactRepository->lookupAddressesByName($name);
     }
 
     /**
