@@ -421,7 +421,19 @@ class ContactService {
      */
     public function searchContacts(array $data): void {
         // Lookup contact based on their name
-        $searchTerm = $data[2] ?? null;
+        if($data[2]){
+            $nameValidation =  $this->inputValidator->validateContactName($data[2]);
+            if (!$nameValidation['valid']) {
+                $this->secureLogger->warning("Invalid contact name", [
+                    'name' => $data[2] ?? 'empty',
+                    'error' => $nameValidation['error']
+                ]);
+                output("Invalid name: " . $nameValidation['error'],'ERROR');
+                exit(1);
+            }
+            $name = $nameValidation['value'];
+        }
+        $searchTerm = $name ?? null;
 
         if ($results = $this->contactRepository->searchContacts($searchTerm)) {
             output(returnContactSearchResults($results));
@@ -441,15 +453,25 @@ class ContactService {
         if (count($data) >= 3) {
             // Check if is a HTTP or TOR address
             if ($this->transportUtility->isAddress($data[2])) {
-                $address = $data[2];
+                $addressValidation = $this->inputValidator->validateAddress($data[2] ?? '');
+                if (!$addressValidation['valid']) {
+                    $this->secureLogger->warning("Invalid contact address", [
+                        'address' => $data[2] ?? 'empty',
+                        'error' => $addressValidation['error']
+                    ]);
+                    output("Invalid Address: " . $addressValidation['error'],'ERROR');
+                    exit(1);
+                }
+                $address = $addressValidation['value'];
+                $transportIndex = $this->transportUtility->determineTransportType($address);
+                $contactResult = $this->contactRepository->getContactByAddress($transportIndex, $address);
             } else{
                 // Check if the name yields an address
                 $contactResult = $this->lookupByName($data[2]);
-                $address = $contactResult['address'] ?? null;
             }
-            $transportIndex = $this->transportUtility->determineTransportType($address);
-            if ($result = $this->contactRepository->getContactByAddress($transportIndex, $address)) {
-                output(returnContactDetails($result));
+           
+            if ($contactResult) {
+                output(returnContactDetails($contactResult));
             } else {
                 output(returnContactNotFound());
             }
@@ -498,7 +520,6 @@ class ContactService {
      * @return bool True if not blocked
      */
     public function isNotBlocked(string $address): bool {
-        // TO DO ECHO FAILURE TO CONTACT
         $transportIndex = $this->transportUtility->determineTransportType($address);
         return $this->contactRepository->isNotBlocked($transportIndex, $address);
     }
