@@ -19,21 +19,12 @@ for container in "${containers[@]}"; do
     # Query transaction count and basic info
     transactionInfo=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$db = ServiceContainer::getInstance()->getDatabase();
 
         // Get total count
-        \$stmt = \$db->prepare('SELECT COUNT(*) as total FROM transactions');
-        \$stmt->execute();
-        \$total = \$stmt->fetchColumn();
+        \$total = ServiceContainer::getInstance()->getTransactionRepository()->getTotalCountTransactions();
 
         // Get count by type
-        \$stmt = \$db->prepare('
-            SELECT type, COUNT(*) as count
-            FROM transactions
-            GROUP BY type
-        ');
-        \$stmt->execute();
-        \$types = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+        \$types = ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsTypeStatistics();
 
         echo 'Total:' . \$total . ' ';
         foreach (\$types as \$type) {
@@ -145,7 +136,8 @@ if [[ "$testPair" ]]; then
     docker exec ${sender} eiou send ${containerAddresses[${receiver}]} 2 USD 2>&1 > /dev/null
 
     # Wait for processing
-    sleep 2
+    echo -e "\t   Waiting for 15 seconds for complete routing (faster but certainty)..."
+    sleep 15
 
     # Check new counts
     senderAfter=$(docker exec ${sender} php -r "
@@ -207,16 +199,8 @@ for container in "${containers[@]:0:2}"; do  # Test first 2 containers
 
     timestampCheck=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$db = ServiceContainer::getInstance()->getDatabase();
 
-        \$stmt = \$db->prepare('
-            SELECT timestamp
-            FROM transactions
-            ORDER BY timestamp DESC
-            LIMIT 5
-        ');
-        \$stmt->execute();
-        \$timestamps = \$stmt->fetchAll(PDO::FETCH_COLUMN);
+        \$timestamps = ServiceContainer::getInstance()->getTransactionRepository()->getTimestampsTransactions(5);
 
         if (count(\$timestamps) > 1) {
             \$ordered = true;
