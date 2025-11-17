@@ -85,8 +85,8 @@ if [[ "$firstLink" ]]; then
     echo -e "\t   Send output: ${sendOutput}"
 
     # Wait for transaction to process
-    echo -e "\t   Waiting 5 seconds for routing process (faster but certainty)..."
-    sleep 5
+    echo -e "\t   Waiting 15 seconds for routing process (faster but certainty)..."
+    sleep 15
 
 
     # Get new balances

@@ -88,7 +88,7 @@ for sender in "${containers[@]}"; do
         sendResult=$(docker exec ${sender} eiou send ${contactAddress} ${testAmount} ${testCurrency} 2>&1)
 
         # Wait for transaction to process
-        sleep 5
+        sleep 10
 
         # Get new balance
         newBalance=$(docker exec ${sender} php -r "

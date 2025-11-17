@@ -37,8 +37,8 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     sendResult=$(docker exec ${containerKeys[0]} eiou send ${containerAddresses[${containerKeys[1]}]} ${testAmount} ${testCurrency} 2>&1)
 
     # Wait for transaction to process
-    echo -e "\t   Waiting 5 seconds for routing process (faster but certainty)..."
-    sleep 5
+    echo -e "\t   Waiting 15 seconds for routing process (faster but certainty)..."
+    sleep 15
 
     # Get new balance of recipient
     newBalance=$(docker exec ${containerKeys[1]} php -r "

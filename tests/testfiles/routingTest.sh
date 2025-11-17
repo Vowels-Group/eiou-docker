@@ -46,8 +46,6 @@ for routingPair in "${!routingTests[@]}"; do
                 \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getUserBalanceCurrency('USD');
                 echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
             " 2>/dev/null || echo "0")
-
-            echo "\t${relay}  ${initialRelayBalances[$relay]}\n"
         done
 
         # Send test message requiring routing
@@ -55,8 +53,8 @@ for routingPair in "${!routingTests[@]}"; do
         routingResult=$(docker exec ${sender} eiou send ${containerAddresses[${receiver}]} ${testAmount} USD 2>&1)
 
         # Wait for transaction to process
-        echo -e "\t   Waiting 10 seconds for routing process (faster but certainty)..."
-        sleep 10
+        echo -e "\t   Waiting 15 seconds for routing process (faster but certainty)..."
+        sleep 15
 
         # Check relay nodes received fees
         relayFeesDetected=0
@@ -66,9 +64,6 @@ for routingPair in "${!routingTests[@]}"; do
                 \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getUserBalanceCurrency('USD');
                 echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
             " 2>/dev/null || echo "0")
-
-            echo "\t${relay}  ${newRelayBalance[$relay]}\n"
-            echo -e "\t ${newRelayBalance} ${initialRelayBalances[$relay]}\n"
 
             balanceDiff=$(awk "BEGIN {print $newRelayBalance - ${initialRelayBalances[$relay]}}")
             balanceIncreased=$(awk "BEGIN {print ($balanceDiff > 0) ? 1 : 0}")
@@ -149,8 +144,8 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
         e2eResult=$(docker exec ${firstContainer} eiou send ${containerAddresses[${lastContainer}]} ${e2eAmount} USD 2>&1)
 
         # Wait for multi-hop routing
-        echo -e "\t   Waiting 10 seconds for multi-hop routing process (faster but certainty)..."
-        sleep 10
+        echo -e "\t   Waiting 15 seconds for multi-hop routing process (faster but certainty)..."
+        sleep 15
 
         # Check if message arrived
         finalState=$(docker exec ${lastContainer} php -r "
