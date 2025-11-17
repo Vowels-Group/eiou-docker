@@ -166,7 +166,7 @@ docker-compose -f docker-compose-10line.yml exec node-i eiou add <address> node-
 docker-compose -f docker-compose-10line.yml exec node-j eiou add <address> node-i <fee> <credit> <currency>
 ```
 
-### Line Topology (13 nodes)
+### Cluster Topology (13 nodes)
 <img width="2640" height="1414" alt="topological cluster 13" src="https://github.com/user-attachments/assets/187cfd3b-f16d-4aaf-88bf-e46630192ff2" />
 
 ```bash
