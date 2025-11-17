@@ -136,6 +136,25 @@ class TransportUtilityService
     }
 
     /**
+     * Determine a possible fallback contact address
+     *
+     * @param string $contactInfo The Contact Info (with addresses)
+     * @return string|null The fallback address
+    */
+    public function fallbackTransportAddress($contactInfo){
+        $transportModes = Constants::ALL_TRANSPORT_MODES;
+        $transportModes = array_values($transportModes);
+        while($transportModes !== []){
+            $transportIndex = array_shift($transportModes);
+            if(isset($contactInfo[$transportIndex])){
+                return $contactInfo[$transportIndex];
+            } 
+        }
+        output(outputNoViableTransportAddress());
+        exit(1);
+    }
+
+    /**
      * Determine if adress is HTTP/HTTPS
      *
      * @param string $address The address of the sender
