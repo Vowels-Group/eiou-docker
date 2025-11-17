@@ -163,10 +163,10 @@ class CliService {
             
             // Prompt user for which setting they want to change
             echo "Select the setting you want to change:\n";
-            echo "\t1. Default Fee\n";
-            echo "\t2. Default Currency\n";
-            echo "\t3. Minimum Fee\n";
-            echo "\t4. Maximum Fee\n";
+            echo "\t1. Default Currency\n";
+            echo "\t2. Minimum Fee amount\n";
+            echo "\t3. Default Fee percentage\n";
+            echo "\t4. Maximum Fee percentage\n";
             echo "\t5. Maximum Peer to Peer Level\n";
             echo "\t6. Default Peer to Peer Expiration\n";
             echo "\t7. Maximum lines of Balance/Transaction output\n";
@@ -180,17 +180,6 @@ class CliService {
             
             switch($setting_choice) {
                 case '1':
-                    echo "Enter new default fee percentage: ";
-                    $key = 'defaultFee';
-                    $validation = InputValidator::validateFeePercent(trim(fgets(STDIN)));
-                    if (!$validation['valid']) {
-                        echo "Error: " . $validation['error'] . "\n";
-                        return;
-                    }
-                    $value = $validation['value'];
-                    break;
-
-                case '2':
                     echo "Enter new default currency (e.g., USD): ";
                     $key = 'defaultCurrency';
                     $validation = InputValidator::validateCurrency(trim(fgets(STDIN)));
@@ -201,10 +190,21 @@ class CliService {
                     $value = $validation['value'];
                     break;
 
-                case '3':
-                    echo "Enter new mimum fee: ";
+                case '2':
+                    echo "Enter new minimum fee amount: ";
                     $key = 'minFee';
                     $validation = InputValidator::validateAmountFee(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+                
+                case '3':
+                    echo "Enter new default fee percentage: ";
+                    $key = 'defaultFee';
+                    $validation = InputValidator::validateFeePercent(trim(fgets(STDIN)));
                     if (!$validation['valid']) {
                         echo "Error: " . $validation['error'] . "\n";
                         return;
@@ -311,10 +311,10 @@ class CliService {
     */
     public function displayCurrentSettings() {
         echo "Current Settings:\n";
-        echo "\tMimimum fee: " . $this->currentUser->getMinimumFee() ."%\n";
-        echo "\tDefault fee: " . $this->currentUser->getDefaultFee() ."%\n";
         echo "\tDefault currency: " . $this->currentUser->getDefaultCurrency() . "\n";
-        echo "\tMaximum Fee: " . $this->currentUser->getMaxFee() . "%\n";
+        echo "\tMinimum fee amount: " . $this->currentUser->getMinimumFee() . " " . $this->currentUser->getDefaultCurrency() ."\n";
+        echo "\tDefault fee percent: " . $this->currentUser->getDefaultFee() ."%\n";
+        echo "\tMaximum Fee percent: " . $this->currentUser->getMaxFee() . "%\n";
         echo "\tMaximum Peer to Peer Level: " .  $this->currentUser->getMaxP2pLevel() . "\n";
         echo "\tDefault Peer to Peer Expiration: " .  $this->currentUser->getP2pExpirationTime() . " seconds\n";
         echo "\tDefault Maximum lines of balance output: " .  $this->currentUser->getMaxOutput() . "\n";
