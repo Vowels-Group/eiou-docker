@@ -311,6 +311,7 @@ class CliService {
     */
     public function displayCurrentSettings() {
         echo "Current Settings:\n";
+        echo "\tMimimum fee: " . $this->currentUser->getMinimumFee() ."%\n";
         echo "\tDefault fee: " . $this->currentUser->getDefaultFee() ."%\n";
         echo "\tDefault currency: " . $this->currentUser->getDefaultCurrency() . "\n";
         echo "\tMaximum Fee: " . $this->currentUser->getMaxFee() . "%\n";
@@ -329,7 +330,8 @@ class CliService {
     public function displayHelp(array $argv) {
         if(isset($argv[2])){
             echo "Command:\n";
-            if(strtolower($argv[2]) === 'defaultfee'){
+            if(strtolower($argv[2]) === 'info'){
+                echo "\tinfo ([detail]) - Display user information.\n";
             } elseif(strtolower($argv[2]) === 'add'){
                 echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
             } elseif(strtolower($argv[2]) === 'viewcontact'){
@@ -361,6 +363,7 @@ class CliService {
             }
         } else{
             echo "Available commands:\n";
+            echo "\tinfo ([detail]) - Display user information.\n";
             echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
             echo "\tviewcontact [address/name] - View contact information.\n";
             echo "\tupdate [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
