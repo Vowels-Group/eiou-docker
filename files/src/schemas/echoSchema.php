@@ -39,9 +39,7 @@ function returnContactDeletedSuccesfully(){
 function returnContactDetails($data) {
     // Return contact details in a nice format
     $app = Application::getInstance();
-    $app->loadserviceContainer();
-    $utilityContainer = UtilityServiceContainer::getInstance($app->services);
-    $currencyUtility = $utilityContainer->getCurrencyUtility();
+    $currencyUtility = $app->utilityServices->getCurrencyUtility();
     return "Contact Details:\n" .
            "---------------\n" .
            "Http Address: " . ($data['http'] ?? 'Http address not available') . "\n" .
@@ -116,8 +114,8 @@ function returnContactSearchResults ($data) {
                 return str_pad($contact['http'] ?? '', 56, ' ') . " | " . 
                         str_pad($contact['tor'] ?? '', 56, ' ') . " | " . 
                         str_pad($contact['name'] ?? 'N/A', 20, ' ') . " | " . 
-                        str_pad(($contact['fee_percent'] !== null ? UtilityServiceContainer::getInstance(Application::getInstance()->services)->getCurrencyUtility()->convertCentsToDollars($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " . 
-                        str_pad(($contact['credit_limit'] !== null ? UtilityServiceContainer::getInstance(Application::getInstance()->services)->getCurrencyUtility()->convertCentsToDollars($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " . 
+                        str_pad(($contact['fee_percent'] !== null ? Application::getInstance()->utilityServices->getCurrencyUtility()->convertCentsToDollars($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " . 
+                        str_pad(($contact['credit_limit'] !== null ? Application::getInstance()->utilityServices->getCurrencyUtility()->convertCentsToDollars($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " . 
                         ($contact['currency'] ?? 'N/A');
             }, $data)) . "\n" .
             "--------------------------------------------\n" .

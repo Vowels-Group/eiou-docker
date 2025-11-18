@@ -15,7 +15,8 @@ $request = json_decode($_GET['payload'], true);
 $app = Application::getInstance();
 $serviceContainer = $app->services;
 $debugService = $serviceContainer->getDebugService();
-$utilityContainer = UtilityServiceContainer::getInstance($serviceContainer);
+
+$utilityContainer = $app->utilityServices;
 $validationUtility = $utilityContainer->getValidationUtility();
 
 // Verify the request signature before processing

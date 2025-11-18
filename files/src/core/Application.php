@@ -25,14 +25,12 @@ class Application {
     /**
      * @var ServiceContainer object of service container
      */
-    protected $serviceContainer;
+    public $services;
 
     /**
      * @var UtilityServiceContainer UtilityServiceContainer instance
      */
-    protected $utilityService;
-
-    public ServiceContainer $services;
+    public $utilityServices;
 
     /**
      * @var array Cached processor instances
@@ -79,6 +77,7 @@ class Application {
             $this->loadCurrentUser();
             // Get ServiceContainer instance
             $this->loadserviceContainer();
+            $this->loadUtilityServiceContainer();
         }
         
         // Get logger wrapper
@@ -220,6 +219,14 @@ class Application {
     public function loadserviceContainer() {
         require_once $this->getRootPath() . '/src/services/ServiceContainer.php';
         $this->services = ServiceContainer::getInstance($this->currentUser, $this->pdo);
+    }
+
+    /**
+     * Load utility services from utilityServiceContainer
+     */
+    public function loadUtilityServiceContainer() {
+        require_once $this->getRootPath() . '/src/services/ServiceContainer.php';
+        $this->utilityServices = UtilityServiceContainer::getInstance($this->services);
     }
 
     /**

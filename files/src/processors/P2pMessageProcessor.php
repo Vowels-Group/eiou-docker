@@ -9,7 +9,6 @@
  */
 
 require_once(__DIR__ . "/AbstractMessageProcessor.php");
-require_once(__DIR__ . "/../services/ServiceContainer.php");
 
 class P2pMessageProcessor extends AbstractMessageProcessor {
     private $p2pService;

@@ -10,7 +10,6 @@
  */
 
 require_once(__DIR__ . "/AbstractMessageProcessor.php");
-require_once(__DIR__ . "/../services/ServiceContainer.php");
 
 class CleanupMessageProcessor extends AbstractMessageProcessor {
     private $cleanupService;
