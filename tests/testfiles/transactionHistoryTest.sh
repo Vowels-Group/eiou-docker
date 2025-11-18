@@ -173,8 +173,8 @@ for container in "${containers[@]:0:2}"; do  # Test first 2 containers
         require_once('./etc/eiou/src/services/ServiceContainer.php');
         \$sends = ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeStatistics('sent');
         \$receives = ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeStatistics('received');;
-        echo 'Sends:' . \$sends['count'] . '/' . (\$sends['total'] ?: '0') . ' ';
-        echo 'Receives:' . \$receives['count'] . '/' . (\$receives['total'] ?: '0');
+        echo 'Sends: ' . \$sends['count'] . '/' . (\$sends['total'] ?: '0') . ' ';
+        echo 'Receives: ' . \$receives['count'] . '/' . (\$receives['total'] ?: '0');
     " 2>/dev/null || echo "ERROR")
 
     if [[ "$queryResult" != "ERROR" ]] && [[ "$queryResult" != "" ]]; then
