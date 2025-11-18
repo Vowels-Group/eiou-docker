@@ -19,7 +19,7 @@ if (!$app->currentUserLoaded()) {
     $app->generateWallet($argv);
     exit(0); // Normal termination after wallet generation
   } else{
-    SecureLogger::warning("Attempted to run command without wallet", ['command' => $request]);
+    $app->getLogger()->warning("Attempted to run command without wallet", ['command' => $request]);
     echo "Wallet does not exist, Please run the 'generate' command from the terminal.\n";
     exit(1); // Exit with error code
   }
@@ -27,9 +27,6 @@ if (!$app->currentUserLoaded()) {
 
 // Get Debug Service Instance
 $debugService = $app->services->getDebugService();
-
-// Initialize InputValidator for CLI command validation
-require_once '/etc/eiou/src/utils/InputValidator.php';
 
 // Apply rate limiting for CLI commands (if database is available)
 if ($app->currentPdoLoaded()) {
@@ -50,7 +47,7 @@ if ($app->currentPdoLoaded()) {
     $rateLimitResult = $rateLimiter->checkLimit($cliIdentifier, 'cli_' . $request, $limits['max'], $limits['window'], $limits['block']);
 
     if (!$rateLimitResult['allowed']) {
-        SecureLogger::warning("CLI command rate limited", [
+        $app->getLogger()->warning("CLI command rate limited", [
             'command' => $request,
             'identifier' => $cliIdentifier,
             'retry_after' => $rateLimitResult['retry_after']
