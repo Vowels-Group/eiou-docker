@@ -89,6 +89,7 @@ printf "========================================\n"
 printf "  EIOU Docker Automated Test Runner\n"
 printf "========================================\n"
 printf "Build: ${BUILD_NAME}\n"
+printf "Mode:  ${MODE}\n"
 printf "Time:  $(date '+%Y-%m-%d %H:%M:%S')\n"
 printf "\n"
 
@@ -102,14 +103,74 @@ if [ $? -ne 0 ]; then
 fi
 
 printf "${GREEN}${CHECK} Build completed successfully${NC}\n"
-sleep 2
 
-# Step 2: Run prerequisite test (torAddressTest (TOR) or hostnameTest (HTTP))
+# Wait for containers to be fully initialized
+printf "\n${GREEN}Waiting for containers to initialize...${NC}\n"
+MAX_WAIT=30  # Maximum wait time per container in seconds
+
+# Get list of eioud containers from docker
+CONTAINER_LIST=$(docker ps --filter "ancestor=eioud" --format "{{.Names}}" 2>/dev/null)
+
+if [ -z "$CONTAINER_LIST" ]; then
+    printf "${RED}No eioud containers found!${NC}\n"
+    exit 1
+fi
+
+for container in $CONTAINER_LIST; do
+    printf "Checking ${container}... "
+    elapsed=0
+    while [ $elapsed -lt $MAX_WAIT ]; do
+        # Check if container is still running
+        if ! docker ps | grep -q "$container"; then
+            printf "${RED}Container stopped unexpectedly!${NC}\n"
+            exit 1
+        fi
+
+        # Verify if userconfig.json exists, it's valid JSON and has required fields
+        if [ "$MODE" == 'http' ]; then
+            if [[ $(docker exec "$container" php -r '
+                if (file_exists("/etc/eiou/userconfig.json")) {
+                    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                    echo isset($json["hostname"]) && isset($json["authcode"]);
+                }
+                echo false;
+            ') ]]; then
+                printf "${GREEN}Ready${NC}\n"
+                break
+            fi
+        elif [ "$MODE" == 'tor' ]; then
+            if [[ $(docker exec "$container" php -r '
+                if (file_exists("/etc/eiou/userconfig.json")) {
+                    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                    echo isset($json["torAddress"]) && isset($json["authcode"]);
+                }
+                echo false;
+            ') ]]; then
+                printf "${GREEN}Ready${NC}\n"
+                break
+            fi
+        fi
+
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    if [ $elapsed -ge $MAX_WAIT ]; then
+        printf "${RED}Timeout waiting for initialization!${NC}\n"
+        docker logs "$container" | tail -n 20
+        exit 1
+    fi
+done
+
+printf "${GREEN}${CHECK} All containers initialized successfully${NC}\n"
+sleep 2  # Additional buffer time for message processors
+
+# Step 2: Run prerequisite test (hostnameTest (HTTP) or torAddressTest (TOR))
 printf "\n${GREEN}[Step 2/3]${NC} Running prerequisite test...\n"
-if [ "$MODE" == 'tor' ]; then
-    run_test "torAddressTest" "./tests/testfiles/torAddressTest.sh" "true"
-elif [ "$MODE" == 'http' ]; then
+if [ "$MODE" == 'http' ]; then 
     run_test "hostnameTest" "./tests/testfiles/hostnameTest.sh" "true"
+elif [ "$MODE" == 'tor' ]; then
+    run_test "torAddressTest" "./tests/testfiles/torAddressTest.sh" "true"
 fi
 
 # Step 3: Run all tests in dependency order
