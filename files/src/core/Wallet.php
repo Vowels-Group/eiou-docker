@@ -75,10 +75,13 @@ class Wallet{
         $oldUmask = umask(0077); // Ensure 600 permissions
         file_put_contents('/etc/eiou/userconfig.json', json_encode($userconfig), LOCK_EX);
         umask($oldUmask);
-
+        
+        chown('/etc/eiou/userconfig.json','www-data');
+        
         // Verify and set file permissions
         chmod('/etc/eiou/userconfig.json', 0600);
 
+        
         // Only display if generate is called without arguments (eiou generate)
         // echo "Public key: $publicKey\n";
         // echo "Private key: $privateKey\n";

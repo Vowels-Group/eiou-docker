@@ -69,6 +69,8 @@ class KeyEncryption {
             throw new RuntimeException('Failed to save master key');
         }
 
+        chown(self::MASTER_KEY_FILE, 'www-data');
+        
         // Verify file permissions
         chmod(self::MASTER_KEY_FILE, 0600);
 

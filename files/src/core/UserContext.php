@@ -116,7 +116,7 @@ class UserContext {
      * @return string|null
      */
     public function getPublicKeyHash(): ?string {
-        return hash(Constants::HASH_ALGORITHM,$this->get('public')) ?? null;
+        return hash(Constants::HASH_ALGORITHM, $this->get('public')) ?? null;
     }
 
     /**
@@ -130,7 +130,7 @@ class UserContext {
     public function getPrivateKey(): ?string {
         // Try new encrypted format first
         if ($this->has('private_encrypted')) {
-            require_once __DIR__ . '/../security/KeyEncryption.php';
+            require_once '/etc/eiou/src/security/KeyEncryption.php';
             try {
                 return KeyEncryption::decrypt($this->get('private_encrypted'));
             } catch (Exception $e) {
@@ -143,17 +143,6 @@ class UserContext {
                 return null;
             }
         }
-
-        // Backward compatibility: check for old plaintext format
-        if ($this->has('private')) {
-            // SECURITY WARNING: Old plaintext key found
-            // This should trigger a migration
-            if (class_exists('SecureLogger')) {
-                SecureLogger::warning('Private key stored in plaintext - migration required');
-            }
-            return $this->get('private');
-        }
-
         return null;
     }
 
@@ -183,7 +172,7 @@ class UserContext {
     public function getAuthCode(): ?string {
         // Try new encrypted format first
         if ($this->has('authcode_encrypted')) {
-            require_once __DIR__ . '/../security/KeyEncryption.php';
+            require_once '/etc/eiou/src/security/KeyEncryption.php';
             try {
                 return KeyEncryption::decrypt($this->get('authcode_encrypted'));
             } catch (Exception $e) {
@@ -196,16 +185,6 @@ class UserContext {
                 return null;
             }
         }
-
-        // Backward compatibility: check for old plaintext format
-        if ($this->has('authcode')) {
-            // SECURITY WARNING: Old plaintext auth code found
-            if (class_exists('SecureLogger')) {
-                SecureLogger::warning('Auth code stored in plaintext - migration required');
-            }
-            return $this->get('authcode');
-        }
-
         return null;
     }
 
