@@ -24,16 +24,8 @@ function createPDOConnection(): PDO {
         $dbName = $databaseContext->getDbName();
         $dbUser = $databaseContext->getDbUser();
         $dbPass = $databaseContext->getDbPass();
-    } else {
-        echo "FALLBACK DATABASE...";
-        // Fallback to global $user for backward compatibility
-        global $database;
-        $dbHost = $database['dbHost'] ?? null;
-        $dbName = $database['dbName'] ?? null;
-        $dbUser = $database['dbUser'] ?? null;
-        $dbPass = $database['dbPass'] ?? null;
-    }
-
+    } 
+    
     // Validate required configuration
     if (!$dbHost || !$dbName || !$dbUser || !$dbPass) {
         if (class_exists('SecureLogger')) {
