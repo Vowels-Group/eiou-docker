@@ -144,8 +144,8 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
         e2eResult=$(docker exec ${firstContainer} eiou send ${containerAddresses[${lastContainer}]} ${e2eAmount} USD 2>&1)
 
         # Wait for multi-hop routing
-        echo -e "\t   Waiting 15 seconds for multi-hop routing process (faster but certainty)..."
-        sleep 15
+        echo -e "\t   Waiting 20 seconds for multi-hop routing process (faster but certainty)..."
+        sleep 20
 
         # Check if message arrived
         finalState=$(docker exec ${lastContainer} php -r "
