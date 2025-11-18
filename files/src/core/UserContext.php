@@ -120,12 +120,41 @@ class UserContext {
     }
 
     /**
-     * Get private key
+     * Get private key (decrypts if encrypted)
      *
-     * @return string|null
+     * SECURITY: This method decrypts the private key. The caller MUST clear
+     * the returned value from memory using KeyEncryption::secureClear() after use.
+     *
+     * @return string|null Decrypted private key or null if not found
      */
     public function getPrivateKey(): ?string {
-        return $this->get('private') ?? null;
+        // Try new encrypted format first
+        if ($this->has('private_encrypted')) {
+            require_once __DIR__ . '/../security/KeyEncryption.php';
+            try {
+                return KeyEncryption::decrypt($this->get('private_encrypted'));
+            } catch (Exception $e) {
+                // Log decryption failure but don't expose details
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::error('Failed to decrypt private key', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+                return null;
+            }
+        }
+
+        // Backward compatibility: check for old plaintext format
+        if ($this->has('private')) {
+            // SECURITY WARNING: Old plaintext key found
+            // This should trigger a migration
+            if (class_exists('SecureLogger')) {
+                SecureLogger::warning('Private key stored in plaintext - migration required');
+            }
+            return $this->get('private');
+        }
+
+        return null;
     }
 
     /**
@@ -134,16 +163,50 @@ class UserContext {
      * @return bool True if wallet has both public and private keys
      */
     public function hasKeys(): bool {
-        return (null!== $this->getPublicKey()) && (null!== $this->getPrivateKey());
+        // Check for public key
+        $hasPublic = null !== $this->getPublicKey();
+
+        // Check for private key (encrypted or plaintext)
+        $hasPrivate = $this->has('private_encrypted') || $this->has('private');
+
+        return $hasPublic && $hasPrivate;
     }
 
     /**
-     * Get authentication code
+     * Get authentication code (decrypts if encrypted)
      *
-     * @return string|null Auth code or null
+     * SECURITY: This method decrypts the auth code. The caller MUST clear
+     * the returned value from memory using KeyEncryption::secureClear() after use.
+     *
+     * @return string|null Decrypted auth code or null if not found
      */
     public function getAuthCode(): ?string {
-        return $this->get('authcode') ?? null;
+        // Try new encrypted format first
+        if ($this->has('authcode_encrypted')) {
+            require_once __DIR__ . '/../security/KeyEncryption.php';
+            try {
+                return KeyEncryption::decrypt($this->get('authcode_encrypted'));
+            } catch (Exception $e) {
+                // Log decryption failure but don't expose details
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::error('Failed to decrypt auth code', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+                return null;
+            }
+        }
+
+        // Backward compatibility: check for old plaintext format
+        if ($this->has('authcode')) {
+            // SECURITY WARNING: Old plaintext auth code found
+            if (class_exists('SecureLogger')) {
+                SecureLogger::warning('Auth code stored in plaintext - migration required');
+            }
+            return $this->get('authcode');
+        }
+
+        return null;
     }
 
     /**
