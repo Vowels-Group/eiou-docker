@@ -53,6 +53,9 @@ class TransactionController
      */
     public function handleSendEIOU(): void
     {
+        // CSRF Protection: Verify token before processing
+        $this->session->verifyCSRFToken();
+
         // Import validation and security classes
         require_once __DIR__ . '/../../utils/InputValidator.php';
         require_once __DIR__ . '/../../utils/Security.php';
