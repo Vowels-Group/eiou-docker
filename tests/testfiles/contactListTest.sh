@@ -73,12 +73,12 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         if [[ "$nameCorrect" == "true" ]] && [[ "$feeCorrect" == "true" ]] &&
            [[ "$creditCorrect" == "true" ]] && [[ "$currencyCorrect" == "true" ]] &&
            [[ "$statusCorrect" == "true" ]]; then
-            printf "\tContact %s->%s metadata ${GREEN}PASSED${NC}\n" ${containerKeys[0]} ${containerKeys[1]}
-            printf "\t  Name: ✓ Fee: ✓ Credit: ✓ Currency: ✓ Status: ✓\n"
+            printf "\t   Contact %s->%s metadata ${GREEN}PASSED${NC}\n" ${containerKeys[0]} ${containerKeys[1]}
+            printf "\t   Name: ✓ Fee: ✓ Credit: ✓ Currency: ✓ Status: ✓\n"
             passed=$(( passed + 1 ))
         else
-            printf "\tContact %s->%s metadata ${RED}FAILED${NC}\n" ${containerKeys[0]} ${containerKeys[1]}
-            printf "\t  Name: %s Fee: %s Credit: %s Currency: %s Status: %s\n" \
+            printf "\t   Contact %s->%s metadata ${RED}FAILED${NC}\n" ${containerKeys[0]} ${containerKeys[1]}
+            printf "\t   Name: %s Fee: %s Credit: %s Currency: %s Status: %s\n" \
                    $([ "$nameCorrect" == "true" ] && echo "✓" || echo "✗") \
                    $([ "$feeCorrect" == "true" ] && echo "✓" || echo "✗") \
                    $([ "$creditCorrect" == "true" ] && echo "✓" || echo "✗") \
@@ -87,7 +87,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
             failure=$(( failure + 1 ))
         fi
     else
-        printf "\tContact %s->%s ${RED}NOT FOUND${NC}\n" ${containerKeys[0]} ${containerKeys[1]}
+        printf "\t   Contact %s->%s ${RED}NOT FOUND${NC}\n" ${containerKeys[0]} ${containerKeys[1]}
         failure=$(( failure + 1 ))
     fi
 done
@@ -127,10 +127,10 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     " 2>/dev/null || echo "0")
 
     if [[ "$forwardExists" == "1" ]] && [[ "$reverseExists" == "1" ]]; then
-        printf "\tBidirectional relationship ${GREEN}PASSED${NC}\n"
+        printf "\t   Bidirectional relationship ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     else
-        printf "\tBidirectional relationship ${RED}FAILED${NC} (Forward: %s, Reverse: %s)\n" ${forwardExists} ${reverseExists}
+        printf "\t   Bidirectional relationship ${RED}FAILED${NC} (Forward: %s, Reverse: %s)\n" ${forwardExists} ${reverseExists}
         failure=$(( failure + 1 ))
     fi
 done
@@ -153,10 +153,10 @@ for container in "${containers[@]}"; do
     " 2>/dev/null || echo "0")
 
     if [[ "$contactCount" -gt "0" ]]; then
-        printf "\t%s has %s accepted contacts ${GREEN}PASSED${NC}\n" ${container} ${contactCount}
+        printf "\t   %s has %s accepted contacts ${GREEN}PASSED${NC}\n" ${container} ${contactCount}
         passed=$(( passed + 1 ))
     else
-        printf "\t%s has no contacts ${RED}FAILED${NC}\n" ${container}
+        printf "\t   %s has no contacts ${RED}FAILED${NC}\n" ${container}
         failure=$(( failure + 1 ))
     fi
 done
@@ -174,10 +174,10 @@ for containersLinkKey in "${containersLinkKeys[@]:0:3}"; do  # Test first 3 link
     viewOutput=$(docker exec ${containerKeys[0]} eiou viewcontact ${containerAddresses[${containerKeys[1]}]} 2>&1)
 
     if [[ ! "$viewOutput" =~ "error" ]] && [[ ! "$viewOutput" =~ "Error" ]] && [[ ! "$viewOutput" =~ "not found" ]]; then
-        printf "\tView contact details ${GREEN}PASSED${NC}\n"
+        printf "\t   View contact details ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     else
-        printf "\tView contact details ${RED}FAILED${NC}\n"
+        printf "\t   View contact details ${RED}FAILED${NC}\n"
         failure=$(( failure + 1 ))
     fi
 done

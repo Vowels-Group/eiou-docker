@@ -33,24 +33,24 @@ for container in "${containers[@]}"; do
     " 2>/dev/null || echo "ERROR")
 
     if [[ "$transactionInfo" != "ERROR" ]] && [[ "$transactionInfo" != "" ]]; then
-        printf "\tTransaction history for %s: %s\n" ${container} "${transactionInfo}"
+        printf "\t   Transaction history for %s: %s\n" ${container} "${transactionInfo}"
 
         # Extract total count (basic parsing)
         if [[ "$transactionInfo" =~ Total:([0-9]+) ]]; then
             totalTx="${BASH_REMATCH[1]}"
             if [[ "$totalTx" -gt "0" ]]; then
-                printf "\tTransaction recording ${GREEN}PASSED${NC} (%s transactions)\n" ${totalTx}
+                printf "\t   Transaction recording ${GREEN}PASSED${NC} (%s transactions)\n" ${totalTx}
                 passed=$(( passed + 1 ))
             else
-                printf "\tTransaction recording ${RED}FAILED${NC} (no transactions found)\n"
+                printf "\t   Transaction recording ${RED}FAILED${NC} (no transactions found)\n"
                 failure=$(( failure + 1 ))
             fi
         else
-            printf "\tTransaction parsing ${RED}FAILED${NC}\n"
+            printf "\t   Transaction parsing ${RED}FAILED${NC}\n"
             failure=$(( failure + 1 ))
         fi
     else
-        printf "\tTransaction query for %s ${RED}FAILED${NC}\n" ${container}
+        printf "\t   Transaction query for %s ${RED}FAILED${NC}\n" ${container}
         failure=$(( failure + 1 ))
     fi
 done
@@ -89,16 +89,16 @@ for container in "${containers[@]}"; do
     " 2>/dev/null || echo "ERROR")
 
     if [[ "$fieldCheck" == "COMPLETE" ]]; then
-        printf "\tTransaction fields ${GREEN}COMPLETE${NC}\n"
+        printf "\t   Transaction fields ${GREEN}COMPLETE${NC}\n"
         passed=$(( passed + 1 ))
     elif [[ "$fieldCheck" == "NO_TRANSACTIONS" ]]; then
-        printf "\tNo transactions to verify ${NC}(skipped)${NC}\n"
+        printf "\t   No transactions to verify ${NC}(skipped)${NC}\n"
         # Don't count as failure if no transactions exist yet
     elif [[ "$fieldCheck" =~ ^MISSING: ]]; then
-        printf "\tTransaction fields ${RED}INCOMPLETE${NC} (%s)\n" "${fieldCheck}"
+        printf "\t   Transaction fields ${RED}INCOMPLETE${NC} (%s)\n" "${fieldCheck}"
         failure=$(( failure + 1 ))
     else
-        printf "\tField check ${RED}FAILED${NC}\n"
+        printf "\t   Field check ${RED}FAILED${NC}\n"
         failure=$(( failure + 1 ))
     fi
 done
@@ -152,10 +152,10 @@ if [[ "$testPair" ]]; then
     receiverDiff=$(( receiverAfter - receiverBefore ))
 
     if [[ "$senderDiff" -eq "1" ]] && [[ "$receiverDiff" -eq "1" ]]; then
-        printf "\tTransaction pair recording ${GREEN}PASSED${NC} (send+receive recorded)\n"
+        printf "\t   Transaction pair recording ${GREEN}PASSED${NC} (send+receive recorded)\n"
         passed=$(( passed + 1 ))
     else
-        printf "\tTransaction pair recording ${RED}FAILED${NC} (Send diff: %s, Receive diff: %s)\n" ${senderDiff} ${receiverDiff}
+        printf "\t   Transaction pair recording ${RED}FAILED${NC} (Send diff: %s, Receive diff: %s)\n" ${senderDiff} ${receiverDiff}
         failure=$(( failure + 1 ))
     fi
 fi
@@ -178,11 +178,11 @@ for container in "${containers[@]:0:2}"; do  # Test first 2 containers
     " 2>/dev/null || echo "ERROR")
 
     if [[ "$queryResult" != "ERROR" ]] && [[ "$queryResult" != "" ]]; then
-        printf "\tFiltered query results: %s\n" "${queryResult}"
-        printf "\tTransaction filtering ${GREEN}PASSED${NC}\n"
+        printf "\t   Filtered query results: %s\n" "${queryResult}"
+        printf "\t   Transaction filtering ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     else
-        printf "\tTransaction filtering ${RED}FAILED${NC}\n"
+        printf "\t   Transaction filtering ${RED}FAILED${NC}\n"
         failure=$(( failure + 1 ))
     fi
 done
@@ -215,13 +215,13 @@ for container in "${containers[@]:0:2}"; do  # Test first 2 containers
     " 2>/dev/null || echo "ERROR")
 
     if [[ "$timestampCheck" == "ORDERED" ]]; then
-        printf "\tTimestamp ordering ${GREEN}PASSED${NC}\n"
+        printf "\t   Timestamp ordering ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     elif [[ "$timestampCheck" == "INSUFFICIENT_DATA" ]]; then
-        printf "\tInsufficient data for timestamp test ${NC}(skipped)${NC}\n"
+        printf "\t   Insufficient data for timestamp test ${NC}(skipped)${NC}\n"
         # Don't count as failure
     else
-        printf "\tTimestamp ordering ${RED}FAILED${NC}\n"
+        printf "\t   Timestamp ordering ${RED}FAILED${NC}\n"
         failure=$(( failure + 1 ))
     fi
 done
