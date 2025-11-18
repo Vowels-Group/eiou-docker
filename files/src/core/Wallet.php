@@ -8,6 +8,9 @@ class Wallet{
      * @return void
      */
     public static function generateWallet(array $argv): void {
+        // Load KeyEncryption for secure key storage
+        require_once __DIR__ . '/../security/KeyEncryption.php';
+
         // require_once '/etc/eiou/src/core/Constants.php';
         // Add default user values in defaultconfig.json
         $defaultConfig = json_encode([
@@ -37,15 +40,22 @@ class Wallet{
 
         // Generate random authentication code of length 20
         $authCode = bin2hex(random_bytes(10));
-        
+
         // Output Tor address
-        $torAddress = trim(file_get_contents('/var/lib/tor/hidden_service/hostname'));   
+        $torAddress = trim(file_get_contents('/var/lib/tor/hidden_service/hostname'));
+
+        // SECURITY: Encrypt private key and auth code before storage
+        $encryptedPrivateKey = KeyEncryption::encrypt($privateKey);
+        $encryptedAuthCode = KeyEncryption::encrypt($authCode);
+
+        // Clear plaintext private key from memory
+        KeyEncryption::secureClear($privateKey);
 
         $userconfig = [
-            'public' => addslashes($publicKey),      // Public key
-            'private' => addslashes($privateKey),    // Private key
-            'authcode' => addslashes($authCode),     // Auth code
-            'torAddress' => addslashes($torAddress)  // Tor address
+            'public' => addslashes($publicKey),           // Public key (not sensitive, can be shared)
+            'private_encrypted' => $encryptedPrivateKey,  // ENCRYPTED private key
+            'authcode_encrypted' => $encryptedAuthCode,   // ENCRYPTED auth code
+            'torAddress' => addslashes($torAddress)       // Tor address
         ];
 
         // If argv2 is the (http/s) hostname of the container
@@ -61,7 +71,13 @@ class Wallet{
             //echo returnTorSaved($userconfig['torAddress']);     // Tor address
         }
 
+        // Set strict file permissions before saving
+        $oldUmask = umask(0077); // Ensure 600 permissions
         file_put_contents('/etc/eiou/userconfig.json', json_encode($userconfig), LOCK_EX);
+        umask($oldUmask);
+
+        // Verify and set file permissions
+        chmod('/etc/eiou/userconfig.json', 0600);
 
         // Only display if generate is called without arguments (eiou generate)
         // echo "Public key: $publicKey\n";
