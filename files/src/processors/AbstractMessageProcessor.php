@@ -24,6 +24,13 @@ abstract class AbstractMessageProcessor {
     protected string $lockfile;
     protected int $logInterval;
     protected array $pollerConfig;
+    protected ?int $shutdownStartTime = null;
+    protected array $cleanupCallbacks = [];
+
+    /**
+     * Maximum shutdown time in seconds
+     */
+    protected const MAX_SHUTDOWN_TIME = 30;
 
     /**
      * Constructor
@@ -42,7 +49,7 @@ abstract class AbstractMessageProcessor {
         pcntl_signal(SIGTERM, [$this, 'handleShutdownSignal']);
         pcntl_signal(SIGINT, [$this, 'handleShutdownSignal']);
         pcntl_signal(SIGHUP, [$this, 'handleReloadSignal']);
-        
+        pcntl_signal(SIGQUIT, [$this, 'handleQuitSignal']);
     }
 
     /**
@@ -68,11 +75,22 @@ abstract class AbstractMessageProcessor {
             // Check for signals
             pcntl_signal_dispatch();
 
+            // Check shutdown timeout
+            if ($this->shutdownStartTime !== null) {
+                $elapsed = time() - $this->shutdownStartTime;
+                if ($elapsed > self::MAX_SHUTDOWN_TIME) {
+                    echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+                    echo "Shutdown timeout exceeded ({$elapsed}s > " . self::MAX_SHUTDOWN_TIME . "s) - forcing exit\n";
+                    $this->forceShutdown();
+                    exit(1);
+                }
+            }
+
             // Process messages (implemented by concrete classes)
             $before = microtime(true);
             $processed = $this->processMessages();
             $hadWork = $processed > 0;
-            
+
             if ($hadWork) {
                 $this->totalProcessed += $processed;
             }
@@ -150,37 +168,145 @@ abstract class AbstractMessageProcessor {
     }
 
     /**
-     * Handle shutdown signals
+     * Handle shutdown signals (SIGTERM, SIGINT)
      *
      * @param int $signal The signal received
      */
     public function handleShutdownSignal(int $signal): void {
+        $signalName = ($signal === SIGTERM) ? 'SIGTERM' : 'SIGINT';
+
         echo "\n[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
-        echo "Received shutdown signal ($signal), stopping gracefully...\n";
+        echo "Received {$signalName} signal, initiating graceful shutdown...\n";
+
         $this->shouldStop = true;
+        $this->shutdownStartTime = time();
     }
 
     /**
-     * Handle Reload signals
+     * Handle reload signal (SIGHUP)
      *
      * @param int $signal The signal received
      */
     public function handleReloadSignal(int $signal): void {
         echo "\n[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
-        echo "Received reload signal ($signal), reloading config...\n";
-        // To do add reload
+        echo "Received SIGHUP signal, reloading configuration...\n";
+
+        // Allow concrete classes to implement reload logic
+        if (method_exists($this, 'reloadConfiguration')) {
+            $this->reloadConfiguration();
+        }
     }
 
     /**
-     * Cleanup on shutdown
+     * Handle quit signal (SIGQUIT) - Quit with diagnostic info
+     *
+     * @param int $signal The signal received
+     */
+    public function handleQuitSignal(int $signal): void {
+        echo "\n[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+        echo "Received SIGQUIT signal, quitting with diagnostics...\n";
+
+        $this->printDiagnostics();
+        $this->shouldStop = true;
+        $this->shutdownStartTime = time();
+    }
+
+    /**
+     * Register cleanup callback
+     *
+     * @param callable $callback Cleanup function to call on shutdown
+     * @param string $description Description of cleanup task
+     */
+    protected function registerCleanup(callable $callback, string $description = ''): void {
+        $this->cleanupCallbacks[] = [
+            'callback' => $callback,
+            'description' => $description
+        ];
+    }
+
+    /**
+     * Execute all cleanup callbacks
+     */
+    protected function executeCleanupCallbacks(): void {
+        if (empty($this->cleanupCallbacks)) {
+            return;
+        }
+
+        echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+        echo "Executing " . count($this->cleanupCallbacks) . " cleanup callbacks...\n";
+
+        foreach ($this->cleanupCallbacks as $cleanup) {
+            try {
+                $desc = $cleanup['description'] ?: 'unnamed cleanup';
+                echo "  - {$desc}\n";
+
+                call_user_func($cleanup['callback']);
+            } catch (Exception $e) {
+                echo "  ! Cleanup error: " . $e->getMessage() . "\n";
+            }
+        }
+    }
+
+    /**
+     * Print diagnostic information
+     */
+    protected function printDiagnostics(): void {
+        echo "\n" . str_repeat("=", 50) . "\n";
+        echo "PROCESS DIAGNOSTICS - " . $this->getProcessorName() . "\n";
+        echo str_repeat("=", 50) . "\n";
+        echo "PID: " . getmypid() . "\n";
+        echo "Total processed: {$this->totalProcessed}\n";
+        echo "Should stop: " . ($this->shouldStop ? 'YES' : 'NO') . "\n";
+        echo "Cleanup callbacks: " . count($this->cleanupCallbacks) . "\n";
+
+        if (function_exists('memory_get_usage')) {
+            echo "Memory usage: " . round(memory_get_usage() / 1024 / 1024, 2) . " MB\n";
+            echo "Peak memory: " . round(memory_get_peak_usage() / 1024 / 1024, 2) . " MB\n";
+        }
+
+        echo "Uptime: " . (time() - $this->lastLogTime) . " seconds\n";
+        echo str_repeat("=", 50) . "\n\n";
+    }
+
+    /**
+     * Graceful shutdown with cleanup
      */
     protected function shutdown(): void {
+        echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+        echo "Shutting down {$this->getProcessorName()} processor...\n";
+
+        // Execute cleanup callbacks
+        $this->executeCleanupCallbacks();
+
+        // Allow concrete classes to perform additional cleanup
+        if (method_exists($this, 'cleanup')) {
+            try {
+                $this->cleanup();
+            } catch (Exception $e) {
+                echo "Cleanup error: " . $e->getMessage() . "\n";
+            }
+        }
+
+        // Remove lockfile
         if (file_exists($this->lockfile)) {
             unlink($this->lockfile);
         }
 
         echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
-        echo $this->getProcessorName() . " processor stopped\n";
+        echo $this->getProcessorName() . " processor stopped gracefully\n";
+    }
+
+    /**
+     * Force shutdown (after timeout)
+     */
+    protected function forceShutdown(): void {
+        echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+        echo "FORCE SHUTDOWN - timeout exceeded\n";
+
+        // Quick cleanup - don't wait for callbacks
+        if (file_exists($this->lockfile)) {
+            @unlink($this->lockfile);
+        }
     }
 
     /**
