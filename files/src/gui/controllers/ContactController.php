@@ -51,22 +51,43 @@ class ContactController
         require_once __DIR__ . '/../../utils/Security.php';
 
         // Sanitize input data
-        $address = Security::sanitizeInput($_POST['address'] ?? '');
+        $httpAddress = Security::sanitizeInput($_POST['http_address'] ?? '');
+        $torAddress = Security::sanitizeInput($_POST['tor_address'] ?? '');
         $name = Security::sanitizeInput($_POST['name'] ?? '');
         $fee = $_POST['fee'] ?? '';
         $credit = $_POST['credit'] ?? '';
         $currency = $_POST['currency'] ?? '';
 
-        if (empty($address) || empty($name) || $fee === '' || $credit === '' || empty($currency)) {
-            $message = 'All fields are required';
+        // Check required fields and ensure at least one address is provided
+        if (empty($name) || $fee === '' || $credit === '' || empty($currency)) {
+            $message = 'All fields except addresses are required';
+            $messageType = 'error';
+        } elseif (empty($httpAddress) && empty($torAddress)) {
+            $message = 'At least one address (HTTP or Tor) must be provided';
             $messageType = 'error';
         } else {
-            // Validate address
-            $addressValidation = InputValidator::validateAddress($address);
-            if (!$addressValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
-                return;
+            // Validate HTTP address if provided
+            if (!empty($httpAddress)) {
+                $httpValidation = InputValidator::validateAddress($httpAddress);
+                if (!$httpValidation['valid']) {
+                    MessageHelper::redirectMessage('Invalid HTTP address: ' . $httpValidation['error'], 'error');
+                    return;
+                }
+                $httpAddress = $httpValidation['value'];
             }
+
+            // Validate Tor address if provided
+            if (!empty($torAddress)) {
+                $torValidation = InputValidator::validateAddress($torAddress);
+                if (!$torValidation['valid']) {
+                    MessageHelper::redirectMessage('Invalid Tor address: ' . $torValidation['error'], 'error');
+                    return;
+                }
+                $torAddress = $torValidation['value'];
+            }
+
+            // Use the first available address for the legacy command
+            $address = !empty($httpAddress) ? $httpAddress : $torAddress;
 
             // Validate contact name
             $nameValidation = InputValidator::validateContactName($name);
@@ -97,12 +118,13 @@ class ContactController
             }
 
             // Use sanitized and validated values
-            $address = $addressValidation['value'];
             $name = $nameValidation['value'];
             $fee = $feeValidation['value'];
             $credit = $creditValidation['value'];
             $currency = $currencyValidation['value'];
+
             // Create argv array for addContact function
+            // Note: The CLI still uses single address for backward compatibility
             $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency];
 
             // Capture output
