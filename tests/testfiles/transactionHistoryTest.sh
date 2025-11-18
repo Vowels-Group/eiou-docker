@@ -125,8 +125,6 @@ if [[ "$testPair" ]]; then
         echo ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeCount('sent');
     " 2>/dev/null || echo "0")
 
-
-
     receiverBefore=$(docker exec ${receiver} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
         echo ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
@@ -136,8 +134,8 @@ if [[ "$testPair" ]]; then
     docker exec ${sender} eiou send ${containerAddresses[${receiver}]} 2 USD 2>&1 > /dev/null
 
     # Wait for processing
-    echo -e "\t   Waiting for 15 seconds for complete routing (faster but certainty)..."
-    sleep 15
+    echo -e "\t   Waiting for 20 seconds for complete routing (faster but certainty)..."
+    sleep 20
 
     # Check new counts
     senderAfter=$(docker exec ${sender} php -r "

@@ -53,8 +53,8 @@ for routingPair in "${!routingTests[@]}"; do
         routingResult=$(docker exec ${sender} eiou send ${containerAddresses[${receiver}]} ${testAmount} USD 2>&1)
 
         # Wait for transaction to process
-        echo -e "\t   Waiting 15 seconds for routing process (faster but certainty)..."
-        sleep 15
+        echo -e "\t   Waiting 20 seconds for routing process (faster but certainty)..."
+        sleep 20
 
         # Check relay nodes received fees
         relayFeesDetected=0
