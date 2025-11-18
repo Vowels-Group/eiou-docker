@@ -89,6 +89,7 @@ printf "========================================\n"
 printf "  EIOU Docker Automated Test Runner\n"
 printf "========================================\n"
 printf "Build: ${BUILD_NAME}\n"
+printf "Mode:  ${MODE}\n"
 printf "Time:  $(date '+%Y-%m-%d %H:%M:%S')\n"
 printf "\n"
 
@@ -125,13 +126,26 @@ for container in $CONTAINER_LIST; do
             exit 1
         fi
 
-        # Check if userconfig.json exists and is valid JSON
-        if docker exec "$container" test -f /etc/eiou/userconfig.json 2>/dev/null; then
-            # Verify it's valid JSON and has required fields
-            if docker exec "$container" php -r '
-                $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
-                exit(isset($json["hostname"]) && isset($json["authcode"]) ? 0 : 1);
-            ' 2>/dev/null; then
+        # Verify if userconfig.json exists, it's valid JSON and has required fields
+        if [ "$MODE" == 'http' ]; then
+            if [[ $(docker exec "$container" php -r '
+                if (file_exists("/etc/eiou/userconfig.json")) {
+                    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                    echo isset($json["hostname"]) && isset($json["authcode"]);
+                }
+                echo false;
+            ') ]]; then
+                printf "${GREEN}Ready${NC}\n"
+                break
+            fi
+        elif [ "$MODE" == 'tor' ]; then
+            if [[ $(docker exec "$container" php -r '
+                if (file_exists("/etc/eiou/userconfig.json")) {
+                    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                    echo isset($json["torAddress"]) && isset($json["authcode"]);
+                }
+                echo false;
+            ') ]]; then
                 printf "${GREEN}Ready${NC}\n"
                 break
             fi
@@ -151,12 +165,12 @@ done
 printf "${GREEN}${CHECK} All containers initialized successfully${NC}\n"
 sleep 2  # Additional buffer time for message processors
 
-# Step 2: Run prerequisite test (torAddressTest (TOR) or hostnameTest (HTTP))
+# Step 2: Run prerequisite test (hostnameTest (HTTP) or torAddressTest (TOR))
 printf "\n${GREEN}[Step 2/3]${NC} Running prerequisite test...\n"
-if [ "$MODE" == 'tor' ]; then
-    run_test "torAddressTest" "./tests/testfiles/torAddressTest.sh" "true"
-elif [ "$MODE" == 'http' ]; then
+if [ "$MODE" == 'http' ]; then 
     run_test "hostnameTest" "./tests/testfiles/hostnameTest.sh" "true"
+elif [ "$MODE" == 'tor' ]; then
+    run_test "torAddressTest" "./tests/testfiles/torAddressTest.sh" "true"
 fi
 
 # Step 3: Run all tests in dependency order
