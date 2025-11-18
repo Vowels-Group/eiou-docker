@@ -219,8 +219,9 @@ printf "================================================================\n"
 
 # List failed tests if any
 if [ -n "$FAILED_TESTS" ]; then
-    printf "\n${RED}Failed Tests:${NC}\n"
-    echo "$FAILED_TESTS" | tr ',' '\n' | sed 's/^/  - /' | grep -v '^  - $'
+    printf "${RED}Failed Tests:${NC}\n"
+    echo "$FAILED_TESTS" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | sed 's/^/  - /'
+    printf "\n"
 fi
 
 # Determine exit code
