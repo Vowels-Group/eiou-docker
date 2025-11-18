@@ -40,12 +40,19 @@ class ServiceContainer {
      */
     private PDO|null $pdo;
 
+
     /**
      * Private constructor for singleton pattern
+     * 
+     * @param UserContext $currentUser Current user data
+     * @param PDO $pdo Database connection
      */
-    private function __construct() {
-        $this->loadCurrentUser();
-        $this->loadDatabase();
+    private function __construct(
+        UserContext $currentUser,
+        PDO $pdo
+    ) {
+        $this->currentUser = $currentUser;
+        $this->pdo = $pdo;
     }
 
     /**
@@ -53,28 +60,11 @@ class ServiceContainer {
      *
      * @return ServiceContainer
      */
-    public static function getInstance(): ServiceContainer {
+    public static function getInstance($currentUser, $pdo): ServiceContainer {
         if (self::$instance === null) {
-            self::$instance = new self();
+            self::$instance = new self($currentUser, $pdo);
         }
         return self::$instance;
-    }
-
-    /**
-     * Load current user from global scope
-     */
-    private function loadCurrentUser(): void {
-        require_once '/etc/eiou/src/core/UserContext.php';
-        $this->currentUser = UserContext::getInstance();
-    }
-
-    /**
-     * Set current user (for testing or manual injection)
-     *
-     * @param UserContext $user User data
-     */
-    public function setCurrentUser(UserContext $user): void {
-        $this->currentUser = $user;
     }
 
     /**
@@ -84,27 +74,6 @@ class ServiceContainer {
      */
     public function getCurrentUser(): UserContext {
         return $this->currentUser;
-    }
-
-    /**
-     * Get database connection (lazy loaded)
-     *
-     * @return PDO|null
-     */
-    public function loadDatabase() {
-        require_once '/etc/eiou/src/database/pdo.php';
-        try {
-            $this->pdo = createPDOConnection();
-        } catch (RuntimeException $e) {
-            // Log the error
-            if (isset($this->utils['SecureLogger'])) {
-                $this->utils['SecureLogger']->logException($e, 'CRITICAL');
-            } else {
-                error_log("ServiceContainer: Database connection failed - " . $e->getMessage());
-            }
-            // Set PDO to null to indicate unavailability
-            $this->pdo = null;
-        }
     }
 
     /**

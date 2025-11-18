@@ -39,7 +39,7 @@ class TransactionMessageProcessor extends AbstractMessageProcessor {
         parent::__construct($pollerConfig, $lockfile, 60);
 
         // Get the transaction service
-        $this->transactionService = ServiceContainer::getInstance()->getTransactionService();
+        $this->transactionService = Application::getInstance()->services->getTransactionService();
     }
 
     /**

@@ -39,7 +39,7 @@ class P2pMessageProcessor extends AbstractMessageProcessor {
         parent::__construct($pollerConfig, $lockfile, 60);
 
         // Get the P2P service
-        $this->p2pService = ServiceContainer::getInstance()->getP2pService();
+        $this->p2pService = Application::getInstance()->services->getP2pService();
     }
 
     /**

@@ -29,7 +29,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Query contact details using PHP
     contactData=$(docker exec ${containerKeys[0]} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$contact = ServiceContainer::getInstance()->getContactRepository()->lookupByAddress('${containerAddresses[${containerKeys[1]}]}');
+        \$contact = Application::getInstance()->services->getContactRepository()->lookupByAddress('${containerAddresses[${containerKeys[1]}]}');
         if (\$contact) {
             echo json_encode(\$contact);
         } else {
@@ -115,14 +115,14 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Check forward relationship
     forwardExists=$(docker exec ${containerKeys[0]} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        if(ServiceContainer::getInstance()->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
+        if(Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
         echo '1';} else{ echo '0';}
     " 2>/dev/null || echo "0")
 
     # Check reverse relationship
     reverseExists=$(docker exec ${containerKeys[1]} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        if(ServiceContainer::getInstance()->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
+        if(Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
         echo '1';} else{ echo '0';}
     " 2>/dev/null || echo "0")
 
@@ -149,7 +149,7 @@ for container in "${containers[@]}"; do
     # Get contact count from database
     contactCount=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        echo ServiceContainer::getInstance()->getContactRepository()->countAcceptedContacts();
+        echo Application::getInstance()->services->getContactRepository()->countAcceptedContacts();
     " 2>/dev/null || echo "0")
 
     if [[ "$contactCount" -gt "0" ]]; then

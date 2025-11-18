@@ -40,7 +40,7 @@ class CleanupMessageProcessor extends AbstractMessageProcessor {
         parent::__construct($pollerConfig, $lockfile, 300);
 
         // Get the cleanup service
-        $this->cleanupService = ServiceContainer::getInstance()->getCleanupService();
+        $this->cleanupService = Application::getInstance()->services->getCleanupService();
     }
 
     /**

@@ -43,7 +43,7 @@ for routingPair in "${!routingTests[@]}"; do
             
             initialRelayBalances[$relay]=$(docker exec ${relay} php -r "
                 require_once('./etc/eiou/src/services/ServiceContainer.php');
-                \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getUserBalanceCurrency('USD');
+                \$balance = Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
                 echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
             " 2>/dev/null || echo "0")
         done
@@ -61,7 +61,7 @@ for routingPair in "${!routingTests[@]}"; do
         for relay in "${intermediates[@]}"; do
             newRelayBalance=$(docker exec ${relay} php -r "
                 require_once('./etc/eiou/src/services/ServiceContainer.php');
-                \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getUserBalanceCurrency('USD');
+                \$balance = Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
                 echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
             " 2>/dev/null || echo "0")
 
@@ -97,7 +97,7 @@ for container in "${containers[@]}"; do
     # Query transaction history and check for relay transactions
     transactionTypes=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$results = ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsTypeStatistics();
+        \$results = Application::getInstance()->services->getTransactionRepository()->getTransactionsTypeStatistics();
         foreach (\$results as \$row) {
             echo \$row['type'] . ': ' . \$row['count'] . ', ';
         }
@@ -136,7 +136,7 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
         # Get initial message count or balance
         initialState=$(docker exec ${lastContainer} php -r "
             require_once('./etc/eiou/src/services/ServiceContainer.php');
-            echo ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
+            echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
         " 2>/dev/null || echo "0")
 
         # Send end-to-end message
@@ -150,7 +150,7 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
         # Check if message arrived
         finalState=$(docker exec ${lastContainer} php -r "
             require_once('./etc/eiou/src/services/ServiceContainer.php');
-            echo ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
+            echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
         " 2>/dev/null || echo "0")
 
         stateIncreased=$(awk "BEGIN {print ($finalState > $initialState) ? 1 : 0}")

@@ -21,11 +21,11 @@ for container in "${containers[@]}"; do
     # Method 2: Direct PHP query for verification
     phpBalance=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$balances = ServiceContainer::getInstance()->getBalanceRepository()->getAllBalances();
+        \$balances = Application::getInstance()->services->getBalanceRepository()->getAllBalances();
         if (!empty(\$balances)) {
             \$total_string = '';
             foreach (\$balances as \$balance) {
-                \$contactResult = ServiceContainer::getInstance()->getContactRepository()->lookupByPubkey(\$balance['pubkey']);
+                \$contactResult = Application::getInstance()->services->getContactRepository()->lookupByPubkey(\$balance['pubkey']);
                 \$total_string .= '\t   ' . \$contactResult['name'] . ' (' . (\$contactResult['tor'] ?? \$contactResult['http']) . ') ' . \$balance['direction'] . ' : ' . \$balance['balance']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . ' ' . \$balance['currency'] . '\n';
             }
             echo \$total_string;
@@ -62,15 +62,15 @@ if [[ "$firstLink" ]]; then
     # Get initial balances
     senderInitial=$(docker exec ${sender} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+        \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
+        \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
 
     receiverInitial=$(docker exec ${receiver} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+        \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
+        \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
 
@@ -92,15 +92,15 @@ if [[ "$firstLink" ]]; then
     # Get new balances
     senderFinal=$(docker exec ${sender} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+        \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
+        \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
 
     receiverFinal=$(docker exec ${receiver} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
-        \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+        \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
+        \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
 

@@ -115,7 +115,7 @@ class TransactionPayload extends BasePayload
     public function buildForwarding(array $message, array $rp2pData): array
     {
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($rp2pData['sender_address']);
-        $transactionService = ServiceContainer::getInstance()->getTransactionService();
+        $transactionService = Application::getInstance()->services->getTransactionService();
         // This method returns data array for further processing, not final payload
         return [
             'time' => $rp2pData['time'],

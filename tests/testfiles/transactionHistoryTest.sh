@@ -21,10 +21,10 @@ for container in "${containers[@]}"; do
         require_once('./etc/eiou/src/services/ServiceContainer.php');
 
         // Get total count
-        \$total = ServiceContainer::getInstance()->getTransactionRepository()->getTotalCountTransactions();
+        \$total = Application::getInstance()->services->getTransactionRepository()->getTotalCountTransactions();
 
         // Get count by type
-        \$types = ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsTypeStatistics();
+        \$types = Application::getInstance()->services->getTransactionRepository()->getTransactionsTypeStatistics();
 
         echo 'Total:' . \$total . ' ';
         foreach (\$types as \$type) {
@@ -66,7 +66,7 @@ for container in "${containers[@]}"; do
     # Query a sample transaction to check fields
     fieldCheck=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$transactions = ServiceContainer::getInstance()->getTransactionRepository()->getTransactions(1);
+        \$transactions = Application::getInstance()->services->getTransactionRepository()->getTransactions(1);
         \$transaction = \$transactions[0];
         if (\$transaction) {
             \$requiredFields = ['id', 'tx_type', 'type', 'status', 'sender_address', 'sender_public_key', 'receiver_address', 'receiver_public_key', 'amount', 'currency', 'timestamp', 'memo'];
@@ -122,12 +122,12 @@ if [[ "$testPair" ]]; then
     # Record current transaction counts
     senderBefore=$(docker exec ${sender} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        echo ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeCount('sent');
+        echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('sent');
     " 2>/dev/null || echo "0")
 
     receiverBefore=$(docker exec ${receiver} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        echo ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
+        echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
     " 2>/dev/null || echo "0")
 
     # Send test transaction
@@ -140,12 +140,12 @@ if [[ "$testPair" ]]; then
     # Check new counts
     senderAfter=$(docker exec ${sender} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        echo ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeCount('sent');
+        echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('sent');
     " 2>/dev/null || echo "0")
 
     receiverAfter=$(docker exec ${receiver} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        echo ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
+        echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
     " 2>/dev/null || echo "0")
 
     senderDiff=$(( senderAfter - senderBefore ))
@@ -171,8 +171,8 @@ for container in "${containers[@]:0:2}"; do  # Test first 2 containers
     # Test querying by type
     queryResult=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
-        \$sends = ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeStatistics('sent');
-        \$receives = ServiceContainer::getInstance()->getTransactionRepository()->getTransactionsSpecificTypeStatistics('received');;
+        \$sends = Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeStatistics('sent');
+        \$receives = Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeStatistics('received');;
         echo 'Sends: ' . \$sends['count'] . '/' . (\$sends['total'] ?: '0') . ' ';
         echo 'Receives: ' . \$receives['count'] . '/' . (\$receives['total'] ?: '0');
     " 2>/dev/null || echo "ERROR")
@@ -198,7 +198,7 @@ for container in "${containers[@]:0:2}"; do  # Test first 2 containers
     timestampCheck=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/services/ServiceContainer.php');
 
-        \$timestamps = ServiceContainer::getInstance()->getTransactionRepository()->getTimestampsTransactions(5);
+        \$timestamps = Application::getInstance()->services->getTransactionRepository()->getTimestampsTransactions(5);
 
         if (count(\$timestamps) > 1) {
             \$ordered = true;

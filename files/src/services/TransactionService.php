@@ -450,7 +450,7 @@ class TransactionService {
                         $this->transactionRepository->updateStatus($txid,'rejected',true);
                         output(outputIssueTransactionTryP2p($response),'SILENT');
                         // Send P2P request for failed direct transaction using P2pService directly
-                        ServiceContainer::getInstance()->getP2pService()->sendP2pRequestFromFailedDirectTransaction($message);
+                        Application::getInstance()->services->getP2pService()->sendP2pRequestFromFailedDirectTransaction($message);
                     }
                 }
                 // If you received the direct transaction 
@@ -609,7 +609,7 @@ class TransactionService {
         }
 
         // If receiver's public key is in contacts, prepare a transaction to send directly to them
-        $contactService = ServiceContainer::getInstance()->getContactService();
+        $contactService = Application::getInstance()->services->getContactService();
         if ($contactInfo = $contactService->lookupContactInfo($request[2])) {
             if($contactInfo['status'] === 'accepted'){
                 // Contact is accepted
@@ -619,7 +619,7 @@ class TransactionService {
 
                 // Determine Transport Type (fallback on other if needed)
                 $transportIndex = $this->transportUtility->fallbackTransportType($request[2],$contactInfo);
-                $synchResult = ServiceContainer::getInstance()->getSynchService()->synchSingleContact($contactInfo[$transportIndex],'SILENT');
+                $synchResult = Application::getInstance()->services->getSynchService()->synchSingleContact($contactInfo[$transportIndex],'SILENT');
                 if($synchResult){
                     $this->handleDirectRoute($request, $contactInfo);
                 } else{
@@ -664,7 +664,7 @@ class TransactionService {
     public function handleP2pRoute(array $request): void{
         output(outputContactNotFoundTryP2p($request), 'SILENT');
         // Send P2P request when contact not found using P2pService directly
-        ServiceContainer::getInstance()->getP2pService()->sendP2pRequest($request);
+        Application::getInstance()->services->getP2pService()->sendP2pRequest($request);
         output(outputSendP2p($request));
     }
 

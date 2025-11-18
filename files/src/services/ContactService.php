@@ -222,7 +222,7 @@ class ContactService {
                 // This contact was already sent a contact request, but has not yet responded to user (try resynching)
                 output(returnContactRequestAlreadyInserted());
                 // Resynch contact using SynchService directly
-                $succesfullSynch = ServiceContainer::getInstance()->getSynchService()->synchSingleContact($address, 'ECHO');
+                $succesfullSynch = Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'ECHO');
             } else{
                 // If contact already exists with an address, it's a contact request, skip sending a message
                 if ($this->acceptContact($transportIndex, $address, $name, $fee, $credit, $currency)) {
@@ -284,7 +284,7 @@ class ContactService {
                 if ($this->contactRepository->insertContact($transportIndexAssociative, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
                     $this->balanceRepository->insertInitialContactBalances($responseData['senderPublicKey'], $currency);
                     // Resynch contact
-                    if(ServiceContainer::getInstance()->getSynchService()->synchSingleContact($address, 'SILENT')){
+                    if(Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'SILENT')){
                         // TO DO ALSO SYNCH BALANCES
                         output(returnContactCreationSuccessful());
                     }

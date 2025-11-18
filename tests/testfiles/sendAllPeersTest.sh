@@ -19,14 +19,14 @@ for container in "${containers[@]}"; do
     if [[ "${MODE}" == "http" ]]; then
          contacts=$(docker exec ${container} php -r "
             require_once('./etc/eiou/src/services/ServiceContainer.php');
-            \$contacts = ServiceContainer::getInstance()->getContactRepository()->getAllAcceptedAddresses();
+            \$contacts = Application::getInstance()->services->getContactRepository()->getAllAcceptedAddresses();
             echo implode(' ', \$contacts);
         " 2>/dev/null || echo "")
 
     elif [[ "${MODE}" == "tor" ]]; then
             contacts=$(docker exec ${container} php -r "
             require_once('./etc/eiou/src/services/ServiceContainer.php');
-            \$contacts = ServiceContainer::getInstance()->getContactRepository()->getAllAcceptedAddresses();
+            \$contacts = Application::getInstance()->services->getContactRepository()->getAllAcceptedAddresses();
             \$contacts = \$stmt->fetchAll(PDO::FETCH_COLUMN);
             echo implode(' ', \$contacts);
         " 2>/dev/null || echo "")
@@ -76,9 +76,9 @@ for sender in "${containers[@]}"; do
         # Get initial balance of recipient
         initialBalance=$(docker exec ${sender} php -r "
             require_once('./etc/eiou/src/services/ServiceContainer.php');
-            \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${contactAddress}');
-            \$balanceRepository = ServiceContainer::getInstance()->getBalanceRepository();
-            \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+            \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${contactAddress}');
+            \$balanceRepository = Application::getInstance()->services->getBalanceRepository();
+            \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
             echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
         " 2>/dev/null || echo "0")
 
@@ -93,9 +93,9 @@ for sender in "${containers[@]}"; do
         # Get new balance
         newBalance=$(docker exec ${sender} php -r "
             require_once('./etc/eiou/src/services/ServiceContainer.php');
-            \$pubkey = ServiceContainer::getInstance()->getContactRepository()->getContactPubkey('${contactAddress}');
-            \$balanceRepository = ServiceContainer::getInstance()->getBalanceRepository();
-            \$balance = ServiceContainer::getInstance()->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+            \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${contactAddress}');
+            \$balanceRepository = Application::getInstance()->services->getBalanceRepository();
+            \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
             echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
         " 2>/dev/null || echo "0")
 
@@ -190,13 +190,13 @@ for sender in "${containers[@]}"; do
         if [[ "${MODE}" == 'http' ]]; then
             hasContact=$(docker exec ${sender} php -r "
                 require_once('./etc/eiou/src/services/ServiceContainer.php');
-                echo ServiceContainer::getInstance()->getContactRepository()->isAcceptedContact('http','${receiverAddress}');
+                echo Application::getInstance()->services->getContactRepository()->isAcceptedContact('http','${receiverAddress}');
             " 2>/dev/null || echo "0")
 
         elif [[ "${MODE}" == 'tor' ]]; then
             hasContact=$(docker exec ${sender} php -r "
                 require_once('./etc/eiou/src/services/ServiceContainer.php');
-                echo ServiceContainer::getInstance()->getContactRepository()->isAcceptedContact('tor','${receiverAddress}');
+                echo Application::getInstance()->services->getContactRepository()->isAcceptedContact('tor','${receiverAddress}');
             " 2>/dev/null || echo "0")
 
         fi

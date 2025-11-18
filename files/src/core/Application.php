@@ -34,7 +34,6 @@ class Application {
 
     public ServiceContainer $services;
 
-
     /**
      * @var array Cached processor instances
      */
@@ -220,7 +219,7 @@ class Application {
      */
     public function loadserviceContainer() {
         require_once $this->getRootPath() . '/src/services/ServiceContainer.php';
-        $this->services = ServiceContainer::getInstance();
+        $this->services = ServiceContainer::getInstance($this->currentUser, $this->pdo);
     }
 
     /**

@@ -28,6 +28,6 @@ require_once __DIR__ . '/ServiceContainer.php';
  * @return void
  */
 function output($message,$echo = 'ECHO') {
-    $service = ServiceContainer::getInstance()->getDebugService();
+    $service = Application::getInstance()->services->getDebugService();
     $service->output($message,$echo);
 }
