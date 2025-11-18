@@ -43,6 +43,9 @@ class ContactController
      */
     public function handleAddContact(): void
     {
+        // CSRF Protection: Verify token before processing
+        $this->session->verifyCSRFToken();
+
         // Import validation and security classes
         require_once __DIR__ . '/../../utils/InputValidator.php';
         require_once __DIR__ . '/../../utils/Security.php';
@@ -135,6 +138,9 @@ class ContactController
      */
     public function handleAcceptContact(): void
     {
+        // CSRF Protection: Verify token before processing
+        $this->session->verifyCSRFToken();
+
         $contactAddress = $_POST['contact_address'] ?? '';
         $contactName = $_POST['contact_name'] ?? '';
         $contactFee = $_POST['contact_fee'] ?? '';
@@ -181,6 +187,9 @@ class ContactController
      */
     public function handleDeleteContact(): void
     {
+        // CSRF Protection: Verify token before processing
+        $this->session->verifyCSRFToken();
+
         $contactAddress = $_POST['contact_address'] ?? '';
 
         if (empty($contactAddress)) {
@@ -220,6 +229,9 @@ class ContactController
      */
     public function handleBlockContact(): void
     {
+        // CSRF Protection: Verify token before processing
+        $this->session->verifyCSRFToken();
+
         $contactAddress = $_POST['contact_address'] ?? '';
 
         if (empty($contactAddress)) {
@@ -259,6 +271,9 @@ class ContactController
      */
     public function handleUnblockContact(): void
     {
+        // CSRF Protection: Verify token before processing
+        $this->session->verifyCSRFToken();
+
         $contactAddress = $_POST['contact_address'] ?? '';
 
         if (empty($contactAddress)) {
@@ -298,6 +313,9 @@ class ContactController
      */
     public function handleEditContact(): void
     {
+        // CSRF Protection: Verify token before processing
+        $this->session->verifyCSRFToken();
+
         $contactAddress = $_POST['contact_address'] ?? '';
         $contactName = $_POST['contact_name'] ?? '';
         $contactFee = $_POST['contact_fee'] ?? '';
