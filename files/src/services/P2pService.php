@@ -106,13 +106,13 @@ class P2pService {
         $this->currentUser = $currentUser;
        
         require_once '/etc/eiou/src/schemas/payloads/P2pPayload.php';
-        $this->p2pPayload = new P2pPayload($this->currentUser,$this->utilityContainer);
+        $this->p2pPayload = new P2pPayload($this->currentUser, $this->utilityContainer);
        
         require_once '/etc/eiou/src/schemas/payloads/Rp2pPayload.php';
-        $this->rp2pPayload = new Rp2pPayload($this->currentUser,$this->utilityContainer);
+        $this->rp2pPayload = new Rp2pPayload($this->currentUser, $this->utilityContainer);
       
         require_once '/etc/eiou/src/schemas/payloads/UtilPayload.php';
-        $this->utilPayload = new UtilPayload($this->currentUser,$this->utilityContainer);
+        $this->utilPayload = new UtilPayload($this->currentUser, $this->utilityContainer);
     }
 
     /**
