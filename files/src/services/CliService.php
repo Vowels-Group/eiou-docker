@@ -499,28 +499,32 @@ class CliService {
             $contacts = $this->contactRepository->getAllContacts();
         }
         $balances = $this->balanceRepository->getUserBalance();
-        foreach($balances as $balance){
-            printf("%s %s, Balance %s : %.2f\n", 'me', $additionalInfo, $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)); 
-            if ($contactResult) {
-                $contactBalances= $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'],$balance['currency']);
-                foreach($contactBalances as $contactBalance){
-                    printf("\t%s (%s), Balance %s : %.2f %s\n", $contactResult['name'], $contactResult['tor'] ?? $contactResult['http'], $contactBalance['direction'], number_format($contactBalance['balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), $contactBalance['currency']);
-                }
-                return;
-            } else{
-                if(!$contacts){
-                    echo "\tNo Contacts exist, so no contact balances can be displayed.\n";
-                    continue;
-                } else{
-                    foreach($contacts as $contact){
-                        $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contact['pubkey'], $balance['currency']);
-                        foreach($contactBalances as $contactBalance){
-                            printf("\t%s (%s), Balance %s : %.2f %s\n", $contact['name'], $contact['http'] ?? $contact['tor'], $contactBalance['direction'], number_format($contactBalance['balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), $contactBalance['currency']);
-                        }
+        if($balances){
+            foreach($balances as $balance){
+                printf("%s %s, Balance %s : %.2f\n", 'me', $additionalInfo, $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)); 
+                if ($contactResult) {
+                    $contactBalances= $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'],$balance['currency']);
+                    foreach($contactBalances as $contactBalance){
+                        printf("\t%s (%s), Balance %s : %.2f %s\n", $contactResult['name'], $contactResult['tor'] ?? $contactResult['http'], $contactBalance['direction'], number_format($contactBalance['balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), $contactBalance['currency']);
                     }
+                    return;
+                } else{
+                    if(!$contacts){
+                        echo "\tNo Contacts exist, so no contact balances can be displayed.\n";
+                        continue;
+                    } else{
+                        foreach($contacts as $contact){
+                            $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contact['pubkey'], $balance['currency']);
+                            foreach($contactBalances as $contactBalance){
+                                printf("\t%s (%s), Balance %s : %.2f %s\n", $contact['name'], $contact['http'] ?? $contact['tor'], $contactBalance['direction'], number_format($contactBalance['balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), $contactBalance['currency']);
+                            }
+                        }
+                    }    
                 }    
-            }    
-        }     
+            }     
+        } else{
+             echo "No balances available.\n";
+        }       
     }
 
     /**
