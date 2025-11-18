@@ -293,8 +293,8 @@ class ContactRepository extends AbstractRepository {
             return '';
         }
         
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result['status'];
+        $result = $stmt->fetchColumn();
+        return $result ?? null;
     }
 
     /**
