@@ -4,6 +4,8 @@
  * Replaces global variables with proper encapsulation
  */
 
+require_once("/etc/eiou/src/utils/SecureLogger.php");
+
 class Application {
     private static ?Application $instance = null;
 
@@ -46,6 +48,9 @@ class Application {
      * Private constructor for singleton pattern
      */
     private function __construct() {
+        // Get logger wrapper
+        $this->getLogger();
+
         // Setup database
         if(!file_exists('/etc/eiou/dbconfig.json')){
             // Performs a fresh installation of the eIOU system by creating db configuration files, database, and necessary tables
@@ -53,8 +58,8 @@ class Application {
                 $this->constructDatabase();
                 $this->loadCurrentDatabase();
             } catch (RuntimeException $e) {
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::critical("Application: Database setup failed", [
+                if ($this->secureLoggerLoaded()) {
+                    $this->getLogger()->critical("Application: Database setup failed", [
                         'error' => $e->getMessage()
                     ]);
                 } else {
@@ -80,8 +85,7 @@ class Application {
             $this->loadUtilityServiceContainer();
         }
         
-        // Get logger wrapper
-        $this->getLogger();
+
     }
 
     /**
@@ -126,7 +130,6 @@ class Application {
         return(isset($this->pdo) && $this->pdo instanceof PDO);
     }
 
-
     /**
      * Set database connection (for testing)
      *
@@ -151,41 +154,6 @@ class Application {
         $this->currentDatabase = DatabaseContext::getInstance();
     }
 
-    /**
-     * Get public key from loaded user
-     * 
-     * @return string|null
-     */
-    public function getPublicKey() {
-        if($this->currentUserLoaded()){
-            return $this->currentUser->getPublicKey();
-        }
-        return null;
-    }
-
-    /**
-     * Get auth code loaded user
-     * 
-     * @return string|null
-     */
-    public function getAuthCode() {
-        if($this->currentUserLoaded()){
-            return $this->currentUser->getAuthCode();
-        }
-        return null;
-    }
-
-    /**
-     * Get public key hash from loaded user
-     * 
-     * @return string|null
-     */
-    public function getPublicKeyHash() {
-        if($this->currentUserLoaded()){
-            return $this->currentUser->getPublicKeyHash();
-        }
-        return null;
-    }
 
     /**
      * Check if userContext has been loaded
@@ -200,6 +168,30 @@ class Application {
     public function loadCurrentUser() {
         require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
+    }
+
+    /**
+     * Get public key from loaded user
+     * 
+     * @return string|null
+     */
+    public function getPublicKey() {
+        if($this->currentUserLoaded()){
+            return $this->currentUser->getPublicKey();
+        }
+        return null;
+    }
+
+    /**
+     * Get public key hash from loaded user
+     * 
+     * @return string|null
+     */
+    public function getPublicKeyHash() {
+        if($this->currentUserLoaded()){
+            return $this->currentUser->getPublicKeyHash();
+        }
+        return null;
     }
 
     /**
@@ -254,6 +246,13 @@ class Application {
             $this->utils['InputValidator'] = new InputValidator();
         }
         return $this->utils['InputValidator'];
+    }
+
+    /**
+     * Check if SecureLogger has been loaded
+     */
+    public function secureLoggerLoaded() {
+        return isset($this->utils['SecureLogger']);
     }
 
     /**
