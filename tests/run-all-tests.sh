@@ -199,6 +199,7 @@ printf "================================================================\n"
 printf "                    TEST SUITE SUMMARY\n"
 printf "================================================================\n"
 printf "Build:          ${BUILD_NAME}\n"
+printf "Mode:           ${MODE}\n"
 printf "Total Tests:    ${TOTAL_TESTS_RUN}\n"
 printf "${GREEN}Passed:         ${TOTAL_TESTS_PASSED}${NC}\n"
 
