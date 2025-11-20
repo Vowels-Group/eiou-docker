@@ -6,6 +6,7 @@ FROM debian:12-slim
 RUN apt-get update && apt-get install -y \
     apache2 \
     cron \
+    curl \
     mariadb-server \
     openssl \
     php \
