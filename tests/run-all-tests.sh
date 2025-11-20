@@ -135,7 +135,7 @@ for container in $CONTAINER_LIST; do
                         echo $json["hostname"];
                     }
                 }')
-            if [[ -z "${httpAddress}" ]]; then
+            if [[ ! -z ${httpAddress} ]]; then
                 printf "${GREEN}Ready${NC}\n"
                 break
             fi
