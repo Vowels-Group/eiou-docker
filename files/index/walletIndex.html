@@ -51,7 +51,7 @@ if (isset($_GET['logout'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
     $submittedAuthCode = $_POST['authcode'];
 
-    if ($user->has('authcode') && $secureSession->authenticate($submittedAuthCode, $user->getAuthCode())) {
+    if ($user->has('authcode_encrypted') && $secureSession->authenticate($submittedAuthCode, $user->getAuthCode())) {
         // Authentication successful, redirect to clean URL
         header('Location: ' . $_SERVER['PHP_SELF']);
         exit;
