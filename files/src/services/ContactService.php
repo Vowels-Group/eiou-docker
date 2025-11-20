@@ -113,6 +113,11 @@ class ContactService {
         }
         $address = $addressValidation['value'];
 
+        if(in_array($address,$this->currentUser->getUserAddresses())){
+            output("Cannot add yourself as a contact");
+            exit(1);
+        }
+
         // Validate and sanitize contact name
         $nameValidation =  $this->inputValidator->validateContactName($data[3] ?? '');
         if (!$nameValidation['valid']) {
