@@ -128,24 +128,25 @@ for container in $CONTAINER_LIST; do
 
         # Verify if userconfig.json exists, it's valid JSON and has required fields
         if [ "$MODE" == 'http' ]; then
-            if [[ $(docker exec "$container" php -r '
+            httpAddress=$(docker exec "$container" php -r '
                 if (file_exists("/etc/eiou/userconfig.json")) {
                     $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
-                    echo isset($json["hostname"]) && isset($json["authcode"]);
-                }
-                echo false;
-            ') ]]; then
+                    if(isset($json["hostname"])){
+                        echo $json["hostname"];
+                }')
+            if [[ -z "${httpAddress}" ]]; then
                 printf "${GREEN}Ready${NC}\n"
                 break
             fi
         elif [ "$MODE" == 'tor' ]; then
-            if [[ $(docker exec "$container" php -r '
+            torAddress=$(docker exec "$container" php -r '
                 if (file_exists("/etc/eiou/userconfig.json")) {
                     $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
-                    echo isset($json["torAddress"]) && isset($json["authcode"]);
-                }
-                echo false;
-            ') ]]; then
+                    if(isset($json["torAddress"])){
+                        echo $json["torAddress"];
+                    }
+                }')
+            if [[ ! -z ${torAddress} ]]; then
                 printf "${GREEN}Ready${NC}\n"
                 break
             fi
