@@ -131,8 +131,9 @@ for container in $CONTAINER_LIST; do
             httpAddress=$(docker exec "$container" php -r '
                 if (file_exists("/etc/eiou/userconfig.json")) {
                     $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
-                    if(isset($json["hostname"])){
+                    if (isset($json["hostname"])){
                         echo $json["hostname"];
+                    }
                 }')
             if [[ -z "${httpAddress}" ]]; then
                 printf "${GREEN}Ready${NC}\n"
