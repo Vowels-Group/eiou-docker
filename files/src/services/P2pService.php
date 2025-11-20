@@ -426,47 +426,55 @@ class P2pService {
     public function processQueuedP2pMessages(): int {
         // Select queued messages from the p2p table (with status queued)
         $queuedMessages = $this->p2pRepository->getQueuedP2pMessages();
-
+        if($queuedMessages !== []){
+            $contacts = $this->contactRepository->getAllAcceptedAddresses(); // Retrieve all accepted contact addresses to send p2p request
+            $contactsCount = count($contacts); // Count amount of contacts to send p2p request
+        }
         // Process each queued message
         foreach ($queuedMessages as $message) {
+            // Get transport type for forwarding/sending
+            $transportIndex = $this->transportUtility->determineTransportType($message['sender_address']);
             $p2pPayload = $this->p2pPayload->buildFromDatabase($message); // Build p2p request payload
-
+            
             // Check if user is NOT the original sender of the p2p and has a direct contact link to end-recipient
             // If this is the case then send p2p directly
             if(!isset($message['destination_address']) && $matchedContact = $this->matchContact($message)){
-                $transportIndex = $this->transportUtility->determineTransportType($message['sender_address']);
                 $response = json_decode($this->transportUtility->send($matchedContact[$transportIndex], $p2pPayload),true);
                 output(outputP2pSendResult($response),'SILENT');
             } else{
-                // Retrieve accepted contacts to send p2p request, excluding the sender
-                $contacts = $this->contactRepository->getAllAcceptedAddresses($message['sender_address']);
-                // Count amount of contacts to send p2p request
-                $contactsCount = count($contacts);
+                $contactsToSend = $contactsCount; // Reset sendable contact count
+                
                 $sentMessages = 0;
                 // Send p2p request to all accepted contacts
                 foreach ($contacts as $contact) {
+                    $contactAddress = $contact[$transportIndex]; // Get similar contact address to message
+                    // Do not send message if contact has not similar transport mode (HTTP goes over HTTP, TOR over TOR etc.)
+                    if(!$contactAddress){
+                        $contactsToSend -= 1;
+                        continue;
+                    }
                     // Do not send message to original sender
-                    if($message['sender_address'] === $contact){
-                        $contactsCount -= 1;
+                    if($message['sender_address'] === $contactAddress){
+                        $contactsToSend -= 1;
                         continue;
                     }
                     // Do not send p2p to contact (end-recipient), if direct transaction failed due to insufficient funds
-                    if(isset($message['destination_address']) && $contact === $message['destination_address']){
-                        $contactsCount -= 1;
+                    if(isset($message['destination_address']) && $message['destination_address'] === $contactAddress){
+                        $contactsToSend -= 1;
                         continue;
                     }
-                    $response = json_decode($this->transportUtility->send($contact, $p2pPayload),true);
+                    $response = json_decode($this->transportUtility->send($contactAddress, $p2pPayload),true);
                     // If rejection from sole possible contact then cancel p2p immediately
-                    if($response['status'] === 'rejected' && $contactsCount === 1){
+                    if($response['status'] === 'rejected' && $contactsToSend === 1){
                         $this->p2pRepository->updateStatus($message['hash'], 'cancelled');
-                        $contactsCount -= 1;
+                        $contactsToSend -= 1;
                         continue;
                     } 
                     $sentMessages += 1;
                     output(outputP2pResponse($response),'SILENT');
                 }
 
-                if(isset($message['destination_address']) && $contactsCount > 0){
+                if(isset($message['destination_address']) && $contactsToSend > 0){
                     output(outputSendP2PToAmountContacts($sentMessages), 'SILENT');
                     //Inform user (in debug) about expected response time
                     $httpExpectedResponseTime = $this->currentUser->getMaxP2pLevel(); // Use maxP2pLevel seconds for http
