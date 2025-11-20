@@ -53,7 +53,7 @@ while true; do
 done
 
 # Wait for Tor to be ready and connected
-echo "Waiting for Tor to establish connection..."
+echo "Waiting for Tor to establish connection with container..."
 TOR_MAX_WAIT=60  # Maximum wait time in seconds
 TOR_ELAPSED=0
 TOR_TEST_URL="${tor}"
@@ -85,6 +85,7 @@ if [ $TOR_ELAPSED -ge $TOR_MAX_WAIT ]; then
     echo "Continuing startup anyway. Tor-dependent features may not work."
 fi
 
+# Display user information
 echo "User Information: "
 if [[ ! -z ${http} ]]; then
     echo -e "\t HTTP address: $http"
