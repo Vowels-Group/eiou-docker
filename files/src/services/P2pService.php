@@ -443,7 +443,6 @@ class P2pService {
                 output(outputP2pSendResult($response),'SILENT');
             } else{
                 $contactsToSend = $contactsCount; // Reset sendable contact count
-                
                 $sentMessages = 0;
                 // Send p2p request to all accepted contacts
                 foreach ($contacts as $contact) {
