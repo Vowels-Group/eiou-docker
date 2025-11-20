@@ -29,7 +29,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # httpA -> httpB (i.e forwards)
     transportType1=$(determineTransport ${containerAddresses[${containerKeys[1]}]})
     statusContact1=$(docker exec ${containerKeys[0]} php -r "
-        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        require_once('./etc/eiou/src/core/Application.php');
         echo Application::getInstance()->services->getContactRepository()->getContactStatus(
             '""${transportType1}""','""${containerAddresses[${containerKeys[1]}]}""'
         );
@@ -48,7 +48,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # httpB -> httpA (i.e backwards)
     transportType0=$(determineTransport ${containerAddresses[${containerKeys[0]}]})
     statusContact0=$(docker exec ${containerKeys[1]} php -r "
-        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        require_once('./etc/eiou/src//core/Application.php');
         echo Application::getInstance()->services->getContactRepository()->getContactStatus(
             '""${transportType0}""','""${containerAddresses[${containerKeys[0]}]}""'
         );

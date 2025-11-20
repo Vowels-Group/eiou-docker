@@ -20,7 +20,7 @@ for container in "${containers[@]}"; do
 
     # Method 2: Direct PHP query for verification
     phpBalance=$(docker exec ${container} php -r "
-        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        require_once('./etc/eiou/src/core/Application.php');
         \$balances = Application::getInstance()->services->getBalanceRepository()->getAllBalances();
         if (!empty(\$balances)) {
             \$total_string = '';
@@ -61,14 +61,14 @@ if [[ "$firstLink" ]]; then
 
     # Get initial balances
     senderInitial=$(docker exec ${sender} php -r "
-        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        require_once('./etc/eiou/src/core/Application.php');
         \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
         \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
 
     receiverInitial=$(docker exec ${receiver} php -r "
-        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        require_once('./etc/eiou/src/core/Application.php');
         \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
         \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
@@ -91,14 +91,14 @@ if [[ "$firstLink" ]]; then
 
     # Get new balances
     senderFinal=$(docker exec ${sender} php -r "
-        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        require_once('./etc/eiou/src/core/Application.php');
         \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
         \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
 
     receiverFinal=$(docker exec ${receiver} php -r "
-        require_once('./etc/eiou/src/services/ServiceContainer.php');
+        require_once('./etc/eiou/src/core/Application.php');
         \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
         \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
