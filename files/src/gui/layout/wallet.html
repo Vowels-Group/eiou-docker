@@ -6,14 +6,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $user->has('hostname') ? htmlspecialchars(parse_url($user->getHttpAddress(), PHP_URL_HOST) ?: $user->getHttpAddress()) . ' - ' : ''; ?>₳ Wallet</title>
-    <!-- Auto-refresh for users with JavaScript disabled (Tor Browser compatible) -->
-    <noscript>
-        <?php if (!empty($authCode)): ?>
-        <meta http-equiv="refresh" content="10;url=<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?authcode=' . urlencode($authCode)); ?>">
-        <?php else: ?>
-        <meta http-equiv="refresh" content="10">
-        <?php endif; ?>
-    </noscript>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style><?php require_once("/etc/eiou/src/gui/assets/css/page.css");?></style>
     <script><?php require_once("/etc/eiou/src/gui/assets/js/script.js");?></script>
