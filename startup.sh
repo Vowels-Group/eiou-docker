@@ -8,40 +8,6 @@ QUICKSTART=${QUICKSTART:-false}
 # Start services
 service cron start
 service tor start
-
-# Wait for Tor to be ready and connected
-echo "Waiting for Tor to establish connection..."
-TOR_MAX_WAIT=60  # Maximum wait time in seconds
-TOR_ELAPSED=0
-TOR_TEST_URL="http://archiveiya74codqgiixo33q62qlrqtkgmcitqx5u2oeqnmn5bpcbiyd.onion"
-
-while [ $TOR_ELAPSED -lt $TOR_MAX_WAIT ]; do
-    # Try to access a known .onion address through Tor's SOCKS proxy
-    if curl --socks5-hostname 127.0.0.1:9050 \
-            --connect-timeout 5 \
-            --max-time 10 \
-            --silent \
-            --fail \
-            --output /dev/null \
-            "$TOR_TEST_URL" 2>/dev/null; then
-        echo "Tor connected successfully"
-        break
-    fi
-
-    # If not connected yet, wait and increment counter
-    if [ $TOR_ELAPSED -eq 0 ]; then
-        echo "Waiting for Tor connection (timeout: ${TOR_MAX_WAIT}s)..."
-    fi
-    sleep 2
-    TOR_ELAPSED=$((TOR_ELAPSED + 2))
-done
-
-# Check if Tor connection was established
-if [ $TOR_ELAPSED -ge $TOR_MAX_WAIT ]; then
-    echo "WARNING: Tor connection could not be verified after ${TOR_MAX_WAIT}s"
-    echo "Continuing startup anyway. Tor-dependent features may not work."
-fi
-
 service apache2 start
 service mariadb start
 
@@ -75,14 +41,6 @@ while true; do
         tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
         pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
         authcode=$(php -r 'require_once("/etc/eiou/src/core/UserContext.php"); echo UserContext::getInstance()->getAuthCode();')
-        echo "User Information: "
-        if [[ ! -z ${http} ]]; then
-            echo -e "\t HTTP address: $http"
-        fi
-        echo -e "\t Tor address: $tor"
-        readable="${pubkey//$'\n'/$'\n\t\t'}"
-        echo -e "\t Public Key: \n\t\t $readable"
-        echo -e "\t Authentication Code: $authcode"
         break
     else
         if $first; then
@@ -93,6 +51,49 @@ while true; do
         continue
     fi
 done
+
+# Wait for Tor to be ready and connected
+echo "Waiting for Tor to establish connection..."
+TOR_MAX_WAIT=60  # Maximum wait time in seconds
+TOR_ELAPSED=0
+TOR_TEST_URL="${tor}"
+
+while [ $TOR_ELAPSED -lt $TOR_MAX_WAIT ]; do
+    # Try to access a known .onion address through Tor's SOCKS proxy
+    if curl --socks5-hostname 127.0.0.1:9050 \
+            --connect-timeout 5 \
+            --max-time 10 \
+            --silent \
+            --fail \
+            --output /dev/null \
+            "$TOR_TEST_URL" 2>/dev/null; then
+        echo "Tor connected successfully"
+        break
+    fi
+
+    # If not connected yet, wait and increment counter
+    if [ $TOR_ELAPSED -eq 0 ]; then
+        echo "Waiting for Tor connection (timeout: ${TOR_MAX_WAIT}s)..."
+    fi
+    sleep 2
+    TOR_ELAPSED=$((TOR_ELAPSED + 2))
+done
+
+# Check if Tor connection was established
+if [ $TOR_ELAPSED -ge $TOR_MAX_WAIT ]; then
+    echo "WARNING: Tor connection could not be verified after ${TOR_MAX_WAIT}s"
+    echo "Continuing startup anyway. Tor-dependent features may not work."
+fi
+
+echo "User Information: "
+if [[ ! -z ${http} ]]; then
+    echo -e "\t HTTP address: $http"
+fi
+echo -e "\t Tor address: $tor"
+readable="${pubkey//$'\n'/$'\n\t\t'}"
+echo -e "\t Public Key: \n\t\t $readable"
+echo -e "\t Authentication Code: $authcode"
+
 
 # Start p2p message processing in background
 nohup php /etc/eiou/p2pMessages.php > /dev/null 2>&1 &
