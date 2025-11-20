@@ -40,7 +40,7 @@ while true; do
         http=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["hostname"])){echo $json["hostname"];}')
         tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
         pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
-        authcode=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["authcode"])){echo $json["authcode"];}')
+        authcode=$(php -r 'require_once("/etc/eiou/src/core/UserContext.php"); echo UserContext::getInstance()->getAuthCode();')
         echo "User Information: "
         if [[ ! -z ${http} ]]; then
             echo -e "\t HTTP address: $http"
