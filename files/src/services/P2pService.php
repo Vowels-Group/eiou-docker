@@ -609,6 +609,16 @@ class P2pService {
     }
 
     /**
+     * Get users total earnings
+     *
+     * @return string Earnings Balance 
+     */
+    public function getUserTotalEarnings() {
+        return $this->p2pRepository->getUserTotalEarnings();
+    }
+    
+
+    /**
      * Get P2P statistics
      *
      * @return array Statistics array

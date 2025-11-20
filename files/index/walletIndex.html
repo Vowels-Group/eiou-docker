@@ -23,11 +23,13 @@ require_once '/etc/eiou/src/gui/helpers/ViewHelper.php';
 $app = Application::getInstance();
 $serviceContainer = $app->services;
 $contactService = $serviceContainer->getContactService();
+$p2pService = $serviceContainer->getP2pService();
 $transactionService = $serviceContainer->getTransactionService();
 
 $utilityContainer = $app->utilityServices;
 $transportUtility = $utilityContainer->getTransportUtility();
 $generalUtility = $utilityContainer->getGeneralUtility();
+$currencyUtility = $utilityContainer->getCurrencyUtility();
 
 // Require UserContext instance
 require_once '/etc/eiou/src/core/UserContext.php';
