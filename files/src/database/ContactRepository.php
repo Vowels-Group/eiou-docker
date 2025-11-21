@@ -512,7 +512,7 @@ class ContactRepository extends AbstractRepository {
      * @return string|null Contact address or null
      */
     public function lookupSpecificAddressByName(string $name, string $transportIndex): ?string {
-        $query = "SELECT $transportIndex FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
+        $query = "SELECT {$transportIndex} FROM {$this->tableName} WHERE LOWER(name) = LOWER(:name)";
         $stmt = $this->execute($query, [':name' => $name]);
 
         if (!$stmt) {
@@ -633,13 +633,16 @@ class ContactRepository extends AbstractRepository {
      */
     public function getAllSingleAcceptedAddresses(string $addressType, ?string $exclude = null): array {
         if ($exclude) {
-            $query = "SELECT $addressType FROM {$this->tableName} WHERE status = 'accepted'";
+            // Get specific address
+            $query = "SELECT {$addressType} FROM {$this->tableName} WHERE status = 'accepted'";
             $query .= " AND $addressType != :toExclude";
             $stmt = $this->execute($query, [':toExclude' => $exclude]);
             
         } else {
+            // Get both otherwise
             $query = "SELECT http, tor FROM {$this->tableName} WHERE status = 'accepted'";
-            $stmt = $this->execute($query);
+            $query .= " AND http != :http OR tor != :tor";
+            $stmt = $this->execute($query, [':http' => $exclude,':tor' => $exclude]);
         }
 
         if (!$stmt) {
