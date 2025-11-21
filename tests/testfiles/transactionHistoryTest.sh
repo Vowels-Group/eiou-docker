@@ -19,12 +19,12 @@ for container in "${containers[@]}"; do
     # Query transaction count and basic info
     transactionInfo=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/core/Application.php');
-
+        \$app = Application::getInstance();
         // Get total count
-        \$total = Application::getInstance()->services->getTransactionRepository()->getTotalCountTransactions();
+        \$total = \$app->services->getTransactionRepository()->getTotalCountTransactions();
 
         // Get count by type
-        \$types = Application::getInstance()->services->getTransactionRepository()->getTransactionsTypeStatistics();
+        \$types = \$app->services->getTransactionRepository()->getTransactionsTypeStatistics();
 
         echo 'Total:' . \$total . ' ';
         foreach (\$types as \$type) {
@@ -171,8 +171,9 @@ for container in "${containers[@]:0:2}"; do  # Test first 2 containers
     # Test querying by type
     queryResult=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/core/Application.php');
-        \$sends = Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeStatistics('sent');
-        \$receives = Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeStatistics('received');;
+        \$app = Application::getInstance();
+        \$sends = \$app->services->getTransactionRepository()->getTransactionsSpecificTypeStatistics('sent');
+        \$receives = \$app->services->getTransactionRepository()->getTransactionsSpecificTypeStatistics('received');;
         echo 'Sends: ' . \$sends['count'] . '/' . (\$sends['total'] ?: '0') . ' ';
         echo 'Receives: ' . \$receives['count'] . '/' . (\$receives['total'] ?: '0');
     " 2>/dev/null || echo "ERROR")

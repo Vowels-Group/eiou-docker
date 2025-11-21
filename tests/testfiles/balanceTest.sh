@@ -21,12 +21,13 @@ for container in "${containers[@]}"; do
     # Method 2: Direct PHP query for verification
     phpBalance=$(docker exec ${container} php -r "
         require_once('./etc/eiou/src/core/Application.php');
-        \$balances = Application::getInstance()->services->getBalanceRepository()->getAllBalances();
+        \$app = Application::getInstance();
+        \$balances = \$app->services->getBalanceRepository()->getAllBalances();
         if (!empty(\$balances)) {
             \$total_string = '';
             foreach (\$balances as \$balance) {
-                \$contactResult = Application::getInstance()->services->getContactRepository()->lookupByPubkey(\$balance['pubkey']);
-                \$total_string .= '\t   ' . \$contactResult['name'] . ' (' . (\$contactResult['tor'] ?? \$contactResult['http']) . ') ' . \$balance['direction'] . ' : ' . \$balance['balance']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . ' ' . \$balance['currency'] . '\n';
+                \$contactResult = \$app->services->getContactRepository()->lookupByPubkey(\$balance['pubkey']);
+                \$total_string .= '\t   ' . \$contactResult['name'] . ' (' . (\$contactResult['tor'] ?? \$contactResult['http']) . ') (received | sent): ' . \$balance['received']/Constants::TRANSACTION_USD_CONVERSION_FACTOR  . ' | ' . \$balance['sent']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . ' ' . \$balance['currency'] . '\n';
             }
             echo \$total_string;
         } else {
@@ -35,9 +36,9 @@ for container in "${containers[@]}"; do
     " 2>/dev/null || echo "ERROR")
 
     # Check if balance command executed successfully
-    # We check for "Balance received :" in output which indicates command worked
+    # We check for "Balance (received | sent):" in output which indicates command worked
     # Ignore PHP warnings ([Warning]) as they don't prevent functionality
-    if [[ "$balanceOutput" =~ "Balance received :" ]] && [[ "$phpBalance" != "ERROR" ]]; then
+    if [[ "$balanceOutput" =~ "Balance (received | sent):" ]] && [[ "$phpBalance" != "ERROR" ]]; then
         printf "\t   Balance query for %s ${GREEN}PASSED${NC}\n" ${container}
         printf "${phpBalance}"
         passed=$(( passed + 1 ))
@@ -62,15 +63,17 @@ if [[ "$firstLink" ]]; then
     # Get initial balances
     senderInitial=$(docker exec ${sender} php -r "
         require_once('./etc/eiou/src/core/Application.php');
-        \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
-        \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+        \$app = Application::getInstance();
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
+        \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
 
     receiverInitial=$(docker exec ${receiver} php -r "
         require_once('./etc/eiou/src/core/Application.php');
-        \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
-        \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+        \$app = Application::getInstance();
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
+        \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
 
@@ -85,22 +88,24 @@ if [[ "$firstLink" ]]; then
     echo -e "\t   Send output: ${sendOutput}"
 
     # Wait for transaction to process
-    echo -e "\t   Waiting 15 seconds for routing process (faster but certainty)..."
-    sleep 15
+    echo -e "\t   Waiting 20 seconds for routing process (faster but certainty)..."
+    sleep 20
 
 
     # Get new balances
     senderFinal=$(docker exec ${sender} php -r "
         require_once('./etc/eiou/src/core/Application.php');
-        \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
-        \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+        \$app = Application::getInstance();
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
+        \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
 
     receiverFinal=$(docker exec ${receiver} php -r "
         require_once('./etc/eiou/src/core/Application.php');
-        \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
-        \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+        \$app = Application::getInstance();
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
+        \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
 
@@ -143,8 +148,8 @@ for container in "${containers[@]}"; do
 
     viewBalancesOutput=$(docker exec ${container} eiou viewbalances 2>&1)
 
-    # Check for "Balance received :" in output, ignore PHP warnings
-    if [[ "$viewBalancesOutput" =~ "Balance received :" ]]; then
+    # Check for "Balance (received | sent):" in output, ignore PHP warnings
+    if [[ "$viewBalancesOutput" =~ "Balance (received | sent):" ]]; then
         printf "viewbalances command for %s ${GREEN}PASSED${NC}\n" ${container}
         passed=$(( passed + 1 ))
     else

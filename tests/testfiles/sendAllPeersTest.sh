@@ -14,25 +14,13 @@ declare -A containerContacts
 
 echo "[Building contact map]"
 for container in "${containers[@]}"; do
-    echo "  -> Getting contacts for ${container}"
-
-    if [[ "${MODE}" == "http" ]]; then
-         contacts=$(docker exec ${container} php -r "
-            require_once('./etc/eiou/src/core/Application.php');
-            \$contacts = Application::getInstance()->services->getContactRepository()->getAllAcceptedAddresses();
-            echo implode(' ', \$contacts);
-        " 2>/dev/null || echo "")
-
-    elif [[ "${MODE}" == "tor" ]]; then
-            contacts=$(docker exec ${container} php -r "
-            require_once('./etc/eiou/src/core/Application.php');
-            \$contacts = Application::getInstance()->services->getContactRepository()->getAllAcceptedAddresses();
-            \$contacts = \$stmt->fetchAll(PDO::FETCH_COLUMN);
-            echo implode(' ', \$contacts);
-        " 2>/dev/null || echo "")
-    fi
-    # IF MODE == 'http' ->
-    # IF MODE == 'tor'  ->
+    echo "  -> Getting contacts for ${container}"    
+    
+    contacts=$(docker exec ${container} php -r "
+        require_once('./etc/eiou/src/core/Application.php');
+        \$contacts = Application::getInstance()->services->getContactRepository()->getAllSingleAcceptedAddresses('${MODE}');
+        echo implode(' ', \$contacts);
+    " 2>/dev/null || echo "")
 
     # Get all accepted contacts for this container
    
@@ -76,9 +64,9 @@ for sender in "${containers[@]}"; do
         # Get initial balance of recipient
         initialBalance=$(docker exec ${sender} php -r "
             require_once('./etc/eiou/src/core/Application.php');
-            \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${contactAddress}');
-            \$balanceRepository = Application::getInstance()->services->getBalanceRepository();
-            \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+            \$app = Application::getInstance();
+            \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${contactAddress}');
+            \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
             echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
         " 2>/dev/null || echo "0")
 
@@ -93,9 +81,9 @@ for sender in "${containers[@]}"; do
         # Get new balance
         newBalance=$(docker exec ${sender} php -r "
             require_once('./etc/eiou/src/core/Application.php');
-            \$pubkey = Application::getInstance()->services->getContactRepository()->getContactPubkey('${contactAddress}');
-            \$balanceRepository = Application::getInstance()->services->getBalanceRepository();
-            \$balance = Application::getInstance()->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+            \$app = Application::getInstance();
+            \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${contactAddress}');
+            \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
             echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
         " 2>/dev/null || echo "0")
 
