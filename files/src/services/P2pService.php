@@ -462,9 +462,10 @@ class P2pService {
                         $contactsToSend -= 1;
                         continue;
                     }
+
                     $response = json_decode($this->transportUtility->send($contactAddress, $p2pPayload),true);
                     // If rejection from sole possible contact then cancel p2p immediately
-                    if($response['status'] === 'rejected' && $contactsCount === 1){
+                    if($response['status'] === 'rejected' && $contactsToSend === 1){
                         $this->p2pRepository->updateStatus($message['hash'], 'cancelled');
                         $contactsToSend -= 1;
                         continue;
