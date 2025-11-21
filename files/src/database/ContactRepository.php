@@ -598,7 +598,7 @@ class ContactRepository extends AbstractRepository {
             return [];
         }
 
-        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /**
@@ -632,24 +632,20 @@ class ContactRepository extends AbstractRepository {
      * @return array Array of accepted addresses
      */
     public function getAllSingleAcceptedAddresses(string $addressType, ?string $exclude = null): array {
+        $query = "SELECT {$addressType} FROM {$this->tableName} WHERE status = 'accepted'";
         if ($exclude) {
             // Get specific address
-            $query = "SELECT {$addressType} FROM {$this->tableName} WHERE status = 'accepted'";
-            $query .= " AND $addressType != :toExclude";
+            $query .= " AND {$addressType} != :toExclude";
             $stmt = $this->execute($query, [':toExclude' => $exclude]);
-            
-        } else {
-            // Get both otherwise
-            $query = "SELECT http, tor FROM {$this->tableName} WHERE status = 'accepted'";
-            $query .= " AND http != :http OR tor != :tor";
-            $stmt = $this->execute($query, [':http' => $exclude,':tor' => $exclude]);
+        } else{
+            $stmt = $this->execute($query);
         }
 
         if (!$stmt) {
             return [];
         }
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
         
+        return $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
     }
 
     /**
