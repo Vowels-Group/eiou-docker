@@ -46,7 +46,7 @@ class BalanceRepository extends AbstractRepository {
      * @return array|null Array of Balances
      */
     public function getContactBalance(string $pubkey, string $currency): array|null{
-        $query = "SELECT balance, direction FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
+        $query = "SELECT received, sent FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
         $stmt = $this->execute($query, [':pubkey' => $pubkey,':currency' => $currency]);
         if (!$stmt) {
             return null;
@@ -75,7 +75,7 @@ class BalanceRepository extends AbstractRepository {
      * @return int Contact received Balance
      */
     public function getContactReceivedBalance(string $pubkey, string $currency): int{
-        $query = "SELECT balance FROM {$this->tableName} WHERE direction = 'received' AND pubkey = :pubkey AND currency = :currency";
+        $query = "SELECT received FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
         $stmt = $this->execute($query, [':pubkey' => $pubkey,':currency' => $currency]);
         if (!$stmt) {
             return 0;
@@ -92,7 +92,7 @@ class BalanceRepository extends AbstractRepository {
      * @return int Contact sent Balance
      */
     public function getContactSentBalance(string $pubkey, string $currency): int{
-        $query = "SELECT balance FROM {$this->tableName} WHERE direction = 'sent' AND pubkey = :pubkey AND currency = :currency";
+        $query = "SELECT sent FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
         $stmt = $this->execute($query, [':pubkey' => $pubkey,':currency' => $currency]);
         if (!$stmt) {
             return 0;
@@ -108,7 +108,7 @@ class BalanceRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function getContactBalances(string $pubkey): array|null{
-        $query = "SELECT balance, direction, currency FROM {$this->tableName} WHERE pubkey = :pubkey";
+        $query = "SELECT received, sent, currency FROM {$this->tableName} WHERE pubkey = :pubkey";
         $stmt = $this->execute($query, [':pubkey' => $pubkey]);
         if (!$stmt) {
             return null;
@@ -125,7 +125,7 @@ class BalanceRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function getContactBalancesCurrency(string $pubkey, string $currency): array|null{
-        $query = "SELECT balance, direction, currency FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
+        $query = "SELECT received, sent, currency FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
         $stmt = $this->execute($query, [':pubkey' => $pubkey, ':currency' => $currency]);
         if (!$stmt) {
             return null;
@@ -142,13 +142,9 @@ class BalanceRepository extends AbstractRepository {
      */
     public function getUserBalance(): array|null{
 
-        $query = "SELECT currency, 
-            Sum(CASE direction 
-                    WHEN 'received' THEN balance 
-                    WHEN 'sent' THEN -balance 
-                END) AS total_balance 
-        FROM {$this->tableName}
-        GROUP BY currency";
+        $query = "SELECT currency, SUM(received) - SUM(sent) AS total_balance 
+                    FROM {$this->tableName}
+                    GROUP BY currency";
 
         $stmt = $this->execute($query);
         
@@ -168,13 +164,9 @@ class BalanceRepository extends AbstractRepository {
      */
     public function getUserBalanceCurrency($currency): int{
 
-        $query = "SELECT
-            Sum(CASE direction 
-                    WHEN 'received' THEN balance 
-                    WHEN 'sent' THEN -balance 
-                END) AS total_balance 
-        FROM {$this->tableName}
-        WHERE currency = :currency";
+        $query = "SELECT SUM(received) - SUM(sent) AS total_balance 
+                    FROM {$this->tableName}
+                    WHERE currency = :currency";
 
        $stmt = $this->execute($query, [':currency' => $currency]);
         
@@ -195,12 +187,9 @@ class BalanceRepository extends AbstractRepository {
     public function getUserBalanceContact(string $pubkey): array|null{
 
         $query = "SELECT currency, 
-            Sum(CASE direction 
-                    WHEN 'received' THEN balance 
-                    WHEN 'sent' THEN -balance 
-                END) AS total_balance 
-        FROM {$this->tableName} WHERE pubkey = :pubkey
-        GROUP BY currency";
+                    SUM(received) - SUM(sent) AS total_balance 
+                    FROM {$this->tableName} WHERE pubkey = :pubkey
+                    GROUP BY currency";
 
         $stmt = $this->execute($query, [':pubkey' => $pubkey]);
         
@@ -216,16 +205,16 @@ class BalanceRepository extends AbstractRepository {
      * Insert (initial) contact balance
      *
      * @param string $pubkey Contact pubkey
-     * @param string $direction direction of balance (received or sent)
-     * @param int $amount Amount of Balance (DEFAULT 0)
+     * @param int $receivedAmount Amount of received balance
+     * @param int $sentAmount Amount of sent balance
      * @param string $currency currency
      * @return bool Success/Failure
      */
-    public function insertBalance(string $pubkey, string $direction, int $amount, string $currency): bool{
+    public function insertBalance(string $pubkey, int $receivedAmount, int $sentAmount, string $currency): bool{
         $data = [
             'pubkey' => $pubkey,
-            'direction' => $direction,
-            'balance' => $amount,
+            'received' => $receivedAmount,
+            'sent' => $sentAmount,
             'currency' => $currency
         ];
 
@@ -240,8 +229,8 @@ class BalanceRepository extends AbstractRepository {
      * @param string $currency currency
      */
     public function insertInitialContactBalances(string $pubkey, string $currency){
-        $this->insertBalance($pubkey, 'received', 0, $currency);
-        $this->insertBalance($pubkey, 'sent', 0, $currency);
+        $this->insertBalance($pubkey, 0, 0, $currency);
+       
     }
 
 
@@ -255,8 +244,8 @@ class BalanceRepository extends AbstractRepository {
      * @return bool Success/Failure of balance update
      */
     public function updateBalance(string $pubkey, string $direction, int $amount, string $currency): bool{
-        $query = "UPDATE {$this->tableName} SET balance = balance + :amount WHERE direction = :direction AND pubkey = :pubkey AND currency = :currency";
-        $stmt = $this->execute($query, [':direction' => $direction, ':amount' => $amount,':pubkey' => $pubkey,':currency' => $currency]);    
+        $query = "UPDATE {$this->tableName} SET {$direction} = {$direction} + :amount WHERE pubkey = :pubkey AND currency = :currency";
+        $stmt = $this->execute($query, [':amount' => $amount,':pubkey' => $pubkey,':currency' => $currency]);    
         if(!$stmt){
             return false;
         }
