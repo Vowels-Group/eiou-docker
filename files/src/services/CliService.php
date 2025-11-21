@@ -505,8 +505,15 @@ class CliService {
                 if ($contactResult) {
                     $contactBalances= $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'],$balance['currency']);
                     foreach($contactBalances as $contactBalance){
-                        printf("\t%s (%s), Balance received : %.2f %s\n", $contactResult['name'], $contactResult['tor'] ?? $contactResult['http'], number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), $contactBalance['currency']);
-                         printf("\t%s (%s), Balance sent : %.2f %s\n", $contactResult['name'], $contactResult['tor'] ?? $contactResult['http'], number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), $contactBalance['currency']);
+                        printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n", 
+                            $contact['name'], 
+                            $contact['http'] ?? $contact['tor'], 
+                            'received',
+                            'sent',
+                            number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), 
+                            number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
+                            $contactBalance['currency']
+                        );
                     }
                     return;
                 } else{
@@ -517,8 +524,15 @@ class CliService {
                         foreach($contacts as $contact){
                             $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contact['pubkey'], $balance['currency']);
                             foreach($contactBalances as $contactBalance){
-                                printf("\t%s (%s), Balance received : %.2f %s\n", $contact['name'], $contact['http'] ?? $contact['tor'], number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), $contactBalance['currency']);
-                                printf("\t%s (%s), Balance sent : %.2f %s\n", $contact['name'], $contact['http'] ?? $contact['tor'], number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), $contactBalance['currency']);
+                                printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n", 
+                                    $contact['name'], 
+                                    $contact['http'] ?? $contact['tor'], 
+                                    'received',
+                                    'sent',
+                                    number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), 
+                                    number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
+                                    $contactBalance['currency']
+                                );
                             }
                         }
                     }    
