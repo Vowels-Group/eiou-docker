@@ -25,15 +25,14 @@ class ContactRepository extends AbstractRepository {
     /**
      * Accept a contact request
      *
-     * @param string $transportIndex Address type, i.e. http, tor
-     * @param string $address Contact address
+     * @param string $senderPublicKey pubkey of Sender
      * @param string $name Contact name
      * @param float $fee Fee percentage
      * @param float $credit Credit limit
      * @param string $currency Currency code
      * @return bool Success status
      */
-    public function acceptContact(string $transportIndex, string $address, string $name, float $fee, float $credit, string $currency): bool {
+    public function acceptContact(string $senderPublicKey, string $name, float $fee, float $credit, string $currency): bool {
         $data = [
             'name' => $name,
             'status' => 'accepted',
@@ -42,7 +41,7 @@ class ContactRepository extends AbstractRepository {
             'currency' => $currency
         ];
 
-        $affectedRows = $this->update($data, $transportIndex, $address);
+        $affectedRows = $this->update($data, 'pubkey', $senderPublicKey);
         return $affectedRows > 0;
     }
 
@@ -50,22 +49,18 @@ class ContactRepository extends AbstractRepository {
      * Add a pending contact (incoming request)
      *
      * @param string $senderPublicKey Sender's public key
-     * @param array $addresses Associative array of Contact address(es) ['address_type' => address]
      * @return string JSON response
      */
-    public function addPendingContact(string $senderPublicKey, array $addresses): string {
-        $pubkeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
-
-        $data = array_merge($addresses,[
+    public function addPendingContact(string $senderPublicKey): string {
+        $data = [
             'pubkey' => $senderPublicKey,
-            'pubkey_hash' => $pubkeyHash,
+            'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $senderPublicKey),
             'name' => null,
             'status' => 'pending',
             'fee_percent' => null,
             'credit_limit' => null,
             'currency' => null
-        ]);
-
+        ];  
         return $this->insert($data);
     }
 
@@ -400,7 +395,6 @@ class ContactRepository extends AbstractRepository {
     /**
      * Insert a new contact
      *
-     * @param array $addresses Associative array of Contact address(es) ['address_type' => address]
      * @param string $contactPublicKey Contact's public key
      * @param string $name Contact name
      * @param float $fee Fee percentage
@@ -409,7 +403,6 @@ class ContactRepository extends AbstractRepository {
      * @return bool Success status
      */
     public function insertContact(
-        array $addresses,
         string $contactPublicKey,
         string $name,
         float $fee,
@@ -418,7 +411,7 @@ class ContactRepository extends AbstractRepository {
     ): bool {
         $pubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
 
-        $data = array_merge($addresses,[
+        $data = [
             'pubkey' => $contactPublicKey,
             'pubkey_hash' => $pubkeyHash,
             'name' => $name,
@@ -426,7 +419,7 @@ class ContactRepository extends AbstractRepository {
             'fee_percent' => $fee,
             'credit_limit' => $credit,
             'currency' => $currency
-        ]);
+        ];
 
         $result = $this->insert($data);
         return $result !== false;
