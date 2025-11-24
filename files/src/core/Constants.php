@@ -114,7 +114,7 @@ class Constants {
     const DB_QUERY_LIMIT_SINGLE = 1;
 
     // Crypto/Security
-    const HASH_ALGORITHM = 'sha256';
+    const HASH_ALGORITHM = 'sha256'; // Do not change
     const RANDOM_BYTES_LENGTH = 32;
     const CSRF_TOKEN_LENGTH = 64; // 32 bytes hex encoded
 
