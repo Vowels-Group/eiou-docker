@@ -40,19 +40,26 @@ class ServiceContainer {
      */
     private PDO|null $pdo;
 
-
     /**
      * Private constructor for singleton pattern
      * 
-     * @param UserContext $currentUser Current user data
-     * @param PDO $pdo Database connection
+     * @param UserContext $currentUser Current user data (optional)
+     * @param PDO $pdo Database connection (optional)
      */
     private function __construct(
-        UserContext $currentUser,
-        PDO $pdo
+        ?UserContext $currentUser,
+        ?PDO $pdo
     ) {
-        $this->currentUser = $currentUser;
-        $this->pdo = $pdo;
+        if($currentUser){
+            $this->currentUser = $currentUser;
+        } else{
+            $this->loadCurrentUser();
+        }
+        if($pdo){
+            $this->pdo = $pdo;
+        } else{
+            $this->loadDatabase();
+        }
     }
 
     /**
@@ -60,11 +67,28 @@ class ServiceContainer {
      *
      * @return ServiceContainer
      */
-    public static function getInstance($currentUser, $pdo): ServiceContainer {
+    public static function getInstance(?UserContext $currentUser, ?PDO $pdo): ServiceContainer {
         if (self::$instance === null) {
             self::$instance = new self($currentUser, $pdo);
         }
         return self::$instance;
+    }
+
+    /**
+     * Load current user from global scope
+     */
+    private function loadCurrentUser(): void {
+        require_once '/etc/eiou/src/core/UserContext.php';
+        $this->currentUser = UserContext::getInstance();
+    }
+
+    /**
+     * Set current user (for testing or manual injection)
+     *
+     * @param UserContext $user User data
+     */
+    public function setCurrentUser(UserContext $user): void {
+        $this->currentUser = $user;
     }
 
     /**
@@ -77,12 +101,48 @@ class ServiceContainer {
     }
 
     /**
+     * Get database connection (lazy loaded)
+     *
+     * @return PDO|null
+     */
+    public function loadDatabase() {
+        require_once '/etc/eiou/src/database/pdo.php';
+        try {
+            $this->pdo = createPDOConnection();
+        } catch (RuntimeException $e) {
+            // Log the error
+            if (isset($this->utils['SecureLogger'])) {
+                $this->utils['SecureLogger']->logException($e, 'CRITICAL');
+            } else {
+                error_log("ServiceContainer: Database connection failed - " . $e->getMessage());
+            }
+            // Set PDO to null to indicate unavailability
+            $this->pdo = null;
+        }
+    }
+
+    /**
      * Get PDO instance
      *
      * @return PDO Database connection
      */
     public function getPdo(): PDO {
         return $this->pdo;
+    }
+
+    /**
+     * Get AddressRepository instance
+     *
+     * @return AddressRepository
+     */
+    public function getAddressRepository(): AddressRepository {
+        if (!isset($this->repositories['AddressRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/AddressRepository.php';
+            $this->repositories['AddressRepository'] = new AddressRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['AddressRepository'];
     }
 
     /**
@@ -185,6 +245,7 @@ class ServiceContainer {
             require_once __DIR__ . '/ContactService.php';
             $this->services['ContactService'] = new ContactService(
                 $this->getContactRepository(),
+                $this->getAddressRepository(),
                 $this->getBalanceRepository(),
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),

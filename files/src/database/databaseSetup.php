@@ -62,6 +62,7 @@ function freshInstall(){
             try {
                 $dbConn->exec(getDebugTableSchema());
                 $dbConn->exec(getContactsTableSchema());
+                $dbConn->exec( getAddressTableSchema());
                 $dbConn->exec(getBalancesTableSchema());
                 $dbConn->exec(getTransactionsTableSchema());
                 $dbConn->exec(getP2pTableSchema());
