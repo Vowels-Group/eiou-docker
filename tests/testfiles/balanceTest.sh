@@ -26,7 +26,7 @@ for container in "${containers[@]}"; do
         if (!empty(\$balances)) {
             \$total_string = '';
             foreach (\$balances as \$balance) {
-                \$contactResult = \$app->services->getContactRepository()->lookupByPubkey(\$balance['pubkey']);
+                \$contactResult = \$app->services->getContactRepository()->lookupByPubkeyHash(\$balance['pubkey_hash']);
                 \$total_string .= '\t   ' . \$contactResult['name'] . ' (' . (\$contactResult['tor'] ?? \$contactResult['http']) . ') (received | sent): ' . \$balance['received']/Constants::TRANSACTION_USD_CONVERSION_FACTOR  . ' | ' . \$balance['sent']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . ' ' . \$balance['currency'] . '\n';
             }
             echo \$total_string;
@@ -64,7 +64,7 @@ if [[ "$firstLink" ]]; then
     senderInitial=$(docker exec ${sender} php -r "
         require_once('./etc/eiou/src/core/Application.php');
         \$app = Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${receiver}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
@@ -72,7 +72,7 @@ if [[ "$firstLink" ]]; then
     receiverInitial=$(docker exec ${receiver} php -r "
         require_once('./etc/eiou/src/core/Application.php');
         \$app = Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${sender}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
@@ -96,7 +96,7 @@ if [[ "$firstLink" ]]; then
     senderFinal=$(docker exec ${sender} php -r "
         require_once('./etc/eiou/src/core/Application.php');
         \$app = Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[${receiver}]}');
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${receiver}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")
@@ -104,7 +104,7 @@ if [[ "$firstLink" ]]; then
     receiverFinal=$(docker exec ${receiver} php -r "
         require_once('./etc/eiou/src/core/Application.php');
         \$app = Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[${sender}]}');
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${sender}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
     " 2>/dev/null || echo "0")

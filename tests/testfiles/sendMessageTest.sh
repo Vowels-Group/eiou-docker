@@ -29,7 +29,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     initialBalance=$(docker exec ${containerKeys[1]} php -r "
         require_once('./etc/eiou/src/core/Application.php');
         \$app = Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[${containerKeys[0]}]}');
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'${testCurrency}');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")
@@ -45,7 +45,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     newBalance=$(docker exec ${containerKeys[1]} php -r "
         require_once('./etc/eiou/src/core/Application.php');
         \$app = Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[${containerKeys[0]}]}');
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'${testCurrency}');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")
@@ -74,7 +74,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     initialBalanceD=$(docker exec httpD php -r "
         require_once('./etc/eiou/src/core/Application.php');
         \$app = Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[httpC]}');
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")
@@ -90,7 +90,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     newBalanceD=$(docker exec httpD php -r "
         require_once('./etc/eiou/src/core/Application.php');
         \$app = Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${containerAddresses[httpC]}');
+        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
         echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")

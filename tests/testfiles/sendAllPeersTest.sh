@@ -65,7 +65,7 @@ for sender in "${containers[@]}"; do
         initialBalance=$(docker exec ${sender} php -r "
             require_once('./etc/eiou/src/core/Application.php');
             \$app = Application::getInstance();
-            \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${contactAddress}');
+            \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${contactAddress}');
             \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
             echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
         " 2>/dev/null || echo "0")
@@ -82,7 +82,7 @@ for sender in "${containers[@]}"; do
         newBalance=$(docker exec ${sender} php -r "
             require_once('./etc/eiou/src/core/Application.php');
             \$app = Application::getInstance();
-            \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${contactAddress}');
+            \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${contactAddress}');
             \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
             echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
         " 2>/dev/null || echo "0")
@@ -178,13 +178,13 @@ for sender in "${containers[@]}"; do
         if [[ "${MODE}" == 'http' ]]; then
             hasContact=$(docker exec ${sender} php -r "
                 require_once('./etc/eiou/src/core/Application.php');
-                echo Application::getInstance()->services->getContactRepository()->isAcceptedContact('http','${receiverAddress}');
+                echo Application::getInstance()->services->getContactRepository()->isAcceptedContactAddress('http','${receiverAddress}');
             " 2>/dev/null || echo "0")
 
         elif [[ "${MODE}" == 'tor' ]]; then
             hasContact=$(docker exec ${sender} php -r "
                 require_once('./etc/eiou/src/core/Application.php');
-                echo Application::getInstance()->services->getContactRepository()->isAcceptedContact('tor','${receiverAddress}');
+                echo Application::getInstance()->services->getContactRepository()->isAcceptedContactAddress('tor','${receiverAddress}');
             " 2>/dev/null || echo "0")
 
         fi
