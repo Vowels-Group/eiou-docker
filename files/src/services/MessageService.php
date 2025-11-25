@@ -179,13 +179,13 @@ class MessageService {
     private function handleContactMessageInquiryRequest(array $decodedMessage): void {
         // Handle inquiry about contact request status
         $address = $decodedMessage['senderAddress'];
-        $transportIndex = $this->transportUtility->determineTransportType($address);
+        $pubkey = $decodedMessage['senderPublicKey'];
         // Contact is already accepted
-        if($this->contactRepository->isAcceptedContact($transportIndex, $address)){
+        if($this->contactRepository->isAcceptedContact($pubkey)){
             echo $this->messagePayload->buildContactIsAccepted($address,true);
         }
         // Contact is pending
-        elseif($this->contactRepository->hasPendingContact($transportIndex, $address)){
+        elseif($this->contactRepository->hasPendingContact($pubkey)){
             echo $this->messagePayload->buildContactIsNotYetAccepted($address);
         } else{
             echo $this->messagePayload->buildContactIsUnknown($address);
@@ -200,13 +200,10 @@ class MessageService {
      */
     private function handleContactMessageRequest(array $decodedMessage): void {
         // Handle contact request status update messages
-        $address = $decodedMessage['senderAddress'];
         $status = $decodedMessage['status'];
-
         if($status === 'accepted'){
-            output(outputContactRequestWasAccepted($address),'SILENT');
-            $transportIndex = $this->transportUtility->determineTransportType($address);
-            $this->contactRepository->updateStatus($transportIndex, $address, $status);
+            output(outputContactRequestWasAccepted($decodedMessage['senderAddress']),'SILENT');
+            $this->contactRepository->updateStatus($decodedMessage['senderPublicKey'], $status);
         }
     }
 

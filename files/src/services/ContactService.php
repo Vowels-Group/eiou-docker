@@ -183,7 +183,6 @@ class ContactService {
         // Get contact if exists in database in some form
         $transportIndex = $this->transportUtility->determineTransportType($address);
         $contact = $this->contactRepository->getContactByAddress($transportIndex, $address);
-
         if($contact){
             $this->handleExistingContact($contact, $address, $name, $fee, $credit, $currency);
         } else{
@@ -202,7 +201,6 @@ class ContactService {
      * @param string $currency Currency code
      */
     private function handleExistingContact(array $contact, string $address, string $name, float $fee, float $credit, string $currency): void {
-        $transportIndex = $this->transportUtility->determineTransportType($address);
         // Check if contact is already an accepted contact
         if($contact['status'] === 'accepted'){
             output(returnContactExists(),'WARNING');
@@ -212,7 +210,7 @@ class ContactService {
             // Contact was blocked after user sent contact request
             if($contact['name']){
                 // Unblock contact and add values
-                if($this->contactRepository->updateUnblockContact($transportIndex, $address, $name, $fee, $credit, $currency)){
+                if($this->contactRepository->updateUnblockContact($contact['pubkey'], $name, $fee, $credit, $currency)){
                     output(outputContactUnblockedAndOverwritten());
                 } else{
                     output(outputContactUnblockedAndOverwrittenFailure());
@@ -220,7 +218,7 @@ class ContactService {
             }
             // Contact was blocked when user received contact request
             else{
-                if($this->contactRepository->updateUnblockContact($transportIndex, $address, $name, $fee, $credit, $currency)){
+                if($this->contactRepository->updateUnblockContact($contact['pubkey'], $name, $fee, $credit, $currency)){
                     output(outputContactUnblockedAndAdded());
                 } else{
                     output(outputContactUnblockedAndAddedFailure());
@@ -238,9 +236,8 @@ class ContactService {
                 $succesfullSynch = Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'ECHO');
             } else{
                 // If contact already exists with an address, it's a contact request, skip sending a message
-                if ($this->acceptContact($transportIndex, $address, $name, $fee, $credit, $currency)) {
+                if ($this->acceptContact($contact['pubkey'], $name, $fee, $credit, $currency)) {
                     // Send message of successful contact acceptance back to original contact requester
-                   
                     $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
                     output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
                     output(returnContactAccepted());
@@ -266,6 +263,9 @@ class ContactService {
         // Build the payload array
         $payload = $this->contactPayload->buildCreateRequest($address);
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);
+        // TO DO CHECK IF exists address type
+
+
         // Check if the response indicates successful acceptance
         $responseData = json_decode($this->transportUtility->send($address, $payload), true);
         if (isset($responseData['status'])){
@@ -274,7 +274,7 @@ class ContactService {
             if($responseData['status'] === 'received'){
                 // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
-                    $this->addressRepository->insertAddress($senderPublicKey,$transportIndexAssociative);
+                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
                     output(returnContactCreationSuccessful());
                 } else{
@@ -285,9 +285,7 @@ class ContactService {
             // Our contact pubkey exists on their end, but not provided address 
             //  we are known under a different address or transport type
             elseif($responseData['status'] === 'updated'){
-                $senderAddress = $responseData['senderAddress'];
-                $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
-                if($this->addressRepository->insertAddress($senderPublicKey,[$transportIndex => $senderAddress])){
+                if($this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative)){
                     output(outputContactUpdatedAddress());
                 } else{
                     output(outputContactUpdatedAddressFailure());
@@ -297,7 +295,7 @@ class ContactService {
             elseif($responseData['status'] === 'warning'){
                 // Insert contact and try re-synching (inquiry about acceptance status)
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
-                    $this->addressRepository->insertAddress($senderPublicKey,$transportIndexAssociative);
+                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
                     // Resynch contact
                     if(Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'SILENT')){
@@ -324,20 +322,18 @@ class ContactService {
     /**
      * Accept a contact request
      *
-     * @param string $transportIndex Address type, i.e. http, tor
-     * @param string $address Contact address
+     * @param string $pubkey Contact pubkey
      * @param string $name Contact name
      * @param float $fee Fee percentage
      * @param float $credit Credit limit
      * @param string $currency Currency code
      * @return bool Success status
      */
-    public function acceptContact(string $transportIndex, string $address, string $name, float $fee, float $credit, string $currency): bool {
-        $success = $this->contactRepository->acceptContact($transportIndex, $address, $name, $fee, $credit, $currency);
+    public function acceptContact(string $pubkey, string $name, float $fee, float $credit, string $currency): bool {
+        $success = $this->contactRepository->acceptContact($pubkey, $name, $fee, $credit, $currency);
         if($success){
-            $contactPubkeyHash = $this->addressRepository->getContactPubkeyHash($address);
-            $this->addressRepository->insertAddress($contactPubkeyHash,[$transportIndex => $address]);
-            $this->balanceRepository->insertInitialContactBalances($contactPubkeyHash, $currency);
+            // Addresses already saved, just need to add initial contact balances
+            $this->balanceRepository->insertInitialContactBalances($pubkey, $currency);
         }
         return $success;
     }
@@ -352,17 +348,17 @@ class ContactService {
         $senderAddress = $request['senderAddress'];
         $senderPublicKey = $request['senderPublicKey'];
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
-        $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
+        $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($senderAddress);
         // Check if contact already exists
         if ($this->contactRepository->contactExistsPubkey($senderPublicKey)) {
-            $contactAddresses = $this->addressRepository->lookupByPubkey($senderPublicKeyHash);
-           
+            $contactAddresses = $this->addressRepository->lookupByPubkeyHash($senderPublicKeyHash);
+            $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
             if($contactAddresses[$transportIndex] === $senderAddress){
                 // Address already exists (Not a new contact)
                 return $this->contactPayload->buildAlreadyExists($senderAddress);
             } else{
                 // Address unknown prior but pubkey exists (known contact, unknown address)
-                if($this->addressRepository->updateContactFields($senderPublicKeyHash,[$transportIndex => $senderAddress])){
+                if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
                     return $this->contactPayload->buildUpdated($senderAddress);
                 } else{
                     // Unable to update contact
@@ -371,7 +367,7 @@ class ContactService {
             }
         } else{
             // Contact request is brand new, no prior users exist in any form
-            if($this->contactRepository->addPendingContact($senderPublicKey) && $this->addressRepository->insertAddress($senderPublicKeyHash,[$transportIndex => $senderAddress])){
+            if($this->contactRepository->addPendingContact($senderPublicKey) && $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative)){
                 return $this->contactPayload->buildReceived($senderAddress);
             } else{
                 // Unable to insert contact
@@ -532,23 +528,21 @@ class ContactService {
     /**
      * Check if contact is accepted
      *
-     * @param string $address Contact address
+     * @param string $pubkey Contact pubkey
      * @return bool True if accepted
      */
-    public function isAcceptedContact(string $address): bool {
-        $transportIndex = $this->transportUtility->determineTransportType($address);
-        return $this->contactRepository->isAcceptedContact($transportIndex, $address);
+    public function isAcceptedContact(string $pubkey): bool {
+        return $this->contactRepository->isAcceptedContact($pubkey);
     }
 
     /**
      * Check if contact is not blocked
      *
-     * @param string $address Contact address
+     * @param string $pubkey Contact pubkey
      * @return bool True if not blocked
      */
-    public function isNotBlocked(string $address): bool {
-        $transportIndex = $this->transportUtility->determineTransportType($address);
-        return $this->contactRepository->isNotBlocked($transportIndex, $address);
+    public function isNotBlocked(string $pubkey): bool {
+        return $this->contactRepository->isNotBlocked($pubkey);
     }
 
     /**
@@ -611,8 +605,11 @@ class ContactService {
             exit(1);
         }
         $address = $addressValidation['value'];
-        $transportIndex = $this->transportUtility->determineTransportType($address);
-        return $this->contactRepository->deleteContact($transportIndex, $address);
+        $pubkey = $this->contactRepository->getContactPubkey($address);
+        $deletedContact = $this->contactRepository->deleteContact($pubkey);
+        $deletedAddress = $this->addressRepository->deleteByPubkey($pubkey);
+        $deletedBalance = $this->balanceRepository->deleteByPubkey($pubkey);
+        return $deletedContact && $deletedAddress && $deletedBalance;
     }
 
     /**
@@ -631,7 +628,7 @@ class ContactService {
      * @return array Array of addresses
      */
     public function getAllAddresses(?string $exclude = null): array {
-        return $this->contactRepository->getAllAddresses($exclude);
+        return $this->addressRepository->getAllAddresses($exclude);
     }
 
     /**
@@ -642,8 +639,8 @@ class ContactService {
      * @param string $status New status
      * @return bool Success status
      */
-    public function updateStatus(string $transportIndex, string $address, string $status): bool {
-        return $this->contactRepository->updateStatus($transportIndex, $address, $status);
+    public function updateStatus(string $address, string $status): bool {
+        return $this->contactRepository->updateStatus($this->contactRepository->getContactPubkey($address), $status);
     }
 
     /**

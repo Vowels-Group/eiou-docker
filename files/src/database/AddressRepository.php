@@ -32,7 +32,7 @@ class AddressRepository extends AbstractRepository {
     public function insertAddress(string $contactPublicKey, array $addresses): bool {
 
         $data = array_merge($addresses,[
-            'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $contactPublicKey),
+            'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $contactPublicKey)
         ]);
 
         $result = $this->insert($data);
@@ -51,7 +51,7 @@ class AddressRepository extends AbstractRepository {
             return false;
         }
 
-        $affectedRows = $this->update($fields, 'pubkey_hash', $pubkeyHash);
+        $affectedRows = $this->update($fields, $this->primaryKey, $pubkeyHash);
         return $affectedRows >= 0;
     }
 
@@ -59,20 +59,65 @@ class AddressRepository extends AbstractRepository {
      * Lookup contact addresses by pubkey hash
      *
      * @param string $pubkeyHash Contact pubkey
-     * @return array|null Contact data or null
+     * @return array Contact data (including pubkey_hash) or null
      */
-    public function lookupByPubkey(string $pubkeyHash): ?array {
-        $query = "SELECT * FROM {$this->tableName} WHERE pubkey = :pubkey";
+    public function lookupByPubkeyHash(string $pubkeyHash): array {
+        $query = "SELECT * FROM {$this->tableName} WHERE {$this->primaryKey} = :pubkey_hash";
         $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash]);
 
         if (!$stmt) {
-            return null;
+            return [];
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: null;
+        return $result ?: [];
     }
 
+    /**
+     * Delete contact addresses by pubkey 
+     *
+     * @param string $pubkeyHash Contact pubkey
+     * @return bool True or false
+     */
+    public function deleteByPubkey(string $pubkey): bool {
+        $deletedRows = $this->delete($this->primaryKey, hash(Constants::HASH_ALGORITHM, $pubkey));
+        return $deletedRows > 0;
+    }
+
+    /**
+     * Delete contact addresses by pubkey hash
+     *
+     * @param string $pubkeyHash Contact pubkey hash
+     * @return bool True or false
+     */
+    public function deleteByPubkeyHash(string $pubkeyHash): bool {
+        $deletedRows = $this->delete($this->primaryKey, $pubkeyHash);
+        return $deletedRows > 0;
+    }
+
+    /**
+     * Retrieve all contact addresses
+     *
+     * @param string|null $exclude Address to exclude
+     * @return array Array of addresses
+     */
+    public function getAllAddresses(?string $exclude = null): array {
+        
+        if ($exclude) {
+            $query = "SELECT * FROM {$this->tableName}";
+            $query .= " WHERE http != :http OR tor != :tor";
+            $stmt = $this->execute($query, [':http' => $exclude,':tor' => $exclude]);
+        } else {
+            $query = "SELECT * FROM {$this->tableName}";
+            $stmt = $this->execute($query);
+        }
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
     /**
      * Retrieve contact public key hash by address
@@ -81,7 +126,7 @@ class AddressRepository extends AbstractRepository {
      * @return string|null Contact's publice key hash or null
      */
     public function getContactPubkeyHash(string $address): ?string {
-        $query = "SELECT pubkey_hash FROM {$this->tableName}";
+        $query = "SELECT {$this->primaryKey} FROM {$this->tableName}";
         $query .= " WHERE http = :http OR tor = :tor";
         $stmt = $this->execute($query, [':http' => $address,':tor' => $address]);
 
@@ -92,6 +137,4 @@ class AddressRepository extends AbstractRepository {
         $result = $stmt->fetchColumn();
         return $result ?: null;
     }
-
-
 }

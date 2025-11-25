@@ -204,9 +204,9 @@ class P2pService {
      */
     public function checkP2pPossible(array $request, $echo = true) : bool{
         $senderAddress = $request['senderAddress'];
-        $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
+        $pubkey = $request['senderPublicKey'];
         // Check if User is not blocked
-        if(!$this->contactRepository->isNotBlocked($transportIndex, $senderAddress)){
+        if(!$this->contactRepository->isNotBlocked($pubkey)){
             return false; 
         }
         // Check if P2P message has not reached max intermediary hop amount

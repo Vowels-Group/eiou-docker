@@ -266,6 +266,7 @@ class ServiceContainer {
             require_once __DIR__ . '/TransactionService.php';
             $this->services['TransactionService'] = new TransactionService(
                 $this->getContactRepository(),
+                $this->getAddressRepository(),
                 $this->getBalanceRepository(),
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
@@ -383,6 +384,7 @@ class ServiceContainer {
             require_once __DIR__ . '/SynchService.php';
             $this->services['SynchService'] = new SynchService(
                 $this->getContactRepository(),
+                $this->getAddressRepository(),
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),

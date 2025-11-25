@@ -17,11 +17,10 @@ function getContactsTableSchema() {
         fee_percent INT,
         credit_limit INT,
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_contacts_tor (tor),
         INDEX idx_contacts_pubkey_hash (pubkey_hash),
         INDEX idx_contacts_name (name),
         INDEX idx_contacts_status (status),
-        INDEX idx_contacts_address_status (tor, status)
+        INDEX idx_contacts_pubkey_hash_status (pubkey_hash, status)
     )";
 }
 
@@ -32,7 +31,9 @@ function getAddressTableSchema(){
         pubkey_hash TEXT NOT NULL,
         http VARCHAR(255) UNIQUE DEFAULT NULL,
         tor VARCHAR(255) UNIQUE DEFAULT NULL,
-        INDEX idx_addresses_pubkey (pubkey_hash)
+        INDEX idx_addresses_pubkey (pubkey_hash),
+        INDEX idx_addresses_http (http),
+        INDEX idx_addresses_tor (tor)
     )";
 }
 

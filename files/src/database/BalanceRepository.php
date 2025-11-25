@@ -19,9 +19,19 @@ class BalanceRepository extends AbstractRepository {
     public function __construct(?PDO $pdo = null) {
         parent::__construct($pdo);
         $this->tableName = 'balances';
-        $this->primaryKey = 'pubkey';
+        $this->primaryKey = 'pubkey_hash';
     }
 
+    /**
+     * Delete balance 
+     * 
+     * @param string $pubkey Contact pubkey
+     * @return bool succeeded true/false
+     */
+    public function deleteByPubkey($pubkey): bool{
+        $deletedRows = $this->delete($this->primaryKey, hash(Constants::HASH_ALGORITHM, $pubkey));
+        return $deletedRows > 0;
+    }
 
     /**
      * Get all balances in the table
@@ -46,8 +56,8 @@ class BalanceRepository extends AbstractRepository {
      * @return array|null Array of Balances
      */
     public function getContactBalance(string $pubkey, string $currency): array|null{
-        $query = "SELECT received, sent FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
-        $stmt = $this->execute($query, [':pubkey' => $pubkey,':currency' => $currency]);
+        $query = "SELECT received, sent FROM {$this->tableName} WHERE {$this->primaryKey} = :pubkey_hash AND currency = :currency";
+        $stmt = $this->execute($query, [':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $pubkey),':currency' => $currency]);
         if (!$stmt) {
             return null;
         }
@@ -75,8 +85,8 @@ class BalanceRepository extends AbstractRepository {
      * @return int Contact received Balance
      */
     public function getContactReceivedBalance(string $pubkey, string $currency): int{
-        $query = "SELECT received FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
-        $stmt = $this->execute($query, [':pubkey' => $pubkey,':currency' => $currency]);
+        $query = "SELECT received FROM {$this->tableName} WHERE {$this->primaryKey} = :pubkey_hash AND currency = :currency";
+        $stmt = $this->execute($query, [':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $pubkey),':currency' => $currency]);
         if (!$stmt) {
             return 0;
         }
@@ -92,8 +102,8 @@ class BalanceRepository extends AbstractRepository {
      * @return int Contact sent Balance
      */
     public function getContactSentBalance(string $pubkey, string $currency): int{
-        $query = "SELECT sent FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
-        $stmt = $this->execute($query, [':pubkey' => $pubkey,':currency' => $currency]);
+        $query = "SELECT sent FROM {$this->tableName} WHERE {$this->primaryKey} = :pubkey_hash AND currency = :currency";
+        $stmt = $this->execute($query, [':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $pubkey),':currency' => $currency]);
         if (!$stmt) {
             return 0;
         }
@@ -108,8 +118,8 @@ class BalanceRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function getContactBalances(string $pubkey): array|null{
-        $query = "SELECT received, sent, currency FROM {$this->tableName} WHERE pubkey = :pubkey";
-        $stmt = $this->execute($query, [':pubkey' => $pubkey]);
+        $query = "SELECT received, sent, currency FROM {$this->tableName} WHERE {$this->primaryKey} = :pubkey_hash";
+        $stmt = $this->execute($query, [':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $pubkey)]);
         if (!$stmt) {
             return null;
         }
@@ -125,8 +135,8 @@ class BalanceRepository extends AbstractRepository {
      * @return array|null Contact data or null
      */
     public function getContactBalancesCurrency(string $pubkey, string $currency): array|null{
-        $query = "SELECT received, sent, currency FROM {$this->tableName} WHERE pubkey = :pubkey AND currency = :currency";
-        $stmt = $this->execute($query, [':pubkey' => $pubkey, ':currency' => $currency]);
+        $query = "SELECT received, sent, currency FROM {$this->tableName} WHERE {$this->primaryKey} = :pubkey_hash AND currency = :currency";
+        $stmt = $this->execute($query, [':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $pubkey), ':currency' => $currency]);
         if (!$stmt) {
             return null;
         }
@@ -188,10 +198,10 @@ class BalanceRepository extends AbstractRepository {
 
         $query = "SELECT currency, 
                     SUM(received) - SUM(sent) AS total_balance 
-                    FROM {$this->tableName} WHERE pubkey = :pubkey
+                    FROM {$this->tableName} WHERE {$this->primaryKey} = :pubkey_hash
                     GROUP BY currency";
 
-        $stmt = $this->execute($query, [':pubkey' => $pubkey]);
+        $stmt = $this->execute($query, [':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $pubkey)]);
         
         if (!$stmt) {
             return null;
@@ -212,7 +222,7 @@ class BalanceRepository extends AbstractRepository {
      */
     public function insertBalance(string $pubkey, int $receivedAmount, int $sentAmount, string $currency): bool{
         $data = [
-            'pubkey' => $pubkey,
+            'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $pubkey),
             'received' => $receivedAmount,
             'sent' => $sentAmount,
             'currency' => $currency
@@ -244,8 +254,8 @@ class BalanceRepository extends AbstractRepository {
      * @return bool Success/Failure of balance update
      */
     public function updateBalance(string $pubkey, string $direction, int $amount, string $currency): bool{
-        $query = "UPDATE {$this->tableName} SET {$direction} = {$direction} + :amount WHERE pubkey = :pubkey AND currency = :currency";
-        $stmt = $this->execute($query, [':amount' => $amount,':pubkey' => $pubkey,':currency' => $currency]);    
+        $query = "UPDATE {$this->tableName} SET {$direction} = {$direction} + :amount WHERE {$this->primaryKey} = :pubkey_hash AND currency = :currency";
+        $stmt = $this->execute($query, [':amount' => $amount,':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $pubkey),':currency' => $currency]);    
         if(!$stmt){
             return false;
         }
