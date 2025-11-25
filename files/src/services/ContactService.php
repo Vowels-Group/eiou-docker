@@ -262,10 +262,8 @@ class ContactService {
     private function handleNewContact(string $address, string $name, float $fee, float $credit, string $currency): void {
         // Build the payload array
         $payload = $this->contactPayload->buildCreateRequest($address);
-        $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);
-        // TO DO CHECK IF exists address type
-
-
+        $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);  // Address already passed validation before
+    
         // Check if the response indicates successful acceptance
         $responseData = json_decode($this->transportUtility->send($address, $payload), true);
         if (isset($responseData['status'])){
