@@ -2,6 +2,7 @@
 # Copyright 2025
 
 require_once __DIR__ . '/../utils/InputValidator.php';
+require_once __DIR__ . '/../cli/CliOutputManager.php';
 
 /**
  * Cli Service
@@ -80,15 +81,18 @@ class CliService {
      * Handler for (CLI) input changes to user settings
      *
      * @param array $argv The (CLI) input data
+     * @param CliOutputManager|null $output Optional output manager for JSON support
     */
-    public function changeSettings(array $argv) {
+    public function changeSettings(array $argv, ?CliOutputManager $output = null) {
+        $output = $output ?? CliOutputManager::getInstance();
+
         // Check if command line based or user input based
         if(isset($argv[2])){
             if(strtolower($argv[2]) === 'defaultfee'){
                 $key = 'defaultFee';
                 $validation = InputValidator::validateFeePercent($argv[3]);
                 if (!$validation['valid']) {
-                    echo "Error: " . $validation['error'] . "\n";
+                    $output->validationError('defaultFee', $validation['error']);
                     return;
                 }
                 $value = $validation['value'];
@@ -96,7 +100,7 @@ class CliService {
                 $key = 'defaultCurrency';
                 $validation = InputValidator::validateCurrency($argv[3]);
                 if (!$validation['valid']) {
-                    echo "Error: " . $validation['error'] . "\n";
+                    $output->validationError('defaultCurrency', $validation['error']);
                     return;
                 }
                 $value = $validation['value'];
@@ -104,7 +108,7 @@ class CliService {
                 $key = 'minFee';
                 $validation = InputValidator::validateAmountFee($argv[3]);
                 if (!$validation['valid']) {
-                    echo "Error: " . $validation['error'] . "\n";
+                    $output->validationError('minFee', $validation['error']);
                     return;
                 }
                 $value = $validation['value'];
@@ -112,7 +116,7 @@ class CliService {
                 $key = 'maxFee';
                 $validation = InputValidator::validateFeePercent($argv[3]);
                 if (!$validation['valid']) {
-                    echo "Error: " . $validation['error'] . "\n";
+                    $output->validationError('maxFee', $validation['error']);
                     return;
                 }
                 $value = $validation['value'];
@@ -120,7 +124,7 @@ class CliService {
                 $key = 'maxP2pLevel';
                 $validation = InputValidator::validateRequestLevel($argv[3]);
                 if (!$validation['valid']) {
-                    echo "Error: " . $validation['error'] . "\n";
+                    $output->validationError('maxP2pLevel', $validation['error']);
                     return;
                 }
                 $value = $validation['value'];
@@ -128,7 +132,7 @@ class CliService {
                 $key = 'p2pExpiration';
                 $validation = InputValidator::validateTimestamp($argv[3]);
                 if (!$validation['valid']) {
-                    echo "Error: " . $validation['error'] . "\n";
+                    $output->validationError('p2pExpiration', $validation['error']);
                     return;
                 }
                 $value = $validation['value'];
@@ -139,7 +143,7 @@ class CliService {
                 } else{
                     // Validate as positive integer using Security::sanitizeInt
                     if (!is_numeric($argv[3]) || intval($argv[3]) <= 0) {
-                        echo "Error: Max output must be a positive integer or 'all'\n";
+                        $output->validationError('maxOutput', 'Max output must be a positive integer or \'all\'');
                         return;
                     }
                     $value = intval($argv[3]);
@@ -154,19 +158,24 @@ class CliService {
                 $key = 'hostname';
                 $validation = InputValidator::validateHostname($argv[3]);
                 if (!$validation['valid']) {
-                    echo "Error: " . $validation['error'] . "\n";
+                    $output->validationError('hostname', $validation['error']);
                     return;
                 }
                 $value = $validation['value'];
             } else{
-                echo "Setting provided does not exist. No changes made.\n";
+                $output->error('Setting provided does not exist. No changes made.', 'INVALID_SETTING', 400);
                 return;
             }
         } else{
+            // Interactive mode - not supported in JSON mode
+            if ($output->isJsonMode()) {
+                $output->error('Interactive mode not supported with --json flag. Please provide setting name and value.', 'INTERACTIVE_NOT_SUPPORTED', 400);
+                return;
+            }
 
             // Display current settings
-            $this->displayCurrentSettings();
-            
+            $this->displayCurrentSettings($output);
+
             // Prompt user for which setting they want to change
             echo "Select the setting you want to change:\n";
             echo "\t1. Default Currency\n";
@@ -183,7 +192,7 @@ class CliService {
 
             // Read user input
             $setting_choice = trim(fgets(STDIN));
-            
+
             switch($setting_choice) {
                 case '1':
                     echo "Enter new default currency (e.g., USD): ";
@@ -206,7 +215,7 @@ class CliService {
                     }
                     $value = $validation['value'];
                     break;
-                
+
                 case '3':
                     echo "Enter new default fee percentage: ";
                     $key = 'defaultFee';
@@ -304,87 +313,204 @@ class CliService {
         } else{
             $configFile = 'defaultconfig.json';
         }
-        
+
         $config_content = json_decode(file_get_contents('/etc/eiou/' . $configFile),true);
         $config_content[$key] = $value;
         file_put_contents('/etc/eiou/'. $configFile, json_encode($config_content,true), LOCK_EX);
-        echo "Setting updated successfully.\n";
+
+        $output->success('Setting updated successfully.', [
+            'setting' => $key,
+            'value' => $value,
+            'config_file' => $configFile
+        ]);
     }
 
     /**
      * Display current settings of user in the CLI
      *
+     * @param CliOutputManager|null $output Optional output manager for JSON support
     */
-    public function displayCurrentSettings() {
-        echo "Current Settings:\n";
-        echo "\tDefault currency: " . $this->currentUser->getDefaultCurrency() . "\n";
-        echo "\tMinimum fee amount: " . $this->currentUser->getMinimumFee() . " " . $this->currentUser->getDefaultCurrency() ."\n";
-        echo "\tDefault fee percent: " . $this->currentUser->getDefaultFee() ."%\n";
-        echo "\tMaximum Fee percent: " . $this->currentUser->getMaxFee() . "%\n";
-        echo "\tMaximum Peer to Peer Level: " .  $this->currentUser->getMaxP2pLevel() . "\n";
-        echo "\tDefault Peer to Peer Expiration: " .  $this->currentUser->getP2pExpirationTime() . " seconds\n";
-        echo "\tDefault Maximum lines of balance output: " .  $this->currentUser->getMaxOutput() . "\n";
-        echo "\tAccess Mode: " . ($this->currentUser->isLocalhostOnly() ? "Local Access Only" : "Network Authorized") . "\n";
-        echo "\tDefault Transport Mode: " . $this->currentUser->getDefaultTransportMode() . "\n";
+    public function displayCurrentSettings(?CliOutputManager $output = null) {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        $settings = [
+            'default_currency' => $this->currentUser->getDefaultCurrency(),
+            'minimum_fee_amount' => $this->currentUser->getMinimumFee(),
+            'minimum_fee_currency' => $this->currentUser->getDefaultCurrency(),
+            'default_fee_percent' => $this->currentUser->getDefaultFee(),
+            'maximum_fee_percent' => $this->currentUser->getMaxFee(),
+            'max_p2p_level' => $this->currentUser->getMaxP2pLevel(),
+            'p2p_expiration_seconds' => $this->currentUser->getP2pExpirationTime(),
+            'max_output_lines' => $this->currentUser->getMaxOutput(),
+            'access_mode' => $this->currentUser->isLocalhostOnly() ? 'localhost_only' : 'network_enabled',
+            'default_transport_mode' => $this->currentUser->getDefaultTransportMode()
+        ];
+
+        if ($output->isJsonMode()) {
+            $output->settings($settings);
+        } else {
+            echo "Current Settings:\n";
+            echo "\tDefault currency: " . $settings['default_currency'] . "\n";
+            echo "\tMinimum fee amount: " . $settings['minimum_fee_amount'] . " " . $settings['minimum_fee_currency'] ."\n";
+            echo "\tDefault fee percent: " . $settings['default_fee_percent'] ."%\n";
+            echo "\tMaximum Fee percent: " . $settings['maximum_fee_percent'] . "%\n";
+            echo "\tMaximum Peer to Peer Level: " .  $settings['max_p2p_level'] . "\n";
+            echo "\tDefault Peer to Peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
+            echo "\tDefault Maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
+            echo "\tAccess Mode: " . ($this->currentUser->isLocalhostOnly() ? "Local Access Only" : "Network Authorized") . "\n";
+            echo "\tDefault Transport Mode: " . $settings['default_transport_mode'] . "\n";
+        }
     }
 
     /**
      * Display available commands to user in the CLI
      *
      * @param array $argv The CLI input data
+     * @param CliOutputManager|null $output Optional output manager for JSON support
     */
-    public function displayHelp(array $argv) {
-        if(isset($argv[2])){
-            echo "Command:\n";
-            if(strtolower($argv[2]) === 'info'){
-                echo "\tinfo ([detail]) - Display user information.\n";
-            } elseif(strtolower($argv[2]) === 'add'){
-                echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
-            } elseif(strtolower($argv[2]) === 'search'){
-                echo "\tsearch ([name]) - Search for contact.\n";
-            } elseif(strtolower($argv[2]) === 'viewcontact'){
-                echo "\tviewcontact [address/name] - View contact information.\n";
-            } elseif(strtolower($argv[2]) === 'update'){
-                echo "\tupdate [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
-            } elseif(strtolower($argv[2]) === 'block'){
-                echo "\block [address/name] - Block a contact.\n";
-            } elseif(strtolower($argv[2]) === 'delete'){
-                echo "\unblock [address/name] - Unblock a contact.\n";
-            } elseif(strtolower($argv[2]) === 'delete'){
-                echo "\tdelete [address/name] - Delete a contact.\n";
-            } elseif(strtolower($argv[2]) === 'send'){
-                echo "\tsend [address/name] [amount] [currency] - Send an eIOU.\n";
-            } elseif(strtolower($argv[2]) === 'viewbalances'){
-                echo "\tviewbalances ([address/name]) - View eIOU balance(s).\n";
-            } elseif(strtolower($argv[2]) === 'history'){
-                echo "\thistory ([address/name]) - View transaction history for contacts, (default: all contacts).\n";
-            } elseif(strtolower($argv[2]) === 'help'){
-                echo "\thelp - Display this help information.\n";
-            } elseif(strtolower($argv[2]) === 'viewsettings'){
-                echo "\tviewsettings - View current settings.\n";
-            } elseif(strtolower($argv[2]) === 'changesettings'){
-                echo "\tchangesettings - Change settings.\n";
-            } elseif(strtolower($argv[2]) === 'generate'){
-                echo "\tgenerate - Generate a new wallet.\n";
-            } else{
-                echo "\tcommand does not exist.\n";
+    public function displayHelp(array $argv, ?CliOutputManager $output = null) {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        // Define all commands with their metadata
+        $commands = [
+            'info' => [
+                'description' => 'Display user information',
+                'usage' => 'info ([detail])',
+                'arguments' => [
+                    'detail' => ['type' => 'optional', 'description' => 'Show detailed balance information']
+                ]
+            ],
+            'add' => [
+                'description' => 'Add a new contact',
+                'usage' => 'add [address] [name] [fee] [credit] [currency]',
+                'arguments' => [
+                    'address' => ['type' => 'required', 'description' => 'Contact address (HTTP or Tor)'],
+                    'name' => ['type' => 'required', 'description' => 'Contact name'],
+                    'fee' => ['type' => 'required', 'description' => 'Fee percentage'],
+                    'credit' => ['type' => 'required', 'description' => 'Credit limit'],
+                    'currency' => ['type' => 'required', 'description' => 'Currency code']
+                ]
+            ],
+            'search' => [
+                'description' => 'Search for contact',
+                'usage' => 'search ([name])',
+                'arguments' => [
+                    'name' => ['type' => 'optional', 'description' => 'Contact name to search']
+                ]
+            ],
+            'viewcontact' => [
+                'description' => 'View contact information',
+                'usage' => 'viewcontact [address/name]',
+                'arguments' => [
+                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name']
+                ]
+            ],
+            'update' => [
+                'description' => 'Update a contact',
+                'usage' => 'update [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit])',
+                'arguments' => [
+                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name'],
+                    'field' => ['type' => 'required', 'description' => 'Field to update: all, name, fee, or credit'],
+                    'values' => ['type' => 'optional', 'description' => 'New values for the field(s)']
+                ]
+            ],
+            'block' => [
+                'description' => 'Block a contact',
+                'usage' => 'block [address/name]',
+                'arguments' => [
+                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name to block']
+                ]
+            ],
+            'unblock' => [
+                'description' => 'Unblock a contact',
+                'usage' => 'unblock [address/name]',
+                'arguments' => [
+                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name to unblock']
+                ]
+            ],
+            'delete' => [
+                'description' => 'Delete a contact',
+                'usage' => 'delete [address/name]',
+                'arguments' => [
+                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name to delete']
+                ]
+            ],
+            'send' => [
+                'description' => 'Send an eIOU',
+                'usage' => 'send [address/name] [amount] [currency]',
+                'arguments' => [
+                    'address/name' => ['type' => 'required', 'description' => 'Recipient address or name'],
+                    'amount' => ['type' => 'required', 'description' => 'Amount to send'],
+                    'currency' => ['type' => 'required', 'description' => 'Currency code']
+                ]
+            ],
+            'viewbalances' => [
+                'description' => 'View eIOU balance(s)',
+                'usage' => 'viewbalances ([address/name])',
+                'arguments' => [
+                    'address/name' => ['type' => 'optional', 'description' => 'Filter by contact address or name']
+                ]
+            ],
+            'history' => [
+                'description' => 'View transaction history for contacts',
+                'usage' => 'history ([address/name])',
+                'arguments' => [
+                    'address/name' => ['type' => 'optional', 'description' => 'Filter by contact address or name']
+                ]
+            ],
+            'help' => [
+                'description' => 'Display help information',
+                'usage' => 'help ([command])',
+                'arguments' => [
+                    'command' => ['type' => 'optional', 'description' => 'Specific command to get help for']
+                ]
+            ],
+            'viewsettings' => [
+                'description' => 'View current settings',
+                'usage' => 'viewsettings',
+                'arguments' => []
+            ],
+            'changesettings' => [
+                'description' => 'Change settings',
+                'usage' => 'changesettings ([setting] [value])',
+                'arguments' => [
+                    'setting' => ['type' => 'optional', 'description' => 'Setting name to change'],
+                    'value' => ['type' => 'optional', 'description' => 'New value for the setting']
+                ]
+            ],
+            'generate' => [
+                'description' => 'Generate a new wallet',
+                'usage' => 'generate',
+                'arguments' => []
+            ]
+        ];
+
+        $specificCommand = isset($argv[2]) ? strtolower($argv[2]) : null;
+
+        if ($output->isJsonMode()) {
+            if ($specificCommand !== null) {
+                if (isset($commands[$specificCommand])) {
+                    $output->help([$specificCommand => $commands[$specificCommand]], $specificCommand);
+                } else {
+                    $output->error("Command '$specificCommand' does not exist", 'COMMAND_NOT_FOUND', 404);
+                }
+            } else {
+                $output->help($commands);
             }
-        } else{
-            echo "Available commands:\n";
-            echo "\tinfo ([detail]) - Display user information.\n";
-            echo "\tadd [address] [name] [fee] [credit] [currency] - Add a new contact.\n";
-            echo "\tsearch ([name]) - Search for contact.\n";
-            echo "\tviewcontact [address/name] - View contact information.\n";
-            echo "\tupdate [address/name] [all/name/fee/credit] ([name]) ([fee]) ([credit]) - Update a contact.\n";
-            echo "\tblock [address/name] - Block a contact.\n";
-            echo "\tunblock [address/name] - Unblock a contact.\n";
-            echo "\tdelete [address/name] - Delete a contact.\n";
-            echo "\tsend [address/name] [amount] [currency] - Send an eIOU.\n";
-            echo "\tviewbalances ([address/name]) - View eIOU balance(s).\n";
-            echo "\thistory ([address/name]) - View transaction history for contacts, (default: all contacts).\n";
-            echo "\thelp - Display this help information.\n";
-            echo "\tviewsettings - View current settings.\n";
-            echo "\tchangesettings - Change settings.\n";
+        } else {
+            if ($specificCommand !== null) {
+                echo "Command:\n";
+                if (isset($commands[$specificCommand])) {
+                    echo "\t" . $commands[$specificCommand]['usage'] . " - " . $commands[$specificCommand]['description'] . "\n";
+                } else {
+                    echo "\tcommand does not exist.\n";
+                }
+            } else {
+                echo "Available commands:\n";
+                foreach ($commands as $name => $cmd) {
+                    echo "\t" . $cmd['usage'] . " - " . $cmd['description'] . "\n";
+                }
+            }
         }
     }
 
@@ -392,49 +518,106 @@ class CliService {
      * Display user information to user in the CLI
      *
      * @param array $argv The CLI input data
+     * @param CliOutputManager|null $output Optional output manager for JSON support
     */
-    public function displayUserInfo(array $argv) {    
+    public function displayUserInfo(array $argv, ?CliOutputManager $output = null) {
+        $output = $output ?? CliOutputManager::getInstance();
+
        // Define limit of output displayed
         if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
-            $displayLimit = $argv[3];                   
+            $displayLimit = $argv[3];
         } else{
             $displayLimit = $this->currentUser->getMaxOutput();
         }
 
-        echo "User Information:\n";
-        
         // Locators array
         $locators = $this->currentUser->getUserLocaters();
-        
-        // Output locators
-        echo "\tLocators:\n";
-        foreach ($locators as $type => $address) {
-            printf("\t\t• %-5s: %s\n",$type,$address);
-        }
-        
-        // Authentication code is from the config file
-        echo "\tAuthentication Code: " . $this->currentUser->getAuthCode() . "\n";
 
-        $pubkey = $this->currentUser->getPublicKey();
-        // Public key is from the config file
-        $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$pubkey);
-        echo "\tPublic Key:" . $readablePubKey . "\n";
+        // Build user info data structure
+        $userInfo = [
+            'locators' => $locators,
+            'authentication_code' => $this->currentUser->getAuthCode(),
+            'public_key' => $this->currentUser->getPublicKey()
+        ];
 
-        if (isset($argv[2]) && strtolower($argv[2]) === 'detail'){
+        $showDetails = isset($argv[2]) && strtolower($argv[2]) === 'detail';
+
+        if ($showDetails) {
             // Get total sent and received by currency
             $balances = $this->balanceRepository->getUserBalance();
+            $userInfo['balances'] = [];
+
             if(isset($balances)){
                 foreach($balances as $balance){
-                    printf("\tTotal Balance %s : %s\n", $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2));
-                    if (isset($argv[2]) && $argv[2] === 'detail') { 
-                        $this->viewBalanceQuery("received","from",$this->transactionRepository->getReceivedUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit); // Received Balances
-                        $this->viewBalanceQuery("sent","to",$this->transactionRepository->getSentUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit); // Sent Balances
+                    $balanceData = [
+                        'currency' => $balance['currency'],
+                        'total_balance' => number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
+                        'received' => [],
+                        'sent' => []
+                    ];
+
+                    // Get received transactions
+                    $receivedTx = $this->transactionRepository->getReceivedUserTransactionsCurrency($balance['currency'], PHP_INT_MAX);
+                    foreach ($receivedTx as $tx) {
+                        $balanceData['received'][] = [
+                            'date' => $tx['date'],
+                            'counterparty_name' => $this->contactRepository->lookupNameByAddress($tx['counterparty']),
+                            'counterparty_address' => $tx['counterparty'],
+                            'amount' => $tx['amount'],
+                            'currency' => $tx['currency']
+                        ];
                     }
+
+                    // Get sent transactions
+                    $sentTx = $this->transactionRepository->getSentUserTransactionsCurrency($balance['currency'], PHP_INT_MAX);
+                    foreach ($sentTx as $tx) {
+                        $balanceData['sent'][] = [
+                            'date' => $tx['date'],
+                            'counterparty_name' => $this->contactRepository->lookupNameByAddress($tx['counterparty']),
+                            'counterparty_address' => $tx['counterparty'],
+                            'amount' => $tx['amount'],
+                            'currency' => $tx['currency']
+                        ];
+                    }
+
+                    $userInfo['balances'][] = $balanceData;
                 }
-            } else{
-                printf("\tNo balances available yet.\n");
-            }      
-        }   
+            }
+        }
+
+        if ($output->isJsonMode()) {
+            $output->userInfo($userInfo);
+        } else {
+            echo "User Information:\n";
+
+            // Output locators
+            echo "\tLocators:\n";
+            foreach ($locators as $type => $address) {
+                printf("\t\t• %-5s: %s\n",$type,$address);
+            }
+
+            // Authentication code is from the config file
+            echo "\tAuthentication Code: " . $this->currentUser->getAuthCode() . "\n";
+
+            $pubkey = $this->currentUser->getPublicKey();
+            // Public key is from the config file
+            $readablePubKey = "\n\t\t" . str_replace("\n","\n\t\t",$pubkey);
+            echo "\tPublic Key:" . $readablePubKey . "\n";
+
+            if ($showDetails){
+                // Get total sent and received by currency
+                $balances = $this->balanceRepository->getUserBalance();
+                if(isset($balances)){
+                    foreach($balances as $balance){
+                        printf("\tTotal Balance %s : %s\n", $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2));
+                        $this->viewBalanceQuery("received","from",$this->transactionRepository->getReceivedUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit);
+                        $this->viewBalanceQuery("sent","to",$this->transactionRepository->getSentUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit);
+                    }
+                } else{
+                    printf("\tNo balances available yet.\n");
+                }
+            }
+        }
     }
 
     /**
@@ -473,11 +656,16 @@ class CliService {
      * Display balance information, based on transactions, to user in the CLI
      *
      * @param array $argv The CLI input data
+     * @param CliOutputManager|null $output Optional output manager for JSON support
     */
-    public function viewBalances(array $argv) {
+    public function viewBalances(array $argv, ?CliOutputManager $output = null) {
+        $output = $output ?? CliOutputManager::getInstance();
+
         // Check if an address or name is provided
         $contactResult = null;
+        $filterAddress = null;
         if (isset($argv[2])) {
+            $filterAddress = $argv[2];
             // Check if it's a HTTP or Tor address
             if ($this->transportUtility->isAddress($argv[2])) {
                 $address = $argv[2];
@@ -495,65 +683,126 @@ class CliService {
         $additionalInfo = $additionalAddresses ? '(' . implode(', ', $additionalAddresses) . ')' : '';
 
         if(!$contactResult){
-            echo "Address/Name unknown or not provided, displaying all balances.\n";
             $contacts = $this->contactRepository->getAllContacts();
         }
+
         $balances = $this->balanceRepository->getUserBalance();
-        if($balances){
-            foreach($balances as $balance){
-                printf("%s %s, Balance %s : %.2f\n", 'me', $additionalInfo, $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)); 
-                if ($contactResult) {
-                    $contactBalances= $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'],$balance['currency']);
-                    foreach($contactBalances as $contactBalance){
-                        printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n", 
-                            $contact['name'], 
-                            $contact['http'] ?? $contact['tor'], 
-                            'received',
-                            'sent',
-                            number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), 
-                            number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
-                            $contactBalance['currency']
-                        );
-                    }
-                    return;
-                } else{
-                    if(!$contacts){
-                        echo "\tNo Contacts exist, so no contact balances can be displayed.\n";
-                        continue;
-                    } else{
+
+        if ($output->isJsonMode()) {
+            // Build JSON response
+            $balanceData = [
+                'user' => [
+                    'addresses' => $additionalAddresses,
+                    'balances' => []
+                ],
+                'contacts' => [],
+                'filter' => $filterAddress
+            ];
+
+            if($balances){
+                foreach($balances as $balance){
+                    $balanceData['user']['balances'][] = [
+                        'currency' => $balance['currency'],
+                        'total_balance' => number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
+                    ];
+
+                    if ($contactResult) {
+                        $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'], $balance['currency']);
+                        foreach($contactBalances as $contactBalance){
+                            $balanceData['contacts'][] = [
+                                'name' => $contactResult['name'],
+                                'address' => $contactResult['http'] ?? $contactResult['tor'],
+                                'currency' => $contactBalance['currency'],
+                                'received' => number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
+                                'sent' => number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
+                            ];
+                        }
+                    } else if(isset($contacts)){
                         foreach($contacts as $contact){
                             $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contact['pubkey'], $balance['currency']);
                             foreach($contactBalances as $contactBalance){
-                                printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n", 
-                                    $contact['name'], 
-                                    $contact['http'] ?? $contact['tor'], 
-                                    'received',
-                                    'sent',
-                                    number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2), 
-                                    number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
-                                    $contactBalance['currency']
-                                );
+                                $balanceData['contacts'][] = [
+                                    'name' => $contact['name'],
+                                    'address' => $contact['http'] ?? $contact['tor'],
+                                    'currency' => $contactBalance['currency'],
+                                    'received' => number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
+                                    'sent' => number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
+                                ];
                             }
                         }
-                    }    
-                }    
-            }     
-        } else{
-             echo "No balances available.\n";
-        }       
+                    }
+                }
+            }
+
+            $output->balances($balanceData);
+        } else {
+            // Original text output
+            if(!$contactResult && isset($argv[2])){
+                echo "Address/Name unknown or not provided, displaying all balances.\n";
+            }
+
+            if($balances){
+                foreach($balances as $balance){
+                    printf("%s %s, Balance %s : %.2f\n", 'me', $additionalInfo, $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2));
+                    if ($contactResult) {
+                        $contactBalances= $this->balanceRepository->getContactBalancesCurrency($contactResult['pubkey'],$balance['currency']);
+                        foreach($contactBalances as $contactBalance){
+                            printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n",
+                                $contactResult['name'],
+                                $contactResult['http'] ?? $contactResult['tor'],
+                                'received',
+                                'sent',
+                                number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
+                                number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
+                                $contactBalance['currency']
+                            );
+                        }
+                        return;
+                    } else{
+                        if(!isset($contacts) || !$contacts){
+                            echo "\tNo Contacts exist, so no contact balances can be displayed.\n";
+                            continue;
+                        } else{
+                            foreach($contacts as $contact){
+                                $contactBalances = $this->balanceRepository->getContactBalancesCurrency($contact['pubkey'], $balance['currency']);
+                                foreach($contactBalances as $contactBalance){
+                                    printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n",
+                                        $contact['name'],
+                                        $contact['http'] ?? $contact['tor'],
+                                        'received',
+                                        'sent',
+                                        number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
+                                        number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
+                                        $contactBalance['currency']
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            } else{
+                 echo "No balances available.\n";
+            }
+        }
     }
 
     /**
      * Display all transaction history in pretty print 'table' to user in the CLI
      *
      * @param array $argv The CLI input data
+     * @param CliOutputManager|null $output Optional output manager for JSON support
     */
-    public function viewTransactionHistory(array $argv) {
+    public function viewTransactionHistory(array $argv, ?CliOutputManager $output = null) {
+        $output = $output ?? CliOutputManager::getInstance();
+
         if(isset($argv[3]) && ($argv[3] === 'all' || intval($argv[3]) > 0)){
-            $displayLimit = $argv[3];                   
+            $displayLimit = $argv[3];
         } else{
             $displayLimit = $this->currentUser->getMaxOutput();
         }
+
+        $contactResult = null;
+        $transportIndex = null;
 
         // Check if an address or name is provided
         if (isset($argv[2])) {
@@ -566,21 +815,21 @@ class CliService {
                 }
             } else {
                 // Check if the name yields an address
-                $contactResult = $this->contactRepository->lookupByName($argv[2]);           
+                $contactResult = $this->contactRepository->lookupByName($argv[2]);
             }
-            if ($contactResult) {
+            if ($contactResult && $transportIndex) {
                 $sentTransactions = $this->transactionRepository->getSentUserTransactionsAddress($contactResult[$transportIndex],PHP_INT_MAX);
                 $receivedTransactions = $this->transactionRepository->getReceivedUserTransactionsAddress($contactResult[$transportIndex],PHP_INT_MAX);
-                $this->displayHistory($sentTransactions, 'sent', $displayLimit);
-                $this->displayHistory($receivedTransactions, 'received', $displayLimit);
+                $this->displayHistory($sentTransactions, 'sent', $displayLimit, $output);
+                $this->displayHistory($receivedTransactions, 'received', $displayLimit, $output);
                 return;
             }
         }
         // If no address supplied, get all transactions
         $sentTransactions = $this->transactionRepository->getSentUserTransactions(PHP_INT_MAX);
         $receivedTransactions = $this->transactionRepository->getReceivedUserTransactions(PHP_INT_MAX);
-        $this->displayHistory($sentTransactions, 'sent', $displayLimit);
-        $this->displayHistory($receivedTransactions, 'received', $displayLimit); 
+        $this->displayHistory($sentTransactions, 'sent', $displayLimit, $output);
+        $this->displayHistory($receivedTransactions, 'received', $displayLimit, $output);
     }
 
     /**
@@ -588,44 +837,80 @@ class CliService {
      *
      * @param array $transactions The formatted transaction data
      * @param string $direction received/send
-     * @param int $displayLimit The limit of output displayed
+     * @param int|string $displayLimit The limit of output displayed
+     * @param CliOutputManager|null $output Optional output manager for JSON support
     */
-    public function displayHistory(array $transactions, string $direction, int $displayLimit){
-        if(!$transactions){
-            echo "No transaction history found for $direction transactions.\n";
-            return;
-        }
+    public function displayHistory(array $transactions, string $direction, $displayLimit, ?CliOutputManager $output = null){
+        $output = $output ?? CliOutputManager::getInstance();
 
-        echo "Transaction History for $direction transactions:\n";
-        echo "-------------------------------------------\n";
-        echo str_pad("Timestamp", 26, ' ') . " | " . 
-            str_pad("Direction", 9, ' ') . " | " . 
-            str_pad("Name (Address)", 82, ' ') . " | " .
-            str_pad("Amount", 10, ' ') . " | " . 
-            str_pad("Currency", 10, ' ') . "\n";
-        echo "-------------------------------------------\n";
-            
         $countResults = count($transactions);
-        $countrows = 1;
-        foreach ($transactions as $tx) {
-            $contactName = $this->contactRepository->lookupNameByAddress($tx['counterparty']);
-            echo str_pad($tx['date'], 26, ' ') . " | " . 
-                str_pad($tx['type'], 9, ' ') . " | " . 
-                str_pad($contactName . " (" . $this->generalUtility->truncateAddress($tx['counterparty'],82-(strlen($contactName)+2)) . ")", 82, ' ') . " | " . 
-                str_pad($tx['amount'], 10, ' ') . " | " . 
-                str_pad($tx['currency'], 10, ' ') . "\n" ; 
-                        
-            if($displayLimit !== 'all' && ($countrows >= $displayLimit)){
-                break;
-            } 
-            $countrows += 1;        
+
+        if ($output->isJsonMode()) {
+            // Calculate effective display limit
+            $effectiveLimit = $displayLimit;
+            if ($displayLimit === 'all') {
+                $effectiveLimit = $countResults;
+            } elseif ($displayLimit > $countResults) {
+                $effectiveLimit = $countResults;
+            }
+
+            // Build transaction data for JSON
+            $txData = [];
+            $count = 0;
+            foreach ($transactions as $tx) {
+                if ($displayLimit !== 'all' && $count >= $displayLimit) {
+                    break;
+                }
+                $txData[] = [
+                    'timestamp' => $tx['date'],
+                    'type' => $tx['type'],
+                    'direction' => $direction,
+                    'counterparty_name' => $this->contactRepository->lookupNameByAddress($tx['counterparty']),
+                    'counterparty_address' => $tx['counterparty'],
+                    'amount' => $tx['amount'],
+                    'currency' => $tx['currency']
+                ];
+                $count++;
+            }
+
+            $output->transactionHistory($txData, $direction, $countResults, $effectiveLimit);
+        } else {
+            if(!$transactions){
+                echo "No transaction history found for $direction transactions.\n";
+                return;
+            }
+
+            echo "Transaction History for $direction transactions:\n";
+            echo "-------------------------------------------\n";
+            echo str_pad("Timestamp", 26, ' ') . " | " .
+                str_pad("Direction", 9, ' ') . " | " .
+                str_pad("Name (Address)", 82, ' ') . " | " .
+                str_pad("Amount", 10, ' ') . " | " .
+                str_pad("Currency", 10, ' ') . "\n";
+            echo "-------------------------------------------\n";
+
+            $countrows = 1;
+            foreach ($transactions as $tx) {
+                $contactName = $this->contactRepository->lookupNameByAddress($tx['counterparty']);
+                echo str_pad($tx['date'], 26, ' ') . " | " .
+                    str_pad($tx['type'], 9, ' ') . " | " .
+                    str_pad($contactName . " (" . $this->generalUtility->truncateAddress($tx['counterparty'],82-(strlen($contactName)+2)) . ")", 82, ' ') . " | " .
+                    str_pad($tx['amount'], 10, ' ') . " | " .
+                    str_pad($tx['currency'], 10, ' ') . "\n" ;
+
+                if($displayLimit !== 'all' && ($countrows >= $displayLimit)){
+                    break;
+                }
+                $countrows += 1;
+            }
+            echo "-------------------------------------------\n";
+            $effectiveLimit = $displayLimit;
+            if($displayLimit === 'all'){
+                $effectiveLimit = $countResults;
+            } elseif($displayLimit > $countResults){
+                $effectiveLimit = $countResults;
+            }
+            echo "Displaying " . $effectiveLimit .  " out of " . $countResults . " total transactions.\n";
         }
-        echo "-------------------------------------------\n";
-        if($displayLimit === 'all'){
-            $displayLimit = $countResults;
-        } elseif($displayLimit > $countResults){
-            $displayLimit = $countResults;
-        }
-        echo "Displaying " . $displayLimit .  " out of " . $countResults . " total transactions.\n";
     }
 }
