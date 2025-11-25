@@ -164,8 +164,11 @@ echo "[Testing mesh topology completeness]"
 meshTestPassed=0
 meshTestTotal=0
 meshContactsBuild="${#containersLinks[@]}"
-
+totalContactsExpected=0
 for sender in "${containers[@]}"; do
+    contactsExpectedCount=${expectedContacts[${sender}]}
+    totalContactsExpected=$(( totalContactsExpected + $contactsExpectedCount ))
+    contactsFound=0
     for receiver in "${containers[@]}"; do
         if [[ "$sender" == "$receiver" ]]; then
             continue  # Skip self-sends
@@ -175,31 +178,32 @@ for sender in "${containers[@]}"; do
 
         # Check if receiver is in sender's contacts
         receiverAddress="${containerAddresses[$receiver]}"
-        if [[ "${MODE}" == 'http' ]]; then
-            hasContact=$(docker exec ${sender} php -r "
-                require_once('./etc/eiou/src/core/Application.php');
-                echo Application::getInstance()->services->getContactRepository()->isAcceptedContactAddress('http','${receiverAddress}');
-            " 2>/dev/null || echo "0")
-
-        elif [[ "${MODE}" == 'tor' ]]; then
-            hasContact=$(docker exec ${sender} php -r "
-                require_once('./etc/eiou/src/core/Application.php');
-                echo Application::getInstance()->services->getContactRepository()->isAcceptedContactAddress('tor','${receiverAddress}');
-            " 2>/dev/null || echo "0")
-
-        fi
+       
+        hasContact=$(docker exec ${sender} php -r "
+            require_once('./etc/eiou/src/core/Application.php');
+            echo Application::getInstance()->services->getContactRepository()->isAcceptedContactAddress('${MODE}','${receiverAddress}');
+        " 2>/dev/null || echo "0")
 
         if [[ "$hasContact" -eq "1" ]]; then
             meshTestPassed=$(( meshTestPassed + 1 ))
+            contactsFound=$(( contactsFound + 1))
         fi
     done
+    
+    if [[ "$contactsFound" -eq "$contactsExpectedCount" ]]; then
+        printf "    ${GREEN}Found all expected contacts for ${sender}${NC}\n"  
+    else 
+        printf "    ${RED}Only found ${contactsFound}/$totalContactsExpected contacts for ${sender}${NC}\n"  
+    fi
 done
 
 totaltests=$(( totaltests + 1 ))
 
-printf "  Mesh connectivity of build: %d/%d connections exist " ${meshTestPassed} ${meshContactsBuild}
-buildMeshPercentage=$(awk "BEGIN {printf \"%.1f\", ($meshTestPassed * 100.0 / $meshContactsBuild)}")
-if [[ "$meshTestPassed" -eq "$meshContactsBuild" ]]; then
+
+
+printf "  Mesh connectivity of build: %d/%d connections exist " ${meshTestPassed} ${totalContactsExpected}
+buildMeshPercentage=$(awk "BEGIN {printf \"%.1f\", ($meshTestPassed * 100.0 / $totalContactsExpected)}")
+if [[ "$meshTestPassed" -eq "$totalContactsExpected" ]]; then
     printf "${GREEN}(100%% - Full Build mesh)${NC}\n"
     passed=$(( passed + 1 ))
 elif [[ $(awk "BEGIN {print ($buildMeshPercentage >= 75) ? 1 : 0}") -eq 1 ]]; then
@@ -210,16 +214,15 @@ else
     failure=$(( failure + 1 ))
 fi
 
+# printf "  Full Mesh connectivity: %d/%d connections exist (informative, no failure) " ${meshTestPassed} ${meshTestTotal}
+# fullMeshPercentage=$(awk "BEGIN {printf \"%.1f\", ($meshTestPassed * 100.0 / $meshTestTotal)}")
 
-printf "  Full Mesh connectivity: %d/%d connections exist (informative, no failure) " ${meshTestPassed} ${meshTestTotal}
-fullMeshPercentage=$(awk "BEGIN {printf \"%.1f\", ($meshTestPassed * 100.0 / $meshTestTotal)}")
+# if [[ "$meshTestPassed" -eq "$meshTestTotal" ]]; then
+#     printf "${GREEN}(100%% - Full mesh)${NC}\n"
+# elif [[ $(awk "BEGIN {print ($fullMeshPercentage >= 75) ? 1 : 0}") -eq 1 ]]; then
+#     printf "${NC}(%s%% - Partial mesh)${NC}\n" ${fullMeshPercentage}
+# else
+#     printf "${RED}(%s%% - Sparse connectivity)${NC}\n" ${fullMeshPercentage}
+# fi
 
-if [[ "$meshTestPassed" -eq "$meshTestTotal" ]]; then
-    printf "${GREEN}(100%% - Full mesh)${NC}\n"
-elif [[ $(awk "BEGIN {print ($fullMeshPercentage >= 75) ? 1 : 0}") -eq 1 ]]; then
-    printf "${NC}(%s%% - Partial mesh)${NC}\n" ${fullMeshPercentage}
-else
-    printf "${RED}(%s%% - Sparse connectivity)${NC}\n" ${fullMeshPercentage}
-fi
-
-succesrate "${totaltests}" "${passed}" "${failure}" "'send to all peers'"
+# succesrate "${totaltests}" "${passed}" "${failure}" "'send to all peers'"
