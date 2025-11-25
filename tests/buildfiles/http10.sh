@@ -67,6 +67,19 @@ declare -A containersLinks=(
     [httpJ,httpI]="$defaultFee $defaultCredit USD"
 )
 
+declare -A expectedContacts=(
+    [httpA]=1  # Only connected to httpB
+    [httpB]=2  # Connected to httpA and httpC
+    [httpC]=2  # Connected to httpB and httpC
+    [httpD]=2  # Connected to httpC and httpE
+    [httpE]=2  # Connected to httpD and httpF
+    [httpF]=2  # Connected to httpE and httpG
+    [httpG]=2  # Connected to httpF and httpH
+    [httpH]=2  # Connected to httpG and httpI
+    [httpI]=2  # Connected to httpH and httpJ
+    [httpJ]=1  # Only connected to httpJ
+)
+
 # For 10-line topology: A-B-C-D-E-F-G-H-I-J
 # Test A->C (should route through B)
 # Test A->D (should route through B and C)

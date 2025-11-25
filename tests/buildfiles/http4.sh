@@ -50,6 +50,13 @@ declare -A containersLinks=(
     [httpD,httpC]="$defaultFee $defaultCredit USD"
 )
 
+declare -A expectedContacts=(
+    [httpA]=1  # Only connected to httpB
+    [httpB]=2  # Connected to httpA and httpC
+    [httpC]=2  # Connected to httpB and httpC
+    [httpD]=1  # Only connected to httpC
+)
+
 # For 4-line topology: A-B-C-D
 # Test A->C (should route through B)
 # Test A->D (should route through B and C)

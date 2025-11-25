@@ -76,6 +76,21 @@ declare -A containersLinks=(
     [A42,A4]="$defaultFee $defaultCredit USD"
 )
 
+declare -A expectedContacts=(
+    [A0]=4   # Connected to A1, A2, A3 and A4
+    [A1]=3   # Connected to A0, A11 and A12
+    [A2]=3   # Connected to A0, A21 and A22
+    [A3]=3   # Connected to A0, A31 and A32
+    [A4]=3   # Connected to A0, A41 and A42
+    [A11]=2  # Only connected to A1
+    [A12]=2  # Only connected to A1
+    [A21]=2  # Only connected to A2
+    [A22]=2  # Only connected to A2
+    [A31]=1  # Only connected to A3
+    [A32]=1  # Only connected to A3
+    [A41]=1  # Only connected to A4
+    [A42]=1  # Only connected to A4
+)
 
 # For 13-node cluster topology:
 ## A31 A32   A41 A42
