@@ -68,8 +68,11 @@ class SecureLogger {
         // Mask sensitive data in context
         $maskedContext = self::maskContext($context);
 
-        // Format log entry
-        $timestamp = date(Constants::DISPLAY_DATE_FORMAT);
+        // Format log entry with proper microtime
+        // Note: date() always returns '000000' for microseconds (PHP limitation)
+        // Using microtime() string format to avoid float precision issues
+        $datetime = DateTime::createFromFormat('0.u00 U', microtime());
+        $timestamp = $datetime->format(Constants::DISPLAY_DATE_FORMAT);
         $pid = getmypid();
         $logEntry = "[$timestamp] [$level] [PID:$pid] $maskedMessage";
 
