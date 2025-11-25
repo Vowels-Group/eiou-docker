@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../cli/CliOutputManager.php';
+
 /**
  * Contact Service
  *
@@ -98,9 +100,12 @@ class ContactService {
      * to ensure data integrity and prevent injection attacks.
      *
      * @param array $data Command line arguments
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function addContact(array $data): void {
+    public function addContact(array $data, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
         // Validate and sanitize address
         $addressValidation =  $this->inputValidator->validateAddress($data[2] ?? '');
         if (!$addressValidation['valid']) {
@@ -108,13 +113,13 @@ class ContactService {
                 'address' => $data[2] ?? 'empty',
                 'error' => $addressValidation['error']
             ]);
-            output("Invalid Address: " . $addressValidation['error'],'ERROR');
+            $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
             exit(1);
         }
         $address = $addressValidation['value'];
 
         if(in_array($address,$this->currentUser->getUserAddresses())){
-            output("Cannot add yourself as a contact");
+            $output->error("Cannot add yourself as a contact", 'SELF_CONTACT', 400);
             exit(1);
         }
 
@@ -125,7 +130,7 @@ class ContactService {
                 'name' => $data[3] ?? 'empty',
                 'error' => $nameValidation['error']
             ]);
-            output("Invalid name: " . $nameValidation['error'],'ERROR');
+            $output->error("Invalid name: " . $nameValidation['error'], 'INVALID_NAME', 400);
             exit(1);
         }
         $name = $nameValidation['value'];
@@ -137,7 +142,7 @@ class ContactService {
                 'fee' => $data[4] ?? 'empty',
                 'error' => $feeValidation['error']
             ]);
-            output("Invalid Fee: " .$feeValidation['error'], 'ERROR');
+            $output->error("Invalid Fee: " . $feeValidation['error'], 'INVALID_FEE', 400);
             exit(1);
         }
         $fee = $feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR;
@@ -149,7 +154,7 @@ class ContactService {
                 'credit' => $data[5] ?? 'empty',
                 'error' => $creditValidation['error']
             ]);
-            output("Invalid credit: " . $creditValidation['error'], 'ERROR');
+            $output->error("Invalid credit: " . $creditValidation['error'], 'INVALID_CREDIT', 400);
             exit(1);
         }
         $credit = $creditValidation['value'] * Constants::CREDIT_CONVERSION_FACTOR;
@@ -161,7 +166,7 @@ class ContactService {
                 'currency' => $data[6] ?? 'empty',
                 'error' => $currencyValidation['error']
             ]);
-            output("Invalid currency: " . $currencyValidation['error'], 'ERROR');
+            $output->error("Invalid currency: " . $currencyValidation['error'], 'INVALID_CURRENCY', 400);
             exit(1);
         }
         $currency = $currencyValidation['value'];
@@ -177,9 +182,9 @@ class ContactService {
         $contact = $this->contactRepository->getContactByAddress($transportIndex, $address);
 
         if($contact){
-            $this->handleExistingContact($contact, $address, $name, $fee, $credit, $currency);
+            $this->handleExistingContact($contact, $address, $name, $fee, $credit, $currency, $output);
         } else{
-            $this->handleNewContact($address, $name, $fee, $credit, $currency);
+            $this->handleNewContact($address, $name, $fee, $credit, $currency, $output);
         }
     }
 
@@ -192,12 +197,25 @@ class ContactService {
      * @param float $fee Fee percentage
      * @param float $credit Credit limit
      * @param string $currency Currency code
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    private function handleExistingContact(array $contact, string $address, string $name, float $fee, float $credit, string $currency): void {
+    private function handleExistingContact(array $contact, string $address, string $name, float $fee, float $credit, string $currency, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
         $transportIndex = $this->transportUtility->determineTransportType($address);
+
+        // Build contact data for JSON response
+        $contactData = [
+            'address' => $address,
+            'name' => $name,
+            'fee' => $fee / Constants::FEE_CONVERSION_FACTOR,
+            'credit' => $credit / Constants::CREDIT_CONVERSION_FACTOR,
+            'currency' => $currency,
+            'status' => $contact['status']
+        ];
+
         // Check if contact is already an accepted contact
         if($contact['status'] === 'accepted'){
-            output(returnContactExists(),'WARNING');
+            $output->error("Contact already exists", 'CONTACT_EXISTS', 409, ['contact' => $contactData]);
         }
         // Check if contact was blocked
         elseif($contact['status'] === 'blocked'){
@@ -205,40 +223,44 @@ class ContactService {
             if($contact['name']){
                 // Unblock contact and add values
                 if($this->contactRepository->updateUnblockContact($transportIndex, $address, $name, $fee, $credit, $currency)){
-                    output(outputContactUnblockedAndOverwritten());
+                    $output->success("Contact unblocked and updated", $contactData, "Contact unblocked and updated successfully");
                 } else{
-                    output(outputContactUnblockedAndOverwrittenFailure());
+                    $output->error("Failed to unblock and update contact", 'UNBLOCK_FAILED', 500, ['contact' => $contactData]);
                 }
             }
             // Contact was blocked when user received contact request
             else{
                 if($this->contactRepository->updateUnblockContact($transportIndex, $address, $name, $fee, $credit, $currency)){
-                    output(outputContactUnblockedAndAdded());
+                    // Send message of successful contact acceptance back to original contact requester
+                    $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
+                    $output->success("Contact unblocked and added", $contactData, "Contact unblocked and added successfully");
                 } else{
-                    output(outputContactUnblockedAndAddedFailure());
+                    $output->error("Failed to unblock and add contact", 'UNBLOCK_ADD_FAILED', 500, ['contact' => $contactData]);
                 }
-                // Send message of successful contact acceptance back to original contact requester
-                $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
             }
         }
         elseif($contact['status'] === 'pending'){
             // if pending with name (contact was inserted by user for contact request)
             if($contact['name']){
                 // This contact was already sent a contact request, but has not yet responded to user (try resynching)
-                output(returnContactRequestAlreadyInserted());
                 // Resynch contact using SynchService directly
-                $succesfullSynch = Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'ECHO');
+                $succesfullSynch = Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'SILENT');
+                if ($succesfullSynch) {
+                    $contactData['status'] = 'accepted';
+                    $output->success("Contact request already sent, synched successfully", $contactData, "Contact synched");
+                } else {
+                    $output->info("Contact request already sent, awaiting response", $contactData);
+                }
             } else{
                 // If contact already exists with an address, it's a contact request, skip sending a message
                 if ($this->acceptContact($transportIndex, $address, $name, $fee, $credit, $currency)) {
                     // Send message of successful contact acceptance back to original contact requester
-                   
                     $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
-                    output(outputSendContactAcceptedSuccesfullyMessage($address),'SILENT');
-                    output(returnContactAccepted());
+                    $contactData['status'] = 'accepted';
+                    $output->success("Contact request accepted", $contactData, "Contact accepted successfully");
                 }
                 else {
-                    output(returnContactAcceptanceFailed(), 'ERROR');
+                    $output->error("Failed to accept contact request", 'ACCEPT_FAILED', 500, ['contact' => $contactData]);
                     exit(1);
                 }
             }
@@ -253,8 +275,20 @@ class ContactService {
      * @param float $fee Fee percentage
      * @param float $credit Credit limit
      * @param string $currency Currency code
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    private function handleNewContact(string $address, string $name, float $fee, float $credit, string $currency): void {
+    private function handleNewContact(string $address, string $name, float $fee, float $credit, string $currency, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        // Build contact data for JSON response
+        $contactData = [
+            'address' => $address,
+            'name' => $name,
+            'fee' => $fee / Constants::FEE_CONVERSION_FACTOR,
+            'credit' => $credit / Constants::CREDIT_CONVERSION_FACTOR,
+            'currency' => $currency
+        ];
+
         // Build the payload array
         $payload = $this->contactPayload->buildCreateRequest($address);
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);
@@ -266,23 +300,27 @@ class ContactService {
                 // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
                 if ($this->contactRepository->insertContact($transportIndexAssociative, $responseData['senderPublicKey'], $name, $fee, $credit, $currency)) {
                     $this->balanceRepository->insertInitialContactBalances($responseData['senderPublicKey'], $currency);
-                    output(returnContactCreationSuccessful());
+                    $contactData['status'] = 'pending';
+                    $contactData['pubkey'] = $responseData['senderPublicKey'];
+                    $output->success("Contact request sent successfully", $contactData, "Contact request sent, awaiting acceptance");
                 } else{
-                    output(returnContactCreationFailed());
+                    $output->error("Failed to create contact", 'CONTACT_CREATE_FAILED', 500, ['contact' => $contactData]);
                     exit(1);
                 }
-            } 
-            // Our contact pubkey exists on their end, but not provided address 
+            }
+            // Our contact pubkey exists on their end, but not provided address
             //  we are known under a different address or transport type
             elseif($responseData['status'] === 'updated'){
                 $senderAddress = $responseData['senderAddress'];
                 $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
                 if($this->contactRepository->updateContactFields($responseData['senderPublicKey'],[$transportIndex => $senderAddress])){
-                    output(outputContactUpdatedAddress());
+                    $contactData['status'] = 'updated';
+                    $contactData['updated_address'] = $senderAddress;
+                    $output->success("Contact address updated", $contactData, "Contact address updated successfully");
                 } else{
-                    output(outputContactUpdatedAddressFailure());
+                    $output->error("Failed to update contact address", 'ADDRESS_UPDATE_FAILED', 500, ['contact' => $contactData]);
                 }
-            } 
+            }
             // Our contact pubkey and adress both exist on their end (Case when we delete the contact and try re-adding it)
             elseif($responseData['status'] === 'warning'){
                 // Insert contact and try re-synching (inquiry about acceptance status)
@@ -290,22 +328,26 @@ class ContactService {
                     $this->balanceRepository->insertInitialContactBalances($responseData['senderPublicKey'], $currency);
                     // Resynch contact
                     if(Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'SILENT')){
-                        // TO DO ALSO SYNCH BALANCES
-                        output(returnContactCreationSuccessful());
+                        $contactData['status'] = 'accepted';
+                        $contactData['pubkey'] = $responseData['senderPublicKey'];
+                        $output->success("Contact re-added and synched", $contactData, "Contact created successfully");
+                    } else {
+                        $contactData['status'] = 'pending';
+                        $output->success("Contact re-added, awaiting sync", $contactData, "Contact created, sync pending");
                     }
                 }
-            } 
+            }
             // Our contact request could not be processed on their end
             elseif($responseData['status'] === 'rejection'){
-                // If not accepted, show error and display the response
-                output(returnContactRejected($responseData));
-                output(outputFailedContactRequest($payload), 'SILENT');
+                $output->error("Contact request rejected: " . ($responseData['reason'] ?? 'Unknown reason'), 'CONTACT_REJECTED', 403, [
+                    'contact' => $contactData,
+                    'response' => $responseData
+                ]);
                 exit(1);
             }
         } else{
             // Case when sending to an adress that does not exist at all (or is experiencing downtime)
-            output(outputFailedContactInteraction());
-            output(outputFailedContactRequest($payload), 'SILENT');
+            $output->error("Failed to reach contact address. Address may not exist or is offline.", 'CONTACT_UNREACHABLE', 503, ['contact' => $contactData]);
             exit(1);
         }
     }
@@ -422,11 +464,13 @@ class ContactService {
      * Search contacts
      *
      * @param array $data Command line arguments
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function searchContacts(array $data): void {
-        // Lookup contact based on their name
+    public function searchContacts(array $data, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
 
+        // Lookup contact based on their name
         if(isset($data[2])){
             $nameValidation =  $this->inputValidator->validateContactName($data[2]);
             if (!$nameValidation['valid']) {
@@ -434,7 +478,7 @@ class ContactService {
                     'name' => $data[2] ?? 'empty',
                     'error' => $nameValidation['error']
                 ]);
-                output("Invalid name: " . $nameValidation['error'],'ERROR');
+                $output->error("Invalid name: " . $nameValidation['error'], 'INVALID_NAME', 400);
                 exit(1);
             }
             $name = $nameValidation['value'];
@@ -442,9 +486,25 @@ class ContactService {
         $searchTerm = $name ?? null;
 
         if ($results = $this->contactRepository->searchContacts($searchTerm)) {
-            output(returnContactSearchResults($results));
+            if ($output->isJsonMode()) {
+                $output->success("Found " . count($results) . " contact(s)", [
+                    'search_term' => $searchTerm,
+                    'count' => count($results),
+                    'contacts' => $results
+                ]);
+            } else {
+                echo "Search Results:\n";
+                foreach ($results as $contact) {
+                    echo "\t" . $contact['name'] . " - " . ($contact['http'] ?? $contact['tor'] ?? 'No address') . " (" . $contact['status'] . ")\n";
+                }
+                echo "Found " . count($results) . " contact(s)\n";
+            }
         } else{
-            output(returnContactSearchNoResults());
+            $output->success("No contacts found", [
+                'search_term' => $searchTerm,
+                'count' => 0,
+                'contacts' => []
+            ], "No contacts match the search criteria");
         }
     }
 
@@ -452,9 +512,12 @@ class ContactService {
      * View contact details
      *
      * @param array $data Command line arguments
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function viewContact(array $data): void {
+    public function viewContact(array $data, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
         // View contact information
         $amountValidation = $this->inputValidator->validateArgvAmount($data, 3);
         if (!$amountValidation['valid']) {
@@ -462,7 +525,7 @@ class ContactService {
                 'value' => $data,
                 'error' => $amountValidation['error']
             ]);
-            output(("Invalid parameter amount: " . $amountValidation['error']),'ERROR');
+            $output->error("Invalid parameter amount: " . $amountValidation['error'], 'INVALID_PARAMS', 400);
             exit(0);
         }
 
@@ -473,7 +536,7 @@ class ContactService {
                     'address' => $data[2] ?? 'empty',
                     'error' => $addressValidation['error']
                 ]);
-                output("Invalid Address: " . $addressValidation['error'],'ERROR');
+                $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
                 exit(1);
             }
             $address = $addressValidation['value'];
@@ -483,13 +546,34 @@ class ContactService {
             // Check if the name yields an address
             $contactResult = $this->lookupByName($data[2]);
         }
-        
+
         if ($contactResult) {
-            output(returnContactDetails($contactResult));
+            if ($output->isJsonMode()) {
+                $output->success("Contact found", [
+                    'contact' => [
+                        'name' => $contactResult['name'] ?? null,
+                        'http' => $contactResult['http'] ?? null,
+                        'tor' => $contactResult['tor'] ?? null,
+                        'pubkey' => $contactResult['pubkey'] ?? null,
+                        'status' => $contactResult['status'] ?? null,
+                        'fee_percent' => isset($contactResult['fee_percent']) ? $contactResult['fee_percent'] / Constants::FEE_CONVERSION_FACTOR : null,
+                        'credit_limit' => isset($contactResult['credit_limit']) ? $contactResult['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR : null,
+                        'currency' => $contactResult['currency'] ?? null
+                    ]
+                ]);
+            } else {
+                echo "Contact Details:\n";
+                echo "\tName: " . ($contactResult['name'] ?? 'N/A') . "\n";
+                if (isset($contactResult['http'])) echo "\tHTTP: " . $contactResult['http'] . "\n";
+                if (isset($contactResult['tor'])) echo "\tTor: " . $contactResult['tor'] . "\n";
+                echo "\tStatus: " . ($contactResult['status'] ?? 'N/A') . "\n";
+                if (isset($contactResult['fee_percent'])) echo "\tFee: " . ($contactResult['fee_percent'] / Constants::FEE_CONVERSION_FACTOR) . "%\n";
+                if (isset($contactResult['credit_limit'])) echo "\tCredit Limit: " . ($contactResult['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR) . "\n";
+                if (isset($contactResult['currency'])) echo "\tCurrency: " . $contactResult['currency'] . "\n";
+            }
         } else {
-            output(returnContactNotFound());
+            $output->error("Contact not found", 'CONTACT_NOT_FOUND', 404, ['query' => $data[2] ?? null]);
         }
-        
     }
 
     /**
@@ -538,74 +622,203 @@ class ContactService {
     /**
      * Block a contact
      *
-     * @param string $address Contact address
+     * @param string|null $address Contact address
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return bool Success status
      */
-    public function blockContact(string $address): bool {
+    public function blockContact(?string $address, ?CliOutputManager $output = null): bool {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        if ($address === null) {
+            $output->error("Address is required", 'MISSING_ADDRESS', 400);
+            exit(1);
+        }
+
         $addressValidation =  $this->inputValidator->validateAddress($address);
         if (!$addressValidation['valid']) {
             $this->secureLogger->warning("Invalid contact address", [
-                'address' => $data[2] ?? 'empty',
+                'address' => $address,
                 'error' => $addressValidation['error']
             ]);
-            output("Invalid Address: " . $addressValidation['error'],'ERROR');
+            $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
             exit(1);
         }
         $address = $addressValidation['value'];
         $transportIndex = $this->transportUtility->determineTransportType($address);
-        return $this->contactRepository->blockContact($transportIndex, $address);
+
+        if ($this->contactRepository->blockContact($transportIndex, $address)) {
+            $output->success("Contact blocked successfully", [
+                'address' => $address,
+                'status' => 'blocked'
+            ]);
+            return true;
+        } else {
+            $output->error("Failed to block contact", 'BLOCK_FAILED', 500, ['address' => $address]);
+            return false;
+        }
     }
 
     /**
      * Unblock a contact
      *
-     * @param string $address Contact address
+     * @param string|null $address Contact address
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return bool Success status
      */
-    public function unblockContact(string $address): bool {
+    public function unblockContact(?string $address, ?CliOutputManager $output = null): bool {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        if ($address === null) {
+            $output->error("Address is required", 'MISSING_ADDRESS', 400);
+            exit(1);
+        }
+
         $addressValidation =  $this->inputValidator->validateAddress($address);
         if (!$addressValidation['valid']) {
             $this->secureLogger->warning("Invalid contact address", [
-                'address' => $data[2] ?? 'empty',
+                'address' => $address,
                 'error' => $addressValidation['error']
             ]);
-            output("Invalid Address: " . $addressValidation['error'],'ERROR');
+            $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
             exit(1);
         }
         $address = $addressValidation['value'];
-        
+
         $transportIndex = $this->transportUtility->determineTransportType($address);
-        return $this->contactRepository->unblockContact($transportIndex, $address);
+
+        if ($this->contactRepository->unblockContact($transportIndex, $address)) {
+            $output->success("Contact unblocked successfully", [
+                'address' => $address,
+                'status' => 'unblocked'
+            ]);
+            return true;
+        } else {
+            $output->error("Failed to unblock contact", 'UNBLOCK_FAILED', 500, ['address' => $address]);
+            return false;
+        }
     }
 
     /**
      * Delete a contact
      *
-     * @param string $address Contact address
+     * @param string|null $address Contact address
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return bool Success status
      */
-    public function deleteContact(string $address): bool {
+    public function deleteContact(?string $address, ?CliOutputManager $output = null): bool {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        if ($address === null) {
+            $output->error("Address is required", 'MISSING_ADDRESS', 400);
+            exit(1);
+        }
+
         $addressValidation =  $this->inputValidator->validateAddress($address);
         if (!$addressValidation['valid']) {
             $this->secureLogger->warning("Invalid contact address", [
-                'address' => $data[2] ?? 'empty',
+                'address' => $address,
                 'error' => $addressValidation['error']
             ]);
-            output("Invalid Address: " . $addressValidation['error'],'ERROR');
+            $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
             exit(1);
         }
         $address = $addressValidation['value'];
         $transportIndex = $this->transportUtility->determineTransportType($address);
-        return $this->contactRepository->deleteContact($transportIndex, $address);
+
+        if ($this->contactRepository->deleteContact($transportIndex, $address)) {
+            $output->success("Contact deleted successfully", [
+                'address' => $address,
+                'deleted' => true
+            ]);
+            return true;
+        } else {
+            $output->error("Failed to delete contact", 'DELETE_FAILED', 500, ['address' => $address]);
+            return false;
+        }
     }
 
     /**
      * Update specific contact fields through CLI interaction
      *
      * @param array $argv Command line arguments
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function updateContact(array $argv) {
-        return $this->contactRepository->updateContact($argv);
+    public function updateContact(array $argv, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        $address = $argv[2] ?? null;
+        $field = isset($argv[3]) ? strtolower($argv[3]) : null;
+        $value = $argv[4] ?? null;
+        $value2 = $argv[5] ?? null;
+        $value3 = $argv[6] ?? null;
+
+        // Validate address
+        if (!$address) {
+            $output->error("Address is required", 'MISSING_ADDRESS', 400);
+            return;
+        }
+
+        // Lookup contact
+        $contact = $this->contactRepository->lookupByAddress($address);
+        if (!$contact) {
+            // Try by name
+            $contact = $this->contactRepository->lookupByName($address);
+        }
+
+        if (!$contact) {
+            $output->error("Contact not found: $address", 'CONTACT_NOT_FOUND', 404);
+            return;
+        }
+
+        // Validate field
+        if (!in_array($field, ['name', 'fee', 'credit', 'all'])) {
+            $output->error("Invalid field. Must be one of: name, fee, credit, all", 'INVALID_FIELD', 400, [
+                'valid_fields' => ['name', 'fee', 'credit', 'all']
+            ]);
+            return;
+        }
+
+        // Validate values
+        if (!$value || ($field === 'all' && (!$value2 || !$value3))) {
+            $output->error("Insufficient parameters for update", 'MISSING_PARAMS', 400, [
+                'field' => $field,
+                'usage' => $field === 'all'
+                    ? 'update [address] all [name] [fee] [credit]'
+                    : "update [address] $field [value]"
+            ]);
+            return;
+        }
+
+        // Build update fields
+        $updateFields = [];
+        $updateData = ['address' => $address, 'field' => $field];
+
+        if ($field === 'name') {
+            $updateFields['name'] = $value;
+            $updateData['name'] = $value;
+        } elseif ($field === 'fee') {
+            $updateFields['fee_percent'] = $value * Constants::FEE_CONVERSION_FACTOR;
+            $updateData['fee'] = $value;
+        } elseif ($field === 'credit') {
+            $updateFields['credit_limit'] = $value * Constants::CREDIT_CONVERSION_FACTOR;
+            $updateFields['currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $updateData['credit'] = $value;
+        } elseif ($field === 'all') {
+            $updateFields['name'] = $value;
+            $updateFields['fee_percent'] = $value2 * Constants::FEE_CONVERSION_FACTOR;
+            $updateFields['credit_limit'] = $value3 * Constants::CREDIT_CONVERSION_FACTOR;
+            $updateFields['currency'] = Constants::TRANSACTION_DEFAULT_CURRENCY;
+            $updateData['name'] = $value;
+            $updateData['fee'] = $value2;
+            $updateData['credit'] = $value3;
+        }
+
+        // Perform update
+        if ($this->contactRepository->updateContactFields($contact['pubkey'], $updateFields)) {
+            $output->success("Contact updated successfully", $updateData);
+        } else {
+            $output->error("Failed to update contact", 'UPDATE_FAILED', 500, $updateData);
+        }
     }
 
     /**

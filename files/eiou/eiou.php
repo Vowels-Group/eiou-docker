@@ -8,7 +8,7 @@ require_once '/etc/eiou/functions.php';
 require_once '/etc/eiou/security_init.php';
 
 // Load CLI output manager for JSON support
-require_once dirname(__DIR__) . '/src/cli/CliOutputManager.php';
+require_once '/etc/eiou/src/cli/CliOutputManager.php';
 
 // Get application instance (if first time build database)
 $app = Application::getInstance();
@@ -28,7 +28,7 @@ $output->setCommand($request);
 if (!$app->currentUserLoaded()) {
   // Generate Wallet
   if($request === "generate"){
-    $app->generateWallet($cleanArgv);
+    $app->generateWallet($cleanArgv, $output);
     exit(0); // Normal termination after wallet generation
   } else{
     $app->getLogger()->warning("Attempted to run command without wallet", ['command' => $request]);

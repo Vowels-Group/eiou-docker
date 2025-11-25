@@ -2,6 +2,7 @@
 # Copyright 2025
 
 require_once __DIR__ . '/../utils/InputValidator.php';
+require_once __DIR__ . '/../cli/CliOutputManager.php';
 
 /**
  * Transaction Service
@@ -536,14 +537,24 @@ class TransactionService {
      * Send eIOU
      *
      * @param array|null $request Request data
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function sendEiou(?array $request = null): void {
+    public function sendEiou(?array $request = null, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
         // Handler for sending eIOU through user Input
         if ($request === null) {
             global $data;
             $request = $data;
         }
+
+        // Build transaction data for JSON response
+        $txData = [
+            'recipient' => $request[2] ?? null,
+            'amount' => $request[3] ?? null,
+            'currency' => $request[4] ?? 'USD'
+        ];
 
         // Validate Parameter count
         if (isset($request)) {
@@ -553,7 +564,7 @@ class TransactionService {
                     'value' => $request,
                     'error' => $amountValidation['error']
                 ]);
-                output(("Invalid parameter amount: " . $amountValidation['error']),'ERROR');
+                $output->error("Invalid parameter amount: " . $amountValidation['error'], 'INVALID_PARAMS', 400);
                 exit(0);
             }
         }
@@ -567,11 +578,11 @@ class TransactionService {
                     $this->secureLogger->warning("Invalid Address/name", [
                         'value' => $request[2],
                         'error' => $addressValidation['error'] . " / " . $nameValidation['error']
-                    ]);   
-                    output(("Invalid Address/name: " . $addressValidation['error'] . " / " . $nameValidation['error']),'ERROR');
+                    ]);
+                    $output->error("Invalid Address/name: " . $addressValidation['error'], 'INVALID_RECIPIENT', 400);
                     exit(0);
-                } 
-            }   
+                }
+            }
         }
 
         // Validate and sanitize amount if provided
@@ -582,10 +593,11 @@ class TransactionService {
                     'amount' => $request[3],
                     'error' => $amountValidation['error']
                 ]);
-                output(("Invalid amount: " . $amountValidation['error']),'ERROR');
+                $output->error("Invalid amount: " . $amountValidation['error'], 'INVALID_AMOUNT', 400);
                 exit(0);
             }
             $request[3] = $amountValidation['value'];
+            $txData['amount'] = $request[3];
         }
 
         // Validate currency if provided
@@ -596,15 +608,16 @@ class TransactionService {
                     'currency' => $request[4],
                     'error' => $currencyValidation['error']
                 ]);
-                output("Invalid currency: " . $currencyValidation['error'],'ERROR');
+                $output->error("Invalid currency: " . $currencyValidation['error'], 'INVALID_CURRENCY', 400);
                 exit(0);
             }
             $request[4] = $currencyValidation['value'];
+            $txData['currency'] = $request[4];
         }
 
         // Check if any contacts for eIOU
         if(!$this->contactRepository->getAllAddresses()){
-            output(outputNoContactsForTransaction($request));
+            $output->error("No contacts available for transaction", 'NO_CONTACTS', 400, $txData);
             exit(0);
         }
 
@@ -613,7 +626,7 @@ class TransactionService {
         if ($contactInfo = $contactService->lookupContactInfo($request[2])) {
             if($contactInfo['status'] === 'accepted'){
                 // Contact is accepted
-                $this->handleDirectRoute($request, $contactInfo);
+                $this->handleDirectRoute($request, $contactInfo, $output);
             }elseif($contactInfo['status'] === 'pending'){
                 // Contact is still pending, try a resynch otherwise send through p2p if possible
 
@@ -621,17 +634,17 @@ class TransactionService {
                 $transportIndex = $this->transportUtility->fallbackTransportType($request[2],$contactInfo);
                 $synchResult = Application::getInstance()->services->getSynchService()->synchSingleContact($contactInfo[$transportIndex],'SILENT');
                 if($synchResult){
-                    $this->handleDirectRoute($request, $contactInfo);
+                    $this->handleDirectRoute($request, $contactInfo, $output);
                 } else{
-                    $this->handleP2pRoute($request);
+                    $this->handleP2pRoute($request, $output);
                 }
             } elseif($contactInfo['status'] === 'blocked'){
                 // Contact is blocked, do not send anything
-                output(outputContactBlockedNoTransaction(),'SILENT');
-            }  
+                $output->error("Cannot send to blocked contact", 'CONTACT_BLOCKED', 403, $txData);
+            }
         } else {
             // Contact not found, try sending through p2p network
-            $this->handleP2pRoute($request);
+            $this->handleP2pRoute($request, $output);
         }
     }
 
@@ -640,32 +653,58 @@ class TransactionService {
      *
      * @param array $request Request data
      * @param array $contactInfo Contact information
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function handleDirectRoute(array $request, $contactInfo): void{
-        output(outputLookedUpContactInfo($contactInfo), 'SILENT');
+    public function handleDirectRoute(array $request, $contactInfo, ?CliOutputManager $output = null): void{
+        $output = $output ?? CliOutputManager::getInstance();
 
         // Data preparation for eIOU
         $data = $this->prepareStandardTransactionData($request, $contactInfo);
-        
+
         // Prepare transaction payload from data
         $payload = $this->transactionPayload->build($data);
         $this->transactionRepository->insertTransaction($payload,'sent');
 
-        output(outputSendTransaction($payload));
+        // Build response data
+        $txResponse = [
+            'status' => 'sent',
+            'type' => 'direct',
+            'recipient' => $contactInfo['receiverName'] ?? $request[2],
+            'recipient_address' => $data['receiverAddress'] ?? null,
+            'amount' => ($data['amount'] ?? 0) / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
+            'currency' => $data['currency'] ?? 'USD',
+            'txid' => $data['txid'] ?? null,
+            'timestamp' => $data['time'] ?? null
+        ];
+
+        $output->success("Transaction sent successfully", $txResponse, "Direct transaction initiated");
     }
 
     /**
      * Send out p2p message to find route to contact for sending a eIOU
      *
      * @param array $request Request data
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function handleP2pRoute(array $request): void{
-        output(outputContactNotFoundTryP2p($request), 'SILENT');
+    public function handleP2pRoute(array $request, ?CliOutputManager $output = null): void{
+        $output = $output ?? CliOutputManager::getInstance();
+
         // Send P2P request when contact not found using P2pService directly
         Application::getInstance()->services->getP2pService()->sendP2pRequest($request);
-        output(outputSendP2p($request));
+
+        // Build response data
+        $txResponse = [
+            'status' => 'pending',
+            'type' => 'p2p',
+            'recipient' => $request[2] ?? null,
+            'amount' => $request[3] ?? null,
+            'currency' => $request[4] ?? 'USD',
+            'message' => 'P2P route discovery initiated'
+        ];
+
+        $output->success("P2P transaction request sent", $txResponse, "Searching for route to recipient via P2P network");
     }
 
     /**
