@@ -159,7 +159,6 @@ class SynchService {
         // Synch specific contact based on address
         $transportIndex = $this->transportUtility->determineTransportType($contactAddress);
         $contact = $this->contactRepository->getContactByAddress($transportIndex, $contactAddress); // Get contact from database
-        output("CONTACT " . print_r($contact,true),'SILENT');
         if($contact['status'] === 'pending'){
             output(outputSynchContactDueToPendingStatus($contactAddress),$echo);
             // If the contact is still pending then inquire with contact
