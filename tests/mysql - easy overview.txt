@@ -4,9 +4,11 @@ use eiou
 
 SELECT message FROM debug;
 
-SELECT id,  http, tor, name, status, fee_percent, credit_limit, currency FROM contacts;
+SELECT id, name, status, fee_percent, credit_limit, currency FROM contacts;
 
-SELECT id, received, sent, currency FROM balances;
+SELECT * FROM addresses;
+
+SELECT * FROM balances;
 
 SELECT id, hash, time, amount, my_fee_amount, sender_address, destination_address, incoming_txid, outgoing_txid, status, created_at, completed_at FROM p2p;
 

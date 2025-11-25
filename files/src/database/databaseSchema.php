@@ -5,8 +5,6 @@
 function getContactsTableSchema() {
     return "CREATE TABLE IF NOT EXISTS contacts (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        http VARCHAR(255) UNIQUE,
-        tor VARCHAR(255) UNIQUE,
         pubkey TEXT NOT NULL,
         pubkey_hash VARCHAR(64),
         name VARCHAR(255),
@@ -15,15 +13,27 @@ function getContactsTableSchema() {
             'accepted', /* Contact request Accepted */ 
             'blocked'   /* Contact request Blocked */ 
         ) DEFAULT 'pending',
+        currency VARCHAR(10),
         fee_percent INT,
         credit_limit INT,
-        currency VARCHAR(10),
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_contacts_tor (tor),
         INDEX idx_contacts_pubkey_hash (pubkey_hash),
         INDEX idx_contacts_name (name),
         INDEX idx_contacts_status (status),
-        INDEX idx_contacts_address_status (tor, status)
+        INDEX idx_contacts_pubkey_hash_status (pubkey_hash, status)
+    )";
+}
+
+// Address table
+function getAddressTableSchema(){
+    return "CREATE TABLE IF NOT EXISTS addresses (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        pubkey_hash TEXT NOT NULL,
+        http VARCHAR(255) UNIQUE DEFAULT NULL,
+        tor VARCHAR(255) UNIQUE DEFAULT NULL,
+        INDEX idx_addresses_pubkey (pubkey_hash),
+        INDEX idx_addresses_http (http),
+        INDEX idx_addresses_tor (tor)
     )";
 }
 
@@ -31,11 +41,11 @@ function getContactsTableSchema() {
 function getBalancesTableSchema() {
     return "CREATE TABLE IF NOT EXISTS balances (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
-        pubkey TEXT NOT NULL,
+        pubkey_hash TEXT NOT NULL,
         received INT NOT NULL,
         sent INT NOT NULL,
         currency VARCHAR(10),
-        INDEX idx_balances_pubkey (pubkey)
+        INDEX idx_balances_pubkey_hash (pubkey_hash)
     )";
 }
 
@@ -75,6 +85,7 @@ function getP2pTableSchema() {
         sender_public_key TEXT NOT NULL,
         sender_address VARCHAR(255) NOT NULL,
         sender_signature TEXT,
+        description TEXT,
         status ENUM(
             'initial',      /* First received p2p request */
             'queued',       /* Waiting to be processed */
@@ -154,6 +165,7 @@ function getTransactionsTableSchema() {
         previous_txid VARCHAR(255),
         sender_signature TEXT,
         memo TEXT,
+        description TEXT,
         INDEX idx_transactions_receiver_public_key_hash (receiver_public_key_hash),
         INDEX idx_transactions_sender_public_key_hash (sender_public_key_hash),
         INDEX idx_transactions_sender_receiver (sender_public_key_hash, receiver_public_key_hash),

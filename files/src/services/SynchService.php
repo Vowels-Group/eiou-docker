@@ -15,6 +15,11 @@ class SynchService {
     private ContactRepository $contactRepository;
 
     /**
+     * @var AddressRepository Address repository instance
+     */
+    private AddressRepository $addressRepository;
+
+    /**
      * @var P2pRepository P2P repository instance
      */
     private P2pRepository $p2pRepository;
@@ -63,6 +68,7 @@ class SynchService {
     /**
      * Constructor
      * @param ContactRepository $contactRepository Contact repository
+     * @param AddressRepository $addressRepository Address Repository
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
@@ -71,6 +77,7 @@ class SynchService {
      */
     public function __construct(
         ContactRepository $contactRepository,
+         AddressRepository $addressRepository,
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
@@ -78,6 +85,7 @@ class SynchService {
         UserContext $currentUser
     ) {
         $this->contactRepository = $contactRepository;
+        $this->addressRepository = $addressRepository;
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
@@ -129,7 +137,7 @@ class SynchService {
      */
     public function synchAllContacts(): void{
         // Synch all contacts
-        $contacts = $this->contactRepository->getAllAddresses();
+        $contacts = $this->addressRepository->getAllAddresses();
         foreach ($contacts as $contact) {
             if ($contact['http']) {
                 // Http is faster (thus preffered if possible)
@@ -150,7 +158,7 @@ class SynchService {
     public function synchSingleContact($contactAddress, $echo='SILENT'): bool{
         // Synch specific contact based on address
         $transportIndex = $this->transportUtility->determineTransportType($contactAddress);
-        $contact = $this->contactRepository->getContactByAddress($transportIndex,$contactAddress); // Get contact from database
+        $contact = $this->contactRepository->getContactByAddress($transportIndex, $contactAddress); // Get contact from database
         if($contact['status'] === 'pending'){
             output(outputSynchContactDueToPendingStatus($contactAddress),$echo);
             // If the contact is still pending then inquire with contact

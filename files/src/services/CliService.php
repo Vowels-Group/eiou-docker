@@ -447,14 +447,13 @@ class CliService {
     */
     public function viewBalanceQuery(string $direction, string $where, array $results, int $displayLimit){
         $countResults = count($results);
-        
         echo "\t\tBalance $direction $where:\n";
         $countrows = 1;
         foreach ($results as $res) {
             printf("\t\t\t%s %s %s (%s), %.2f %s\n", 
                     $res['date'],
                     "|",
-                    $this->contactRepository->lookupNameByAddress($res['counterparty']), 
+                    $this->contactRepository->lookupNameByAddress($this->transportUtility->determineTransportType($res['counterparty']),$res['counterparty']), 
                     $this->generalUtility->truncateAddress($res['counterparty'],30), 
                     $res['amount'], 
                     $res['currency']);
@@ -483,7 +482,7 @@ class CliService {
                 $address = $argv[2];
                 $transportIndex = $this->transportUtility->determineTransportType($address);
                 if($this->contactRepository->contactExists($transportIndex, $address)){
-                    $contactResult = $this->contactRepository->lookupByAddress($address);
+                    $contactResult = $this->contactRepository->lookupByAddress($transportIndex, $address);
                 }
             } else{
                 // Check if the name yields an address
@@ -562,7 +561,7 @@ class CliService {
                 $address = $argv[2];
                 $transportIndex = $this->transportUtility->determineTransportType($address);
                 if($this->contactRepository->contactExists($transportIndex, $address)){
-                    $contactResult = $this->contactRepository->lookupByAddress($address);
+                    $contactResult = $this->contactRepository->lookupByAddress($transportIndex, $address);
                 }
             } else {
                 // Check if the name yields an address
@@ -608,7 +607,7 @@ class CliService {
         $countResults = count($transactions);
         $countrows = 1;
         foreach ($transactions as $tx) {
-            $contactName = $this->contactRepository->lookupNameByAddress($tx['counterparty']);
+            $contactName = $this->contactRepository->lookupNameByAddress($this->transportUtility->determineTransportType($tx['counterparty']),$tx['counterparty']);
             echo str_pad($tx['date'], 26, ' ') . " | " . 
                 str_pad($tx['type'], 9, ' ') . " | " . 
                 str_pad($contactName . " (" . $this->generalUtility->truncateAddress($tx['counterparty'],82-(strlen($contactName)+2)) . ")", 82, ' ') . " | " . 

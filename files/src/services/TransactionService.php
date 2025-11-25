@@ -17,6 +17,11 @@ class TransactionService {
     private ContactRepository $contactRepository;
 
     /**
+     * @var AddressRepository Address repository instance
+     */
+    private AddressRepository $addressRepository;
+
+    /**
      * @var BalanceRepository Balance repository instance
      */
     private BalanceRepository $balanceRepository;
@@ -85,6 +90,7 @@ class TransactionService {
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
+     * @param AddressRepository $addressRepository Address Repository
      * @param BalanceRepository $balanceRepository Balance repository
      * @param P2pRepository $p2pRepository P2p repository
      * @param Rp2pRepository $rp2pRepository Rp2p repository
@@ -94,6 +100,7 @@ class TransactionService {
      */
     public function __construct(
         ContactRepository $contactRepository,
+        AddressRepository $addressRepository,
         BalanceRepository $balanceRepository,
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
@@ -104,6 +111,7 @@ class TransactionService {
         UserContext $currentUser
     ) {
         $this->contactRepository = $contactRepository;
+        $this->addressRepository = $addressRepository;
         $this->balanceRepository = $balanceRepository;
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
@@ -213,9 +221,9 @@ class TransactionService {
      */
     public function checkTransactionPossible(array $request, $echo = true) : bool{
         $senderAddress = $request['senderAddress'];
-        $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
+        $pubkey = $request['senderPublicKey'];
         // Check if User is not blocked
-        if(!$this->contactRepository->isNotBlocked($transportIndex, $senderAddress)){
+        if(!$this->contactRepository->isNotBlocked($pubkey)){
             return false;
         } 
         // Check if transaction is a valid successor of previous txids
@@ -603,7 +611,7 @@ class TransactionService {
         }
 
         // Check if any contacts for eIOU
-        if(!$this->contactRepository->getAllAddresses()){
+        if(!$this->addressRepository->getAllAddresses()){
             output(outputNoContactsForTransaction($request));
             exit(0);
         }

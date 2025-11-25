@@ -29,7 +29,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Query contact details using PHP
     contactData=$(docker exec ${containerKeys[0]} php -r "
         require_once('./etc/eiou/src/core/Application.php');
-        \$contact = Application::getInstance()->services->getContactRepository()->lookupByAddress('${containerAddresses[${containerKeys[1]}]}');
+        \$contact = Application::getInstance()->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
         if (\$contact) {
             echo json_encode(\$contact);
         } else {
