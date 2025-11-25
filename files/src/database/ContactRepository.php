@@ -765,7 +765,6 @@ class ContactRepository extends AbstractRepository {
                     FROM {$this->tableName} c 
                     JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash";
-
         $stmt = $this->execute($query);
 
         if(!$stmt){
@@ -790,9 +789,11 @@ class ContactRepository extends AbstractRepository {
                     AND status = 'accepted' 
                     ORDER BY created_at DESC LIMIT ?";
         $stmt = $this->execute($query,[$limit]);
+        
         if(!$stmt){
             return [];
         }
+
         return $stmt->fetchAll(PDO::FETCH_ASSOC); 
     }
 
@@ -811,9 +812,11 @@ class ContactRepository extends AbstractRepository {
                     AND status = 'accepted'
                     name LIKE ?"; 
         $stmt = $this->execute($query,['%' . $searchTerm . '%']);
+        
         if(!$stmt){
             return [];
         }
+
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
        
     }
@@ -884,7 +887,6 @@ class ContactRepository extends AbstractRepository {
             'currency' => $currency
         ];
 
-        // TO DO
         $affectedRows = $this->update($data, $this->primaryKey, $pubkey);
         return $affectedRows > 0;
     }
