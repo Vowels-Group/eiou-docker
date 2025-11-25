@@ -191,7 +191,9 @@ class P2pService {
      */
     public function calculateRequestedAmount($request): int {
          // Calculate total amount needed for p2p through user
-        $senderContact = $this->contactRepository->lookupByAddress($request['senderAddress']);
+        $address = $request['senderAddress'];
+        $transportIndex = $this->transportUtility->determineTransportType($address);
+        $senderContact = $this->contactRepository->lookupByAddress($transportIndex, $address);
         $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee()); 
         return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'], $fee, $this->currentUser->getMinimumFee());
     }

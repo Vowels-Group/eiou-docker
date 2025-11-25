@@ -18,7 +18,7 @@ class MessageHelper
     public static function parseContactOutput(string $output): array
     {
         $output = trim($output);
-
+    
         // Success messages
         if (str_contains(strtolower($output), 'contact accepted.') !== false) {
             return ['message' => $output, 'type' => 'contact-accepted'];

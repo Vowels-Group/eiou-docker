@@ -181,7 +181,7 @@ class MessageService {
         $address = $decodedMessage['senderAddress'];
         $pubkey = $decodedMessage['senderPublicKey'];
         // Contact is already accepted
-        if($this->contactRepository->isAcceptedContact($pubkey)){
+        if($this->contactRepository->isAcceptedContactPubkey($pubkey)){
             echo $this->messagePayload->buildContactIsAccepted($address,true);
         }
         // Contact is pending

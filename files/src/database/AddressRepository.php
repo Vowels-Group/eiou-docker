@@ -122,13 +122,15 @@ class AddressRepository extends AbstractRepository {
     /**
      * Retrieve contact public key hash by address
      *
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return string|null Contact's publice key hash or null
      */
-    public function getContactPubkeyHash(string $address): ?string {
-        $query = "SELECT {$this->primaryKey} FROM {$this->tableName}";
-        $query .= " WHERE http = :http OR tor = :tor";
-        $stmt = $this->execute($query, [':http' => $address,':tor' => $address]);
+    public function getContactPubkeyHash(string $transportIndex, string $address): ?string {
+        $query = "SELECT {$this->primaryKey} FROM {$this->tableName}
+                    WHERE {$transportIndex} = :address";
+
+        $stmt = $this->execute($query, [':address' => $address]);
 
         if (!$stmt) {
             return null;

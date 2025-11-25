@@ -383,7 +383,14 @@ class ContactService {
     public function lookupContactInfo($request): ?array {
         // Lookup information
         $lookupResultByName = $this->lookupByName($request);
-        $lookupResultByAddress = $this->lookupByAddress($request);
+        if(!$lookupResultByName){
+            $lookupResultByAddress = null;
+            $transportIndex = $this->transportUtility->determineTransportType($request);
+            if($transportIndex){
+                $lookupResultByAddress = $this->lookupByAddress($transportIndex, $request);
+            }
+        }
+        
         $lookupResult = $lookupResultByName ?? $lookupResultByAddress;
 
         if (isset($lookupResult['name'])) {
@@ -421,11 +428,12 @@ class ContactService {
     /**
      * Lookup contact by address
      *
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return array|null Contact data or null
      */
-    public function lookupByAddress(string $address): ?array {
-        return $this->contactRepository->lookupByAddress($address);
+    public function lookupByAddress(string $transportIndex, string $address): ?array {
+        return $this->contactRepository->lookupByAddress($transportIndex, $address);
     }
 
     /**
@@ -529,8 +537,8 @@ class ContactService {
      * @param string $pubkey Contact pubkey
      * @return bool True if accepted
      */
-    public function isAcceptedContact(string $pubkey): bool {
-        return $this->contactRepository->isAcceptedContact($pubkey);
+    public function isAcceptedContactPubkey(string $pubkey): bool {
+        return $this->contactRepository->isAcceptedContactPubkey($pubkey);
     }
 
     /**
@@ -603,7 +611,7 @@ class ContactService {
             exit(1);
         }
         $address = $addressValidation['value'];
-        $pubkey = $this->contactRepository->getContactPubkey($address);
+        $pubkey = $this->getContactPubkey($address);
         $deletedContact = $this->contactRepository->deleteContact($pubkey);
         $deletedAddress = $this->addressRepository->deleteByPubkey($pubkey);
         $deletedBalance = $this->balanceRepository->deleteByPubkey($pubkey);
@@ -638,7 +646,7 @@ class ContactService {
      * @return bool Success status
      */
     public function updateStatus(string $address, string $status): bool {
-        return $this->contactRepository->updateStatus($this->contactRepository->getContactPubkey($address), $status);
+        return $this->contactRepository->updateStatus($this->getContactPubkey($address), $status);
     }
 
     /**
@@ -655,10 +663,11 @@ class ContactService {
      * Get contact public key
      *
      * @param string $address Contact address
-     * @return array|null Array with pubkey or null
+     * @return string|null Array with pubkey or null
      */
-    public function getContactPubkey(string $address): ?array {
-        return $this->contactRepository->getContactPubkey($address);
+    public function getContactPubkey(string $address): ?string {
+        $transportIndex = $this->transportUtility->determineTransportType($address);
+        return $this->contactRepository->getContactPubkey($transportIndex, $address);
     }
 
     /**
@@ -738,10 +747,11 @@ class ContactService {
     /**
      * Lookup contact name by address
      *
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string $address Contact address
      * @return string|null Contact name or null
      */
-    public function lookupNameByAddress(string $address): ?string {
-        return $this->contactRepository->lookupNameByAddress($address);
+    public function lookupNameByAddress(string $transportIndex, string $address): ?string {
+        return $this->contactRepository->lookupNameByAddress($transportIndex, $address);
     }
 }

@@ -85,6 +85,7 @@ function getP2pTableSchema() {
         sender_public_key TEXT NOT NULL,
         sender_address VARCHAR(255) NOT NULL,
         sender_signature TEXT,
+        description TEXT,
         status ENUM(
             'initial',      /* First received p2p request */
             'queued',       /* Waiting to be processed */
@@ -164,6 +165,7 @@ function getTransactionsTableSchema() {
         previous_txid VARCHAR(255),
         sender_signature TEXT,
         memo TEXT,
+        description TEXT,
         INDEX idx_transactions_receiver_public_key_hash (receiver_public_key_hash),
         INDEX idx_transactions_sender_public_key_hash (sender_public_key_hash),
         INDEX idx_transactions_sender_receiver (sender_public_key_hash, receiver_public_key_hash),
