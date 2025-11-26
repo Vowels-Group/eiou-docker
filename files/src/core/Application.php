@@ -5,6 +5,7 @@
  */
 
 require_once("/etc/eiou/src/utils/SecureLogger.php");
+require_once("/etc/eiou/src/cli/CliOutputManager.php");
 
 class Application {
     private static ?Application $instance = null;
@@ -196,13 +197,14 @@ class Application {
 
     /**
      * Generate Wallet from CLI input
-     * 
+     *
      * @param array $argv CLI input
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function generateWallet(array $argv): void {
+    public function generateWallet(array $argv, ?CliOutputManager $output = null): void {
         require_once '/etc/eiou/src/core/Wallet.php';
-        Wallet::generateWallet($argv);
+        Wallet::generateWallet($argv, $output);
     }
 
     /**
@@ -408,22 +410,41 @@ class Application {
 
     /**
      * Clean up resources
+     *
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function shutdown() {
-        $items = glob('/tmp/' . '*.pid');
-        foreach ($items as $item) {
+    public function shutdown(?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        $pidFiles = glob('/tmp/' . '*.pid');
+        $processesTerminated = 0;
+
+        foreach ($pidFiles as $item) {
             if (is_file($item)) {
-                posix_kill(trim(file_get_contents($item)), SIGTERM);
+                $pid = trim(file_get_contents($item));
+                if (posix_kill((int)$pid, SIGTERM)) {
+                    $processesTerminated++;
+                }
+                unlink($item);
             }
         }
+
         $this->processors = [];
-        $this->services->getUtilityContainer()->clearUtilities();
-        $this->services->clearServices();
+        if ($this->services) {
+            $this->services->getUtilityContainer()->clearUtilities();
+            $this->services->clearServices();
+        }
         $this->utils = [];
         $this->currentUser = null;
         if ($this->pdo) {
             $this->pdo = null;
         }
+
+        $output->success("Application shutdown complete", [
+            'processes_terminated' => $processesTerminated,
+            'pid_files_cleaned' => count($pidFiles),
+            'resources_released' => true
+        ], "All resources have been released");
     }
 
     /**
