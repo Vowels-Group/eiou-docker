@@ -98,17 +98,16 @@ class AddressRepository extends AbstractRepository {
     /**
      * Retrieve all contact addresses
      *
+     * @param string $transportIndex Address type, i.e. http, tor
      * @param string|null $exclude Address to exclude
      * @return array Array of addresses
      */
-    public function getAllAddresses(?string $exclude = null): array {
-        
-        if ($exclude) {
-            $query = "SELECT * FROM {$this->tableName}";
-            $query .= " WHERE http != :http OR tor != :tor";
-            $stmt = $this->execute($query, [':http' => $exclude,':tor' => $exclude]);
+    public function getAllAddresses(?string $transportIndex = null, ?string $exclude = null): array {
+        $query = "SELECT * FROM {$this->tableName}";
+        if ($transportIndex && $exclude) { 
+            $query .= "  WHERE {$transportIndex} = :toExclude";
+            $stmt = $this->execute($query, [':toExclude' => $exclude]);
         } else {
-            $query = "SELECT * FROM {$this->tableName}";
             $stmt = $this->execute($query);
         }
 
