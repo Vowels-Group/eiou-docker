@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../cli/CliOutputManager.php';
+
 /**
  * Synch Service
  *
@@ -107,45 +109,87 @@ class SynchService {
      * Handler for synch through user-input
      *
      * @param array $argv Command line arguments
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function sych($argv): void{   
+    public function sych($argv, ?CliOutputManager $output = null): void{
+        $output = $output ?? CliOutputManager::getInstance();
+
         if(isset($argv[2])){
             $argument = strtolower($argv[2]);
             if($argument === 'contacts'){
-                $this->synchAllContacts();
+                $this->synchAllContacts($output);
             } elseif($argument === 'transactions'){
-                $this->synchAllTransactions();
+                $this->synchAllTransactions($output);
+            } else {
+                $output->error("Invalid sync type. Use 'contacts' or 'transactions'", 'INVALID_SYNC_TYPE', 400, [
+                    'valid_types' => ['contacts', 'transactions']
+                ]);
             }
         } else{
-            $this->synchAll();
+            $this->synchAll($output);
         }
     }
 
     /**
      * Synch all possible entities
      *
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function synchAll(): void{
+    public function synchAll(?CliOutputManager $output = null): void{
+        $output = $output ?? CliOutputManager::getInstance();
+
         // Synch both contacts and transactions
-        $this->synchAllContacts();
-        $this->synchAllTransactions();
+        $contactResults = $this->synchAllContactsInternal();
+        $transactionResults = $this->synchAllTransactionsInternal();
+
+        $output->success("Sync completed", [
+            'contacts' => $contactResults,
+            'transactions' => $transactionResults
+        ], "Synched contacts and transactions");
     }
 
     /**
      * Synch all contacts
      *
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function synchAllContacts(): void{
-        // Synch all contacts
+    public function synchAllContacts(?CliOutputManager $output = null): void{
+        $output = $output ?? CliOutputManager::getInstance();
+
+        $results = $this->synchAllContactsInternal();
+
+        $output->success("Contacts synced", $results, "Contact synchronization completed");
+    }
+
+    /**
+     * Internal method to synch all contacts and return results
+     *
+     * @return array Sync results
+     */
+    private function synchAllContactsInternal(): array{
         $contacts = $this->addressRepository->getAllAddresses();
+        $results = [
+            'total' => count($contacts),
+            'synced' => 0,
+            'failed' => 0,
+            'details' => []
+        ];
+
         foreach ($contacts as $contact) {
-            if ($contact['http']) {
-                // Http is faster (thus preffered if possible)
-                $this->synchSingleContact($contact['http']);
-            } elseif ($contact['tor']) {
-                $this->synchSingleContact($contact['tor']);
+            $address = $contact['http'] ?? $contact['tor'] ?? null;
+            if ($address) {
+                $success = $this->synchSingleContact($address, 'SILENT');
+                if ($success) {
+                    $results['synced']++;
+                    $results['details'][] = ['address' => $address, 'status' => 'synced'];
+                } else {
+                    $results['failed']++;
+                    $results['details'][] = ['address' => $address, 'status' => 'failed'];
+                }
             }
         }
+
+        return $results;
     }
 
     /**
@@ -202,9 +246,28 @@ class SynchService {
     /**
      * Synch all transactions
      *
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function synchAllTransactions(): void {
-        // Synch all transactions
+    public function synchAllTransactions(?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        $results = $this->synchAllTransactionsInternal();
+
+        $output->success("Transactions synced", $results, "Transaction synchronization completed");
+    }
+
+    /**
+     * Internal method to synch all transactions and return results
+     *
+     * @return array Sync results
+     */
+    private function synchAllTransactionsInternal(): array {
+        // Synch all transactions - placeholder for future implementation
+        return [
+            'total' => 0,
+            'synced' => 0,
+            'message' => 'Transaction sync not yet implemented'
+        ];
     }
 
     /**
