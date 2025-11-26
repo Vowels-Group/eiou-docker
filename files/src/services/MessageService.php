@@ -113,9 +113,7 @@ class MessageService {
      */
     public function checkMessageValidity(array $decodedMessage): bool {
         // Check if message is from a valid source
-        $senderAddress = $decodedMessage['senderAddress'];
-        $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
-        if($this->contactRepository->getContactByAddress($transportIndex, $senderAddress)){
+        if($this->contactRepository->contactExistsPubkey($decodedMessage['senderPublicKey'])){
             // The source is a contact
             return true;
         } elseif(isset($decodedMessage['hash'])){
