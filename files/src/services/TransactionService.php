@@ -678,7 +678,7 @@ class TransactionService {
             'timestamp' => $data['time'] ?? null
         ];
 
-        $output->success("Transaction sent successfully", $txResponse, "Direct transaction initiated");
+        $output->success("Transaction sent successfully to " . $data['receiverAddress'] , $txResponse, "Direct transaction initiated");
     }
 
     /**
@@ -704,7 +704,7 @@ class TransactionService {
             'message' => 'P2P route discovery initiated'
         ];
 
-        $output->success("P2P transaction request sent", $txResponse, "Searching for route to recipient via P2P network");
+        $output->success("Searching for route via P2P network to " . $request[2], $txResponse, "Searching for route to recipient via P2P network");
     }
 
     /**

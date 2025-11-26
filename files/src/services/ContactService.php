@@ -215,7 +215,7 @@ class ContactService {
 
         // Check if contact is already an accepted contact
         if($contact['status'] === 'accepted'){
-            $output->error("Contact already exists", 'CONTACT_EXISTS', 409, ['contact' => $contactData]);
+            $output->error("Contact " . $address . " already exists ", 'CONTACT_EXISTS', 409, ['contact' => $contactData]);
         }
         // Check if contact was blocked
         elseif($contact['status'] === 'blocked'){
@@ -223,9 +223,9 @@ class ContactService {
             if($contact['name']){
                 // Unblock contact and add values
                 if($this->contactRepository->updateUnblockContact($transportIndex, $address, $name, $fee, $credit, $currency)){
-                    $output->success("Contact unblocked and updated", $contactData, "Contact unblocked and updated successfully");
+                    $output->success("Contact" . $address . "unblocked and updated", $contactData, "Contact unblocked and updated successfully");
                 } else{
-                    $output->error("Failed to unblock and update contact", 'UNBLOCK_FAILED', 500, ['contact' => $contactData]);
+                    $output->error("Failed to unblock and update contact " . $address, 'UNBLOCK_FAILED', 500, ['contact' => $contactData]);
                 }
             }
             // Contact was blocked when user received contact request
@@ -233,9 +233,9 @@ class ContactService {
                 if($this->contactRepository->updateUnblockContact($transportIndex, $address, $name, $fee, $credit, $currency)){
                     // Send message of successful contact acceptance back to original contact requester
                     $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
-                    $output->success("Contact unblocked and added", $contactData, "Contact unblocked and added successfully");
+                    $output->success("Contact " . $address . " unblocked and added", $contactData, "Contact unblocked and added successfully");
                 } else{
-                    $output->error("Failed to unblock and add contact", 'UNBLOCK_ADD_FAILED', 500, ['contact' => $contactData]);
+                    $output->error("Failed to unblock and add contact " . $address, 'UNBLOCK_ADD_FAILED', 500, ['contact' => $contactData]);
                 }
             }
         }
@@ -247,9 +247,9 @@ class ContactService {
                 $succesfullSynch = Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'SILENT');
                 if ($succesfullSynch) {
                     $contactData['status'] = 'accepted';
-                    $output->success("Contact request already sent, synched successfully", $contactData, "Contact synched");
+                    $output->success("Contact request already sent, synched successfully with " . $address, $contactData, "Contact synched");
                 } else {
-                    $output->info("Contact request already sent, awaiting response", $contactData);
+                    $output->info("Contact request already sent, awaiting response from " . $address, $contactData);
                 }
             } else{
                 // If contact already exists with an address, it's a contact request, skip sending a message
@@ -257,10 +257,10 @@ class ContactService {
                     // Send message of successful contact acceptance back to original contact requester
                     $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
                     $contactData['status'] = 'accepted';
-                    $output->success("Contact request accepted", $contactData, "Contact accepted successfully");
+                    $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
                 }
                 else {
-                    $output->error("Failed to accept contact request", 'ACCEPT_FAILED', 500, ['contact' => $contactData]);
+                    $output->error("Failed to accept contact request from " . $address, 'ACCEPT_FAILED', 500, ['contact' => $contactData]);
                     exit(1);
                 }
             }
@@ -302,9 +302,9 @@ class ContactService {
                     $this->balanceRepository->insertInitialContactBalances($responseData['senderPublicKey'], $currency);
                     $contactData['status'] = 'pending';
                     $contactData['pubkey'] = $responseData['senderPublicKey'];
-                    $output->success("Contact request sent successfully", $contactData, "Contact request sent, awaiting acceptance");
+                    $output->success("Contact request sent successfully to " . $address, $contactData, "Contact request sent, awaiting acceptance");
                 } else{
-                    $output->error("Failed to create contact", 'CONTACT_CREATE_FAILED', 500, ['contact' => $contactData]);
+                    $output->error("Failed to create contact with " . $address, 'CONTACT_CREATE_FAILED', 500, ['contact' => $contactData]);
                     exit(1);
                 }
             }
@@ -316,9 +316,9 @@ class ContactService {
                 if($this->contactRepository->updateContactFields($responseData['senderPublicKey'],[$transportIndex => $senderAddress])){
                     $contactData['status'] = 'updated';
                     $contactData['updated_address'] = $senderAddress;
-                    $output->success("Contact address updated", $contactData, "Contact address updated successfully");
+                    $output->success("Contact address updated with " . $address, $contactData, "Contact address updated successfully");
                 } else{
-                    $output->error("Failed to update contact address", 'ADDRESS_UPDATE_FAILED', 500, ['contact' => $contactData]);
+                    $output->error("Failed to update contact address with " . $address, 'ADDRESS_UPDATE_FAILED', 500, ['contact' => $contactData]);
                 }
             }
             // Our contact pubkey and adress both exist on their end (Case when we delete the contact and try re-adding it)
@@ -330,16 +330,16 @@ class ContactService {
                     if(Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'SILENT')){
                         $contactData['status'] = 'accepted';
                         $contactData['pubkey'] = $responseData['senderPublicKey'];
-                        $output->success("Contact re-added and synched", $contactData, "Contact created successfully");
+                        $output->success("Contact re-added and synched with " . $address, $contactData, "Contact created successfully");
                     } else {
                         $contactData['status'] = 'pending';
-                        $output->success("Contact re-added, awaiting sync", $contactData, "Contact created, sync pending");
+                        $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
                     }
                 }
             }
             // Our contact request could not be processed on their end
             elseif($responseData['status'] === 'rejection'){
-                $output->error("Contact request rejected: " . ($responseData['reason'] ?? 'Unknown reason'), 'CONTACT_REJECTED', 403, [
+                $output->error("Contact request rejected by " . $address . " : " . ($responseData['reason'] ?? 'Unknown reason'), 'CONTACT_REJECTED', 403, [
                     'contact' => $contactData,
                     'response' => $responseData
                 ]);
@@ -347,7 +347,7 @@ class ContactService {
             }
         } else{
             // Case when sending to an adress that does not exist at all (or is experiencing downtime)
-            $output->error("Failed to reach contact address. Address may not exist or is offline.", 'CONTACT_UNREACHABLE', 503, ['contact' => $contactData]);
+            $output->error("Failed to reach contact address. Address " . $address . " may not exist or is offline.", 'CONTACT_UNREACHABLE', 503, ['contact' => $contactData]);
             exit(1);
         }
     }
