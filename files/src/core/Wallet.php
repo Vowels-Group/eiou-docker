@@ -1,17 +1,21 @@
 <?php
 
+require_once __DIR__ . '/../cli/CliOutputManager.php';
+
 class Wallet{
     /**
      * Generate wallet
      *
      * @param array $argv Command line arguments
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public static function generateWallet(array $argv): void {
+    public static function generateWallet(array $argv, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
         // Load KeyEncryption for secure key storage
         require_once __DIR__ . '/../security/KeyEncryption.php';
 
-        // require_once '/etc/eiou/src/core/Constants.php';
         // Add default user values in defaultconfig.json
         $defaultConfig = json_encode([
             'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,           // Default currency
@@ -58,41 +62,35 @@ class Wallet{
             'torAddress' => addslashes($torAddress)       // Tor address
         ];
 
+        $walletData = [
+            'tor_address' => $torAddress,
+            'public_key_generated' => true
+        ];
+
         // If argv2 is the (http/s) hostname of the container
         if (isset($argv[2])) {
             if (filter_var($argv[2], FILTER_VALIDATE_URL)) {
                 // Save the hostname to the configuration
                 $userconfig['hostname'] = addslashes($argv[2]); // HTTP address
-                //echo returnHostnameSaved($argv[2]);
+                $walletData['http_address'] = $argv[2];
             } else {
-                echo returnInvalidHostnameFormat();
+                $output->error("Invalid hostname format. Must be a valid URL.", 'INVALID_HOSTNAME', 400, [
+                    'provided' => $argv[2]
+                ]);
+                return;
             }
-        } else{
-            //echo returnTorSaved($userconfig['torAddress']);     // Tor address
         }
 
         // Set strict file permissions before saving
         $oldUmask = umask(0077); // Ensure 600 permissions
         file_put_contents('/etc/eiou/userconfig.json', json_encode($userconfig), LOCK_EX);
         umask($oldUmask);
-        
+
         chown('/etc/eiou/userconfig.json','www-data');
-        
+
         // Verify and set file permissions
         chmod('/etc/eiou/userconfig.json', 0600);
 
-        
-        // Only display if generate is called without arguments (eiou generate)
-        // echo "Public key: $publicKey\n";
-        // echo "Private key: $privateKey\n";
-        // echo "Authentication Code: $authCode\n";
-        // echo "Tor Address: $torAddress\n";
-        // echo "Please save these keys securely, or write the name of a file to output to (leave blank for none): \n";
-        // $privateKeyFile = trim(fgets(STDIN));
-        // if (!empty($privateKeyFile)) {
-        //     // Save the private key to the specified file
-        //     file_put_contents($privateKeyFile, $privateKey);
-        //     echo "Private key saved to $privateKeyFile\n";
-        // }
+        $output->success("Wallet generated successfully", $walletData, "New wallet created with secure key storage");
     }
 }
