@@ -681,7 +681,7 @@ class TransactionService {
             'recipient' => $contactInfo['receiverName'] ?? $request[2],
             'recipient_address' => $data['receiverAddress'] ?? null,
             'amount' => ($data['amount'] ?? 0) / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
-            'currency' => $data['currency'] ?? 'USD',
+            'currency' => $data['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY,
             'txid' => $data['txid'] ?? null,
             'timestamp' => $data['time'] ?? null
         ];
