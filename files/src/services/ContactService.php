@@ -208,7 +208,6 @@ class ContactService {
      */
     private function handleExistingContact(array $contact, string $address, string $name, float $fee, float $credit, string $currency, ?CliOutputManager $output = null): void {
         $output = $output ?? CliOutputManager::getInstance();
-        $transportIndex = $this->transportUtility->determineTransportType($address);
 
         // Build contact data for JSON response
         $contactData = [
@@ -308,6 +307,7 @@ class ContactService {
             if($responseData['status'] === 'received'){
                 // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
                     $contactData['status'] = 'pending';
                     $contactData['pubkey'] = $senderPublicKey;
