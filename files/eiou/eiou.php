@@ -7,20 +7,32 @@ require_once '/etc/eiou/functions.php';
 // Initialize security components for CLI
 require_once '/etc/eiou/security_init.php';
 
+// Load CLI output manager for JSON support
+require_once '/etc/eiou/src/cli/CliOutputManager.php';
+
 // Get application instance (if first time build database)
 $app = Application::getInstance();
 
+// Initialize CLI output manager with argv
+$output = CliOutputManager::getInstance($argv, $app->getPublicKeyHash() ?? 'anonymous');
+
+// Clean argv to remove output flags (--json, etc.) for command processing
+$cleanArgv = CliOutputManager::cleanArgv($argv);
+
 // Convert request to lowercase
-$request = strtolower($argv[1]);
+$request = isset($cleanArgv[1]) ? strtolower($cleanArgv[1]) : '';
+
+// Set command in output manager
+$output->setCommand($request);
 
 if (!$app->currentUserLoaded()) {
   // Generate Wallet
   if($request === "generate"){
-    $app->generateWallet($argv);
+    $app->generateWallet($cleanArgv, $output);
     exit(0); // Normal termination after wallet generation
   } else{
     $app->getLogger()->warning("Attempted to run command without wallet", ['command' => $request]);
-    echo "Wallet does not exist, Please run the 'generate' command from the terminal.\n";
+    $output->walletRequired();
     exit(1); // Exit with error code
   }
 } 
@@ -52,7 +64,7 @@ if ($app->currentPdoLoaded()) {
             'identifier' => $cliIdentifier,
             'retry_after' => $rateLimitResult['retry_after']
         ]);
-        echo "Rate limit exceeded. Please try again in " . $rateLimitResult['retry_after'] . " seconds.\n";
+        $output->rateLimitExceeded($rateLimitResult['retry_after'], $request);
         exit(1);
     }
 }
@@ -62,109 +74,106 @@ if ($request === "info") {
   // Show user info (with/without details)
   $debugService->output("Executing info request",  'SILENT');
   $cliService = $app->services->getCliService();
-  $cliService->displayUserInfo($argv);
+  $cliService->displayUserInfo($cleanArgv, $output);
 }
 // Contacts
 elseif($request === "add"){
   // Add Contact - validate input before processing
   $debugService->output("Executing add contact request", 'SILENT');
   $contactService = $app->services->getContactService();
-  $contactService->addContact($argv);
+  $contactService->addContact($cleanArgv, $output);
 }
 elseif($request === "viewcontact"){
   // View Contact
   $debugService->output("Executing read contact request", 'SILENT');
   $contactService = $app->services->getContactService();
-  $contactService->viewContact($argv);
+  $contactService->viewContact($cleanArgv, $output);
 }
 elseif($request === "update"){
   // Update Contact
   $debugService->output("Executing update contact request", 'SILENT');
   $contactService = $app->services->getContactService();
-  $contactService->updateContact($argv);
+  $contactService->updateContact($cleanArgv, $output);
 }
 elseif($request === "block"){
   // Block Contact
   $debugService->output("Executing block contact request", 'SILENT');
-  // no check on argv[2] what is
   $contactService = $app->services->getContactService();
-  $contactService->blockContact($argv[2]);
+  $contactService->blockContact($cleanArgv[2] ?? null, $output);
 }
 elseif($request === "unblock"){
   // Unblock Contact
   $debugService->output("Executing unblock contact request", 'SILENT');
-  // no check on argv[2] what is
   $contactService = $app->services->getContactService();
-  $contactService->unblockContact($argv[2]);
+  $contactService->unblockContact($cleanArgv[2] ?? null, $output);
 }
 elseif($request === "delete"){
   // Delete Contact
   $debugService->output("Executing delete contact request", 'SILENT');
-  // no check on argv[2] what is
   $contactService = $app->services->getContactService();
-  $contactService->deleteContact($argv[2]);
+  $contactService->deleteContact($cleanArgv[2] ?? null, $output);
 }
 elseif($request === "search"){
   // Search Contacts
   $debugService->output("Executing search contacts request", 'SILENT');
   $contactService = $app->services->getContactService();
-  $contactService->searchContacts($argv);
+  $contactService->searchContacts($cleanArgv, $output);
 }
 // Transactions
 elseif($request === "send"){
   // Send eIOU
   $debugService->output("Executing send eIOU request", 'SILENT');
   $transactionService = $app->services->getTransactionService();
-  $transactionService->sendEiou($argv);
+  $transactionService->sendEiou($cleanArgv, $output);
 }
 elseif($request === "viewbalances"){
   // View eIOUs
   $debugService->output("Executing view balances request", 'SILENT');
   $cliService = $app->services->getCliService();
-  $cliService->viewBalances($argv);
+  $cliService->viewBalances($cleanArgv, $output);
 }
 elseif($request === "history"){
   // View Transaction History
   $debugService->output("Executing transaction history request", 'SILENT');
   $cliService = $app->services->getCliService();
-  $cliService->viewTransactionHistory($argv);
+  $cliService->viewTransactionHistory($cleanArgv, $output);
 }
 // Settings
 elseif($request === "help"){
   // Help
   $debugService->output("Executing help request", 'SILENT');
   $cliService = $app->services->getCliService();
-  $cliService->displayHelp($argv);
+  $cliService->displayHelp($cleanArgv, $output);
 }
 elseif($request === "viewsettings"){
   // View Settings
   $debugService->output("Executing view settings request", 'SILENT');
   $cliService = $app->services->getCliService();
-  $cliService->displayCurrentSettings();
+  $cliService->displayCurrentSettings($output);
 }
 elseif($request === "changesettings"){
   // Change settings
   $debugService->output("Executing change settings request", 'SILENT');
   $cliService = $app->services->getCliService();
-  $cliService->changeSettings($argv);
+  $cliService->changeSettings($cleanArgv, $output);
 }
 elseif($request === "synch"){
   // Synch
   $debugService->output("Executing synch request", 'SILENT');
   $synchService = $app->services->getSynchService();
-  $synchService->sych($argv);
+  $synchService->sych($cleanArgv, $output);
 } elseif($request === "generate"){
-  // Handle for Wallet request after wallet has been created 
-   echo returnWalletAlreadyExists();
+  // Handle for Wallet request after wallet has been created
+  $output->walletExists();
 }
 elseif($request === "shutdown"){
   // Shutdown application
   $debugService->output("Executing shutdown request", 'SILENT');
-  $app->shutdown();
+  $app->shutdown($output);
 }
 else{
   // If no known input, display commands possible for input
   $cliService = $app->services->getCliService();
-  $cliService->displayHelp($argv);
-  echo $request . " not found, displaying help above\n";
+  $cliService->displayHelp($cleanArgv, $output);
+  $output->error("Command '$request' not found", 'COMMAND_NOT_FOUND', 404);
 }
