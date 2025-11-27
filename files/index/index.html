@@ -29,8 +29,9 @@ if (!$validationUtility->verifyRequestSignature($envelope)) {
 $messageContent = json_decode($envelope['message'], true);
 
 // Build the full request by merging transport metadata with message content
-// This provides backward compatibility with services expecting senderAddress/senderPublicKey
+// This provides backward compatibility with services expecting senderAddress/senderPublicKey/signature
 $request = array_merge($messageContent, [
+    'signature' => $envelope['signature'],
     'senderAddress' => $envelope['senderAddress'],
     'senderPublicKey' => $envelope['senderPublicKey']
 ]);
