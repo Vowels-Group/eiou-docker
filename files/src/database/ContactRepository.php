@@ -359,9 +359,10 @@ class ContactRepository extends AbstractRepository {
      */
     public function getPendingContactRequests(): array {
         $query = "SELECT * 
-                    FROM {$this->tableName} 
-                    WHERE name IS NULL 
-                    AND status = 'pending'";
+                    FROM addresses a JOIN {$this->tableName} c
+                    ON a.pubkey_hash = c.pubkey_hash
+                    WHERE c.name IS NULL 
+                    AND c.status = 'pending'";
         $stmt = $this->execute($query);
 
         if (!$stmt) {
@@ -380,9 +381,10 @@ class ContactRepository extends AbstractRepository {
     {
         // Get all pending contact requests (where name IS NOT NULL and status = 'pending')
         $query = "SELECT * 
-                    FROM {$this->tableName} 
-                    WHERE name IS NOT NULL 
-                    AND status = 'pending'";
+                    FROM addresses a JOIN {$this->tableName} c
+                    ON a.pubkey_hash = c.pubkey_hash
+                    WHERE c.name IS NOT NULL 
+                    AND c.status = 'pending'";
         $stmt = $this->execute($query);
         if(!$stmt){
             return [];
