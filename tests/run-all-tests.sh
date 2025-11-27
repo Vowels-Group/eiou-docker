@@ -187,6 +187,7 @@ sendAllPeersTest
 routingTest
 contactListTest
 transactionHistoryTest
+cliCommandsTest
 "
 
 # Run each test in order

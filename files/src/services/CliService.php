@@ -561,7 +561,7 @@ class CliService {
                     foreach ($receivedTx as $tx) {
                         $balanceData['received'][] = [
                             'date' => $tx['date'],
-                            'counterparty_name' => $this->contactRepository->lookupNameByAddress($tx['counterparty']),
+                            'counterparty_name' => $this->contactRepository->lookupNameByAddress($this->transportUtility->determineTransportType($tx['counterparty']), $tx['counterparty']),
                             'counterparty_address' => $tx['counterparty'],
                             'amount' => $tx['amount'],
                             'currency' => $tx['currency']
@@ -573,7 +573,7 @@ class CliService {
                     foreach ($sentTx as $tx) {
                         $balanceData['sent'][] = [
                             'date' => $tx['date'],
-                            'counterparty_name' => $this->contactRepository->lookupNameByAddress($tx['counterparty']),
+                            'counterparty_name' => $this->contactRepository->lookupNameByAddress($this->transportUtility->determineTransportType($tx['counterparty']), $tx['counterparty']),
                             'counterparty_address' => $tx['counterparty'],
                             'amount' => $tx['amount'],
                             'currency' => $tx['currency']
@@ -864,7 +864,7 @@ class CliService {
                     'timestamp' => $tx['date'],
                     'type' => $tx['type'],
                     'direction' => $direction,
-                    'counterparty_name' => $this->contactRepository->lookupNameByAddress($tx['counterparty']),
+                    'counterparty_name' => $this->contactRepository->lookupNameByAddress($this->transportUtility->determineTransportType($tx['counterparty']), $tx['counterparty']),
                     'counterparty_address' => $tx['counterparty'],
                     'amount' => $tx['amount'],
                     'currency' => $tx['currency']
