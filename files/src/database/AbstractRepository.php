@@ -94,6 +94,23 @@ abstract class AbstractRepository {
     }
 
     /**
+     * Get column names of table
+     *
+     * @return array|null
+     */
+    protected function getColumnNames(): ?array {
+        $query = "SELECT name FROM sys.columns WHERE object_id = OBJECT_ID({$this->tableName})";
+        $stmt =  $this->execute($query);
+
+         if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return $result ?: null;
+    }
+
+    /**
      * Execute a prepared statement with parameters
      *
      * @param string $query SQL query with named placeholders
