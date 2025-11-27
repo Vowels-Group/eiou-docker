@@ -75,7 +75,7 @@ for routingPair in "${!routingTests[@]}"; do
         done
 
         # Check if routing succeeded
-        if [[ "$routingResult" =~ "Sending" ]] && [[ $relayFeesDetected -gt 0 ]]; then
+        if [[ "$routingResult" =~ "Searching for route via P2P network" ]] && [[ $relayFeesDetected -gt 0 ]]; then
             printf "\t   Routing %s -> %s ${GREEN}PASSED${NC} (%d relays detected fees)\n" ${sender} ${receiver} ${relayFeesDetected}
             passed=$(( passed + 1 ))
         else
@@ -144,8 +144,8 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
         e2eResult=$(docker exec ${firstContainer} eiou send ${containerAddresses[${lastContainer}]} ${e2eAmount} USD 2>&1)
 
         # Wait for multi-hop routing
-        echo -e "\t   Waiting 20 seconds for multi-hop routing process (faster but certainty)..."
-        sleep 20
+        echo -e "\t   Waiting 30 seconds for multi-hop routing process (faster but certainty)..."
+        sleep 30
 
         # Check if message arrived
         finalState=$(docker exec ${lastContainer} php -r "

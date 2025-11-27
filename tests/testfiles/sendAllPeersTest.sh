@@ -133,7 +133,7 @@ if [[ -n "${containers[0]}" ]]; then
             # Send broadcast amount
             broadcastResult=$(docker exec ${broadcaster} eiou send ${contactAddress} ${broadcastAmount} ${broadcastCurrency} 2>&1)
 
-            if [[ "$broadcastResult" =~ "Sending" ]] || [[ "$broadcastResult" =~ "Success" ]]; then
+            if [[ "$broadcastResult" =~ "Searching for route via P2P network" ]] || [[ "$broadcastResult" =~ "Transaction sent successfully to" ]]; then
                 printf "${GREEN}SENT${NC}\n"
                 broadcastSuccess=$(( broadcastSuccess + 1 ))
             else
