@@ -514,7 +514,26 @@ body {
     }
 
     .quick-actions {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+    }
+
+    .action-card {
+        padding: 0.75rem 0.25rem;
+    }
+
+    .action-card i {
+        font-size: 1.25rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .action-card h3 {
+        font-size: 0.7rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .action-card p {
+        display: none;
     }
 
     .form-actions {

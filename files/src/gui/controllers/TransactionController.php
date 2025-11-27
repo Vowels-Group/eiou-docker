@@ -63,11 +63,27 @@ class TransactionController
         // Sanitize input data
         $recipient = Security::sanitizeInput($_POST['recipient'] ?? '');
         $manualRecipient = Security::sanitizeInput($_POST['manual_recipient'] ?? '');
+        $addressType = Security::sanitizeInput($_POST['address_type'] ?? '');
         $amount = $_POST['amount'] ?? '';
         $currency = $_POST['currency'] ?? '';
 
-        // Use manual recipient if provided, otherwise use selected recipient
-        $finalRecipient = !empty($manualRecipient) ? $manualRecipient : $recipient;
+        // Determine final recipient based on input method
+        if (!empty($manualRecipient)) {
+            // Manual address entry - use as-is
+            $finalRecipient = $manualRecipient;
+        } elseif (!empty($recipient) && !empty($addressType)) {
+            // Contact selected with address type - lookup and use specific address
+            $contactInfo = $this->contactService->lookupByName($recipient);
+            if ($contactInfo && isset($contactInfo[$addressType]) && !empty($contactInfo[$addressType])) {
+                $finalRecipient = $contactInfo[$addressType];
+            } else {
+                MessageHelper::redirectMessage('Selected address type not available for contact', 'error');
+                return;
+            }
+        } else {
+            // Fallback to recipient name (will be resolved by backend)
+            $finalRecipient = $recipient;
+        }
 
         // Validate required fields
         if (empty($finalRecipient) || empty($amount) || empty($currency)) {

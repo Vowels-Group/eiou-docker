@@ -754,6 +754,9 @@ class TransactionService {
 
         // Build result array with balances
         $contactsWithBalances = [];
+        
+        $addressTypes = $this->addressRepository->getAllAddressTypes();
+        
         foreach($contacts as $contact){
             // Get pre-calculated balance from batch query result
             $balance = $balances[$contact['pubkey']] ?? 0;
@@ -761,15 +764,21 @@ class TransactionService {
             $fee_percent = $contact['fee_percent'];
             $credit_limit = $contact['credit_limit'];
 
-            $contactsWithBalances[] = [
+            // Add all addresses
+            $addressesAssociative = [];
+            foreach($addressTypes as $addressType){
+                $addressesAssociative[$addressType] = $contact[$addressType] ?? '';
+            }
+
+            $contactsWithBalances[] = array_merge($addressesAssociative,[
                 'name' => $contact['name'],
-                'http' => $contact['http'] ?? '',
-                'tor' => $contact['tor'] ?? '',
                 'balance' =>  $balance ? $this->currencyUtility->convertCentsToDollars($balance) : $balance,
                 'fee' =>  $fee_percent ? $this->currencyUtility->convertCentsToDollars($fee_percent) : $fee_percent,
                 'credit_limit' =>  $credit_limit ? $this->currencyUtility->convertCentsToDollars($credit_limit) : $credit_limit,
                 'currency' => $contact['currency']
-            ];
+            ]);
+            
+            output("contactsWithBalances: " . print_r($contactsWithBalances,true),'SILENT');
 
         }
         return $contactsWithBalances;
