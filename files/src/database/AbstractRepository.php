@@ -99,7 +99,9 @@ abstract class AbstractRepository {
      * @return array|null
      */
     protected function getColumnNames(): ?array {
-        $query = "SELECT name FROM sys.columns WHERE object_id = OBJECT_ID({$this->tableName})";
+        $query = "SELECT COLUMN_NAME
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_NAME = N'{$this->tableName}'";
         $stmt =  $this->execute($query);
 
          if (!$stmt) {

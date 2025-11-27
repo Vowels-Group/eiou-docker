@@ -30,7 +30,8 @@ class AddressRepository extends AbstractRepository {
     public function getAllAddressTypes(){
         $columns = $this->getColumnNames();
         if($columns){
-            unset($columns[array_search('pubkey_hash',$columns)]);
+            // Remove unneeded column names
+            $columns = array_values(array_diff($columns, ['id','pubkey_hash']));
         }
         return $columns;
     }
