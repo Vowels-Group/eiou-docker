@@ -23,6 +23,19 @@ class AddressRepository extends AbstractRepository {
     }
 
     /**
+     * Get all possible address types from table
+     *
+     * @return array|null Address Types
+     */
+    public function getAllAddressTypes(){
+        $columns = $this->getColumnNames();
+        if($columns){
+            unset($columns[array_search('pubkey_hash',$columns)]);
+        }
+        return $columns;
+    }
+
+    /**
      * Insert a new address
      *
      * @param string $contactPublicKey Contact's public key
