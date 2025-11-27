@@ -107,7 +107,7 @@ class TransportUtilityService
         } 
         // If provided address/name did not result in a viable transport type 
         //  and default transport mode did not work to compensate, try finding the next possible
-        $transportModes = Constants::ALL_TRANSPORT_MODES;
+        $transportModes = $this->container->getAddressRepository()->getAllAddressTypes();
         unset($transportModes[array_search($transportIndex,$transportModes)]);
         $transportModes = array_values($transportModes);
         while($transportModes !== []){
@@ -127,14 +127,15 @@ class TransportUtilityService
      * @return string|null The fallback address
     */
     public function fallbackTransportAddress($contactInfo){
-        $transportModes = Constants::ALL_TRANSPORT_MODES;
-        $transportModes = array_values($transportModes);
-        while($transportModes !== []){
-            $transportIndex = array_shift($transportModes);
-            if(isset($contactInfo[$transportIndex])){
-                return $contactInfo[$transportIndex];
-            } 
-        }
+        $transportModes = $this->container->getAddressRepository()->getAllAddressTypes();
+        if($transportModes){
+            while($transportModes !== []){
+                $transportIndex = array_shift($transportModes);
+                if(isset($contactInfo[$transportIndex])){
+                    return $contactInfo[$transportIndex];
+                } 
+            }
+        }      
         output(outputNoViableTransportAddress());
         exit(1);
     }
