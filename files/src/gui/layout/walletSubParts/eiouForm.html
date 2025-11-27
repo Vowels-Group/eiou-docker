@@ -26,12 +26,28 @@
             <select id="recipient" name="recipient">
                 <option value="">Or select from contacts below</option>
                 <?php foreach ($acceptedContacts as $contact): ?>
-                    <option value="<?php echo htmlspecialchars($contact['name']); ?>"><?php echo htmlspecialchars($contact['name']); ?> (Contact)</option>
+                    <option value="<?php echo htmlspecialchars($contact['name']); ?>"
+                            data-http="<?php echo htmlspecialchars($contact['http'] ?? ''); ?>"
+                            data-tor="<?php echo htmlspecialchars($contact['tor'] ?? ''); ?>">
+                        <?php echo htmlspecialchars($contact['name']); ?> (Contact)
+                    </option>
                 <?php endforeach; ?>
             </select>
             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                <i class="fas fa-lightbulb"></i> 
+                <i class="fas fa-lightbulb"></i>
                 <strong>Tip:</strong> You can also enter a .onion address or HTTP address directly to send to non-contacts via P2P routing.
+            </small>
+        </div>
+
+        <!-- Address Type Selector (shown when contact selected) -->
+        <div class="form-group" id="address-type-group" style="display: none;">
+            <label for="address-type">Address Type:</label>
+            <select id="address-type" name="address_type">
+                <option value="">Select address type</option>
+            </select>
+            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                <i class="fas fa-network-wired"></i>
+                Choose which address to use for this contact
             </small>
         </div>
         

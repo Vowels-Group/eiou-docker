@@ -837,7 +837,7 @@ class TransactionRepository extends AbstractRepository {
     public function getTransactionHistory(int $limit = 10): array
     {
         $userAddresses = $this->currentUser->getUserAddresses();
-        
+
 
         if (empty($userAddresses)) {
             return [];
@@ -846,9 +846,22 @@ class TransactionRepository extends AbstractRepository {
         // Create placeholders for IN clause
         $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
 
-        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM {$this->tableName}
-                    WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
-                    ORDER BY timestamp DESC LIMIT ?";
+        // Query with LEFT JOINs to get contact names for both sender and receiver
+        $query = "SELECT
+                    t.sender_address,
+                    t.receiver_address,
+                    t.amount,
+                    t.currency,
+                    t.timestamp,
+                    sender_contact.name AS sender_name,
+                    receiver_contact.name AS receiver_name
+                  FROM {$this->tableName} t
+                  LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.tor)
+                  LEFT JOIN contacts sender_contact ON sender_addr.pubkey_hash = sender_contact.pubkey_hash
+                  LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.tor)
+                  LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
+                  WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders))
+                  ORDER BY t.timestamp DESC LIMIT ?";
 
         // Bind parameters - addresses twice for both IN clauses, then limit
         $params = array_merge($userAddresses, $userAddresses, [$limit]);
@@ -864,13 +877,19 @@ class TransactionRepository extends AbstractRepository {
         foreach ($transactions as $tx) {
             $isSent = in_array($tx['sender_address'], $userAddresses);
             $counterpartyAddress = $isSent ? $tx['receiver_address'] : $tx['sender_address'];
+            $counterpartyName = $isSent ? $tx['receiver_name'] : $tx['sender_name'];
+
+            // Build display string: "Name (address)" or just "address" if no name
+            $counterpartyDisplay = $counterpartyName
+                ? $counterpartyName . ' (' . $counterpartyAddress . ')'
+                : $counterpartyAddress;
 
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
                 'type' => $isSent ? 'sent' : 'received',
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
-                'counterparty' => $counterpartyAddress
+                'counterparty' => $counterpartyDisplay
             ];
         }
         return $formattedTransactions;
@@ -886,7 +905,7 @@ class TransactionRepository extends AbstractRepository {
     public function getTransactionHistoryCurrency(string $currency, int $limit = 10): array
     {
         $userAddresses = $this->currentUser->getUserAddresses();
-        
+
 
         if (empty($userAddresses)) {
             return [];
@@ -895,11 +914,24 @@ class TransactionRepository extends AbstractRepository {
         // Create placeholders for IN clause
         $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
 
-        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp FROM {$this->tableName}
-                    WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders)) AND currency = ?
-                    ORDER BY timestamp DESC LIMIT ?";
+        // Query with LEFT JOINs to get contact names for both sender and receiver
+        $query = "SELECT
+                    t.sender_address,
+                    t.receiver_address,
+                    t.amount,
+                    t.currency,
+                    t.timestamp,
+                    sender_contact.name AS sender_name,
+                    receiver_contact.name AS receiver_name
+                  FROM {$this->tableName} t
+                  LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.tor)
+                  LEFT JOIN contacts sender_contact ON sender_addr.pubkey_hash = sender_contact.pubkey_hash
+                  LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.tor)
+                  LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
+                  WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders)) AND t.currency = ?
+                  ORDER BY t.timestamp DESC LIMIT ?";
 
-        // Bind parameters - addresses twice for both IN clauses, then limit
+        // Bind parameters - addresses twice for both IN clauses, then currency, then limit
         $params = array_merge($userAddresses, $userAddresses, [$currency, $limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
@@ -913,13 +945,19 @@ class TransactionRepository extends AbstractRepository {
         foreach ($transactions as $tx) {
             $isSent = in_array($tx['sender_address'], $userAddresses);
             $counterpartyAddress = $isSent ? $tx['receiver_address'] : $tx['sender_address'];
+            $counterpartyName = $isSent ? $tx['receiver_name'] : $tx['sender_name'];
+
+            // Build display string: "Name (address)" or just "address" if no name
+            $counterpartyDisplay = $counterpartyName
+                ? $counterpartyName . ' (' . $counterpartyAddress . ')'
+                : $counterpartyAddress;
 
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
                 'type' => $isSent ? 'sent' : 'received',
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
-                'counterparty' => $counterpartyAddress
+                'counterparty' => $counterpartyDisplay
             ];
         }
         return $formattedTransactions;
