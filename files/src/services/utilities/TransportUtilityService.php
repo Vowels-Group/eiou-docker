@@ -271,9 +271,6 @@ class TransportUtilityService
      * - senderAddress, senderPublicKey, signature are at top level (transport metadata)
      * - message contains only the signed content (no duplication)
      *
-     * This eliminates the previous issue where all payload fields were duplicated
-     * inside the 'message' field, causing bandwidth overhead.
-     *
      * @param array $payload The payload to sign
      * @return array|false The signed payload with clean structure, or false on failure
     */
@@ -301,8 +298,8 @@ class TransportUtilityService
         // - Transport metadata at top level
         // - Message content in 'message' field (no duplication)
         return [
-            'senderAddress' => $payload['senderAddress'] ?? $this->currentUser->getHttpAddress(),
-            'senderPublicKey' => $this->currentUser->getPublicKey(),
+            'senderAddress' => $payload['senderAddress'],
+            'senderPublicKey' => $payload['senderPublicKey'],
             'message' => $message,
             'signature' => base64_encode($signature)
         ];
