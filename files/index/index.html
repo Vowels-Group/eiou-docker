@@ -9,8 +9,8 @@ if (!file_exists('/etc/eiou/userconfig.json')) {
   die;
 }
 
-// Accept incoming connection and decode request
-$request = json_decode($_GET['payload'], true);
+// Accept incoming connection and decode the transport envelope
+$envelope = json_decode($_GET['payload'], true);
 
 $app = Application::getInstance();
 $serviceContainer = $app->services;
@@ -19,44 +19,58 @@ $debugService = $serviceContainer->getDebugService();
 $utilityContainer = $app->utilityServices;
 $validationUtility = $utilityContainer->getValidationUtility();
 
-// Verify the request signature before processing
-if (!$validationUtility->verifyRequestSignature($request)) {
+// Verify the request signature BEFORE decoding message content
+// This allows rejecting invalid requests early without processing the payload
+if (!$validationUtility->verifyRequestSignature($envelope)) {
     die;
 }
 
-if ($request['type'] === "create") {
+// Decode the message content (separate from transport metadata)
+$messageContent = json_decode($envelope['message'], true);
+
+// Build the full request by merging transport metadata with message content
+// This provides backward compatibility with services expecting senderAddress/senderPublicKey
+$request = array_merge($messageContent, [
+    'senderAddress' => $envelope['senderAddress'],
+    'senderPublicKey' => $envelope['senderPublicKey']
+]);
+
+// Route based on the type from message content
+$type = $messageContent['type'] ?? null;
+
+if ($type === "create") {
   // Handle contact request
-  $debugService->output("Processing create request from " . print_r($request['senderAddress'],true) , 'SILENT');
+  $debugService->output("Processing create request from " . print_r($envelope['senderAddress'],true) , 'SILENT');
   $contactService = $serviceContainer->getContactService();
-  echo $contactService->handleContactCreation($request);  
+  echo $contactService->handleContactCreation($request);
 }
-elseif ($request['type'] === "send") {
+elseif ($type === "send") {
   // Handle eIOU
-  $debugService->output("Processing send request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'] ?? $request['memo'], TRUE), 'SILENT');
+  $debugService->output("Processing send request from " . print_r($envelope['senderAddress'],true) . " with hash " . print_r($messageContent['hash'] ?? $messageContent['memo'], TRUE), 'SILENT');
   $transactionService = $serviceContainer->getTransactionService();
   if($transactionService->checkTransactionPossible($request)){
     $transactionService->processTransaction($request);
   }
 }
-elseif ($request['type'] === "p2p") {
+elseif ($type === "p2p") {
   // Handle Peer to peer Request
-  $debugService->output("Processing p2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
+  $debugService->output("Processing p2p request from " . print_r($envelope['senderAddress'],true) . " with hash " . print_r($messageContent['hash'], TRUE), 'SILENT');
   $p2pService = $serviceContainer->getP2pService();
   if($p2pService->checkP2pPossible($request)){
     $p2pService->handleP2pRequest($request);
   }
 }
-elseif ($request['type'] === "rp2p") {
+elseif ($type === "rp2p") {
   // Handle Peer to peer Response
-  $debugService->output("Processing rp2p request from " . print_r($request['senderAddress'],true) . " with hash " . print_r($request['hash'], TRUE), 'SILENT');
+  $debugService->output("Processing rp2p request from " . print_r($envelope['senderAddress'],true) . " with hash " . print_r($messageContent['hash'], TRUE), 'SILENT');
   $rp2pService = $serviceContainer->getRp2pService();
   if($rp2pService->checkRp2pPossible($request)){
     $rp2pService->handleRp2pRequest($request);
   }
 }
-elseif ($request['type'] === "message") {
+elseif ($type === "message") {
   // Handle messages
-  $debugService->output("Processing message from " . print_r($request['senderAddress'],true), 'SILENT');
+  $debugService->output("Processing message from " . print_r($envelope['senderAddress'],true), 'SILENT');
   $messageService = $serviceContainer->getMessageService();
   $messageService->handleMessageRequest($request);
 }

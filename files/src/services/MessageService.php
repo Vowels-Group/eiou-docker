@@ -137,33 +137,34 @@ class MessageService {
     /**
      * Handle incoming message request
      *
-     * @param array $message Message data
+     * Note: With the new payload structure, the message content is already decoded
+     * by index.html before being passed here. The $request parameter contains
+     * the merged content (message fields + senderAddress/senderPublicKey).
+     *
+     * @param array $request Request data (already decoded)
      * @return void
      */
-    public function handleMessageRequest(array $message): void {
-        // Handler for different message types
-        $decodedMessage = json_decode($message['message'],true);
-
+    public function handleMessageRequest(array $request): void {
         // Check if message is from a known or logical source
-        if(!$this->checkMessageValidity($decodedMessage)){
-            echo $this->utilPayload->buildInvalidSource($message);
+        if(!$this->checkMessageValidity($request)){
+            echo $this->utilPayload->buildInvalidSource($request);
             exit();
         }
 
         // Handle Transaction messages
-        if($decodedMessage['typeMessage'] === "transaction"){
-            if(isset($decodedMessage['inquiry']) && $decodedMessage['inquiry']){
-                $this->handleTransactionMessageInquiryRequest($decodedMessage);
+        if($request['typeMessage'] === "transaction"){
+            if(isset($request['inquiry']) && $request['inquiry']){
+                $this->handleTransactionMessageInquiryRequest($request);
             } else{
-                $this->handleTransactionMessageRequest($decodedMessage);
+                $this->handleTransactionMessageRequest($request);
             }
         }
         // Handle Contact messages
-        elseif($decodedMessage['typeMessage'] === "contact"){
-            if(isset($decodedMessage['inquiry']) && $decodedMessage['inquiry']){
-                $this->handleContactMessageInquiryRequest($decodedMessage);
+        elseif($request['typeMessage'] === "contact"){
+            if(isset($request['inquiry']) && $request['inquiry']){
+                $this->handleContactMessageInquiryRequest($request);
             } else{
-                $this->handleContactMessageRequest($decodedMessage);
+                $this->handleContactMessageRequest($request);
             }
         }
     }
@@ -274,28 +275,19 @@ class MessageService {
     /**
      * Validate message structure
      *
-     * @param array $message Message data
+     * Note: With the new payload structure, the message content is already decoded.
+     * This method validates the merged request structure.
+     *
+     * @param array $request Request data (already decoded)
      * @return bool True if valid structure
      */
-    public function validateMessageStructure(array $message): bool {
-        if (!isset($message['message'])) {
-            error_log("Message structure invalid: missing 'message' field");
-            return false;
-        }
-
-        $decodedMessage = json_decode($message['message'], true);
-
-        if (!$decodedMessage) {
-            error_log("Message structure invalid: failed to decode JSON");
-            return false;
-        }
-
-        if (!isset($decodedMessage['typeMessage'])) {
+    public function validateMessageStructure(array $request): bool {
+        if (!isset($request['typeMessage'])) {
             error_log("Message structure invalid: missing 'typeMessage' field");
             return false;
         }
 
-        if (!isset($decodedMessage['senderAddress'])) {
+        if (!isset($request['senderAddress'])) {
             error_log("Message structure invalid: missing 'senderAddress' field");
             return false;
         }

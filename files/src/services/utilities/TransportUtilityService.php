@@ -267,19 +267,44 @@ class TransportUtilityService
     /**
      * Sign a payload
      *
+     * Creates a clean payload structure where:
+     * - senderAddress, senderPublicKey, signature are at top level (transport metadata)
+     * - message contains only the signed content (no duplication)
+     *
+     * This eliminates the previous issue where all payload fields were duplicated
+     * inside the 'message' field, causing bandwidth overhead.
+     *
      * @param array $payload The payload to sign
-    */ 
+     * @return array|false The signed payload with clean structure, or false on failure
+    */
     public function sign(array $payload) {
+        // Remove transport metadata from payload content (will be at top level)
+        $messageContent = $payload;
+        unset($messageContent['senderAddress']);
+        unset($messageContent['senderPublicKey']);
+        unset($messageContent['signature']);
+
+        // Add nonce for replay protection
+        $messageContent['nonce'] = time();
+
+        // JSON encode the message content (no duplication)
+        $message = json_encode($messageContent);
+
         // Sign the message
-        $payload['nonce'] = time();
-        $message = json_encode($payload);
-        $payload['message'] = $message;
         $signature = '';
         if (!openssl_sign($message, $signature, openssl_pkey_get_private($this->currentUser->getPrivateKey()))) {
             echo "Failed to sign the message.\n";
             return false;
         }
-        $payload['signature'] = base64_encode($signature);
-        return $payload;
+
+        // Build clean payload structure:
+        // - Transport metadata at top level
+        // - Message content in 'message' field (no duplication)
+        return [
+            'senderAddress' => $payload['senderAddress'] ?? $this->currentUser->getHttpAddress(),
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+            'message' => $message,
+            'signature' => base64_encode($signature)
+        ];
     }
 }
