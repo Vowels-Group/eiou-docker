@@ -321,7 +321,10 @@ class ContactService {
             //  we are known under a different address or transport type
             elseif($responseData['status'] === 'updated'){
                 $senderAddress = $responseData['senderAddress'];
-                if($this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative)){
+                $senderPublicKey = $responseData['senderPublicKey'];
+                $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+                // Update contact address on our end 
+                if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
                     $contactData['status'] = 'updated';
                     $contactData['updated_address'] = $senderAddress;
                     $output->success("Contact address updated with " . $address, $contactData, "Contact address updated successfully");

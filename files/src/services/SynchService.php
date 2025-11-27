@@ -211,11 +211,17 @@ class SynchService {
             $status = $synchResponse['status'];
             $reason = $synchResponse['reason'] ?? NULL;
             if($status === 'accepted'){
+                $senderPublicKey = $synchResponse['senderPublicKey'];
+                $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+                $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($contactAddress); 
+
                 // If you are accepted as a contact by the contact in question then update accordingly 
-                $this->contactRepository->updateStatus($transportIndex, $contactAddress, $status);
+                $this->contactRepository->updateStatus($senderPublicKey, $status);
+                $this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative);
                 output(outputContactSuccesfullySynched($contactAddress),$echo);
                 return true;
             } elseif($status === 'rejected' && $reason === 'unknown'){
+                
                 // If no database existence of contact request on their end, resend contact request
                 $contactPayload = $this->contactPayload->buildCreateRequest($contactAddress);
                 $responseData = json_decode($this->transportUtility->send($contactAddress, $contactPayload), true);
