@@ -66,7 +66,6 @@ class SynchService {
      */
     private MessagePayload $messagePayload;
 
-
     /**
      * Constructor
      * @param ContactRepository $contactRepository Contact repository
@@ -285,6 +284,4 @@ class SynchService {
         // Synch specific
         return true;
     }
-
-
 }
