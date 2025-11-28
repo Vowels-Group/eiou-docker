@@ -1090,7 +1090,8 @@ class TransactionRepository extends AbstractRepository {
                 'txid' => $request['txid'],
                 'previous_txid' => $result ? $result['txid'] : null,
                 'sender_signature' => $request['signature'] ?? null, // upon initial inserting a standard transaction in database of original sender it is null
-                'memo' => $request['memo']
+                'memo' => $request['memo'],
+                'description' => $request['description'] ?? null
             ];
             $result = $this->insert($data);
             $this->commit();

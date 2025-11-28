@@ -345,6 +345,7 @@ class TransactionService {
         $data['amount'] = round($request[3] * Constants::TRANSACTION_USD_CONVERSION_FACTOR); // Convert to cents
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY; // Get currency or default to USD
         $data['memo'] = 'standard';
+        $data['description'] = $request[5] ?? null; // Optional description (only shared with end recipient)
 
         // Determine Transport Type (fallback on other if needed)
         $transportIndex = $this->transportUtility->fallbackTransportType($request[2],$contactInfo);

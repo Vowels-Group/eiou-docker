@@ -116,8 +116,13 @@ class TransactionController
             // Use sanitized values
             $amount = $amountValidation['value'];
             $currency = $currencyValidation['value'];
+
+            // Get optional description (sanitized)
+            $description = Security::sanitizeInput($_POST['description'] ?? '');
+            $description = !empty($description) ? $description : null;
+
             // Create argv array for sendEiou function
-            $argv = ['eiou', 'send', $finalRecipient, $amount, $currency];
+            $argv = ['eiou', 'send', $finalRecipient, $amount, $currency, $description];
 
             // Capture output
             ob_start();
