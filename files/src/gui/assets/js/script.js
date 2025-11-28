@@ -153,11 +153,125 @@ function closeEditContactModal() {
     document.getElementById('editContactModal').style.display = 'none';
 }
 
+// Transaction detail modal functions
+function openTransactionModal(index) {
+    if (typeof transactionData === 'undefined' || !transactionData[index]) {
+        return;
+    }
+
+    var tx = transactionData[index];
+    var modal = document.getElementById('transactionModal');
+    var content = document.getElementById('tx-modal-content');
+
+    // Build status badge HTML
+    var statusClass = 'tx-status-' + tx.status;
+    var statusBadge = '<span class="tx-status-badge ' + statusClass + '">' + tx.status.charAt(0).toUpperCase() + tx.status.slice(1) + '</span>';
+
+    // Build transaction type badge
+    var txTypeBadge = tx.tx_type === 'p2p'
+        ? '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-network-wired"></i> P2P Routed</span>'
+        : '<span style="background: #28a745; color: #fff; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-arrow-right"></i> Direct</span>';
+
+    // Build direction badge
+    var directionColor = tx.type === 'sent' ? '#dc3545' : '#28a745';
+    var directionIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
+    var directionText = tx.type === 'sent' ? 'Sent' : 'Received';
+
+    // Truncate long values for display
+    function truncate(str, len) {
+        if (!str) return 'N/A';
+        return str.length > len ? str.substring(0, len) + '...' : str;
+    }
+
+    // Build HTML content
+    var html = '';
+
+    // Header with amount
+    html += '<div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, ' + directionColor + ' 0%, ' + (tx.type === 'sent' ? '#ff6b6b' : '#20c997') + ' 100%); border-radius: 8px; margin-bottom: 1.5rem;">';
+    html += '<div style="font-size: 2rem; font-weight: bold; color: white;">' + (tx.type === 'sent' ? '-' : '+') + '$' + parseFloat(tx.amount).toFixed(2) + ' ' + tx.currency + '</div>';
+    html += '<div style="color: rgba(255,255,255,0.9); margin-top: 0.5rem;"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    html += '</div>';
+
+    // Status and type badges
+    html += '<div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">';
+    html += statusBadge;
+    html += txTypeBadge;
+    html += '</div>';
+
+    // Details section
+    html += '<div class="tx-detail-section">';
+
+    // Counterparty
+    html += '<div class="tx-detail-row">';
+    html += '<div class="tx-detail-label">' + (tx.type === 'sent' ? 'To' : 'From') + '</div>';
+    html += '<div class="tx-detail-value">' + (tx.counterparty_name ? '<strong>' + tx.counterparty_name + '</strong><br>' : '') + '<span style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + tx.counterparty_address + '</span></div>';
+    html += '</div>';
+
+    // Date/Time
+    html += '<div class="tx-detail-row">';
+    html += '<div class="tx-detail-label">Date & Time</div>';
+    html += '<div class="tx-detail-value">' + tx.date + '</div>';
+    html += '</div>';
+
+    // Transaction ID
+    if (tx.txid) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Transaction ID</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.txid + '</div>';
+        html += '</div>';
+    }
+
+    // Memo (for P2P transactions)
+    if (tx.memo && tx.memo !== 'standard') {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Routing Hash</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + truncate(tx.memo, 64) + '</div>';
+        html += '</div>';
+    }
+
+    // Description
+    if (tx.description) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Description</div>';
+        html += '<div class="tx-detail-value">' + tx.description + '</div>';
+        html += '</div>';
+    }
+
+    // Sender Address
+    html += '<div class="tx-detail-row">';
+    html += '<div class="tx-detail-label">Sender Address</div>';
+    html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.sender_address + '</div>';
+    html += '</div>';
+
+    // Receiver Address
+    html += '<div class="tx-detail-row">';
+    html += '<div class="tx-detail-label">Receiver Address</div>';
+    html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.receiver_address + '</div>';
+    html += '</div>';
+
+    html += '</div>';
+
+    content.innerHTML = html;
+    modal.style.display = 'flex';
+}
+
+function closeTransactionModal() {
+    var modal = document.getElementById('transactionModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
 // Close modal when clicking outside of it
 window.onclick = function(event) {
-    const modal = document.getElementById('editContactModal');
-    if (event.target === modal) {
+    var editModal = document.getElementById('editContactModal');
+    var txModal = document.getElementById('transactionModal');
+
+    if (event.target === editModal) {
         closeEditContactModal();
+    }
+    if (event.target === txModal) {
+        closeTransactionModal();
     }
 }
 
@@ -165,5 +279,6 @@ window.onclick = function(event) {
 document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         closeEditContactModal();
+        closeTransactionModal();
     }
 });

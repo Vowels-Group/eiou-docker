@@ -741,3 +741,82 @@ html {
 .contact-card:hover .contact-avatar {
     transform: scale(1.1);
 }
+
+/* Transaction Status Badges */
+.tx-status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.tx-status-pending {
+    background: #ffc107;
+    color: #000;
+}
+
+.tx-status-sent {
+    background: #17a2b8;
+    color: #fff;
+}
+
+.tx-status-accepted {
+    background: #28a745;
+    color: #fff;
+}
+
+.tx-status-rejected {
+    background: #dc3545;
+    color: #fff;
+}
+
+.tx-status-cancelled {
+    background: #6c757d;
+    color: #fff;
+}
+
+.tx-status-completed {
+    background: #28a745;
+    color: #fff;
+}
+
+/* Transaction Detail Modal */
+.tx-detail-section {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.tx-detail-row {
+    display: flex;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.tx-detail-row:last-child {
+    border-bottom: none;
+}
+
+.tx-detail-row:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.tx-detail-label {
+    width: 140px;
+    flex-shrink: 0;
+    font-weight: 600;
+    color: #6c757d;
+}
+
+.tx-detail-value {
+    flex: 1;
+    color: #212529;
+}
+
+/* Transaction item hover effect */
+.transaction-item:hover {
+    background: #f8f9fa;
+    transition: background 0.2s ease;
+}
