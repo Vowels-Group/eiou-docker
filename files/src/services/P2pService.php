@@ -539,7 +539,9 @@ class P2pService {
 
         $p2pPayload = $this->p2pPayload->build($this->prepareP2pRequestData($data));
         output(outputInsertingP2pRequest($address), 'SILENT');
-        $this->p2pRepository->insertP2pRequest($p2pPayload, $address);
+        // Privacy: Store description locally but don't include in P2P payload sent to relays
+        $description = isset($data[5]) && !empty($data[5]) ? $data[5] : null;
+        $this->p2pRepository->insertP2pRequest($p2pPayload, $address, $description);
         $this->p2pRepository->updateStatus($p2pPayload['hash'], 'queued');
     }
 
