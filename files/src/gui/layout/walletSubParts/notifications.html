@@ -1,9 +1,9 @@
 <!-- Copyright 2025  -->
- 
+
 <!-- Message alerts -->
 <?php if (!empty($messageForDisplay)): ?>
     <div class="alert alert-<?php echo $messageTypeForDisplay; ?> fade-in-up">
-        <i class="fas fa-<?php 
+        <i class="fas fa-<?php
             if ($messageTypeForDisplay === 'contact-accepted') {
                 echo 'user-check';
             } elseif ($messageTypeForDisplay === 'success') {
@@ -18,6 +18,25 @@
         ?>"></i>
         <?php echo htmlspecialchars($messageForDisplay); ?>
     </div>
+    <!-- Show toast notification for transaction results -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var msgType = '<?php echo addslashes($messageTypeForDisplay); ?>';
+        var msg = '<?php echo addslashes($messageForDisplay); ?>';
+        var toastType = msgType === 'success' ? 'success' : (msgType === 'error' ? 'error' : 'info');
+        var title = toastType === 'success' ? 'Success' : (toastType === 'error' ? 'Error' : 'Notice');
+
+        // Check if this is a transaction-related message
+        if (msg.toLowerCase().indexOf('transaction') !== -1 ||
+            msg.toLowerCase().indexOf('sent') !== -1) {
+            title = toastType === 'success' ? 'Transaction Complete' : 'Transaction Failed';
+        }
+
+        if (typeof showToast === 'function') {
+            showToast(title, msg, toastType);
+        }
+    });
+    </script>
 <?php endif; ?>
 
 <!-- Pending Contact Requests Notification -->

@@ -287,3 +287,91 @@ document.addEventListener('keydown', function(event) {
         closeTransactionModal();
     }
 });
+
+// Toast Notification System
+function showToast(title, message, type) {
+    type = type || 'info';
+
+    // Ensure toast container exists
+    var container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    // Create toast element
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + type;
+
+    // Icon mapping
+    var icons = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+    };
+
+    toast.innerHTML = '<i class="fas ' + icons[type] + ' toast-icon"></i>' +
+        '<div class="toast-content">' +
+        '<div class="toast-title">' + title + '</div>' +
+        '<div class="toast-message">' + message + '</div>' +
+        '</div>' +
+        '<button class="toast-close" onclick="this.parentElement.remove()">&times;</button>';
+
+    container.appendChild(toast);
+
+    // Auto-remove after 5 seconds
+    setTimeout(function() {
+        if (toast.parentElement) {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100px)';
+            toast.style.transition = 'all 0.3s ease';
+            setTimeout(function() {
+                if (toast.parentElement) {
+                    toast.remove();
+                }
+            }, 300);
+        }
+    }, 5000);
+}
+
+// Show toast when sending transaction
+function initializeTransactionToast() {
+    var sendForm = document.querySelector('#send-form form');
+    if (sendForm) {
+        sendForm.addEventListener('submit', function(e) {
+            var recipientSelect = document.getElementById('recipient');
+            var manualAddress = document.getElementById('manual-address');
+            var amount = document.getElementById('amount');
+            var currency = document.getElementById('currency');
+
+            var recipient = '';
+            if (recipientSelect && recipientSelect.value) {
+                recipient = recipientSelect.options[recipientSelect.selectedIndex].text;
+            } else if (manualAddress && manualAddress.value) {
+                var addr = manualAddress.value;
+                recipient = addr.length > 25 ? addr.substring(0, 25) + '...' : addr;
+            }
+
+            var amountValue = amount ? amount.value : '0';
+            var currencyValue = currency ? currency.value : 'USD';
+
+            // Determine if P2P or direct
+            var isP2P = !recipientSelect || !recipientSelect.value;
+            var txType = isP2P ? 'P2P' : 'Direct';
+
+            showToast(
+                'Sending ' + txType + ' Transaction',
+                'Sending $' + amountValue + ' ' + currencyValue + ' to ' + recipient + '...',
+                'info'
+            );
+        });
+    }
+}
+
+// Initialize toast on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', function() {
+    initializeTransactionToast();
+});
