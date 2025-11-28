@@ -178,3 +178,79 @@ function getTransactionsTableSchema() {
         INDEX idx_transactions_memo (memo(255))
     )";
 }
+
+// Message Delivery Tracking table - tracks multi-stage acknowledgments and retries
+function getMessageDeliveryTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS message_delivery (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact') NOT NULL,
+        message_id VARCHAR(255) NOT NULL,  /* txid, hash, etc. */
+        recipient_address VARCHAR(255) NOT NULL,
+        delivery_stage ENUM(
+            'pending',      /* Message queued for delivery */
+            'sent',         /* Message sent, awaiting acknowledgment */
+            'received',     /* Recipient acknowledged receipt */
+            'inserted',     /* Recipient confirmed database insertion */
+            'forwarded',    /* Recipient confirmed forwarding to next hop */
+            'completed',    /* Full delivery chain completed */
+            'failed'        /* Delivery failed after all retries */
+        ) DEFAULT 'pending',
+        retry_count INT DEFAULT 0,
+        max_retries INT DEFAULT 5,
+        next_retry_at TIMESTAMP(6) NULL,
+        last_error TEXT,
+        last_response TEXT,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY idx_delivery_unique (message_type, message_id, recipient_address),
+        INDEX idx_delivery_stage (delivery_stage),
+        INDEX idx_delivery_retry (delivery_stage, next_retry_at),
+        INDEX idx_delivery_message_type (message_type),
+        INDEX idx_delivery_created_at (created_at)
+    )";
+}
+
+// Dead Letter Queue table - stores failed messages for manual review
+function getDeadLetterQueueTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS dead_letter_queue (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact') NOT NULL,
+        original_id VARCHAR(255) NOT NULL,  /* txid, hash, etc. */
+        payload JSON NOT NULL,
+        recipient_address VARCHAR(255) NOT NULL,
+        retry_count INT DEFAULT 0,
+        last_retry_at TIMESTAMP(6) NULL,
+        failure_reason TEXT,
+        status ENUM(
+            'pending',      /* Awaiting manual review */
+            'retrying',     /* Being retried manually */
+            'resolved',     /* Successfully resolved/reprocessed */
+            'abandoned'     /* Manually marked as abandoned */
+        ) DEFAULT 'pending',
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        resolved_at TIMESTAMP(6) NULL,
+        INDEX idx_dlq_status (status),
+        INDEX idx_dlq_message_type (message_type),
+        INDEX idx_dlq_created_at (created_at),
+        INDEX idx_dlq_status_created (status, created_at)
+    )";
+}
+
+// Message Delivery Metrics table - tracks delivery success/failure rates
+function getDeliveryMetricsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS delivery_metrics (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        period_start TIMESTAMP(6) NOT NULL,
+        period_end TIMESTAMP(6) NOT NULL,
+        message_type ENUM('transaction', 'p2p', 'rp2p', 'contact', 'all') NOT NULL,
+        total_sent INT DEFAULT 0,
+        total_delivered INT DEFAULT 0,
+        total_failed INT DEFAULT 0,
+        avg_delivery_time_ms INT DEFAULT 0,
+        avg_retry_count DECIMAL(5,2) DEFAULT 0,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_metrics_period (period_start, period_end),
+        INDEX idx_metrics_type (message_type),
+        INDEX idx_metrics_created (created_at)
+    )";
+}

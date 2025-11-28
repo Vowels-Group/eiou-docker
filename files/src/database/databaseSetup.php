@@ -67,6 +67,9 @@ function freshInstall(){
                 $dbConn->exec(getTransactionsTableSchema());
                 $dbConn->exec(getP2pTableSchema());
                 $dbConn->exec(getRp2pTableSchema());
+                $dbConn->exec(getMessageDeliveryTableSchema());
+                $dbConn->exec(getDeadLetterQueueTableSchema());
+                $dbConn->exec(getDeliveryMetricsTableSchema());
             } catch (PDOException $tableError) {
                 if (class_exists('SecureLogger')) {
                     SecureLogger::error("Table creation failed", [
@@ -114,6 +117,49 @@ function freshInstall(){
         // Write the default configuration
         if($dbConfig !== []){
             file_put_contents('/etc/eiou/dbconfig.json', json_encode($dbConfig), LOCK_EX);
-        }   
+        }
     }
+}
+
+/**
+ * Run database migrations to add new tables to existing databases
+ * This function is idempotent - safe to run multiple times
+ *
+ * @param PDO $pdo Database connection
+ * @return array Migration results
+ */
+function runMigrations(PDO $pdo): array {
+    require_once '/etc/eiou/src/database/databaseSchema.php';
+
+    $results = [];
+
+    // Define migrations with table name => schema function
+    $migrations = [
+        'message_delivery' => 'getMessageDeliveryTableSchema',
+        'dead_letter_queue' => 'getDeadLetterQueueTableSchema',
+        'delivery_metrics' => 'getDeliveryMetricsTableSchema',
+    ];
+
+    foreach ($migrations as $tableName => $schemaFunction) {
+        try {
+            // Check if table exists
+            $stmt = $pdo->query("SHOW TABLES LIKE '$tableName'");
+            if ($stmt->rowCount() === 0) {
+                // Table doesn't exist, create it
+                $pdo->exec($schemaFunction());
+                $results[$tableName] = 'created';
+            } else {
+                $results[$tableName] = 'exists';
+            }
+        } catch (PDOException $e) {
+            $results[$tableName] = 'error: ' . $e->getMessage();
+            if (class_exists('SecureLogger')) {
+                SecureLogger::error("Migration failed for table $tableName", [
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+    }
+
+    return $results;
 }
