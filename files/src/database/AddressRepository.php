@@ -138,4 +138,28 @@ class AddressRepository extends AbstractRepository {
         $result = $stmt->fetchColumn();
         return $result ?: null;
     }
+
+    /**
+     * Get all address type column names from the addresses table
+     * Excludes 'id' and 'pubkey_hash' columns
+     *
+     * @return array Array of address type names (e.g., ['http', 'tor'])
+     */
+    public function getAllAddressTypes(): array {
+        $query = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = :table_name
+                  AND COLUMN_NAME NOT IN ('id', 'pubkey_hash')
+                  ORDER BY ORDINAL_POSITION";
+
+        $stmt = $this->execute($query, [':table_name' => $this->tableName]);
+
+        if (!$stmt) {
+            // Fallback to known address types if query fails
+            return ['http', 'tor'];
+        }
+
+        $result = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return $result ?: ['http', 'tor'];
+    }
 }

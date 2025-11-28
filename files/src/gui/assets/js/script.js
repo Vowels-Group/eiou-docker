@@ -72,32 +72,37 @@ function initializeSendForm() {
                 manualAddressInput.value = '';
                 recipientSelect.required = true;
 
-                // Get available addresses from data attributes
-                const httpAddr = selectedOption.getAttribute('data-http');
-                const torAddr = selectedOption.getAttribute('data-tor');
+                // Get available addresses from JSON data attribute
+                var addressesJson = selectedOption.getAttribute('data-addresses');
+                var addresses = {};
+                try {
+                    addresses = addressesJson ? JSON.parse(addressesJson) : {};
+                } catch (e) {
+                    addresses = {};
+                }
 
-                // Populate address type dropdown
+                // Populate address type dropdown dynamically
                 addressTypeSelect.innerHTML = '<option value="">Select address type</option>';
 
-                if (torAddr) {
-                    const truncatedTor = torAddr.length > 30 ? torAddr.substring(0, 30) + '...' : torAddr;
-                    addressTypeSelect.innerHTML += '<option value="tor">Tor (' + truncatedTor + ')</option>';
-                }
-                if (httpAddr) {
-                    const truncatedHttp = httpAddr.length > 30 ? httpAddr.substring(0, 30) + '...' : httpAddr;
-                    addressTypeSelect.innerHTML += '<option value="http">HTTP (' + truncatedHttp + ')</option>';
+                var addressTypes = Object.keys(addresses);
+                var addressCount = addressTypes.length;
+
+                for (var i = 0; i < addressTypes.length; i++) {
+                    var type = addressTypes[i];
+                    var addr = addresses[type];
+                    var truncatedAddr = addr.length > 30 ? addr.substring(0, 30) + '...' : addr;
+                    var displayType = type.toUpperCase();
+                    addressTypeSelect.innerHTML += '<option value="' + type + '">' + displayType + ' (' + truncatedAddr + ')</option>';
                 }
 
                 // Show address type selector if at least one address available
-                if (torAddr || httpAddr) {
+                if (addressCount > 0) {
                     addressTypeGroup.style.display = 'block';
                     addressTypeSelect.required = true;
 
                     // Auto-select if only one address available
-                    if (torAddr && !httpAddr) {
-                        addressTypeSelect.value = 'tor';
-                    } else if (httpAddr && !torAddr) {
-                        addressTypeSelect.value = 'http';
+                    if (addressCount === 1) {
+                        addressTypeSelect.value = addressTypes[0];
                     }
                 } else {
                     addressTypeGroup.style.display = 'none';

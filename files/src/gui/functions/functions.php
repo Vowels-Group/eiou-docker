@@ -41,3 +41,6 @@ $pendingContacts = $contactService->getPendingContactRequests();
 $pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests());
 $acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts());
 $blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts());
+
+// Address types (dynamic from database schema)
+$addressTypes = $contactService->getAllAddressTypes();
