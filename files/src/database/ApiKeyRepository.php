@@ -1,0 +1,296 @@
+<?php
+# Copyright 2025
+
+/**
+ * Repository for managing API keys
+ *
+ * Handles CRUD operations for API keys with secure storage
+ */
+
+require_once dirname(__DIR__) . '/database/AbstractRepository.php';
+
+class ApiKeyRepository extends AbstractRepository {
+
+    /**
+     * Generate a new API key
+     *
+     * @param string $name Human-readable name for the key
+     * @param array $permissions Array of allowed permissions
+     * @param int|null $rateLimitPerMinute Custom rate limit (default: 100)
+     * @param string|null $expiresAt Expiration timestamp (null = never expires)
+     * @return array ['key_id' => string, 'secret' => string] - secret is only returned once!
+     */
+    public function createKey(
+        string $name,
+        array $permissions = ['wallet:read'],
+        ?int $rateLimitPerMinute = 100,
+        ?string $expiresAt = null
+    ): array {
+        // Generate unique key_id (public identifier)
+        $keyId = 'eiou_' . bin2hex(random_bytes(12));
+
+        // Generate secret key (shown only once to user)
+        $secret = bin2hex(random_bytes(32));
+
+        // Hash the secret for storage (we never store the raw secret)
+        $keyHash = hash('sha256', $secret);
+
+        $sql = "INSERT INTO api_keys (key_id, key_hash, name, permissions, rate_limit_per_minute, expires_at)
+                VALUES (:key_id, :key_hash, :name, :permissions, :rate_limit, :expires_at)";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':key_id' => $keyId,
+            ':key_hash' => $keyHash,
+            ':name' => $name,
+            ':permissions' => json_encode($permissions),
+            ':rate_limit' => $rateLimitPerMinute,
+            ':expires_at' => $expiresAt
+        ]);
+
+        return [
+            'key_id' => $keyId,
+            'secret' => $secret,
+            'name' => $name,
+            'permissions' => $permissions,
+            'rate_limit_per_minute' => $rateLimitPerMinute,
+            'expires_at' => $expiresAt
+        ];
+    }
+
+    /**
+     * Validate an API key and return its details
+     *
+     * @param string $keyId The public key identifier
+     * @param string $secret The secret key
+     * @return array|null Key details if valid, null if invalid
+     */
+    public function validateKey(string $keyId, string $secret): ?array {
+        $keyHash = hash('sha256', $secret);
+
+        $sql = "SELECT id, key_id, name, permissions, rate_limit_per_minute, enabled, expires_at
+                FROM api_keys
+                WHERE key_id = :key_id
+                AND key_hash = :key_hash
+                AND enabled = 1
+                AND (expires_at IS NULL OR expires_at > NOW())";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':key_id' => $keyId,
+            ':key_hash' => $keyHash
+        ]);
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($result) {
+            // Update last_used_at
+            $this->updateLastUsed($keyId);
+
+            // Decode permissions JSON
+            $result['permissions'] = json_decode($result['permissions'], true);
+        }
+
+        return $result ?: null;
+    }
+
+    /**
+     * Get API key by key_id (without validating secret)
+     *
+     * @param string $keyId The public key identifier
+     * @return array|null Key details if found
+     */
+    public function getByKeyId(string $keyId): ?array {
+        $sql = "SELECT id, key_id, name, permissions, rate_limit_per_minute, enabled, created_at, last_used_at, expires_at
+                FROM api_keys
+                WHERE key_id = :key_id";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':key_id' => $keyId]);
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($result) {
+            $result['permissions'] = json_decode($result['permissions'], true);
+        }
+
+        return $result ?: null;
+    }
+
+    /**
+     * List all API keys (without secrets)
+     *
+     * @param bool $includeDisabled Include disabled keys
+     * @return array List of API keys
+     */
+    public function listKeys(bool $includeDisabled = false): array {
+        $sql = "SELECT id, key_id, name, permissions, rate_limit_per_minute, enabled, created_at, last_used_at, expires_at
+                FROM api_keys";
+
+        if (!$includeDisabled) {
+            $sql .= " WHERE enabled = 1";
+        }
+
+        $sql .= " ORDER BY created_at DESC";
+
+        $stmt = $this->pdo->query($sql);
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($results as &$result) {
+            $result['permissions'] = json_decode($result['permissions'], true);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Update last used timestamp for an API key
+     *
+     * @param string $keyId The public key identifier
+     */
+    public function updateLastUsed(string $keyId): void {
+        $sql = "UPDATE api_keys SET last_used_at = NOW(6) WHERE key_id = :key_id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':key_id' => $keyId]);
+    }
+
+    /**
+     * Disable an API key
+     *
+     * @param string $keyId The public key identifier
+     * @return bool True if key was disabled
+     */
+    public function disableKey(string $keyId): bool {
+        $sql = "UPDATE api_keys SET enabled = 0 WHERE key_id = :key_id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':key_id' => $keyId]);
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Enable an API key
+     *
+     * @param string $keyId The public key identifier
+     * @return bool True if key was enabled
+     */
+    public function enableKey(string $keyId): bool {
+        $sql = "UPDATE api_keys SET enabled = 1 WHERE key_id = :key_id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':key_id' => $keyId]);
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Delete an API key permanently
+     *
+     * @param string $keyId The public key identifier
+     * @return bool True if key was deleted
+     */
+    public function deleteKey(string $keyId): bool {
+        $sql = "DELETE FROM api_keys WHERE key_id = :key_id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':key_id' => $keyId]);
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Update API key permissions
+     *
+     * @param string $keyId The public key identifier
+     * @param array $permissions New permissions array
+     * @return bool True if updated
+     */
+    public function updatePermissions(string $keyId, array $permissions): bool {
+        $sql = "UPDATE api_keys SET permissions = :permissions WHERE key_id = :key_id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':key_id' => $keyId,
+            ':permissions' => json_encode($permissions)
+        ]);
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Log an API request
+     *
+     * @param string $keyId API key used
+     * @param string $endpoint Endpoint accessed
+     * @param string $method HTTP method
+     * @param string $ipAddress Client IP
+     * @param int $responseCode HTTP response code
+     * @param int|null $responseTimeMs Response time in milliseconds
+     */
+    public function logRequest(
+        string $keyId,
+        string $endpoint,
+        string $method,
+        string $ipAddress,
+        int $responseCode,
+        ?int $responseTimeMs = null
+    ): void {
+        $sql = "INSERT INTO api_request_log (key_id, endpoint, method, ip_address, response_code, response_time_ms)
+                VALUES (:key_id, :endpoint, :method, :ip_address, :response_code, :response_time_ms)";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':key_id' => $keyId,
+            ':endpoint' => $endpoint,
+            ':method' => $method,
+            ':ip_address' => $ipAddress,
+            ':response_code' => $responseCode,
+            ':response_time_ms' => $responseTimeMs
+        ]);
+    }
+
+    /**
+     * Get request count for rate limiting
+     *
+     * @param string $keyId API key
+     * @param int $windowSeconds Time window in seconds
+     * @return int Number of requests in the window
+     */
+    public function getRequestCount(string $keyId, int $windowSeconds = 60): int {
+        $sql = "SELECT COUNT(*) as count FROM api_request_log
+                WHERE key_id = :key_id
+                AND request_timestamp > DATE_SUB(NOW(6), INTERVAL :window SECOND)";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':key_id' => $keyId,
+            ':window' => $windowSeconds
+        ]);
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return (int) $result['count'];
+    }
+
+    /**
+     * Check if a key has a specific permission
+     *
+     * @param array $keyPermissions The key's permissions array
+     * @param string $requiredPermission Permission to check (e.g., 'wallet:read')
+     * @return bool True if permission is granted
+     */
+    public static function hasPermission(array $keyPermissions, string $requiredPermission): bool {
+        // Check for wildcard permission
+        if (in_array('*', $keyPermissions) || in_array('admin', $keyPermissions)) {
+            return true;
+        }
+
+        // Check for exact match
+        if (in_array($requiredPermission, $keyPermissions)) {
+            return true;
+        }
+
+        // Check for category wildcard (e.g., 'wallet:*' grants 'wallet:read')
+        $parts = explode(':', $requiredPermission);
+        if (count($parts) === 2) {
+            $categoryWildcard = $parts[0] . ':*';
+            if (in_array($categoryWildcard, $keyPermissions)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}

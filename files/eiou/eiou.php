@@ -171,6 +171,14 @@ elseif($request === "shutdown"){
   $debugService->output("Executing shutdown request", 'SILENT');
   $app->shutdown($output);
 }
+// API Key Management
+elseif($request === "apikey"){
+  // Manage API keys
+  $debugService->output("Executing API key management request", 'SILENT');
+  require_once '/etc/eiou/src/services/ApiKeyService.php';
+  $apiKeyService = new ApiKeyService($app->services->getApiKeyRepository(), $output);
+  $apiKeyService->handleCommand($cleanArgv);
+}
 else{
   // If no known input, display commands possible for input
   $cliService = $app->services->getCliService();

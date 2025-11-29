@@ -1,0 +1,91 @@
+<?php
+# Copyright 2025
+
+/**
+ * API Entry Point
+ *
+ * Handles all incoming REST API requests
+ *
+ * All requests should be directed here via Apache rewrite:
+ * RewriteRule ^api/(.*)$ /etc/eiou/api.php [L,QSA]
+ */
+
+// Set JSON content type
+header('Content-Type: application/json; charset=utf-8');
+
+// Set CORS headers for API access
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: X-API-Key, X-API-Timestamp, X-API-Signature, Content-Type');
+
+// Handle preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
+// Initialize application
+require_once '/etc/eiou/src/core/Application.php';
+require_once '/etc/eiou/src/core/Constants.php';
+
+try {
+    $app = Application::getInstance();
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'error' => [
+            'message' => 'Service unavailable',
+            'code' => 'service_unavailable'
+        ],
+        'timestamp' => date('c')
+    ]);
+    exit;
+}
+
+// Check if API is enabled
+if (!defined('Constants::API_ENABLED') || Constants::API_ENABLED !== true) {
+    // API is enabled by default if constant is not set
+}
+
+// Load API components
+require_once '/etc/eiou/src/database/ApiKeyRepository.php';
+require_once '/etc/eiou/src/api/ApiAuthService.php';
+require_once '/etc/eiou/src/api/ApiController.php';
+
+// Run database migrations (creates api_keys table if needed)
+require_once '/etc/eiou/src/database/databaseSetup.php';
+$pdo = $app->services->getPdo();
+runMigrations($pdo);
+
+// Initialize API components
+$apiKeyRepo = new ApiKeyRepository($pdo);
+$logger = $app->getLogger();
+$authService = new ApiAuthService($apiKeyRepo, $logger);
+$controller = new ApiController($authService, $apiKeyRepo, $app->services, $logger);
+
+// Get request details
+$method = $_SERVER['REQUEST_METHOD'];
+$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$params = $_GET;
+$body = file_get_contents('php://input') ?: '';
+$headers = ApiAuthService::getRequestHeaders();
+
+// Handle the request
+$response = $controller->handleRequest($method, $path, $params, $body, $headers);
+
+// Set HTTP status code
+http_response_code($response['status_code'] ?? 200);
+
+// Add rate limit headers
+if (isset($response['data']['rate_limit'])) {
+    header('X-RateLimit-Limit: ' . $response['data']['rate_limit']['limit']);
+    header('X-RateLimit-Remaining: ' . $response['data']['rate_limit']['remaining']);
+    header('X-RateLimit-Reset: ' . $response['data']['rate_limit']['reset']);
+}
+
+// Remove internal status_code from response
+unset($response['status_code']);
+
+// Output JSON response
+echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
