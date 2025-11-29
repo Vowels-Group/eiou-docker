@@ -133,9 +133,10 @@ if [[ "$testPair" ]]; then
     # Send test transaction
     docker exec ${sender} eiou send ${containerAddresses[${receiver}]} 2 USD 2>&1 > /dev/null
 
-    # Wait for processing
-    echo -e "\t   Waiting for 20 seconds for complete routing (faster but certainty)..."
-    sleep 20
+    # Wait for processing with polling
+    echo -e "\t   Waiting for transaction processing (timeout: 20s)..."
+    tx_count_condition="[ \"\$(docker exec ${receiver} php -r \"require_once('./etc/eiou/src/core/Application.php'); echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('received');\" 2>/dev/null)\" -gt \"$receiverBefore\" ]"
+    wait_for_condition "$tx_count_condition" 20 1 "transaction processing"
 
     # Check new counts
     senderAfter=$(docker exec ${sender} php -r "

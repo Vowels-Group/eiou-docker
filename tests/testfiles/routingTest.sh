@@ -52,9 +52,17 @@ for routingPair in "${!routingTests[@]}"; do
         testAmount="3"
         routingResult=$(docker exec ${sender} eiou send ${containerAddresses[${receiver}]} ${testAmount} USD 2>&1)
 
-        # Wait for transaction to process
-        echo -e "\t   Waiting 20 seconds for routing process (faster but certainty)..."
-        sleep 20
+        # Wait for routing with polling - check first relay node for balance change
+        echo -e "\t   Waiting for routing (timeout: 20s)..."
+        if [[ "${intermediates[0]}" ]]; then
+            firstRelay="${intermediates[0]}"
+            relay_balance_cmd="php -r \"
+                require_once('./etc/eiou/src/core/Application.php');
+                \\\$balance = Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+                echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+            \""
+            wait_for_balance_change "$firstRelay" "${initialRelayBalances[$firstRelay]}" "$relay_balance_cmd" 20 "relay fee" > /dev/null 2>&1 || true
+        fi
 
         # Check relay nodes received fees
         relayFeesDetected=0
@@ -143,9 +151,13 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
         e2eAmount="8"
         e2eResult=$(docker exec ${firstContainer} eiou send ${containerAddresses[${lastContainer}]} ${e2eAmount} USD 2>&1)
 
-        # Wait for multi-hop routing
-        echo -e "\t   Waiting 30 seconds for multi-hop routing process (faster but certainty)..."
-        sleep 30
+        # Wait for multi-hop routing with polling
+        echo -e "\t   Waiting for multi-hop routing (timeout: 30s)..."
+        tx_count_cmd="php -r \"
+            require_once('./etc/eiou/src/core/Application.php');
+            echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
+        \""
+        wait_for_condition "[ \"\$(docker exec ${lastContainer} sh -c '$tx_count_cmd' 2>/dev/null)\" -gt \"$initialState\" ]" 30 1 "multi-hop delivery"
 
         # Check if message arrived
         finalState=$(docker exec ${lastContainer} php -r "
