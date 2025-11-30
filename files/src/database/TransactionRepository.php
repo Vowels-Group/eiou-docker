@@ -1174,6 +1174,27 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Update transaction description
+     *
+     * @param string $identifier Transaction memo or txid
+     * @param string $description Description
+     * @param bool $isTxid True if identifier is txid, false if memo
+     * @return bool Success status
+     */
+    public function updateDescription(string $identifier, string $description, bool $isTxid = false): bool {
+        $column = $isTxid ? 'txid' : 'memo';
+        $affectedRows = $this->update(['description' => $description], $column, $identifier);
+
+        // Output silent logging if function exists
+        if (function_exists('output') && function_exists('outputTransactionDescriptionUpdated')) {
+            $typeTransaction = $isTxid ? 'txid' : 'hash';
+            output(outputTransactionDescriptionUpdated($description, $typeTransaction, $identifier), 'SILENT');
+        }
+
+        return $affectedRows >= 0;
+    }
+
+    /**
      * Get transactions by status
      *
      * @param string $status Transaction status
