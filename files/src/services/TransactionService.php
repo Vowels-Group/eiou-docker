@@ -568,7 +568,8 @@ class TransactionService {
         $txData = [
             'recipient' => $request[2] ?? null,
             'amount' => $request[3] ?? null,
-            'currency' => $request[4] ?? 'USD'
+            'currency' => $request[4] ?? 'USD',
+            'description' => $request[5] ?? null
         ];
 
         // Validate Parameter count
