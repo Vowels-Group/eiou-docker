@@ -968,4 +968,13 @@ class ContactService {
     public function lookupNameByAddress(string $transportIndex, string $address): ?string {
         return $this->contactRepository->lookupNameByAddress($transportIndex, $address);
     }
+
+    /**
+     * Get all available address types from the database schema
+     *
+     * @return array Array of address type names (e.g., ['http', 'tor'])
+     */
+    public function getAllAddressTypes(): array {
+        return $this->addressRepository->getAllAddressTypes();
+    }
 }

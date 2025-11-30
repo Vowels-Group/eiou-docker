@@ -66,9 +66,10 @@ class P2pRepository extends AbstractRepository {
      *
      * @param array $request P2P request data
      * @param string|null $destinationAddress Destination address
+     * @param string|null $description Optional description (only stored locally, not sent to relays)
      * @return string JSON response
      */
-    public function insertP2pRequest(array $request, ?string $destinationAddress = null): string {
+    public function insertP2pRequest(array $request, ?string $destinationAddress = null, ?string $description = null): string {
         $myFeeAmount = $request['feeAmount'] ?? null;
         $status = $request['status'] ?? 'initial';
 
@@ -88,7 +89,8 @@ class P2pRepository extends AbstractRepository {
             'destination_address' => $destinationAddress,
             'incoming_txid' => $request['incoming_txid'] ?? null,
             'outgoing_txid' => $request['outgoing_txid'] ?? null,
-            'status' => $status
+            'status' => $status,
+            'description' => $description // Privacy: Only stored locally, never sent to relay nodes
         ];
 
         $result = $this->insert($data);

@@ -26,8 +26,23 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                         <span style="background: lightgreen; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Accepted</span>
                         <div class="contact-details">
-                            <div class="contact-address"><?php  if ($contact['http']){echo htmlspecialchars($generalUtility->truncateAddress($contact['http']));} else{echo 'Http Not available';} ?></div>
-                            <div class="contact-address"><?php  if ($contact['tor']){echo htmlspecialchars($generalUtility->truncateAddress($contact['tor']));} else{echo 'Tor Not available';} ?></div>            
+                            <?php
+                            // Display up to 2 addresses dynamically
+                            $displayedCount = 0;
+                            foreach ($addressTypes as $type) {
+                                if ($displayedCount >= 2) break;
+                                $addr = $contact[$type] ?? null;
+                                if ($addr) {
+                                    echo '<div class="contact-address"><strong>' . strtoupper(htmlspecialchars($type)) . ':</strong> ' . htmlspecialchars($generalUtility->truncateAddress($addr)) . '</div>';
+                                    $displayedCount++;
+                                }
+                            }
+                            if ($displayedCount === 0) {
+                                echo '<div class="contact-address">No address available</div>';
+                            } elseif ($displayedCount === 1) {
+                                echo '<div class="contact-address" style="color: #6c757d; font-style: italic;">No other address available</div>';
+                            }
+                            ?>
                             <div>Balance: <span class="<?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>">
                                 <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?>
                             </span> <?php echo $contact['currency']; ?></div>
@@ -65,8 +80,23 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                         <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending Response</span>
                         <div class="contact-details">
-                            <div class="contact-address"><?php  if ($contact['http']) { echo htmlspecialchars($generalUtility->truncateAddress($contact['http']));} else{ echo "Http not available.";} ?></div>
-                            <div class="contact-address"><?php  if ($contact['tor']) {echo htmlspecialchars($generalUtility->truncateAddress($contact['tor']));} else{ echo "Tor not available.";} ?></div>           
+                            <?php
+                            // Display up to 2 addresses dynamically
+                            $displayedCount = 0;
+                            foreach ($addressTypes as $type) {
+                                if ($displayedCount >= 2) break;
+                                $addr = $contact[$type] ?? null;
+                                if ($addr) {
+                                    echo '<div class="contact-address"><strong>' . strtoupper(htmlspecialchars($type)) . ':</strong> ' . htmlspecialchars($generalUtility->truncateAddress($addr)) . '</div>';
+                                    $displayedCount++;
+                                }
+                            }
+                            if ($displayedCount === 0) {
+                                echo '<div class="contact-address">No address available</div>';
+                            } elseif ($displayedCount === 1) {
+                                echo '<div class="contact-address" style="color: #6c757d; font-style: italic;">No other address available</div>';
+                            }
+                            ?>
                             <div>Balance: <span class="balance-negative">
                                 -
                             </span> <?php echo $contact['currency']; ?></div>
@@ -87,8 +117,23 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name'] ?? "-"); ?></div>
                         <span style="background: red; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Blocked</span>
                         <div class="contact-details">
-                            <div class="contact-address"><?php  if ($contact['http']){echo htmlspecialchars($generalUtility->truncateAddress($contact['http']));} else{echo 'Http not available.';} ?></div>
-                            <div class="contact-address"><?php  if ($contact['tor']){echo htmlspecialchars($generalUtility->truncateAddress($contact['tor']));} else{echo 'Tor not available.';} ?></div>      
+                            <?php
+                            // Display up to 2 addresses dynamically
+                            $displayedCount = 0;
+                            foreach ($addressTypes as $type) {
+                                if ($displayedCount >= 2) break;
+                                $addr = $contact[$type] ?? null;
+                                if ($addr) {
+                                    echo '<div class="contact-address"><strong>' . strtoupper(htmlspecialchars($type)) . ':</strong> ' . htmlspecialchars($generalUtility->truncateAddress($addr)) . '</div>';
+                                    $displayedCount++;
+                                }
+                            }
+                            if ($displayedCount === 0) {
+                                echo '<div class="contact-address">No address available</div>';
+                            } elseif ($displayedCount === 1) {
+                                echo '<div class="contact-address" style="color: #6c757d; font-style: italic;">No other address available</div>';
+                            }
+                            ?>
                             <div>Balance: <span class="balance-negative">
                                 -
                             </span> <?php echo $contact['currency'] ?? "USD"; ?></div>
@@ -169,18 +214,20 @@
                 <strong style="color: #0d6efd;">Contact Request #<?php echo $index + 1; ?></strong>
                 <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending</span>
             </div>
+            <?php
+            // Display addresses dynamically (up to 2)
+            $pendingDisplayed = 0;
+            foreach ($addressTypes as $type) {
+                if ($pendingDisplayed >= 2) break;
+                $addr = $contact[$type] ?? null;
+            ?>
             <div style="margin-bottom: 0.5rem;">
-                <div class="info-label">Http Address:</div>
+                <div class="info-label"><?php echo strtoupper(htmlspecialchars($type)); ?> Address:</div>
                 <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px;">
-                    <?php if (isset($contact['http'])){echo htmlspecialchars($contact['http']);} else{echo 'Http not available.';} ?>
+                    <?php if ($addr) { echo htmlspecialchars($addr); $pendingDisplayed++; } else { echo strtoupper(htmlspecialchars($type)) . ' not available.'; } ?>
                 </div>
             </div>
-            <div style="margin-bottom: 0.5rem;">
-                <div class="info-label">Tor Address:</div>
-                <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px;">
-                    <?php if (isset($contact['tor'])){echo htmlspecialchars($contact['tor']);} else{echo 'Tor not available.';} ?>
-                </div>
-            </div>
+            <?php } ?>
             <div style="margin-bottom: 1rem;">
                 <div class="info-label">Public Key:</div>
                 <div style="font-family: monospace; font-size: 0.8rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px; max-height: 100px; overflow-y: auto;">

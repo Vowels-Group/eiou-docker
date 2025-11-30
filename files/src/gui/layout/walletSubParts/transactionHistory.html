@@ -1,5 +1,5 @@
 <!-- Copyright 2025  -->
- 
+
 <!-- Transaction History -->
 <div id="transactions" class="transactions-section fade-in-up">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
@@ -16,17 +16,67 @@
                 <p>Your transaction history will appear here</p>
             </div>
         <?php else: ?>
-            <?php foreach ($transactions as $tx): ?>
-                <div class="transaction-item">
+            <?php foreach ($transactions as $index => $tx): ?>
+                <div class="transaction-item" style="cursor: pointer;" onclick="openTransactionModal(<?php echo $index; ?>)" title="Click for details">
                     <div class="transaction-info">
-                        <div><strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars($tx['counterparty']); ?></strong></div>
-                        <div style="font-size: 0.9rem; color: #6c757d;"><?php echo $tx['date']; ?></div>
+                        <div>
+                            <strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars($tx['counterparty']); ?></strong>
+                            <?php if ($tx['status'] !== 'completed'): ?>
+                                <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($tx['status']); ?>"><?php echo ucfirst(htmlspecialchars($tx['status'])); ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <div style="font-size: 0.9rem; color: #6c757d;">
+                            <?php echo $tx['date']; ?>
+                            <?php if ($tx['tx_type'] === 'p2p'): ?>
+                                <span style="color: #ffc107; margin-left: 0.5rem;"><i class="fas fa-network-wired"></i> P2P</span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
                         <?php echo ($tx['type'] === 'sent' ? '-' : '+') . '$' . number_format($tx['amount'], 2); ?> <?php echo $tx['currency']; ?>
+                        <i class="fas fa-chevron-right" style="margin-left: 0.5rem; font-size: 0.8rem; color: #6c757d;"></i>
                     </div>
                 </div>
             <?php endforeach; ?>
         <?php endif; ?>
     </div>
 </div>
+
+<!-- Transaction Detail Modal -->
+<div id="transactionModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h3><i class="fas fa-receipt"></i> Transaction Details</h3>
+            <span class="close" onclick="closeTransactionModal()">&times;</span>
+        </div>
+        <div class="modal-body" style="padding: 1.5rem;">
+            <div id="tx-modal-content">
+                <!-- Content populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Store transaction data for JavaScript -->
+<script>
+    var transactionData = <?php echo json_encode(array_map(function($tx) {
+        return [
+            'txid' => $tx['txid'] ?? '',
+            'tx_type' => $tx['tx_type'] ?? 'standard',
+            'direction' => $tx['direction'] ?? $tx['type'],
+            'status' => $tx['status'] ?? 'completed',
+            'date' => $tx['date'] ?? '',
+            'type' => $tx['type'] ?? '',
+            'amount' => $tx['amount'] ?? 0,
+            'currency' => $tx['currency'] ?? 'USD',
+            'counterparty' => $tx['counterparty'] ?? '',
+            'counterparty_address' => $tx['counterparty_address'] ?? '',
+            'counterparty_name' => $tx['counterparty_name'] ?? '',
+            'sender_address' => $tx['sender_address'] ?? '',
+            'receiver_address' => $tx['receiver_address'] ?? '',
+            'memo' => $tx['memo'] ?? '',
+            'description' => $tx['description'] ?? '',
+            'previous_txid' => $tx['previous_txid'] ?? ''
+        ];
+    }, $transactions ?? [])); ?>;
+</script>

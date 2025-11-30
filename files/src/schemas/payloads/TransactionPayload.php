@@ -15,7 +15,7 @@ class TransactionPayload extends BasePayload
      * Build the main send transaction payload (used for saving into database)
      *
      * @param array $data Transaction data with keys: time, receiverAddress, receiverPublicKey,
-     *                    amount, currency, txid, previousTxid, memo (optional)
+     *                    amount, currency, txid, previousTxid, memo (optional), description (optional)
      * @return array The send transaction payload
      */
     public function build(array $data): array
@@ -28,7 +28,7 @@ class TransactionPayload extends BasePayload
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiverAddress']);
         $memo = $data['memo'] ?? 'standard';
 
-        return [
+        $payload = [
             'type' => 'send',
             'time' => $data['time'],
             'receiverAddress' => $data['receiverAddress'],
@@ -41,6 +41,13 @@ class TransactionPayload extends BasePayload
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
+
+        // Include description if provided (only for final recipient in P2P)
+        if (isset($data['description']) && $data['description'] !== null) {
+            $payload['description'] = $this->sanitizeString($data['description']);
+        }
+
+        return $payload;
     }
 
     /**

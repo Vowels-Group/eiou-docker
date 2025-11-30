@@ -846,13 +846,23 @@ class TransactionRepository extends AbstractRepository {
         // Create placeholders for IN clause
         $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
 
-        // Query with LEFT JOINs to get contact names for both sender and receiver
+        // Query with LEFT JOINs to get contact names and full transaction details
         $query = "SELECT
+                    t.id,
+                    t.txid,
+                    t.tx_type,
+                    t.type AS direction,
+                    t.status,
                     t.sender_address,
                     t.receiver_address,
+                    t.sender_public_key,
+                    t.receiver_public_key,
                     t.amount,
                     t.currency,
                     t.timestamp,
+                    t.memo,
+                    t.description,
+                    t.previous_txid,
                     sender_contact.name AS sender_name,
                     receiver_contact.name AS receiver_name
                   FROM {$this->tableName} t
@@ -885,11 +895,25 @@ class TransactionRepository extends AbstractRepository {
                 : $counterpartyAddress;
 
             $formattedTransactions[] = [
+                'id' => $tx['id'],
+                'txid' => $tx['txid'],
+                'tx_type' => $tx['tx_type'],
+                'direction' => $tx['direction'],
+                'status' => $tx['status'],
                 'date' => $tx['timestamp'],
                 'type' => $isSent ? 'sent' : 'received',
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
+                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
                 'currency' => $tx['currency'],
-                'counterparty' => $counterpartyDisplay
+                'counterparty' => $counterpartyDisplay,
+                'counterparty_address' => $counterpartyAddress,
+                'counterparty_name' => $counterpartyName,
+                'sender_address' => $tx['sender_address'],
+                'receiver_address' => $tx['receiver_address'],
+                'sender_public_key' => $tx['sender_public_key'],
+                'receiver_public_key' => $tx['receiver_public_key'],
+                'memo' => $tx['memo'],
+                'description' => $tx['description'],
+                'previous_txid' => $tx['previous_txid']
             ];
         }
         return $formattedTransactions;
@@ -1066,7 +1090,8 @@ class TransactionRepository extends AbstractRepository {
                 'txid' => $request['txid'],
                 'previous_txid' => $result ? $result['txid'] : null,
                 'sender_signature' => $request['signature'] ?? null, // upon initial inserting a standard transaction in database of original sender it is null
-                'memo' => $request['memo']
+                'memo' => $request['memo'],
+                'description' => $request['description'] ?? null
             ];
             $result = $this->insert($data);
             $this->commit();

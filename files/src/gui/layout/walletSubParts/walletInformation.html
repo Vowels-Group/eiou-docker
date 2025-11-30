@@ -23,30 +23,63 @@
             <div class="balance-currency">Total Earnings</div>
         </div>
 
+        <?php
+        // Build dynamic user addresses array
+        $userAddresses = [];
+        if ($user->has('hostname')) {
+            $userAddresses['http'] = $user->getHttpAddress();
+        }
+        if ($user->has('torAddress')) {
+            $userAddresses['tor'] = $user->getTorAddress();
+        }
+        $addressCount = count($userAddresses);
+        $firstAddressType = $addressCount > 0 ? array_key_first($userAddresses) : null;
+        ?>
         <div class="info-item">
-            <div class="info-label">Http Address:</div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                <span style="flex: 1; word-break: break-all;"><?php echo $user->has('hostname') ? $user->getHttpAddress() : 'Not available'; ?></span>
-                <?php if ($user->has('hostname')): ?>
-                    <textarea class="copy-textarea" readonly style="display: none;" id="http-address"><?php echo $user->getHttpAddress(); ?></textarea>
-                    <button class="btn btn-sm btn-outline" onclick="document.getElementById('http-address').style.display='block'; document.getElementById('http-address').select();" title="Copy Http address">
+            <div class="info-label">Your Address<?php echo $addressCount > 1 ? 'es' : ''; ?>:</div>
+            <?php if ($addressCount === 0): ?>
+                <div>Not available</div>
+            <?php elseif ($addressCount === 1): ?>
+                <!-- Single address - show directly -->
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <span style="flex: 1; word-break: break-all;">
+                        <strong style="text-transform: uppercase;"><?php echo htmlspecialchars($firstAddressType); ?>:</strong>
+                        <?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?>
+                    </span>
+                    <textarea class="copy-textarea" readonly style="display: none;" id="user-address"><?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?></textarea>
+                    <button class="btn btn-sm btn-outline" onclick="document.getElementById('user-address').style.display='block'; document.getElementById('user-address').select();" title="Copy address">
                         <i class="fas fa-copy"></i> Copy
                     </button>
-                <?php endif; ?>
-            </div>
-        </div>
-
-        <div class="info-item">
-            <div class="info-label">Tor Address:</div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                <span style="flex: 1; word-break: break-all;"><?php echo $user->has('torAddress') ? $user->getTorAddress() : 'Not available'; ?></span>
-                <?php if ($user->has('torAddress')): ?>
-                    <textarea class="copy-textarea" readonly style="display: none;" id="tor-address"><?php echo $user->getTorAddress(); ?></textarea>
-                    <button class="btn btn-sm btn-outline" onclick="document.getElementById('tor-address').style.display='block'; document.getElementById('tor-address').select();" title="Copy Tor address">
+                </div>
+            <?php else: ?>
+                <!-- Multiple addresses - show dropdown -->
+                <div style="margin-bottom: 0.5rem;">
+                    <select id="user-address-selector" style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #ced4da;" onchange="showSelectedUserAddress()">
+                        <?php foreach ($userAddresses as $type => $address): ?>
+                            <option value="<?php echo htmlspecialchars($type); ?>" data-address="<?php echo htmlspecialchars($address); ?>">
+                                <?php echo strtoupper(htmlspecialchars($type)); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div id="user-address-display" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <span id="user-address-value" style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?></span>
+                    <textarea class="copy-textarea" readonly style="display: none;" id="user-address-copy"><?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?></textarea>
+                    <button class="btn btn-sm btn-outline" onclick="document.getElementById('user-address-copy').style.display='block'; document.getElementById('user-address-copy').select();" title="Copy address">
                         <i class="fas fa-copy"></i> Copy
                     </button>
-                <?php endif; ?>
-            </div>
+                </div>
+                <script>
+                function showSelectedUserAddress() {
+                    var select = document.getElementById('user-address-selector');
+                    var selectedOption = select.options[select.selectedIndex];
+                    var address = selectedOption.getAttribute('data-address');
+                    document.getElementById('user-address-value').textContent = address;
+                    document.getElementById('user-address-copy').value = address;
+                    document.getElementById('user-address-copy').style.display = 'none';
+                }
+                </script>
+            <?php endif; ?>
         </div>
         <div class="info-item">
             <div class="info-label">Public Key:</div>

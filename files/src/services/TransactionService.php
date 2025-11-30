@@ -345,6 +345,7 @@ class TransactionService {
         $data['amount'] = round($request[3] * Constants::TRANSACTION_USD_CONVERSION_FACTOR); // Convert to cents
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY; // Get currency or default to USD
         $data['memo'] = 'standard';
+        $data['description'] = $request[5] ?? null; // Optional description (only shared with end recipient)
 
         // Determine Transport Type (fallback on other if needed)
         $transportIndex = $this->transportUtility->fallbackTransportType($request[2],$contactInfo);
@@ -359,10 +360,11 @@ class TransactionService {
     /**
      * Prepare P2P transaction data
      *
-     * @param array $request Request data
+     * @param array $request The RP2P request data
+     * @param string|null $description Optional description (only included for final recipient)
      * @return array Prepared transaction data
      */
-    public function prepareP2pTransactionData(array $request): array {
+    public function prepareP2pTransactionData(array $request, ?string $description = null): array {
         // Prepare data for p2p transaction
         $data['time'] = $request['time'];
 
@@ -374,6 +376,11 @@ class TransactionService {
         $data['currency'] = $request['currency'];
         $data['txid'] = $this->createUniqueTxid($data);
         $data['memo'] = $request['hash'];
+
+        // Privacy: Description only sent to final recipient, not to relay nodes
+        if ($description !== null) {
+            $data['description'] = $description;
+        }
 
         return $data;
     }
@@ -725,8 +732,12 @@ class TransactionService {
         // Handler for sending transactions upon successfully receiving route to end-recipient
         output(outputP2pEiouSend($request),'SILENT');
 
+        // Retrieve description from P2P table (privacy: only sent to final recipient)
+        $p2p = $this->p2pRepository->getByHash($request['hash']);
+        $description = $p2p['description'] ?? null;
+
         // Create data to send back to rp2p sender
-        $data = $this->prepareP2pTransactionData($request);
+        $data = $this->prepareP2pTransactionData($request, $description);
 
         // Prepare transaction payload
         $payload = $this->transactionPayload->build($data);
