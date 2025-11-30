@@ -272,6 +272,10 @@ function outputTransactionDirectSentSuccesfully($data){
     return "Sent " . $data['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
 }
 
+function outputTransactionDescriptionUpdated($description,$typeTransaction,$memo){
+    return "Updated description to '" . $description . "' for transaction of type $typeTransaction: " . $memo."\n";
+}
+
 function outputTransactionStatusUpdated($status,$typeTransaction,$memo){
     return "Updated status to '" . $status . "' for transaction of type $typeTransaction: " . $memo."\n";
 }
