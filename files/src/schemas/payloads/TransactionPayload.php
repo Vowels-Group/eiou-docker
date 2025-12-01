@@ -107,6 +107,7 @@ class TransactionPayload extends BasePayload
             'txid' => $data['txid'],
             'previousTxid' => $data['previous_txid'] ?? null,
             'memo' => $memo,
+            'description' => $data['description'],
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];

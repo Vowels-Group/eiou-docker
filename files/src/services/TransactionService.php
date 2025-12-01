@@ -690,6 +690,7 @@ class TransactionService {
             'recipient_address' => $data['receiverAddress'] ?? null,
             'amount' => ($data['amount'] ?? 0) / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
             'currency' => $data['currency'] ?? Constants::TRANSACTION_DEFAULT_CURRENCY,
+            'description' => $data['description'] ?? null,
             'txid' => $data['txid'] ?? null,
             'timestamp' => $data['time'] ?? null
         ];
@@ -717,6 +718,7 @@ class TransactionService {
             'recipient' => $request[2] ?? null,
             'amount' => $request[3] ?? null,
             'currency' => $request[4] ?? 'USD',
+            'description' => $request[5] ?? null,
             'message' => 'P2P route discovery initiated'
         ];
 
