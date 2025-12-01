@@ -791,9 +791,6 @@ class TransactionService {
                 'credit_limit' =>  $credit_limit ? $this->currencyUtility->convertCentsToDollars($credit_limit) : $credit_limit,
                 'currency' => $contact['currency']
             ]);
-            
-            output("contactsWithBalances: " . print_r($contactsWithBalances,true),'SILENT');
-
         }
         return $contactsWithBalances;
     }
