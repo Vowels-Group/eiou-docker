@@ -1017,6 +1017,24 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Get transaction status by memo
+     *
+     * @param string $memo Transaction memo
+     * @return string Transaction status or null
+     */
+    public function getStatusByMemo(string $memo): ?string {
+        $query = "SELECT status FROM {$this->tableName} WHERE memo = :memo";
+        $stmt = $this->execute($query, [':memo' => $memo]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetchColumn();
+        return $result ?: null;
+    }
+
+    /**
      * Check if Transaction exists by txid
      *
      * @param string $txid Transaction txid
@@ -1042,6 +1060,24 @@ class TransactionRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
+     * Get transaction status by txid
+     *
+     * @param string $txid Transaction txid
+     * @return string Transaction status or null
+     */
+    public function getStatusByTxid(string $txid): ?string {
+        $query = "SELECT status FROM {$this->tableName} WHERE txid = :txid";
+        $stmt = $this->execute($query, [':txid' => $txid]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetchColumn();
         return $result ?: null;
     }
 
