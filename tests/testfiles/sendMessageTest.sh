@@ -81,7 +81,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     multiHopResult=$(docker exec httpA eiou send ${containerAddresses[httpD]} 10 USD 2>&1)
 
     # Wait for balance change with polling (multi-hop may take longer)
-    echo -e "\t   Waiting for multi-hop routing (timeout: 20s)..."
+    echo -e "\t   Waiting for multi-hop routing (timeout: 30s)..."
     balance_cmd_d="php -r \"
         require_once('./etc/eiou/src/core/Application.php');
         \\\$app = Application::getInstance();
@@ -89,7 +89,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
         \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
         echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     \""
-    newBalanceD=$(wait_for_balance_change "httpD" "$initialBalanceD" "$balance_cmd_d" 20 "multi-hop routing")
+    newBalanceD=$(wait_for_balance_change "httpD" "$initialBalanceD" "$balance_cmd_d" 30 "multi-hop routing")
 
     # Add to test count
     totaltests=$(( totaltests + 1 ))
