@@ -65,6 +65,23 @@ class BalanceRepository extends AbstractRepository {
         return $result ?: null;
     }
 
+    /**
+     * Lookup contact balance (both ways) subsetted on currency
+     *
+     * @param string $pubkeyHash Contact pubkeyhash
+     * @param string $currency currency
+     * @return array|null Array of Balances
+     */
+    public function getContactBalanceByPubkeyHash(string $pubkeyHash, string $currency =  'USD'): array|null{
+        $query = "SELECT received, sent FROM {$this->tableName} WHERE {$this->primaryKey} = :pubkey_hash AND currency = :currency";
+        $stmt = $this->execute($query, [':pubkey_hash' => $pubkeyHash,':currency' => $currency]);
+        if (!$stmt) {
+            return null;
+        }
+        $result = $stmt->fetchALL(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
 
     /**
      * Lookup current contact balance given contact pubkey
