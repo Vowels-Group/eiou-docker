@@ -108,7 +108,7 @@ function wait_for_tx_status(){
         status=$(docker exec $container php -r "
             require_once('./etc/eiou/src/core/Application.php');
             \$app = Application::getInstance();
-            \$tx = \$app->services->getTransactionRepository()->findByTxid('$txid');
+            \$tx = \$app->services->getTransactionRepository()->getByTxid('$txid');
             echo \$tx['status'] ?? 'unknown';
         " 2>/dev/null || echo "unknown")
 
@@ -133,11 +133,12 @@ function wait_for_contact(){
     local timeout="${3:-10}"
     local elapsed=0
 
+    transportCheck=$(determineTransport ${address})
     while [ $elapsed -lt $timeout ]; do
         local contact_exists=$(docker exec $container php -r "
             require_once('./etc/eiou/src/core/Application.php');
             \$app = Application::getInstance();
-            \$contact = \$app->services->getContactRepository()->getContactByAnyAddress('$address');
+            \$contact = \$app->services->getContactRepository()->getContactByAddress('""${transportCheck}""','$address');
             echo \$contact ? 'yes' : 'no';
         " 2>/dev/null || echo "no")
 
