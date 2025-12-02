@@ -39,6 +39,9 @@ class Constants {
     const APP_ENV = 'development';
     const APP_DEBUG = true;
 
+    // API
+    const API_ENABLED = true;
+
     // Transaction limits
     const TRANSACTION_MIN_AMOUNT = 0;
     const TRANSACTION_MAX_AMOUNT = 999999999;
