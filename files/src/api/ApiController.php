@@ -7,18 +7,21 @@
  * Handles all REST API endpoints for external application integration
  *
  * Endpoints:
- * - GET  /api/v1/wallet/balance        - Get wallet balances
- * - POST /api/v1/wallet/send           - Send transaction
- * - GET  /api/v1/wallet/transactions   - Get transaction history
- * - GET  /api/v1/wallet/info           - Get wallet info
+ * - GET  /api/v1/wallet/balance              - Get wallet balances
+ * - POST /api/v1/wallet/send                 - Send transaction
+ * - GET  /api/v1/wallet/transactions         - Get transaction history
+ * - GET  /api/v1/wallet/info                 - Get wallet info
  *
- * - GET    /api/v1/contacts            - List all contacts
- * - POST   /api/v1/contacts            - Add new contact
- * - GET    /api/v1/contacts/:address   - Get contact details
- * - DELETE /api/v1/contacts/:address   - Delete contact
+ * - GET    /api/v1/contacts                  - List all contacts
+ * - POST   /api/v1/contacts                  - Add new contact
+ * - GET    /api/v1/contacts/:address         - Get contact details
+ * - DELETE /api/v1/contacts/:address         - Delete contact
+ * - PUT    /api/v1/contacts/:address         - Update contact
+ * - POST   /api/v1/contacts/block/:address   - Block contact
+ * - POST   /api/v1/contacts/unblock/:address - Unblock contact
  *
- * - GET  /api/v1/system/status         - Get system status
- * - GET  /api/v1/system/metrics        - Get system metrics
+ * - GET  /api/v1/system/status               - Get system status
+ * - GET  /api/v1/system/metrics              - Get system metrics
  */
 
 class ApiController {
