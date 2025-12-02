@@ -40,14 +40,14 @@ done
 ############################ Testing #############################
 
 testname="addContactsTest"
-totaltests=$(( "${#containersLinkKeys[@]}" + "${#containersLinkKeys[@]}" ))
+totaltests="${#containersLinkKeys[@]}"
 passed=0
 failure=0
 
 for containersLinkKey in "${containersLinkKeys[@]}"; do
     containerKeys=(${containersLinkKey//,/ }) 
     
-    # httpA -> httpB (i.e forwards)
+    # httpA -> httpB (i.e forwards and the next LinkKey should be httpB -> httpA (i.e backwards))
     transportType1=$(determineTransport ${containerAddresses[${containerKeys[1]}]})
     statusContact1=$(docker exec ${containerKeys[0]} php -r "
         require_once('./etc/eiou/src/core/Application.php');
@@ -64,26 +64,6 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         printf "\t   ${testname} for %s ${RED}FAILED${NC}\n" ${containerKeys[0]}
         failure=$(( failure + 1 ))
     fi
-
-   
-    # httpB -> httpA (i.e backwards)
-    transportType0=$(determineTransport ${containerAddresses[${containerKeys[0]}]})
-    statusContact0=$(docker exec ${containerKeys[1]} php -r "
-        require_once('./etc/eiou/src//core/Application.php');
-        echo Application::getInstance()->services->getContactRepository()->getContactStatus(
-            '""${transportType0}""','""${containerAddresses[${containerKeys[0]}]}""'
-        );
-    ")
-
-    printf "\n\t   %s has status %s with %s\n" ${containerKeys[0]} ${statusContact0} ${containerKeys[1]}  
-    if [[ "${statusContact0}" == "accepted" ]]; then
-        printf "\t   ${testname} for %s ${GREEN}PASSED${NC}\n" ${containerKeys[1]}
-        passed=$(( passed + 1 ))
-    else
-        printf "\t   ${testname} for %s ${RED}FAILED${NC}\n" ${containerKeys[1]}
-        failure=$(( failure + 1 ))
-    fi
-
 
 done
 
