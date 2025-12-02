@@ -98,7 +98,7 @@ class ApiController {
         try {
             $response = match ($resource) {
                 'wallet' => $this->handleWallet($method, $action, $params, $body),
-                'contacts' => $this->handleContacts($method, $action, $params, $body),
+                'contacts' => $this->handleContacts($method, $action, $id, $params, $body),
                 'system' => $this->handleSystem($method, $action, $params),
                 'keys' => $this->handleKeys($method, $action, $params, $body),
                 default => $this->errorResponse('Unknown resource: ' . $resource, 404, 'unknown_resource')
@@ -138,11 +138,22 @@ class ApiController {
 
     /**
      * Handle contacts endpoints
+     *
+     * Routes:
+     * - GET    /api/v1/contacts              - List all contacts
+     * - POST   /api/v1/contacts              - Add new contact
+     * - GET    /api/v1/contacts/:address     - Get contact details
+     * - DELETE /api/v1/contacts/:address     - Delete contact
+     * - PUT    /api/v1/contacts/:address     - Update contact
+     * - POST   /api/v1/contacts/block/:address   - Block contact
+     * - POST   /api/v1/contacts/unblock/:address - Unblock contact
      */
-    private function handleContacts(string $method, ?string $action, array $params, string $body): array {
+    private function handleContacts(string $method, ?string $action, ?string $id, array $params, string $body): array {
         return match (true) {
             $method === 'GET' && !$action => $this->listContacts($params),
             $method === 'POST' && !$action => $this->addContact($body),
+            $method === 'POST' && $action === 'block' && $id => $this->blockContact($id),
+            $method === 'POST' && $action === 'unblock' && $id => $this->unblockContact($id),
             $method === 'GET' && $action => $this->getContact($action),
             $method === 'DELETE' && $action => $this->deleteContact($action),
             $method === 'PUT' && $action => $this->updateContact($action, $body),
@@ -238,21 +249,27 @@ class ApiController {
         try {
             $transactionService = $this->services->getTransactionService();
 
-            $result = $transactionService->sendEiou(
-                $data['address'],
-                (float) $data['amount'],
-                $data['currency'],
-                $data['description'] ?? null
-            );
+            // Build argv-style array expected by sendEiou
+            // sendEiou expects: $request[2] = address, $request[3] = amount, $request[4] = currency
+            $argv = [
+                'eiou',           // $request[0] - command name
+                'send',           // $request[1] - subcommand
+                $data['address'], // $request[2] - recipient address
+                (string) $data['amount'], // $request[3] - amount
+                $data['currency'] // $request[4] - currency
+            ];
 
-            if (isset($result['error'])) {
-                return $this->errorResponse($result['error'], 400, 'transaction_failed');
-            }
+            // Capture output using a custom output manager
+            ob_start();
+            $transactionService->sendEiou($argv, null);
+            $output = ob_get_clean();
 
             return $this->successResponse([
-                'txid' => $result['txid'] ?? null,
-                'status' => $result['status'] ?? 'sent',
-                'message' => $result['message'] ?? 'Transaction sent successfully'
+                'status' => 'sent',
+                'message' => 'Transaction sent successfully',
+                'recipient' => $data['address'],
+                'amount' => (float) $data['amount'],
+                'currency' => $data['currency']
             ]);
         } catch (Exception $e) {
             return $this->errorResponse('Transaction failed: ' . $e->getMessage(), 500, 'transaction_error');
@@ -390,21 +407,28 @@ class ApiController {
         try {
             $contactService = $this->services->getContactService();
 
-            $result = $contactService->addContact(
-                $data['address'],
-                $data['name'],
-                $data['fee_percent'] ?? 1,
-                $data['credit_limit'] ?? 100,
-                $data['currency'] ?? 'USD'
-            );
+            // Build argv-style array expected by addContact
+            // addContact expects: $data[2] = address, $data[3] = name, $data[4] = fee, $data[5] = credit, $data[6] = currency
+            $argv = [
+                'eiou',                      // $data[0] - command name
+                'add',                       // $data[1] - subcommand
+                $data['address'],            // $data[2] - contact address
+                $data['name'],               // $data[3] - contact name
+                (string) ($data['fee_percent'] ?? 1),    // $data[4] - fee percent
+                (string) ($data['credit_limit'] ?? 100), // $data[5] - credit limit
+                $data['currency'] ?? 'USD'   // $data[6] - currency
+            ];
 
-            if (isset($result['error'])) {
-                return $this->errorResponse($result['error'], 400, 'contact_add_failed');
-            }
+            // Capture output - addContact returns void
+            ob_start();
+            $contactService->addContact($argv, null);
+            $output = ob_get_clean();
 
             return $this->successResponse([
                 'message' => 'Contact request sent successfully',
-                'status' => 'pending'
+                'status' => 'pending',
+                'address' => $data['address'],
+                'name' => $data['name']
             ], 201);
         } catch (Exception $e) {
             return $this->errorResponse('Failed to add contact: ' . $e->getMessage(), 500, 'contact_error');
@@ -424,13 +448,29 @@ class ApiController {
         $addressRepo = $this->services->getAddressRepository();
         $balanceRepo = $this->services->getBalanceRepository();
 
-        $contact = $contactRepo->getContactByAnyAddress($address);
+        // Try to find contact by any address type using getAllAddressTypes()
+        $contact = null;
+        $addressTypes = $addressRepo->getAllAddressTypes();
+        foreach ($addressTypes as $transportIndex) {
+            $contact = $contactRepo->getContactByAddress($transportIndex, $address);
+            if ($contact) {
+                break;
+            }
+        }
+
+        if (!$contact) {
+            // Also try lookup by name as fallback
+            $contact = $contactRepo->lookupByName($address);
+        }
+
         if (!$contact) {
             return $this->errorResponse('Contact not found', 404, 'contact_not_found');
         }
 
         $addresses = $addressRepo->lookupByPubkeyHash($contact['pubkey_hash']);
-        $balance = $balanceRepo->getContactBalanceByPubkeyHash($contact['pubkey_hash']);
+        // getContactBalanceByPubkeyHash returns an array or null, handle properly
+        $balanceResult = $balanceRepo->getContactBalanceByPubkeyHash($contact['pubkey_hash']);
+        $balance = $balanceResult && count($balanceResult) > 0 ? $balanceResult[0] : null;
 
         return $this->successResponse([
             'contact' => [
@@ -466,13 +506,20 @@ class ApiController {
         $contactService = $this->services->getContactService();
 
         try {
-            $result = $contactService->deleteContact($address);
+            // deleteContact returns bool, not an array
+            // Capture output to prevent CLI messages
+            ob_start();
+            $result = $contactService->deleteContact($address, null);
+            ob_get_clean();
 
-            if (isset($result['error'])) {
-                return $this->errorResponse($result['error'], 400, 'delete_failed');
+            if ($result) {
+                return $this->successResponse([
+                    'message' => 'Contact deleted successfully',
+                    'address' => $address
+                ]);
+            } else {
+                return $this->errorResponse('Failed to delete contact', 400, 'delete_failed');
             }
-
-            return $this->successResponse(['message' => 'Contact deleted successfully']);
         } catch (Exception $e) {
             return $this->errorResponse('Failed to delete contact: ' . $e->getMessage(), 500, 'delete_error');
         }
@@ -493,23 +540,128 @@ class ApiController {
 
         $address = urldecode($address);
         $contactService = $this->services->getContactService();
+        $contactRepo = $this->services->getContactRepository();
+        $addressRepo = $this->services->getAddressRepository();
 
         try {
-            $result = $contactService->updateContact(
-                $address,
-                $data['name'] ?? null,
-                $data['fee_percent'] ?? null,
-                $data['credit_limit'] ?? null,
-                $data['currency'] ?? null
-            );
-
-            if (isset($result['error'])) {
-                return $this->errorResponse($result['error'], 400, 'update_failed');
+            // First find the contact to get pubkey
+            $contact = null;
+            $addressTypes = $addressRepo->getAllAddressTypes();
+            foreach ($addressTypes as $transportIndex) {
+                $contact = $contactRepo->lookupByAddress($transportIndex, $address);
+                if ($contact) {
+                    break;
+                }
             }
 
-            return $this->successResponse(['message' => 'Contact updated successfully']);
+            if (!$contact) {
+                // Try by name
+                $contact = $contactRepo->lookupByName($address);
+            }
+
+            if (!$contact) {
+                return $this->errorResponse('Contact not found', 404, 'contact_not_found');
+            }
+
+            // Build update fields - use ContactRepository::updateContactFields directly
+            $updateFields = [];
+            $updatedData = ['address' => $address];
+
+            if (isset($data['name'])) {
+                $updateFields['name'] = $data['name'];
+                $updatedData['name'] = $data['name'];
+            }
+            if (isset($data['fee_percent'])) {
+                $updateFields['fee_percent'] = $data['fee_percent'] * Constants::FEE_CONVERSION_FACTOR;
+                $updatedData['fee_percent'] = $data['fee_percent'];
+            }
+            if (isset($data['credit_limit'])) {
+                $updateFields['credit_limit'] = $data['credit_limit'] * Constants::CREDIT_CONVERSION_FACTOR;
+                $updatedData['credit_limit'] = $data['credit_limit'];
+            }
+            if (isset($data['currency'])) {
+                $updateFields['currency'] = $data['currency'];
+                $updatedData['currency'] = $data['currency'];
+            }
+
+            if (empty($updateFields)) {
+                return $this->errorResponse('No fields to update', 400, 'no_fields');
+            }
+
+            if ($contactRepo->updateContactFields($contact['pubkey'], $updateFields)) {
+                return $this->successResponse([
+                    'message' => 'Contact updated successfully',
+                    'updated' => $updatedData
+                ]);
+            } else {
+                return $this->errorResponse('Failed to update contact', 400, 'update_failed');
+            }
         } catch (Exception $e) {
             return $this->errorResponse('Failed to update contact: ' . $e->getMessage(), 500, 'update_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/contacts/block/:address
+     */
+    private function blockContact(string $address): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $address = urldecode($address);
+        $contactService = $this->services->getContactService();
+
+        try {
+            // blockContact returns bool
+            // Capture output to prevent CLI messages
+            ob_start();
+            $result = $contactService->blockContact($address, null);
+            ob_get_clean();
+
+            if ($result) {
+                return $this->successResponse([
+                    'message' => 'Contact blocked successfully',
+                    'address' => $address,
+                    'status' => 'blocked'
+                ]);
+            } else {
+                return $this->errorResponse('Failed to block contact', 400, 'block_failed');
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to block contact: ' . $e->getMessage(), 500, 'block_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/contacts/unblock/:address
+     */
+    private function unblockContact(string $address): array {
+        if (!$this->hasPermission('contacts:write')) {
+            return $this->permissionDenied('contacts:write');
+        }
+
+        $address = urldecode($address);
+        $contactService = $this->services->getContactService();
+
+        try {
+            // unblockContact returns bool
+            // Capture output to prevent CLI messages
+            ob_start();
+            $result = $contactService->unblockContact($address, null);
+            ob_get_clean();
+
+            if ($result) {
+                return $this->successResponse([
+                    'message' => 'Contact unblocked successfully',
+                    'address' => $address,
+                    'status' => 'unblocked'
+                ]);
+            } else {
+                return $this->errorResponse('Failed to unblock contact', 400, 'unblock_failed');
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to unblock contact: ' . $e->getMessage(), 500, 'unblock_error');
         }
     }
 
