@@ -75,17 +75,15 @@ for sender in "${containers[@]}"; do
         testCurrency="USD"
         sendResult=$(docker exec ${sender} eiou send ${contactAddress} ${testAmount} ${testCurrency} 2>&1)
 
-        # Wait for transaction to process
-        sleep 10
-
-        # Get new balance
-        newBalance=$(docker exec ${sender} php -r "
+        # Wait for transaction to process with polling
+        balance_cmd="php -r \"
             require_once('./etc/eiou/src/core/Application.php');
-            \$app = Application::getInstance();
-            \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${contactAddress}');
-            \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
-            echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
-        " 2>/dev/null || echo "0")
+            \\\$app = Application::getInstance();
+            \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${contactAddress}');
+            \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
+            echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+        \""
+        newBalance=$(wait_for_balance_change "${sender}" "$initialBalance" "$balance_cmd" 10 "tx processing")
 
         # Check if send succeeded (balance changed or success message)
         balanceChanged=$(awk "BEGIN {print ($newBalance != $initialBalance) ? 1 : 0}")

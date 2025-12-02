@@ -37,18 +37,16 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Send the message
     sendResult=$(docker exec ${containerKeys[0]} eiou send ${containerAddresses[${containerKeys[1]}]} ${testAmount} ${testCurrency} 2>&1)
 
-    # Wait for transaction to process
-    echo -e "\t   Waiting 20 seconds for routing process (faster but certainty)..."
-    sleep 20
-
-    # Get new balance of recipient
-    newBalance=$(docker exec ${containerKeys[1]} php -r "
+    # Wait for balance change with polling (faster than fixed sleep)
+    echo -e "\t   Waiting for balance change (timeout: 20s)..."
+    balance_cmd="php -r \"
         require_once('./etc/eiou/src/core/Application.php');
-        \$app = Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
-        \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'${testCurrency}');
-        echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
-    " 2>/dev/null || echo "0")
+        \\\$app = Application::getInstance();
+        \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
+        \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'${testCurrency}');
+        echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+    \""
+    newBalance=$(wait_for_balance_change "${containerKeys[1]}" "$initialBalance" "$balance_cmd" 20 "tx processing")
 
     # Calculate expected balance (initial + amount - fee if applicable)
     # Note: The exact fee calculation depends on the network configuration
@@ -82,18 +80,16 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     # Send from httpA to httpD (multi-hop)
     multiHopResult=$(docker exec httpA eiou send ${containerAddresses[httpD]} 10 USD 2>&1)
 
-    # Wait for routing
-    echo -e "\t   Waiting for 20 seconds for complete routing (faster but certainty)..."
-    sleep 20
-
-    # Get new balance of httpD
-    newBalanceD=$(docker exec httpD php -r "
+    # Wait for balance change with polling (multi-hop may take longer)
+    echo -e "\t   Waiting for multi-hop routing (timeout: 30s)..."
+    balance_cmd_d="php -r \"
         require_once('./etc/eiou/src/core/Application.php');
-        \$app = Application::getInstance();
-        \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
-        \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
-        echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
-    " 2>/dev/null || echo "0")
+        \\\$app = Application::getInstance();
+        \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
+        \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
+        echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+    \""
+    newBalanceD=$(wait_for_balance_change "httpD" "$initialBalanceD" "$balance_cmd_d" 30 "multi-hop routing")
 
     # Add to test count
     totaltests=$(( totaltests + 1 ))

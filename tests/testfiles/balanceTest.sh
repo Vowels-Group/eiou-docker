@@ -87,10 +87,16 @@ if [[ "$firstLink" ]]; then
     sendOutput=$(docker exec ${sender} eiou send ${containerAddresses[${receiver}]} ${testAmount} USD 2>&1)
     echo -e "\t   Send output: ${sendOutput}"
 
-    # Wait for transaction to process
-    echo -e "\t   Waiting 20 seconds for routing process (faster but certainty)..."
-    sleep 20
-
+    # Wait for transaction to process with polling
+    echo -e "\t   Waiting for balance change (timeout: 20s)..."
+    balance_cmd="php -r \"
+        require_once('./etc/eiou/src/core/Application.php');
+        \\\$app = Application::getInstance();
+        \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${sender}]}');
+        \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
+        echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+    \""
+    receiverFinal=$(wait_for_balance_change "${receiver}" "$receiverInitial" "$balance_cmd" 20 "balance change")
 
     # Get new balances
     senderFinal=$(docker exec ${sender} php -r "
