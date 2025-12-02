@@ -238,7 +238,7 @@ class ApiController {
         try {
             $transactionService = $this->services->getTransactionService();
 
-            $result = $transactionService->send(
+            $result = $transactionService->sendEiou(
                 $data['address'],
                 (float) $data['amount'],
                 $data['currency'],
@@ -319,7 +319,7 @@ class ApiController {
         $currentUser = $this->services->getCurrentUser();
         $addressRepo = $this->services->getAddressRepository();
 
-        $addresses = $addressRepo->getOwnAddresses();
+        $addresses = $currentUser->getUserLocaters();
 
         return $this->successResponse([
             'public_key_hash' => $currentUser->getPublicKeyHash(),
@@ -344,11 +344,11 @@ class ApiController {
         $contactRepo = $this->services->getContactRepository();
         $addressRepo = $this->services->getAddressRepository();
 
-        $contacts = $contactRepo->getAllContactsByStatus($status);
+        $contacts = $contactRepo->getContactsByStatus($status);
         $result = [];
 
         foreach ($contacts as $contact) {
-            $addresses = $addressRepo->getAddressesByPubkeyHash($contact['pubkey_hash']);
+            $addresses = $addressRepo->lookupByPubkeyHash($contact['pubkey_hash']);
             $result[] = [
                 'name' => $contact['name'],
                 'pubkey_hash' => $contact['pubkey_hash'],
@@ -390,7 +390,7 @@ class ApiController {
         try {
             $contactService = $this->services->getContactService();
 
-            $result = $contactService->add(
+            $result = $contactService->addContact(
                 $data['address'],
                 $data['name'],
                 $data['fee_percent'] ?? 1,
@@ -429,8 +429,8 @@ class ApiController {
             return $this->errorResponse('Contact not found', 404, 'contact_not_found');
         }
 
-        $addresses = $addressRepo->getAddressesByPubkeyHash($contact['pubkey_hash']);
-        $balance = $balanceRepo->getBalanceByPubkeyHash($contact['pubkey_hash']);
+        $addresses = $addressRepo->lookupByPubkeyHash($contact['pubkey_hash']);
+        $balance = $balanceRepo->getContactBalanceByPubkeyHash($contact['pubkey_hash']);
 
         return $this->successResponse([
             'contact' => [
@@ -466,7 +466,7 @@ class ApiController {
         $contactService = $this->services->getContactService();
 
         try {
-            $result = $contactService->delete($address);
+            $result = $contactService->deleteContact($address);
 
             if (isset($result['error'])) {
                 return $this->errorResponse($result['error'], 400, 'delete_failed');
@@ -495,7 +495,7 @@ class ApiController {
         $contactService = $this->services->getContactService();
 
         try {
-            $result = $contactService->edit(
+            $result = $contactService->updateContact(
                 $address,
                 $data['name'] ?? null,
                 $data['fee_percent'] ?? null,
@@ -562,8 +562,8 @@ class ApiController {
 
         // Get statistics
         $txStats = $transactionRepo->getTransactionsTypeStatistics();
-        $contactCount = count($contactRepo->getAllContactsByStatus('accepted'));
-        $pendingP2p = $p2pRepo->getPendingCount();
+        $contactCount = $contactRepo->countAcceptedContacts();
+        $queuedP2p = $p2pRepo->getCountP2pMessagesWithStatus('queued');
 
         $txByType = [];
         foreach ($txStats as $stat) {
@@ -579,7 +579,7 @@ class ApiController {
                 'total_accepted' => $contactCount
             ],
             'p2p' => [
-                'pending' => $pendingP2p
+                'queued' => $queuedP2p
             ],
             'uptime' => $this->getUptime(),
             'memory_usage' => memory_get_usage(true),
