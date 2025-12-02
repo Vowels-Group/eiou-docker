@@ -53,11 +53,6 @@ require_once '/etc/eiou/src/database/ApiKeyRepository.php';
 require_once '/etc/eiou/src/api/ApiAuthService.php';
 require_once '/etc/eiou/src/api/ApiController.php';
 
-// Run database migrations (creates api_keys table if needed)
-require_once '/etc/eiou/src/database/databaseSetup.php';
-$pdo = $app->services->getPdo();
-runMigrations($pdo);
-
 // Initialize API components
 $apiKeyRepo = new ApiKeyRepository($pdo);
 $logger = $app->getLogger();
