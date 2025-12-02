@@ -561,6 +561,157 @@ else
     failure=$(( failure + 1 ))
 fi
 
+############################ POST WALLET SEND TEST ############################
+
+echo -e "\n[Wallet Send API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing POST /api/v1/wallet/send"
+
+timestamp=$(date +%s)
+path="/api/v1/wallet/send"
+sendBody='{"recipient":"test-address-12345","amount":"1.00","currency":"IOU"}'
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$body = '${sendBody}';
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$hmac = hash_hmac('sha256', \$message, \$secret);
+    echo \$secret . ':' . \$hmac;
+" 2>/dev/null)
+
+sendResponse=$(docker exec ${testContainer} curl -s \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    -d "${sendBody}" \
+    "http://localhost/api/v1/wallet/send" 2>&1)
+
+# The send may fail due to invalid recipient or insufficient funds, but API should respond properly
+if [[ "$sendResponse" =~ '"success"' ]] && [[ "$sendResponse" =~ '"request_id"' ]]; then
+    printf "\t   POST /api/v1/wallet/send ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   POST /api/v1/wallet/send ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${sendResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ POST CONTACTS TEST ############################
+
+echo -e "\n[Contact Creation API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing POST /api/v1/contacts"
+
+timestamp=$(date +%s)
+path="/api/v1/contacts"
+# Use a simple test address - contact add will fail but API should respond properly
+testContactAddress="test-contact-api-test"
+contactBody="{\"name\":\"API Test Contact\",\"address\":\"${testContactAddress}\"}"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$body = '${contactBody}';
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    \$hmac = hash_hmac('sha256', \$message, \$secret);
+    echo \$secret . ':' . \$hmac;
+" 2>/dev/null)
+
+createContactResponse=$(docker exec ${testContainer} curl -s \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    -d "${contactBody}" \
+    "http://localhost/api/v1/contacts" 2>&1)
+
+# Check if response has proper JSON structure with success field (API or CLI format)
+if [[ "$createContactResponse" =~ '"success"' ]]; then
+    printf "\t   POST /api/v1/contacts ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   POST /api/v1/contacts ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${createContactResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ GET CONTACT BY ADDRESS TEST ############################
+
+echo -e "\n[Get Contact API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing GET /api/v1/contacts/:address"
+
+timestamp=$(date +%s)
+# Use a simple address without special characters to avoid Apache routing issues
+testGetAddress="nonexistent-test-contact"
+path="/api/v1/contacts/${testGetAddress}"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    \$hmac = hash_hmac('sha256', \$message, \$secret);
+    echo \$secret . ':' . \$hmac;
+" 2>/dev/null)
+
+getContactResponse=$(docker exec ${testContainer} curl -s \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "http://localhost/api/v1/contacts/${testGetAddress}" 2>&1)
+
+# Response should have proper format - expect "contact not found" error with proper structure
+if [[ "$getContactResponse" =~ '"success"' ]] && [[ "$getContactResponse" =~ '"request_id"' ]]; then
+    printf "\t   GET /api/v1/contacts/:address ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   GET /api/v1/contacts/:address ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${getContactResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ DELETE CONTACT TEST ############################
+
+echo -e "\n[Delete Contact API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing DELETE /api/v1/contacts/:address"
+
+timestamp=$(date +%s)
+# Use same simple address
+testDeleteAddress="nonexistent-test-contact"
+path="/api/v1/contacts/${testDeleteAddress}"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"DELETE\\n${path}\\n${timestamp}\\n\";
+    \$hmac = hash_hmac('sha256', \$message, \$secret);
+    echo \$secret . ':' . \$hmac;
+" 2>/dev/null)
+
+deleteContactResponse=$(docker exec ${testContainer} curl -s \
+    -X DELETE \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "http://localhost/api/v1/contacts/${testDeleteAddress}" 2>&1)
+
+# Response should have proper JSON structure with success field (API or CLI format)
+if [[ "$deleteContactResponse" =~ '"success"' ]]; then
+    printf "\t   DELETE /api/v1/contacts/:address ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   DELETE /api/v1/contacts/:address ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${deleteContactResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
 ############################ API KEY DELETE TEST ############################
 
 echo -e "\n[API Key Delete Test]"
