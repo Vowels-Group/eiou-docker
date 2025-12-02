@@ -350,14 +350,19 @@ class ApiController {
         }
 
         $currentUser = $this->services->getCurrentUser();
-        $addresses = $currentUser->getUserLocaters();
+        $userAddresses = $currentUser->getUserLocaters();
+        $addressRepo = $this->services->getAddressRepository();
+
+        // Use getAllAddressTypes() to dynamically get all address types
+        $addressTypes = $addressRepo->getAllAddressTypes();
+        $addresses = [];
+        foreach ($addressTypes as $type) {
+            $addresses[$type] = $userAddresses[$type] ?? null;
+        }
 
         return $this->successResponse([
             'public_key_hash' => $currentUser->getPublicKeyHash(),
-            'addresses' => [
-                'http' => $addresses['http'] ?? null,
-                'tor' => $addresses['tor'] ?? null
-            ]
+            'addresses' => $addresses
         ]);
     }
 
@@ -375,11 +380,21 @@ class ApiController {
         $contactRepo = $this->services->getContactRepository();
         $addressRepo = $this->services->getAddressRepository();
 
+        // Get all address types dynamically for future-proofing
+        $addressTypes = $addressRepo->getAllAddressTypes();
+
         $contacts = $contactRepo->getContactsByStatus($status);
         $result = [];
 
         foreach ($contacts as $contact) {
-            $addresses = $addressRepo->lookupByPubkeyHash($contact['pubkey_hash']);
+            $contactAddresses = $addressRepo->lookupByPubkeyHash($contact['pubkey_hash']);
+
+            // Build addresses array dynamically based on available address types
+            $addresses = [];
+            foreach ($addressTypes as $type) {
+                $addresses[$type] = $contactAddresses[$type] ?? null;
+            }
+
             $result[] = [
                 'name' => $contact['name'],
                 'pubkey_hash' => $contact['pubkey_hash'],
@@ -387,10 +402,7 @@ class ApiController {
                 'currency' => $contact['currency'],
                 'fee_percent' => $contact['fee_percent'],
                 'credit_limit' => $contact['credit_limit'],
-                'addresses' => [
-                    'http' => $addresses['http'] ?? null,
-                    'tor' => $addresses['tor'] ?? null
-                ],
+                'addresses' => $addresses,
                 'created_at' => $contact['created_at']
             ];
         }
@@ -494,7 +506,14 @@ class ApiController {
             return $this->errorResponse('Contact not found', 404, 'contact_not_found');
         }
 
-        $addresses = $addressRepo->lookupByPubkeyHash($contact['pubkey_hash']);
+        $contactAddresses = $addressRepo->lookupByPubkeyHash($contact['pubkey_hash']);
+
+        // Build addresses array dynamically based on available address types
+        $addresses = [];
+        foreach ($addressTypes as $type) {
+            $addresses[$type] = $contactAddresses[$type] ?? null;
+        }
+
         // getContactBalanceByPubkeyHash returns an array or null, handle properly
         $balanceResult = $balanceRepo->getContactBalanceByPubkeyHash($contact['pubkey_hash']);
         $balance = $balanceResult && count($balanceResult) > 0 ? $balanceResult[0] : null;
@@ -507,10 +526,7 @@ class ApiController {
                 'currency' => $contact['currency'],
                 'fee_percent' => $contact['fee_percent'],
                 'credit_limit' => $contact['credit_limit'],
-                'addresses' => [
-                    'http' => $addresses['http'] ?? null,
-                    'tor' => $addresses['tor'] ?? null
-                ],
+                'addresses' => $addresses,
                 'balance' => $balance ? [
                     'received' => $balance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
                     'sent' => $balance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,

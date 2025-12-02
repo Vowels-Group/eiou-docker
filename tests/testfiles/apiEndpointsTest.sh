@@ -343,6 +343,224 @@ else
     failure=$(( failure + 1 ))
 fi
 
+############################ RESPONSE FORMAT VALIDATION ############################
+
+echo -e "\n[Response Format Validation Tests]"
+
+# Test 1: Success response has required fields
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Validating successResponse() format structure"
+
+# Use the cached statusResponse from earlier test
+formatValid=$(docker exec ${testContainer} php -r "
+    \$json = '${statusResponse}';
+    \$response = json_decode(\$json, true);
+
+    // Check required fields for success response
+    \$hasSuccess = isset(\$response['success']) && \$response['success'] === true;
+    \$hasData = array_key_exists('data', \$response) && is_array(\$response['data']);
+    \$hasTimestamp = isset(\$response['timestamp']);
+    \$hasRequestId = isset(\$response['request_id']) && strpos(\$response['request_id'], 'req_') === 0;
+    \$hasNullError = array_key_exists('error', \$response) && \$response['error'] === null;
+
+    if (\$hasSuccess && \$hasData && \$hasTimestamp && \$hasRequestId && \$hasNullError) {
+        echo 'VALID';
+    } else {
+        \$missing = [];
+        if (!\$hasSuccess) \$missing[] = 'success';
+        if (!\$hasData) \$missing[] = 'data';
+        if (!\$hasTimestamp) \$missing[] = 'timestamp';
+        if (!\$hasRequestId) \$missing[] = 'request_id';
+        if (!\$hasNullError) \$missing[] = 'error=null';
+        echo 'MISSING: ' . implode(', ', \$missing);
+    }
+" 2>/dev/null)
+
+if [[ "$formatValid" == "VALID" ]]; then
+    printf "\t   successResponse format ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   successResponse format ${RED}FAILED${NC}\n"
+    printf "\t   Result: ${formatValid}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 2: Error response has required fields
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Validating errorResponse() format structure"
+
+errorFormatValid=$(docker exec ${testContainer} php -r "
+    \$json = '${unauthorizedResponse}';
+    \$response = json_decode(\$json, true);
+
+    // Check required fields for error response
+    \$hasSuccess = isset(\$response['success']) && \$response['success'] === false;
+    \$hasNullData = array_key_exists('data', \$response) && \$response['data'] === null;
+    \$hasTimestamp = isset(\$response['timestamp']);
+    \$hasRequestId = isset(\$response['request_id']) && strpos(\$response['request_id'], 'req_') === 0;
+    \$hasError = isset(\$response['error']) && is_array(\$response['error']);
+    \$hasErrorMessage = isset(\$response['error']['message']);
+    \$hasErrorCode = isset(\$response['error']['code']);
+
+    if (\$hasSuccess && \$hasNullData && \$hasTimestamp && \$hasRequestId && \$hasError && \$hasErrorMessage && \$hasErrorCode) {
+        echo 'VALID';
+    } else {
+        \$missing = [];
+        if (!\$hasSuccess) \$missing[] = 'success=false';
+        if (!\$hasNullData) \$missing[] = 'data=null';
+        if (!\$hasTimestamp) \$missing[] = 'timestamp';
+        if (!\$hasRequestId) \$missing[] = 'request_id';
+        if (!\$hasError) \$missing[] = 'error object';
+        if (!\$hasErrorMessage) \$missing[] = 'error.message';
+        if (!\$hasErrorCode) \$missing[] = 'error.code';
+        echo 'MISSING: ' . implode(', ', \$missing);
+    }
+" 2>/dev/null)
+
+if [[ "$errorFormatValid" == "VALID" ]]; then
+    printf "\t   errorResponse format ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   errorResponse format ${RED}FAILED${NC}\n"
+    printf "\t   Result: ${errorFormatValid}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 3: Wallet info response has addresses object
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Validating wallet info addresses structure"
+
+walletInfoValid=$(docker exec ${testContainer} php -r "
+    \$json = '${infoResponse}';
+    \$response = json_decode(\$json, true);
+
+    \$hasAddresses = isset(\$response['data']['addresses']) && is_array(\$response['data']['addresses']);
+    \$hasPubkeyHash = isset(\$response['data']['public_key_hash']);
+
+    if (\$hasAddresses && \$hasPubkeyHash) {
+        echo 'VALID';
+    } else {
+        echo 'INVALID';
+    }
+" 2>/dev/null)
+
+if [[ "$walletInfoValid" == "VALID" ]]; then
+    printf "\t   Wallet info structure ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Wallet info structure ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 4: Contacts list response has count field
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Validating contacts list structure"
+
+contactsValid=$(docker exec ${testContainer} php -r "
+    \$json = '${contactsResponse}';
+    \$response = json_decode(\$json, true);
+
+    \$hasContacts = isset(\$response['data']['contacts']) && is_array(\$response['data']['contacts']);
+    \$hasCount = isset(\$response['data']['count']) && is_numeric(\$response['data']['count']);
+
+    if (\$hasContacts && \$hasCount) {
+        echo 'VALID';
+    } else {
+        echo 'INVALID';
+    }
+" 2>/dev/null)
+
+if [[ "$contactsValid" == "VALID" ]]; then
+    printf "\t   Contacts list structure ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Contacts list structure ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 5: Transactions response has pagination
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Validating transactions pagination structure"
+
+txPaginationValid=$(docker exec ${testContainer} php -r "
+    \$json = '${transactionsResponse}';
+    \$response = json_decode(\$json, true);
+
+    \$hasTransactions = isset(\$response['data']['transactions']) && is_array(\$response['data']['transactions']);
+    \$hasPagination = isset(\$response['data']['pagination']) && is_array(\$response['data']['pagination']);
+    \$hasTotal = isset(\$response['data']['pagination']['total']);
+    \$hasLimit = isset(\$response['data']['pagination']['limit']);
+    \$hasOffset = isset(\$response['data']['pagination']['offset']);
+
+    if (\$hasTransactions && \$hasPagination && \$hasTotal && \$hasLimit && \$hasOffset) {
+        echo 'VALID';
+    } else {
+        echo 'INVALID';
+    }
+" 2>/dev/null)
+
+if [[ "$txPaginationValid" == "VALID" ]]; then
+    printf "\t   Transactions pagination ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Transactions pagination ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 6: System status response structure
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Validating system status structure"
+
+sysStatusValid=$(docker exec ${testContainer} php -r "
+    \$json = '${statusResponse}';
+    \$response = json_decode(\$json, true);
+
+    \$hasStatus = isset(\$response['data']['status']);
+    \$hasDatabase = isset(\$response['data']['database']);
+    \$hasProcessors = isset(\$response['data']['processors']) && is_array(\$response['data']['processors']);
+
+    if (\$hasStatus && \$hasDatabase && \$hasProcessors) {
+        echo 'VALID';
+    } else {
+        echo 'INVALID';
+    }
+" 2>/dev/null)
+
+if [[ "$sysStatusValid" == "VALID" ]]; then
+    printf "\t   System status structure ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   System status structure ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7: System metrics response structure
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Validating system metrics structure"
+
+metricsStructValid=$(docker exec ${testContainer} php -r "
+    \$json = '${metricsResponse}';
+    \$response = json_decode(\$json, true);
+
+    \$hasTransactions = isset(\$response['data']['transactions']) && is_array(\$response['data']['transactions']);
+    \$hasContacts = isset(\$response['data']['contacts']) && is_array(\$response['data']['contacts']);
+    \$hasP2p = isset(\$response['data']['p2p']) && is_array(\$response['data']['p2p']);
+
+    if (\$hasTransactions && \$hasContacts && \$hasP2p) {
+        echo 'VALID';
+    } else {
+        echo 'INVALID';
+    }
+" 2>/dev/null)
+
+if [[ "$metricsStructValid" == "VALID" ]]; then
+    printf "\t   System metrics structure ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   System metrics structure ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
 ############################ API KEY DELETE TEST ############################
 
 echo -e "\n[API Key Delete Test]"
