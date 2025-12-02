@@ -249,28 +249,44 @@ class ApiController {
         try {
             $transactionService = $this->services->getTransactionService();
 
-            // Build argv-style array expected by sendEiou
-            // sendEiou expects: $request[2] = address, $request[3] = amount, $request[4] = currency
+            // Build argv-style array with --json flag for JSON output
             $argv = [
                 'eiou',                     // $request[0] - command name
                 'send',                     // $request[1] - subcommand
                 $data['address'],           // $request[2] - recipient address
                 (string) $data['amount'],   // $request[3] - amount
-                $data['currency']           // $request[4] - currency
+                $data['currency'],          // $request[4] - currency
+                '--json'                    // Enable JSON output mode
             ];
 
-            // Capture output using a custom output manager
+            // Create a fresh CliOutputManager instance with JSON mode
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
+
+            // Capture JSON output from the CLI function
             ob_start();
-            $transactionService->sendEiou($argv, null);
+            $transactionService->sendEiou($argv, $outputManager);
             $output = ob_get_clean();
 
-            return $this->successResponse([
-                'status' => 'sent',
-                'message' => 'Transaction sent successfully',
-                'recipient' => $data['address'],
-                'amount' => (float) $data['amount'],
-                'currency' => $data['currency']
-            ]);
+            // Parse the CLI JSON response
+            $cliResponse = $this->parseCliJsonResponse($output);
+
+            if ($cliResponse && $cliResponse['success']) {
+                return $this->successResponse([
+                    'status' => $cliResponse['data']['status'] ?? 'sent',
+                    'message' => $cliResponse['message'] ?? 'Transaction sent successfully',
+                    'recipient' => $cliResponse['data']['recipient'] ?? $data['address'],
+                    'recipient_address' => $cliResponse['data']['recipient_address'] ?? null,
+                    'amount' => $cliResponse['data']['amount'] ?? (float) $data['amount'],
+                    'currency' => $cliResponse['data']['currency'] ?? $data['currency'],
+                    'txid' => $cliResponse['data']['txid'] ?? null,
+                    'type' => $cliResponse['data']['type'] ?? 'direct'
+                ]);
+            } else {
+                $errorMsg = $cliResponse['error']['message'] ?? 'Transaction failed';
+                $errorCode = $cliResponse['error']['code'] ?? 'transaction_failed';
+                return $this->errorResponse($errorMsg, 400, strtolower($errorCode));
+            }
         } catch (Exception $e) {
             return $this->errorResponse('Transaction failed: ' . $e->getMessage(), 500, 'transaction_error');
         }
@@ -405,8 +421,7 @@ class ApiController {
         try {
             $contactService = $this->services->getContactService();
 
-            // Build argv-style array expected by addContact
-            // addContact expects: $data[2] = address, $data[3] = name, $data[4] = fee, $data[5] = credit, $data[6] = currency
+            // Build argv-style array with --json flag for JSON output
             $argv = [
                 'eiou',                                  // $data[0] - command name
                 'add',                                   // $data[1] - subcommand
@@ -414,20 +429,34 @@ class ApiController {
                 $data['name'],                           // $data[3] - contact name
                 (string) ($data['fee_percent'] ?? 1),    // $data[4] - fee percent
                 (string) ($data['credit_limit'] ?? 100), // $data[5] - credit limit
-                $data['currency'] ?? 'USD'               // $data[6] - currency
+                $data['currency'] ?? 'USD',              // $data[6] - currency
+                '--json'                                 // Enable JSON output mode
             ];
 
-            // Capture output - addContact returns void
+            // Create a fresh CliOutputManager instance with JSON mode
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
+
+            // Capture JSON output from the CLI function
             ob_start();
-            $contactService->addContact($argv, null);
+            $contactService->addContact($argv, $outputManager);
             $output = ob_get_clean();
 
-            return $this->successResponse([
-                'message' => 'Contact request sent successfully',
-                'status' => 'pending',
-                'address' => $data['address'],
-                'name' => $data['name']
-            ], 201);
+            // Parse the CLI JSON response
+            $cliResponse = $this->parseCliJsonResponse($output);
+
+            if ($cliResponse && $cliResponse['success']) {
+                return $this->successResponse([
+                    'message' => $cliResponse['message'] ?? 'Contact request sent successfully',
+                    'status' => $cliResponse['data']['status'] ?? 'pending',
+                    'address' => $cliResponse['data']['address'] ?? $data['address'],
+                    'name' => $cliResponse['data']['name'] ?? $data['name']
+                ], 201);
+            } else {
+                $errorMsg = $cliResponse['error']['message'] ?? 'Failed to add contact';
+                $errorCode = $cliResponse['error']['code'] ?? 'contact_add_failed';
+                return $this->errorResponse($errorMsg, 400, strtolower($errorCode));
+            }
         } catch (Exception $e) {
             return $this->errorResponse('Failed to add contact: ' . $e->getMessage(), 500, 'contact_error');
         }
@@ -504,19 +533,35 @@ class ApiController {
         $contactService = $this->services->getContactService();
 
         try {
-            // deleteContact returns bool, not an array
-            // Capture output to prevent CLI messages
-            ob_start();
-            $result = $contactService->deleteContact($address, null);
-            ob_get_clean();
+            // Build argv-style array with --json flag for JSON output
+            $argv = [
+                'eiou',
+                'delete',
+                $address,
+                '--json'
+            ];
 
-            if ($result) {
+            // Create a fresh CliOutputManager instance with JSON mode
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
+
+            // Capture JSON output from the CLI function
+            ob_start();
+            $contactService->deleteContact($address, $outputManager);
+            $output = ob_get_clean();
+
+            // Parse the CLI JSON response
+            $cliResponse = $this->parseCliJsonResponse($output);
+
+            if ($cliResponse && $cliResponse['success']) {
                 return $this->successResponse([
-                    'message' => 'Contact deleted successfully',
+                    'message' => $cliResponse['message'] ?? 'Contact deleted successfully',
                     'address' => $address
                 ]);
             } else {
-                return $this->errorResponse('Failed to delete contact', 400, 'delete_failed');
+                $errorMsg = $cliResponse['error']['message'] ?? 'Failed to delete contact';
+                $errorCode = $cliResponse['error']['code'] ?? 'delete_failed';
+                return $this->errorResponse($errorMsg, 400, strtolower($errorCode));
             }
         } catch (Exception $e) {
             return $this->errorResponse('Failed to delete contact: ' . $e->getMessage(), 500, 'delete_error');
@@ -610,20 +655,36 @@ class ApiController {
         $contactService = $this->services->getContactService();
 
         try {
-            // blockContact returns bool
-            // Capture output to prevent CLI messages
-            ob_start();
-            $result = $contactService->blockContact($address, null);
-            ob_get_clean();
+            // Build argv-style array with --json flag for JSON output
+            $argv = [
+                'eiou',
+                'block',
+                $address,
+                '--json'
+            ];
 
-            if ($result) {
+            // Create a fresh CliOutputManager instance with JSON mode
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
+
+            // Capture JSON output from the CLI function
+            ob_start();
+            $contactService->blockContact($address, $outputManager);
+            $output = ob_get_clean();
+
+            // Parse the CLI JSON response
+            $cliResponse = $this->parseCliJsonResponse($output);
+
+            if ($cliResponse && $cliResponse['success']) {
                 return $this->successResponse([
-                    'message' => 'Contact blocked successfully',
+                    'message' => $cliResponse['message'] ?? 'Contact blocked successfully',
                     'address' => $address,
                     'status' => 'blocked'
                 ]);
             } else {
-                return $this->errorResponse('Failed to block contact', 400, 'block_failed');
+                $errorMsg = $cliResponse['error']['message'] ?? 'Failed to block contact';
+                $errorCode = $cliResponse['error']['code'] ?? 'block_failed';
+                return $this->errorResponse($errorMsg, 400, strtolower($errorCode));
             }
         } catch (Exception $e) {
             return $this->errorResponse('Failed to block contact: ' . $e->getMessage(), 500, 'block_error');
@@ -642,20 +703,36 @@ class ApiController {
         $contactService = $this->services->getContactService();
 
         try {
-            // unblockContact returns bool
-            // Capture output to prevent CLI messages
-            ob_start();
-            $result = $contactService->unblockContact($address, null);
-            ob_get_clean();
+            // Build argv-style array with --json flag for JSON output
+            $argv = [
+                'eiou',
+                'unblock',
+                $address,
+                '--json'
+            ];
 
-            if ($result) {
+            // Create a fresh CliOutputManager instance with JSON mode
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
+
+            // Capture JSON output from the CLI function
+            ob_start();
+            $contactService->unblockContact($address, $outputManager);
+            $output = ob_get_clean();
+
+            // Parse the CLI JSON response
+            $cliResponse = $this->parseCliJsonResponse($output);
+
+            if ($cliResponse && $cliResponse['success']) {
                 return $this->successResponse([
-                    'message' => 'Contact unblocked successfully',
+                    'message' => $cliResponse['message'] ?? 'Contact unblocked successfully',
                     'address' => $address,
-                    'status' => 'unblocked'
+                    'status' => 'accepted'
                 ]);
             } else {
-                return $this->errorResponse('Failed to unblock contact', 400, 'unblock_failed');
+                $errorMsg = $cliResponse['error']['message'] ?? 'Failed to unblock contact';
+                $errorCode = $cliResponse['error']['code'] ?? 'unblock_failed';
+                return $this->errorResponse($errorMsg, 400, strtolower($errorCode));
             }
         } catch (Exception $e) {
             return $this->errorResponse('Failed to unblock contact: ' . $e->getMessage(), 500, 'unblock_error');
@@ -802,6 +879,39 @@ class ApiController {
             403,
             'permission_denied'
         );
+    }
+
+    /**
+     * Parse CLI JSON response from captured output
+     *
+     * The CLI functions output JSON when using the --json flag.
+     * This method parses that output and returns a structured array.
+     *
+     * @param string $output The captured output from CLI function
+     * @return array|null Parsed JSON response or null if parsing fails
+     */
+    private function parseCliJsonResponse(string $output): ?array {
+        // Trim whitespace and newlines
+        $output = trim($output);
+
+        // Handle empty output
+        if (empty($output)) {
+            return null;
+        }
+
+        // Try to parse as JSON
+        $decoded = json_decode($output, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            // Log parsing error
+            $this->log('warning', 'Failed to parse CLI JSON response', [
+                'output' => substr($output, 0, 500),
+                'json_error' => json_last_error_msg()
+            ]);
+            return null;
+        }
+
+        return $decoded;
     }
 
     /**
