@@ -94,25 +94,6 @@ abstract class AbstractRepository {
     }
 
     /**
-     * Get column names of table
-     *
-     * @return array|null
-     */
-    protected function getColumnNames(): ?array {
-        $query = "SELECT COLUMN_NAME
-                    FROM INFORMATION_SCHEMA.COLUMNS
-                    WHERE TABLE_NAME = N'{$this->tableName}'";
-        $stmt =  $this->execute($query);
-
-         if (!$stmt) {
-            return null;
-        }
-
-        $result = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        return $result ?: null;
-    }
-
-    /**
      * Execute a prepared statement with parameters
      *
      * @param string $query SQL query with named placeholders
