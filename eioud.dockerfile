@@ -29,6 +29,9 @@ RUN echo "AddType application/x-httpd-php .html" | tee -a /etc/apache2/apache2.c
 # Set ServerName to suppress Apache warning
 RUN echo "ServerName localhost" | tee -a /etc/apache2/apache2.conf
 
+# Add API rewriterule
+RUN echo "RewriteRule ^api/(.*)$ /etc/eiou/api.php [L,QSA]" | tee -a /etc/apache2/apache2.conf
+
 # Copy eiou.php file to /usr/local/bin and create a wrapper script
 COPY files/eiou/eiou.php /usr/local/bin/eiou.php
 RUN echo '#!/bin/bash\nphp /usr/local/bin/eiou.php "$@"' > /usr/local/bin/eiou && \
