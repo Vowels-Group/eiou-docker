@@ -134,8 +134,7 @@ function runMigrations(PDO $pdo): array {
 
     // List of migration tables to create (added after initial release)
     $migrations = [
-        'api_keys' => 'getApiKeysTableSchema',
-        'api_request_log' => 'getApiRequestLogTableSchema',
+    
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {
