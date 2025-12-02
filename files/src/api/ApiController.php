@@ -140,11 +140,11 @@ class ApiController {
      * Handle contacts endpoints
      *
      * Routes:
-     * - GET    /api/v1/contacts              - List all contacts
-     * - POST   /api/v1/contacts              - Add new contact
-     * - GET    /api/v1/contacts/:address     - Get contact details
-     * - DELETE /api/v1/contacts/:address     - Delete contact
-     * - PUT    /api/v1/contacts/:address     - Update contact
+     * - GET    /api/v1/contacts                  - List all contacts
+     * - POST   /api/v1/contacts                  - Add new contact
+     * - GET    /api/v1/contacts/:address         - Get contact details
+     * - DELETE /api/v1/contacts/:address         - Delete contact
+     * - PUT    /api/v1/contacts/:address         - Update contact
      * - POST   /api/v1/contacts/block/:address   - Block contact
      * - POST   /api/v1/contacts/unblock/:address - Unblock contact
      */
@@ -252,11 +252,11 @@ class ApiController {
             // Build argv-style array expected by sendEiou
             // sendEiou expects: $request[2] = address, $request[3] = amount, $request[4] = currency
             $argv = [
-                'eiou',           // $request[0] - command name
-                'send',           // $request[1] - subcommand
-                $data['address'], // $request[2] - recipient address
-                (string) $data['amount'], // $request[3] - amount
-                $data['currency'] // $request[4] - currency
+                'eiou',                     // $request[0] - command name
+                'send',                     // $request[1] - subcommand
+                $data['address'],           // $request[2] - recipient address
+                (string) $data['amount'],   // $request[3] - amount
+                $data['currency']           // $request[4] - currency
             ];
 
             // Capture output using a custom output manager
@@ -334,8 +334,6 @@ class ApiController {
         }
 
         $currentUser = $this->services->getCurrentUser();
-        $addressRepo = $this->services->getAddressRepository();
-
         $addresses = $currentUser->getUserLocaters();
 
         return $this->successResponse([
@@ -410,13 +408,13 @@ class ApiController {
             // Build argv-style array expected by addContact
             // addContact expects: $data[2] = address, $data[3] = name, $data[4] = fee, $data[5] = credit, $data[6] = currency
             $argv = [
-                'eiou',                      // $data[0] - command name
-                'add',                       // $data[1] - subcommand
-                $data['address'],            // $data[2] - contact address
-                $data['name'],               // $data[3] - contact name
+                'eiou',                                  // $data[0] - command name
+                'add',                                   // $data[1] - subcommand
+                $data['address'],                        // $data[2] - contact address
+                $data['name'],                           // $data[3] - contact name
                 (string) ($data['fee_percent'] ?? 1),    // $data[4] - fee percent
                 (string) ($data['credit_limit'] ?? 100), // $data[5] - credit limit
-                $data['currency'] ?? 'USD'   // $data[6] - currency
+                $data['currency'] ?? 'USD'               // $data[6] - currency
             ];
 
             // Capture output - addContact returns void
@@ -539,7 +537,6 @@ class ApiController {
         }
 
         $address = urldecode($address);
-        $contactService = $this->services->getContactService();
         $contactRepo = $this->services->getContactRepository();
         $addressRepo = $this->services->getAddressRepository();
 
