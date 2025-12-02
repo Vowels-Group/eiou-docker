@@ -37,6 +37,7 @@ class Constants {
 
     // Development/Production
     const APP_ENV = 'development';
+    const APP_VERSION = '0.0.1';
     const APP_DEBUG = true;
 
     // API
