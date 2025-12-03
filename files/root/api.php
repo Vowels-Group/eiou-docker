@@ -56,8 +56,7 @@ require_once '/etc/eiou/src/services/ServiceWrappers.php';
 require_once '/etc/eiou/src/schemas/outputSchema.php';
 
 // Initialize API components
-$pdo = $app->services->getPdo();
-$apiKeyRepo = new ApiKeyRepository($pdo);
+$apiKeyRepo = $app->services->getApiKeyRepository();
 $logger = $app->getLogger();
 $authService = new ApiAuthService($apiKeyRepo, $logger);
 $controller = new ApiController($authService, $apiKeyRepo, $app->services, $logger);
