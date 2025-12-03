@@ -40,20 +40,18 @@ class Wallet{
         ]);
         file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);
 
-        // Generate BIP39 mnemonic seed phrase (12 words)
-        $mnemonic = BIP39::generateMnemonic(12);
+        // Generate BIP39 mnemonic seed phrase (24 words)
+        $mnemonic = BIP39::generateMnemonic(24);
 
-        // Generate a private key
-        $config = array(
-            "private_key_bits" => 2048,
-            "curve_name" => "secp256k1"
-        );
-        $res = openssl_pkey_new($config);
-        openssl_pkey_export($res, $privateKey);
+        // Derive deterministic EC key pair from seed using secp256k1
+        // This allows wallet restoration to generate the EXACT same key pair
+        $seed = BIP39::mnemonicToSeed($mnemonic);
+        $keyPair = BIP39::seedToKeyPair($seed);
+        $privateKey = $keyPair['private'];
+        $publicKey = $keyPair['public'];
 
-        // Extract public key from the private key
-        $keyDetails = openssl_pkey_get_details($res);
-        $publicKey = $keyDetails['key'];
+        // Clear seed from memory
+        BIP39::secureClear($seed);
 
         // Generate random authentication code of length 20
         $authCode = bin2hex(random_bytes(10));
@@ -131,13 +129,13 @@ class Wallet{
         require_once __DIR__ . '/../security/BIP39.php';
 
         // Get seed phrase from arguments (words 3 onwards)
-        // Usage: eiou generate restore word1 word2 word3 ... word12
-        if (count($argv) < 15) { // eiou generate restore + 12 words
+        // Usage: eiou generate restore word1 word2 word3 ... word24
+        if (count($argv) < 27) { // eiou generate restore + 24 words
             $output->error(
-                "Seed phrase required. Usage: eiou generate restore <12 or 24 words>",
+                "Seed phrase required. Usage: eiou generate restore <24 words>",
                 'INVALID_SEED_PHRASE',
                 400,
-                ['expected_words' => '12 or 24', 'provided' => count($argv) - 3]
+                ['expected_words' => '24', 'provided' => count($argv) - 3]
             );
             return;
         }
@@ -148,12 +146,12 @@ class Wallet{
 
         // Validate word count
         $wordCount = count($seedWords);
-        if (!in_array($wordCount, [12, 24])) {
+        if ($wordCount !== 24) {
             $output->error(
-                "Invalid seed phrase length. Must be 12 or 24 words.",
+                "Invalid seed phrase length. Must be 24 words.",
                 'INVALID_WORD_COUNT',
                 400,
-                ['expected' => '12 or 24', 'provided' => $wordCount]
+                ['expected' => '24', 'provided' => $wordCount]
             );
             return;
         }
@@ -196,20 +194,15 @@ class Wallet{
         ]);
         file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);
 
-        // Generate a new RSA key pair
-        // Note: RSA keys cannot be deterministically derived from BIP39 seed
-        // The seed phrase is used for backup/restore of the mnemonic itself
-        // Future enhancement: Use EC keys (secp256k1) for deterministic derivation
-        $config = array(
-            "private_key_bits" => 2048,
-            "curve_name" => "secp256k1"
-        );
-        $res = openssl_pkey_new($config);
-        openssl_pkey_export($res, $privateKey);
+        // Derive deterministic EC key pair from seed using secp256k1
+        // This generates the EXACT same key pair as the original wallet
+        $seed = BIP39::mnemonicToSeed($mnemonic);
+        $keyPair = BIP39::seedToKeyPair($seed);
+        $privateKey = $keyPair['private'];
+        $publicKey = $keyPair['public'];
 
-        // Extract public key from the private key
-        $keyDetails = openssl_pkey_get_details($res);
-        $publicKey = $keyDetails['key'];
+        // Clear seed from memory
+        BIP39::secureClear($seed);
 
         // Generate random authentication code of length 20
         $authCode = bin2hex(random_bytes(10));
@@ -250,7 +243,7 @@ class Wallet{
             'word_count' => $wordCount
         ];
 
-        $output->success("Wallet restored successfully from seed phrase", $walletData, "Wallet restored with new keys. Note: RSA keys are newly generated.");
+        $output->success("Wallet restored successfully from seed phrase", $walletData, "Wallet restored with deterministic EC keys derived from seed phrase.");
 
         // SECURITY: Clear plaintext mnemonic from memory
         KeyEncryption::secureClear($mnemonic);
@@ -264,23 +257,27 @@ class Wallet{
      * @return void
      */
     private static function displaySeedPhrase(string $mnemonic, CliOutputManager $output): void {
-        $formatted = BIP39::formatMnemonic($mnemonic);
+        // Table uses 65 characters total width:
+        // ║ (1) + space (1) + content (61) + space (1) + ║ (1) = 65
+        $contentWidth = 61;
+        $formatted = BIP39::formatMnemonic($mnemonic, $contentWidth);
 
         // In JSON mode, the seed phrase is already in walletData
         // In text mode, we display it formatted
         if (!$output->isJsonMode()) {
             echo "\n";
             echo "╔═══════════════════════════════════════════════════════════════╗\n";
-            echo "║  IMPORTANT: WRITE DOWN YOUR SEED PHRASE AND STORE SAFELY     ║\n";
+            echo "║ IMPORTANT: WRITE DOWN YOUR SEED PHRASE AND STORE SAFELY      ║\n";
             echo "╠═══════════════════════════════════════════════════════════════╣\n";
-            echo "║  This is the ONLY way to restore your wallet if lost.        ║\n";
-            echo "║  Never share it. Never store it digitally.                   ║\n";
+            echo "║ This is the ONLY way to restore your wallet if lost.         ║\n";
+            echo "║ Never share it. Never store it digitally.                    ║\n";
             echo "╠═══════════════════════════════════════════════════════════════╣\n";
 
             $lines = explode("\n", $formatted);
             foreach ($lines as $line) {
-                $padded = str_pad($line, 61);
-                echo "║  " . $padded . "║\n";
+                // Ensure each line is exactly contentWidth characters
+                $padded = str_pad($line, $contentWidth);
+                echo "║ " . $padded . " ║\n";
             }
 
             echo "╚═══════════════════════════════════════════════════════════════╝\n";

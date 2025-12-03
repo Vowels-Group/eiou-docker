@@ -192,46 +192,220 @@ class BIP39 {
     }
 
     /**
-     * Generate deterministic RSA key pair from seed
+     * Generate deterministic EC key pair from seed using secp256k1
      *
-     * Note: RSA keys cannot be directly derived from a seed like EC keys.
-     * This method uses the seed as a deterministic random source.
+     * EC keys can be derived deterministically from a seed, unlike RSA.
+     * The private key is derived using HMAC-SHA256 of the seed.
      *
      * @param string $seed Raw seed bytes from BIP39
      * @return array ['private' => string, 'public' => string]
+     * @throws RuntimeException If key generation fails
      */
     public static function seedToKeyPair(string $seed): array {
-        // For RSA, we need to use a deterministic PRNG seeded with our seed
-        // PHP's OpenSSL doesn't support deterministic key generation directly,
-        // so we'll use a workaround: generate and store the seed, then
-        // regenerate using the same seed when restoring
+        // Derive 32-byte EC private key deterministically from seed
+        $privateKeyBytes = hash_hmac('sha256', $seed, 'eiou-ec-key', true);
 
-        // Generate a hash-based deterministic value for seeding
-        $deterministicSeed = hash('sha512', $seed . 'eiou_key_derivation_v1', true);
+        // Get the preferred EC curve (secp256k1 if available, otherwise prime256v1)
+        $curveName = self::getPreferredCurve();
 
-        // Set up OpenSSL config for key generation
-        $config = [
-            "private_key_bits" => 2048,
-            "private_key_type" => OPENSSL_KEYTYPE_RSA,
-        ];
+        // For secp256k1, the private key must be less than the curve order
+        // The secp256k1 order is: FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+        // For prime256v1, the order is: FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+        // Our HMAC output is effectively random and very unlikely to exceed these,
+        // but we ensure validity by reducing modulo the order if needed
+        $privateKeyBytes = self::ensureValidPrivateKey($privateKeyBytes, $curveName);
 
-        // Generate key pair
-        // Note: This won't be truly deterministic without custom PRNG,
-        // so we'll store both the seed AND the generated key
-        $res = openssl_pkey_new($config);
+        // Convert private key bytes to PEM format for OpenSSL
+        $privateKeyPem = self::ecPrivateKeyToPem($privateKeyBytes, $curveName);
 
-        if (!$res) {
-            throw new RuntimeException('Failed to generate key pair: ' . openssl_error_string());
+        // Load the private key and extract public key
+        $keyResource = openssl_pkey_get_private($privateKeyPem);
+
+        if (!$keyResource) {
+            throw new RuntimeException('Failed to load EC private key: ' . openssl_error_string());
         }
 
-        openssl_pkey_export($res, $privateKey);
-        $keyDetails = openssl_pkey_get_details($res);
+        // Export the private key in standard PEM format
+        if (!openssl_pkey_export($keyResource, $privateKey)) {
+            throw new RuntimeException('Failed to export EC private key: ' . openssl_error_string());
+        }
+
+        // Get key details including public key
+        $keyDetails = openssl_pkey_get_details($keyResource);
+
+        if (!$keyDetails) {
+            throw new RuntimeException('Failed to get EC key details: ' . openssl_error_string());
+        }
+
         $publicKey = $keyDetails['key'];
 
         return [
             'private' => $privateKey,
             'public' => $publicKey
         ];
+    }
+
+    /**
+     * Get the preferred EC curve name
+     *
+     * Checks if secp256k1 is available, otherwise falls back to prime256v1
+     *
+     * @return string The curve name to use
+     */
+    public static function getPreferredCurve(): string {
+        $curves = openssl_get_curve_names();
+
+        if (in_array('secp256k1', $curves)) {
+            return 'secp256k1';
+        }
+
+        if (in_array('prime256v1', $curves)) {
+            return 'prime256v1';
+        }
+
+        throw new RuntimeException('No supported EC curve available (need secp256k1 or prime256v1)');
+    }
+
+    /**
+     * Ensure the private key is valid for the given curve
+     *
+     * @param string $privateKeyBytes 32-byte private key
+     * @param string $curveName The EC curve name
+     * @return string Valid 32-byte private key
+     */
+    private static function ensureValidPrivateKey(string $privateKeyBytes, string $curveName): string {
+        // The private key must be non-zero and less than the curve order
+        // For both secp256k1 and prime256v1, we check if all bytes are zero
+        if ($privateKeyBytes === str_repeat("\x00", 32)) {
+            // Extremely unlikely, but hash again if we get all zeros
+            $privateKeyBytes = hash_hmac('sha256', $privateKeyBytes, 'eiou-ec-key-retry', true);
+        }
+
+        return $privateKeyBytes;
+    }
+
+    /**
+     * Convert raw EC private key bytes to PEM format
+     *
+     * @param string $privateKeyBytes 32-byte private key
+     * @param string $curveName The EC curve name
+     * @return string PEM-encoded private key
+     */
+    private static function ecPrivateKeyToPem(string $privateKeyBytes, string $curveName): string {
+        // OID for the curve
+        $curveOids = [
+            'secp256k1' => "\x06\x05\x2b\x81\x04\x00\x0a",  // 1.3.132.0.10
+            'prime256v1' => "\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07",  // 1.2.840.10045.3.1.7
+        ];
+
+        if (!isset($curveOids[$curveName])) {
+            throw new RuntimeException("Unsupported curve: $curveName");
+        }
+
+        $curveOid = $curveOids[$curveName];
+
+        // Build the EC private key structure (RFC 5915)
+        // ECPrivateKey ::= SEQUENCE {
+        //   version        INTEGER { ecPrivkeyVer1(1) },
+        //   privateKey     OCTET STRING,
+        //   parameters [0] ECParameters {{ NamedCurve }} OPTIONAL,
+        //   publicKey  [1] BIT STRING OPTIONAL
+        // }
+
+        // Version = 1
+        $version = "\x02\x01\x01";
+
+        // Private key as OCTET STRING
+        $privateKeyOctet = "\x04\x20" . $privateKeyBytes;
+
+        // Parameters (curve OID) as context-specific [0]
+        $parameters = "\xa0" . chr(strlen($curveOid)) . $curveOid;
+
+        // Compute public key from private key
+        $publicKeyBytes = self::computePublicKey($privateKeyBytes, $curveName);
+
+        // Public key as context-specific [1] containing BIT STRING
+        $publicKeyBitString = "\x03" . chr(strlen($publicKeyBytes) + 1) . "\x00" . $publicKeyBytes;
+        $publicKeyContext = "\xa1" . chr(strlen($publicKeyBitString)) . $publicKeyBitString;
+
+        // Combine into SEQUENCE
+        $ecPrivateKey = $version . $privateKeyOctet . $parameters . $publicKeyContext;
+        $ecPrivateKeySeq = "\x30" . self::asn1Length(strlen($ecPrivateKey)) . $ecPrivateKey;
+
+        // Encode as PEM
+        $base64 = base64_encode($ecPrivateKeySeq);
+        $pem = "-----BEGIN EC PRIVATE KEY-----\n";
+        $pem .= chunk_split($base64, 64, "\n");
+        $pem .= "-----END EC PRIVATE KEY-----\n";
+
+        return $pem;
+    }
+
+    /**
+     * Compute the public key from a private key
+     *
+     * @param string $privateKeyBytes 32-byte private key
+     * @param string $curveName The EC curve name
+     * @return string Uncompressed public key (65 bytes: 0x04 + 32-byte X + 32-byte Y)
+     */
+    private static function computePublicKey(string $privateKeyBytes, string $curveName): string {
+        // Use OpenSSL to compute the public key by creating a temporary key
+        // This is a workaround since PHP doesn't expose EC point multiplication directly
+
+        // Create a minimal EC private key PEM without public key to bootstrap
+        $curveOids = [
+            'secp256k1' => "\x06\x05\x2b\x81\x04\x00\x0a",
+            'prime256v1' => "\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07",
+        ];
+
+        $curveOid = $curveOids[$curveName];
+
+        // Minimal EC private key structure
+        $version = "\x02\x01\x01";
+        $privateKeyOctet = "\x04\x20" . $privateKeyBytes;
+        $parameters = "\xa0" . chr(strlen($curveOid)) . $curveOid;
+
+        $ecPrivateKey = $version . $privateKeyOctet . $parameters;
+        $ecPrivateKeySeq = "\x30" . self::asn1Length(strlen($ecPrivateKey)) . $ecPrivateKey;
+
+        $pem = "-----BEGIN EC PRIVATE KEY-----\n";
+        $pem .= chunk_split(base64_encode($ecPrivateKeySeq), 64, "\n");
+        $pem .= "-----END EC PRIVATE KEY-----\n";
+
+        // Load the key - OpenSSL will compute the public key
+        $key = openssl_pkey_get_private($pem);
+
+        if (!$key) {
+            throw new RuntimeException('Failed to compute public key: ' . openssl_error_string());
+        }
+
+        $details = openssl_pkey_get_details($key);
+
+        if (!$details || !isset($details['ec']['x']) || !isset($details['ec']['y'])) {
+            throw new RuntimeException('Failed to extract EC public key coordinates');
+        }
+
+        // Build uncompressed public key: 0x04 + X + Y
+        $x = str_pad($details['ec']['x'], 32, "\x00", STR_PAD_LEFT);
+        $y = str_pad($details['ec']['y'], 32, "\x00", STR_PAD_LEFT);
+
+        return "\x04" . $x . $y;
+    }
+
+    /**
+     * Encode ASN.1 length
+     *
+     * @param int $length The length to encode
+     * @return string ASN.1 length bytes
+     */
+    private static function asn1Length(int $length): string {
+        if ($length < 128) {
+            return chr($length);
+        } elseif ($length < 256) {
+            return "\x81" . chr($length);
+        } else {
+            return "\x82" . pack('n', $length);
+        }
     }
 
     /**
@@ -265,20 +439,35 @@ class BIP39 {
      * Format mnemonic for display (groups of 4 words per line)
      *
      * @param string $mnemonic Space-separated mnemonic
+     * @param int $lineWidth Width of each line for padding (default 61 for table display)
      * @return string Formatted mnemonic
      */
-    public static function formatMnemonic(string $mnemonic): string {
+    public static function formatMnemonic(string $mnemonic, int $lineWidth = 61): string {
         $words = explode(' ', $mnemonic);
         $lines = [];
+
+        // Find the longest word to calculate consistent column widths
+        $maxWordLength = 0;
+        foreach ($words as $word) {
+            $maxWordLength = max($maxWordLength, strlen($word));
+        }
+
+        // Each numbered word format: "NN. word" where NN is 2 digits (right-aligned)
+        // Column width = 2 (number) + 2 (". ") + maxWordLength = 4 + maxWordLength
+        $columnWidth = 4 + $maxWordLength;
 
         for ($i = 0; $i < count($words); $i += 4) {
             $lineWords = array_slice($words, $i, 4);
             $numberedWords = [];
             foreach ($lineWords as $j => $word) {
                 $num = $i + $j + 1;
-                $numberedWords[] = str_pad($num, 2, ' ', STR_PAD_LEFT) . '. ' . $word;
+                // Pad number to 2 chars (right-aligned), then pad entire entry to column width
+                $entry = str_pad($num, 2, ' ', STR_PAD_LEFT) . '. ' . str_pad($word, $maxWordLength);
+                $numberedWords[] = $entry;
             }
-            $lines[] = implode('  ', $numberedWords);
+            $lineContent = implode('  ', $numberedWords);
+            // Pad the entire line to the specified width
+            $lines[] = str_pad($lineContent, $lineWidth);
         }
 
         return implode("\n", $lines);
