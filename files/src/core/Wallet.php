@@ -19,9 +19,6 @@ class Wallet{
             return;
         }
 
-        // Check for torAddressOnly option (skip seed phrase)
-        $torAddressOnly = isset($argv[2]) && strtolower($argv[2]) === 'toraddressonly';
-
         // Load KeyEncryption for secure key storage
         require_once __DIR__ . '/../security/KeyEncryption.php';
         require_once __DIR__ . '/../security/BIP39.php';
@@ -77,8 +74,7 @@ class Wallet{
 
         $walletData = [
             'tor_address' => $torAddress,
-            'public_key_generated' => true,
-            'seed_phrase' => $mnemonic
+            'public_key_generated' => true
         ];
 
         // If argv2 is the (http/s) hostname of the container
@@ -267,10 +263,10 @@ class Wallet{
         if (!$output->isJsonMode()) {
             echo "\n";
             echo "╔═══════════════════════════════════════════════════════════════╗\n";
-            echo "║ IMPORTANT: WRITE DOWN YOUR SEED PHRASE AND STORE SAFELY      ║\n";
+            echo "║ IMPORTANT: WRITE DOWN YOUR SEED PHRASE AND STORE SAFELY       ║\n";
             echo "╠═══════════════════════════════════════════════════════════════╣\n";
-            echo "║ This is the ONLY way to restore your wallet if lost.         ║\n";
-            echo "║ Never share it. Never store it digitally.                    ║\n";
+            echo "║ This is the ONLY way to restore your wallet if lost.          ║\n";
+            echo "║ Never share it. Never store it digitally.                     ║\n";
             echo "╠═══════════════════════════════════════════════════════════════╣\n";
 
             $lines = explode("\n", $formatted);
