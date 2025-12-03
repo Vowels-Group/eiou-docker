@@ -27,6 +27,32 @@ echo -e "\t   Test container: ${testContainer}"
 echo -e "\t   Real contact: ${realContactContainer} (${realContactAddress})"
 echo -e "\t   Mode: ${MODE}"
 
+# Helper function to display API request details
+display_api_request() {
+    local container="$1"
+    local method="$2"
+    local endpoint="$3"
+    local body="$4"
+    local recipient="$5"
+
+    printf "\t   Container: ${container}\n"
+    printf "\t   Endpoint: ${method} ${endpoint}\n"
+    if [[ -n "$body" ]]; then
+        printf "\t   Body: ${body}\n"
+    fi
+    if [[ -n "$recipient" ]]; then
+        printf "\t   Recipient: ${recipient}\n"
+    fi
+}
+
+# Helper function to display response details
+display_api_response() {
+    local response_code="$1"
+    local success="$2"
+
+    printf "\t   Response Code: ${response_code}\n"
+}
+
 ############################ API KEY SETUP ############################
 
 echo -e "\n[API Key Setup]"
@@ -579,12 +605,14 @@ fi
 echo -e "\n[Wallet Send API Test]"
 totaltests=$(( totaltests + 1 ))
 
-echo -e "\n\t-> Testing POST /api/v1/wallet/send to ${realContactAddress}"
+echo -e "\n\t-> Testing POST /api/v1/wallet/send"
 
 timestamp=$(date +%s)
 path="/api/v1/wallet/send"
 # Use real contact address from containerAddresses
 sendBody="{\"address\":\"${realContactAddress}\",\"amount\":\"0.01\",\"currency\":\"USD\"}"
+
+display_api_request "${testContainer}" "POST" "/api/v1/wallet/send" "${sendBody}" "${realContactAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
@@ -594,7 +622,7 @@ signature=$(docker exec ${testContainer} php -r "
     echo \$secret . ':' . \$hmac;
 " 2>/dev/null)
 
-sendResponse=$(docker exec ${testContainer} curl -s \
+sendResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
     -X POST \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
@@ -602,6 +630,11 @@ sendResponse=$(docker exec ${testContainer} curl -s \
     -H "Content-Type: application/json" \
     -d "${sendBody}" \
     "http://localhost/api/v1/wallet/send" 2>&1)
+
+sendResponseCode=$(echo "$sendResponseFull" | tail -1)
+sendResponse=$(echo "$sendResponseFull" | sed '$d')
+
+display_api_response "${sendResponseCode}"
 
 # Transaction to real contact should succeed with proper response
 if [[ "$sendResponse" =~ '"success"' ]] && [[ "$sendResponse" =~ 'true' ]] && [[ "$sendResponse" =~ '"error": null' || "$sendResponse" =~ '"error":null' ]]; then
@@ -618,12 +651,14 @@ fi
 echo -e "\n[Contact Creation API Test]"
 totaltests=$(( totaltests + 1 ))
 
-echo -e "\n\t-> Testing POST /api/v1/contacts with ${realContactAddress}"
+echo -e "\n\t-> Testing POST /api/v1/contacts"
 
 timestamp=$(date +%s)
 path="/api/v1/contacts"
 # Use real contact address from containerAddresses - may already exist but API should respond properly
 contactBody="{\"name\":\"API Test Contact\",\"address\":\"${realContactAddress}\"}"
+
+display_api_request "${testContainer}" "POST" "/api/v1/contacts" "${contactBody}" "${realContactAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
@@ -633,7 +668,7 @@ signature=$(docker exec ${testContainer} php -r "
     echo \$secret . ':' . \$hmac;
 " 2>/dev/null)
 
-createContactResponse=$(docker exec ${testContainer} curl -s \
+createContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
     -X POST \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
@@ -641,6 +676,11 @@ createContactResponse=$(docker exec ${testContainer} curl -s \
     -H "Content-Type: application/json" \
     -d "${contactBody}" \
     "http://localhost/api/v1/contacts" 2>&1)
+
+createContactCode=$(echo "$createContactResponseFull" | tail -1)
+createContactResponse=$(echo "$createContactResponseFull" | sed '$d')
+
+display_api_response "${createContactCode}"
 
 # Check if response has proper JSON structure with success field (API or CLI format)
 if [[ "$createContactResponse" =~ '"success"' ]]; then
@@ -659,10 +699,12 @@ totaltests=$(( totaltests + 1 ))
 
 # Get the real contact name from the second container (containers[1])
 realContactNameForGet="${realContactContainer}"
-echo -e "\n\t-> Testing GET /api/v1/contacts/:address with ${realContactNameForGet}"
+echo -e "\n\t-> Testing GET /api/v1/contacts/:address"
 
 timestamp=$(date +%s)
 path="/api/v1/contacts/${realContactNameForGet}"
+
+display_api_request "${testContainer}" "GET" "/api/v1/contacts/${realContactNameForGet}" "" "${realContactNameForGet}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
@@ -671,12 +713,17 @@ signature=$(docker exec ${testContainer} php -r "
     echo \$secret . ':' . \$hmac;
 " 2>/dev/null)
 
-getContactResponse=$(docker exec ${testContainer} curl -s \
+getContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
     "http://localhost/api/v1/contacts/${realContactNameForGet}" 2>&1)
+
+getContactCode=$(echo "$getContactResponseFull" | tail -1)
+getContactResponse=$(echo "$getContactResponseFull" | sed '$d')
+
+display_api_response "${getContactCode}"
 
 # Real contact should return success:true with contact data
 if [[ "$getContactResponse" =~ '"success"' ]] && [[ "$getContactResponse" =~ 'true' ]] && [[ "$getContactResponse" =~ '"name"' ]]; then
@@ -696,10 +743,12 @@ totaltests=$(( totaltests + 1 ))
 # Use the real contact name for delete test - this tests the API endpoint response format
 # The delete may fail because it's an active peer, but API should respond properly
 testDeleteAddress="${realContactContainer}"
-echo -e "\n\t-> Testing DELETE /api/v1/contacts/:address with ${testDeleteAddress}"
+echo -e "\n\t-> Testing DELETE /api/v1/contacts/:address"
 
 timestamp=$(date +%s)
 path="/api/v1/contacts/${testDeleteAddress}"
+
+display_api_request "${testContainer}" "DELETE" "/api/v1/contacts/${testDeleteAddress}" "" "${testDeleteAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
@@ -708,13 +757,18 @@ signature=$(docker exec ${testContainer} php -r "
     echo \$secret . ':' . \$hmac;
 " 2>/dev/null)
 
-deleteContactResponse=$(docker exec ${testContainer} curl -s \
+deleteContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
     -X DELETE \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
     "http://localhost/api/v1/contacts/${testDeleteAddress}" 2>&1)
+
+deleteContactCode=$(echo "$deleteContactResponseFull" | tail -1)
+deleteContactResponse=$(echo "$deleteContactResponseFull" | sed '$d')
+
+display_api_response "${deleteContactCode}"
 
 # Response should have proper JSON structure with success field (may be true or false based on contact state)
 if [[ "$deleteContactResponse" =~ '"success"' ]]; then
@@ -733,10 +787,12 @@ totaltests=$(( totaltests + 1 ))
 
 # Use real contact address for block test
 blockAddress="${realContactAddress}"
-echo -e "\n\t-> Testing POST /api/v1/contacts/block/:address with ${blockAddress}"
+echo -e "\n\t-> Testing POST /api/v1/contacts/block/:address"
 
 timestamp=$(date +%s)
 path="/api/v1/contacts/block/${blockAddress}"
+
+display_api_request "${testContainer}" "POST" "/api/v1/contacts/block/${blockAddress}" "" "${blockAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
@@ -745,13 +801,18 @@ signature=$(docker exec ${testContainer} php -r "
     echo \$secret . ':' . \$hmac;
 " 2>/dev/null)
 
-blockContactResponse=$(docker exec ${testContainer} curl -s \
+blockContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
     -X POST \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
     "http://localhost/api/v1/contacts/block/${blockAddress}" 2>&1)
+
+blockContactCode=$(echo "$blockContactResponseFull" | tail -1)
+blockContactResponse=$(echo "$blockContactResponseFull" | sed '$d')
+
+display_api_response "${blockContactCode}"
 
 # Response should have proper JSON structure with success field
 if [[ "$blockContactResponse" =~ '"success"' ]]; then
@@ -770,10 +831,12 @@ totaltests=$(( totaltests + 1 ))
 
 # Use real contact address for unblock test (unblock the contact we just blocked)
 unblockAddress="${realContactAddress}"
-echo -e "\n\t-> Testing POST /api/v1/contacts/unblock/:address with ${unblockAddress}"
+echo -e "\n\t-> Testing POST /api/v1/contacts/unblock/:address"
 
 timestamp=$(date +%s)
 path="/api/v1/contacts/unblock/${unblockAddress}"
+
+display_api_request "${testContainer}" "POST" "/api/v1/contacts/unblock/${unblockAddress}" "" "${unblockAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
@@ -782,13 +845,18 @@ signature=$(docker exec ${testContainer} php -r "
     echo \$secret . ':' . \$hmac;
 " 2>/dev/null)
 
-unblockContactResponse=$(docker exec ${testContainer} curl -s \
+unblockContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
     -X POST \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
     "http://localhost/api/v1/contacts/unblock/${unblockAddress}" 2>&1)
+
+unblockContactCode=$(echo "$unblockContactResponseFull" | tail -1)
+unblockContactResponse=$(echo "$unblockContactResponseFull" | sed '$d')
+
+display_api_response "${unblockContactCode}"
 
 # Response should have proper JSON structure with success field
 if [[ "$unblockContactResponse" =~ '"success"' ]]; then
@@ -804,24 +872,25 @@ fi
 
 # Get a real contact from the container's contacts list for subsequent tests
 echo -e "\n[Real Contact Tests Setup]"
-realContactName=""
-realContactAddress=""
+realContactNameFromViewbalances=""
 
 # Try to get first contact name directly from viewbalances output (path: data.balances.contacts[0].name)
-realContactName=$(docker exec ${testContainer} sh -c "eiou viewbalances --json 2>/dev/null | php -r '\$d=json_decode(file_get_contents(\"php://stdin\"),true);if(isset(\$d[\"data\"][\"balances\"][\"contacts\"][0][\"name\"]))echo \$d[\"data\"][\"balances\"][\"contacts\"][0][\"name\"];'" 2>/dev/null)
+realContactNameFromViewbalances=$(docker exec ${testContainer} sh -c "eiou viewbalances --json 2>/dev/null | php -r '\$d=json_decode(file_get_contents(\"php://stdin\"),true);if(isset(\$d[\"data\"][\"balances\"][\"contacts\"][0][\"name\"]))echo \$d[\"data\"][\"balances\"][\"contacts\"][0][\"name\"];'" 2>/dev/null)
 
-if [[ -n "$realContactName" ]]; then
-    printf "\t   Found real contact: ${realContactName}\n"
+if [[ -n "$realContactNameFromViewbalances" ]]; then
+    printf "\t   Found real contact from viewbalances: ${realContactNameFromViewbalances}\n"
 
     ############################ REAL CONTACT GET TEST ############################
 
     echo -e "\n[Get Real Contact API Test]"
     totaltests=$(( totaltests + 1 ))
 
-    echo -e "\n\t-> Testing GET /api/v1/contacts/:address with real contact"
+    echo -e "\n\t-> Testing GET /api/v1/contacts/:address (viewbalances contact)"
 
     timestamp=$(date +%s)
-    path="/api/v1/contacts/${realContactName}"
+    path="/api/v1/contacts/${realContactNameFromViewbalances}"
+
+    display_api_request "${testContainer}" "GET" "/api/v1/contacts/${realContactNameFromViewbalances}" "" "${realContactNameFromViewbalances}"
 
     signature=$(docker exec ${testContainer} php -r "
         \$secret = '${apiSecret}';
@@ -830,12 +899,17 @@ if [[ -n "$realContactName" ]]; then
         echo \$secret . ':' . \$hmac;
     " 2>/dev/null)
 
-    realContactResponse=$(docker exec ${testContainer} curl -s \
+    realContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
         -H "X-API-Key: ${apiKeyId}" \
         -H "X-API-Timestamp: ${timestamp}" \
         -H "X-API-Signature: ${signature}" \
         -H "Content-Type: application/json" \
-        "http://localhost/api/v1/contacts/${realContactName}" 2>&1)
+        "http://localhost/api/v1/contacts/${realContactNameFromViewbalances}" 2>&1)
+
+    realContactCode=$(echo "$realContactResponseFull" | tail -1)
+    realContactResponse=$(echo "$realContactResponseFull" | sed '$d')
+
+    display_api_response "${realContactCode}"
 
     # Real contact should return success:true with contact data (allow for JSON whitespace)
     if [[ "$realContactResponse" =~ '"success"' ]] && [[ "$realContactResponse" =~ 'true' ]] && [[ "$realContactResponse" =~ '"name"' ]]; then
@@ -852,11 +926,13 @@ if [[ -n "$realContactName" ]]; then
     echo -e "\n[Send to Real Contact API Test]"
     totaltests=$(( totaltests + 1 ))
 
-    echo -e "\n\t-> Testing POST /api/v1/wallet/send with real contact"
+    echo -e "\n\t-> Testing POST /api/v1/wallet/send (viewbalances contact)"
 
     timestamp=$(date +%s)
     path="/api/v1/wallet/send"
-    realSendBody="{\"address\":\"${realContactName}\",\"amount\":\"0.01\",\"currency\":\"USD\"}"
+    realSendBody="{\"address\":\"${realContactNameFromViewbalances}\",\"amount\":\"0.01\",\"currency\":\"USD\"}"
+
+    display_api_request "${testContainer}" "POST" "/api/v1/wallet/send" "${realSendBody}" "${realContactNameFromViewbalances}"
 
     signature=$(docker exec ${testContainer} php -r "
         \$secret = '${apiSecret}';
@@ -866,7 +942,7 @@ if [[ -n "$realContactName" ]]; then
         echo \$secret . ':' . \$hmac;
     " 2>/dev/null)
 
-    realSendResponse=$(docker exec ${testContainer} curl -s \
+    realSendResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
         -X POST \
         -H "X-API-Key: ${apiKeyId}" \
         -H "X-API-Timestamp: ${timestamp}" \
@@ -874,6 +950,11 @@ if [[ -n "$realContactName" ]]; then
         -H "Content-Type: application/json" \
         -d "${realSendBody}" \
         "http://localhost/api/v1/wallet/send" 2>&1)
+
+    realSendCode=$(echo "$realSendResponseFull" | tail -1)
+    realSendResponse=$(echo "$realSendResponseFull" | sed '$d')
+
+    display_api_response "${realSendCode}"
 
     # Transaction to real contact should succeed - check for "success": true and "error": null
     if [[ "$realSendResponse" =~ '"success"' ]] && [[ "$realSendResponse" =~ 'true' ]] && [[ "$realSendResponse" =~ '"error": null' || "$realSendResponse" =~ '"error":null' ]]; then
