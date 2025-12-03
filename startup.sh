@@ -25,7 +25,7 @@ done
 if [[ $(php -r 'require_once "/etc/eiou/src/startup/configCheck.php"; echo $run;') ]]; then
     # RESTORE takes priority over QUICKSTART
     if [ "$RESTORE" != "false" ]; then
-        echo "Restore mode enabled. Restoring wallet from seed phrase..."
+        echo "Restore mode enabled. Restoring wallet from provided seed phrase..."
         eiou generate restore $RESTORE
         echo "Wallet restore completed."
     elif [ "$QUICKSTART" != "false" ]; then
