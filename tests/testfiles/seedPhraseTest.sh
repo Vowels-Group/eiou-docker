@@ -88,6 +88,7 @@ masterKeyBackup=$(docker exec ${testContainer} cat /etc/eiou/.master.key 2>/dev/
 
 if [[ -n "$masterKeyBackup" ]]; then
     printf "\t   Master key backed up ${GREEN}PASSED${NC}\n"
+    printf "\t   ${YELLOW}PROOF - Master Key (base64): ${masterKeyBackup}${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   Master key backup ${RED}FAILED${NC}\n"
@@ -98,6 +99,10 @@ fi
 
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 4: Deleting userconfig.json to simulate fresh wallet"
+
+# Get timestamp of original file BEFORE deletion
+originalTimestamp=$(docker exec ${testContainer} stat -c '%Y %y' /etc/eiou/userconfig.json 2>/dev/null)
+printf "\t   ${YELLOW}PROOF - Original file timestamp: ${originalTimestamp}${NC}\n"
 
 deleteResult=$(docker exec ${testContainer} rm -f /etc/eiou/userconfig.json 2>&1)
 verifyDeleted=$(docker exec ${testContainer} test -f /etc/eiou/userconfig.json && echo "EXISTS" || echo "DELETED")
@@ -122,7 +127,10 @@ restoreOutput=$(docker exec ${testContainer} eiou generate restore ${seedPhrase}
 verifyRestored=$(docker exec ${testContainer} test -f /etc/eiou/userconfig.json && echo "CREATED" || echo "NOT_CREATED")
 
 if [[ "$verifyRestored" == "CREATED" ]]; then
+    # Get timestamp of restored file AFTER creation
+    restoredTimestamp=$(docker exec ${testContainer} stat -c '%Y %y' /etc/eiou/userconfig.json 2>/dev/null)
     printf "\t   Wallet restored from seed phrase ${GREEN}PASSED${NC}\n"
+    printf "\t   ${YELLOW}PROOF - Restored file timestamp: ${restoredTimestamp}${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   Wallet restoration ${RED}FAILED${NC}\n"
