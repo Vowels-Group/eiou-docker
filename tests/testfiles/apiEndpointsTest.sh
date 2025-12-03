@@ -14,6 +14,19 @@ failure=0
 # Use first container for testing
 testContainer="${containers[0]}"
 
+# Get real contact address from containerAddresses (populated by hostnameTest.sh or torAddressTest.sh)
+# The second container in the topology is a known contact of the first
+realContactContainer="${containers[1]}"
+realContactAddress="${containerAddresses[${realContactContainer}]}"
+
+if [[ -z "$realContactAddress" ]]; then
+    echo -e "\t   ${YELLOW}Warning: containerAddresses not populated. Using fallback contact detection.${NC}"
+fi
+
+echo -e "\t   Test container: ${testContainer}"
+echo -e "\t   Real contact: ${realContactContainer} (${realContactAddress})"
+echo -e "\t   Mode: ${MODE}"
+
 ############################ API KEY SETUP ############################
 
 echo -e "\n[API Key Setup]"
@@ -566,11 +579,12 @@ fi
 echo -e "\n[Wallet Send API Test]"
 totaltests=$(( totaltests + 1 ))
 
-echo -e "\n\t-> Testing POST /api/v1/wallet/send"
+echo -e "\n\t-> Testing POST /api/v1/wallet/send to ${realContactAddress}"
 
 timestamp=$(date +%s)
 path="/api/v1/wallet/send"
-sendBody='{"address":"test-address-12345","amount":"1.00","currency":"USD"}'
+# Use real contact address from containerAddresses
+sendBody="{\"address\":\"${realContactAddress}\",\"amount\":\"0.01\",\"currency\":\"USD\"}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
@@ -589,15 +603,10 @@ sendResponse=$(docker exec ${testContainer} curl -s \
     -d "${sendBody}" \
     "http://localhost/api/v1/wallet/send" 2>&1)
 
-# Basic endpoint test with invalid address - may fail with empty response due to unhandled error
-# The real contact send test validates actual functionality
-if [[ "$sendResponse" =~ '"success"' ]]; then
+# Transaction to real contact should succeed with proper response
+if [[ "$sendResponse" =~ '"success"' ]] && [[ "$sendResponse" =~ 'true' ]] && [[ "$sendResponse" =~ '"error": null' || "$sendResponse" =~ '"error":null' ]]; then
     printf "\t   POST /api/v1/wallet/send ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
-elif [[ -z "$sendResponse" ]]; then
-    # Empty response indicates server error - test real contact send instead
-    printf "\t   POST /api/v1/wallet/send ${YELLOW}SKIPPED${NC} (endpoint tested with real contact below)\n"
-    # Don't count as failure since real contact test validates the endpoint
 else
     printf "\t   POST /api/v1/wallet/send ${RED}FAILED${NC}\n"
     printf "\t   Response: ${sendResponse}\n"
@@ -609,13 +618,12 @@ fi
 echo -e "\n[Contact Creation API Test]"
 totaltests=$(( totaltests + 1 ))
 
-echo -e "\n\t-> Testing POST /api/v1/contacts"
+echo -e "\n\t-> Testing POST /api/v1/contacts with ${realContactAddress}"
 
 timestamp=$(date +%s)
 path="/api/v1/contacts"
-# Use a simple test address - contact add will fail but API should respond properly
-testContactAddress="test-contact-api-test"
-contactBody="{\"name\":\"API Test Contact\",\"address\":\"${testContactAddress}\"}"
+# Use real contact address from containerAddresses - may already exist but API should respond properly
+contactBody="{\"name\":\"API Test Contact\",\"address\":\"${realContactAddress}\"}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
@@ -649,12 +657,12 @@ fi
 echo -e "\n[Get Contact API Test]"
 totaltests=$(( totaltests + 1 ))
 
-echo -e "\n\t-> Testing GET /api/v1/contacts/:address"
+# Get the real contact name from the second container (containers[1])
+realContactNameForGet="${realContactContainer}"
+echo -e "\n\t-> Testing GET /api/v1/contacts/:address with ${realContactNameForGet}"
 
 timestamp=$(date +%s)
-# Use a simple address without special characters to avoid Apache routing issues
-testGetAddress="nonexistent-test-contact"
-path="/api/v1/contacts/${testGetAddress}"
+path="/api/v1/contacts/${realContactNameForGet}"
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
@@ -668,10 +676,10 @@ getContactResponse=$(docker exec ${testContainer} curl -s \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/contacts/${testGetAddress}" 2>&1)
+    "http://localhost/api/v1/contacts/${realContactNameForGet}" 2>&1)
 
-# Response should have proper format - expect "contact not found" error with proper structure
-if [[ "$getContactResponse" =~ '"success"' ]] && [[ "$getContactResponse" =~ '"request_id"' ]]; then
+# Real contact should return success:true with contact data
+if [[ "$getContactResponse" =~ '"success"' ]] && [[ "$getContactResponse" =~ 'true' ]] && [[ "$getContactResponse" =~ '"name"' ]]; then
     printf "\t   GET /api/v1/contacts/:address ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -685,11 +693,12 @@ fi
 echo -e "\n[Delete Contact API Test]"
 totaltests=$(( totaltests + 1 ))
 
-echo -e "\n\t-> Testing DELETE /api/v1/contacts/:address"
+# Use the real contact name for delete test - this tests the API endpoint response format
+# The delete may fail because it's an active peer, but API should respond properly
+testDeleteAddress="${realContactContainer}"
+echo -e "\n\t-> Testing DELETE /api/v1/contacts/:address with ${testDeleteAddress}"
 
 timestamp=$(date +%s)
-# Use same simple address
-testDeleteAddress="nonexistent-test-contact"
 path="/api/v1/contacts/${testDeleteAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
@@ -707,7 +716,7 @@ deleteContactResponse=$(docker exec ${testContainer} curl -s \
     -H "Content-Type: application/json" \
     "http://localhost/api/v1/contacts/${testDeleteAddress}" 2>&1)
 
-# Response should have proper JSON structure with success field (API or CLI format)
+# Response should have proper JSON structure with success field (may be true or false based on contact state)
 if [[ "$deleteContactResponse" =~ '"success"' ]]; then
     printf "\t   DELETE /api/v1/contacts/:address ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
@@ -722,11 +731,11 @@ fi
 echo -e "\n[Block Contact API Test]"
 totaltests=$(( totaltests + 1 ))
 
-echo -e "\n\t-> Testing POST /api/v1/contacts/block/:address"
+# Use real contact address for block test
+blockAddress="${realContactAddress}"
+echo -e "\n\t-> Testing POST /api/v1/contacts/block/:address with ${blockAddress}"
 
 timestamp=$(date +%s)
-# Use a test address for block (doesn't need to exist, just tests endpoint)
-blockAddress="test-block-contact"
 path="/api/v1/contacts/block/${blockAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
@@ -759,11 +768,11 @@ fi
 echo -e "\n[Unblock Contact API Test]"
 totaltests=$(( totaltests + 1 ))
 
-echo -e "\n\t-> Testing POST /api/v1/contacts/unblock/:address"
+# Use real contact address for unblock test (unblock the contact we just blocked)
+unblockAddress="${realContactAddress}"
+echo -e "\n\t-> Testing POST /api/v1/contacts/unblock/:address with ${unblockAddress}"
 
 timestamp=$(date +%s)
-# Use a test address for unblock
-unblockAddress="test-unblock-contact"
 path="/api/v1/contacts/unblock/${unblockAddress}"
 
 signature=$(docker exec ${testContainer} php -r "
