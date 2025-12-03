@@ -6,6 +6,7 @@
 QUICKSTART=${QUICKSTART:-false}
 
 # Check for restore flag (24-word seed phrase)
+#    RESTORE="word1 word2 .... word24"
 RESTORE=${RESTORE:-false}
 
 # Start services
