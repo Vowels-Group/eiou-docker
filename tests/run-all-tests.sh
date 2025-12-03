@@ -188,6 +188,7 @@ routingTest
 contactListTest
 transactionHistoryTest
 cliCommandsTest
+seedPhraseTest
 "
 
 # Run each test in order

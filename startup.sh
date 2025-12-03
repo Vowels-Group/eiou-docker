@@ -5,6 +5,9 @@
 # Check for quickstart flag
 QUICKSTART=${QUICKSTART:-false}
 
+# Check for restore flag (24-word seed phrase)
+RESTORE=${RESTORE:-false}
+
 # Start services
 service cron start
 service tor start
@@ -19,8 +22,12 @@ done
 
 # Check if userconfig.json was already made and if so if user keys exist, if not build config
 if [[ $(php -r 'require_once "/etc/eiou/src/startup/configCheck.php"; echo $run;') ]]; then
-    # If quickstart flag is set, automatically run generate command
-    if [ "$QUICKSTART" != "false" ]; then
+    # RESTORE takes priority over QUICKSTART
+    if [ "$RESTORE" != "false" ]; then
+        echo "Restore mode enabled. Restoring wallet from seed phrase..."
+        eiou generate restore $RESTORE
+        echo "Wallet restore completed."
+    elif [ "$QUICKSTART" != "false" ]; then
         echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
         eiou generate http://$QUICKSTART
         echo "Generate command completed."
