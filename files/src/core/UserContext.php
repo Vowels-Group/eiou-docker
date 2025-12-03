@@ -261,9 +261,9 @@ class UserContext {
         $locaters = [];
         foreach($this->getUserAddresses() as $address){
             if ($this->isTorAddress($address)){
-                $locaters['Tor'] = $address;
+                $locaters['tor'] = $address;
             } elseif ($this->isHttpAddress($address)) {
-                $locaters['Http'] = $address;
+                $locaters['http'] = $address;
             }
         }
         return $locaters;

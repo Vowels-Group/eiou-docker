@@ -188,6 +188,7 @@ routingTest
 contactListTest
 transactionHistoryTest
 cliCommandsTest
+apiEndpointsTest
 "
 
 # Run each test in order

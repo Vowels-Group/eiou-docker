@@ -178,3 +178,39 @@ function getTransactionsTableSchema() {
         INDEX idx_transactions_memo (memo(255))
     )";
 }
+
+// API Keys table for external API access
+function getApiKeysTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS api_keys (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        key_id VARCHAR(32) NOT NULL UNIQUE,
+        key_hash VARCHAR(64) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        permissions JSON NOT NULL,
+        rate_limit_per_minute INT DEFAULT 100,
+        enabled TINYINT(1) DEFAULT 1,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TIMESTAMP(6) NULL,
+        expires_at TIMESTAMP(6) NULL,
+        INDEX idx_api_keys_key_id (key_id),
+        INDEX idx_api_keys_enabled (enabled),
+        INDEX idx_api_keys_expires (expires_at)
+    )";
+}
+
+// API Request Log table for audit trail
+function getApiRequestLogTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS api_request_log (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        key_id VARCHAR(32) NOT NULL,
+        endpoint VARCHAR(255) NOT NULL,
+        method VARCHAR(10) NOT NULL,
+        ip_address VARCHAR(45) NOT NULL,
+        request_timestamp TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        response_code INT NOT NULL,
+        response_time_ms INT,
+        INDEX idx_api_log_key_id (key_id),
+        INDEX idx_api_log_timestamp (request_timestamp),
+        INDEX idx_api_log_endpoint (endpoint)
+    )";
+}

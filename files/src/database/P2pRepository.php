@@ -164,6 +164,29 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
+     * Retrieve count of P2P messages by status
+     *
+     * @param string $status P2P status (default: 'queued')
+     * @return int count of P2P messages
+     */
+    public function getCountP2pMessagesWithStatus(string $status = 'queued'): int {
+        $query = "SELECT count(*) as count
+                    FROM {$this->tableName}
+                    WHERE status = :status";
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':status', $status);
+        $stmt->execute();
+
+        if (!$stmt) {
+            return 0;
+        }
+
+        $result = $stmt->fetchColumn();
+        return (int) $result ?? 0;
+    }
+
+    /**
      * Retrieve credit currently on hold in P2P for a pubkey
      *
      * @param string $pubkey Sender pubkey

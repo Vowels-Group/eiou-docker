@@ -236,6 +236,21 @@ class ServiceContainer {
     }
 
     /**
+     * Get ApiKeyRepository instance
+     *
+     * @return ApiKeyRepository
+     */
+    public function getApiKeyRepository(): ApiKeyRepository {
+        if (!isset($this->repositories['ApiKeyRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/ApiKeyRepository.php';
+            $this->repositories['ApiKeyRepository'] = new ApiKeyRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['ApiKeyRepository'];
+    }
+
+    /**
      * Get ContactService instance
      *
      * @return ContactService

@@ -373,6 +373,25 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Get all contacts by status (non-user initiated)
+     *
+     * @param string $status Contact status (default: 'pending')
+     * @return array Array of contacts with status
+     */
+    public function getContactsByStatus(string $status): array {
+        $query = "SELECT * 
+                    FROM {$this->tableName}
+                    WHERE status = :status";
+        $stmt = $this->execute($query,[':status' => $status]);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
      * Get user pending contacts (requests sent by user)
      *
      * @return array Array of pending contacts
