@@ -959,7 +959,7 @@ class ContactRepository extends AbstractRepository {
      * @return array Array of contacts
      */
     public function searchContacts(?string $name = null): array {
-        $query = "SELECT a.*, c.name, c.fee_percent, c.credit_limit, c.currency 
+        $query = "SELECT a.*, c.name, c.fee_percent, c.credit_limit, c.currency, c.status 
                     FROM {$this->tableName} c 
                     JOIN addresses a
                     ON c.pubkey_hash = a.pubkey_hash"; 
