@@ -3,26 +3,12 @@
 set -e # Stop script on failure
 
 # Check if network exists and create it if necessary
-if docker network inspect eioud-network >/dev/null 2>&1; then
+if docker network inspect "${network}" >/dev/null 2>&1; then
     echo "Network already exists."
 else
     echo "Creating network..."
-    docker network create --driver bridge eioud-network
+    docker network create --driver bridge "${network}"
 fi
-
-# Function to remove a container if it exists
-remove_container_if_exists() {
-    local container_name=$1
-    if docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
-        echo "Removing existing container: $container_name..."
-        docker rm -f "$container_name"
-        echo "Removing any volumes of container: $container_name..."
-        docker volume rm "$container_name-mysql-data"
-        docker volume rm "$container_name-files"
-        docker volume rm "$container_name-index"
-        docker volume rm "$container_name-eiou"
-    fi
-}
 
 declare -A containerAddresses
 

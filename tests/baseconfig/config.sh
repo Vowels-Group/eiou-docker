@@ -9,6 +9,8 @@ NC='\033[0m'                # Revert to normal color
 CHECK='\u2714'              # Checkmark
 CROSS='\u274c'              # Crossmark
 
+network="eioud-network"
+
 #############################################################################
 
 
@@ -37,6 +39,20 @@ function determineTransport(){
 
     elif [[ ${address} =~ \.onion$ ]]; then
         echo 'tor'
+    fi
+}
+
+# Function to remove a container if it exists and any volumes associated
+remove_container_if_exists() {
+    local container_name=$1
+    if docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
+        echo "Removing existing container: $container_name..."
+        docker rm -f "$container_name"
+        echo "Removing any volumes of container: $container_name..."
+        docker volume rm "$container_name-mysql-data"
+        docker volume rm "$container_name-files"
+        docker volume rm "$container_name-index"
+        docker volume rm "$container_name-eiou"
     fi
 }
 
