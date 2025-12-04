@@ -148,9 +148,6 @@ class CliService {
                     }
                     $value = intval($argv[3]);
                 }
-            } elseif(strtolower($argv[2]) === 'localhostonly'){
-                $key = 'localhostOnly';
-                $value = ($argv[3] === '1');
             } elseif(strtolower($argv[2]) === 'defaulttransportmode'){
                 $key = 'defaultTransportMode';
                 $value = strtolower($argv[3]);
@@ -185,9 +182,8 @@ class CliService {
             echo "\t5. Maximum Peer to Peer Level\n";
             echo "\t6. Default Peer to Peer Expiration\n";
             echo "\t7. Maximum lines of Balance/Transaction output\n";
-            echo "\t8. Access Mode\n";
-            echo "\t9. Default Transport Type\n";
-            echo "\t10. Hostname\n";
+            echo "\t8. Default Transport Type\n";
+            echo "\t9. Hostname\n";
             echo "\t0. Cancel\n";
 
             // Read user input
@@ -276,18 +272,12 @@ class CliService {
                     break;
 
                 case '8':
-                    echo "Enter access mode (0 for Network Enabled, 1 for LocalHost Only): ";
-                    $key = 'localhostOnly';
-                    $value = (trim(fgets(STDIN)) === '1');
-                    break;
-
-                case '9':
                     echo "Enter new default transport type (e.g. http, tor): ";
                     $key = 'defaultTransportMode';
                     $value = strtolower(trim(fgets(STDIN)));
                     break;
 
-                case '10':
+                case '9':
                     echo "Enter new hostname (e.g. http://httpA): ";
                     $key = 'hostname';
                     $validation = InputValidator::validateHostname(strtolower(trim(fgets(STDIN))));
@@ -342,7 +332,6 @@ class CliService {
             'max_p2p_level' => $this->currentUser->getMaxP2pLevel(),
             'p2p_expiration_seconds' => $this->currentUser->getP2pExpirationTime(),
             'max_output_lines' => $this->currentUser->getMaxOutput(),
-            'access_mode' => $this->currentUser->isLocalhostOnly() ? 'localhost_only' : 'network_enabled',
             'default_transport_mode' => $this->currentUser->getDefaultTransportMode()
         ];
 
@@ -357,7 +346,6 @@ class CliService {
             echo "\tMaximum Peer to Peer Level: " .  $settings['max_p2p_level'] . "\n";
             echo "\tDefault Peer to Peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
             echo "\tDefault Maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
-            echo "\tAccess Mode: " . ($this->currentUser->isLocalhostOnly() ? "Local Access Only" : "Network Authorized") . "\n";
             echo "\tDefault Transport Mode: " . $settings['default_transport_mode'] . "\n";
         }
     }
@@ -480,15 +468,13 @@ class CliService {
             ],
             'generate' => [
                 'description' => 'Generate a new wallet or restore from seed phrase',
-                'usage' => 'generate [restore <24 words>] [torAddressOnly] [hostname]',
+                'usage' => 'generate [restore <24 words>] [hostname]',
                 'arguments' => [
                     'restore' => ['type' => 'optional', 'description' => 'Restore wallet from BIP39 seed phrase (24 words)'],
-                    'torAddressOnly' => ['type' => 'optional', 'description' => 'Generate without seed phrase display'],
                     'hostname' => ['type' => 'optional', 'description' => 'HTTP/S hostname for the wallet']
                 ],
                 'examples' => [
                     'generate' => 'Create new wallet with seed phrase',
-                    'generate torAddressOnly' => 'Create wallet without seed phrase',
                     'generate restore word1 word2 ... word24' => 'Restore from 24-word seed'
                 ]
             ]

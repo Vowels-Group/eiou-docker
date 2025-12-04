@@ -32,7 +32,6 @@ class Wallet{
             'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,              // Default maximum level for Peer to Peer propagation
             'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,           // Default expiration time for Peer to Peer requests in seconds
             'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,             // Maximum lines of output for multi-line output
-            'localhostOnly' => Constants::LOCAL_HOST_ONLY,                          // Network connection limited to localhost only or not
             'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE             // Default way to send messages (fallback in case uncertain)
         ]);
         file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);
@@ -185,7 +184,6 @@ class Wallet{
             'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,
             'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,
             'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,
-            'localhostOnly' => Constants::LOCAL_HOST_ONLY,
             'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE
         ]);
         file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);

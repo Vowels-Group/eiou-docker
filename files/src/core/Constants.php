@@ -123,7 +123,6 @@ class Constants {
     const CSRF_TOKEN_LENGTH = 64; // 32 bytes hex encoded
 
     // Network
-    const LOCAL_HOST_ONLY = true;
     const DEFAULT_TRANSPORT_MODE = 'tor';
 
     // P2P Network

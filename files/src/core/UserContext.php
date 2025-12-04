@@ -374,16 +374,6 @@ class UserContext {
     }
 
     /**
-     * Check if localhost only mode is enabled
-     *
-     * @return bool
-     */
-    public function isLocalhostOnly(): bool {
-        return filter_var($this->get('localhostOnly'), FILTER_VALIDATE_BOOLEAN) ?? Constants::LOCAL_HOST_ONLY;
-    }
-
-
-    /**
      * Get deafult transport type for messages
      *
      * @return string
