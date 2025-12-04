@@ -3,6 +3,9 @@
 # Test seed phrase generate and restore functionality
 # Verifies that restoring from a seed phrase yields the same keys as before
 # PR #198 - Seed phrase deterministic derivation test
+#
+# NOTE: All paths use double slashes (//etc/eiou/) to prevent Git Bash on Windows
+# from converting /etc/ to C:/Program Files/Git/etc/. This is safe on Linux too.
 
 echo -e "\nTesting seed phrase generate and restore functionality..."
 
@@ -14,6 +17,11 @@ failure=0
 # Use first container for testing
 testContainer="${containers[0]}"
 
+# Define paths with double slashes to prevent Git Bash MSYS path conversion
+EIOU_DIR="//etc//eiou"
+USERCONFIG="${EIOU_DIR}//userconfig.json"
+MASTER_KEY="${EIOU_DIR}//.master.key"
+
 echo -e "\n[Seed Phrase Restore Test on ${testContainer}]"
 
 ############################ STORE ORIGINAL PUBLIC KEY ############################
@@ -22,7 +30,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 1: Storing original public key from userconfig.json"
 
 originalPublicKey=$(docker exec ${testContainer} php -r '
-    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["public"])) {
         echo $json["public"];
     } else {
@@ -49,8 +57,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 2: Decrypting seed phrase from encrypted mnemonic"
 
 seedPhrase=$(docker exec ${testContainer} php -r '
-    require_once "/etc/eiou/src/security/KeyEncryption.php";
-    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["mnemonic_encrypted"])) {
         $mnemonic = KeyEncryption::decrypt($json["mnemonic_encrypted"]);
         echo $mnemonic;
@@ -84,15 +92,15 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3: Backing up master key before deletion"
 
 # Show file permissions for debugging
-masterKeyPerms=$(docker exec ${testContainer} ls -la /etc/eiou/.master.key 2>&1)
+masterKeyPerms=$(docker exec ${testContainer} ls -la ${MASTER_KEY} 2>&1)
 printf "\t   ${YELLOW}DEBUG - Master key file info: ${masterKeyPerms}${NC}\n"
 
 # First check if master key file exists
-masterKeyExists=$(docker exec ${testContainer} test -f /etc/eiou/.master.key && echo "EXISTS" || echo "NOT_FOUND")
+masterKeyExists=$(docker exec ${testContainer} test -f ${MASTER_KEY} && echo "EXISTS" || echo "NOT_FOUND")
 
 if [[ "$masterKeyExists" == "EXISTS" ]]; then
     # Backup the master key since it's needed for encryption operations
-    masterKeyBackup=$(docker exec ${testContainer} cat /etc/eiou/.master.key 2>&1 | base64)
+    masterKeyBackup=$(docker exec ${testContainer} cat ${MASTER_KEY} 2>&1 | base64)
 
     if [[ -n "$masterKeyBackup" ]]; then
         printf "\t   Master key backed up ${GREEN}PASSED${NC}\n"
@@ -114,15 +122,15 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 4: Deleting userconfig.json to simulate fresh wallet"
 
 # Show file permissions for debugging
-userconfigPerms=$(docker exec ${testContainer} ls -la /etc/eiou/userconfig.json 2>&1)
+userconfigPerms=$(docker exec ${testContainer} ls -la ${USERCONFIG} 2>&1)
 printf "\t   ${YELLOW}DEBUG - Userconfig file info: ${userconfigPerms}${NC}\n"
 
 # Check if userconfig.json exists before getting timestamp
-userconfigExists=$(docker exec ${testContainer} test -f /etc/eiou/userconfig.json && echo "EXISTS" || echo "NOT_FOUND")
+userconfigExists=$(docker exec ${testContainer} test -f ${USERCONFIG} && echo "EXISTS" || echo "NOT_FOUND")
 
 if [[ "$userconfigExists" == "EXISTS" ]]; then
     # Get timestamp of original file BEFORE deletion
-    originalTimestamp=$(docker exec ${testContainer} stat -c '%Y %y' /etc/eiou/userconfig.json 2>&1)
+    originalTimestamp=$(docker exec ${testContainer} stat -c '%Y %y' ${USERCONFIG} 2>&1)
     printf "\t   ${YELLOW}PROOF - Original file timestamp: ${originalTimestamp}${NC}\n"
 else
     printf "\t   ${RED}ERROR - userconfig.json does not exist before deletion (test -f returned NOT_FOUND)${NC}\n"
@@ -130,8 +138,8 @@ else
     originalTimestamp="FILE_NOT_FOUND"
 fi
 
-deleteResult=$(docker exec ${testContainer} rm -f /etc/eiou/userconfig.json 2>&1)
-verifyDeleted=$(docker exec ${testContainer} test -f /etc/eiou/userconfig.json && echo "EXISTS" || echo "DELETED")
+deleteResult=$(docker exec ${testContainer} rm -f ${USERCONFIG} 2>&1)
+verifyDeleted=$(docker exec ${testContainer} test -f ${USERCONFIG} && echo "EXISTS" || echo "DELETED")
 
 if [[ "$verifyDeleted" == "DELETED" ]]; then
     printf "\t   userconfig.json deleted ${GREEN}PASSED${NC}\n"
@@ -154,11 +162,11 @@ restoreOutput=$(docker exec ${testContainer} eiou generate restore ${seedPhrase}
 sleep 1
 
 # Check if restore was successful by verifying userconfig.json was created
-verifyRestored=$(docker exec ${testContainer} test -f /etc/eiou/userconfig.json && echo "CREATED" || echo "NOT_CREATED")
+verifyRestored=$(docker exec ${testContainer} test -f ${USERCONFIG} && echo "CREATED" || echo "NOT_CREATED")
 
 if [[ "$verifyRestored" == "CREATED" ]]; then
     # Get timestamp of restored file AFTER creation
-    restoredTimestamp=$(docker exec ${testContainer} stat -c '%Y %y' /etc/eiou/userconfig.json 2>&1)
+    restoredTimestamp=$(docker exec ${testContainer} stat -c '%Y %y' ${USERCONFIG} 2>&1)
     printf "\t   Wallet restored from seed phrase ${GREEN}PASSED${NC}\n"
     printf "\t   ${YELLOW}PROOF - Restored file timestamp: ${restoredTimestamp}${NC}\n"
     passed=$(( passed + 1 ))
@@ -174,7 +182,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 6: Retrieving restored public key"
 
 restoredPublicKey=$(docker exec ${testContainer} php -r '
-    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["public"])) {
         echo $json["public"];
     } else {
@@ -220,7 +228,7 @@ echo -e "\n\t-> Step 8: Verifying wallet configuration is intact"
 
 # Check that the restored wallet has required fields
 configCheck=$(docker exec ${testContainer} php -r '
-    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     $hasPublicKey = isset($json["public"]);
     $hasPrivateKey = isset($json["private_encrypted"]);
     $hasMnemonic = isset($json["mnemonic_encrypted"]);
