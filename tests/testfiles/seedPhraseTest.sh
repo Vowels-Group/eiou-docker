@@ -83,6 +83,10 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3: Backing up master key before deletion"
 
+# Show file permissions for debugging
+masterKeyPerms=$(docker exec ${testContainer} ls -la /etc/eiou/.master.key 2>&1)
+printf "\t   ${YELLOW}DEBUG - Master key file info: ${masterKeyPerms}${NC}\n"
+
 # First check if master key file exists
 masterKeyExists=$(docker exec ${testContainer} test -f /etc/eiou/.master.key && echo "EXISTS" || echo "NOT_FOUND")
 
@@ -99,7 +103,8 @@ if [[ "$masterKeyExists" == "EXISTS" ]]; then
         failure=$(( failure + 1 ))
     fi
 else
-    printf "\t   Master key backup ${RED}FAILED${NC} - file does not exist\n"
+    printf "\t   Master key backup ${RED}FAILED${NC} - file does not exist (test -f returned NOT_FOUND)\n"
+    printf "\t   ${RED}DEBUG - ls output was: ${masterKeyPerms}${NC}\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -107,6 +112,10 @@ fi
 
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 4: Deleting userconfig.json to simulate fresh wallet"
+
+# Show file permissions for debugging
+userconfigPerms=$(docker exec ${testContainer} ls -la /etc/eiou/userconfig.json 2>&1)
+printf "\t   ${YELLOW}DEBUG - Userconfig file info: ${userconfigPerms}${NC}\n"
 
 # Check if userconfig.json exists before getting timestamp
 userconfigExists=$(docker exec ${testContainer} test -f /etc/eiou/userconfig.json && echo "EXISTS" || echo "NOT_FOUND")
@@ -116,7 +125,8 @@ if [[ "$userconfigExists" == "EXISTS" ]]; then
     originalTimestamp=$(docker exec ${testContainer} stat -c '%Y %y' /etc/eiou/userconfig.json 2>&1)
     printf "\t   ${YELLOW}PROOF - Original file timestamp: ${originalTimestamp}${NC}\n"
 else
-    printf "\t   ${RED}ERROR - userconfig.json does not exist before deletion${NC}\n"
+    printf "\t   ${RED}ERROR - userconfig.json does not exist before deletion (test -f returned NOT_FOUND)${NC}\n"
+    printf "\t   ${RED}DEBUG - ls output was: ${userconfigPerms}${NC}\n"
     originalTimestamp="FILE_NOT_FOUND"
 fi
 
