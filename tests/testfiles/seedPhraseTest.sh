@@ -83,15 +83,23 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3: Backing up master key before deletion"
 
-# Backup the master key since it's needed for encryption operations
-masterKeyBackup=$(docker exec ${testContainer} cat /etc/eiou/.master.key 2>/dev/null | base64)
+# First check if master key file exists
+masterKeyExists=$(docker exec ${testContainer} test -f /etc/eiou/.master.key && echo "EXISTS" || echo "NOT_FOUND")
 
-if [[ -n "$masterKeyBackup" ]]; then
-    printf "\t   Master key backed up ${GREEN}PASSED${NC}\n"
-    printf "\t   ${YELLOW}PROOF - Master Key (base64): ${masterKeyBackup}${NC}\n"
-    passed=$(( passed + 1 ))
+if [[ "$masterKeyExists" == "EXISTS" ]]; then
+    # Backup the master key since it's needed for encryption operations
+    masterKeyBackup=$(docker exec ${testContainer} cat /etc/eiou/.master.key 2>&1 | base64)
+
+    if [[ -n "$masterKeyBackup" ]]; then
+        printf "\t   Master key backed up ${GREEN}PASSED${NC}\n"
+        printf "\t   ${YELLOW}PROOF - Master Key (base64): ${masterKeyBackup}${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   Master key backup ${RED}FAILED${NC} - file exists but could not read\n"
+        failure=$(( failure + 1 ))
+    fi
 else
-    printf "\t   Master key backup ${RED}FAILED${NC}\n"
+    printf "\t   Master key backup ${RED}FAILED${NC} - file does not exist\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -100,9 +108,17 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 4: Deleting userconfig.json to simulate fresh wallet"
 
-# Get timestamp of original file BEFORE deletion
-originalTimestamp=$(docker exec ${testContainer} stat -c '%Y %y' /etc/eiou/userconfig.json 2>/dev/null)
-printf "\t   ${YELLOW}PROOF - Original file timestamp: ${originalTimestamp}${NC}\n"
+# Check if userconfig.json exists before getting timestamp
+userconfigExists=$(docker exec ${testContainer} test -f /etc/eiou/userconfig.json && echo "EXISTS" || echo "NOT_FOUND")
+
+if [[ "$userconfigExists" == "EXISTS" ]]; then
+    # Get timestamp of original file BEFORE deletion
+    originalTimestamp=$(docker exec ${testContainer} stat -c '%Y %y' /etc/eiou/userconfig.json 2>&1)
+    printf "\t   ${YELLOW}PROOF - Original file timestamp: ${originalTimestamp}${NC}\n"
+else
+    printf "\t   ${RED}ERROR - userconfig.json does not exist before deletion${NC}\n"
+    originalTimestamp="FILE_NOT_FOUND"
+fi
 
 deleteResult=$(docker exec ${testContainer} rm -f /etc/eiou/userconfig.json 2>&1)
 verifyDeleted=$(docker exec ${testContainer} test -f /etc/eiou/userconfig.json && echo "EXISTS" || echo "DELETED")
@@ -112,6 +128,7 @@ if [[ "$verifyDeleted" == "DELETED" ]]; then
     passed=$(( passed + 1 ))
 else
     printf "\t   userconfig.json deletion ${RED}FAILED${NC}\n"
+    printf "\t   Delete result: ${deleteResult}\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -123,12 +140,15 @@ echo -e "\n\t-> Step 5: Restoring wallet with 'eiou generate restore <seed_phras
 # Run the restore command with the seed phrase
 restoreOutput=$(docker exec ${testContainer} eiou generate restore ${seedPhrase} 2>&1)
 
+# Small delay to ensure file system sync
+sleep 1
+
 # Check if restore was successful by verifying userconfig.json was created
 verifyRestored=$(docker exec ${testContainer} test -f /etc/eiou/userconfig.json && echo "CREATED" || echo "NOT_CREATED")
 
 if [[ "$verifyRestored" == "CREATED" ]]; then
     # Get timestamp of restored file AFTER creation
-    restoredTimestamp=$(docker exec ${testContainer} stat -c '%Y %y' /etc/eiou/userconfig.json 2>/dev/null)
+    restoredTimestamp=$(docker exec ${testContainer} stat -c '%Y %y' /etc/eiou/userconfig.json 2>&1)
     printf "\t   Wallet restored from seed phrase ${GREEN}PASSED${NC}\n"
     printf "\t   ${YELLOW}PROOF - Restored file timestamp: ${restoredTimestamp}${NC}\n"
     passed=$(( passed + 1 ))
