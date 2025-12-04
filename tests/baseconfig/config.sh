@@ -11,6 +11,11 @@ CROSS='\u274c'              # Crossmark
 
 network="eioud-network"
 
+# Define paths with double slashes to prevent Git Bash MSYS path conversion
+EIOU_DIR="//etc//eiou"
+USERCONFIG="${EIOU_DIR}//userconfig.json"
+MASTER_KEY="${EIOU_DIR}//.master.key"
+
 #############################################################################
 
 
