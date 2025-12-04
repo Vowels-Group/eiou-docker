@@ -203,11 +203,11 @@ printf "================================================================\n"
 printf "                    Cleaning up\n"
 printf "================================================================\n"
 printf "Removing existing test containers and associated volumes (if any)..."
-# for container in "${containers[@]}"; do
-#     remove_container_if_exists $container
-# done
+for container in "${containers[@]}"; do
+    remove_container_if_exists $container
+done
 
-# remove_container_if_exists $restoreContainer
+remove_container_if_exists $restoreContainer
 printf "================================================================\n"
 
 # Final summary
