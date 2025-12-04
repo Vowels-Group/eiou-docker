@@ -85,8 +85,6 @@ class Application {
             $this->loadserviceContainer();
             $this->loadUtilityServiceContainer();
         }
-        
-
     }
 
     /**
@@ -205,6 +203,18 @@ class Application {
     public function generateWallet(array $argv, ?CliOutputManager $output = null): void {
         require_once '/etc/eiou/src/core/Wallet.php';
         Wallet::generateWallet($argv, $output);
+    }
+
+    /**
+     * Restore Wallet from CLI input
+     *
+     * @param array $argv CLI input
+     * @param CliOutputManager|null $output Optional output manager for JSON support
+     * @return void
+     */
+    public function restoreWallet(array $argv, ?CliOutputManager $output = null): void {
+        require_once '/etc/eiou/src/core/Wallet.php';
+        Wallet::restoreWallet($argv, $output);
     }
 
     /**

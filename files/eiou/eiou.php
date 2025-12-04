@@ -28,6 +28,10 @@ $output->setCommand($request);
 if (!$app->currentUserLoaded()) {
   // Generate Wallet
   if($request === "generate"){
+    if(isset($cleanArgv[2]) && $cleanArgv[2] === "restore"){
+      $app->restoreWallet($cleanArgv, $output);
+      exit(0); // Normal termination after wallet restoration
+    }
     $app->generateWallet($cleanArgv, $output);
     exit(0); // Normal termination after wallet generation
   } else{

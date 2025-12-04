@@ -189,6 +189,7 @@ contactListTest
 transactionHistoryTest
 cliCommandsTest
 apiEndpointsTest
+seedPhraseTest
 "
 
 # Run each test in order
@@ -197,7 +198,21 @@ for test_name in $TEST_ORDER; do
     run_test "$test_name" "$test_file" "false"
 done
 
+# Cleaning up all made containers and volumes
+printf "\n"
+printf "================================================================\n"
+printf "                    Cleaning up\n"
+printf "================================================================\n"
+printf "Removing existing test containers and associated volumes (if any)..."
+for container in "${containers[@]}"; do
+    remove_container_if_exists $container
+done
+
+remove_container_if_exists $restoreContainer
+printf "================================================================\n"
+
 # Final summary
+printf "\n"
 printf "\n"
 printf "================================================================\n"
 printf "                    TEST SUITE SUMMARY\n"
@@ -236,3 +251,4 @@ else
     printf "\n${RED}${CROSS} Test suite completed with failures${NC}\n"
     exit 1
 fi
+

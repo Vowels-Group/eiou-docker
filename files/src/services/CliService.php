@@ -479,9 +479,18 @@ class CliService {
                 ]
             ],
             'generate' => [
-                'description' => 'Generate a new wallet',
-                'usage' => 'generate',
-                'arguments' => []
+                'description' => 'Generate a new wallet or restore from seed phrase',
+                'usage' => 'generate [restore <24 words>] [torAddressOnly] [hostname]',
+                'arguments' => [
+                    'restore' => ['type' => 'optional', 'description' => 'Restore wallet from BIP39 seed phrase (24 words)'],
+                    'torAddressOnly' => ['type' => 'optional', 'description' => 'Generate without seed phrase display'],
+                    'hostname' => ['type' => 'optional', 'description' => 'HTTP/S hostname for the wallet']
+                ],
+                'examples' => [
+                    'generate' => 'Create new wallet with seed phrase',
+                    'generate torAddressOnly' => 'Create wallet without seed phrase',
+                    'generate restore word1 word2 ... word24' => 'Restore from 24-word seed'
+                ]
             ]
         ];
 
