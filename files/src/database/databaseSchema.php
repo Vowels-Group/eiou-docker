@@ -186,6 +186,7 @@ function getMessageDeliveryTableSchema() {
         message_type ENUM('transaction', 'p2p', 'rp2p', 'contact') NOT NULL,
         message_id VARCHAR(255) NOT NULL,  /* txid, hash, etc. */
         recipient_address VARCHAR(255) NOT NULL,
+        payload JSON NULL,  /* Stored payload for retry attempts */
         delivery_stage ENUM(
             'pending',      /* Message queued for delivery */
             'sent',         /* Message sent, awaiting acknowledgment */

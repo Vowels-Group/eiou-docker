@@ -31,6 +31,7 @@ class MessageDeliveryRepository extends AbstractRepository {
      * @param string $recipientAddress Recipient's address
      * @param string $stage Initial delivery stage
      * @param int $maxRetries Maximum retry attempts
+     * @param array|null $payload Optional payload to store for retry attempts
      * @return int|false Insert ID or false on failure
      */
     public function createDelivery(
@@ -38,7 +39,8 @@ class MessageDeliveryRepository extends AbstractRepository {
         string $messageId,
         string $recipientAddress,
         string $stage = 'pending',
-        int $maxRetries = 5
+        int $maxRetries = 5,
+        ?array $payload = null
     ) {
         $data = [
             'message_type' => $messageType,
@@ -49,7 +51,53 @@ class MessageDeliveryRepository extends AbstractRepository {
             'retry_count' => 0
         ];
 
+        // Store payload as JSON for retry attempts
+        if ($payload !== null) {
+            $data['payload'] = json_encode($payload);
+        }
+
         return $this->insert($data);
+    }
+
+    /**
+     * Update the payload for an existing delivery record
+     *
+     * @param string $messageType Type of message
+     * @param string $messageId Message identifier
+     * @param array $payload Payload to store
+     * @return bool Success status
+     */
+    public function updatePayload(string $messageType, string $messageId, array $payload): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET payload = :payload,
+                      updated_at = CURRENT_TIMESTAMP(6)
+                  WHERE message_type = :type AND message_id = :id";
+
+        $stmt = $this->execute($query, [
+            ':payload' => json_encode($payload),
+            ':type' => $messageType,
+            ':id' => $messageId
+        ]);
+
+        return $stmt !== false;
+    }
+
+    /**
+     * Get the stored payload for a delivery record
+     *
+     * @param string $messageType Type of message
+     * @param string $messageId Message identifier
+     * @return array|null Decoded payload or null
+     */
+    public function getPayload(string $messageType, string $messageId): ?array {
+        $delivery = $this->getByMessage($messageType, $messageId);
+
+        if (!$delivery || empty($delivery['payload'])) {
+            return null;
+        }
+
+        $payload = json_decode($delivery['payload'], true);
+        return is_array($payload) ? $payload : null;
     }
 
     /**
