@@ -293,6 +293,9 @@ class ServiceContainer {
     /**
      * Get TransactionService instance
      *
+     * Integrates MessageDeliveryService for reliable transaction message delivery
+     * with retry logic and dead letter queue support.
+     *
      * @return TransactionService
      */
     public function getTransactionService(): TransactionService {
@@ -308,7 +311,8 @@ class ServiceContainer {
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->getLogger(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getMessageDeliveryService()
             );
         }
         return $this->services['TransactionService'];

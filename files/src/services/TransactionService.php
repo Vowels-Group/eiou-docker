@@ -3,11 +3,14 @@
 
 require_once __DIR__ . '/../utils/InputValidator.php';
 require_once __DIR__ . '/../cli/CliOutputManager.php';
+require_once __DIR__ . '/MessageDeliveryService.php';
 
 /**
  * Transaction Service
  *
  * Handles all business logic for transaction management.
+ * Integrates with MessageDeliveryService for reliable message delivery
+ * with tracking, retry logic, and dead letter queue support.
  *
  * @package Services
  */
@@ -88,6 +91,11 @@ class TransactionService {
     private UtilPayload $utilPayload;
 
     /**
+     * @var MessageDeliveryService|null Message delivery service for reliable delivery
+     */
+    private ?MessageDeliveryService $messageDeliveryService = null;
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
@@ -97,7 +105,10 @@ class TransactionService {
      * @param Rp2pRepository $rp2pRepository Rp2p repository
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
+     * @param InputValidator $inputValidator InputValidator
+     * @param SecureLogger $secureLogger SecureLogger
      * @param UserContext $currentUser Current user data
+     * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      */
     public function __construct(
         ContactRepository $contactRepository,
@@ -109,7 +120,8 @@ class TransactionService {
         UtilityServiceContainer $utilityContainer,
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
-        UserContext $currentUser
+        UserContext $currentUser,
+        ?MessageDeliveryService $messageDeliveryService = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->addressRepository = $addressRepository;
@@ -124,12 +136,80 @@ class TransactionService {
         $this->inputValidator = $inputValidator;
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
-       
+        $this->messageDeliveryService = $messageDeliveryService;
+
         require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
-      
+
         require_once '/etc/eiou/src/schemas/payloads/UtilPayload.php';
         $this->utilPayload = new UtilPayload($this->currentUser,$this->utilityContainer);
+    }
+
+    /**
+     * Set the message delivery service (for lazy initialization)
+     *
+     * @param MessageDeliveryService $service Message delivery service
+     */
+    public function setMessageDeliveryService(MessageDeliveryService $service): void {
+        $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Send a transaction message with optional delivery tracking
+     *
+     * Uses MessageDeliveryService when available for reliable delivery with
+     * retry logic and dead letter queue support. Falls back to direct transport
+     * if delivery service is not configured.
+     *
+     * @param string $address Recipient address
+     * @param array $payload Message payload
+     * @param string $txid Transaction ID for tracking
+     * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
+     */
+    private function sendTransactionMessage(string $address, array $payload, string $txid): array {
+        // Generate unique message ID for tracking
+        $messageId = 'tx-' . $txid . '-' . time();
+
+        // Use delivery tracking if service is available
+        if ($this->messageDeliveryService !== null) {
+            $result = $this->messageDeliveryService->sendWithTracking(
+                'transaction',
+                $messageId,
+                $address,
+                $payload
+            );
+
+            // Extract response from tracking result
+            $response = $result['response'] ?? null;
+            $rawResponse = $response ? json_encode($response) : '';
+
+            $this->secureLogger->info("Transaction message sent with tracking", [
+                'address' => $address,
+                'message_id' => $messageId,
+                'txid' => $txid,
+                'stage' => $result['stage'] ?? 'unknown',
+                'success' => $result['success'] ?? false
+            ]);
+
+            return [
+                'success' => $result['success'] ?? false,
+                'response' => $response,
+                'raw' => $rawResponse,
+                'tracking' => $result,
+                'messageId' => $messageId
+            ];
+        }
+
+        // Fall back to direct transport
+        $rawResponse = $this->transportUtility->send($address, $payload);
+        $response = json_decode($rawResponse, true);
+
+        return [
+            'success' => $response !== null && isset($response['status']),
+            'response' => $response,
+            'raw' => $rawResponse,
+            'messageId' => $messageId
+        ];
     }
 
     /**
@@ -446,30 +526,44 @@ class TransactionService {
 
             // If direct transaction
             if($memo === 'standard'){
-                // If you're sending the direct transaction 
+                // If you're sending the direct transaction
                 if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
                     $payload = $this->transactionPayload->buildStandardFromDatabase($message);
                     $this->transactionRepository->updateStatus($txid,'sent',true);
-                    $response = json_decode($this->transportUtility->send($message['receiver_address'], $payload),true);
+
+                    // Send with delivery tracking
+                    $sendResult = $this->sendTransactionMessage($message['receiver_address'], $payload, $txid);
+                    $response = $sendResult['response'];
                     output(outputTransactionInquiryResponse($response),'SILENT');
 
-                    if($response['status'] === 'accepted'){
+                    if($response && $response['status'] === 'accepted'){
                         $this->transactionRepository->updateStatus($txid,'accepted',true);
-                    } elseif($response['status'] === 'rejected'){
+                    } elseif($response && $response['status'] === 'rejected'){
                         $this->transactionRepository->updateStatus($txid,'rejected',true);
                         output(outputIssueTransactionTryP2p($response),'SILENT');
                         // Send P2P request for failed direct transaction using P2pService directly
                         Application::getInstance()->services->getP2pService()->sendP2pRequestFromFailedDirectTransaction($message);
+                    } elseif(!$sendResult['success']) {
+                        // Message delivery failed after retries
+                        $trackingResult = $sendResult['tracking'] ?? [];
+                        $this->secureLogger->warning("Transaction delivery failed", [
+                            'txid' => $txid,
+                            'attempts' => $trackingResult['attempts'] ?? 'unknown',
+                            'error' => $trackingResult['error'] ?? 'Unknown error',
+                            'moved_to_dlq' => $trackingResult['dlq'] ?? false
+                        ]);
                     }
                 }
-                // If you received the direct transaction 
+                // If you received the direct transaction
                 else{
                     $this->transactionRepository->updateStatus($txid,'completed',true);
                     $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
                     output(outputTransactionAmountReceived($message),'SILENT');
                     $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                     output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
-                    $response = $this->transportUtility->send($message['sender_address'],$payloadTransactionCompleted);
+
+                    // Send completion message with delivery tracking
+                    $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, $txid . '-complete');
                 }
             } else{
                 // If p2p transaction
@@ -498,16 +592,29 @@ class TransactionService {
             $this->p2pRepository->updateStatus($memo,'paid');
             $this->transactionRepository->updateStatus($memo,'sent');
             output(outputSendTransactionOnwards($message),'SILENT');
-            $response = json_decode($this->transportUtility->send($message['receiver_address'], $payload),true);
 
-            if($response['status'] === 'accepted'){
+            // Send with delivery tracking
+            $sendResult = $this->sendTransactionMessage($message['receiver_address'], $payload, $txid);
+            $response = $sendResult['response'];
+
+            if($response && $response['status'] === 'accepted'){
                 $this->transactionRepository->updateStatus($txid,'accepted');
-            } elseif($response['status'] === 'rejected' ){
+            } elseif($response && $response['status'] === 'rejected'){
                 $this->p2pRepository->updateStatus($memo,'cancelled');
                 $this->transactionRepository->updateStatus($memo,'rejected');
+            } elseif(!$sendResult['success']) {
+                // Message delivery failed after retries
+                $trackingResult = $sendResult['tracking'] ?? [];
+                $this->secureLogger->warning("P2P transaction delivery failed", [
+                    'txid' => $txid,
+                    'memo' => $memo,
+                    'attempts' => $trackingResult['attempts'] ?? 'unknown',
+                    'error' => $trackingResult['error'] ?? 'Unknown error',
+                    'moved_to_dlq' => $trackingResult['dlq'] ?? false
+                ]);
             }
             output(outputTransactionResponse($response),'SILENT');
-        } 
+        }
          // If receiving transaction
         else{
             // If not end-recipient of transaction
@@ -517,16 +624,16 @@ class TransactionService {
 
                 // Create new transaction, from received prior transaction, for sending onwards to sender of rp2p
                 $rp2p = $this->rp2pRepository->getByHash($message['memo']);
-                
-                
+
+
                 $data = $this->transactionPayload->buildForwarding($message, $rp2p);
                 $payload = $this->transactionPayload->buildFromDatabase($data);
 
                 $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($payload,'relay'),true);
-                
+
                 $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
                 output(outputTransactionInsertion($insertTransactionResponse));
-            } 
+            }
              // If end-recipient of transaction
             else{
                 $this->p2pRepository->updateStatus($memo,'completed',true);
@@ -536,7 +643,9 @@ class TransactionService {
                 output(outputTransactionAmountReceived($message),'SILENT');
                 $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                 output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
-                $response = $this->transportUtility->send($message['sender_address'],$payloadTransactionCompleted);
+
+                // Send completion message with delivery tracking
+                $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, $txid . '-p2p-complete');
             }
         }
     }
