@@ -510,45 +510,23 @@ class ContactService {
                 exit(1);
             }
         } else{
-            // Case when sending to an address that does not exist at all (or is experiencing downtime)
-            // Check if message delivery has exhausted all retries before showing error
-            if ($this->messageDeliveryService !== null) {
-                $deliveryStatus = $this->messageDeliveryService->getDeliveryStatus('contact', $messageId);
+            // No valid response - MessageDeliveryService has already exhausted all retries
+            // (retries happen synchronously within sendWithTracking)
+            $attempts = $sendResult['attempts'] ?? 'unknown';
+            $lastError = $sendResult['error'] ?? 'No response received';
 
-                if ($deliveryStatus !== null) {
-                    // If retries are not exhausted, the message is scheduled for retry - inform user
-                    if (!$deliveryStatus['retries_exhausted'] && !$deliveryStatus['is_failed']) {
-                        $output->info(
-                            "Contact request to " . $address . " is being retried. " .
-                            "Attempt " . $deliveryStatus['retry_count'] . " of " . $deliveryStatus['max_retries'] . ".",
-                            [
-                                'contact' => $contactData,
-                                'retry_count' => $deliveryStatus['retry_count'],
-                                'max_retries' => $deliveryStatus['max_retries'],
-                                'status' => 'retry_scheduled'
-                            ]
-                        );
-                        return; // Don't exit - retry is scheduled
-                    }
-
-                    // Retries exhausted - now show the final error
-                    $output->error(
-                        "Failed to reach contact address after " . $deliveryStatus['retry_count'] . " attempts. " .
-                        "Address " . $address . " may not exist or is offline.",
-                        'CONTACT_UNREACHABLE',
-                        503,
-                        [
-                            'contact' => $contactData,
-                            'retry_count' => $deliveryStatus['retry_count'],
-                            'last_error' => $deliveryStatus['last_error']
-                        ]
-                    );
-                    exit(1);
-                }
-            }
-
-            // Fallback for when delivery service is not available or no status found
-            $output->error("Failed to reach contact address. Address " . $address . " may not exist or is offline.", 'CONTACT_UNREACHABLE', 503, ['contact' => $contactData]);
+            $output->error(
+                "Failed to reach contact address after " . $attempts . " attempts. " .
+                "Address " . $address . " may not exist or is offline.",
+                'CONTACT_UNREACHABLE',
+                503,
+                [
+                    'contact' => $contactData,
+                    'attempts' => $attempts,
+                    'last_error' => $lastError,
+                    'moved_to_dlq' => $sendResult['dlq'] ?? false
+                ]
+            );
             exit(1);
         }
     }

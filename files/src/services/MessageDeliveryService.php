@@ -80,7 +80,11 @@ class MessageDeliveryService {
     }
 
     /**
-     * Send a message with delivery tracking
+     * Send a message with delivery tracking and synchronous retry
+     *
+     * Attempts to deliver a message with automatic retries using exponential backoff.
+     * Will retry up to maxRetries times before moving to the Dead Letter Queue.
+     * All retries happen synchronously within this method call.
      *
      * @param string $messageType Type of message (transaction, p2p, rp2p, contact)
      * @param string $messageId Unique identifier (txid, hash, etc.)
@@ -96,7 +100,7 @@ class MessageDeliveryService {
     ): array {
         // Create or get existing delivery record
         if (!$this->deliveryRepository->deliveryExists($messageType, $messageId)) {
-            // Store payload with the delivery record for retry attempts
+            // Store payload with the delivery record
             $this->deliveryRepository->createDelivery(
                 $messageType,
                 $messageId,
@@ -106,64 +110,166 @@ class MessageDeliveryService {
                 $payload
             );
         } else {
-            // Update payload if record already exists (in case payload changed)
+            // Update payload if record already exists
             $this->deliveryRepository->updatePayload($messageType, $messageId, $payload);
         }
 
-        // Update stage to sent
-        $this->deliveryRepository->updateStage($messageType, $messageId, 'sent');
-
-        // Attempt delivery
-        $response = $this->transportUtility->send($recipient, $payload);
-        $decodedResponse = json_decode($response, true);
-
-        // Process response
-        return $this->processDeliveryResponse(
+        // Perform synchronous delivery with retries
+        return $this->attemptDeliveryWithRetries(
             $messageType,
             $messageId,
             $recipient,
-            $payload,
-            $decodedResponse,
-            $response
+            $payload
         );
     }
 
     /**
-     * Process the delivery response and update tracking
+     * Attempt delivery with synchronous retries
+     *
+     * Implements exponential backoff retry logic. Will attempt delivery
+     * up to maxRetries times, sleeping between attempts according to
+     * the calculated backoff delay.
      *
      * @param string $messageType Type of message
      * @param string $messageId Message identifier
      * @param string $recipient Recipient address
-     * @param array $payload Original payload
-     * @param array|null $response Decoded response
-     * @param string $rawResponse Raw response string
-     * @return array Processed result
+     * @param array $payload Message payload
+     * @return array Final result after all attempts
      */
-    private function processDeliveryResponse(
+    private function attemptDeliveryWithRetries(
         string $messageType,
         string $messageId,
         string $recipient,
-        array $payload,
-        ?array $response,
-        string $rawResponse
+        array $payload
     ): array {
-        // No response or connection failure
-        if ($response === null || empty($rawResponse)) {
-            return $this->handleDeliveryFailure(
-                $messageType,
-                $messageId,
-                $recipient,
-                $payload,
-                'No response received from recipient'
-            );
+        $lastError = '';
+        $lastResult = null;
+
+        for ($attempt = 0; $attempt <= $this->maxRetries; $attempt++) {
+            // Update stage to sent
+            $this->deliveryRepository->updateStage($messageType, $messageId, 'sent');
+
+            if (class_exists('SecureLogger')) {
+                SecureLogger::info("Attempting message delivery", [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId,
+                    'recipient' => $recipient,
+                    'attempt' => $attempt + 1,
+                    'max_attempts' => $this->maxRetries + 1
+                ]);
+            }
+
+            try {
+                // Attempt delivery
+                $response = $this->transportUtility->send($recipient, $payload);
+                $decodedResponse = json_decode($response, true);
+
+                // Check for successful response
+                if ($decodedResponse !== null && !empty($response)) {
+                    $status = $decodedResponse['status'] ?? null;
+
+                    // Success cases - don't retry
+                    if (in_array($status, ['received', 'inserted', 'forwarded', 'accepted'])) {
+                        $result = $this->processSuccessfulDelivery(
+                            $messageType,
+                            $messageId,
+                            $status,
+                            $decodedResponse,
+                            $response
+                        );
+                        $result['attempts'] = $attempt + 1;
+                        return $result;
+                    }
+
+                    // Explicit rejection - don't retry
+                    if ($status === 'rejected') {
+                        $this->deliveryRepository->markFailed(
+                            $messageType,
+                            $messageId,
+                            'Rejected: ' . ($decodedResponse['message'] ?? 'No reason')
+                        );
+                        return [
+                            'success' => false,
+                            'stage' => 'rejected',
+                            'message' => $decodedResponse['message'] ?? 'Message rejected by recipient',
+                            'response' => $decodedResponse,
+                            'retry' => false,
+                            'attempts' => $attempt + 1
+                        ];
+                    }
+
+                    // Unknown status - treat as failure, may retry
+                    $lastError = 'Unknown response status: ' . ($status ?? 'null');
+                } else {
+                    // No response or empty response
+                    $lastError = 'No response received from recipient';
+                }
+
+            } catch (Exception $e) {
+                $lastError = 'Transport exception: ' . $e->getMessage();
+
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::logException($e, [
+                        'context' => 'delivery_attempt',
+                        'message_type' => $messageType,
+                        'message_id' => $messageId,
+                        'attempt' => $attempt + 1
+                    ]);
+                }
+            }
+
+            // Update retry count in database
+            $this->deliveryRepository->incrementRetry($messageType, $messageId, 0, $lastError);
+
+            // If we haven't exhausted retries, wait and try again
+            if ($attempt < $this->maxRetries) {
+                $delay = $this->calculateRetryDelay($attempt);
+
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::warning("Delivery attempt failed, retrying", [
+                        'message_type' => $messageType,
+                        'message_id' => $messageId,
+                        'attempt' => $attempt + 1,
+                        'next_attempt' => $attempt + 2,
+                        'delay_seconds' => $delay,
+                        'error' => $lastError
+                    ]);
+                }
+
+                // Sleep for the backoff delay
+                sleep($delay);
+            }
         }
 
-        // Check for multi-stage acknowledgment
-        $status = $response['status'] ?? null;
+        // All retries exhausted - move to DLQ
+        return $this->handleExhaustedRetries(
+            $messageType,
+            $messageId,
+            $recipient,
+            $payload,
+            $lastError
+        );
+    }
 
+    /**
+     * Process a successful delivery response
+     *
+     * @param string $messageType Type of message
+     * @param string $messageId Message identifier
+     * @param string $status Response status
+     * @param array $response Decoded response
+     * @param string $rawResponse Raw response string
+     * @return array Success result
+     */
+    private function processSuccessfulDelivery(
+        string $messageType,
+        string $messageId,
+        string $status,
+        array $response,
+        string $rawResponse
+    ): array {
         switch ($status) {
             case 'received':
-                // Stage 1: Message received
                 $this->deliveryRepository->updateStage($messageType, $messageId, 'received', $rawResponse);
                 return [
                     'success' => true,
@@ -173,7 +279,6 @@ class MessageDeliveryService {
                 ];
 
             case 'inserted':
-                // Stage 2: Stored in database
                 $this->deliveryRepository->updateStage($messageType, $messageId, 'inserted', $rawResponse);
                 return [
                     'success' => true,
@@ -183,7 +288,6 @@ class MessageDeliveryService {
                 ];
 
             case 'forwarded':
-                // Stage 3: Forwarded to next hop
                 $this->deliveryRepository->updateStage($messageType, $messageId, 'forwarded', $rawResponse);
                 return [
                     'success' => true,
@@ -193,7 +297,6 @@ class MessageDeliveryService {
                 ];
 
             case 'accepted':
-                // Final acceptance - mark completed
                 $this->deliveryRepository->markCompleted($messageType, $messageId);
                 return [
                     'success' => true,
@@ -202,108 +305,71 @@ class MessageDeliveryService {
                     'response' => $response
                 ];
 
-            case 'rejected':
-                // Explicit rejection - don't retry
-                $this->deliveryRepository->markFailed($messageType, $messageId, 'Rejected: ' . ($response['message'] ?? 'No reason'));
-                return [
-                    'success' => false,
-                    'stage' => 'rejected',
-                    'message' => $response['message'] ?? 'Message rejected by recipient',
-                    'response' => $response,
-                    'retry' => false
-                ];
-
             default:
-                // Unknown response - treat as failure, may retry
-                return $this->handleDeliveryFailure(
-                    $messageType,
-                    $messageId,
-                    $recipient,
-                    $payload,
-                    'Unknown response status: ' . ($status ?? 'null')
-                );
+                // Shouldn't reach here, but handle gracefully
+                $this->deliveryRepository->updateStage($messageType, $messageId, 'received', $rawResponse);
+                return [
+                    'success' => true,
+                    'stage' => 'received',
+                    'message' => 'Message delivered with status: ' . $status,
+                    'response' => $response
+                ];
         }
     }
 
     /**
-     * Handle delivery failure with retry logic
+     * Handle exhausted retries - move to DLQ
      *
      * @param string $messageType Type of message
      * @param string $messageId Message identifier
      * @param string $recipient Recipient address
      * @param array $payload Message payload
-     * @param string $error Error description
+     * @param string $lastError Last error message
      * @return array Failure result
      */
-    private function handleDeliveryFailure(
+    private function handleExhaustedRetries(
         string $messageType,
         string $messageId,
         string $recipient,
         array $payload,
-        string $error
+        string $lastError
     ): array {
-        // Get current delivery record
+        // Get current retry count from database
         $delivery = $this->deliveryRepository->getByMessage($messageType, $messageId);
-        $retryCount = $delivery ? (int) $delivery['retry_count'] : 0;
+        $retryCount = $delivery ? (int) $delivery['retry_count'] : $this->maxRetries;
 
-        // Check if we've exhausted retries
-        if ($retryCount >= $this->maxRetries) {
-            // Move to Dead Letter Queue
-            $this->dlqRepository->addToQueue(
-                $messageType,
-                $messageId,
-                $payload,
-                $recipient,
-                $retryCount,
-                $error
-            );
+        // Move to Dead Letter Queue
+        $this->dlqRepository->addToQueue(
+            $messageType,
+            $messageId,
+            $payload,
+            $recipient,
+            $retryCount,
+            $lastError
+        );
 
-            $this->deliveryRepository->markFailed($messageType, $messageId, $error);
-
-            if (class_exists('SecureLogger')) {
-                SecureLogger::error("Message delivery exhausted all retries, moved to DLQ", [
-                    'message_type' => $messageType,
-                    'message_id' => $messageId,
-                    'recipient' => $recipient,
-                    'retry_count' => $retryCount,
-                    'error' => $error
-                ]);
-            }
-
-            return [
-                'success' => false,
-                'stage' => 'failed',
-                'message' => 'Message delivery failed after ' . $retryCount . ' retries, moved to DLQ',
-                'error' => $error,
-                'retry' => false,
-                'dlq' => true
-            ];
-        }
-
-        // Calculate exponential backoff delay with jitter
-        $delay = $this->calculateRetryDelay($retryCount);
-
-        // Schedule retry
-        $this->deliveryRepository->incrementRetry($messageType, $messageId, $delay, $error);
+        // Mark as failed in delivery tracking
+        $this->deliveryRepository->markFailed($messageType, $messageId, $lastError);
 
         if (class_exists('SecureLogger')) {
-            SecureLogger::warning("Message delivery failed, scheduling retry", [
+            SecureLogger::error("Message delivery exhausted all retries, moved to DLQ", [
                 'message_type' => $messageType,
                 'message_id' => $messageId,
-                'retry_count' => $retryCount + 1,
-                'next_retry_delay' => $delay,
-                'error' => $error
+                'recipient' => $recipient,
+                'retry_count' => $retryCount,
+                'error' => $lastError
             ]);
         }
 
         return [
             'success' => false,
-            'stage' => 'retry_scheduled',
-            'message' => 'Delivery failed, retry scheduled',
-            'error' => $error,
-            'retry' => true,
-            'retry_count' => $retryCount + 1,
-            'retry_delay' => $delay
+            'stage' => 'failed',
+            'message' => 'Message delivery failed after ' . ($this->maxRetries + 1) . ' attempts',
+            'error' => $lastError,
+            'retry' => false,
+            'dlq' => true,
+            'attempts' => $this->maxRetries + 1,
+            'retry_count' => $retryCount
         ];
     }
 
@@ -330,10 +396,13 @@ class MessageDeliveryService {
     }
 
     /**
-     * Process messages ready for retry
+     * Process messages ready for retry (asynchronous/background processing)
      *
-     * Retrieves messages that are due for retry and attempts to resend them
-     * using the stored payload. Updates delivery status based on result.
+     * NOTE: With the new synchronous retry implementation, this method is primarily
+     * used for background processing of messages that may have been left in a
+     * pending/sent state (e.g., due to server restart during retry).
+     *
+     * For normal operations, retries happen synchronously within sendWithTracking.
      *
      * @param int $limit Maximum messages to process
      * @return array Results with processed count and details
@@ -391,88 +460,48 @@ class MessageDeliveryService {
             }
 
             if (class_exists('SecureLogger')) {
-                SecureLogger::info("Retrying message delivery", [
+                SecureLogger::info("Processing queued message for retry", [
                     'message_type' => $messageType,
                     'message_id' => $messageId,
-                    'retry_count' => $retryCount + 1,
+                    'retry_count' => $retryCount,
                     'recipient' => $recipient
                 ]);
             }
 
-            // Update stage to sent before attempting delivery
-            $this->deliveryRepository->updateStage($messageType, $messageId, 'sent');
+            // Use the synchronous retry mechanism (will attempt remaining retries)
+            $result = $this->attemptDeliveryWithRetries(
+                $messageType,
+                $messageId,
+                $recipient,
+                $payload
+            );
 
-            // Attempt delivery
-            try {
-                $response = $this->transportUtility->send($recipient, $payload);
-                $decodedResponse = json_decode($response, true);
+            $results['processed']++;
 
-                // Process the response
-                $result = $this->processDeliveryResponse(
-                    $messageType,
-                    $messageId,
-                    $recipient,
-                    $payload,
-                    $decodedResponse,
-                    $response
-                );
-
-                $results['processed']++;
-
-                if ($result['success']) {
-                    $results['succeeded']++;
-                    $results['details'][] = [
-                        'message_id' => $messageId,
-                        'status' => 'success',
-                        'stage' => $result['stage'] ?? 'unknown'
-                    ];
-                } else {
-                    // Check if this was moved to DLQ (exhausted retries)
-                    if (isset($result['dlq']) && $result['dlq']) {
-                        $results['failed']++;
-                        $results['details'][] = [
-                            'message_id' => $messageId,
-                            'status' => 'exhausted',
-                            'error' => $result['error'] ?? 'Max retries exceeded'
-                        ];
-                    } else {
-                        // Retry scheduled
-                        $results['details'][] = [
-                            'message_id' => $messageId,
-                            'status' => 'retry_scheduled',
-                            'retry_count' => $result['retry_count'] ?? $retryCount + 1,
-                            'retry_delay' => $result['retry_delay'] ?? 0
-                        ];
-                    }
-                }
-            } catch (Exception $e) {
-                // Handle transport exception
-                $results['processed']++;
-
-                $errorResult = $this->handleDeliveryFailure(
-                    $messageType,
-                    $messageId,
-                    $recipient,
-                    $payload,
-                    'Transport exception: ' . $e->getMessage()
-                );
-
-                if (isset($errorResult['dlq']) && $errorResult['dlq']) {
-                    $results['failed']++;
-                }
-
+            if ($result['success']) {
+                $results['succeeded']++;
                 $results['details'][] = [
                     'message_id' => $messageId,
-                    'status' => 'exception',
-                    'error' => $e->getMessage()
+                    'status' => 'success',
+                    'stage' => $result['stage'] ?? 'unknown',
+                    'attempts' => $result['attempts'] ?? 1
                 ];
-
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::logException($e, [
-                        'context' => 'retry_queue',
-                        'message_type' => $messageType,
-                        'message_id' => $messageId
-                    ]);
+            } else {
+                // Check if this was moved to DLQ (exhausted retries)
+                if (isset($result['dlq']) && $result['dlq']) {
+                    $results['failed']++;
+                    $results['details'][] = [
+                        'message_id' => $messageId,
+                        'status' => 'exhausted',
+                        'error' => $result['error'] ?? 'Max retries exceeded',
+                        'attempts' => $result['attempts'] ?? $this->maxRetries + 1
+                    ];
+                } else {
+                    $results['details'][] = [
+                        'message_id' => $messageId,
+                        'status' => $result['stage'] ?? 'failed',
+                        'error' => $result['error'] ?? 'Unknown error'
+                    ];
                 }
             }
         }
