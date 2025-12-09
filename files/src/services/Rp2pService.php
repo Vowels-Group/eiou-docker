@@ -1,10 +1,14 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/MessageDeliveryService.php';
+
 /**
  * RP2P Service
  *
  * Handles all business logic for R peer-to-peer payment routing.
+ * Integrates with MessageDeliveryService for reliable message delivery
+ * with tracking, retry logic, and dead letter queue support.
  *
  * @package Services
  */
@@ -35,12 +39,12 @@ class RP2pService {
     private UtilityServiceContainer $utilityContainer;
 
     /**
-     * @var ValidationUtilityService Validation utility service 
+     * @var ValidationUtilityService Validation utility service
      */
     private ValidationUtilityService $validationUtility;
 
     /**
-     * @var TransportUtilityService Transport utility service 
+     * @var TransportUtilityService Transport utility service
      */
     private TransportUtilityService $transportUtility;
 
@@ -55,6 +59,11 @@ class RP2pService {
     private Rp2pPayload $rp2pPayload;
 
     /**
+     * @var MessageDeliveryService|null Message delivery service for reliable delivery
+     */
+    private ?MessageDeliveryService $messageDeliveryService = null;
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
@@ -63,6 +72,7 @@ class RP2pService {
      * @param RP2pRepository $rp2pRepository RP2P repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
+     * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      */
     public function __construct(
         ContactRepository $contactRepository,
@@ -70,7 +80,8 @@ class RP2pService {
         P2pRepository $p2pRepository,
         RP2pRepository $rp2pRepository,
         UtilityServiceContainer $utilityContainer,
-        UserContext $currentUser
+        UserContext $currentUser,
+        ?MessageDeliveryService $messageDeliveryService = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->balanceRepository = $balanceRepository;
@@ -80,9 +91,79 @@ class RP2pService {
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
-       
+        $this->messageDeliveryService = $messageDeliveryService;
+
         require_once '/etc/eiou/src/schemas/payloads/Rp2pPayload.php';
         $this->rp2pPayload = new Rp2pPayload($this->currentUser,$this->utilityContainer);
+    }
+
+    /**
+     * Set the message delivery service (for lazy initialization)
+     *
+     * @param MessageDeliveryService $service Message delivery service
+     */
+    public function setMessageDeliveryService(MessageDeliveryService $service): void {
+        $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Send an RP2P message with optional delivery tracking
+     *
+     * Uses MessageDeliveryService when available for reliable delivery with
+     * retry logic and dead letter queue support. Falls back to direct transport
+     * if delivery service is not configured.
+     *
+     * @param string $address Recipient address
+     * @param array $payload Message payload
+     * @param string $hash RP2P hash for tracking
+     * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
+     */
+    private function sendRp2pMessage(string $address, array $payload, string $hash): array {
+        // Generate unique message ID for tracking
+        $messageId = 'rp2p-' . $hash . '-' . time();
+
+        // Use delivery tracking if service is available
+        if ($this->messageDeliveryService !== null) {
+            $result = $this->messageDeliveryService->sendWithTracking(
+                'rp2p',
+                $messageId,
+                $address,
+                $payload
+            );
+
+            // Extract response from tracking result
+            $response = $result['response'] ?? null;
+            $rawResponse = $response ? json_encode($response) : '';
+
+            if (class_exists('SecureLogger')) {
+                SecureLogger::info("RP2P message sent with tracking", [
+                    'address' => $address,
+                    'message_id' => $messageId,
+                    'hash' => $hash,
+                    'stage' => $result['stage'] ?? 'unknown',
+                    'success' => $result['success'] ?? false
+                ]);
+            }
+
+            return [
+                'success' => $result['success'] ?? false,
+                'response' => $response,
+                'raw' => $rawResponse,
+                'tracking' => $result,
+                'messageId' => $messageId
+            ];
+        }
+
+        // Fall back to direct transport
+        $rawResponse = $this->transportUtility->send($address, $payload);
+        $response = json_decode($rawResponse, true);
+
+        return [
+            'success' => $response !== null && isset($response['status']),
+            'response' => $response,
+            'raw' => $rawResponse,
+            'messageId' => $messageId
+        ];
     }
 
     /**
@@ -130,11 +211,34 @@ class RP2pService {
                     output(outputFeeRejection(), 'SILENT');
                 }
             } else{
-                // Send rp2p messages onwards to sender of p2p
+                // Send rp2p messages onwards to sender of p2p with delivery tracking
                 $rP2pPayload = $this->rp2pPayload->build($request); // Build rp2p payload
                 $this->p2pRepository->updateStatus($request['hash'], 'found');  // Update the p2p request status to found
-                $response = json_decode($this->transportUtility->send($p2p['sender_address'], $rP2pPayload),true);
-                output(outputRp2pResponse($response),'SILENT');
+
+                // Use tracked delivery for reliable message sending
+                $sendResult = $this->sendRp2pMessage($p2p['sender_address'], $rP2pPayload, $request['hash']);
+                $response = $sendResult['response'];
+
+                if ($sendResult['success']) {
+                    output(outputRp2pResponse($response), 'SILENT');
+                } else {
+                    // Log delivery failure details
+                    $trackingResult = $sendResult['tracking'] ?? [];
+                    $attempts = $trackingResult['attempts'] ?? 'unknown';
+                    $lastError = $trackingResult['error'] ?? 'No response received';
+
+                    if (class_exists('SecureLogger')) {
+                        SecureLogger::warning("RP2P message delivery failed", [
+                            'hash' => $request['hash'],
+                            'sender_address' => $p2p['sender_address'],
+                            'attempts' => $attempts,
+                            'error' => $lastError,
+                            'moved_to_dlq' => $trackingResult['dlq'] ?? false
+                        ]);
+                    }
+
+                    output(outputRp2pResponse($response ?? ['status' => 'failed', 'error' => $lastError]), 'SILENT');
+                }
             }
         }
     }

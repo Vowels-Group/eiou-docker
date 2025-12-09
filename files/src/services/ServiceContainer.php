@@ -339,7 +339,10 @@ class ServiceContainer {
     }
 
     /**
-     * Get R2pService instance
+     * Get Rp2pService instance
+     *
+     * Integrates MessageDeliveryService for reliable RP2P message delivery
+     * with retry logic and dead letter queue support.
      *
      * @return Rp2pService
      */
@@ -352,7 +355,8 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getMessageDeliveryService()
             );
         }
         return $this->services['Rp2pService'];
