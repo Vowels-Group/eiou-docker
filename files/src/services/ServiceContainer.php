@@ -268,6 +268,9 @@ class ServiceContainer {
     /**
      * Get ContactService instance
      *
+     * Integrates MessageDeliveryService for reliable contact message delivery
+     * with retry logic and dead letter queue support.
+     *
      * @return ContactService
      */
     public function getContactService(): ContactService {
@@ -280,7 +283,8 @@ class ServiceContainer {
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->getLogger(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getMessageDeliveryService()
             );
         }
         return $this->services['ContactService'];

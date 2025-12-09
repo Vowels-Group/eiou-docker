@@ -2,11 +2,14 @@
 # Copyright 2025
 
 require_once __DIR__ . '/../cli/CliOutputManager.php';
+require_once __DIR__ . '/MessageDeliveryService.php';
 
 /**
  * Contact Service
  *
  * Handles all business logic for contact management.
+ * Integrates with MessageDeliveryService for reliable message delivery
+ * with tracking, retry logic, and dead letter queue support.
  *
  * @package Services
  */
@@ -35,7 +38,7 @@ class ContactService {
     private UtilityServiceContainer $utilityContainer;
 
     /**
-     * @var TransportUtilityService Transport utility service 
+     * @var TransportUtilityService Transport utility service
      */
     private TransportUtilityService $transportUtility;
 
@@ -65,6 +68,11 @@ class ContactService {
     private MessagePayload $messagePayload;
 
     /**
+     * @var MessageDeliveryService|null Message delivery service for reliable delivery
+     */
+    private ?MessageDeliveryService $messageDeliveryService = null;
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact Repository
@@ -74,6 +82,7 @@ class ContactService {
      * @param InputValidator $inputValidator InputValidator Util
      * @param SecureLogger $secureLogger SecureLogger Util
      * @param UserContext $currentUser Current user data
+     * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      */
     public function __construct(
         ContactRepository $contactRepository,
@@ -82,8 +91,9 @@ class ContactService {
         UtilityServiceContainer $utilityContainer,
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
-        UserContext $currentUser
-        ) 
+        UserContext $currentUser,
+        ?MessageDeliveryService $messageDeliveryService = null
+        )
     {
         $this->contactRepository = $contactRepository;
         $this->addressRepository = $addressRepository;
@@ -93,12 +103,79 @@ class ContactService {
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
         $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
+        $this->messageDeliveryService = $messageDeliveryService;
 
         require_once '/etc/eiou/src/schemas/payloads/ContactPayload.php';
         $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
 
         require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
         $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
+    }
+
+    /**
+     * Set the message delivery service (for lazy initialization)
+     *
+     * @param MessageDeliveryService $service Message delivery service
+     */
+    public function setMessageDeliveryService(MessageDeliveryService $service): void {
+        $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Send a contact message with optional delivery tracking
+     *
+     * Uses MessageDeliveryService when available for reliable delivery with
+     * retry logic and dead letter queue support. Falls back to direct transport
+     * if delivery service is not configured.
+     *
+     * @param string $address Recipient address
+     * @param array $payload Message payload
+     * @param string|null $messageId Optional unique message ID for tracking
+     * @return array Response with 'success', 'response', and 'raw' keys
+     */
+    private function sendContactMessage(string $address, array $payload, ?string $messageId = null): array {
+        // Generate message ID if not provided (use hash of payload for consistency)
+        if ($messageId === null) {
+            $messageId = hash('sha256', json_encode($payload) . microtime(true));
+        }
+
+        // Use delivery tracking if service is available
+        if ($this->messageDeliveryService !== null) {
+            $result = $this->messageDeliveryService->sendWithTracking(
+                'contact',
+                $messageId,
+                $address,
+                $payload
+            );
+
+            // Extract response from tracking result
+            $response = $result['response'] ?? null;
+            $rawResponse = $response ? json_encode($response) : '';
+
+            $this->secureLogger->info("Contact message sent with tracking", [
+                'address' => $address,
+                'message_id' => $messageId,
+                'stage' => $result['stage'] ?? 'unknown',
+                'success' => $result['success'] ?? false
+            ]);
+
+            return [
+                'success' => $result['success'] ?? false,
+                'response' => $response,
+                'raw' => $rawResponse,
+                'tracking' => $result
+            ];
+        }
+
+        // Fall back to direct transport
+        $rawResponse = $this->transportUtility->send($address, $payload);
+        $response = json_decode($rawResponse, true);
+
+        return [
+            'success' => $response !== null && isset($response['status']),
+            'response' => $response,
+            'raw' => $rawResponse
+        ];
     }
 
     /**
@@ -237,8 +314,10 @@ class ContactService {
             // Contact was blocked when user received contact request
             else{
                 if($this->contactRepository->updateUnblockContact($contact['pubkey'], $name, $fee, $credit, $currency)){
-                    // Send message of successful contact acceptance back to original contact requester
-                    $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
+                    // Send message of successful contact acceptance back to original contact requester with tracking
+                    $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
+                    $messageId = 'contact-unblock-accept-' . hash('sha256', $address . $contact['pubkey'] . time());
+                    $this->sendContactMessage($address, $acceptPayload, $messageId);
                     $output->success("Contact " . $address . " unblocked and added", $contactData, "Contact unblocked and added successfully");
                 } else{
                     $output->error("Failed to unblock and add contact " . $address, 'UNBLOCK_ADD_FAILED', 500, ['contact' => $contactData]);
@@ -260,8 +339,10 @@ class ContactService {
             } else{
                 // If contact already exists with an address, it's a contact request, skip sending a message
                 if ($this->acceptContact($contact['pubkey'], $name, $fee, $credit, $currency)) {
-                    // Send message of successful contact acceptance back to original contact requester
-                    $this->transportUtility->send($address, $this->messagePayload->buildContactIsAccepted($address));
+                    // Send message of successful contact acceptance back to original contact requester with tracking
+                    $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
+                    $messageId = 'contact-accept-' . hash('sha256', $address . $contact['pubkey'] . time());
+                    $this->sendContactMessage($address, $acceptPayload, $messageId);
                     $contactData['status'] = 'accepted';
                     $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
                 }
@@ -275,6 +356,8 @@ class ContactService {
 
     /**
      * Handle new contact creation
+     *
+     * Uses MessageDeliveryService for reliable message delivery when available.
      *
      * @param string $address Contact address
      * @param string $name Contact name
@@ -298,9 +381,14 @@ class ContactService {
         // Build the payload array
         $payload = $this->contactPayload->buildCreateRequest($address);
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);  // Address already passed validation before
-    
-        // Check if the response indicates successful acceptance
-        $responseData = json_decode($this->transportUtility->send($address, $payload), true);
+
+        // Generate unique message ID for contact creation tracking
+        $messageId = 'contact-create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . time());
+
+        // Send contact creation request with delivery tracking
+        $sendResult = $this->sendContactMessage($address, $payload, $messageId);
+        $responseData = $sendResult['response'];
+
         if (isset($responseData['status'])){
             $senderPublicKey = $responseData['senderPublicKey'];
             // Contact request was received (initial insert on their end as pending, awaiting acceptance)
