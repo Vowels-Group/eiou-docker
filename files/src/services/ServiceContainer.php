@@ -317,6 +317,9 @@ class ServiceContainer {
     /**
      * Get P2pService instance
      *
+     * Integrates MessageDeliveryService for reliable P2P message delivery
+     * with retry logic and dead letter queue support.
+     *
      * @return P2pService
      */
     public function getP2pService(): P2pService {
@@ -328,7 +331,8 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getTransactionRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getMessageDeliveryService()
             );
         }
         return $this->services['P2pService'];
