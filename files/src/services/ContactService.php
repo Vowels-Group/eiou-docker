@@ -512,8 +512,10 @@ class ContactService {
         } else{
             // No valid response - MessageDeliveryService has already exhausted all retries
             // (retries happen synchronously within sendWithTracking)
-            $attempts = $sendResult['attempts'] ?? 'unknown';
-            $lastError = $sendResult['error'] ?? 'No response received';
+            // Tracking results are nested inside 'tracking' key from sendContactMessage
+            $trackingResult = $sendResult['tracking'] ?? [];
+            $attempts = $trackingResult['attempts'] ?? 'unknown';
+            $lastError = $trackingResult['error'] ?? 'No response received';
 
             $output->error(
                 "Failed to reach contact address after " . $attempts . " attempts. " .
@@ -524,7 +526,7 @@ class ContactService {
                     'contact' => $contactData,
                     'attempts' => $attempts,
                     'last_error' => $lastError,
-                    'moved_to_dlq' => $sendResult['dlq'] ?? false
+                    'moved_to_dlq' => $trackingResult['dlq'] ?? false
                 ]
             );
             exit(1);
