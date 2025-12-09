@@ -107,6 +107,57 @@ class RP2pService {
     }
 
     /**
+     * Update delivery stage to 'forwarded' after successfully forwarding a message
+     *
+     * @param string $messageType Type of message ('p2p' or 'rp2p')
+     * @param string $messageId The message ID used for tracking
+     * @param string|null $nextHop Optional address of next hop for logging
+     */
+    private function updateDeliveryStageToForwarded(string $messageType, string $messageId, ?string $nextHop = null): void {
+        if ($this->messageDeliveryService === null) {
+            return;
+        }
+
+        $success = $this->messageDeliveryService->updateStageToForwarded(
+            $messageType,
+            $messageId,
+            $nextHop
+        );
+
+        if ($success && class_exists('SecureLogger')) {
+            SecureLogger::info("RP2P delivery stage updated to forwarded", [
+                'message_type' => $messageType,
+                'message_id' => $messageId,
+                'next_hop' => $nextHop
+            ]);
+        }
+    }
+
+    /**
+     * Mark a delivery as completed
+     *
+     * @param string $messageType Type of message ('p2p' or 'rp2p')
+     * @param string $messageId The message ID used for tracking
+     */
+    private function markDeliveryCompleted(string $messageType, string $messageId): void {
+        if ($this->messageDeliveryService === null) {
+            return;
+        }
+
+        $success = $this->messageDeliveryService->markDeliveryCompleted(
+            $messageType,
+            $messageId
+        );
+
+        if ($success && class_exists('SecureLogger')) {
+            SecureLogger::info("RP2P delivery marked as completed", [
+                'message_type' => $messageType,
+                'message_id' => $messageId
+            ]);
+        }
+    }
+
+    /**
      * Send an RP2P message with optional delivery tracking
      *
      * Uses MessageDeliveryService when available for reliable delivery with
@@ -220,6 +271,8 @@ class RP2pService {
                 $response = $sendResult['response'];
 
                 if ($sendResult['success']) {
+                    // Mark delivery as forwarded since we successfully sent to next hop
+                    $this->updateDeliveryStageToForwarded('rp2p', $sendResult['messageId'], $p2p['sender_address']);
                     output(outputRp2pResponse($response), 'SILENT');
                 } else {
                     // Log delivery failure details
@@ -253,16 +306,17 @@ class RP2pService {
         // Check if RP2P already exists for hash in database
         try{
             if($this->rp2pRepository->rp2pExists($request['hash'])){
-              //If RP2P already exists 
+              //If RP2P already exists
                 if($echo){
                     echo  $this->rp2pPayload->buildRejection($request);
                 }
                 return false;
-            } 
-            if($echo){
-                echo  $this->rp2pPayload->buildAcceptance($request);
             }
-            return true;  
+            if($echo){
+                // Return 'inserted' status since the RP2P will be stored in the database
+                echo  $this->rp2pPayload->buildInserted($request);
+            }
+            return true;
         } catch (PDOException $e) {
             // Handle database error
             error_log("Error retrieving existence of RP2P by hash" . $e->getMessage());

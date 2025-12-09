@@ -773,6 +773,134 @@ class MessageDeliveryService {
     }
 
     /**
+     * Update delivery stage to 'forwarded' after successfully forwarding a message
+     *
+     * This method is called after an intermediary has successfully forwarded a
+     * message to the next hop in the chain. It updates the stage to 'forwarded'.
+     *
+     * Stage progression is enforced to prevent regression:
+     * pending -> sent -> received -> inserted -> forwarded -> completed
+     *
+     * @param string $messageType Type of message (transaction, p2p, rp2p, contact)
+     * @param string $messageId Message identifier
+     * @param string|null $nextHop Optional address of next hop for logging
+     * @return bool Success status
+     */
+    public function updateStageToForwarded(
+        string $messageType,
+        string $messageId,
+        ?string $nextHop = null
+    ): bool {
+        // Get current delivery record
+        $delivery = $this->deliveryRepository->getByMessage($messageType, $messageId);
+
+        if (!$delivery) {
+            if (class_exists('SecureLogger')) {
+                SecureLogger::warning("Cannot update stage to forwarded: delivery record not found", [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId
+                ]);
+            }
+            return false;
+        }
+
+        $currentStage = $delivery['delivery_stage'];
+
+        // Define stage order for progression checking
+        $stageOrder = [
+            'pending' => 0,
+            'sent' => 1,
+            'received' => 2,
+            'inserted' => 3,
+            'forwarded' => 4,
+            'completed' => 5,
+            'failed' => 6
+        ];
+
+        $currentOrder = $stageOrder[$currentStage] ?? -1;
+        $forwardedOrder = $stageOrder['forwarded'];
+
+        // Update to 'forwarded' only if current stage is before 'forwarded'
+        if ($currentOrder < $forwardedOrder) {
+            $responseData = [
+                'message' => 'Message forwarded to next hop',
+                'timestamp' => microtime(true),
+                'previous_stage' => $currentStage
+            ];
+            if ($nextHop !== null) {
+                $responseData['next_hop'] = $nextHop;
+            }
+
+            $this->deliveryRepository->updateStage(
+                $messageType,
+                $messageId,
+                'forwarded',
+                json_encode($responseData)
+            );
+
+            if (class_exists('SecureLogger')) {
+                SecureLogger::info("Delivery stage updated to 'forwarded'", [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId,
+                    'previous_stage' => $currentStage,
+                    'next_hop' => $nextHop
+                ]);
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Mark a delivery as completed
+     *
+     * This method marks a delivery as completed when the entire message flow
+     * has finished successfully (e.g., when a P2P transaction completes).
+     *
+     * @param string $messageType Type of message (transaction, p2p, rp2p, contact)
+     * @param string $messageId Message identifier
+     * @return bool Success status
+     */
+    public function markDeliveryCompleted(
+        string $messageType,
+        string $messageId
+    ): bool {
+        // Get current delivery record
+        $delivery = $this->deliveryRepository->getByMessage($messageType, $messageId);
+
+        if (!$delivery) {
+            if (class_exists('SecureLogger')) {
+                SecureLogger::warning("Cannot mark completed: delivery record not found", [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId
+                ]);
+            }
+            return false;
+        }
+
+        $currentStage = $delivery['delivery_stage'];
+
+        // Don't mark as completed if already failed
+        if ($currentStage === 'failed') {
+            return false;
+        }
+
+        $this->deliveryRepository->markCompleted($messageType, $messageId);
+
+        if (class_exists('SecureLogger')) {
+            SecureLogger::info("Delivery marked as 'completed'", [
+                'message_type' => $messageType,
+                'message_id' => $messageId,
+                'previous_stage' => $currentStage
+            ]);
+        }
+
+        return true;
+    }
+
+    /**
      * Update delivery stage after local database operation
      *
      * This method is called after a message has been successfully stored locally

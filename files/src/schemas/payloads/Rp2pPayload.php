@@ -89,4 +89,44 @@ class Rp2pPayload extends BasePayload
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
+
+    /**
+     * Build RP2P forwarded payload when request is being forwarded to next hop
+     *
+     * @param array $request The RP2P request data
+     * @param string|null $nextHop Optional next hop address
+     * @return string JSON-encoded forwarded payload
+     */
+    public function buildForwarded(array $request, ?string $nextHop = null): string
+    {
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+        $message = 'hash ' . $request['hash'] . ' for RP2P forwarded by ' . $receiver;
+        if ($nextHop !== null) {
+            $message .= ' to next hop';
+        }
+
+        return json_encode([
+            'status' => 'forwarded',
+            'message' => $message,
+            'senderAddress' => $receiver,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
+
+    /**
+     * Build RP2P inserted payload when request has been stored in database
+     *
+     * @param array $request The RP2P request data
+     * @return string JSON-encoded inserted payload
+     */
+    public function buildInserted(array $request): string
+    {
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+        return json_encode([
+            'status' => 'inserted',
+            'message' => 'hash ' . $request['hash'] . ' for RP2P stored in database of ' . $receiver,
+            'senderAddress' => $receiver,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
 }

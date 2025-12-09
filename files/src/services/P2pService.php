@@ -230,6 +230,57 @@ class P2pService {
     }
 
     /**
+     * Update delivery stage to 'forwarded' after successfully forwarding a message
+     *
+     * @param string $messageType Type of message ('p2p' or 'rp2p')
+     * @param string $messageId The message ID used for tracking
+     * @param string|null $nextHop Optional address of next hop for logging
+     */
+    private function updateDeliveryStageToForwarded(string $messageType, string $messageId, ?string $nextHop = null): void {
+        if ($this->messageDeliveryService === null) {
+            return;
+        }
+
+        $success = $this->messageDeliveryService->updateStageToForwarded(
+            $messageType,
+            $messageId,
+            $nextHop
+        );
+
+        if ($success) {
+            $this->secureLogger->info("P2P delivery stage updated to forwarded", [
+                'message_type' => $messageType,
+                'message_id' => $messageId,
+                'next_hop' => $nextHop
+            ]);
+        }
+    }
+
+    /**
+     * Mark a delivery as completed
+     *
+     * @param string $messageType Type of message ('p2p' or 'rp2p')
+     * @param string $messageId The message ID used for tracking
+     */
+    private function markDeliveryCompleted(string $messageType, string $messageId): void {
+        if ($this->messageDeliveryService === null) {
+            return;
+        }
+
+        $success = $this->messageDeliveryService->markDeliveryCompleted(
+            $messageType,
+            $messageId
+        );
+
+        if ($success) {
+            $this->secureLogger->info("P2P delivery marked as completed", [
+                'message_type' => $messageType,
+                'message_id' => $messageId
+            ]);
+        }
+    }
+
+    /**
      * Check if P2P request level is valid
      *
      * @param array $request The P2P request data
@@ -342,11 +393,12 @@ class P2pService {
                     echo $this->p2pPayload->buildRejection($request);
                 }
                 return false;
-            } 
-            if($echo){
-                echo $this->p2pPayload->buildAcceptance($request);
             }
-            return true;  
+            if($echo){
+                // Return 'inserted' status since the P2P will be stored in the database
+                echo $this->p2pPayload->buildInserted($request);
+            }
+            return true;
         } catch (PDOException $e) {
             // Handle database error
             error_log("Error retrieving existence of P2P by hash" , $e->getMessage());
@@ -577,7 +629,7 @@ class P2pService {
 
                 if ($sendResult['success']) {
                     // Mark as forwarded stage since we're routing to the destination
-                    $this->updateDeliveryStageAfterInsert('p2p', $messageId, false);
+                    $this->updateDeliveryStageToForwarded('p2p', $messageId, $matchedContact[$transportIndex]);
                 }
 
                 output(outputP2pSendResult($response),'SILENT');
@@ -620,14 +672,14 @@ class P2pService {
 
                     $sentMessages += 1;
                     if ($sendResult['success']) {
-                        $successfulSends[] = $messageId;
+                        $successfulSends[] = ['messageId' => $messageId, 'nextHop' => $contactAddress];
                     }
                     output(outputP2pResponse($response),'SILENT');
                 }
 
-                // Update delivery stages for successful sends
-                foreach ($successfulSends as $msgId) {
-                    $this->updateDeliveryStageAfterInsert('p2p', $msgId, false);
+                // Update delivery stages to 'forwarded' for successful sends
+                foreach ($successfulSends as $sendInfo) {
+                    $this->updateDeliveryStageToForwarded('p2p', $sendInfo['messageId'], $sendInfo['nextHop']);
                 }
 
                 if(isset($message['destination_address']) && $contactsToSend > 0){

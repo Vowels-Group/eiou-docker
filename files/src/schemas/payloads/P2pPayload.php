@@ -113,6 +113,51 @@ class P2pPayload extends BasePayload
         ]);
     }
 
+    /**
+     * Build P2P forwarded payload when request is being forwarded to next hop
+     *
+     * @param array $request The P2P request data
+     * @param string|null $nextHop Optional next hop address
+     * @return string JSON encoded forwarded payload
+     */
+    public function buildForwarded(array $request, ?string $nextHop = null): string
+    {
+        $this->ensureRequiredFields($request, ['hash', 'senderAddress']);
+
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+        $message = "hash {$request['hash']} for P2P forwarded by {$receiver}";
+        if ($nextHop !== null) {
+            $message .= " to next hop";
+        }
+
+        return json_encode([
+            'status' => 'forwarded',
+            'message' => $message,
+            'senderAddress' => $receiver,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
+
+    /**
+     * Build P2P inserted payload when request has been stored in database
+     *
+     * @param array $request The P2P request data
+     * @return string JSON encoded inserted payload
+     */
+    public function buildInserted(array $request): string
+    {
+        $this->ensureRequiredFields($request, ['hash', 'senderAddress']);
+
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+
+        return json_encode([
+            'status' => 'inserted',
+            'message' => "hash {$request['hash']} for P2P stored in database of {$receiver}",
+            'senderAddress' => $receiver,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
+
     // /**
     //  * Build P2P inquiry payload
     //  *
