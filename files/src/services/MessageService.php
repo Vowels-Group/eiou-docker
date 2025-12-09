@@ -194,15 +194,24 @@ class MessageService {
     /**
      * Handle contact message request
      *
+     * Processes contact status update messages (e.g., acceptance notifications)
+     * and returns appropriate acknowledgment for delivery tracking.
+     *
      * @param array $decodedMessage Decoded message data
      * @return void
      */
     private function handleContactMessageRequest(array $decodedMessage): void {
         // Handle contact request status update messages
         $status = $decodedMessage['status'];
+        $senderAddress = $decodedMessage['senderAddress'];
+
         if($status === 'accepted'){
-            output(outputContactRequestWasAccepted($decodedMessage['senderAddress']),'SILENT');
+            output(outputContactRequestWasAccepted($senderAddress),'SILENT');
             $this->contactRepository->updateStatus($decodedMessage['senderPublicKey'], $status);
+
+            // Return acknowledgment for delivery tracking
+            // This confirms the acceptance message was received and processed
+            echo $this->messagePayload->buildContactAcceptanceAcknowledgment($senderAddress);
         }
     }
 

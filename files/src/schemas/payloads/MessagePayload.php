@@ -110,6 +110,26 @@ class MessagePayload extends BasePayload
     }
 
     /**
+     * Build acknowledgment for contact acceptance message
+     *
+     * Returns an acknowledgment to the sender who notified us of accepting our contact request.
+     * This enables proper delivery tracking stages (received -> inserted -> completed).
+     *
+     * @param string $address The recipient address (the one who sent the acceptance)
+     * @return string JSON-encoded acknowledgment payload
+     */
+    public function buildContactAcceptanceAcknowledgment(string $address): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return json_encode([
+            'status' => 'accepted',
+            'message' => $myAddress . ' confirms contact acceptance was received and processed',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
+
+    /**
      * Build payload regarding the successful completion of a transaction
      *
      * @param array $message Message data containing transaction hash
