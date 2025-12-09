@@ -553,4 +553,93 @@ class MessageDeliveryService {
             'dlq_deleted' => $this->dlqRepository->deleteOldRecords($dlqDays)
         ];
     }
+
+    /**
+     * Update delivery stage after local database operation
+     *
+     * This method is called after a message has been successfully stored locally
+     * (e.g., contact inserted into database). It updates the stage to 'inserted'
+     * and optionally marks the delivery as 'completed'.
+     *
+     * Stage progression is enforced to prevent regression:
+     * pending -> sent -> received -> inserted -> forwarded -> completed
+     *
+     * @param string $messageType Type of message (transaction, p2p, rp2p, contact)
+     * @param string $messageId Message identifier
+     * @param bool $markCompleted Whether to mark as completed after inserting
+     * @return bool Success status
+     */
+    public function updateStageAfterLocalInsert(
+        string $messageType,
+        string $messageId,
+        bool $markCompleted = false
+    ): bool {
+        // Get current delivery record
+        $delivery = $this->deliveryRepository->getByMessage($messageType, $messageId);
+
+        if (!$delivery) {
+            if (class_exists('SecureLogger')) {
+                SecureLogger::warning("Cannot update stage: delivery record not found", [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId
+                ]);
+            }
+            return false;
+        }
+
+        $currentStage = $delivery['delivery_stage'];
+
+        // Define stage order for progression checking
+        $stageOrder = [
+            'pending' => 0,
+            'sent' => 1,
+            'received' => 2,
+            'inserted' => 3,
+            'forwarded' => 4,
+            'completed' => 5,
+            'failed' => 6
+        ];
+
+        $currentOrder = $stageOrder[$currentStage] ?? -1;
+        $insertedOrder = $stageOrder['inserted'];
+        $completedOrder = $stageOrder['completed'];
+
+        // Update to 'inserted' only if current stage is before 'inserted'
+        if ($currentOrder < $insertedOrder) {
+            $this->deliveryRepository->updateStage(
+                $messageType,
+                $messageId,
+                'inserted',
+                json_encode([
+                    'message' => 'Data stored in local database',
+                    'timestamp' => microtime(true),
+                    'previous_stage' => $currentStage
+                ])
+            );
+
+            if (class_exists('SecureLogger')) {
+                SecureLogger::info("Delivery stage updated to 'inserted'", [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId,
+                    'previous_stage' => $currentStage
+                ]);
+            }
+
+            $currentOrder = $insertedOrder;
+        }
+
+        // Mark as completed if requested and not already completed
+        if ($markCompleted && $currentOrder < $completedOrder) {
+            $this->deliveryRepository->markCompleted($messageType, $messageId);
+
+            if (class_exists('SecureLogger')) {
+                SecureLogger::info("Delivery marked as 'completed'", [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId
+                ]);
+            }
+        }
+
+        return true;
+    }
 }
