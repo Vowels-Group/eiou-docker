@@ -283,3 +283,39 @@ function outputTransactionResponse($response){
 function outputUpdatedTxid($txid,$which_txid,$hash){
     return "Updated " . $which_txid . " to " . $txid . " for p2p with hash " . $hash ."\n";
 }
+
+// ============================================================================
+// MESSAGE DELIVERY OUTPUT FUNCTIONS
+// ============================================================================
+
+function outputMessageDeliveryCreated($messageType, $messageId, $recipientAddress){
+    return "[MessageDelivery] Created: type=" . $messageType . ", id=" . $messageId . ", recipient=" . $recipientAddress . "\n";
+}
+
+function outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, $newStage){
+    return "[MessageDelivery] Stage updated: type=" . $messageType . ", id=" . $messageId . ", stage=" . $previousStage . " -> " . $newStage . "\n";
+}
+
+function outputMessageDeliveryRetry($messageType, $messageId, $retryCount, $maxRetries, $delaySeconds){
+    return "[MessageDelivery] Retry scheduled: type=" . $messageType . ", id=" . $messageId . ", attempt=" . $retryCount . "/" . $maxRetries . ", delay=" . $delaySeconds . "s\n";
+}
+
+function outputMessageDeliveryCompleted($messageType, $messageId){
+    return "[MessageDelivery] Completed: type=" . $messageType . ", id=" . $messageId . "\n";
+}
+
+function outputMessageDeliveryFailed($messageType, $messageId, $reason){
+    return "[MessageDelivery] Failed: type=" . $messageType . ", id=" . $messageId . ", reason=" . $reason . "\n";
+}
+
+function outputMessageDeliveryMovedToDlq($messageType, $messageId, $retryCount){
+    return "[MessageDelivery] Moved to DLQ: type=" . $messageType . ", id=" . $messageId . ", retries=" . $retryCount . "\n";
+}
+
+function outputDeadLetterQueueRetry($dlqId, $messageType, $originalId){
+    return "[DLQ] Retrying: dlq_id=" . $dlqId . ", type=" . $messageType . ", original_id=" . $originalId . "\n";
+}
+
+function outputDeadLetterQueueResolved($dlqId, $messageType, $originalId){
+    return "[DLQ] Resolved: dlq_id=" . $dlqId . ", type=" . $messageType . ", original_id=" . $originalId . "\n";
+}

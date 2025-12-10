@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/../database/MessageDeliveryRepository.php';
 require_once __DIR__ . '/../database/DeadLetterQueueRepository.php';
+require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
 
 /**
  * Message Delivery Service
@@ -24,6 +25,11 @@ class MessageDeliveryService {
      * @var DeadLetterQueueRepository Dead letter queue repository
      */
     private DeadLetterQueueRepository $dlqRepository;
+
+    /**
+     * @var DeliveryMetricsRepository|null Delivery metrics repository
+     */
+    private ?DeliveryMetricsRepository $metricsRepository = null;
 
     /**
      * @var TransportUtilityService Transport utility service
@@ -51,6 +57,11 @@ class MessageDeliveryService {
     private float $jitterFactor;
 
     /**
+     * @var float Start time for delivery time tracking
+     */
+    private float $deliveryStartTime = 0;
+
+    /**
      * Constructor
      *
      * @param MessageDeliveryRepository $deliveryRepository Delivery repository
@@ -60,6 +71,7 @@ class MessageDeliveryService {
      * @param int $maxRetries Maximum retries (default: 5)
      * @param int $baseDelay Base delay in seconds (default: 2)
      * @param float $jitterFactor Jitter factor (default: 0.2)
+     * @param DeliveryMetricsRepository|null $metricsRepository Optional metrics repository
      */
     public function __construct(
         MessageDeliveryRepository $deliveryRepository,
@@ -68,7 +80,8 @@ class MessageDeliveryService {
         UserContext $currentUser,
         int $maxRetries = 5,
         int $baseDelay = 2,
-        float $jitterFactor = 0.2
+        float $jitterFactor = 0.2,
+        ?DeliveryMetricsRepository $metricsRepository = null
     ) {
         $this->deliveryRepository = $deliveryRepository;
         $this->dlqRepository = $dlqRepository;
@@ -77,6 +90,32 @@ class MessageDeliveryService {
         $this->maxRetries = $maxRetries;
         $this->baseDelay = $baseDelay;
         $this->jitterFactor = $jitterFactor;
+        $this->metricsRepository = $metricsRepository;
+
+        // Initialize metrics repository if not provided
+        if ($this->metricsRepository === null) {
+            try {
+                $this->metricsRepository = new DeliveryMetricsRepository();
+            } catch (Exception $e) {
+                // Metrics repository is optional, continue without it
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::warning("Could not initialize DeliveryMetricsRepository", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+        }
+    }
+
+    /**
+     * Output debug message for message delivery events
+     *
+     * @param string $message Message to output
+     */
+    private function debugOutput(string $message): void {
+        if (function_exists('output')) {
+            output($message, 'SILENT');
+        }
     }
 
     /**
@@ -98,6 +137,9 @@ class MessageDeliveryService {
         string $recipient,
         array $payload
     ): array {
+        // Start tracking delivery time
+        $this->deliveryStartTime = microtime(true);
+
         // Create or get existing delivery record
         if (!$this->deliveryRepository->deliveryExists($messageType, $messageId)) {
             // Store payload with the delivery record
@@ -109,6 +151,11 @@ class MessageDeliveryService {
                 $this->maxRetries,
                 $payload
             );
+
+            // Debug output for message creation
+            if (function_exists('outputMessageDeliveryCreated')) {
+                $this->debugOutput(outputMessageDeliveryCreated($messageType, $messageId, $recipient));
+            }
         } else {
             // Update payload if record already exists
             $this->deliveryRepository->updatePayload($messageType, $messageId, $payload);
@@ -175,7 +222,8 @@ class MessageDeliveryService {
                             $messageId,
                             $status,
                             $decodedResponse,
-                            $response
+                            $response,
+                            $attempt
                         );
                         $result['attempts'] = $attempt + 1;
                         return $result;
@@ -225,6 +273,17 @@ class MessageDeliveryService {
             if ($attempt < $this->maxRetries) {
                 $delay = $this->calculateRetryDelay($attempt);
 
+                // Debug output for retry scheduling
+                if (function_exists('outputMessageDeliveryRetry')) {
+                    $this->debugOutput(outputMessageDeliveryRetry(
+                        $messageType,
+                        $messageId,
+                        $attempt + 1,
+                        $this->maxRetries,
+                        $delay
+                    ));
+                }
+
                 if (class_exists('SecureLogger')) {
                     SecureLogger::warning("Delivery attempt failed, retrying", [
                         'message_type' => $messageType,
@@ -259,6 +318,7 @@ class MessageDeliveryService {
      * @param string $status Response status
      * @param array $response Decoded response
      * @param string $rawResponse Raw response string
+     * @param int $retryCount Current retry count for metrics
      * @return array Success result
      */
     private function processSuccessfulDelivery(
@@ -266,54 +326,135 @@ class MessageDeliveryService {
         string $messageId,
         string $status,
         array $response,
-        string $rawResponse
+        string $rawResponse,
+        int $retryCount = 0
     ): array {
+        // Get current delivery for previous stage tracking
+        $currentDelivery = $this->deliveryRepository->getByMessage($messageType, $messageId);
+        $previousStage = $currentDelivery ? $currentDelivery['delivery_stage'] : 'pending';
+
+        // Calculate delivery time for metrics
+        $deliveryTimeMs = $this->deliveryStartTime > 0
+            ? (int) ((microtime(true) - $this->deliveryStartTime) * 1000)
+            : 0;
+
+        $result = null;
+
         switch ($status) {
             case 'received':
                 $this->deliveryRepository->updateStage($messageType, $messageId, 'received', $rawResponse);
-                return [
+                if (function_exists('outputMessageDeliveryStageUpdated')) {
+                    $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'received'));
+                }
+                $result = [
                     'success' => true,
                     'stage' => 'received',
                     'message' => 'Message received by recipient',
                     'response' => $response
                 ];
+                break;
 
             case 'inserted':
                 $this->deliveryRepository->updateStage($messageType, $messageId, 'inserted', $rawResponse);
-                return [
+                if (function_exists('outputMessageDeliveryStageUpdated')) {
+                    $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'inserted'));
+                }
+                $result = [
                     'success' => true,
                     'stage' => 'inserted',
                     'message' => 'Message stored in recipient database',
                     'response' => $response
                 ];
+                break;
 
             case 'forwarded':
                 $this->deliveryRepository->updateStage($messageType, $messageId, 'forwarded', $rawResponse);
-                return [
+                if (function_exists('outputMessageDeliveryStageUpdated')) {
+                    $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'forwarded'));
+                }
+                $result = [
                     'success' => true,
                     'stage' => 'forwarded',
                     'message' => 'Message forwarded to next hop',
                     'response' => $response
                 ];
+                break;
 
             case 'accepted':
                 $this->deliveryRepository->markCompleted($messageType, $messageId);
-                return [
+                if (function_exists('outputMessageDeliveryCompleted')) {
+                    $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
+                }
+                $result = [
                     'success' => true,
                     'stage' => 'completed',
                     'message' => 'Message accepted by recipient',
                     'response' => $response
                 ];
+                break;
 
             default:
                 // Shouldn't reach here, but handle gracefully
                 $this->deliveryRepository->updateStage($messageType, $messageId, 'received', $rawResponse);
-                return [
+                if (function_exists('outputMessageDeliveryStageUpdated')) {
+                    $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'received'));
+                }
+                $result = [
                     'success' => true,
                     'stage' => 'received',
                     'message' => 'Message delivered with status: ' . $status,
                     'response' => $response
                 ];
+                break;
+        }
+
+        // Record metrics for successful delivery
+        $this->recordDeliveryMetric($messageType, true, $deliveryTimeMs, $retryCount);
+
+        return $result;
+    }
+
+    /**
+     * Record a delivery metric
+     *
+     * @param string $messageType Type of message
+     * @param bool $isDelivered Whether the message was delivered
+     * @param int $deliveryTimeMs Delivery time in milliseconds
+     * @param int $retryCount Number of retries
+     */
+    private function recordDeliveryMetric(
+        string $messageType,
+        bool $isDelivered,
+        int $deliveryTimeMs = 0,
+        int $retryCount = 0
+    ): void {
+        if ($this->metricsRepository === null) {
+            return;
+        }
+
+        try {
+            $this->metricsRepository->recordDeliveryEvent(
+                $messageType,
+                $isDelivered,
+                $deliveryTimeMs,
+                $retryCount
+            );
+
+            // Also record to 'all' type for aggregate metrics
+            $this->metricsRepository->recordDeliveryEvent(
+                'all',
+                $isDelivered,
+                $deliveryTimeMs,
+                $retryCount
+            );
+        } catch (Exception $e) {
+            // Metrics recording should not fail the delivery
+            if (class_exists('SecureLogger')) {
+                SecureLogger::warning("Failed to record delivery metric", [
+                    'message_type' => $messageType,
+                    'error' => $e->getMessage()
+                ]);
+            }
         }
     }
 
@@ -338,6 +479,11 @@ class MessageDeliveryService {
         $delivery = $this->deliveryRepository->getByMessage($messageType, $messageId);
         $retryCount = $delivery ? (int) $delivery['retry_count'] : $this->maxRetries;
 
+        // Calculate delivery time for metrics
+        $deliveryTimeMs = $this->deliveryStartTime > 0
+            ? (int) ((microtime(true) - $this->deliveryStartTime) * 1000)
+            : 0;
+
         // Move to Dead Letter Queue
         $this->dlqRepository->addToQueue(
             $messageType,
@@ -350,6 +496,17 @@ class MessageDeliveryService {
 
         // Mark as failed in delivery tracking
         $this->deliveryRepository->markFailed($messageType, $messageId, $lastError);
+
+        // Debug output for failure and DLQ
+        if (function_exists('outputMessageDeliveryFailed')) {
+            $this->debugOutput(outputMessageDeliveryFailed($messageType, $messageId, $lastError));
+        }
+        if (function_exists('outputMessageDeliveryMovedToDlq')) {
+            $this->debugOutput(outputMessageDeliveryMovedToDlq($messageType, $messageId, $retryCount));
+        }
+
+        // Record metrics for failed delivery
+        $this->recordDeliveryMetric($messageType, false, $deliveryTimeMs, $retryCount);
 
         if (class_exists('SecureLogger')) {
             SecureLogger::error("Message delivery exhausted all retries, moved to DLQ", [
@@ -658,6 +815,15 @@ class MessageDeliveryService {
             ];
         }
 
+        // Debug output for DLQ retry
+        if (function_exists('outputDeadLetterQueueRetry')) {
+            $this->debugOutput(outputDeadLetterQueueRetry(
+                $dlqId,
+                $item['message_type'],
+                $item['original_id']
+            ));
+        }
+
         // Mark as retrying
         $this->dlqRepository->markRetrying($dlqId);
 
@@ -667,6 +833,16 @@ class MessageDeliveryService {
 
             if ($result['success'] ?? false) {
                 $this->dlqRepository->markResolved($dlqId);
+
+                // Debug output for DLQ resolution
+                if (function_exists('outputDeadLetterQueueResolved')) {
+                    $this->debugOutput(outputDeadLetterQueueResolved(
+                        $dlqId,
+                        $item['message_type'],
+                        $item['original_id']
+                    ));
+                }
+
                 return [
                     'success' => true,
                     'message' => 'Message successfully resent from DLQ'

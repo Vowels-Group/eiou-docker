@@ -187,6 +187,7 @@ sendAllPeersTest
 routingTest
 contactListTest
 transactionHistoryTest
+messageDeliveryTest
 cliCommandsTest
 "
 
