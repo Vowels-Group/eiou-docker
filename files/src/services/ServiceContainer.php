@@ -266,6 +266,21 @@ class ServiceContainer {
     }
 
     /**
+     * Get DeliveryMetricsRepository instance
+     *
+     * @return DeliveryMetricsRepository
+     */
+    public function getDeliveryMetricsRepository(): DeliveryMetricsRepository {
+        if (!isset($this->repositories['DeliveryMetricsRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/DeliveryMetricsRepository.php';
+            $this->repositories['DeliveryMetricsRepository'] = new DeliveryMetricsRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['DeliveryMetricsRepository'];
+    }
+
+    /**
      * Get ContactService instance
      *
      * Integrates MessageDeliveryService for reliable contact message delivery
@@ -468,6 +483,7 @@ class ServiceContainer {
             $this->services['MessageDeliveryService'] = new MessageDeliveryService(
                 $this->getMessageDeliveryRepository(),
                 $this->getDeadLetterQueueRepository(),
+                $this->getDeliveryMetricsRepository(),
                 $this->getUtilityContainer()->getTransportUtility(),
                 $this->currentUser
             );

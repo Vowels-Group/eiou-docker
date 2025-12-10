@@ -27,9 +27,9 @@ class MessageDeliveryService {
     private DeadLetterQueueRepository $dlqRepository;
 
     /**
-     * @var DeliveryMetricsRepository|null Delivery metrics repository
+     * @var DeliveryMetricsRepository Delivery metrics repository
      */
-    private ?DeliveryMetricsRepository $metricsRepository = null;
+    private DeliveryMetricsRepository $metricsRepository;
 
     /**
      * @var TransportUtilityService Transport utility service
@@ -66,45 +66,31 @@ class MessageDeliveryService {
      *
      * @param MessageDeliveryRepository $deliveryRepository Delivery repository
      * @param DeadLetterQueueRepository $dlqRepository DLQ repository
+     * @param DeliveryMetricsRepository $metricsRepository metrics repository
      * @param TransportUtilityService $transportUtility Transport service
      * @param UserContext $currentUser Current user
      * @param int $maxRetries Maximum retries (default: 5)
      * @param int $baseDelay Base delay in seconds (default: 2)
      * @param float $jitterFactor Jitter factor (default: 0.2)
-     * @param DeliveryMetricsRepository|null $metricsRepository Optional metrics repository
      */
     public function __construct(
         MessageDeliveryRepository $deliveryRepository,
         DeadLetterQueueRepository $dlqRepository,
+        DeliveryMetricsRepository $metricsRepository,
         TransportUtilityService $transportUtility,
         UserContext $currentUser,
         int $maxRetries = 5,
         int $baseDelay = 2,
-        float $jitterFactor = 0.2,
-        ?DeliveryMetricsRepository $metricsRepository = null
+        float $jitterFactor = 0.2,  
     ) {
         $this->deliveryRepository = $deliveryRepository;
         $this->dlqRepository = $dlqRepository;
+        $this->metricsRepository = $metricsRepository;
         $this->transportUtility = $transportUtility;
         $this->currentUser = $currentUser;
         $this->maxRetries = $maxRetries;
         $this->baseDelay = $baseDelay;
         $this->jitterFactor = $jitterFactor;
-        $this->metricsRepository = $metricsRepository;
-
-        // Initialize metrics repository if not provided
-        if ($this->metricsRepository === null) {
-            try {
-                $this->metricsRepository = new DeliveryMetricsRepository();
-            } catch (Exception $e) {
-                // Metrics repository is optional, continue without it
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::warning("Could not initialize DeliveryMetricsRepository", [
-                        'error' => $e->getMessage()
-                    ]);
-                }
-            }
-        }
     }
 
     /**
