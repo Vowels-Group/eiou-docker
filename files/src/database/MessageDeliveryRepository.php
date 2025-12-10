@@ -328,6 +328,50 @@ class MessageDeliveryRepository extends AbstractRepository {
     }
 
     /**
+     * Mark all deliveries matching a hash pattern as completed
+     *
+     * Used to mark all P2P broadcast deliveries as completed when the
+     * transaction completes. P2P messages use IDs like:
+     * - p2p-direct-{hash}
+     * - p2p-broadcast-{hash}-{contactHash}
+     *
+     * @param string $messageType Type of message ('p2p' or 'rp2p')
+     * @param string $hash The P2P hash to match (will match message_id LIKE '%{hash}%')
+     * @return int Number of updated records
+     */
+    public function markCompletedByHash(string $messageType, string $hash): int {
+        $query = "UPDATE {$this->tableName}
+                  SET delivery_stage = 'completed',
+                      updated_at = NOW()
+                  WHERE message_type = :type
+                    AND message_id LIKE :pattern
+                    AND delivery_stage NOT IN ('completed', 'failed')";
+
+        $stmt = $this->pdo->prepare($query);
+        $pattern = '%' . $hash . '%';
+        $stmt->bindValue(':type', $messageType, PDO::PARAM_STR);
+        $stmt->bindValue(':pattern', $pattern, PDO::PARAM_STR);
+
+        try {
+            $stmt->execute();
+            $count = $stmt->rowCount();
+
+            if ($count > 0 && class_exists('SecureLogger')) {
+                SecureLogger::info("Marked P2P deliveries as completed by hash", [
+                    'message_type' => $messageType,
+                    'hash' => $hash,
+                    'updated_count' => $count
+                ]);
+            }
+
+            return $count;
+        } catch (PDOException $e) {
+            $this->logError("Failed to mark deliveries completed by hash", $e);
+            return 0;
+        }
+    }
+
+    /**
      * Delete old completed/failed records
      *
      * @param int $days Number of days to keep

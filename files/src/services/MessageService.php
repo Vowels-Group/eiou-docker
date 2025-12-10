@@ -31,12 +31,17 @@ class MessageService {
     private TransactionRepository $transactionRepository;
 
     /**
+     * @var MessageDeliveryRepository|null Message delivery repository instance
+     */
+    private ?MessageDeliveryRepository $messageDeliveryRepository = null;
+
+    /**
      * @var UtilityServiceContainer Utility service container
      */
     private UtilityServiceContainer $utilityContainer;
 
     /**
-     * @var TransportUtilityService Transport utility service 
+     * @var TransportUtilityService Transport utility service
      */
     private TransportUtilityService $transportUtility;
 
@@ -103,6 +108,15 @@ class MessageService {
        
         require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
         $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
+
+        // Initialize MessageDeliveryRepository for marking P2P deliveries as completed
+        try {
+            require_once '/etc/eiou/src/database/MessageDeliveryRepository.php';
+            $this->messageDeliveryRepository = new MessageDeliveryRepository();
+        } catch (Exception $e) {
+            // MessageDeliveryRepository is optional, continue without it
+            $this->messageDeliveryRepository = null;
+        }
     }
 
     /**
@@ -259,11 +273,17 @@ class MessageService {
                             $this->transactionRepository->updateStatus($hash,'completed');
                             $this->balanceRepository->updateBalanceGivenTransactions($transactions);
                             output(outputTransactionP2pSentSuccesfully($p2p),'SILENT');
+
+                            // Mark all P2P delivery records for this hash as completed
+                            $this->markP2pDeliveriesCompleted($hash);
                         }
                     } else{
                         $this->p2pRepository->updateStatus($hash,'completed',true);
                         $this->transactionRepository->updateStatus($hash,'completed');
                         $this->balanceRepository->updateBalanceGivenTransactions($transactions);
+
+                        // Mark all P2P delivery records for this hash as completed
+                        $this->markP2pDeliveriesCompleted($hash);
 
                         // Send transaction completion message onwards
                         $payloadTransactionCompleted =  $this->transactionPayload->buildCompleted($decodedMessage);
@@ -330,5 +350,31 @@ class MessageService {
         }
 
         return json_encode($response);
+    }
+
+    /**
+     * Mark all P2P delivery records for a hash as completed
+     *
+     * When a P2P transaction completes, this marks all related message_delivery
+     * records (both p2p-direct-{hash} and p2p-broadcast-{hash}-{contactHash})
+     * as completed.
+     *
+     * @param string $hash The P2P hash (memo)
+     * @return void
+     */
+    private function markP2pDeliveriesCompleted(string $hash): void {
+        if ($this->messageDeliveryRepository === null) {
+            return;
+        }
+
+        // Mark both 'p2p' and 'rp2p' message types as completed
+        $p2pCount = $this->messageDeliveryRepository->markCompletedByHash('p2p', $hash);
+        $rp2pCount = $this->messageDeliveryRepository->markCompletedByHash('rp2p', $hash);
+
+        if ($p2pCount > 0 || $rp2pCount > 0) {
+            if (function_exists('output')) {
+                output("[MessageDelivery] Marked P2P deliveries completed: p2p={$p2pCount}, rp2p={$rp2pCount} for hash={$hash}\n", 'SILENT');
+            }
+        }
     }
 }
