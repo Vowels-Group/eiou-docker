@@ -216,7 +216,8 @@ class MessageDeliveryService {
                     $status = $decodedResponse['status'] ?? null;
 
                     // Success cases - don't retry
-                    if (in_array($status, ['received', 'inserted', 'forwarded', 'accepted'])) {
+                    // 'acknowledged' is returned for completion messages (transaction complete confirmations)
+                    if (in_array($status, ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged'])) {
                         $result = $this->processSuccessfulDelivery(
                             $messageType,
                             $messageId,
@@ -389,6 +390,21 @@ class MessageDeliveryService {
                     'success' => true,
                     'stage' => 'completed',
                     'message' => 'Message accepted by recipient',
+                    'response' => $response
+                ];
+                break;
+
+            case 'acknowledged':
+                // Acknowledgment is returned for completion messages (e.g., transaction complete)
+                // This confirms the recipient received and processed the completion notification
+                $this->deliveryRepository->markCompleted($messageType, $messageId);
+                if (function_exists('outputMessageDeliveryCompleted')) {
+                    $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
+                }
+                $result = [
+                    'success' => true,
+                    'stage' => 'completed',
+                    'message' => 'Completion message acknowledged by recipient',
                     'response' => $response
                 ];
                 break;

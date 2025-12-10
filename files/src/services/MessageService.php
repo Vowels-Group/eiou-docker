@@ -230,6 +230,9 @@ class MessageService {
     /**
      * Handle transaction message request
      *
+     * Processes transaction completion messages and returns acknowledgments
+     * to enable proper delivery tracking stages.
+     *
      * @param array $decodedMessage Decoded message data
      * @return void
      */
@@ -268,6 +271,8 @@ class MessageService {
                         $response = $this->transportUtility->send($p2p['sender_address'],$payloadTransactionCompleted);
                     }
                 }
+                // Return acknowledgment for P2P completion message delivery tracking
+                echo $this->messagePayload->buildTransactionCompletionAcknowledgment($decodedMessage);
             } elseif($decodedMessage['hashType'] === 'txid'){
                 // End recipient (contact) sent us direct confirmation, thus transaction completed successfully
                 // Singular direct transaction
@@ -277,6 +282,8 @@ class MessageService {
                     $this->balanceRepository->updateBalanceGivenTransactions($transaction);
                     output(outputTransactionDirectSentSuccesfully($decodedMessage),'SILENT');
                 }
+                // Return acknowledgment for direct transaction completion message delivery tracking
+                echo $this->messagePayload->buildTransactionCompletionAcknowledgment($decodedMessage);
             }
         }
     }
