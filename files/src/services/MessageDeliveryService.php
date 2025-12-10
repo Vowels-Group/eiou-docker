@@ -119,6 +119,182 @@ class MessageDeliveryService {
     }
 
     /**
+     * Send a message with delivery tracking - non-blocking (async) version
+     *
+     * Attempts to deliver a message ONCE without blocking on retries.
+     * If the first attempt fails, the message is stored for background retry
+     * processing via processRetryQueue(). This allows P2P broadcast loops
+     * to continue without waiting for the full retry cycle.
+     *
+     * Use this method when sending multiple messages in a loop (e.g., P2P broadcasts)
+     * to prevent blocking on individual message delivery failures.
+     *
+     * @param string $messageType Type of message (transaction, p2p, rp2p, contact)
+     * @param string $messageId Unique identifier (txid, hash, etc.)
+     * @param string $recipient Recipient address
+     * @param array $payload Message payload
+     * @return array Response with status and delivery info (immediate result, no retries)
+     */
+    public function sendWithTrackingAsync(
+        string $messageType,
+        string $messageId,
+        string $recipient,
+        array $payload
+    ): array {
+        // Start tracking delivery time
+        $this->deliveryStartTime = microtime(true);
+
+        // Create or get existing delivery record
+        if (!$this->deliveryRepository->deliveryExists($messageType, $messageId)) {
+            // Store payload with the delivery record for potential background retry
+            $this->deliveryRepository->createDelivery(
+                $messageType,
+                $messageId,
+                $recipient,
+                'pending',
+                $this->maxRetries,
+                $payload
+            );
+
+            // Debug output for message creation
+            if (function_exists('outputMessageDeliveryCreated')) {
+                $this->debugOutput(outputMessageDeliveryCreated($messageType, $messageId, $recipient));
+            }
+        } else {
+            // Update payload if record already exists
+            $this->deliveryRepository->updatePayload($messageType, $messageId, $payload);
+        }
+
+        // Perform single delivery attempt (non-blocking)
+        return $this->attemptSingleDelivery(
+            $messageType,
+            $messageId,
+            $recipient,
+            $payload
+        );
+    }
+
+    /**
+     * Attempt a single delivery without retries (for async/non-blocking sends)
+     *
+     * If the delivery fails, the message is left in 'sent' state with retry_count=0
+     * so it can be picked up by processRetryQueue() for background retry.
+     *
+     * @param string $messageType Type of message
+     * @param string $messageId Message identifier
+     * @param string $recipient Recipient address
+     * @param array $payload Message payload
+     * @return array Result of the single attempt
+     */
+    private function attemptSingleDelivery(
+        string $messageType,
+        string $messageId,
+        string $recipient,
+        array $payload
+    ): array {
+        // Update stage to sent
+        $this->deliveryRepository->updateStage($messageType, $messageId, 'sent');
+
+        if (class_exists('SecureLogger')) {
+            SecureLogger::info("Attempting async message delivery (single attempt)", [
+                'message_type' => $messageType,
+                'message_id' => $messageId,
+                'recipient' => $recipient
+            ]);
+        }
+
+        try {
+            // Attempt delivery
+            $response = $this->transportUtility->send($recipient, $payload);
+            $decodedResponse = json_decode($response, true);
+
+            // Check for successful response
+            if ($decodedResponse !== null && !empty($response)) {
+                $status = $decodedResponse['status'] ?? null;
+
+                // Success cases
+                if (in_array($status, ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged'])) {
+                    $result = $this->processSuccessfulDelivery(
+                        $messageType,
+                        $messageId,
+                        $status,
+                        $decodedResponse,
+                        $response,
+                        0 // First attempt
+                    );
+                    $result['attempts'] = 1;
+                    $result['async'] = true;
+                    return $result;
+                }
+
+                // Explicit rejection - don't retry
+                if ($status === 'rejected') {
+                    $this->deliveryRepository->markFailed(
+                        $messageType,
+                        $messageId,
+                        'Rejected: ' . ($decodedResponse['message'] ?? 'No reason')
+                    );
+                    return [
+                        'success' => false,
+                        'stage' => 'rejected',
+                        'message' => $decodedResponse['message'] ?? 'Message rejected by recipient',
+                        'response' => $decodedResponse,
+                        'retry' => false,
+                        'attempts' => 1,
+                        'async' => true
+                    ];
+                }
+
+                // Unknown status - mark for background retry
+                $lastError = 'Unknown response status: ' . ($status ?? 'null');
+            } else {
+                // No response - mark for background retry
+                $lastError = 'No response received from recipient';
+            }
+
+        } catch (Exception $e) {
+            $lastError = 'Transport exception: ' . $e->getMessage();
+
+            if (class_exists('SecureLogger')) {
+                SecureLogger::logException($e, [
+                    'context' => 'async_delivery_attempt',
+                    'message_type' => $messageType,
+                    'message_id' => $messageId
+                ]);
+            }
+        }
+
+        // First attempt failed - mark for background retry (don't block)
+        // Keep retry_count at 0 so processRetryQueue() will pick it up
+        $this->deliveryRepository->incrementRetry($messageType, $messageId, 0, $lastError);
+
+        // Debug output for queued retry
+        if (function_exists('outputMessageDeliveryQueuedForRetry')) {
+            $this->debugOutput(outputMessageDeliveryQueuedForRetry($messageType, $messageId, $this->maxRetries));
+        }
+
+        if (class_exists('SecureLogger')) {
+            SecureLogger::warning("Async delivery failed, queued for background retry", [
+                'message_type' => $messageType,
+                'message_id' => $messageId,
+                'error' => $lastError
+            ]);
+        }
+
+        // Return immediately - do not block waiting for retries
+        return [
+            'success' => false,
+            'stage' => 'queued_for_retry',
+            'message' => 'First delivery attempt failed, queued for background retry',
+            'error' => $lastError,
+            'retry' => true,
+            'attempts' => 1,
+            'max_retries' => $this->maxRetries,
+            'async' => true
+        ];
+    }
+
+    /**
      * Send a message with delivery tracking and synchronous retry
      *
      * Attempts to deliver a message with automatic retries using exponential backoff.

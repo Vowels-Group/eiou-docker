@@ -312,6 +312,10 @@ function outputMessageDeliveryMovedToDlq($messageType, $messageId, $retryCount){
     return "[MessageDelivery] Moved to DLQ: type=" . $messageType . ", id=" . $messageId . ", retries=" . $retryCount . "\n";
 }
 
+function outputMessageDeliveryQueuedForRetry($messageType, $messageId, $maxRetries){
+    return "[MessageDelivery] Queued for background retry: type=" . $messageType . ", id=" . $messageId . ", max_retries=" . $maxRetries . "\n";
+}
+
 function outputDeadLetterQueueRetry($dlqId, $messageType, $originalId){
     return "[DLQ] Retrying: dlq_id=" . $dlqId . ", type=" . $messageType . ", original_id=" . $originalId . "\n";
 }

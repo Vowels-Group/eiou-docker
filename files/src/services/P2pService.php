@@ -142,11 +142,12 @@ class P2pService {
     }
 
     /**
-     * Send a P2P message with optional delivery tracking
+     * Send a P2P message with optional delivery tracking (non-blocking)
      *
      * Uses MessageDeliveryService when available for reliable delivery with
-     * retry logic and dead letter queue support. Falls back to direct transport
-     * if delivery service is not configured.
+     * retry logic and dead letter queue support. Uses async (non-blocking)
+     * delivery to prevent P2P broadcast loops from getting stuck waiting on
+     * retries. Failed sends are queued for background retry.
      *
      * @param string $messageType Type of P2P message ('p2p' or 'rp2p')
      * @param string $address Recipient address
@@ -160,9 +161,10 @@ class P2pService {
             $messageId = $payload['hash'] ?? hash('sha256', json_encode($payload) . microtime(true));
         }
 
-        // Use delivery tracking if service is available
+        // Use async (non-blocking) delivery tracking if service is available
+        // This allows P2P broadcast loops to continue without waiting for retries
         if ($this->messageDeliveryService !== null) {
-            $result = $this->messageDeliveryService->sendWithTracking(
+            $result = $this->messageDeliveryService->sendWithTrackingAsync(
                 $messageType,
                 $messageId,
                 $address,
@@ -173,12 +175,16 @@ class P2pService {
             $response = $result['response'] ?? null;
             $rawResponse = $response ? json_encode($response) : '';
 
-            $this->secureLogger->info("P2P message sent with tracking", [
+            // For async sends, 'queued_for_retry' stage means first attempt failed but will be retried
+            $isQueuedForRetry = ($result['stage'] ?? '') === 'queued_for_retry';
+
+            $this->secureLogger->info("P2P message sent with async tracking", [
                 'message_type' => $messageType,
                 'address' => $address,
                 'message_id' => $messageId,
                 'stage' => $result['stage'] ?? 'unknown',
-                'success' => $result['success'] ?? false
+                'success' => $result['success'] ?? false,
+                'queued_for_retry' => $isQueuedForRetry
             ]);
 
             return [
@@ -186,7 +192,8 @@ class P2pService {
                 'response' => $response,
                 'raw' => $rawResponse,
                 'tracking' => $result,
-                'messageId' => $messageId
+                'messageId' => $messageId,
+                'queued_for_retry' => $isQueuedForRetry
             ];
         }
 
