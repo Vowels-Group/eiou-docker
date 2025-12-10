@@ -144,8 +144,8 @@ class P2pService {
     /**
      * Send a P2P message with optional delivery tracking (non-blocking)
      *
-     * Uses MessageDeliveryService when available for reliable delivery with
-     * retry logic and dead letter queue support. Uses async (non-blocking)
+     * Uses MessageDeliveryService.sendMessage() when available for reliable delivery
+     * with retry logic and dead letter queue support. Uses async (non-blocking)
      * delivery to prevent P2P broadcast loops from getting stuck waiting on
      * retries. Failed sends are queued for background retry.
      *
@@ -156,48 +156,23 @@ class P2pService {
      * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
      */
     private function sendP2pMessage(string $messageType, string $address, array $payload, ?string $messageId = null): array {
-        // Generate message ID if not provided - use hash from payload if available
+        // Use unified sendMessage() from MessageDeliveryService if available
+        if ($this->messageDeliveryService !== null) {
+            // Use async=true for non-blocking delivery (allows P2P broadcast loops to continue)
+            return $this->messageDeliveryService->sendMessage(
+                $messageType,
+                $address,
+                $payload,
+                $messageId,
+                true // async
+            );
+        }
+
+        // Fall back to direct transport when MessageDeliveryService not available
         if ($messageId === null) {
             $messageId = $payload['hash'] ?? hash('sha256', json_encode($payload) . microtime(true));
         }
 
-        // Use async (non-blocking) delivery tracking if service is available
-        // This allows P2P broadcast loops to continue without waiting for retries
-        if ($this->messageDeliveryService !== null) {
-            $result = $this->messageDeliveryService->sendWithTrackingAsync(
-                $messageType,
-                $messageId,
-                $address,
-                $payload
-            );
-
-            // Extract response from tracking result
-            $response = $result['response'] ?? null;
-            $rawResponse = $response ? json_encode($response) : '';
-
-            // For async sends, 'queued_for_retry' stage means first attempt failed but will be retried
-            $isQueuedForRetry = ($result['stage'] ?? '') === 'queued_for_retry';
-
-            $this->secureLogger->info("P2P message sent with async tracking", [
-                'message_type' => $messageType,
-                'address' => $address,
-                'message_id' => $messageId,
-                'stage' => $result['stage'] ?? 'unknown',
-                'success' => $result['success'] ?? false,
-                'queued_for_retry' => $isQueuedForRetry
-            ]);
-
-            return [
-                'success' => $result['success'] ?? false,
-                'response' => $response,
-                'raw' => $rawResponse,
-                'tracking' => $result,
-                'messageId' => $messageId,
-                'queued_for_retry' => $isQueuedForRetry
-            ];
-        }
-
-        // Fall back to direct transport
         $rawResponse = $this->transportUtility->send($address, $payload);
         $response = json_decode($rawResponse, true);
 
@@ -207,84 +182,6 @@ class P2pService {
             'raw' => $rawResponse,
             'messageId' => $messageId
         ];
-    }
-
-    /**
-     * Update delivery stage after local database operation
-     *
-     * @param string $messageType Type of message ('p2p' or 'rp2p')
-     * @param string $messageId The message ID used for tracking
-     * @param bool $markCompleted Whether to also mark as completed
-     */
-    private function updateDeliveryStageAfterInsert(string $messageType, string $messageId, bool $markCompleted = false): void {
-        if ($this->messageDeliveryService === null) {
-            return;
-        }
-
-        $success = $this->messageDeliveryService->updateStageAfterLocalInsert(
-            $messageType,
-            $messageId,
-            $markCompleted
-        );
-
-        if ($success) {
-            $this->secureLogger->info("P2P delivery stage updated after local insert", [
-                'message_type' => $messageType,
-                'message_id' => $messageId,
-                'mark_completed' => $markCompleted
-            ]);
-        }
-    }
-
-    /**
-     * Update delivery stage to 'forwarded' after successfully forwarding a message
-     *
-     * @param string $messageType Type of message ('p2p' or 'rp2p')
-     * @param string $messageId The message ID used for tracking
-     * @param string|null $nextHop Optional address of next hop for logging
-     */
-    private function updateDeliveryStageToForwarded(string $messageType, string $messageId, ?string $nextHop = null): void {
-        if ($this->messageDeliveryService === null) {
-            return;
-        }
-
-        $success = $this->messageDeliveryService->updateStageToForwarded(
-            $messageType,
-            $messageId,
-            $nextHop
-        );
-
-        if ($success) {
-            $this->secureLogger->info("P2P delivery stage updated to forwarded", [
-                'message_type' => $messageType,
-                'message_id' => $messageId,
-                'next_hop' => $nextHop
-            ]);
-        }
-    }
-
-    /**
-     * Mark a delivery as completed
-     *
-     * @param string $messageType Type of message ('p2p' or 'rp2p')
-     * @param string $messageId The message ID used for tracking
-     */
-    private function markDeliveryCompleted(string $messageType, string $messageId): void {
-        if ($this->messageDeliveryService === null) {
-            return;
-        }
-
-        $success = $this->messageDeliveryService->markDeliveryCompleted(
-            $messageType,
-            $messageId
-        );
-
-        if ($success) {
-            $this->secureLogger->info("P2P delivery marked as completed", [
-                'message_type' => $messageType,
-                'message_id' => $messageId
-            ]);
-        }
     }
 
     /**
@@ -450,9 +347,9 @@ class P2pService {
                 $sendResult = $this->sendP2pMessage('rp2p', $request['senderAddress'], $rP2pPayload, $messageId);
                 $response = $sendResult['response'];
 
-                // Update delivery stage after local insert
-                if ($sendResult['success']) {
-                    $this->updateDeliveryStageAfterInsert('rp2p', $messageId, false);
+                // Update delivery stage after local insert (using MessageDeliveryService directly)
+                if ($sendResult['success'] && $this->messageDeliveryService !== null) {
+                    $this->messageDeliveryService->updateStageAfterLocalInsert('rp2p', $messageId, false);
                 }
 
                 output(outputRp2pTransactionResponse($response), 'SILENT');
@@ -634,9 +531,9 @@ class P2pService {
                 $sendResult = $this->sendP2pMessage('p2p', $matchedContact[$transportIndex], $p2pPayload, $messageId);
                 $response = $sendResult['response'];
 
-                if ($sendResult['success']) {
+                if ($sendResult['success'] && $this->messageDeliveryService !== null) {
                     // Mark as forwarded stage since we're routing to the destination
-                    $this->updateDeliveryStageToForwarded('p2p', $messageId, $matchedContact[$transportIndex]);
+                    $this->messageDeliveryService->updateStageToForwarded('p2p', $messageId, $matchedContact[$transportIndex]);
                 }
 
                 output(outputP2pSendResult($response),'SILENT');
@@ -684,9 +581,11 @@ class P2pService {
                     output(outputP2pResponse($response),'SILENT');
                 }
 
-                // Update delivery stages to 'forwarded' for successful sends
-                foreach ($successfulSends as $sendInfo) {
-                    $this->updateDeliveryStageToForwarded('p2p', $sendInfo['messageId'], $sendInfo['nextHop']);
+                // Update delivery stages to 'forwarded' for successful sends (using MessageDeliveryService directly)
+                if ($this->messageDeliveryService !== null) {
+                    foreach ($successfulSends as $sendInfo) {
+                        $this->messageDeliveryService->updateStageToForwarded('p2p', $sendInfo['messageId'], $sendInfo['nextHop']);
+                    }
                 }
 
                 if(isset($message['destination_address']) && $contactsToSend > 0){

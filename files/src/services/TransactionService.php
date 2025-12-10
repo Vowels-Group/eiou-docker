@@ -155,61 +155,10 @@ class TransactionService {
     }
 
     /**
-     * Mark a delivery as completed
-     *
-     * @param string $messageType Type of message ('transaction', 'p2p', 'rp2p')
-     * @param string $messageId The message ID used for tracking
-     */
-    private function markDeliveryCompleted(string $messageType, string $messageId): void {
-        if ($this->messageDeliveryService === null) {
-            return;
-        }
-
-        $success = $this->messageDeliveryService->markDeliveryCompleted(
-            $messageType,
-            $messageId
-        );
-
-        if ($success) {
-            $this->secureLogger->info("Transaction delivery marked as completed", [
-                'message_type' => $messageType,
-                'message_id' => $messageId
-            ]);
-        }
-    }
-
-    /**
-     * Update delivery stage to 'forwarded' after successfully forwarding a message
-     *
-     * @param string $messageType Type of message ('transaction', 'p2p', 'rp2p')
-     * @param string $messageId The message ID used for tracking
-     * @param string|null $nextHop Optional address of next hop for logging
-     */
-    private function updateDeliveryStageToForwarded(string $messageType, string $messageId, ?string $nextHop = null): void {
-        if ($this->messageDeliveryService === null) {
-            return;
-        }
-
-        $success = $this->messageDeliveryService->updateStageToForwarded(
-            $messageType,
-            $messageId,
-            $nextHop
-        );
-
-        if ($success) {
-            $this->secureLogger->info("Transaction delivery stage updated to forwarded", [
-                'message_type' => $messageType,
-                'message_id' => $messageId,
-                'next_hop' => $nextHop
-            ]);
-        }
-    }
-
-    /**
      * Send a transaction message with optional delivery tracking
      *
-     * Uses MessageDeliveryService when available for reliable delivery with
-     * retry logic and dead letter queue support. Falls back to direct transport
+     * Uses MessageDeliveryService.sendMessage() when available for reliable delivery
+     * with retry logic and dead letter queue support. Falls back to direct transport
      * if delivery service is not configured.
      *
      * @param string $address Recipient address
@@ -221,37 +170,19 @@ class TransactionService {
         // Generate unique message ID for tracking
         $messageId = 'tx-' . $txid . '-' . time();
 
-        // Use delivery tracking if service is available
+        // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
-            $result = $this->messageDeliveryService->sendWithTracking(
+            // Use sync delivery (async=false) for transactions to ensure reliability
+            return $this->messageDeliveryService->sendMessage(
                 'transaction',
-                $messageId,
                 $address,
-                $payload
+                $payload,
+                $messageId,
+                false // sync
             );
-
-            // Extract response from tracking result
-            $response = $result['response'] ?? null;
-            $rawResponse = $response ? json_encode($response) : '';
-
-            $this->secureLogger->info("Transaction message sent with tracking", [
-                'address' => $address,
-                'message_id' => $messageId,
-                'txid' => $txid,
-                'stage' => $result['stage'] ?? 'unknown',
-                'success' => $result['success'] ?? false
-            ]);
-
-            return [
-                'success' => $result['success'] ?? false,
-                'response' => $response,
-                'raw' => $rawResponse,
-                'tracking' => $result,
-                'messageId' => $messageId
-            ];
         }
 
-        // Fall back to direct transport
+        // Fall back to direct transport when MessageDeliveryService not available
         $rawResponse = $this->transportUtility->send($address, $payload);
         $response = json_decode($rawResponse, true);
 
@@ -613,8 +544,10 @@ class TransactionService {
                     $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                     output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
 
-                    // Mark the transaction delivery as completed
-                    $this->markDeliveryCompleted('transaction', 'tx-' . $txid . '-' . strtotime($message['created_at'] ?? 'now'));
+                    // Mark the transaction delivery as completed (using MessageDeliveryService directly)
+                    if ($this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->markDeliveryCompleted('transaction', 'tx-' . $txid . '-' . strtotime($message['created_at'] ?? 'now'));
+                    }
 
                     // Send completion message with delivery tracking
                     $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, $txid . '-complete');
@@ -698,8 +631,10 @@ class TransactionService {
                 $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                 output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
 
-                // Mark the P2P delivery chain as completed since transaction was received
-                $this->markDeliveryCompleted('p2p', 'p2p-direct-' . $memo);
+                // Mark the P2P delivery chain as completed since transaction was received (using MessageDeliveryService directly)
+                if ($this->messageDeliveryService !== null) {
+                    $this->messageDeliveryService->markDeliveryCompleted('p2p', 'p2p-direct-' . $memo);
+                }
 
                 // Send completion message with delivery tracking
                 $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, $txid . '-p2p-complete');

@@ -124,8 +124,8 @@ class ContactService {
     /**
      * Send a contact message with optional delivery tracking
      *
-     * Uses MessageDeliveryService when available for reliable delivery with
-     * retry logic and dead letter queue support. Falls back to direct transport
+     * Uses MessageDeliveryService.sendMessage() when available for reliable delivery
+     * with retry logic and dead letter queue support. Falls back to direct transport
      * if delivery service is not configured.
      *
      * @param string $address Recipient address
@@ -134,41 +134,23 @@ class ContactService {
      * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
      */
     private function sendContactMessage(string $address, array $payload, ?string $messageId = null): array {
-        // Generate message ID if not provided (use hash of payload for consistency)
+        // Use unified sendMessage() from MessageDeliveryService if available
+        if ($this->messageDeliveryService !== null) {
+            // Use sync delivery (async=false) for contact messages to ensure reliability
+            return $this->messageDeliveryService->sendMessage(
+                'contact',
+                $address,
+                $payload,
+                $messageId,
+                false // sync
+            );
+        }
+
+        // Fall back to direct transport when MessageDeliveryService not available
         if ($messageId === null) {
             $messageId = hash('sha256', json_encode($payload) . microtime(true));
         }
 
-        // Use delivery tracking if service is available
-        if ($this->messageDeliveryService !== null) {
-            $result = $this->messageDeliveryService->sendWithTracking(
-                'contact',
-                $messageId,
-                $address,
-                $payload
-            );
-
-            // Extract response from tracking result
-            $response = $result['response'] ?? null;
-            $rawResponse = $response ? json_encode($response) : '';
-
-            $this->secureLogger->info("Contact message sent with tracking", [
-                'address' => $address,
-                'message_id' => $messageId,
-                'stage' => $result['stage'] ?? 'unknown',
-                'success' => $result['success'] ?? false
-            ]);
-
-            return [
-                'success' => $result['success'] ?? false,
-                'response' => $response,
-                'raw' => $rawResponse,
-                'tracking' => $result,
-                'messageId' => $messageId
-            ];
-        }
-
-        // Fall back to direct transport
         $rawResponse = $this->transportUtility->send($address, $payload);
         $response = json_decode($rawResponse, true);
 
@@ -178,41 +160,6 @@ class ContactService {
             'raw' => $rawResponse,
             'messageId' => $messageId
         ];
-    }
-
-    /**
-     * Update delivery stage after local database operation
-     *
-     * Call this after successfully storing contact data locally to update
-     * the delivery tracking to 'inserted' and optionally 'completed'.
-     *
-     * Uses MessageDeliveryService::updateStageAfterLocalInsert which enforces
-     * proper stage progression to prevent regression.
-     *
-     * @param string $messageId The message ID used for tracking
-     * @param bool $markCompleted Whether to also mark as completed
-     */
-    private function updateDeliveryStageAfterInsert(string $messageId, bool $markCompleted = false): void {
-        if ($this->messageDeliveryService === null) {
-            return;
-        }
-
-        $success = $this->messageDeliveryService->updateStageAfterLocalInsert(
-            'contact',
-            $messageId,
-            $markCompleted
-        );
-
-        if ($success) {
-            $this->secureLogger->info("Contact delivery stage updated after local insert", [
-                'message_id' => $messageId,
-                'mark_completed' => $markCompleted
-            ]);
-        } else {
-            $this->secureLogger->warning("Failed to update contact delivery stage after insert", [
-                'message_id' => $messageId
-            ]);
-        }
     }
 
     /**
@@ -356,10 +303,10 @@ class ContactService {
                     $messageId = 'contact-unblock-accept-' . hash('sha256', $address . $contact['pubkey'] . time());
                     $sendResult = $this->sendContactMessage($address, $acceptPayload, $messageId);
 
-                    // For acceptance messages, we update stages based on our local operations
+                    // For acceptance messages, we update stages based on our local operations (using MessageDeliveryService directly)
                     // Stage progression: pending -> sent -> received (from transport) -> inserted (local) -> completed
-                    if ($sendResult['success']) {
-                        $this->updateDeliveryStageAfterInsert($messageId, true);
+                    if ($sendResult['success'] && $this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                     }
 
                     $output->success("Contact " . $address . " unblocked and added", $contactData, "Contact unblocked and added successfully");
@@ -388,11 +335,11 @@ class ContactService {
                     $messageId = 'contact-accept-' . hash('sha256', $address . $contact['pubkey'] . time());
                     $sendResult = $this->sendContactMessage($address, $acceptPayload, $messageId);
 
-                    // For acceptance messages, we update stages based on our local operations
+                    // For acceptance messages, we update stages based on our local operations (using MessageDeliveryService directly)
                     // The acceptance message was sent and our local DB was updated (acceptContact above)
                     // Stage progression: pending -> sent -> received (from transport) -> inserted (local) -> completed
-                    if ($sendResult['success']) {
-                        $this->updateDeliveryStageAfterInsert($messageId, true);
+                    if ($sendResult['success'] && $this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                     }
 
                     $contactData['status'] = 'accepted';
@@ -450,9 +397,11 @@ class ContactService {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
-                    // Update delivery stage: received -> inserted -> completed
+                    // Update delivery stage: received -> inserted -> completed (using MessageDeliveryService directly)
                     // Contact request phase is complete (awaiting acceptance is a separate phase)
-                    $this->updateDeliveryStageAfterInsert($messageId, true);
+                    if ($this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
 
                     $contactData['status'] = 'pending';
                     $contactData['pubkey'] = $senderPublicKey;
@@ -470,8 +419,10 @@ class ContactService {
                 $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
                 // Update contact address on our end
                 if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
-                    // Update delivery stage: updated -> inserted -> completed
-                    $this->updateDeliveryStageAfterInsert($messageId, true);
+                    // Update delivery stage: updated -> inserted -> completed (using MessageDeliveryService directly)
+                    if ($this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
 
                     $contactData['status'] = 'updated';
                     $contactData['updated_address'] = $senderAddress;
@@ -487,8 +438,10 @@ class ContactService {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
-                    // Update delivery stage: warning -> inserted -> completed
-                    $this->updateDeliveryStageAfterInsert($messageId, true);
+                    // Update delivery stage: warning -> inserted -> completed (using MessageDeliveryService directly)
+                    if ($this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
 
                     // Resynch contact
                     if(Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'SILENT')){

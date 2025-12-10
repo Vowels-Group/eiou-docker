@@ -107,61 +107,10 @@ class RP2pService {
     }
 
     /**
-     * Update delivery stage to 'forwarded' after successfully forwarding a message
-     *
-     * @param string $messageType Type of message ('p2p' or 'rp2p')
-     * @param string $messageId The message ID used for tracking
-     * @param string|null $nextHop Optional address of next hop for logging
-     */
-    private function updateDeliveryStageToForwarded(string $messageType, string $messageId, ?string $nextHop = null): void {
-        if ($this->messageDeliveryService === null) {
-            return;
-        }
-
-        $success = $this->messageDeliveryService->updateStageToForwarded(
-            $messageType,
-            $messageId,
-            $nextHop
-        );
-
-        if ($success && class_exists('SecureLogger')) {
-            SecureLogger::info("RP2P delivery stage updated to forwarded", [
-                'message_type' => $messageType,
-                'message_id' => $messageId,
-                'next_hop' => $nextHop
-            ]);
-        }
-    }
-
-    /**
-     * Mark a delivery as completed
-     *
-     * @param string $messageType Type of message ('p2p' or 'rp2p')
-     * @param string $messageId The message ID used for tracking
-     */
-    private function markDeliveryCompleted(string $messageType, string $messageId): void {
-        if ($this->messageDeliveryService === null) {
-            return;
-        }
-
-        $success = $this->messageDeliveryService->markDeliveryCompleted(
-            $messageType,
-            $messageId
-        );
-
-        if ($success && class_exists('SecureLogger')) {
-            SecureLogger::info("RP2P delivery marked as completed", [
-                'message_type' => $messageType,
-                'message_id' => $messageId
-            ]);
-        }
-    }
-
-    /**
      * Send an RP2P message with optional delivery tracking
      *
-     * Uses MessageDeliveryService when available for reliable delivery with
-     * retry logic and dead letter queue support. Falls back to direct transport
+     * Uses MessageDeliveryService.sendMessage() when available for reliable delivery
+     * with retry logic and dead letter queue support. Falls back to direct transport
      * if delivery service is not configured.
      *
      * @param string $address Recipient address
@@ -173,39 +122,19 @@ class RP2pService {
         // Generate unique message ID for tracking
         $messageId = 'rp2p-' . $hash . '-' . time();
 
-        // Use delivery tracking if service is available
+        // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
-            $result = $this->messageDeliveryService->sendWithTracking(
+            // Use sync delivery (async=false) since RP2P messages are typically direct responses
+            return $this->messageDeliveryService->sendMessage(
                 'rp2p',
-                $messageId,
                 $address,
-                $payload
+                $payload,
+                $messageId,
+                false // sync
             );
-
-            // Extract response from tracking result
-            $response = $result['response'] ?? null;
-            $rawResponse = $response ? json_encode($response) : '';
-
-            if (class_exists('SecureLogger')) {
-                SecureLogger::info("RP2P message sent with tracking", [
-                    'address' => $address,
-                    'message_id' => $messageId,
-                    'hash' => $hash,
-                    'stage' => $result['stage'] ?? 'unknown',
-                    'success' => $result['success'] ?? false
-                ]);
-            }
-
-            return [
-                'success' => $result['success'] ?? false,
-                'response' => $response,
-                'raw' => $rawResponse,
-                'tracking' => $result,
-                'messageId' => $messageId
-            ];
         }
 
-        // Fall back to direct transport
+        // Fall back to direct transport when MessageDeliveryService not available
         $rawResponse = $this->transportUtility->send($address, $payload);
         $response = json_decode($rawResponse, true);
 
@@ -271,8 +200,10 @@ class RP2pService {
                 $response = $sendResult['response'];
 
                 if ($sendResult['success']) {
-                    // Mark delivery as forwarded since we successfully sent to next hop
-                    $this->updateDeliveryStageToForwarded('rp2p', $sendResult['messageId'], $p2p['sender_address']);
+                    // Mark delivery as forwarded since we successfully sent to next hop (using MessageDeliveryService directly)
+                    if ($this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageToForwarded('rp2p', $sendResult['messageId'], $p2p['sender_address']);
+                    }
                     output(outputRp2pResponse($response), 'SILENT');
                 } else {
                     // Log delivery failure details

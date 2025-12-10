@@ -105,6 +105,78 @@ class MessageDeliveryService {
     }
 
     /**
+     * Send a message with delivery tracking (unified interface)
+     *
+     * This is the main entry point for sending messages with delivery tracking.
+     * Consolidates the common pattern used by P2pService, Rp2pService,
+     * TransactionService, and ContactService.
+     *
+     * @param string $messageType Type of message (transaction, p2p, rp2p, contact)
+     * @param string $address Recipient address
+     * @param array $payload Message payload
+     * @param string|null $messageId Optional unique message ID (auto-generated if null)
+     * @param bool $async Use async (non-blocking) delivery (default: false for sync with retries)
+     * @return array Response with 'success', 'response', 'raw', 'tracking', and 'messageId' keys
+     */
+    public function sendMessage(
+        string $messageType,
+        string $address,
+        array $payload,
+        ?string $messageId = null,
+        bool $async = false
+    ): array {
+        // Generate message ID if not provided - use hash from payload if available
+        if ($messageId === null) {
+            $messageId = $payload['hash'] ?? hash('sha256', json_encode($payload) . microtime(true));
+        }
+
+        // Use async or sync delivery based on parameter
+        if ($async) {
+            $result = $this->sendWithTrackingAsync(
+                $messageType,
+                $messageId,
+                $address,
+                $payload
+            );
+        } else {
+            $result = $this->sendWithTracking(
+                $messageType,
+                $messageId,
+                $address,
+                $payload
+            );
+        }
+
+        // Extract response from tracking result
+        $response = $result['response'] ?? null;
+        $rawResponse = $response ? json_encode($response) : '';
+
+        // For async sends, check if queued for retry
+        $isQueuedForRetry = ($result['stage'] ?? '') === 'queued_for_retry';
+
+        if (class_exists('SecureLogger')) {
+            SecureLogger::info("Message sent via unified sendMessage", [
+                'message_type' => $messageType,
+                'address' => $address,
+                'message_id' => $messageId,
+                'stage' => $result['stage'] ?? 'unknown',
+                'success' => $result['success'] ?? false,
+                'async' => $async,
+                'queued_for_retry' => $isQueuedForRetry
+            ]);
+        }
+
+        return [
+            'success' => $result['success'] ?? false,
+            'response' => $response,
+            'raw' => $rawResponse,
+            'tracking' => $result,
+            'messageId' => $messageId,
+            'queued_for_retry' => $isQueuedForRetry
+        ];
+    }
+
+    /**
      * Send a message with delivery tracking - non-blocking (async) version
      *
      * Attempts to deliver a message ONCE without blocking on retries.
