@@ -412,6 +412,8 @@ class ServiceContainer {
                 $this->getUtilityContainer(),
                 $this->currentUser
             );
+            // Inject MessageDeliveryService for reliable message delivery
+            $this->services['MessageService']->setMessageDeliveryService($this->getMessageDeliveryService());
         }
         return $this->services['MessageService'];
     }

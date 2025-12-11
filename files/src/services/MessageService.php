@@ -36,6 +36,11 @@ class MessageService {
     private ?MessageDeliveryRepository $messageDeliveryRepository = null;
 
     /**
+     * @var MessageDeliveryService|null Message delivery service for reliable delivery
+     */
+    private ?MessageDeliveryService $messageDeliveryService = null;
+
+    /**
      * @var UtilityServiceContainer Utility service container
      */
     private UtilityServiceContainer $utilityContainer;
@@ -117,6 +122,60 @@ class MessageService {
             // MessageDeliveryRepository is optional, continue without it
             $this->messageDeliveryRepository = null;
         }
+    }
+
+    /**
+     * Set the message delivery service (for lazy initialization)
+     *
+     * @param MessageDeliveryService $service Message delivery service
+     */
+    public function setMessageDeliveryService(MessageDeliveryService $service): void {
+        $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Send a message with optional delivery tracking
+     *
+     * Uses MessageDeliveryService.sendMessage() when available for reliable delivery
+     * with retry logic and dead letter queue support. Falls back to direct transport
+     * if delivery service is not configured.
+     *
+     * Note: Message types sent from MessageService are:
+     * - 'message-inquiry': Direct inquiry to end-recipient (no forwarding)
+     * - 'message-completion': Transaction completion forwarded through chain
+     *
+     * @param string $messageType Message type for tracking
+     * @param string $address Recipient address
+     * @param array $payload Message payload
+     * @param string|null $hash Hash for message ID generation
+     * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
+     */
+    private function sendMessage(string $messageType, string $address, array $payload, ?string $hash = null): array {
+        // Generate unique message ID for tracking
+        $messageId = $messageType . '-' . ($hash ?? hash('sha256', json_encode($payload))) . '-' . $this->utilityContainer->getTimeUtility()->getCurrentMicrotime();
+
+        // Use unified sendMessage() from MessageDeliveryService if available
+        if ($this->messageDeliveryService !== null) {
+            // Use sync delivery (async=false) for message service operations
+            return $this->messageDeliveryService->sendMessage(
+                $messageType,
+                $address,
+                $payload,
+                $messageId,
+                false // sync
+            );
+        }
+
+        // Fall back to direct transport when MessageDeliveryService not available
+        $rawResponse = $this->transportUtility->send($address, $payload);
+        $response = json_decode($rawResponse, true);
+
+        return [
+            'success' => $response !== null && isset($response['status']),
+            'response' => $response,
+            'raw' => $rawResponse,
+            'messageId' => $messageId
+        ];
     }
 
     /**
@@ -264,8 +323,10 @@ class MessageService {
                     // Check if user was original sender of transaction
                     if(isset($p2p['destination_address'])){
                         // Send direct message inquiry to end recipient double checking if completion of transaction correct
+                        // This is a direct message (no forwarding) - completes on 'inserted' status
                         $completedTransactionInquiry = $this->messagePayload->buildTransactionCompletedInquiry($decodedMessage);
-                        $response = json_decode($this->transportUtility->send($p2p['destination_address'],$completedTransactionInquiry),true);
+                        $sendResult = $this->sendMessage('message-inquiry', $p2p['destination_address'], $completedTransactionInquiry, $hash);
+                        $response = $sendResult['response'];
                         output(outputTransactionInquiryResponse($response),'SILENT');
 
                         if($response['status'] === 'completed'){
@@ -285,10 +346,11 @@ class MessageService {
                         // Mark all P2P delivery records for this hash as completed
                         $this->markP2pDeliveriesCompleted($hash);
 
-                        // Send transaction completion message onwards
+                        // Send transaction completion message onwards (forwarded through chain)
+                        // This is a forwarded message - completes on 'forwarded' or 'inserted' status
                         $payloadTransactionCompleted =  $this->transactionPayload->buildCompleted($decodedMessage);
                         output(outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$p2p['sender_address']),'SILENT');
-                        $response = $this->transportUtility->send($p2p['sender_address'],$payloadTransactionCompleted);
+                        $sendResult = $this->sendMessage('message-completion', $p2p['sender_address'], $payloadTransactionCompleted, $hash);
                     }
                 }
                 // Return acknowledgment for P2P completion message delivery tracking

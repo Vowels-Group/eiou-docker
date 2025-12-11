@@ -598,9 +598,10 @@ class MessageDeliveryService {
                 break;
 
             case 'inserted':
-                // For RP2P and P2P messages, 'inserted' means the end-recipient received it
-                // and stored it - the message delivery to that contact is complete
-                if ($messageType === 'rp2p' || $messageType === 'p2p') {
+                // For P2P, RP2P, message-inquiry, and message-completion types,
+                // 'inserted' means the end-recipient received it and stored it
+                // - the message delivery to that contact is complete
+                if (in_array($messageType, ['rp2p', 'p2p', 'message-inquiry', 'message-completion'])) {
                     $this->deliveryRepository->markCompleted($messageType, $messageId);
                     if (function_exists('outputMessageDeliveryCompleted')) {
                         $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
@@ -626,9 +627,11 @@ class MessageDeliveryService {
                 break;
 
             case 'forwarded':
-                // For RP2P and P2P messages, 'forwarded' means the next contact confirmed
-                // they received and forwarded it - the message to that contact is complete
-                if ($messageType === 'rp2p' || $messageType === 'p2p') {
+                // For P2P, RP2P, and message-completion types, 'forwarded' means the next
+                // contact confirmed they received and forwarded it - the message delivery
+                // to that contact is complete.
+                // Note: message-inquiry is direct (not forwarded), so does not complete here.
+                if (in_array($messageType, ['rp2p', 'p2p', 'message-completion'])) {
                     $this->deliveryRepository->markCompleted($messageType, $messageId);
                     if (function_exists('outputMessageDeliveryCompleted')) {
                         $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
