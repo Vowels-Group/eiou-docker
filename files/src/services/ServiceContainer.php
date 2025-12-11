@@ -410,10 +410,9 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getTransactionRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getMessageDeliveryService()
             );
-            // Inject MessageDeliveryService for reliable message delivery
-            $this->services['MessageService']->setMessageDeliveryService($this->getMessageDeliveryService());
         }
         return $this->services['MessageService'];
     }

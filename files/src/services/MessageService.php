@@ -36,11 +36,6 @@ class MessageService {
     private ?MessageDeliveryRepository $messageDeliveryRepository = null;
 
     /**
-     * @var MessageDeliveryService|null Message delivery service for reliable delivery
-     */
-    private ?MessageDeliveryService $messageDeliveryService = null;
-
-    /**
      * @var UtilityServiceContainer Utility service container
      */
     private UtilityServiceContainer $utilityContainer;
@@ -49,6 +44,11 @@ class MessageService {
      * @var TransportUtilityService Transport utility service
      */
     private TransportUtilityService $transportUtility;
+
+    /**
+     * @var TimeUtilityService Time utility service
+     */
+    private TimeUtilityService $timeUtility;
 
     /**
      * @var UserContext Current user data
@@ -75,6 +75,10 @@ class MessageService {
      */
     private MessagePayload $messagePayload;
 
+    /**
+     * @var MessageDeliveryService Message delivery service for reliable delivery
+     */
+    private ?MessageDeliveryService $messageDeliveryService = null;
 
     /**
      * Constructor
@@ -85,6 +89,7 @@ class MessageService {
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
+     * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      */
     public function __construct(
         ContactRepository $contactRepository,
@@ -92,7 +97,8 @@ class MessageService {
         P2pRepository $p2pRepository,
         TransactionRepository $transactionRepository,
         UtilityServiceContainer $utilityContainer,
-        UserContext $currentUser
+        UserContext $currentUser,
+        ?MessageDeliveryService $messageDeliveryService = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->balanceRepository = $balanceRepository;
@@ -100,7 +106,9 @@ class MessageService {
         $this->transactionRepository = $transactionRepository;
         $this->utilityContainer = $utilityContainer;
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
+        $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
+        $this->messageDeliveryService = $messageDeliveryService;
        
         require_once '/etc/eiou/src/schemas/payloads/ContactPayload.php';
         $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
@@ -152,7 +160,7 @@ class MessageService {
      */
     private function sendMessage(string $messageType, string $address, array $payload, ?string $hash = null): array {
         // Generate unique message ID for tracking
-        $messageId = $messageType . '-' . ($hash ?? hash('sha256', json_encode($payload))) . '-' . $this->utilityContainer->getTimeUtility()->getCurrentMicrotime();
+        $messageId = $messageType . '-' . ($hash ?? hash('sha256', json_encode($payload))) . '-' . $this->timeUtility->getCurrentMicrotime();
 
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
