@@ -1054,6 +1054,20 @@ class MessageDeliveryService {
     }
 
     /**
+     * Mark all deliveries matching a hash pattern as completed
+     *
+     * Used to mark all P2P broadcast deliveries as completed when the
+     * transaction completes. Delegates to MessageDeliveryRepository.
+     *
+     * @param string $messageType Type of message ('p2p' or 'rp2p')
+     * @param string $hash The P2P hash to match
+     * @return int Number of updated records
+     */
+    public function markCompletedByHash(string $messageType, string $hash): int {
+        return $this->deliveryRepository->markCompletedByHash($messageType, $hash);
+    }
+
+    /**
      * Get delivery statistics
      *
      * @return array Statistics including success rate

@@ -31,11 +31,6 @@ class MessageService {
     private TransactionRepository $transactionRepository;
 
     /**
-     * @var MessageDeliveryRepository|null Message delivery repository instance
-     */
-    private ?MessageDeliveryRepository $messageDeliveryRepository = null;
-
-    /**
      * @var UtilityServiceContainer Utility service container
      */
     private UtilityServiceContainer $utilityContainer;
@@ -121,15 +116,6 @@ class MessageService {
        
         require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
         $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
-
-        // Initialize MessageDeliveryRepository for marking P2P deliveries as completed
-        try {
-            require_once '/etc/eiou/src/database/MessageDeliveryRepository.php';
-            $this->messageDeliveryRepository = new MessageDeliveryRepository();
-        } catch (Exception $e) {
-            // MessageDeliveryRepository is optional, continue without it
-            $this->messageDeliveryRepository = null;
-        }
     }
 
     /**
@@ -427,19 +413,19 @@ class MessageService {
      *
      * When a P2P transaction completes, this marks all related message_delivery
      * records (both p2p-direct-{hash} and p2p-broadcast-{hash}-{contactHash})
-     * as completed.
+     * as completed. Delegates to MessageDeliveryService.
      *
      * @param string $hash The P2P hash (memo)
      * @return void
      */
     private function markP2pDeliveriesCompleted(string $hash): void {
-        if ($this->messageDeliveryRepository === null) {
+        if ($this->messageDeliveryService === null) {
             return;
         }
 
-        // Mark both 'p2p' and 'rp2p' message types as completed
-        $p2pCount = $this->messageDeliveryRepository->markCompletedByHash('p2p', $hash);
-        $rp2pCount = $this->messageDeliveryRepository->markCompletedByHash('rp2p', $hash);
+        // Mark both 'p2p' and 'rp2p' message types as completed via MessageDeliveryService
+        $p2pCount = $this->messageDeliveryService->markCompletedByHash('p2p', $hash);
+        $rp2pCount = $this->messageDeliveryService->markCompletedByHash('rp2p', $hash);
 
         if ($p2pCount > 0 || $rp2pCount > 0) {
             if (function_exists('output')) {
