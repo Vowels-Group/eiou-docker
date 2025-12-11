@@ -57,9 +57,14 @@ class MessageDeliveryService {
     private float $jitterFactor;
 
     /**
-     * @var float Start time for delivery time tracking
+     * @var TimeUtilityService Time utility service
      */
-    private float $deliveryStartTime = 0;
+    private TimeUtilityService $timeUtility;
+
+    /**
+     * @var int Start time for delivery time tracking (microtime as int)
+     */
+    private int $deliveryStartTime = 0;
 
     /**
      * Constructor
@@ -68,6 +73,7 @@ class MessageDeliveryService {
      * @param DeadLetterQueueRepository $dlqRepository DLQ repository
      * @param DeliveryMetricsRepository $metricsRepository metrics repository
      * @param TransportUtilityService $transportUtility Transport service
+     * @param TimeUtilityService $timeUtility Time utility service
      * @param UserContext $currentUser Current user
      * @param int $maxRetries Maximum retries (default: 5)
      * @param int $baseDelay Base delay in seconds (default: 2)
@@ -78,15 +84,17 @@ class MessageDeliveryService {
         DeadLetterQueueRepository $dlqRepository,
         DeliveryMetricsRepository $metricsRepository,
         TransportUtilityService $transportUtility,
+        TimeUtilityService $timeUtility,
         UserContext $currentUser,
         int $maxRetries = 5,
         int $baseDelay = 2,
-        float $jitterFactor = 0.2,  
+        float $jitterFactor = 0.2,
     ) {
         $this->deliveryRepository = $deliveryRepository;
         $this->dlqRepository = $dlqRepository;
         $this->metricsRepository = $metricsRepository;
         $this->transportUtility = $transportUtility;
+        $this->timeUtility = $timeUtility;
         $this->currentUser = $currentUser;
         $this->maxRetries = $maxRetries;
         $this->baseDelay = $baseDelay;
@@ -127,7 +135,7 @@ class MessageDeliveryService {
     ): array {
         // Generate message ID if not provided - use hash from payload if available
         if ($messageId === null) {
-            $messageId = $payload['hash'] ?? hash('sha256', json_encode($payload) . microtime(true));
+            $messageId = $payload['hash'] ?? hash('sha256', json_encode($payload) . $this->timeUtility->getCurrentMicrotime());
         }
 
         // Use async or sync delivery based on parameter
@@ -200,7 +208,7 @@ class MessageDeliveryService {
         array $payload
     ): array {
         // Start tracking delivery time
-        $this->deliveryStartTime = microtime(true);
+        $this->deliveryStartTime = $this->timeUtility->getCurrentMicrotime();
 
         // Create or get existing delivery record
         if (!$this->deliveryRepository->deliveryExists($messageType, $messageId)) {
@@ -372,7 +380,7 @@ class MessageDeliveryService {
         array $payload
     ): array {
         // Start tracking delivery time
-        $this->deliveryStartTime = microtime(true);
+        $this->deliveryStartTime = $this->timeUtility->getCurrentMicrotime();
 
         // Create or get existing delivery record
         if (!$this->deliveryRepository->deliveryExists($messageType, $messageId)) {
@@ -570,7 +578,7 @@ class MessageDeliveryService {
 
         // Calculate delivery time for metrics
         $deliveryTimeMs = $this->deliveryStartTime > 0
-            ? (int) ((microtime(true) - $this->deliveryStartTime) * 1000)
+            ? (int) (($this->timeUtility->getCurrentMicrotime() - $this->deliveryStartTime) / 10)
             : 0;
 
         $result = null;
@@ -590,29 +598,59 @@ class MessageDeliveryService {
                 break;
 
             case 'inserted':
-                $this->deliveryRepository->updateStage($messageType, $messageId, 'inserted', $rawResponse);
-                if (function_exists('outputMessageDeliveryStageUpdated')) {
-                    $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'inserted'));
+                // For RP2P and P2P messages, 'inserted' means the end-recipient received it
+                // and stored it - the message delivery to that contact is complete
+                if ($messageType === 'rp2p' || $messageType === 'p2p') {
+                    $this->deliveryRepository->markCompleted($messageType, $messageId);
+                    if (function_exists('outputMessageDeliveryCompleted')) {
+                        $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
+                    }
+                    $result = [
+                        'success' => true,
+                        'stage' => 'completed',
+                        'message' => strtoupper($messageType) . ' message inserted by recipient - delivery complete',
+                        'response' => $response
+                    ];
+                } else {
+                    $this->deliveryRepository->updateStage($messageType, $messageId, 'inserted', $rawResponse);
+                    if (function_exists('outputMessageDeliveryStageUpdated')) {
+                        $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'inserted'));
+                    }
+                    $result = [
+                        'success' => true,
+                        'stage' => 'inserted',
+                        'message' => 'Message stored in recipient database',
+                        'response' => $response
+                    ];
                 }
-                $result = [
-                    'success' => true,
-                    'stage' => 'inserted',
-                    'message' => 'Message stored in recipient database',
-                    'response' => $response
-                ];
                 break;
 
             case 'forwarded':
-                $this->deliveryRepository->updateStage($messageType, $messageId, 'forwarded', $rawResponse);
-                if (function_exists('outputMessageDeliveryStageUpdated')) {
-                    $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'forwarded'));
+                // For RP2P and P2P messages, 'forwarded' means the next contact confirmed
+                // they received and forwarded it - the message to that contact is complete
+                if ($messageType === 'rp2p' || $messageType === 'p2p') {
+                    $this->deliveryRepository->markCompleted($messageType, $messageId);
+                    if (function_exists('outputMessageDeliveryCompleted')) {
+                        $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
+                    }
+                    $result = [
+                        'success' => true,
+                        'stage' => 'completed',
+                        'message' => strtoupper($messageType) . ' message forwarded by recipient - delivery complete',
+                        'response' => $response
+                    ];
+                } else {
+                    $this->deliveryRepository->updateStage($messageType, $messageId, 'forwarded', $rawResponse);
+                    if (function_exists('outputMessageDeliveryStageUpdated')) {
+                        $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'forwarded'));
+                    }
+                    $result = [
+                        'success' => true,
+                        'stage' => 'forwarded',
+                        'message' => 'Message forwarded to next hop',
+                        'response' => $response
+                    ];
                 }
-                $result = [
-                    'success' => true,
-                    'stage' => 'forwarded',
-                    'message' => 'Message forwarded to next hop',
-                    'response' => $response
-                ];
                 break;
 
             case 'accepted':
@@ -731,7 +769,7 @@ class MessageDeliveryService {
 
         // Calculate delivery time for metrics
         $deliveryTimeMs = $this->deliveryStartTime > 0
-            ? (int) ((microtime(true) - $this->deliveryStartTime) * 1000)
+            ? (int) (($this->timeUtility->getCurrentMicrotime() - $this->deliveryStartTime) / 10)
             : 0;
 
         // Move to Dead Letter Queue
@@ -1133,7 +1171,7 @@ class MessageDeliveryService {
     public function buildAcknowledgment(string $stage, ?string $messageId = null, ?string $additionalInfo = null): string {
         $response = [
             'status' => $stage,
-            'timestamp' => microtime(true),
+            'timestamp' => $this->timeUtility->getCurrentMicrotime(),
             'senderAddress' => $this->currentUser->getHttpAddress(),
             'senderPublicKey' => $this->currentUser->getPublicKey()
         ];
@@ -1250,7 +1288,7 @@ class MessageDeliveryService {
         if ($currentOrder < $forwardedOrder) {
             $responseData = [
                 'message' => 'Message forwarded to next hop',
-                'timestamp' => microtime(true),
+                'timestamp' => $this->timeUtility->getCurrentMicrotime(),
                 'previous_stage' => $currentStage
             ];
             if ($nextHop !== null) {
@@ -1384,7 +1422,7 @@ class MessageDeliveryService {
                 'inserted',
                 json_encode([
                     'message' => 'Data stored in local database',
-                    'timestamp' => microtime(true),
+                    'timestamp' => $this->timeUtility->getCurrentMicrotime(),
                     'previous_stage' => $currentStage
                 ])
             );

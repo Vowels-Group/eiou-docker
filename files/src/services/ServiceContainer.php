@@ -485,6 +485,7 @@ class ServiceContainer {
                 $this->getDeadLetterQueueRepository(),
                 $this->getDeliveryMetricsRepository(),
                 $this->getUtilityContainer()->getTransportUtility(),
+                $this->getUtilityContainer()->getTimeUtility(),
                 $this->currentUser
             );
         }

@@ -120,7 +120,7 @@ class RP2pService {
      */
     private function sendRp2pMessage(string $address, array $payload, string $hash): array {
         // Generate unique message ID for tracking
-        $messageId = 'rp2p-' . $hash . '-' . time();
+        $messageId = 'rp2p-' . $hash . '-' . $this->utilityContainer->getTimeUtility()->getCurrentMicrotime();
 
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
@@ -200,10 +200,8 @@ class RP2pService {
                 $response = $sendResult['response'];
 
                 if ($sendResult['success']) {
-                    // Mark delivery as forwarded since we successfully sent to next hop (using MessageDeliveryService directly)
-                    if ($this->messageDeliveryService !== null) {
-                        $this->messageDeliveryService->updateStageToForwarded('rp2p', $sendResult['messageId'], $p2p['sender_address']);
-                    }
+                    // RP2P delivery is automatically marked as completed by MessageDeliveryService
+                    // when the recipient confirms 'forwarded' or 'inserted' status
                     output(outputRp2pResponse($response), 'SILENT');
                 } else {
                     // Log delivery failure details

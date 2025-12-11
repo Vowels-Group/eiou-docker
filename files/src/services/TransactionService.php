@@ -168,7 +168,7 @@ class TransactionService {
      */
     private function sendTransactionMessage(string $address, array $payload, string $txid): array {
         // Generate unique message ID for tracking
-        $messageId = 'tx-' . $txid . '-' . time();
+        $messageId = 'tx-' . $txid . '-' . $this->utilityContainer->getTimeUtility()->getCurrentMicrotime();
 
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {

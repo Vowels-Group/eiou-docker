@@ -170,7 +170,7 @@ class P2pService {
 
         // Fall back to direct transport when MessageDeliveryService not available
         if ($messageId === null) {
-            $messageId = $payload['hash'] ?? hash('sha256', json_encode($payload) . microtime(true));
+            $messageId = $payload['hash'] ?? hash('sha256', json_encode($payload) . $this->timeUtility->getCurrentMicrotime());
         }
 
         $rawResponse = $this->transportUtility->send($address, $payload);
