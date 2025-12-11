@@ -49,6 +49,11 @@ class RP2pService {
     private TransportUtilityService $transportUtility;
 
     /**
+     * @var TimeUtilityService Time utility service
+     */
+    private TimeUtilityService $timeUtility;
+
+    /**
      * @var UserContext Current user data
      */
     private UserContext $currentUser;
@@ -90,6 +95,7 @@ class RP2pService {
         $this->utilityContainer = $utilityContainer;
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
+        $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
 
@@ -120,7 +126,7 @@ class RP2pService {
      */
     private function sendRp2pMessage(string $address, array $payload, string $hash): array {
         // Generate unique message ID for tracking
-        $messageId = 'rp2p-' . $hash . '-' . $this->utilityContainer->getTimeUtility()->getCurrentMicrotime();
+        $messageId = 'rp2p-' . $hash . '-' . $this->timeUtility->getCurrentMicrotime();
 
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {

@@ -43,6 +43,11 @@ class ContactService {
     private TransportUtilityService $transportUtility;
 
     /**
+     * @var TimeUtilityService Time utility service
+     */
+    private TimeUtilityService $timeUtility;
+
+    /**
      * @var InputValidator InputValidator
      */
     private InputValidator $inputValidator;
@@ -103,6 +108,7 @@ class ContactService {
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
         $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
+        $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->messageDeliveryService = $messageDeliveryService;
 
         require_once '/etc/eiou/src/schemas/payloads/ContactPayload.php';
@@ -148,7 +154,7 @@ class ContactService {
 
         // Fall back to direct transport when MessageDeliveryService not available
         if ($messageId === null) {
-            $messageId = hash('sha256', json_encode($payload) . $this->utilityContainer->getTimeUtility()->getCurrentMicrotime());
+            $messageId = hash('sha256', json_encode($payload) . $this->timeUtility->getCurrentMicrotime());
         }
 
         $rawResponse = $this->transportUtility->send($address, $payload);
@@ -300,7 +306,7 @@ class ContactService {
                 if($this->contactRepository->updateUnblockContact($contact['pubkey'], $name, $fee, $credit, $currency)){
                     // Send message of successful contact acceptance back to original contact requester with tracking
                     $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
-                    $messageId = 'contact-unblock-accept-' . hash('sha256', $address . $contact['pubkey'] . $this->utilityContainer->getTimeUtility()->getCurrentMicrotime());
+                    $messageId = 'contact-unblock-accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
                     $sendResult = $this->sendContactMessage($address, $acceptPayload, $messageId);
 
                     // For acceptance messages, we update stages based on our local operations (using MessageDeliveryService directly)
@@ -332,7 +338,7 @@ class ContactService {
                 if ($this->acceptContact($contact['pubkey'], $name, $fee, $credit, $currency)) {
                     // Send message of successful contact acceptance back to original contact requester with tracking
                     $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
-                    $messageId = 'contact-accept-' . hash('sha256', $address . $contact['pubkey'] . $this->utilityContainer->getTimeUtility()->getCurrentMicrotime());
+                    $messageId = 'contact-accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
                     $sendResult = $this->sendContactMessage($address, $acceptPayload, $messageId);
 
                     // For acceptance messages, we update stages based on our local operations (using MessageDeliveryService directly)
@@ -382,7 +388,7 @@ class ContactService {
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);  // Address already passed validation before
 
         // Generate unique message ID for contact creation tracking
-        $messageId = 'contact-create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->utilityContainer->getTimeUtility()->getCurrentMicrotime());
+        $messageId = 'contact-create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
 
         // Send contact creation request with delivery tracking
         $sendResult = $this->sendContactMessage($address, $payload, $messageId);

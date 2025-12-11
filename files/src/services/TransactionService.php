@@ -66,6 +66,11 @@ class TransactionService {
     private TransportUtilityService $transportUtility;
 
     /**
+     * @var TimeUtilityService Time utility service
+     */
+    private TimeUtilityService $timeUtility;
+
+    /**
      * @var InputValidator InputValidator
      */
     private InputValidator $inputValidator;
@@ -133,6 +138,7 @@ class TransactionService {
         $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
+        $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->inputValidator = $inputValidator;
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
@@ -168,7 +174,7 @@ class TransactionService {
      */
     private function sendTransactionMessage(string $address, array $payload, string $txid): array {
         // Generate unique message ID for tracking
-        $messageId = 'tx-' . $txid . '-' . $this->utilityContainer->getTimeUtility()->getCurrentMicrotime();
+        $messageId = 'tx-' . $txid . '-' . $this->timeUtility->getCurrentMicrotime();
 
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
@@ -403,7 +409,7 @@ class TransactionService {
         output(outputPrepareSendData($request), 'SILENT');
 
         $data['txType'] = 'standard';
-        $data['time'] = $this->utilityContainer->getTimeUtility()->getCurrentMicrotime();
+        $data['time'] = $this->timeUtility->getCurrentMicrotime();
         $data['amount'] = round($request[3] * Constants::TRANSACTION_USD_CONVERSION_FACTOR); // Convert to cents
         $data['currency'] = $request[4] ?? Constants::TRANSACTION_DEFAULT_CURRENCY; // Get currency or default to USD
         $data['memo'] = 'standard';

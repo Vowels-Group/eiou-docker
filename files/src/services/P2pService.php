@@ -117,7 +117,7 @@ class P2pService {
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
-        $this->timeUtility = $utilityContainer->getTimeUtility();
+        $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
         $this->secureLogger = new SecureLogger();
