@@ -278,8 +278,8 @@ class MessageDeliveryService {
             if ($decodedResponse !== null && !empty($response)) {
                 $status = $decodedResponse['status'] ?? null;
 
-                // Success cases
-                if (in_array($status, ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged'])) {
+                // Success cases - 'completed' is returned by inquiry handlers (e.g., transaction inquiry)
+                if (in_array($status, ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed'])) {
                     $result = $this->processSuccessfulDelivery(
                         $messageType,
                         $messageId,
@@ -459,7 +459,8 @@ class MessageDeliveryService {
 
                     // Success cases - don't retry
                     // 'acknowledged' is returned for completion messages (transaction complete confirmations)
-                    if (in_array($status, ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged'])) {
+                    // 'completed' is returned by inquiry handlers (e.g., transaction inquiry)
+                    if (in_array($status, ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed'])) {
                         $result = $this->processSuccessfulDelivery(
                             $messageType,
                             $messageId,
@@ -681,6 +682,21 @@ class MessageDeliveryService {
                     'success' => true,
                     'stage' => 'completed',
                     'message' => 'Completion message acknowledged by recipient',
+                    'response' => $response
+                ];
+                break;
+
+            case 'completed':
+                // 'completed' is returned by inquiry handlers (e.g., transaction inquiry)
+                // This confirms the recipient received the inquiry and confirmed transaction completion
+                $this->deliveryRepository->markCompleted($messageType, $messageId);
+                if (function_exists('outputMessageDeliveryCompleted')) {
+                    $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
+                }
+                $result = [
+                    'success' => true,
+                    'stage' => 'completed',
+                    'message' => 'Inquiry confirmed - transaction completed by recipient',
                     'response' => $response
                 ];
                 break;

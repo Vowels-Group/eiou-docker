@@ -135,8 +135,8 @@ class MessageService {
      * if delivery service is not configured.
      *
      * Note: Message subtypes sent from MessageService are encoded in the message ID:
-     * - 'inquiry': Direct inquiry to end-recipient (no forwarding) - ID: tx-{hash}-message-inquiry-{timestamp}
-     * - 'completion': Transaction completion forwarded through chain - ID: tx-{hash}-message-completion-{timestamp}
+     * - 'inquiry': Direct inquiry to end-recipient (no forwarding) - ID: tx-inquiry-{hash}-{timestamp}
+     * - 'completion': Transaction completion forwarded through chain - ID: tx-completion-{hash}-{timestamp}
      *
      * All messages use 'transaction' as the message_type for database storage.
      *
@@ -148,9 +148,9 @@ class MessageService {
      */
     private function sendMessage(string $messageSubtype, string $address, array $payload, ?string $hash = null): array {
         // Generate unique message ID for tracking
-        // Format: tx-{hash}-message-{subtype}-{timestamp}
+        // Format: tx-{subtype}-{hash}-{timestamp}
         $hashPart = $hash ?? hash('sha256', json_encode($payload));
-        $messageId = 'tx-' . $hashPart . '-message-' . $messageSubtype . '-' . $this->timeUtility->getCurrentMicrotime();
+        $messageId = 'tx-' . $messageSubtype . '-' . $hashPart . '-' . $this->timeUtility->getCurrentMicrotime();
 
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
@@ -323,7 +323,7 @@ class MessageService {
                     if(isset($p2p['destination_address'])){
                         // Send direct message inquiry to end recipient double checking if completion of transaction correct
                         // This is a direct message (no forwarding) - completes on 'inserted' status
-                        // Subtype 'inquiry' creates message_id: tx-{hash}-message-inquiry-{timestamp}
+                        // Subtype 'inquiry' creates message_id: tx-inquiry-{hash}-{timestamp}
                         $completedTransactionInquiry = $this->messagePayload->buildTransactionCompletedInquiry($decodedMessage);
                         $sendResult = $this->sendMessage('inquiry', $p2p['destination_address'], $completedTransactionInquiry, $hash);
                         $response = $sendResult['response'];
@@ -348,7 +348,7 @@ class MessageService {
 
                         // Send transaction completion message onwards (forwarded through chain)
                         // This is a forwarded message - completes on 'forwarded' or 'inserted' status
-                        // Subtype 'completion' creates message_id: tx-{hash}-message-completion-{timestamp}
+                        // Subtype 'completion' creates message_id: tx-completion-{hash}-{timestamp}
                         $payloadTransactionCompleted =  $this->transactionPayload->buildCompleted($decodedMessage);
                         output(outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$p2p['sender_address']),'SILENT');
                         $sendResult = $this->sendMessage('completion', $p2p['sender_address'], $payloadTransactionCompleted, $hash);
