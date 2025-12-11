@@ -136,7 +136,7 @@ class MessageService {
      *
      * Note: Message subtypes sent from MessageService are encoded in the message ID:
      * - 'inquiry': Direct inquiry to end-recipient (no forwarding) - ID: tx-inquiry-{hash}-{timestamp}
-     * - 'completion': Transaction completion forwarded through chain - ID: tx-completion-{hash}-{timestamp}
+     * - 'completion-relay': Transaction completion relayed through chain - ID: tx-completion-relay-{hash}-{timestamp}
      *
      * All messages use 'transaction' as the message_type for database storage.
      *
@@ -346,12 +346,12 @@ class MessageService {
                         // Mark all P2P delivery records for this hash as completed
                         $this->markP2pDeliveriesCompleted($hash);
 
-                        // Send transaction completion message onwards (forwarded through chain)
-                        // This is a forwarded message - completes on 'forwarded' or 'inserted' status
-                        // Subtype 'completion' creates message_id: tx-completion-{hash}-{timestamp}
+                        // Send transaction completion message onwards (relayed through chain)
+                        // This is a relay message - completes on 'forwarded' or 'inserted' status
+                        // Subtype 'completion-relay' creates message_id: tx-completion-relay-{hash}-{timestamp}
                         $payloadTransactionCompleted =  $this->transactionPayload->buildCompleted($decodedMessage);
                         output(outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$p2p['sender_address']),'SILENT');
-                        $sendResult = $this->sendMessage('completion', $p2p['sender_address'], $payloadTransactionCompleted, $hash);
+                        $sendResult = $this->sendMessage('completion-relay', $p2p['sender_address'], $payloadTransactionCompleted, $hash);
                     }
                 }
                 // Return acknowledgment for P2P completion message delivery tracking

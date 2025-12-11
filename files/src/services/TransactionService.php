@@ -174,7 +174,8 @@ class TransactionService {
      */
     private function sendTransactionMessage(string $address, array $payload, string $txid): array {
         // Generate unique message ID for tracking
-        $messageId = 'tx-' . $txid . '-' . $this->timeUtility->getCurrentMicrotime();
+        // Format: tx-send-{txid}-{timestamp} (sending a transaction)
+        $messageId = 'tx-send-' . $txid . '-' . $this->timeUtility->getCurrentMicrotime();
 
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
@@ -556,7 +557,8 @@ class TransactionService {
                     }
 
                     // Send completion message with delivery tracking
-                    $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, $txid . '-complete');
+                    // Format: tx-completion-response-{txid}-{timestamp} (responding to direct transaction received)
+                    $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, 'completion-response-' . $txid);
                 }
             } else{
                 // If p2p transaction
@@ -643,7 +645,8 @@ class TransactionService {
                 }
 
                 // Send completion message with delivery tracking
-                $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, $txid . '-p2p-complete');
+                // Format: tx-completion-response-{txid}-{timestamp} (P2P end-recipient responding with completion)
+                $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, 'completion-response-' . $txid);
             }
         }
     }
