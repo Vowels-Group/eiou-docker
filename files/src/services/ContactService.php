@@ -774,29 +774,45 @@ class ContactService {
     /**
      * Block a contact
      *
-     * @param string|null $address Contact address
+     * @param string|null $addressOrName Contact address or name
      * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return bool Success status
      */
-    public function blockContact(?string $address, ?CliOutputManager $output = null): bool {
+    public function blockContact(?string $addressOrName, ?CliOutputManager $output = null): bool {
         $output = $output ?? CliOutputManager::getInstance();
 
-        if ($address === null) {
-            $output->error("Address is required", 'MISSING_ADDRESS', 400);
+        if ($addressOrName === null) {
+            $output->error("Address or name is required", 'MISSING_IDENTIFIER', 400);
             exit(1);
         }
 
-        $addressValidation =  $this->inputValidator->validateAddress($address);
-        if (!$addressValidation['valid']) {
-            $this->secureLogger->warning("Invalid contact address", [
-                'address' => $address,
-                'error' => $addressValidation['error']
-            ]);
-            $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
-            exit(1);
+        // Check if it's a HTTP or Tor address
+        if ($this->transportUtility->isAddress($addressOrName)) {
+            $addressValidation = $this->inputValidator->validateAddress($addressOrName);
+            if (!$addressValidation['valid']) {
+                $this->secureLogger->warning("Invalid contact address", [
+                    'address' => $addressOrName,
+                    'error' => $addressValidation['error']
+                ]);
+                $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
+                exit(1);
+            }
+            $address = $addressValidation['value'];
+            $transportIndex = $this->transportUtility->determineTransportType($address);
+        } else {
+            // Check if the name yields an address
+            $contact = $this->contactRepository->lookupByName($addressOrName);
+            if (!$contact) {
+                $output->error("Contact not found with name: " . $addressOrName, 'CONTACT_NOT_FOUND', 404);
+                exit(1);
+            }
+            $address = $contact['http'] ?? $contact['tor'] ?? null;
+            if (!$address) {
+                $output->error("Contact has no valid address", 'NO_ADDRESS', 500);
+                exit(1);
+            }
+            $transportIndex = $this->transportUtility->determineTransportType($address);
         }
-        $address = $addressValidation['value'];
-        $transportIndex = $this->transportUtility->determineTransportType($address);
 
         if ($this->contactRepository->blockContact($transportIndex, $address)) {
             $output->success("Contact blocked successfully", [
@@ -813,28 +829,43 @@ class ContactService {
     /**
      * Unblock a contact
      *
-     * @param string|null $address Contact address
+     * @param string|null $addressOrName Contact address or name
      * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return bool Success status
      */
-    public function unblockContact(?string $address, ?CliOutputManager $output = null): bool {
+    public function unblockContact(?string $addressOrName, ?CliOutputManager $output = null): bool {
         $output = $output ?? CliOutputManager::getInstance();
 
-        if ($address === null) {
-            $output->error("Address is required", 'MISSING_ADDRESS', 400);
+        if ($addressOrName === null) {
+            $output->error("Address or name is required", 'MISSING_IDENTIFIER', 400);
             exit(1);
         }
 
-        $addressValidation =  $this->inputValidator->validateAddress($address);
-        if (!$addressValidation['valid']) {
-            $this->secureLogger->warning("Invalid contact address", [
-                'address' => $address,
-                'error' => $addressValidation['error']
-            ]);
-            $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
-            exit(1);
+        // Check if it's a HTTP or Tor address
+        if ($this->transportUtility->isAddress($addressOrName)) {
+            $addressValidation = $this->inputValidator->validateAddress($addressOrName);
+            if (!$addressValidation['valid']) {
+                $this->secureLogger->warning("Invalid contact address", [
+                    'address' => $addressOrName,
+                    'error' => $addressValidation['error']
+                ]);
+                $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
+                exit(1);
+            }
+            $address = $addressValidation['value'];
+        } else {
+            // Check if the name yields an address
+            $contact = $this->contactRepository->lookupByName($addressOrName);
+            if (!$contact) {
+                $output->error("Contact not found with name: " . $addressOrName, 'CONTACT_NOT_FOUND', 404);
+                exit(1);
+            }
+            $address = $contact['http'] ?? $contact['tor'] ?? null;
+            if (!$address) {
+                $output->error("Contact has no valid address", 'NO_ADDRESS', 500);
+                exit(1);
+            }
         }
-        $address = $addressValidation['value'];
 
         $transportIndex = $this->transportUtility->determineTransportType($address);
 
@@ -853,28 +884,44 @@ class ContactService {
     /**
      * Delete a contact
      *
-     * @param string|null $address Contact address
+     * @param string|null $addressOrName Contact address or name
      * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return bool Success status
      */
-    public function deleteContact(?string $address, ?CliOutputManager $output = null): bool {
+    public function deleteContact(?string $addressOrName, ?CliOutputManager $output = null): bool {
         $output = $output ?? CliOutputManager::getInstance();
 
-        if ($address === null) {
-            $output->error("Address is required", 'MISSING_ADDRESS', 400);
+        if ($addressOrName === null) {
+            $output->error("Address or name is required", 'MISSING_IDENTIFIER', 400);
             exit(1);
         }
 
-        $addressValidation =  $this->inputValidator->validateAddress($address);
-        if (!$addressValidation['valid']) {
-            $this->secureLogger->warning("Invalid contact address", [
-                'address' => $address,
-                'error' => $addressValidation['error']
-            ]);
-            $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
-            exit(1);
+        // Check if it's a HTTP or Tor address
+        if ($this->transportUtility->isAddress($addressOrName)) {
+            $addressValidation = $this->inputValidator->validateAddress($addressOrName);
+            if (!$addressValidation['valid']) {
+                $this->secureLogger->warning("Invalid contact address", [
+                    'address' => $addressOrName,
+                    'error' => $addressValidation['error']
+                ]);
+                $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
+                exit(1);
+            }
+            $address = $addressValidation['value'];
+        } else {
+            // Check if the name yields an address
+            $contact = $this->contactRepository->lookupByName($addressOrName);
+            if (!$contact) {
+                $output->error("Contact not found with name: " . $addressOrName, 'CONTACT_NOT_FOUND', 404);
+                exit(1);
+            }
+            $address = $contact['http'] ?? $contact['tor'] ?? null;
+            if (!$address) {
+                $output->error("Contact has no valid address", 'NO_ADDRESS', 500);
+                exit(1);
+            }
         }
-        $address = $addressValidation['value'];
+
         $pubkey = $this->getContactPubkey($address);
 
         if ($this->contactRepository->deleteContact($pubkey) && $this->addressRepository->deleteByPubkey($pubkey) && $this->balanceRepository->deleteByPubkey($pubkey)) {
