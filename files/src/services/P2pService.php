@@ -526,10 +526,11 @@ class P2pService {
 
             // Check if user is NOT the original sender of the p2p and has a direct contact link to end-recipient
             // If this is the case then send p2p directly
-            // Message ID format: direct-{hash} (message_type 'p2p' provides context)
+            // Message ID format: direct-{hash}-{contactHash} (message_type 'p2p' provides context)
             if(!isset($message['destination_address']) && $matchedContact = $this->matchContact($message)){
                 // Send directly to matched contact with delivery tracking
-                $messageId = 'direct-' . $p2pHash;
+                $contactHash = substr(hash('sha256', $matchedContact[$transportIndex]), 0, 8);
+                $messageId = 'direct-' . $p2pHash . '-' . $contactHash;
                 $sendResult = $this->sendP2pMessage('p2p', $matchedContact[$transportIndex], $p2pPayload, $messageId);
                 $response = $sendResult['response'];
 

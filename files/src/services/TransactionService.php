@@ -167,15 +167,25 @@ class TransactionService {
      * with retry logic and dead letter queue support. Falls back to direct transport
      * if delivery service is not configured.
      *
+     * Message ID format varies by transaction type:
+     * - Original send: send-{txid}-{timestamp} (user initiated the transaction)
+     * - Relay: relay-{txid}-{timestamp} (user is forwarding for another party)
+     * - Special formats: {prefix}-{txid}-{timestamp} (e.g., completion-response)
+     *
      * @param string $address Recipient address
      * @param array $payload Message payload
      * @param string $txid Transaction ID for tracking
+     * @param bool $isRelay Whether this is a relay (forwarding) vs original send
      * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
      */
-    private function sendTransactionMessage(string $address, array $payload, string $txid): array {
+    private function sendTransactionMessage(string $address, array $payload, string $txid, bool $isRelay = false): array {
         // Generate unique message ID for tracking
-        // Format: {txid}-{timestamp} (message_type 'transaction' provides context)
-        $messageId = $txid . '-' . $this->timeUtility->getCurrentMicrotime();
+        // Format: {prefix}-{txid}-{timestamp} (message_type 'transaction' provides context)
+        // Use relay- prefix for forwarded transactions, send- for original sends
+        // If txid already contains a prefix (e.g., completion-response-), use it as-is
+        $hasPrefix = strpos($txid, '-') !== false;
+        $prefix = $hasPrefix ? '' : ($isRelay ? 'relay-' : 'send-');
+        $messageId = $prefix . $txid . '-' . $this->timeUtility->getCurrentMicrotime();
 
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
@@ -583,6 +593,12 @@ class TransactionService {
             $rp2p = $this->rp2pRepository->getByHash($memo);
             $message['time'] = $rp2p['time'];
 
+            // Check if user is original sender (has destination_address) or intermediary (relay)
+            // Original sender: destination_address is set when P2P request was created
+            // Intermediary: destination_address is NULL when forwarding P2P request
+            $p2p = $this->p2pRepository->getByHash($memo);
+            $isRelay = !isset($p2p['destination_address']) || $p2p['destination_address'] === null;
+
             // If sending transaction forwards
             $payload = $this->transactionPayload->buildFromDatabase($message);
             $this->p2pRepository->updateStatus($memo,'paid');
@@ -590,7 +606,8 @@ class TransactionService {
             output(outputSendTransactionOnwards($message),'SILENT');
 
             // Send with delivery tracking
-            $sendResult = $this->sendTransactionMessage($message['receiver_address'], $payload, $txid);
+            // Use relay- prefix for forwarded transactions, send- for original sends
+            $sendResult = $this->sendTransactionMessage($message['receiver_address'], $payload, $txid, $isRelay);
             $response = $sendResult['response'];
 
             if($response && $response['status'] === 'accepted'){
@@ -640,9 +657,10 @@ class TransactionService {
                 $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                 output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
 
-                // Mark the P2P delivery chain as completed since transaction was received (using MessageDeliveryService directly)
+                // Mark the P2P delivery chain as completed since transaction was received
+                // Uses pattern matching to find message_ids like direct-{hash}-{contactHash}
                 if ($this->messageDeliveryService !== null) {
-                    $this->messageDeliveryService->markDeliveryCompleted('p2p', 'direct-' . $memo);
+                    $this->messageDeliveryService->markCompletedByHash('p2p', $memo);
                 }
 
                 // Send completion message with delivery tracking
