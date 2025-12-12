@@ -174,6 +174,51 @@ class DeliveryMetricsRepository extends AbstractRepository {
     }
 
     /**
+     * Build aggregated metrics query
+     *
+     * @param bool $groupByType Whether to group by message type
+     * @param string|null $messageType Optional message type filter (ignored if groupByType is true)
+     * @return string SQL query string
+     */
+    private function buildAggregatedMetricsQuery(bool $groupByType = false, ?string $messageType = null): string {
+        $selectFields = $groupByType ? "message_type,\n                    " : "";
+
+        $query = "SELECT
+                    {$selectFields}COALESCE(SUM(total_sent), 0) as total_sent,
+                    COALESCE(SUM(total_delivered), 0) as total_delivered,
+                    COALESCE(SUM(total_failed), 0) as total_failed,
+                    COALESCE(AVG(avg_delivery_time_ms), 0) as avg_delivery_time_ms,
+                    COALESCE(AVG(avg_retry_count), 0) as avg_retry_count
+                  FROM {$this->tableName}
+                  WHERE period_start >= :start AND period_end <= :end";
+
+        if (!$groupByType && $messageType !== null) {
+            $query .= " AND message_type = :type";
+        }
+
+        if ($groupByType) {
+            $query .= " GROUP BY message_type";
+        }
+
+        return $query;
+    }
+
+    /**
+     * Calculate success rate and add to result array
+     *
+     * @param array $result Result array with total_sent and total_delivered
+     * @return array Result with added success_rate
+     */
+    private function addSuccessRate(array &$result): array {
+        $totalSent = (int) ($result['total_sent'] ?? 0);
+        $totalDelivered = (int) ($result['total_delivered'] ?? 0);
+        $result['success_rate'] = $totalSent > 0
+            ? round(($totalDelivered / $totalSent) * 100, 2)
+            : 0;
+        return $result;
+    }
+
+    /**
      * Get aggregated metrics for a time range
      *
      * @param string $periodStart Start of the period
@@ -186,18 +231,10 @@ class DeliveryMetricsRepository extends AbstractRepository {
         string $periodEnd,
         ?string $messageType = null
     ): array {
-        $query = "SELECT
-                    COALESCE(SUM(total_sent), 0) as total_sent,
-                    COALESCE(SUM(total_delivered), 0) as total_delivered,
-                    COALESCE(SUM(total_failed), 0) as total_failed,
-                    COALESCE(AVG(avg_delivery_time_ms), 0) as avg_delivery_time_ms,
-                    COALESCE(AVG(avg_retry_count), 0) as avg_retry_count
-                  FROM {$this->tableName}
-                  WHERE period_start >= :start AND period_end <= :end";
+        $query = $this->buildAggregatedMetricsQuery(false, $messageType);
         $params = [':start' => $periodStart, ':end' => $periodEnd];
 
         if ($messageType !== null) {
-            $query .= " AND message_type = :type";
             $params[':type'] = $messageType;
         }
 
@@ -215,14 +252,7 @@ class DeliveryMetricsRepository extends AbstractRepository {
             ];
         }
 
-        // Calculate success rate
-        $totalSent = (int) $result['total_sent'];
-        $totalDelivered = (int) $result['total_delivered'];
-        $result['success_rate'] = $totalSent > 0
-            ? round(($totalDelivered / $totalSent) * 100, 2)
-            : 0;
-
-        return $result;
+        return $this->addSuccessRate($result);
     }
 
     /**
@@ -246,27 +276,14 @@ class DeliveryMetricsRepository extends AbstractRepository {
      * @return array Metrics grouped by message type
      */
     public function getMetricsByType(string $periodStart, string $periodEnd): array {
-        $query = "SELECT
-                    message_type,
-                    SUM(total_sent) as total_sent,
-                    SUM(total_delivered) as total_delivered,
-                    SUM(total_failed) as total_failed,
-                    AVG(avg_delivery_time_ms) as avg_delivery_time_ms,
-                    AVG(avg_retry_count) as avg_retry_count
-                  FROM {$this->tableName}
-                  WHERE period_start >= :start AND period_end <= :end
-                  GROUP BY message_type";
+        $query = $this->buildAggregatedMetricsQuery(true);
 
         $stmt = $this->execute($query, [':start' => $periodStart, ':end' => $periodEnd]);
         $results = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
 
-        // Calculate success rates
+        // Calculate success rates for each type
         foreach ($results as &$result) {
-            $totalSent = (int) $result['total_sent'];
-            $totalDelivered = (int) $result['total_delivered'];
-            $result['success_rate'] = $totalSent > 0
-                ? round(($totalDelivered / $totalSent) * 100, 2)
-                : 0;
+            $this->addSuccessRate($result);
         }
 
         return $results;

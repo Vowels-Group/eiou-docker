@@ -55,17 +55,27 @@ class DeadLetterQueueRepository extends AbstractRepository {
 
         $result = $this->insert($data);
 
-        // Log to SecureLogger if available
-        if (class_exists('SecureLogger')) {
-            SecureLogger::warning("Message added to Dead Letter Queue", [
-                'message_type' => $messageType,
-                'original_id' => $originalId,
-                'recipient' => $recipientAddress,
-                'failure_reason' => $failureReason
-            ]);
-        }
+        $this->log('warning', "Message added to Dead Letter Queue", [
+            'message_type' => $messageType,
+            'original_id' => $originalId,
+            'recipient' => $recipientAddress,
+            'failure_reason' => $failureReason
+        ]);
 
         return $result;
+    }
+
+    /**
+     * Log a message using SecureLogger if available
+     *
+     * @param string $level Log level (info, warning, error)
+     * @param string $message Log message
+     * @param array $context Additional context
+     */
+    private function log(string $level, string $message, array $context = []): void {
+        if (class_exists('SecureLogger')) {
+            SecureLogger::$level($message, $context);
+        }
     }
 
     /**
@@ -86,15 +96,7 @@ class DeadLetterQueueRepository extends AbstractRepository {
         try {
             $stmt->execute();
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // Decode JSON payloads
-            foreach ($results as &$item) {
-                if (isset($item['payload'])) {
-                    $item['payload'] = json_decode($item['payload'], true);
-                }
-            }
-
-            return $results;
+            return $this->decodeJsonFields($results, 'payload');
         } catch (PDOException $e) {
             $this->logError("Failed to get pending DLQ items", $e);
             return [];
@@ -110,8 +112,8 @@ class DeadLetterQueueRepository extends AbstractRepository {
     public function getById(int $id): ?array {
         $result = $this->findById($id);
 
-        if ($result && isset($result['payload'])) {
-            $result['payload'] = json_decode($result['payload'], true);
+        if ($result) {
+            $this->decodeJsonFields($result, 'payload');
         }
 
         return $result;
@@ -147,15 +149,7 @@ class DeadLetterQueueRepository extends AbstractRepository {
         try {
             $stmt->execute();
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // Decode JSON payloads
-            foreach ($results as &$item) {
-                if (isset($item['payload'])) {
-                    $item['payload'] = json_decode($item['payload'], true);
-                }
-            }
-
-            return $results;
+            return $this->decodeJsonFields($results, 'payload');
         } catch (PDOException $e) {
             $this->logError("Failed to get DLQ items by type", $e);
             return [];
