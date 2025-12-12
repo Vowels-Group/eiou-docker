@@ -375,3 +375,60 @@ function initializeTransactionToast() {
 document.addEventListener('DOMContentLoaded', function() {
     initializeTransactionToast();
 });
+// Loading Overlay Functions  
+function showLoader(message) {
+    message = message || 'Loading...';
+    var overlay = document.getElementById('loadingOverlay');
+    var loadingText = document.getElementById('loadingText');
+    if (overlay && loadingText) {
+        loadingText.textContent = message;
+        overlay.classList.add('active');
+    }
+}
+
+function hideLoader() {
+    var overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.classList.remove('active');
+    }
+}
+
+// Form loaders initialization
+function initializeFormLoaders() {
+    // Add contact form
+    var addContactForm = document.querySelector('#add-contact form');
+    if (addContactForm) {
+        addContactForm.addEventListener('submit', function() {
+            showLoader('Adding contact...');
+        });
+    }
+
+    // Edit contact form
+    var editContactForm = document.querySelector('#editContactModal form');
+    if (editContactForm) {
+        editContactForm.addEventListener('submit', function() {
+            showLoader('Updating contact...');
+        });
+    }
+
+    // Auth form
+    var authForm = document.querySelector('.auth-form');
+    if (authForm) {
+        authForm.addEventListener('submit', function() {
+            showLoader('Authenticating...');
+        });
+    }
+
+    // Send form - already handled in initializeTransactionToast, add loader
+    var sendForm = document.querySelector('#send-form form');
+    if (sendForm) {
+        sendForm.addEventListener('submit', function() {
+            showLoader('Sending transaction...');
+        });
+    }
+}
+
+// Add to existing DOMContentLoaded
+window.addEventListener('DOMContentLoaded', function() {
+    initializeFormLoaders();
+});
