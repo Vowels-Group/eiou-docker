@@ -95,24 +95,44 @@ class P2pPayload extends BasePayload
      * Build P2P rejection payload
      *
      * @param array $request The P2P request data
-     * @param string $reason Rejection reason
+     * @param string $reason Rejection reason code (duplicate, insufficient_funds, contact_blocked, etc.)
      * @return string JSON encoded rejection payload
      */
-    public function buildRejection(array $request, string $reason = 'already exists'): string
+    public function buildRejection(array $request, string $reason = 'duplicate'): string
     {
         $this->ensureRequiredFields($request, ['hash', 'senderAddress']);
 
         $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
 
-        $defaultReason = "hash {$request['hash']} for P2P already exists in database of {$receiver}";
+        $message = $this->buildRejectionMessage($request['hash'], $receiver, $reason);
 
         return json_encode([
             'status' => 'rejected',
             'reason' => $reason,
-            'message' => $reason ?? $defaultReason,
+            'message' => $message,
             'senderAddress' => $receiver,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
+    }
+
+    /**
+     * Build a human-readable rejection message based on the reason code
+     *
+     * @param string $hash The P2P hash
+     * @param string $receiver The receiver address
+     * @param string $reason The rejection reason code
+     * @return string Human-readable rejection message
+     */
+    private function buildRejectionMessage(string $hash, string $receiver, string $reason): string
+    {
+        $messages = [
+            'duplicate' => "hash {$hash} for P2P already exists in database of {$receiver}",
+            'insufficient_funds' => "hash {$hash} for P2P rejected by {$receiver}: insufficient funds",
+            'contact_blocked' => "hash {$hash} for P2P rejected by {$receiver}: contact is blocked",
+            'credit_limit_exceeded' => "hash {$hash} for P2P rejected by {$receiver}: credit limit exceeded",
+        ];
+
+        return $messages[$reason] ?? "hash {$hash} for P2P rejected by {$receiver}: {$reason}";
     }
 
     /**

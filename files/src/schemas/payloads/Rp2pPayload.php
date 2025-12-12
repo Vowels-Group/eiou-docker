@@ -74,20 +74,45 @@ class Rp2pPayload extends BasePayload
     }
 
     /**
-     * Build RP2P rejection payload when request was rejected (duplicate in database)
+     * Build RP2P rejection payload when request was rejected
      *
      * @param array $request The RP2P request data
+     * @param string $reason Rejection reason code (duplicate, insufficient_funds, contact_blocked, etc.)
      * @return string JSON-encoded rejection payload
      */
-    public function buildRejection(array $request): string
+    public function buildRejection(array $request, string $reason = 'duplicate'): string
     {
         $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+        $hash = $request['hash'];
+        $message = $this->buildRejectionMessage($hash, $receiver, $reason);
+
         return json_encode([
             'status' => 'rejected',
-            'message' => 'hash ' . print_r($request['hash'], true) . ' for RP2P already exists in database of ' . print_r($receiver, true),
+            'reason' => $reason,
+            'message' => $message,
             'senderAddress' => $receiver,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
+    }
+
+    /**
+     * Build a human-readable rejection message based on the reason code
+     *
+     * @param string $hash The RP2P hash
+     * @param string $receiver The receiver address
+     * @param string $reason The rejection reason code
+     * @return string Human-readable rejection message
+     */
+    private function buildRejectionMessage(string $hash, string $receiver, string $reason): string
+    {
+        $messages = [
+            'duplicate' => "hash {$hash} for RP2P already exists in database of {$receiver}",
+            'insufficient_funds' => "hash {$hash} for RP2P rejected by {$receiver}: insufficient funds",
+            'contact_blocked' => "hash {$hash} for RP2P rejected by {$receiver}: contact is blocked",
+            'credit_limit_exceeded' => "hash {$hash} for RP2P rejected by {$receiver}: credit limit exceeded",
+        ];
+
+        return $messages[$reason] ?? "hash {$hash} for RP2P rejected by {$receiver}: {$reason}";
     }
 
     /**
