@@ -106,10 +106,7 @@ class Rp2pPayload extends BasePayload
     private function buildRejectionMessage(string $hash, string $receiver, string $reason): string
     {
         $messages = [
-            'duplicate' => "hash {$hash} for RP2P already exists in database of {$receiver}",
-            'insufficient_funds' => "hash {$hash} for RP2P rejected by {$receiver}: insufficient funds",
-            'contact_blocked' => "hash {$hash} for RP2P rejected by {$receiver}: contact is blocked",
-            'credit_limit_exceeded' => "hash {$hash} for RP2P rejected by {$receiver}: credit limit exceeded",
+            'duplicate' => "hash {$hash} for RP2P already exists in database of {$receiver}"    
         ];
 
         return $messages[$reason] ?? "hash {$hash} for RP2P rejected by {$receiver}: {$reason}";
