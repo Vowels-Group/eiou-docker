@@ -278,23 +278,26 @@ class P2pService {
         $pubkey = $request['senderPublicKey'];
         // Check if User is not blocked
         if(!$this->contactRepository->isNotBlocked($pubkey)){
-            return false; 
+            if($echo){
+                echo $this->p2pPayload->buildRejection($request, 'contact_blocked');
+            }
+            return false;
         }
         // Check if P2P message has not reached max intermediary hop amount
         elseif(!$this->checkRequestLevel($request)){
             return false;
-        } 
+        }
         // Check if Contact has enough funds for P2P without fees
         elseif(!$this->checkAvailableFunds($request)){
             return false;
-        } 
+        }
 
         // Check if P2P already exists for hash in database
         try{
             if($this->p2pRepository->p2pExists($request['hash'])){
                 //If P2P already exists
                 if($echo){
-                    echo $this->p2pPayload->buildRejection($request);
+                    echo $this->p2pPayload->buildRejection($request, 'duplicate');
                 }
                 return false;
             }

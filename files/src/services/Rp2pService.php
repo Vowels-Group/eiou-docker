@@ -244,7 +244,7 @@ class RP2pService {
             if($this->rp2pRepository->rp2pExists($request['hash'])){
               //If RP2P already exists
                 if($echo){
-                    echo  $this->rp2pPayload->buildRejection($request);
+                    echo  $this->rp2pPayload->buildRejection($request, 'duplicate');
                 }
                 return false;
             }
