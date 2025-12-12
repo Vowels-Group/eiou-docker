@@ -249,9 +249,56 @@ class ServiceContainer {
         }
         return $this->repositories['ApiKeyRepository'];
     }
+    
+    /** Get MessageDeliveryRepository instance
+     *
+     * @return MessageDeliveryRepository
+     */
+    public function getMessageDeliveryRepository(): MessageDeliveryRepository {
+        if (!isset($this->repositories['MessageDeliveryRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/MessageDeliveryRepository.php';
+            $this->repositories['MessageDeliveryRepository'] = new MessageDeliveryRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['MessageDeliveryRepository'];
+    }
+
+    /**
+     * Get DeadLetterQueueRepository instance
+     *
+     * @return DeadLetterQueueRepository
+     */
+    public function getDeadLetterQueueRepository(): DeadLetterQueueRepository {
+        if (!isset($this->repositories['DeadLetterQueueRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/DeadLetterQueueRepository.php';
+            $this->repositories['DeadLetterQueueRepository'] = new DeadLetterQueueRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['DeadLetterQueueRepository'];
+    }
+
+    /**
+     * Get DeliveryMetricsRepository instance
+     *
+     * @return DeliveryMetricsRepository
+     */
+    public function getDeliveryMetricsRepository(): DeliveryMetricsRepository {
+        if (!isset($this->repositories['DeliveryMetricsRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/DeliveryMetricsRepository.php';
+            $this->repositories['DeliveryMetricsRepository'] = new DeliveryMetricsRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['DeliveryMetricsRepository'];
+    }
 
     /**
      * Get ContactService instance
+     *
+     * Integrates MessageDeliveryService for reliable contact message delivery
+     * with retry logic and dead letter queue support.
      *
      * @return ContactService
      */
@@ -265,7 +312,8 @@ class ServiceContainer {
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->getLogger(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getMessageDeliveryService()
             );
         }
         return $this->services['ContactService'];
@@ -273,6 +321,9 @@ class ServiceContainer {
 
     /**
      * Get TransactionService instance
+     *
+     * Integrates MessageDeliveryService for reliable transaction message delivery
+     * with retry logic and dead letter queue support.
      *
      * @return TransactionService
      */
@@ -289,7 +340,8 @@ class ServiceContainer {
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->getLogger(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getMessageDeliveryService()
             );
         }
         return $this->services['TransactionService'];
@@ -297,6 +349,9 @@ class ServiceContainer {
 
     /**
      * Get P2pService instance
+     *
+     * Integrates MessageDeliveryService for reliable P2P message delivery
+     * with retry logic and dead letter queue support.
      *
      * @return P2pService
      */
@@ -309,14 +364,18 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getTransactionRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getMessageDeliveryService()
             );
         }
         return $this->services['P2pService'];
     }
 
     /**
-     * Get R2pService instance
+     * Get Rp2pService instance
+     *
+     * Integrates MessageDeliveryService for reliable RP2P message delivery
+     * with retry logic and dead letter queue support.
      *
      * @return Rp2pService
      */
@@ -329,7 +388,8 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getMessageDeliveryService()
             );
         }
         return $this->services['Rp2pService'];
@@ -364,7 +424,8 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getTransactionRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getMessageDeliveryService()
             );
         }
         return $this->services['MessageService'];
@@ -424,6 +485,26 @@ class ServiceContainer {
             );
         }
         return $this->services['DebugService'];
+    }
+
+    /**
+     * Get MessageDeliveryService instance
+     *
+     * @return MessageDeliveryService
+     */
+    public function getMessageDeliveryService(): MessageDeliveryService {
+        if (!isset($this->services['MessageDeliveryService'])) {
+            require_once __DIR__ . '/MessageDeliveryService.php';
+            $this->services['MessageDeliveryService'] = new MessageDeliveryService(
+                $this->getMessageDeliveryRepository(),
+                $this->getDeadLetterQueueRepository(),
+                $this->getDeliveryMetricsRepository(),
+                $this->getUtilityContainer()->getTransportUtility(),
+                $this->getUtilityContainer()->getTimeUtility(),
+                $this->currentUser
+            );
+        }
+        return $this->services['MessageDeliveryService'];
     }
 
     /**

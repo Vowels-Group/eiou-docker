@@ -2,11 +2,14 @@
 # Copyright 2025
 
 require_once __DIR__ . '/../utils/InputValidator.php';
+require_once __DIR__ . '/MessageDeliveryService.php';
 
 /**
  * P2P Service
  *
  * Handles all business logic for peer-to-peer payment routing.
+ * Integrates with MessageDeliveryService for reliable message delivery
+ * with tracking, retry logic, and dead letter queue support.
  *
  * @package Services
  */
@@ -37,22 +40,22 @@ class P2pService {
     private UtilityServiceContainer $utilityContainer;
 
     /**
-     * @var ValidationUtilityService Validation utility service 
+     * @var ValidationUtilityService Validation utility service
      */
     private ValidationUtilityService $validationUtility;
 
     /**
-     * @var TransportUtilityService Transport utility service 
+     * @var TransportUtilityService Transport utility service
      */
     private TransportUtilityService $transportUtility;
 
     /**
-     * @var TimeUtilityService Time utility service 
+     * @var TimeUtilityService Time utility service
      */
     private TimeUtilityService $timeUtility;
 
     /**
-     * @var CurrencyUtilityService Currency utility service 
+     * @var CurrencyUtilityService Currency utility service
      */
     private CurrencyUtilityService $currencyUtility;
 
@@ -77,6 +80,16 @@ class P2pService {
     private UtilPayload $utilPayload;
 
     /**
+     * @var MessageDeliveryService|null Message delivery service for reliable delivery
+     */
+    private ?MessageDeliveryService $messageDeliveryService = null;
+
+    /**
+     * @var SecureLogger Logger instance
+     */
+    private SecureLogger $secureLogger;
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
@@ -85,6 +98,7 @@ class P2pService {
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
+     * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      */
     public function __construct(
         ContactRepository $contactRepository,
@@ -92,7 +106,8 @@ class P2pService {
         P2pRepository $p2pRepository,
         TransactionRepository $transactionRepository,
         UtilityServiceContainer $utilityContainer,
-        UserContext $currentUser
+        UserContext $currentUser,
+        ?MessageDeliveryService $messageDeliveryService = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->balanceRepository = $balanceRepository;
@@ -102,17 +117,71 @@ class P2pService {
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
-        $this->timeUtility = $utilityContainer->getTimeUtility();
+        $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
-       
+        $this->messageDeliveryService = $messageDeliveryService;
+        $this->secureLogger = new SecureLogger();
+
         require_once '/etc/eiou/src/schemas/payloads/P2pPayload.php';
         $this->p2pPayload = new P2pPayload($this->currentUser, $this->utilityContainer);
-       
+
         require_once '/etc/eiou/src/schemas/payloads/Rp2pPayload.php';
         $this->rp2pPayload = new Rp2pPayload($this->currentUser, $this->utilityContainer);
-      
+
         require_once '/etc/eiou/src/schemas/payloads/UtilPayload.php';
         $this->utilPayload = new UtilPayload($this->currentUser, $this->utilityContainer);
+    }
+
+    /**
+     * Set the message delivery service (for lazy initialization)
+     *
+     * @param MessageDeliveryService $service Message delivery service
+     */
+    public function setMessageDeliveryService(MessageDeliveryService $service): void {
+        $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Send a P2P message with optional delivery tracking (non-blocking)
+     *
+     * Uses MessageDeliveryService.sendMessage() when available for reliable delivery
+     * with retry logic and dead letter queue support. Uses async (non-blocking)
+     * delivery to prevent P2P broadcast loops from getting stuck waiting on
+     * retries. Failed sends are queued for background retry.
+     *
+     * @param string $messageType Type of P2P message ('p2p' or 'rp2p')
+     * @param string $address Recipient address
+     * @param array $payload Message payload
+     * @param string|null $messageId Optional unique message ID for tracking (uses hash if available)
+     * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
+     */
+    private function sendP2pMessage(string $messageType, string $address, array $payload, ?string $messageId = null): array {
+        // Use unified sendMessage() from MessageDeliveryService if available
+        if ($this->messageDeliveryService !== null) {
+            // Use async=true for non-blocking delivery (allows P2P broadcast loops to continue)
+            return $this->messageDeliveryService->sendMessage(
+                $messageType,
+                $address,
+                $payload,
+                $messageId,
+                true // async
+            );
+        }
+
+        // Fall back to direct transport when MessageDeliveryService not available
+        if ($messageId === null) {
+            $messageId = $payload['hash'] ?? hash('sha256', json_encode($payload) . $this->timeUtility->getCurrentMicrotime());
+        }
+
+        $rawResponse = $this->transportUtility->send($address, $payload);
+        $response = json_decode($rawResponse, true);
+
+        return [
+            'success' => $response !== null && isset($response['status']),
+            'response' => $response,
+            'raw' => $rawResponse,
+            'messageId' => $messageId
+        ];
     }
 
     /**
@@ -228,11 +297,12 @@ class P2pService {
                     echo $this->p2pPayload->buildRejection($request);
                 }
                 return false;
-            } 
-            if($echo){
-                echo $this->p2pPayload->buildAcceptance($request);
             }
-            return true;  
+            if($echo){
+                // Return 'inserted' status since the P2P will be stored in the database
+                echo $this->p2pPayload->buildInserted($request);
+            }
+            return true;
         } catch (PDOException $e) {
             // Handle database error
             error_log("Error retrieving existence of P2P by hash" , $e->getMessage());
@@ -248,6 +318,9 @@ class P2pService {
 
     /**
      * Handle incoming P2P request
+     *
+     * Uses MessageDeliveryService for reliable rp2p response delivery when
+     * the P2P destination matches the user.
      *
      * @param array $request The P2P request data
      * @return void
@@ -268,9 +341,18 @@ class P2pService {
                 $request['status'] = 'found';
                 $this->p2pRepository->insertP2pRequest($request, $myAddress);
 
-                // Build and send corresponding rp2p request payload to sender of p2p
+                // Build and send corresponding rp2p request payload to sender of p2p with delivery tracking
+                // Message ID format: response-{hash} (message_type 'rp2p' provides context)
                 $rP2pPayload = $this->rp2pPayload->build($request);
-                $response = json_decode($this->transportUtility->send($request['senderAddress'], $rP2pPayload), true);
+                $messageId = 'response-' . $request['hash'];
+                $sendResult = $this->sendP2pMessage('rp2p', $request['senderAddress'], $rP2pPayload, $messageId);
+                $response = $sendResult['response'];
+
+                // Update delivery stage after local insert (using MessageDeliveryService directly)
+                if ($sendResult['success'] && $this->messageDeliveryService !== null) {
+                    $this->messageDeliveryService->updateStageAfterLocalInsert('rp2p', $messageId, false);
+                }
+
                 output(outputRp2pTransactionResponse($response), 'SILENT');
             } else {
                 // Calculate fees
@@ -423,6 +505,9 @@ class P2pService {
     /**
      * Process queued P2P messages
      *
+     * Uses MessageDeliveryService for reliable P2P message delivery with
+     * tracking, retry logic, and dead letter queue support.
+     *
      * @return int Number of processed messages
      */
     public function processQueuedP2pMessages(): int {
@@ -437,15 +522,29 @@ class P2pService {
             // Get transport type for forwarding/sending
             $transportIndex = $this->transportUtility->determineTransportType($message['sender_address']);
             $p2pPayload = $this->p2pPayload->buildFromDatabase($message); // Build p2p request payload
-            
+            $p2pHash = $message['hash'];
+
             // Check if user is NOT the original sender of the p2p and has a direct contact link to end-recipient
             // If this is the case then send p2p directly
+            // Message ID format: direct-{hash}-{contactHash} (message_type 'p2p' provides context)
             if(!isset($message['destination_address']) && $matchedContact = $this->matchContact($message)){
-                $response = json_decode($this->transportUtility->send($matchedContact[$transportIndex], $p2pPayload),true);
+                // Send directly to matched contact with delivery tracking
+                $contactHash = substr(hash('sha256', $matchedContact[$transportIndex]), 0, 8);
+                $messageId = 'direct-' . $p2pHash . '-' . $contactHash;
+                $sendResult = $this->sendP2pMessage('p2p', $matchedContact[$transportIndex], $p2pPayload, $messageId);
+                $response = $sendResult['response'];
+
+                if ($sendResult['success'] && $this->messageDeliveryService !== null) {
+                    // Mark as forwarded stage since we're routing to the destination
+                    $this->messageDeliveryService->updateStageToForwarded('p2p', $messageId, $matchedContact[$transportIndex]);
+                }
+
                 output(outputP2pSendResult($response),'SILENT');
             } else{
                 $contactsToSend = $contactsCount; // Reset sendable contact count
                 $sentMessages = 0;
+                $successfulSends = [];
+
                 // Send p2p request to all accepted contacts
                 foreach ($contacts as $contact) {
                     $contactAddress = $contact[$transportIndex]; // Get similar contact address to message
@@ -465,15 +564,32 @@ class P2pService {
                         continue;
                     }
 
-                    $response = json_decode($this->transportUtility->send($contactAddress, $p2pPayload),true);
+                    // Send with delivery tracking - use unique ID per contact to track each send
+                    // Message ID format: broadcast-{p2pHash}-{contactHash} (message_type 'p2p' provides context)
+                    $contactHash = substr(hash('sha256', $contactAddress), 0, 8);
+                    $messageId = 'broadcast-' . $p2pHash . '-' . $contactHash;
+                    $sendResult = $this->sendP2pMessage('p2p', $contactAddress, $p2pPayload, $messageId);
+                    $response = $sendResult['response'];
+
                     // If rejection from sole possible contact then cancel p2p immediately
                     if($response['status'] === 'rejected' && $contactsToSend === 1){
-                        $this->p2pRepository->updateStatus($message['hash'], 'cancelled');
+                        $this->p2pRepository->updateStatus($p2pHash, 'cancelled');
                         $contactsToSend -= 1;
                         continue;
-                    } 
+                    }
+
                     $sentMessages += 1;
+                    if ($sendResult['success']) {
+                        $successfulSends[] = ['messageId' => $messageId, 'nextHop' => $contactAddress];
+                    }
                     output(outputP2pResponse($response),'SILENT');
+                }
+
+                // Update delivery stages to 'forwarded' for successful sends (using MessageDeliveryService directly)
+                if ($this->messageDeliveryService !== null) {
+                    foreach ($successfulSends as $sendInfo) {
+                        $this->messageDeliveryService->updateStageToForwarded('p2p', $sendInfo['messageId'], $sendInfo['nextHop']);
+                    }
                 }
 
                 if(isset($message['destination_address']) && $contactsToSend > 0){
@@ -485,14 +601,14 @@ class P2pService {
                 }
 
                 // Cancel the message due to no viable contacts to send to (user is dead-end)
-                if($sentMessages === 0){  
-                    output(outputNoViableRouteP2p($message['hash'],'SILENT'));
-                    $this->p2pRepository->updateStatus($message['hash'], 'cancelled');
+                if($sentMessages === 0){
+                    output(outputNoViableRouteP2p($p2pHash,'SILENT'));
+                    $this->p2pRepository->updateStatus($p2pHash, 'cancelled');
                     continue;
                 }
             }
-            
-            $this->p2pRepository->updateStatus($message['hash'], 'sent');
+
+            $this->p2pRepository->updateStatus($p2pHash, 'sent');
         }
         return isset($queuedMessages) ? count($queuedMessages) : 0;
     }

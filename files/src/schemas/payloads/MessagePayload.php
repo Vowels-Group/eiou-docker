@@ -110,6 +110,26 @@ class MessagePayload extends BasePayload
     }
 
     /**
+     * Build acknowledgment for contact acceptance message
+     *
+     * Returns an acknowledgment to the sender who notified us of accepting our contact request.
+     * This enables proper delivery tracking stages (received -> inserted -> completed).
+     *
+     * @param string $address The recipient address (the one who sent the acceptance)
+     * @return string JSON-encoded acknowledgment payload
+     */
+    public function buildContactAcceptanceAcknowledgment(string $address): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return json_encode([
+            'status' => 'accepted',
+            'message' => $myAddress . ' confirms contact acceptance was received and processed',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
+
+    /**
      * Build payload regarding the successful completion of a transaction
      *
      * @param array $message Message data containing transaction hash
@@ -151,5 +171,29 @@ class MessagePayload extends BasePayload
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
+    }
+
+    /**
+     * Build acknowledgment for transaction completion message
+     *
+     * Returns an acknowledgment to the sender who notified us of a completed transaction.
+     * This enables proper delivery tracking stages (received -> inserted -> completed).
+     *
+     * @param array $message Message data containing transaction hash and hashType
+     * @return string JSON-encoded acknowledgment payload
+     */
+    public function buildTransactionCompletionAcknowledgment(array $message): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
+        $hash = $message['hash'] ?? 'unknown';
+        $hashType = $message['hashType'] ?? 'unknown';
+        return json_encode([
+            'status' => 'acknowledged',
+            'hash' => $hash,
+            'hashType' => $hashType,
+            'message' => $myAddress . ' confirms transaction completion was received and processed',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
     }
 }

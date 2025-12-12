@@ -69,6 +69,9 @@ function freshInstall(){
                 $dbConn->exec(getRp2pTableSchema());
                 $dbConn->exec(getApiKeysTableSchema());
                 $dbConn->exec(getApiRequestLogTableSchema());
+                $dbConn->exec(getMessageDeliveryTableSchema());
+                $dbConn->exec(getDeadLetterQueueTableSchema());
+                $dbConn->exec(getDeliveryMetricsTableSchema());
             } catch (PDOException $tableError) {
                 if (class_exists('SecureLogger')) {
                     SecureLogger::error("Table creation failed", [
@@ -121,11 +124,11 @@ function freshInstall(){
 }
 
 /**
- * Run database migrations for existing installations
- * Creates new tables that were added after initial installation
+ * Run database migrations to add new tables to existing databases
+ * This function is idempotent - safe to run multiple times
  *
  * @param PDO $pdo Database connection
- * @return array Results of migration attempts
+ * @return array Migration results
  */
 function runMigrations(PDO $pdo): array {
     require_once '/etc/eiou/src/database/databaseSchema.php';
@@ -151,7 +154,7 @@ function runMigrations(PDO $pdo): array {
         } catch (PDOException $e) {
             $results[$tableName] = 'error: ' . $e->getMessage();
             if (class_exists('SecureLogger')) {
-                SecureLogger::warning("Migration failed for table $tableName", [
+                SecureLogger::error("Migration failed for table $tableName", [
                     'error' => $e->getMessage()
                 ]);
             }

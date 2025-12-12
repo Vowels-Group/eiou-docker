@@ -77,6 +77,9 @@ class Application {
         // Start PDO connection
         $this->getDatabase();
 
+        // Run migrations for existing databases to add new tables
+        $this->runMigrations();
+
         // Setup user config
         if(file_exists('/etc/eiou/userconfig.json') && !$this->currentUserLoaded()){
             // Get UserContext instance
@@ -118,7 +121,38 @@ class Application {
             $this->pdo = createPDOConnection();
         } catch (Exception $e) {
             $this->utils['SecureLogger']->logException($e,'ERROR');
-        } 
+        }
+    }
+
+    /**
+     * Run database migrations to add new tables
+     * This is idempotent - safe to run on every startup
+     */
+    private function runMigrations(): void {
+        if ($this->pdo === null) {
+            return;
+        }
+
+        try {
+            require_once '/etc/eiou/src/database/databaseSetup.php';
+            $results = runMigrations($this->pdo);
+
+            // Log any newly created tables
+            foreach ($results as $table => $status) {
+                if ($status === 'created') {
+                    if ($this->secureLoggerLoaded()) {
+                        $this->getLogger()->info("Migration: Created table $table");
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            if ($this->secureLoggerLoaded()) {
+                $this->getLogger()->warning("Migration failed", [
+                    'error' => $e->getMessage()
+                ]);
+            }
+            // Don't throw - migrations failing shouldn't prevent app startup
+        }
     }
 
     /**

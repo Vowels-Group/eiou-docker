@@ -430,4 +430,36 @@ abstract class AbstractRepository {
     public function getTableName(): string {
         return $this->tableName;
     }
+
+    /**
+     * Decode JSON field(s) in result array(s)
+     *
+     * @param array $results Array of result rows (or single row)
+     * @param string|array $fields Field name(s) to decode
+     * @return array Results with decoded JSON fields
+     */
+    protected function decodeJsonFields(array &$results, $fields): array {
+        $fieldList = is_array($fields) ? $fields : [$fields];
+
+        // Check if this is a single row (associative) or multiple rows (indexed)
+        $isSingleRow = !empty($results) && !isset($results[0]);
+
+        if ($isSingleRow) {
+            foreach ($fieldList as $field) {
+                if (isset($results[$field]) && is_string($results[$field])) {
+                    $results[$field] = json_decode($results[$field], true);
+                }
+            }
+        } else {
+            foreach ($results as &$item) {
+                foreach ($fieldList as $field) {
+                    if (isset($item[$field]) && is_string($item[$field])) {
+                        $item[$field] = json_decode($item[$field], true);
+                    }
+                }
+            }
+        }
+
+        return $results;
+    }
 }

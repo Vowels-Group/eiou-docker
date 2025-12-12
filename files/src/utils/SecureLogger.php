@@ -87,10 +87,8 @@ class SecureLogger {
             @file_put_contents(self::$logFile, $logEntry, FILE_APPEND | LOCK_EX);
         }
 
-        // Also log to PHP error log for ERROR and CRITICAL
-        if (in_array($level, ['ERROR', 'CRITICAL'])) {
-            error_log($logEntry);
-        }
+        // Note: Removed error_log() call for ERROR/CRITICAL to prevent terminal output.
+        // All logs are written to the log file only.
     }
 
     /**

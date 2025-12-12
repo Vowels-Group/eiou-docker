@@ -26,23 +26,50 @@ abstract class AbstractMessageProcessor {
     protected array $pollerConfig;
 
     /**
+     * @var int Maximum graceful shutdown time in seconds
+     */
+    protected int $shutdownTimeout = 30;
+
+    /**
+     * @var float|null Timestamp when shutdown was initiated
+     */
+    protected ?float $shutdownStartTime = null;
+
+    /**
+     * @var bool Flag to track if shutdown is in progress
+     */
+    protected bool $shutdownInProgress = false;
+
+    /**
+     * @var int Count of shutdown signals received (to handle duplicates)
+     */
+    protected int $shutdownSignalCount = 0;
+
+    /**
+     * @var PDO|null Database connection for cleanup
+     */
+    protected ?PDO $pdo = null;
+
+    /**
      * Constructor
      *
      * @param array $pollerConfig Configuration for adaptive polling
      * @param string $lockfile Path to lockfile for ensuring single instance
      * @param int $logInterval Seconds between statistics logging
+     * @param int $shutdownTimeout Maximum shutdown time in seconds
      */
-    public function __construct(array $pollerConfig, string $lockfile, int $logInterval = 60) {
+    public function __construct(array $pollerConfig, string $lockfile, int $logInterval = 60, int $shutdownTimeout = 30) {
         $this->pollerConfig = $pollerConfig;
         $this->lockfile = $lockfile;
         $this->logInterval = $logInterval;
         $this->lastLogTime = time();
+        $this->shutdownTimeout = $shutdownTimeout;
 
         // Set up signal handlers for graceful shutdown
         pcntl_signal(SIGTERM, [$this, 'handleShutdownSignal']);
         pcntl_signal(SIGINT, [$this, 'handleShutdownSignal']);
         pcntl_signal(SIGHUP, [$this, 'handleReloadSignal']);
-        
+        pcntl_signal(SIGQUIT, [$this, 'handleQuitSignal']);
     }
 
     /**
@@ -68,11 +95,17 @@ abstract class AbstractMessageProcessor {
             // Check for signals
             pcntl_signal_dispatch();
 
+            // Check for shutdown timeout
+            if ($this->shutdownInProgress && $this->hasShutdownTimedOut()) {
+                $this->handleShutdownTimeout();
+                break;
+            }
+
             // Process messages (implemented by concrete classes)
             $before = microtime(true);
             $processed = $this->processMessages();
             $hadWork = $processed > 0;
-            
+
             if ($hadWork) {
                 $this->totalProcessed += $processed;
             }
@@ -85,6 +118,34 @@ abstract class AbstractMessageProcessor {
         }
 
         $this->shutdown();
+    }
+
+    /**
+     * Handle shutdown timeout - force exit after graceful shutdown exceeds timeout
+     */
+    protected function handleShutdownTimeout(): void {
+        $elapsed = round(microtime(true) - $this->shutdownStartTime, 2);
+
+        echo "\n[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+        echo "WARNING: Graceful shutdown timed out after {$elapsed}s, forcing exit...\n";
+
+        // Log timeout event
+        if (class_exists('SecureLogger')) {
+            SecureLogger::warning("Processor shutdown timeout - forcing exit", [
+                'processor' => $this->getProcessorName(),
+                'pid' => getmypid(),
+                'timeout' => $this->shutdownTimeout,
+                'elapsed' => $elapsed
+            ]);
+        }
+
+        // Minimal cleanup - just remove lockfile
+        if (file_exists($this->lockfile)) {
+            unlink($this->lockfile);
+        }
+
+        // Force exit with error code
+        exit(124); // Exit code 124 commonly indicates timeout
     }
 
     /**
@@ -150,37 +211,232 @@ abstract class AbstractMessageProcessor {
     }
 
     /**
-     * Handle shutdown signals
+     * Handle shutdown signals (SIGTERM, SIGINT)
      *
      * @param int $signal The signal received
      */
     public function handleShutdownSignal(int $signal): void {
+        $this->shutdownSignalCount++;
+
+        // Ignore duplicate signals if shutdown already in progress
+        if ($this->shutdownInProgress) {
+            echo "\n[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+            echo "Shutdown already in progress (signal #{$this->shutdownSignalCount}), ignoring...\n";
+            return;
+        }
+
+        $this->shutdownInProgress = true;
+        $this->shutdownStartTime = microtime(true);
+
+        $signalName = $signal === SIGTERM ? 'SIGTERM' : ($signal === SIGINT ? 'SIGINT' : "signal $signal");
         echo "\n[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
-        echo "Received shutdown signal ($signal), stopping gracefully...\n";
+        echo "Received {$signalName}, initiating graceful shutdown (timeout: {$this->shutdownTimeout}s)...\n";
+
+        // Log to SecureLogger if available
+        if (class_exists('SecureLogger')) {
+            SecureLogger::info("Processor shutdown initiated", [
+                'processor' => $this->getProcessorName(),
+                'signal' => $signalName,
+                'pid' => getmypid(),
+                'timeout' => $this->shutdownTimeout
+            ]);
+        }
+
         $this->shouldStop = true;
     }
 
     /**
-     * Handle Reload signals
+     * Handle reload signals (SIGHUP)
      *
      * @param int $signal The signal received
      */
     public function handleReloadSignal(int $signal): void {
         echo "\n[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
-        echo "Received reload signal ($signal), reloading config...\n";
-        // To do add reload
+        echo "Received SIGHUP, reloading configuration...\n";
+
+        // Log reload event
+        if (class_exists('SecureLogger')) {
+            SecureLogger::info("Processor configuration reload requested", [
+                'processor' => $this->getProcessorName(),
+                'pid' => getmypid()
+            ]);
+        }
+
+        // Subclasses can override onReload() to implement specific reload behavior
+        $this->onReload();
     }
 
     /**
-     * Cleanup on shutdown
+     * Handle quit signal (SIGQUIT) - for debugging with core dump
+     *
+     * @param int $signal The signal received
      */
-    protected function shutdown(): void {
+    public function handleQuitSignal(int $signal): void {
+        echo "\n[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+        echo "Received SIGQUIT, forcing immediate shutdown for debug...\n";
+
+        // Log quit event
+        if (class_exists('SecureLogger')) {
+            SecureLogger::warning("Processor SIGQUIT received - debug shutdown", [
+                'processor' => $this->getProcessorName(),
+                'pid' => getmypid(),
+                'total_processed' => $this->totalProcessed
+            ]);
+        }
+
+        // Minimal cleanup - just remove lockfile
         if (file_exists($this->lockfile)) {
             unlink($this->lockfile);
         }
 
+        // Exit with signal for potential core dump
+        exit(128 + SIGQUIT);
+    }
+
+    /**
+     * Hook for subclasses to implement configuration reload
+     * Called when SIGHUP is received
+     */
+    protected function onReload(): void {
+        // Default implementation does nothing
+        // Subclasses can override to reload configuration
+    }
+
+    /**
+     * Check if shutdown has timed out
+     *
+     * @return bool True if shutdown has exceeded timeout
+     */
+    protected function hasShutdownTimedOut(): bool {
+        if ($this->shutdownStartTime === null) {
+            return false;
+        }
+
+        $elapsed = microtime(true) - $this->shutdownStartTime;
+        return $elapsed >= $this->shutdownTimeout;
+    }
+
+    /**
+     * Comprehensive cleanup on shutdown
+     * Performs all cleanup procedures in order
+     */
+    protected function shutdown(): void {
+        $startTime = microtime(true);
+
         echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
-        echo $this->getProcessorName() . " processor stopped\n";
+        echo "Starting shutdown cleanup for {$this->getProcessorName()} processor...\n";
+
+        // 1. Log shutdown event
+        if (class_exists('SecureLogger')) {
+            SecureLogger::info("Processor shutdown cleanup started", [
+                'processor' => $this->getProcessorName(),
+                'pid' => getmypid(),
+                'total_processed_session' => $this->totalProcessed
+            ]);
+        }
+
+        // 2. Close database connections
+        $this->closeDatabaseConnections();
+
+        // 3. Flush buffers to disk
+        $this->flushBuffers();
+
+        // 4. Release file locks and remove lockfile
+        $this->releaseLocks();
+
+        // 5. Clear temporary files
+        $this->clearTemporaryFiles();
+
+        // 6. Call subclass-specific cleanup
+        $this->onShutdown();
+
+        // 7. Calculate shutdown duration
+        $duration = round((microtime(true) - $startTime) * 1000, 2);
+
+        // 8. Final log message
+        echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+        echo "{$this->getProcessorName()} processor stopped (cleanup took {$duration}ms)\n";
+
+        if (class_exists('SecureLogger')) {
+            SecureLogger::info("Processor shutdown complete", [
+                'processor' => $this->getProcessorName(),
+                'pid' => getmypid(),
+                'cleanup_duration_ms' => $duration
+            ]);
+        }
+    }
+
+    /**
+     * Close database connections
+     */
+    protected function closeDatabaseConnections(): void {
+        if ($this->pdo !== null) {
+            $this->pdo = null;
+            echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+            echo "Database connections closed\n";
+        }
+    }
+
+    /**
+     * Flush all buffers to disk
+     */
+    protected function flushBuffers(): void {
+        // Flush PHP output buffers
+        while (ob_get_level() > 0) {
+            ob_end_flush();
+        }
+
+        // Flush file system buffers
+        clearstatcache(true);
+    }
+
+    /**
+     * Release file locks and remove lockfile
+     */
+    protected function releaseLocks(): void {
+        if (file_exists($this->lockfile)) {
+            unlink($this->lockfile);
+            echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+            echo "Lockfile removed: {$this->lockfile}\n";
+        }
+    }
+
+    /**
+     * Clear temporary files created by this processor
+     * Subclasses can override to add specific temporary file cleanup
+     */
+    protected function clearTemporaryFiles(): void {
+        // Default implementation clears processor-specific temp files
+        $tempPattern = sys_get_temp_dir() . '/' . strtolower($this->getProcessorName()) . '_*';
+        $tempFiles = glob($tempPattern);
+
+        if ($tempFiles) {
+            foreach ($tempFiles as $file) {
+                if (is_file($file)) {
+                    unlink($file);
+                }
+            }
+            echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
+            echo "Cleared " . count($tempFiles) . " temporary files\n";
+        }
+    }
+
+    /**
+     * Hook for subclasses to implement additional shutdown cleanup
+     * Called during shutdown sequence
+     */
+    protected function onShutdown(): void {
+        // Default implementation does nothing
+        // Subclasses can override for specific cleanup
+    }
+
+    /**
+     * Set database connection for cleanup tracking
+     *
+     * @param PDO $pdo Database connection
+     */
+    public function setDatabaseConnection(PDO $pdo): void {
+        $this->pdo = $pdo;
     }
 
     /**
