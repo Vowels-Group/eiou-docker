@@ -329,6 +329,15 @@ class UserContext {
     }
 
     /**
+     * Get default credit limit
+     *
+     * @return float
+     */
+    public function getDefaultCreditLimit(): float {
+        return (float) ($this->get('defaultCreditLimit') ?? Constants::CONTACT_DEFAULT_CREDIT_LIMIT);
+    }
+
+    /**
      * Get default currency
      *
      * @return string
