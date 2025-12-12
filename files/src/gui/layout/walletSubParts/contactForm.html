@@ -21,11 +21,19 @@
         </div>
         <div class="form-group">
             <label for="fee">Fee (%):</label>
-            <input type="number" id="fee" name="fee" placeholder="0.1" step="0.1" min="0" required>
+            <input type="number" id="fee" name="fee" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.1" min="0" required class="default-value">
+            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                <i class="fas fa-info-circle"></i>
+                Default value from your wallet settings
+            </small>
         </div>
         <div class="form-group">
             <label for="credit">Credit Limit:</label>
-            <input type="number" id="credit" name="credit" placeholder="100" min="0" required>
+            <input type="number" id="credit" name="credit" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
+            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                <i class="fas fa-info-circle"></i>
+                Default value from your wallet settings
+            </small>
         </div>
         <div class="form-group">
             <label for="contactCurrency">Currency:</label>
