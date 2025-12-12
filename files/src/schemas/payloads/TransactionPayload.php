@@ -192,24 +192,48 @@ class TransactionPayload extends BasePayload
      * Build a transaction rejection payload
      *
      * @param array $request The transaction request data
-     * @param string $reason Optional rejection reason
+     * @param string $reason Rejection reason code (duplicate, insufficient_funds, contact_blocked, invalid_previous_txid, etc.)
      * @return string JSON encoded rejection payload
      */
-    public function buildRejection(array $request, string $reason = null): string
+    public function buildRejection(array $request, string $reason = 'duplicate'): string
     {
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress'] ?? '');
         $hashInfo = $this->resolveHashInfo($request);
 
-        $defaultReason = "{$hashInfo['type']} {$hashInfo['value']} for Transaction already exists in database of {$userAddress}";
+        $message = $this->buildRejectionMessage($hashInfo, $userAddress, $reason);
 
         return json_encode([
             'status' => 'rejected',
+            'reason' => $reason,
             'txid' => $request['txid'] ?? null,
             'memo' => $request['memo'] ?? null,
-            'message' => $reason ?? $defaultReason,
+            'message' => $message,
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
+    }
+
+    /**
+     * Build a human-readable rejection message based on the reason code
+     *
+     * @param array $hashInfo Array with 'type' and 'value' keys
+     * @param string $userAddress The user address
+     * @param string $reason The rejection reason code
+     * @return string Human-readable rejection message
+     */
+    private function buildRejectionMessage(array $hashInfo, string $userAddress, string $reason): string
+    {
+        $identifier = "{$hashInfo['type']} {$hashInfo['value']}";
+
+        $messages = [
+            'duplicate' => "{$identifier} for Transaction already exists in database of {$userAddress}",
+            'insufficient_funds' => "{$identifier} for Transaction rejected by {$userAddress}: insufficient funds",
+            'contact_blocked' => "{$identifier} for Transaction rejected by {$userAddress}: contact is blocked",
+            'credit_limit_exceeded' => "{$identifier} for Transaction rejected by {$userAddress}: credit limit exceeded",
+            'invalid_previous_txid' => "{$identifier} for Transaction rejected by {$userAddress}: previous transaction ID mismatch",
+        ];
+
+        return $messages[$reason] ?? "{$identifier} for Transaction rejected by {$userAddress}: {$reason}";
     }
 
     /**

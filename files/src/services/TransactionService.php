@@ -304,14 +304,23 @@ class TransactionService {
         $pubkey = $request['senderPublicKey'];
         // Check if User is not blocked
         if(!$this->contactRepository->isNotBlocked($pubkey)){
+            if($echo){
+                echo $this->transactionPayload->buildRejection($request, 'contact_blocked');
+            }
             return false;
-        } 
+        }
         // Check if transaction is a valid successor of previous txids
         elseif(!$this->checkPreviousTxid($request)){
+            if($echo){
+                echo $this->transactionPayload->buildRejection($request, 'invalid_previous_txid');
+            }
             return false;
-        } 
+        }
         // Check if Contact has enough funds for Transaction
         elseif(!$this->checkAvailableFundsTransaction($request)){
+            if($echo){
+                echo $this->transactionPayload->buildRejection($request, 'insufficient_funds');
+            }
             return false;
         }
         // Check if Transaction already exists for txid or memo in database
@@ -327,12 +336,12 @@ class TransactionService {
             if($exists){
                 // if transaction already exists
                 if($echo){
-                    echo $this->transactionPayload->buildRejection($request);
+                    echo $this->transactionPayload->buildRejection($request, 'duplicate');
                 }
                 return false;
-            } 
+            }
             if($echo){
-                echo $this->transactionPayload->buildAcceptance($request);            
+                echo $this->transactionPayload->buildAcceptance($request);
             }
             return true;
         } catch (PDOException $e) {
