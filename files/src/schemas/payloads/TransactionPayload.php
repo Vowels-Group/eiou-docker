@@ -173,7 +173,7 @@ class TransactionPayload extends BasePayload
         );
         $hashInfo = $this->resolveHashInfo($request);
 
-        return [
+        $payload = [
             'type' => 'message',
             'typeMessage' => 'transaction',
             'inquiry' => false,
@@ -186,6 +186,13 @@ class TransactionPayload extends BasePayload
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
+
+        // Include description if present (for end-recipient to store)
+        if (isset($request['description']) && $request['description'] !== null) {
+            $payload['description'] = $this->sanitizeString($request['description']);
+        }
+
+        return $payload;
     }
 
     /**

@@ -565,7 +565,17 @@ class TransactionService {
                     $this->transactionRepository->updateStatus($txid,'completed',true);
                     $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
                     output(outputTransactionAmountReceived($message),'SILENT');
-                    $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
+
+                // Ensure description is available for completion message
+                // If not in transaction record, fetch from p2p table
+                if (!isset($message['description']) || $message['description'] === null) {
+                    $p2p = $this->p2pRepository->getByHash($memo);
+                    if ($p2p && isset($p2p['description'])) {
+                        $message['description'] = $p2p['description'];
+                    }
+                }
+
+                $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                     output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
 
                     // Mark the transaction delivery as completed (using MessageDeliveryService directly)
@@ -661,6 +671,16 @@ class TransactionService {
                 $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
                 $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
                 output(outputTransactionAmountReceived($message),'SILENT');
+
+                // Ensure description is available for completion message
+                // If not in transaction record, fetch from p2p table
+                if (!isset($message['description']) || $message['description'] === null) {
+                    $p2p = $this->p2pRepository->getByHash($memo);
+                    if ($p2p && isset($p2p['description'])) {
+                        $message['description'] = $p2p['description'];
+                    }
+                }
+
                 $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                 output(outputSendTransactionCompletionMessageMemo($message),'SILENT');
 

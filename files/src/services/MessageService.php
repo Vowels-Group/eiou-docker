@@ -335,6 +335,11 @@ class MessageService {
                             $this->balanceRepository->updateBalanceGivenTransactions($transactions);
                             output(outputTransactionP2pSentSuccesfully($p2p),'SILENT');
 
+                            // Store description from completion message if provided
+                            if (isset($response['description']) && $response['description'] !== null) {
+                                $this->transactionRepository->updateDescription($hash, $response['description'], false);
+                            }
+
                             // Mark all P2P delivery records for this hash as completed
                             $this->markP2pDeliveriesCompleted($hash);
                         }
@@ -364,6 +369,11 @@ class MessageService {
                     $this->transactionRepository->updateStatus($hash,'completed',true);
                     $this->balanceRepository->updateBalanceGivenTransactions($transaction);
                     output(outputTransactionDirectSentSuccesfully($decodedMessage),'SILENT');
+
+                    // Store description from completion message if provided
+                    if (isset($decodedMessage['description']) && $decodedMessage['description'] !== null) {
+                        $this->transactionRepository->updateDescription($hash, $decodedMessage['description'], true);
+                    }
                 }
                 // Return acknowledgment for direct transaction completion message delivery tracking
                 echo $this->messagePayload->buildTransactionCompletionAcknowledgment($decodedMessage);
