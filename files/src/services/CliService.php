@@ -466,6 +466,13 @@ class CliService {
                     'value' => ['type' => 'optional', 'description' => 'New value for the setting']
                 ]
             ],
+            'sync' => [
+                'description' => 'Synchronize contacts and transactions',
+                'usage' => 'sync ([contacts|transactions])',
+                'arguments' => [
+                    'type' => ['type' => 'optional', 'description' => 'Sync only contacts or transactions (default: both)']
+                ]
+            ],
             'generate' => [
                 'description' => 'Generate a new wallet or restore from seed phrase',
                 'usage' => 'generate [restore <24 words>] [hostname]',

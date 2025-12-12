@@ -29,16 +29,16 @@ function outputContactMatched($contactHash){
     return "Contact matched with hash: " . $contactHash."\n";
 }
 
-function outputContactSuccesfullySynched($address){
-    return "Contact " . $address . " was succesfully synched.\n";
+function outputContactSuccesfullysynced($address){
+    return "Contact " . $address . " was successfully synced.\n";
 }
 
-function outputContactNoResponseSynch(){
-    return "Contact did not respond to synch request immediately.\n";
+function outputContactNoResponseSync(){
+    return "Contact did not respond to sync request immediately.\n";
 }
 
-function outputContactNoNeedSynch($address){
-    return "Contact " . $address . " has no need for synching as it's already an accepted contact.\n";
+function outputContactNoNeedSync($address){
+    return "Contact " . $address . " has no need for syncing as it's already an accepted contact.\n";
 }
 
 function outputContactNotFoundTryP2p($request){
@@ -244,8 +244,8 @@ function outputSendTransactionOnwards($message){
     return "Sending Transaction onwards to: " . $message['receiver_address']."\n";
 }
 
-function outputSynchContactDueToPendingStatus($address){
-    return "Contact " . $address . " is being synched due to pending contact request status\n";
+function outputSyncContactDueToPendingStatus($address){
+    return "Contact " . $address . " is being synced due to pending contact request status\n";
 }
 
 function outputTransactionAmountReceived($message){

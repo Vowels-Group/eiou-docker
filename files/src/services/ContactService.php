@@ -325,12 +325,12 @@ class ContactService {
         elseif($contact['status'] === 'pending'){
             // if pending with name (contact was inserted by user for contact request)
             if($contact['name']){
-                // This contact was already sent a contact request, but has not yet responded to user (try resynching)
-                // Resynch contact using SynchService directly
-                $succesfullSynch = Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'SILENT');
-                if ($succesfullSynch) {
+                // This contact was already sent a contact request, but has not yet responded to user (try resyncing)
+                // Resync contact using SyncService directly
+                $successfulSync = Application::getInstance()->services->getSyncService()->syncSingleContact($address, 'SILENT');
+                if ($successfulSync) {
                     $contactData['status'] = 'accepted';
-                    $output->success("Contact request already sent, synched successfully with " . $address, $contactData, "Contact synched");
+                    $output->success("Contact request already sent, synced successfully with " . $address, $contactData, "Contact synced");
                 } else {
                     $output->info("Contact request already sent, awaiting response from " . $address, $contactData);
                 }
@@ -452,11 +452,11 @@ class ContactService {
                         $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                     }
 
-                    // Resynch contact
-                    if(Application::getInstance()->services->getSynchService()->synchSingleContact($address, 'SILENT')){
+                    // Resync contact
+                    if(Application::getInstance()->services->getSyncService()->syncSingleContact($address, 'SILENT')){
                         $contactData['status'] = 'accepted';
                         $contactData['pubkey'] = $responseData['senderPublicKey'];
-                        $output->success("Contact re-added and synched with " . $address, $contactData, "Contact created successfully");
+                        $output->success("Contact re-added and synced with " . $address, $contactData, "Contact created successfully");
                     } else {
                         $contactData['status'] = 'pending';
                         $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
