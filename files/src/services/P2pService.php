@@ -289,6 +289,9 @@ class P2pService {
         }
         // Check if Contact has enough funds for P2P without fees
         elseif(!$this->checkAvailableFunds($request)){
+            if($echo){
+                echo $this->p2pPayload->buildRejection($request, 'insufficient_funds');
+            }
             return false;
         }
 

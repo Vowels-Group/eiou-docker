@@ -315,6 +315,9 @@ class TransactionService {
         }
         // Check if Contact has enough funds for Transaction
         elseif(!$this->checkAvailableFundsTransaction($request)){
+            if($echo){
+                echo $this->transactionPayload->buildRejection($request, 'insufficient_funds');
+            }
             return false;
         }
         // Check if Transaction already exists for txid or memo in database
