@@ -10,6 +10,7 @@
  */
 
 require_once __DIR__ . '/CliJsonResponse.php';
+require_once __DIR__ . '/../utils/SecureLogger.php';
 
 class CliOutputManager
 {
@@ -164,6 +165,14 @@ class CliOutputManager
         int $status = 400,
         array $additionalData = []
     ): void {
+        // Log the error to the log file
+        SecureLogger::error($message, [
+            'error_code' => $code,
+            'status' => $status,
+            'additional_data' => $additionalData,
+            'command' => $this->command
+        ]);
+
         if ($this->jsonMode) {
             echo $this->jsonResponse->error($message, $code, $status, $additionalData) . "\n";
         } else {
@@ -179,6 +188,13 @@ class CliOutputManager
      */
     public function validationError(string $field, string $message): void
     {
+        // Log the validation error to the log file
+        SecureLogger::error("Validation error: $message", [
+            'error_code' => 'VALIDATION_ERROR',
+            'field' => $field,
+            'command' => $this->command
+        ]);
+
         if ($this->jsonMode) {
             echo $this->jsonResponse->validationError([
                 ['field' => $field, 'message' => $message]
