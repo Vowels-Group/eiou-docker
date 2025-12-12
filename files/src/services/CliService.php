@@ -96,6 +96,14 @@ class CliService {
                     return;
                 }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'defaultcreditlimit'){
+                $key = 'defaultCreditLimit';
+                $validation = InputValidator::validateAmountFee($argv[3]);
+                if (!$validation['valid']) {
+                    $output->validationError('defaultCreditLimit', $validation['error']);
+                    return;
+                }
+                $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'defaultcurrency'){
                 $key = 'defaultCurrency';
                 $validation = InputValidator::validateCurrency($argv[3]);
@@ -175,15 +183,16 @@ class CliService {
 
             // Prompt user for which setting they want to change
             echo "Select the setting you want to change:\n";
-            echo "\t1. Default Currency\n";
-            echo "\t2. Minimum Fee amount\n";
-            echo "\t3. Default Fee percentage\n";
-            echo "\t4. Maximum Fee percentage\n";
-            echo "\t5. Maximum Peer to Peer Level\n";
-            echo "\t6. Default Peer to Peer Expiration\n";
-            echo "\t7. Maximum lines of Balance/Transaction output\n";
-            echo "\t8. Default Transport Type\n";
-            echo "\t9. Hostname\n";
+            echo "\t1. Default currency\n";
+            echo "\t2. Minimum ree amount\n";
+            echo "\t3. Default fee percentage\n";
+            echo "\t4. Maximum fee percentage\n";
+            echo "\t5. Default credit limit\n";
+            echo "\t6. Maximum peer to peer Level\n";
+            echo "\t7. Default peer to peer Expiration\n";
+            echo "\t8. Maximum lines of balance/transaction output\n";
+            echo "\t9. Default transport type\n";
+            echo "\t10. Hostname\n";
             echo "\t0. Cancel\n";
 
             // Read user input
@@ -234,8 +243,21 @@ class CliService {
                     $value = $validation['value'];
                     break;
 
+
                 case '5':
-                    echo "Enter new Maximum Peer to Peer Level: ";
+                    echo "Enter new default credit limit: ";
+                    $key = 'defaultCreditLimit';
+                    $validation = InputValidator::validateAmountFee(trim(fgets(STDIN)));
+                    if (!$validation['valid']) {
+                        echo "Error: " . $validation['error'] . "\n";
+                        return;
+                    }
+                    $value = $validation['value'];
+                    break;
+
+
+                case '6':
+                    echo "Enter new maximum peer to peer Level: ";
                     $key = 'maxP2pLevel';
                     $validation = InputValidator::validateRequestLevel(trim(fgets(STDIN)));
                     if (!$validation['valid']) {
@@ -245,8 +267,8 @@ class CliService {
                     $value = $validation['value'];
                     break;
 
-                case '6':
-                    echo "Enter new Peer to Peer Expiration (in seconds): ";
+                case '7':
+                    echo "Enter new peer to peer expiration (in seconds): ";
                     $key = 'p2pExpiration';
                     $validation = InputValidator::validateTimestamp(trim(fgets(STDIN)));
                     if (!$validation['valid']) {
@@ -256,8 +278,8 @@ class CliService {
                     $value = $validation['value'];
                     break;
 
-                case '7':
-                    echo "Enter new Maximum of Balance/Transaction output lines to display: ";
+                case '8':
+                    echo "Enter new maximum of balance/transaction output lines to display: ";
                     $key = 'maxOutput';
                     $read = trim(fgets(STDIN));
                     if($read === 'all'){
@@ -271,13 +293,13 @@ class CliService {
                     }
                     break;
 
-                case '8':
+                case '9':
                     echo "Enter new default transport type (e.g. http, tor): ";
                     $key = 'defaultTransportMode';
                     $value = strtolower(trim(fgets(STDIN)));
                     break;
 
-                case '9':
+                case '10':
                     echo "Enter new hostname (e.g. http://httpA): ";
                     $key = 'hostname';
                     $validation = InputValidator::validateHostname(strtolower(trim(fgets(STDIN))));
@@ -329,6 +351,7 @@ class CliService {
             'minimum_fee_currency' => $this->currentUser->getDefaultCurrency(),
             'default_fee_percent' => $this->currentUser->getDefaultFee(),
             'maximum_fee_percent' => $this->currentUser->getMaxFee(),
+            'default_credit_limit' => $this->currentUser->getDefaultCreditLimit(),
             'max_p2p_level' => $this->currentUser->getMaxP2pLevel(),
             'p2p_expiration_seconds' => $this->currentUser->getP2pExpirationTime(),
             'max_output_lines' => $this->currentUser->getMaxOutput(),
@@ -342,11 +365,12 @@ class CliService {
             echo "\tDefault currency: " . $settings['default_currency'] . "\n";
             echo "\tMinimum fee amount: " . $settings['minimum_fee_amount'] . " " . $settings['minimum_fee_currency'] ."\n";
             echo "\tDefault fee percent: " . $settings['default_fee_percent'] ."%\n";
-            echo "\tMaximum Fee percent: " . $settings['maximum_fee_percent'] . "%\n";
-            echo "\tMaximum Peer to Peer Level: " .  $settings['max_p2p_level'] . "\n";
-            echo "\tDefault Peer to Peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
-            echo "\tDefault Maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
-            echo "\tDefault Transport Mode: " . $settings['default_transport_mode'] . "\n";
+            echo "\tMaximum fee percent: " . $settings['default_credit_limit'] . "\n";
+            echo "\tDefault credit limit: " . $settings['defa'] ."%\n";
+            echo "\tMaximum peer to peer Level: " .  $settings['max_p2p_level'] . "\n";
+            echo "\tDefault peer to peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
+            echo "\tDefault maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
+            echo "\tDefault transport mode: " . $settings['default_transport_mode'] . "\n";
         }
     }
 
