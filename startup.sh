@@ -2,12 +2,18 @@
 
 # Copyright 2025
 
-# Check for quickstart flag
+# Check for quickstart flag with HTTP hostname
+# If set, wallet will be accessible via both Tor and HTTP
+# Example: QUICKSTART=example.com
 QUICKSTART=${QUICKSTART:-false}
 
 # Check for restore flag (24-word seed phrase)
-#    RESTORE="word1 word2 .... word24"
+# If set, wallet will be restored from the provided seed phrase
+# Example: RESTORE="word1 word2 .... word24"
 RESTORE=${RESTORE:-false}
+
+# Default behavior (when no flags set):
+# Automatically quickstart with Tor-only mode (no HTTP hostname)
 
 # Start services
 service cron start
@@ -33,9 +39,10 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/configCheck.php"; echo $run;
         eiou generate http://$QUICKSTART
         echo "Generate command completed."
     else
-        # Run automatically without hostname (only tor)
+        # Default behavior: quickstart (Tor-only, no HTTP hostname)
+        echo "No wallet detected. Quickstarting with Tor-only mode..."
         eiou generate
-        echo "Generate command completed."
+        echo "Quickstart completed. Wallet is now ready to use."
     fi
 fi
 
