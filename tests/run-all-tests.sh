@@ -148,8 +148,17 @@ for container in $CONTAINER_LIST; do
                     }
                 }')
             if [[ ! -z ${torAddress} ]]; then
-                printf "${GREEN}Ready${NC}\n"
-                break
+                # Verify actual TOR connectivity, not just presence of torAddress
+                if docker exec "$container" curl --socks5-hostname 127.0.0.1:9050 \
+                    --connect-timeout 5 \
+                    --max-time 10 \
+                    --silent \
+                    --fail \
+                    --output /dev/null \
+                    "$torAddress" 2>/dev/null; then
+                    printf "${GREEN}Ready (Tor connected)${NC}\n"
+                    break
+                fi
             fi
         fi
 

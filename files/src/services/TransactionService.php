@@ -773,12 +773,12 @@ class TransactionService {
                 // Contact is accepted
                 $this->handleDirectRoute($request, $contactInfo, $output);
             }elseif($contactInfo['status'] === 'pending'){
-                // Contact is still pending, try a resynch otherwise send through p2p if possible
+                // Contact is still pending, try a resync otherwise send through p2p if possible
 
                 // Determine Transport Type (fallback on other if needed)
                 $transportIndex = $this->transportUtility->fallbackTransportType($request[2],$contactInfo);
-                $synchResult = Application::getInstance()->services->getSynchService()->synchSingleContact($contactInfo[$transportIndex],'SILENT');
-                if($synchResult){
+                $syncResult = Application::getInstance()->services->getSyncService()->syncSingleContact($contactInfo[$transportIndex],'SILENT');
+                if($syncResult){
                     $this->handleDirectRoute($request, $contactInfo, $output);
                 } else{
                     $this->handleP2pRoute($request, $output);

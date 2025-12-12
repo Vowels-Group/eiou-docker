@@ -4,13 +4,13 @@
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 
 /**
- * Synch Service
+ * Sync Service
  *
- * Handles all business logic for synch management.
+ * Handles all business logic for sync management.
  *
  * @package Services
  */
-class SynchService {
+class SyncService {
     /**
      * @var ContactRepository Contact repository instance
      */
@@ -105,67 +105,67 @@ class SynchService {
     }
 
     /**
-     * Handler for synch through user-input
+     * Handler for sync through user-input
      *
      * @param array $argv Command line arguments
      * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function sych($argv, ?CliOutputManager $output = null): void{
+    public function sync($argv, ?CliOutputManager $output = null): void{
         $output = $output ?? CliOutputManager::getInstance();
 
         if(isset($argv[2])){
             $argument = strtolower($argv[2]);
             if($argument === 'contacts'){
-                $this->synchAllContacts($output);
+                $this->syncAllContacts($output);
             } elseif($argument === 'transactions'){
-                $this->synchAllTransactions($output);
+                $this->syncAllTransactions($output);
             } else {
                 $output->error("Invalid sync type. Use 'contacts' or 'transactions'", 'INVALID_SYNC_TYPE', 400, [
                     'valid_types' => ['contacts', 'transactions']
                 ]);
             }
         } else{
-            $this->synchAll($output);
+            $this->syncAll($output);
         }
     }
 
     /**
-     * Synch all possible entities
+     * Sync all possible entities
      *
      * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function synchAll(?CliOutputManager $output = null): void{
+    public function syncAll(?CliOutputManager $output = null): void{
         $output = $output ?? CliOutputManager::getInstance();
 
-        // Synch both contacts and transactions
-        $contactResults = $this->synchAllContactsInternal();
-        $transactionResults = $this->synchAllTransactionsInternal();
+        // Sync both contacts and transactions
+        $contactResults = $this->syncAllContactsInternal();
+        $transactionResults = $this->syncAllTransactionsInternal();
 
         $output->success("Sync completed", [
             'contacts' => $contactResults,
             'transactions' => $transactionResults
-        ], "Synched contacts and transactions");
+        ], "Synced contacts and transactions");
     }
 
     /**
-     * Synch all contacts
+     * Sync all contacts
      *
      * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function synchAllContacts(?CliOutputManager $output = null): void{
+    public function syncAllContacts(?CliOutputManager $output = null): void{
         $output = $output ?? CliOutputManager::getInstance();
 
-        $results = $this->synchAllContactsInternal();
+        $results = $this->syncAllContactsInternal();
 
         $output->success("Contacts synced", $results, "Contact synchronization completed");
     }
 
     /**
-     * Internal method to synch all contacts and return results
+     * Internal method to sync all contacts and return results
      *
      * @return array Sync results
      */
-    private function synchAllContactsInternal(): array{
+    private function syncAllContactsInternal(): array{
         $contacts = $this->addressRepository->getAllAddresses();
         $results = [
             'total' => count($contacts),
@@ -177,7 +177,7 @@ class SynchService {
         foreach ($contacts as $contact) {
             $address = $contact['http'] ?? $contact['tor'] ?? null;
             if ($address) {
-                $success = $this->synchSingleContact($address, 'SILENT');
+                $success = $this->syncSingleContact($address, 'SILENT');
                 if ($success) {
                     $results['synced']++;
                     $results['details'][] = ['address' => $address, 'status' => 'synced'];
@@ -192,32 +192,32 @@ class SynchService {
     }
 
     /**
-     * Synch contact
+     * Sync contact
      *
      * @param string $contactAddress Contact Address
      * @param string $echo 'ECHO' (to user & log) or 'SILENT' (only to log)
-     * @return bool True if syched succesfully, false otherwise
+     * @return bool True if synced successfully, false otherwise
      */
-    public function synchSingleContact($contactAddress, $echo='SILENT'): bool{
-        // Synch specific contact based on address
+    public function syncSingleContact($contactAddress, $echo='SILENT'): bool{
+        // Sync specific contact based on address
         $transportIndex = $this->transportUtility->determineTransportType($contactAddress);
         $contact = $this->contactRepository->getContactByAddress($transportIndex, $contactAddress); // Get contact from database
         if($contact['status'] === 'pending'){
-            output(outputSynchContactDueToPendingStatus($contactAddress),$echo);
+            output(outputSyncContactDueToPendingStatus($contactAddress),$echo);
             // If the contact is still pending then inquire with contact
             $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
-            $synchResponse = json_decode($this->transportUtility->send($contactAddress, $messagePayload),true);
-            $status = $synchResponse['status'];
-            $reason = $synchResponse['reason'] ?? NULL;
+            $syncResponse = json_decode($this->transportUtility->send($contactAddress, $messagePayload),true);
+            $status = $syncResponse['status'];
+            $reason = $syncResponse['reason'] ?? NULL;
             if($status === 'accepted'){
-                $senderPublicKey = $synchResponse['senderPublicKey'];
+                $senderPublicKey = $syncResponse['senderPublicKey'];
                 $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
-                $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($contactAddress); 
+                $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($contactAddress);
 
-                // If you are accepted as a contact by the contact in question then update accordingly 
+                // If you are accepted as a contact by the contact in question then update accordingly
                 $this->contactRepository->updateStatus($senderPublicKey, $status);
                 $this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative);
-                output(outputContactSuccesfullySynched($contactAddress),$echo);
+                output(outputContactSuccesfullysynced($contactAddress),$echo);
                 return true;
             } elseif($status === 'rejected' && $reason === 'unknown'){
                 
@@ -227,47 +227,47 @@ class SynchService {
                 if(isset($responseData['status']) && ($responseData['status'] === 'accepted')){
                     // Contact received our contact request, needs to be accepted by other user first
                     //   If acceptance is automatic then able to check through following inquiry
-                    //   Otherwise would need to inquire again down the line (through synch or otherwise)
+                    //   Otherwise would need to inquire again down the line (through sync or otherwise)
                     $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
-                    $synchResponse = $this->transportUtility->send($contactAddress, $messagePayload);
+                    $syncResponse = $this->transportUtility->send($contactAddress, $messagePayload);
                     if($status === 'accepted'){
                         $this->contactRepository->updateStatus($transportIndex, $contactAddress, $status);
-                        output(outputContactSuccesfullySynched($contactAddress),$echo);
+                        output(outputContactSuccesfullysynced($contactAddress),$echo);
                         return true;
-                    }   
-                } 
-            } 
+                    }
+                }
+            }
             // Contact did not respond immediately
-            output(outputContactNoResponseSynch(),$echo);
+            output(outputContactNoResponseSync(),$echo);
             return false;
         } elseif($contact['status'] === 'accepted'){
-            // If contact needs no synching
-            //output(outputContactNoNeedSynch($contactAddress),'SILENT');
+            // If contact needs no syncing
+            //output(outputContactNoNeedSync($contactAddress),'SILENT');
             return true;
         }
         return true;
     }
 
     /**
-     * Synch all transactions
+     * Sync all transactions
      *
      * @param CliOutputManager|null $output Optional output manager for JSON support
      */
-    public function synchAllTransactions(?CliOutputManager $output = null): void {
+    public function syncAllTransactions(?CliOutputManager $output = null): void {
         $output = $output ?? CliOutputManager::getInstance();
 
-        $results = $this->synchAllTransactionsInternal();
+        $results = $this->syncAllTransactionsInternal();
 
         $output->success("Transactions synced", $results, "Transaction synchronization completed");
     }
 
     /**
-     * Internal method to synch all transactions and return results
+     * Internal method to sync all transactions and return results
      *
      * @return array Sync results
      */
-    private function synchAllTransactionsInternal(): array {
-        // Synch all transactions - placeholder for future implementation
+    private function syncAllTransactionsInternal(): array {
+        // Sync all transactions - placeholder for future implementation
         return [
             'total' => 0,
             'synced' => 0,
@@ -276,12 +276,12 @@ class SynchService {
     }
 
     /**
-     * Synch contact
+     * Sync transaction
      *
-     * @return bool True if syched succesfully, false otherwise
+     * @return bool True if synced successfully, false otherwise
      */
-    public function synchTransaction(): bool {
-        // Synch specific
+    public function syncTransaction(): bool {
+        // Sync specific
         return true;
     }
 }
