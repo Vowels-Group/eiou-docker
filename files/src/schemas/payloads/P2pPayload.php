@@ -95,7 +95,7 @@ class P2pPayload extends BasePayload
      * Build P2P rejection payload
      *
      * @param array $request The P2P request data
-     * @param string $reason Optional rejection reason
+     * @param string $reason Rejection reason
      * @return string JSON encoded rejection payload
      */
     public function buildRejection(array $request, string $reason = 'already exists'): string
@@ -104,10 +104,12 @@ class P2pPayload extends BasePayload
 
         $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
 
+        $defaultReason = "hash {$request['hash']} for P2P already exists in database of {$receiver}";
+
         return json_encode([
             'status' => 'rejected',
             'reason' => $reason,
-            'message' => "hash {$request['hash']} for P2P already exists in database of {$receiver}",
+            'message' => $reason ?? $defaultReason,
             'senderAddress' => $receiver,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);

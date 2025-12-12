@@ -192,10 +192,10 @@ class TransactionPayload extends BasePayload
      * Build a transaction rejection payload
      *
      * @param array $request The transaction request data
-     * @param string $reason Optional rejection reason
+     * @param string $reason Rejection reason
      * @return string JSON encoded rejection payload
      */
-    public function buildRejection(array $request, string $reason = null): string
+    public function buildRejection(array $request, string $reason = 'already exists'): string
     {
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress'] ?? '');
         $hashInfo = $this->resolveHashInfo($request);
@@ -204,6 +204,7 @@ class TransactionPayload extends BasePayload
 
         return json_encode([
             'status' => 'rejected',
+            'reason' => $reason,
             'txid' => $request['txid'] ?? null,
             'memo' => $request['memo'] ?? null,
             'message' => $reason ?? $defaultReason,
