@@ -311,6 +311,9 @@ class TransactionService {
         }
         // Check if transaction is a valid successor of previous txids
         elseif(!$this->checkPreviousTxid($request)){
+            if($echo){
+                echo $this->transactionPayload->buildRejection($request, 'invalid_previous_txid');
+            }
             return false;
         }
         // Check if Contact has enough funds for Transaction
