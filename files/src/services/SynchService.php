@@ -37,6 +37,11 @@ class SynchService {
     private TransactionRepository $transactionRepository;
 
     /**
+     * @var BalanceRepository Balance repository instance
+     */
+    private BalanceRepository $balanceRepository;
+
+    /**
      * @var UtilityServiceContainer Utility service container
      */
     private UtilityServiceContainer $utilityContainer;
@@ -73,6 +78,7 @@ class SynchService {
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param BalanceRepository $balanceRepository Balance repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
@@ -82,6 +88,7 @@ class SynchService {
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
+        BalanceRepository $balanceRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
     ) {
@@ -90,6 +97,7 @@ class SynchService {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
+        $this->balanceRepository = $balanceRepository;
         $this->utilityContainer = $utilityContainer;
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
@@ -119,9 +127,11 @@ class SynchService {
                 $this->synchAllContacts($output);
             } elseif($argument === 'transactions'){
                 $this->synchAllTransactions($output);
+            } elseif($argument === 'balances'){
+                $this->synchAllBalances($output);
             } else {
-                $output->error("Invalid sync type. Use 'contacts' or 'transactions'", 'INVALID_SYNC_TYPE', 400, [
-                    'valid_types' => ['contacts', 'transactions']
+                $output->error("Invalid sync type. Use 'contacts', 'transactions', or 'balances'", 'INVALID_SYNC_TYPE', 400, [
+                    'valid_types' => ['contacts', 'transactions', 'balances']
                 ]);
             }
         } else{
@@ -283,5 +293,115 @@ class SynchService {
     public function synchTransaction(): bool {
         // Synch specific
         return true;
+    }
+
+    /**
+     * Synch all balances
+     *
+     * @param CliOutputManager|null $output Optional output manager for JSON support
+     */
+    public function synchAllBalances(?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        $results = $this->synchAllBalancesInternal();
+
+        $output->success("Balances synced", $results, "Balance synchronization completed");
+    }
+
+    /**
+     * Internal method to synch all balances and return results
+     *
+     * @return array Sync results
+     */
+    private function synchAllBalancesInternal(): array {
+        // Get all contacts with their pubkeys
+        $contacts = $this->contactRepository->getAllContactsPubkeys();
+
+        $results = [
+            'total_contacts' => count($contacts),
+            'synced' => 0,
+            'failed' => 0,
+            'details' => []
+        ];
+
+        // Get the user's addresses to determine transaction direction
+        $userAddresses = $this->currentUser->getUserAddresses();
+
+        foreach ($contacts as $contactPubkey) {
+            try {
+                // Get all transactions between user and this contact
+                $userPubkey = $this->currentUser->getPublicKey();
+                $transactions = $this->transactionRepository->getTransactionsBetweenPubkeys($userPubkey, $contactPubkey);
+
+                // Calculate balances from transactions
+                $balancesByCurrency = [];
+
+                foreach ($transactions as $transaction) {
+                    $currency = $transaction['currency'];
+
+                    // Initialize currency if not exists
+                    if (!isset($balancesByCurrency[$currency])) {
+                        $balancesByCurrency[$currency] = [
+                            'received' => 0,
+                            'sent' => 0
+                        ];
+                    }
+
+                    // Determine if user sent or received this transaction
+                    if (in_array($transaction['sender_address'], $userAddresses)) {
+                        // User sent this transaction
+                        $balancesByCurrency[$currency]['sent'] += $transaction['amount'];
+                    } elseif (in_array($transaction['receiver_address'], $userAddresses)) {
+                        // User received this transaction
+                        $balancesByCurrency[$currency]['received'] += $transaction['amount'];
+                    }
+                }
+
+                // Update or insert balances for each currency
+                $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
+
+                foreach ($balancesByCurrency as $currency => $amounts) {
+                    // Check if balance record exists
+                    $existingBalance = $this->balanceRepository->getContactBalance($contactPubkey, $currency);
+
+                    if ($existingBalance && count($existingBalance) > 0) {
+                        // Update existing balance - use raw SQL to set exact values instead of incrementing
+                        $query = "UPDATE balances SET received = :received, sent = :sent
+                                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+                        $stmt = $this->balanceRepository->execute($query, [
+                            ':received' => $amounts['received'],
+                            ':sent' => $amounts['sent'],
+                            ':pubkey_hash' => $contactPubkeyHash,
+                            ':currency' => $currency
+                        ]);
+                    } else {
+                        // Insert new balance record
+                        $this->balanceRepository->insertBalance(
+                            $contactPubkey,
+                            $amounts['received'],
+                            $amounts['sent'],
+                            $currency
+                        );
+                    }
+                }
+
+                $results['synced']++;
+                $results['details'][] = [
+                    'contact_pubkey_hash' => $contactPubkeyHash,
+                    'status' => 'synced',
+                    'currencies' => array_keys($balancesByCurrency)
+                ];
+
+            } catch (Exception $e) {
+                $results['failed']++;
+                $results['details'][] = [
+                    'contact_pubkey' => $contactPubkey,
+                    'status' => 'failed',
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+
+        return $results;
     }
 }
