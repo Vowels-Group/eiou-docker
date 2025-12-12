@@ -16,7 +16,7 @@ SELECT id, hash, time, amount, sender_address FROM rp2p;
 
 SELECT id, status, tx_type, type, sender_address, receiver_address, amount, currency, timestamp, txid, previous_txid, memo FROM transactions;
 
-SELECT id, message_type, message_id, recipient_address, delivery_stage FROM message_delivery;
+SELECT id, message_type, message_id, recipient_address, delivery_stage, retry_count FROM message_delivery;
 
 SELECT id, message_type, original_id, recipient_address, failure_reason, status FROM dead_letter_queue;
 
