@@ -300,12 +300,17 @@ class P2pRepository extends AbstractRepository {
     /**
      * Get expired P2P messages
      *
+     * Retrieves P2P messages that have exceeded their expiration time.
+     * Note: expiration is stored as microtime * TIME_MICROSECONDS_TO_INT,
+     * so we pass the current microtime from PHP for accurate comparison.
+     *
+     * @param int $currentMicrotime Current microtime (from TimeUtilityService::getCurrentMicrotime())
      * @param int $limit Maximum number of messages
      * @return array Array of expired P2P messages
      */
-    public function getExpiredP2p(int $limit = 0): array {
+    public function getExpiredP2p(int $currentMicrotime, int $limit = 0): array {
         $query = "SELECT * FROM {$this->tableName}
-                  WHERE expiration < UNIX_TIMESTAMP()
+                  WHERE expiration < :currentTime
                     AND status NOT IN ('completed', 'expired', 'cancelled')
                   ORDER BY created_at ASC";
 
@@ -314,6 +319,7 @@ class P2pRepository extends AbstractRepository {
         }
 
         $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':currentTime', $currentMicrotime, PDO::PARAM_INT);
 
         if ($limit > 0) {
             $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);

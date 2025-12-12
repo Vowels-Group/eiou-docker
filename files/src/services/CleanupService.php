@@ -1,8 +1,6 @@
 <?php
 # Copyright 2025
 
-require_once __DIR__ . '/../utils/InputValidator.php';
-
 /**
  * Cleanup Service
  *
@@ -68,37 +66,26 @@ class CleanupService {
     /**
      * Check if there are any messages that will expire and process them
      *
-     * This function retrieves all expiring P2P messages from the database and
-     * expires those that have exceeded their expiration time.
+     * This function retrieves all expired P2P messages from the database
+     * (those that have exceeded their expiration time) and marks them as expired.
      *
-     * @return int Number of expiring messages processed
+     * @return int Number of expired messages processed
      * @throws PDOException If database query fails
      */
     public function processCleanupMessages(): int {
         try {
-            $expiringMessages = $this->p2pRepository->getExpiringP2pMessages();
+            // Get current microtime for accurate comparison with stored expiration values
+            $currentMicrotime = $this->timeUtility->getCurrentMicrotime();
 
-            // Process each not completed message
-            foreach ($expiringMessages as $message) {
-                // Validate message structure
-                if (!isset($message['expiration'])) {
-                    error_log("Invalid message expiration: missing field. Message: " . json_encode($message));
-                    continue;
-                }
+            // Get P2P messages that have already expired (SQL filters by expiration < currentMicrotime)
+            $expiredMessages = $this->p2pRepository->getExpiredP2p($currentMicrotime);
 
-                // Validate expiration timestamp using InputValidator
-                $validation = InputValidator::validateTimestamp($message['expiration']);
-                if (!$validation['valid']) {
-                    error_log("Invalid message expiration: " . $validation['error'] . ". Message: " . json_encode($message));
-                    continue;
-                }
-
-                // If no response after set amount of time, expire the p2p (and potential transaction)
-                if ($this->timeUtility->getCurrentMicrotime() > $validation['value']) {
-                    $this->expireMessage($message);
-                }
+            // Process each expired message
+            foreach ($expiredMessages as $message) {
+                $this->expireMessage($message);
             }
-            return isset($expiringMessages) ? count($expiringMessages) : 0;
+
+            return count($expiredMessages);
         } catch (PDOException $e) {
             error_log("Error processing cleanup messages: " . $e->getMessage());
             return 0;
