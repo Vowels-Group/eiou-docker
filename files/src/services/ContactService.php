@@ -806,7 +806,7 @@ class ContactService {
                 $output->error("Contact not found with name: " . $addressOrName, 'CONTACT_NOT_FOUND', 404);
                 exit(1);
             }
-            $address = $contact['http'] ?? $contact['tor'] ?? null;
+            $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
                 $output->error("Contact has no valid address", 'NO_ADDRESS', 500);
                 exit(1);
@@ -860,7 +860,7 @@ class ContactService {
                 $output->error("Contact not found with name: " . $addressOrName, 'CONTACT_NOT_FOUND', 404);
                 exit(1);
             }
-            $address = $contact['http'] ?? $contact['tor'] ?? null;
+            $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
                 $output->error("Contact has no valid address", 'NO_ADDRESS', 500);
                 exit(1);
@@ -915,7 +915,7 @@ class ContactService {
                 $output->error("Contact not found with name: " . $addressOrName, 'CONTACT_NOT_FOUND', 404);
                 exit(1);
             }
-            $address = $contact['http'] ?? $contact['tor'] ?? null;
+            $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
                 $output->error("Contact has no valid address", 'NO_ADDRESS', 500);
                 exit(1);
