@@ -42,13 +42,17 @@ class DeadLetterQueueRepository extends AbstractRepository {
         int $retryCount,
         string $failureReason
     ) {
+        // Use DateTime for proper microsecond support (date() doesn't support .u)
+        $now = DateTime::createFromFormat('U.u', sprintf('%.6F', microtime(true)));
+        $timestamp = $now ? $now->format('Y-m-d H:i:s.u') : date('Y-m-d H:i:s') . '.000000';
+
         $data = [
             'message_type' => $messageType,
             'original_id' => $originalId,
             'payload' => json_encode($payload),
             'recipient_address' => $recipientAddress,
             'retry_count' => $retryCount,
-            'last_retry_at' => date('Y-m-d H:i:s.u'),
+            'last_retry_at' => $timestamp,
             'failure_reason' => $failureReason,
             'status' => 'pending'
         ];
