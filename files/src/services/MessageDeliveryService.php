@@ -17,6 +17,21 @@ require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
  */
 class MessageDeliveryService {
     /**
+     * Success response statuses that indicate delivery was successful
+     */
+    private const SUCCESS_STATUSES = ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed'];
+
+    /**
+     * Message types that complete on 'inserted' or 'forwarded' status
+     */
+    private const COMPLETION_MESSAGE_TYPES = ['rp2p', 'p2p', 'transaction'];
+
+    /**
+     * Maximum retry delay cap in seconds (5 minutes)
+     */
+    private const MAX_RETRY_DELAY_SECONDS = 300;
+
+    /**
      * @var MessageDeliveryRepository Message delivery repository
      */
     private MessageDeliveryRepository $deliveryRepository;
@@ -113,6 +128,63 @@ class MessageDeliveryService {
     }
 
     /**
+     * Emit a debug event by calling a named output function if it exists
+     *
+     * @param string $functionName Name of the output function (e.g., 'outputMessageDeliveryCreated')
+     * @param array $params Parameters to pass to the function
+     */
+    private function emitDebugEvent(string $functionName, array $params): void {
+        if (function_exists($functionName)) {
+            $this->debugOutput(call_user_func_array($functionName, $params));
+        }
+    }
+
+    /**
+     * Check if a response status indicates successful delivery
+     *
+     * @param string|null $status Response status to check
+     * @return bool True if status indicates success
+     */
+    private function isSuccessStatus(?string $status): bool {
+        return $status !== null && in_array($status, self::SUCCESS_STATUSES, true);
+    }
+
+    /**
+     * Check if a message type should complete on 'inserted' or 'forwarded' status
+     *
+     * @param string $messageType Type of message
+     * @return bool True if message type completes on intermediate stages
+     */
+    private function shouldCompleteOnIntermediateStage(string $messageType): bool {
+        return in_array($messageType, self::COMPLETION_MESSAGE_TYPES, true);
+    }
+
+    /**
+     * Log a message using SecureLogger if available
+     *
+     * @param string $level Log level (info, warning, error)
+     * @param string $message Log message
+     * @param array $context Additional context
+     */
+    private function log(string $level, string $message, array $context = []): void {
+        if (class_exists('SecureLogger')) {
+            SecureLogger::$level($message, $context);
+        }
+    }
+
+    /**
+     * Log an exception using SecureLogger if available
+     *
+     * @param Exception $e The exception to log
+     * @param array $context Additional context
+     */
+    private function logException(Exception $e, array $context = []): void {
+        if (class_exists('SecureLogger')) {
+            SecureLogger::logException($e, $context);
+        }
+    }
+
+    /**
      * Send a message with delivery tracking (unified interface)
      *
      * This is the main entry point for sending messages with delivery tracking.
@@ -162,17 +234,15 @@ class MessageDeliveryService {
         // For async sends, check if queued for retry
         $isQueuedForRetry = ($result['stage'] ?? '') === 'queued_for_retry';
 
-        if (class_exists('SecureLogger')) {
-            SecureLogger::info("Message sent via unified sendMessage", [
-                'message_type' => $messageType,
-                'address' => $address,
-                'message_id' => $messageId,
-                'stage' => $result['stage'] ?? 'unknown',
-                'success' => $result['success'] ?? false,
-                'async' => $async,
-                'queued_for_retry' => $isQueuedForRetry
-            ]);
-        }
+        $this->log('info', "Message sent via unified sendMessage", [
+            'message_type' => $messageType,
+            'address' => $address,
+            'message_id' => $messageId,
+            'stage' => $result['stage'] ?? 'unknown',
+            'success' => $result['success'] ?? false,
+            'async' => $async,
+            'queued_for_retry' => $isQueuedForRetry
+        ]);
 
         return [
             'success' => $result['success'] ?? false,
@@ -222,10 +292,7 @@ class MessageDeliveryService {
                 $payload
             );
 
-            // Debug output for message creation
-            if (function_exists('outputMessageDeliveryCreated')) {
-                $this->debugOutput(outputMessageDeliveryCreated($messageType, $messageId, $recipient));
-            }
+            $this->emitDebugEvent('outputMessageDeliveryCreated', [$messageType, $messageId, $recipient]);
         } else {
             // Update payload if record already exists
             $this->deliveryRepository->updatePayload($messageType, $messageId, $payload);
@@ -261,13 +328,11 @@ class MessageDeliveryService {
         // Update stage to sent
         $this->deliveryRepository->updateStage($messageType, $messageId, 'sent');
 
-        if (class_exists('SecureLogger')) {
-            SecureLogger::info("Attempting async message delivery (single attempt)", [
-                'message_type' => $messageType,
-                'message_id' => $messageId,
-                'recipient' => $recipient
-            ]);
-        }
+        $this->log('info', "Attempting async message delivery (single attempt)", [
+            'message_type' => $messageType,
+            'message_id' => $messageId,
+            'recipient' => $recipient
+        ]);
 
         try {
             // Attempt delivery
@@ -278,8 +343,7 @@ class MessageDeliveryService {
             if ($decodedResponse !== null && !empty($response)) {
                 $status = $decodedResponse['status'] ?? null;
 
-                // Success cases - 'completed' is returned by inquiry handlers (e.g., transaction inquiry)
-                if (in_array($status, ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed'])) {
+                if ($this->isSuccessStatus($status)) {
                     $result = $this->processSuccessfulDelivery(
                         $messageType,
                         $messageId,
@@ -321,31 +385,24 @@ class MessageDeliveryService {
         } catch (Exception $e) {
             $lastError = 'Transport exception: ' . $e->getMessage();
 
-            if (class_exists('SecureLogger')) {
-                SecureLogger::logException($e, [
-                    'context' => 'async_delivery_attempt',
-                    'message_type' => $messageType,
-                    'message_id' => $messageId
-                ]);
-            }
+            $this->logException($e, [
+                'context' => 'async_delivery_attempt',
+                'message_type' => $messageType,
+                'message_id' => $messageId
+            ]);
         }
 
         // First attempt failed - mark for background retry (don't block)
         // Keep retry_count at 0 so processRetryQueue() will pick it up
         $this->deliveryRepository->incrementRetry($messageType, $messageId, 0, $lastError);
 
-        // Debug output for queued retry
-        if (function_exists('outputMessageDeliveryQueuedForRetry')) {
-            $this->debugOutput(outputMessageDeliveryQueuedForRetry($messageType, $messageId, $this->maxRetries));
-        }
+        $this->emitDebugEvent('outputMessageDeliveryQueuedForRetry', [$messageType, $messageId, $this->maxRetries]);
 
-        if (class_exists('SecureLogger')) {
-            SecureLogger::warning("Async delivery failed, queued for background retry", [
-                'message_type' => $messageType,
-                'message_id' => $messageId,
-                'error' => $lastError
-            ]);
-        }
+        $this->log('warning', "Async delivery failed, queued for background retry", [
+            'message_type' => $messageType,
+            'message_id' => $messageId,
+            'error' => $lastError
+        ]);
 
         // Return immediately - do not block waiting for retries
         return [
@@ -394,10 +451,7 @@ class MessageDeliveryService {
                 $payload
             );
 
-            // Debug output for message creation
-            if (function_exists('outputMessageDeliveryCreated')) {
-                $this->debugOutput(outputMessageDeliveryCreated($messageType, $messageId, $recipient));
-            }
+            $this->emitDebugEvent('outputMessageDeliveryCreated', [$messageType, $messageId, $recipient]);
         } else {
             // Update payload if record already exists
             $this->deliveryRepository->updatePayload($messageType, $messageId, $payload);
@@ -432,21 +486,18 @@ class MessageDeliveryService {
         array $payload
     ): array {
         $lastError = '';
-        $lastResult = null;
 
         for ($attempt = 0; $attempt <= $this->maxRetries; $attempt++) {
             // Update stage to sent
             $this->deliveryRepository->updateStage($messageType, $messageId, 'sent');
 
-            if (class_exists('SecureLogger')) {
-                SecureLogger::info("Attempting message delivery", [
-                    'message_type' => $messageType,
-                    'message_id' => $messageId,
-                    'recipient' => $recipient,
-                    'attempt' => $attempt + 1,
-                    'max_attempts' => $this->maxRetries + 1
-                ]);
-            }
+            $this->log('info', "Attempting message delivery", [
+                'message_type' => $messageType,
+                'message_id' => $messageId,
+                'recipient' => $recipient,
+                'attempt' => $attempt + 1,
+                'max_attempts' => $this->maxRetries + 1
+            ]);
 
             try {
                 // Attempt delivery
@@ -458,9 +509,7 @@ class MessageDeliveryService {
                     $status = $decodedResponse['status'] ?? null;
 
                     // Success cases - don't retry
-                    // 'acknowledged' is returned for completion messages (transaction complete confirmations)
-                    // 'completed' is returned by inquiry handlers (e.g., transaction inquiry)
-                    if (in_array($status, ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed'])) {
+                    if ($this->isSuccessStatus($status)) {
                         $result = $this->processSuccessfulDelivery(
                             $messageType,
                             $messageId,
@@ -500,14 +549,12 @@ class MessageDeliveryService {
             } catch (Exception $e) {
                 $lastError = 'Transport exception: ' . $e->getMessage();
 
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::logException($e, [
-                        'context' => 'delivery_attempt',
-                        'message_type' => $messageType,
-                        'message_id' => $messageId,
-                        'attempt' => $attempt + 1
-                    ]);
-                }
+                $this->logException($e, [
+                    'context' => 'delivery_attempt',
+                    'message_type' => $messageType,
+                    'message_id' => $messageId,
+                    'attempt' => $attempt + 1
+                ]);
             }
 
             // Update retry count in database
@@ -517,27 +564,22 @@ class MessageDeliveryService {
             if ($attempt < $this->maxRetries) {
                 $delay = $this->calculateRetryDelay($attempt);
 
-                // Debug output for retry scheduling
-                if (function_exists('outputMessageDeliveryRetry')) {
-                    $this->debugOutput(outputMessageDeliveryRetry(
-                        $messageType,
-                        $messageId,
-                        $attempt + 1,
-                        $this->maxRetries,
-                        $delay
-                    ));
-                }
+                $this->emitDebugEvent('outputMessageDeliveryRetry', [
+                    $messageType,
+                    $messageId,
+                    $attempt + 1,
+                    $this->maxRetries,
+                    $delay
+                ]);
 
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::warning("Delivery attempt failed, retrying", [
-                        'message_type' => $messageType,
-                        'message_id' => $messageId,
-                        'attempt' => $attempt + 1,
-                        'next_attempt' => $attempt + 2,
-                        'delay_seconds' => $delay,
-                        'error' => $lastError
-                    ]);
-                }
+                $this->log('warning', "Delivery attempt failed, retrying", [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId,
+                    'attempt' => $attempt + 1,
+                    'next_attempt' => $attempt + 2,
+                    'delay_seconds' => $delay,
+                    'error' => $lastError
+                ]);
 
                 // Sleep for the backoff delay
                 sleep($delay);
@@ -582,144 +624,116 @@ class MessageDeliveryService {
             ? (int) (($this->timeUtility->getCurrentMicrotime() - $this->deliveryStartTime) / 10)
             : 0;
 
-        $result = null;
+        // Determine if this status should complete delivery for this message type
+        $shouldComplete = $this->shouldStatusCompleteDelivery($status, $messageType);
+        $result = $this->buildDeliveryResult($status, $messageType, $shouldComplete, $response, $previousStage);
 
-        switch ($status) {
-            case 'received':
-                $this->deliveryRepository->updateStage($messageType, $messageId, 'received', $rawResponse);
-                if (function_exists('outputMessageDeliveryStageUpdated')) {
-                    $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'received'));
-                }
-                $result = [
-                    'success' => true,
-                    'stage' => 'received',
-                    'message' => 'Message received by recipient',
-                    'response' => $response
-                ];
-                break;
-
-            case 'inserted':
-                // For P2P, RP2P, and transaction types,
-                // 'inserted' means the end-recipient received it and stored it
-                // - the message delivery to that contact is complete
-                // Note: transaction messages (including inquiry/completion subtypes) complete here
-                if (in_array($messageType, ['rp2p', 'p2p', 'transaction'])) {
-                    $this->deliveryRepository->markCompleted($messageType, $messageId);
-                    if (function_exists('outputMessageDeliveryCompleted')) {
-                        $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
-                    }
-                    $result = [
-                        'success' => true,
-                        'stage' => 'completed',
-                        'message' => strtoupper($messageType) . ' message inserted by recipient - delivery complete',
-                        'response' => $response
-                    ];
-                } else {
-                    $this->deliveryRepository->updateStage($messageType, $messageId, 'inserted', $rawResponse);
-                    if (function_exists('outputMessageDeliveryStageUpdated')) {
-                        $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'inserted'));
-                    }
-                    $result = [
-                        'success' => true,
-                        'stage' => 'inserted',
-                        'message' => 'Message stored in recipient database',
-                        'response' => $response
-                    ];
-                }
-                break;
-
-            case 'forwarded':
-                // For P2P, RP2P, and transaction types, 'forwarded' means the next
-                // contact confirmed they received and forwarded it - the message delivery
-                // to that contact is complete.
-                // Note: transaction messages (including completion subtypes) complete here
-                if (in_array($messageType, ['rp2p', 'p2p', 'transaction'])) {
-                    $this->deliveryRepository->markCompleted($messageType, $messageId);
-                    if (function_exists('outputMessageDeliveryCompleted')) {
-                        $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
-                    }
-                    $result = [
-                        'success' => true,
-                        'stage' => 'completed',
-                        'message' => strtoupper($messageType) . ' message forwarded by recipient - delivery complete',
-                        'response' => $response
-                    ];
-                } else {
-                    $this->deliveryRepository->updateStage($messageType, $messageId, 'forwarded', $rawResponse);
-                    if (function_exists('outputMessageDeliveryStageUpdated')) {
-                        $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'forwarded'));
-                    }
-                    $result = [
-                        'success' => true,
-                        'stage' => 'forwarded',
-                        'message' => 'Message forwarded to next hop',
-                        'response' => $response
-                    ];
-                }
-                break;
-
-            case 'accepted':
-                $this->deliveryRepository->markCompleted($messageType, $messageId);
-                if (function_exists('outputMessageDeliveryCompleted')) {
-                    $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
-                }
-                $result = [
-                    'success' => true,
-                    'stage' => 'completed',
-                    'message' => 'Message accepted by recipient',
-                    'response' => $response
-                ];
-                break;
-
-            case 'acknowledged':
-                // Acknowledgment is returned for completion messages (e.g., transaction complete)
-                // This confirms the recipient received and processed the completion notification
-                $this->deliveryRepository->markCompleted($messageType, $messageId);
-                if (function_exists('outputMessageDeliveryCompleted')) {
-                    $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
-                }
-                $result = [
-                    'success' => true,
-                    'stage' => 'completed',
-                    'message' => 'Completion message acknowledged by recipient',
-                    'response' => $response
-                ];
-                break;
-
-            case 'completed':
-                // 'completed' is returned by inquiry handlers (e.g., transaction inquiry)
-                // This confirms the recipient received the inquiry and confirmed transaction completion
-                $this->deliveryRepository->markCompleted($messageType, $messageId);
-                if (function_exists('outputMessageDeliveryCompleted')) {
-                    $this->debugOutput(outputMessageDeliveryCompleted($messageType, $messageId));
-                }
-                $result = [
-                    'success' => true,
-                    'stage' => 'completed',
-                    'message' => 'Inquiry confirmed - transaction completed by recipient',
-                    'response' => $response
-                ];
-                break;
-
-            default:
-                // Shouldn't reach here, but handle gracefully
-                $this->deliveryRepository->updateStage($messageType, $messageId, 'received', $rawResponse);
-                if (function_exists('outputMessageDeliveryStageUpdated')) {
-                    $this->debugOutput(outputMessageDeliveryStageUpdated($messageType, $messageId, $previousStage, 'received'));
-                }
-                $result = [
-                    'success' => true,
-                    'stage' => 'received',
-                    'message' => 'Message delivered with status: ' . $status,
-                    'response' => $response
-                ];
-                break;
+        // Update database and emit debug events
+        if ($shouldComplete) {
+            $this->deliveryRepository->markCompleted($messageType, $messageId);
+            $this->emitDebugEvent('outputMessageDeliveryCompleted', [$messageType, $messageId]);
+        } else {
+            $targetStage = $this->mapStatusToStage($status);
+            $this->deliveryRepository->updateStage($messageType, $messageId, $targetStage, $rawResponse);
+            $this->emitDebugEvent('outputMessageDeliveryStageUpdated', [$messageType, $messageId, $previousStage, $targetStage]);
         }
 
         // Record metrics for successful delivery
         $this->recordDeliveryMetric($messageType, true, $deliveryTimeMs, $retryCount);
 
         return $result;
+    }
+
+    /**
+     * Determine if a status should complete delivery for a message type
+     *
+     * Completion rules:
+     * - 'accepted', 'acknowledged', 'completed': Always complete
+     * - 'inserted', 'forwarded': Complete for p2p/rp2p/transaction types
+     * - 'received': Never completes (intermediate stage)
+     *
+     * @param string $status Response status
+     * @param string $messageType Type of message
+     * @return bool True if delivery should be marked complete
+     */
+    private function shouldStatusCompleteDelivery(string $status, string $messageType): bool {
+        // These statuses always complete delivery
+        if (in_array($status, ['accepted', 'acknowledged', 'completed'], true)) {
+            return true;
+        }
+
+        // 'inserted' and 'forwarded' complete for specific message types
+        if (in_array($status, ['inserted', 'forwarded'], true)) {
+            return $this->shouldCompleteOnIntermediateStage($messageType);
+        }
+
+        return false;
+    }
+
+    /**
+     * Map a response status to its corresponding delivery stage
+     *
+     * @param string $status Response status
+     * @return string Delivery stage name
+     */
+    private function mapStatusToStage(string $status): string {
+        // Most statuses map directly to stages
+        if (in_array($status, ['received', 'inserted', 'forwarded'], true)) {
+            return $status;
+        }
+        // Default fallback
+        return 'received';
+    }
+
+    /**
+     * Build the delivery result array based on status and completion state
+     *
+     * @param string $status Response status
+     * @param string $messageType Type of message
+     * @param bool $isCompleted Whether delivery is completed
+     * @param array $response Original response
+     * @param string $previousStage Previous delivery stage (for context)
+     * @return array Result array with success, stage, message, and response
+     */
+    private function buildDeliveryResult(
+        string $status,
+        string $messageType,
+        bool $isCompleted,
+        array $response,
+        string $previousStage
+    ): array {
+        // Status-specific messages for completed deliveries
+        $completionMessages = [
+            'accepted' => 'Message accepted by recipient',
+            'acknowledged' => 'Completion message acknowledged by recipient',
+            'completed' => 'Inquiry confirmed - transaction completed by recipient',
+            'inserted' => strtoupper($messageType) . ' message inserted by recipient - delivery complete',
+            'forwarded' => strtoupper($messageType) . ' message forwarded by recipient - delivery complete',
+        ];
+
+        // Messages for non-completed stage updates
+        $stageMessages = [
+            'received' => 'Message received by recipient',
+            'inserted' => 'Message stored in recipient database',
+            'forwarded' => 'Message forwarded to next hop',
+        ];
+
+        if ($isCompleted) {
+            return [
+                'success' => true,
+                'stage' => 'completed',
+                'message' => $completionMessages[$status] ?? 'Message delivery completed',
+                'response' => $response
+            ];
+        }
+
+        $targetStage = $this->mapStatusToStage($status);
+        return [
+            'success' => true,
+            'stage' => $targetStage,
+            'message' => $stageMessages[$targetStage] ?? 'Message delivered with status: ' . $status,
+            'response' => $response
+        ];
     }
 
     /**
@@ -757,12 +771,10 @@ class MessageDeliveryService {
             );
         } catch (Exception $e) {
             // Metrics recording should not fail the delivery
-            if (class_exists('SecureLogger')) {
-                SecureLogger::warning("Failed to record delivery metric", [
-                    'message_type' => $messageType,
-                    'error' => $e->getMessage()
-                ]);
-            }
+            $this->log('warning', "Failed to record delivery metric", [
+                'message_type' => $messageType,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 
@@ -806,25 +818,19 @@ class MessageDeliveryService {
         $this->deliveryRepository->markFailed($messageType, $messageId, $lastError);
 
         // Debug output for failure and DLQ
-        if (function_exists('outputMessageDeliveryFailed')) {
-            $this->debugOutput(outputMessageDeliveryFailed($messageType, $messageId, $lastError));
-        }
-        if (function_exists('outputMessageDeliveryMovedToDlq')) {
-            $this->debugOutput(outputMessageDeliveryMovedToDlq($messageType, $messageId, $retryCount));
-        }
+        $this->emitDebugEvent('outputMessageDeliveryFailed', [$messageType, $messageId, $lastError]);
+        $this->emitDebugEvent('outputMessageDeliveryMovedToDlq', [$messageType, $messageId, $retryCount]);
 
         // Record metrics for failed delivery
         $this->recordDeliveryMetric($messageType, false, $deliveryTimeMs, $retryCount);
 
-        if (class_exists('SecureLogger')) {
-            SecureLogger::error("Message delivery exhausted all retries, moved to DLQ", [
-                'message_type' => $messageType,
-                'message_id' => $messageId,
-                'recipient' => $recipient,
-                'retry_count' => $retryCount,
-                'error' => $lastError
-            ]);
-        }
+        $this->log('error', "Message delivery exhausted all retries, moved to DLQ", [
+            'message_type' => $messageType,
+            'message_id' => $messageId,
+            'recipient' => $recipient,
+            'retry_count' => $retryCount,
+            'error' => $lastError
+        ]);
 
         return [
             'success' => false,
@@ -856,8 +862,8 @@ class MessageDeliveryService {
         // Calculate final delay (minimum 1 second)
         $delay = max(1, (int) round($exponentialDelay + $jitter));
 
-        // Cap at 5 minutes maximum
-        return min($delay, 300);
+        // Cap at maximum delay
+        return min($delay, self::MAX_RETRY_DELAY_SECONDS);
     }
 
     /**
@@ -896,13 +902,11 @@ class MessageDeliveryService {
 
             if ($payload === null || !is_array($payload)) {
                 // No payload available - cannot retry, move to DLQ
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::warning("Cannot retry message: no payload stored", [
-                        'message_type' => $messageType,
-                        'message_id' => $messageId,
-                        'retry_count' => $retryCount
-                    ]);
-                }
+                $this->log('warning', "Cannot retry message: no payload stored", [
+                    'message_type' => $messageType,
+                    'message_id' => $messageId,
+                    'retry_count' => $retryCount
+                ]);
 
                 // Move to DLQ since we can't retry
                 $this->dlqRepository->addToQueue(
@@ -924,14 +928,12 @@ class MessageDeliveryService {
                 continue;
             }
 
-            if (class_exists('SecureLogger')) {
-                SecureLogger::info("Processing queued message for retry", [
-                    'message_type' => $messageType,
-                    'message_id' => $messageId,
-                    'retry_count' => $retryCount,
-                    'recipient' => $recipient
-                ]);
-            }
+            $this->log('info', "Processing queued message for retry", [
+                'message_type' => $messageType,
+                'message_id' => $messageId,
+                'retry_count' => $retryCount,
+                'recipient' => $recipient
+            ]);
 
             // Use the synchronous retry mechanism (will attempt remaining retries)
             $result = $this->attemptDeliveryWithRetries(
@@ -1137,14 +1139,7 @@ class MessageDeliveryService {
             ];
         }
 
-        // Debug output for DLQ retry
-        if (function_exists('outputDeadLetterQueueRetry')) {
-            $this->debugOutput(outputDeadLetterQueueRetry(
-                $dlqId,
-                $item['message_type'],
-                $item['original_id']
-            ));
-        }
+        $this->emitDebugEvent('outputDeadLetterQueueRetry', [$dlqId, $item['message_type'], $item['original_id']]);
 
         // Mark as retrying
         $this->dlqRepository->markRetrying($dlqId);
@@ -1155,15 +1150,7 @@ class MessageDeliveryService {
 
             if ($result['success'] ?? false) {
                 $this->dlqRepository->markResolved($dlqId);
-
-                // Debug output for DLQ resolution
-                if (function_exists('outputDeadLetterQueueResolved')) {
-                    $this->debugOutput(outputDeadLetterQueueResolved(
-                        $dlqId,
-                        $item['message_type'],
-                        $item['original_id']
-                    ));
-                }
+                $this->emitDebugEvent('outputDeadLetterQueueResolved', [$dlqId, $item['message_type'], $item['original_id']]);
 
                 return [
                     'success' => true,
@@ -1180,12 +1167,10 @@ class MessageDeliveryService {
         } catch (Exception $e) {
             $this->dlqRepository->returnToPending($dlqId);
 
-            if (class_exists('SecureLogger')) {
-                SecureLogger::logException($e, [
-                    'context' => 'dlq_retry',
-                    'dlq_id' => $dlqId
-                ]);
-            }
+            $this->logException($e, [
+                'context' => 'dlq_retry',
+                'dlq_id' => $dlqId
+            ]);
 
             return [
                 'success' => false,
@@ -1293,12 +1278,10 @@ class MessageDeliveryService {
         $delivery = $this->deliveryRepository->getByMessage($messageType, $messageId);
 
         if (!$delivery) {
-            if (class_exists('SecureLogger')) {
-                SecureLogger::warning("Cannot update stage to forwarded: delivery record not found", [
-                    'message_type' => $messageType,
-                    'message_id' => $messageId
-                ]);
-            }
+            $this->log('warning', "Cannot update stage to forwarded: delivery record not found", [
+                'message_type' => $messageType,
+                'message_id' => $messageId
+            ]);
             return false;
         }
 
@@ -1336,14 +1319,12 @@ class MessageDeliveryService {
                 json_encode($responseData)
             );
 
-            if (class_exists('SecureLogger')) {
-                SecureLogger::info("Delivery stage updated to 'forwarded'", [
-                    'message_type' => $messageType,
-                    'message_id' => $messageId,
-                    'previous_stage' => $currentStage,
-                    'next_hop' => $nextHop
-                ]);
-            }
+            $this->log('info', "Delivery stage updated to 'forwarded'", [
+                'message_type' => $messageType,
+                'message_id' => $messageId,
+                'previous_stage' => $currentStage,
+                'next_hop' => $nextHop
+            ]);
 
             return true;
         }
@@ -1369,12 +1350,10 @@ class MessageDeliveryService {
         $delivery = $this->deliveryRepository->getByMessage($messageType, $messageId);
 
         if (!$delivery) {
-            if (class_exists('SecureLogger')) {
-                SecureLogger::warning("Cannot mark completed: delivery record not found", [
-                    'message_type' => $messageType,
-                    'message_id' => $messageId
-                ]);
-            }
+            $this->log('warning', "Cannot mark completed: delivery record not found", [
+                'message_type' => $messageType,
+                'message_id' => $messageId
+            ]);
             return false;
         }
 
@@ -1387,13 +1366,11 @@ class MessageDeliveryService {
 
         $this->deliveryRepository->markCompleted($messageType, $messageId);
 
-        if (class_exists('SecureLogger')) {
-            SecureLogger::info("Delivery marked as 'completed'", [
-                'message_type' => $messageType,
-                'message_id' => $messageId,
-                'previous_stage' => $currentStage
-            ]);
-        }
+        $this->log('info', "Delivery marked as 'completed'", [
+            'message_type' => $messageType,
+            'message_id' => $messageId,
+            'previous_stage' => $currentStage
+        ]);
 
         return true;
     }
@@ -1422,12 +1399,10 @@ class MessageDeliveryService {
         $delivery = $this->deliveryRepository->getByMessage($messageType, $messageId);
 
         if (!$delivery) {
-            if (class_exists('SecureLogger')) {
-                SecureLogger::warning("Cannot update stage: delivery record not found", [
-                    'message_type' => $messageType,
-                    'message_id' => $messageId
-                ]);
-            }
+            $this->log('warning', "Cannot update stage: delivery record not found", [
+                'message_type' => $messageType,
+                'message_id' => $messageId
+            ]);
             return false;
         }
 
@@ -1461,13 +1436,11 @@ class MessageDeliveryService {
                 ])
             );
 
-            if (class_exists('SecureLogger')) {
-                SecureLogger::info("Delivery stage updated to 'inserted'", [
-                    'message_type' => $messageType,
-                    'message_id' => $messageId,
-                    'previous_stage' => $currentStage
-                ]);
-            }
+            $this->log('info', "Delivery stage updated to 'inserted'", [
+                'message_type' => $messageType,
+                'message_id' => $messageId,
+                'previous_stage' => $currentStage
+            ]);
 
             $currentOrder = $insertedOrder;
         }
@@ -1476,12 +1449,10 @@ class MessageDeliveryService {
         if ($markCompleted && $currentOrder < $completedOrder) {
             $this->deliveryRepository->markCompleted($messageType, $messageId);
 
-            if (class_exists('SecureLogger')) {
-                SecureLogger::info("Delivery marked as 'completed'", [
-                    'message_type' => $messageType,
-                    'message_id' => $messageId
-                ]);
-            }
+            $this->log('info', "Delivery marked as 'completed'", [
+                'message_type' => $messageType,
+                'message_id' => $messageId
+            ]);
         }
 
         return true;
