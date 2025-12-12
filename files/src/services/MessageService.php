@@ -148,9 +148,9 @@ class MessageService {
      */
     private function sendMessage(string $messageSubtype, string $address, array $payload, ?string $hash = null): array {
         // Generate unique message ID for tracking
-        // Format: tx-{subtype}-{hash}-{timestamp}
+        // Format: {subtype}-{hash}-{timestamp} (message_type 'transaction' provides context)
         $hashPart = $hash ?? hash('sha256', json_encode($payload));
-        $messageId = 'tx-' . $messageSubtype . '-' . $hashPart . '-' . $this->timeUtility->getCurrentMicrotime();
+        $messageId = $messageSubtype . '-' . $hashPart . '-' . $this->timeUtility->getCurrentMicrotime();
 
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
@@ -419,7 +419,7 @@ class MessageService {
      * Mark all P2P delivery records for a hash as completed
      *
      * When a P2P transaction completes, this marks all related message_delivery
-     * records (both p2p-direct-{hash} and p2p-broadcast-{hash}-{contactHash})
+     * records (both direct-{hash} and broadcast-{hash}-{contactHash})
      * as completed. Delegates to MessageDeliveryService.
      *
      * @param string $hash The P2P hash (memo)

@@ -305,8 +305,9 @@ class ContactService {
             else{
                 if($this->contactRepository->updateUnblockContact($contact['pubkey'], $name, $fee, $credit, $currency)){
                     // Send message of successful contact acceptance back to original contact requester with tracking
+                    // Message ID format: unblock-accept-{hash} (message_type 'contact' provides context)
                     $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
-                    $messageId = 'contact-unblock-accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
+                    $messageId = 'unblock-accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
                     $sendResult = $this->sendContactMessage($address, $acceptPayload, $messageId);
 
                     // For acceptance messages, we update stages based on our local operations (using MessageDeliveryService directly)
@@ -337,8 +338,9 @@ class ContactService {
                 // If contact already exists with an address, it's a contact request, skip sending a message
                 if ($this->acceptContact($contact['pubkey'], $name, $fee, $credit, $currency)) {
                     // Send message of successful contact acceptance back to original contact requester with tracking
+                    // Message ID format: accept-{hash} (message_type 'contact' provides context)
                     $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
-                    $messageId = 'contact-accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
+                    $messageId = 'accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
                     $sendResult = $this->sendContactMessage($address, $acceptPayload, $messageId);
 
                     // For acceptance messages, we update stages based on our local operations (using MessageDeliveryService directly)
@@ -388,7 +390,8 @@ class ContactService {
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);  // Address already passed validation before
 
         // Generate unique message ID for contact creation tracking
-        $messageId = 'contact-create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
+        // Message ID format: create-{hash} (message_type 'contact' provides context)
+        $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
 
         // Send contact creation request with delivery tracking
         $sendResult = $this->sendContactMessage($address, $payload, $messageId);

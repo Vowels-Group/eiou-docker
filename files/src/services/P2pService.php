@@ -342,9 +342,9 @@ class P2pService {
                 $this->p2pRepository->insertP2pRequest($request, $myAddress);
 
                 // Build and send corresponding rp2p request payload to sender of p2p with delivery tracking
-                // Message ID format: rp2p-response-{hash}
+                // Message ID format: response-{hash} (message_type 'rp2p' provides context)
                 $rP2pPayload = $this->rp2pPayload->build($request);
-                $messageId = 'rp2p-response-' . $request['hash'];
+                $messageId = 'response-' . $request['hash'];
                 $sendResult = $this->sendP2pMessage('rp2p', $request['senderAddress'], $rP2pPayload, $messageId);
                 $response = $sendResult['response'];
 
@@ -526,10 +526,10 @@ class P2pService {
 
             // Check if user is NOT the original sender of the p2p and has a direct contact link to end-recipient
             // If this is the case then send p2p directly
-            // Message ID format: p2p-direct-{hash}
+            // Message ID format: direct-{hash} (message_type 'p2p' provides context)
             if(!isset($message['destination_address']) && $matchedContact = $this->matchContact($message)){
                 // Send directly to matched contact with delivery tracking
-                $messageId = 'p2p-direct-' . $p2pHash;
+                $messageId = 'direct-' . $p2pHash;
                 $sendResult = $this->sendP2pMessage('p2p', $matchedContact[$transportIndex], $p2pPayload, $messageId);
                 $response = $sendResult['response'];
 
@@ -564,9 +564,9 @@ class P2pService {
                     }
 
                     // Send with delivery tracking - use unique ID per contact to track each send
-                    // Message ID format: p2p-broadcast-{p2pHash}-{contactHash}
+                    // Message ID format: broadcast-{p2pHash}-{contactHash} (message_type 'p2p' provides context)
                     $contactHash = substr(hash('sha256', $contactAddress), 0, 8);
-                    $messageId = 'p2p-broadcast-' . $p2pHash . '-' . $contactHash;
+                    $messageId = 'broadcast-' . $p2pHash . '-' . $contactHash;
                     $sendResult = $this->sendP2pMessage('p2p', $contactAddress, $p2pPayload, $messageId);
                     $response = $sendResult['response'];
 

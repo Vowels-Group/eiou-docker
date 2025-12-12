@@ -332,8 +332,8 @@ class MessageDeliveryRepository extends AbstractRepository {
      *
      * Used to mark all P2P broadcast deliveries as completed when the
      * transaction completes. P2P messages use IDs like:
-     * - p2p-direct-{hash}
-     * - p2p-broadcast-{hash}-{contactHash}
+     * - direct-{hash}
+     * - broadcast-{hash}-{contactHash}
      *
      * @param string $messageType Type of message ('p2p' or 'rp2p')
      * @param string $hash The P2P hash to match (will match message_id LIKE '%{hash}%')

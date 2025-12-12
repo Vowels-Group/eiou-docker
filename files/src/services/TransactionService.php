@@ -174,8 +174,8 @@ class TransactionService {
      */
     private function sendTransactionMessage(string $address, array $payload, string $txid): array {
         // Generate unique message ID for tracking
-        // Format: tx-send-{txid}-{timestamp} (sending a transaction)
-        $messageId = 'tx-send-' . $txid . '-' . $this->timeUtility->getCurrentMicrotime();
+        // Format: {txid}-{timestamp} (message_type 'transaction' provides context)
+        $messageId = $txid . '-' . $this->timeUtility->getCurrentMicrotime();
 
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
@@ -552,12 +552,13 @@ class TransactionService {
                     output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
 
                     // Mark the transaction delivery as completed (using MessageDeliveryService directly)
+                    // Note: message_id format is {txid}-{timestamp}
                     if ($this->messageDeliveryService !== null) {
-                        $this->messageDeliveryService->markDeliveryCompleted('transaction', 'tx-' . $txid . '-' . strtotime($message['created_at'] ?? 'now'));
+                        $this->messageDeliveryService->markDeliveryCompleted('transaction', $txid . '-' . strtotime($message['created_at'] ?? 'now'));
                     }
 
                     // Send completion message with delivery tracking
-                    // Format: tx-completion-response-{txid}-{timestamp} (responding to direct transaction received)
+                    // Format: completion-response-{txid}-{timestamp} (responding to direct transaction received)
                     $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, 'completion-response-' . $txid);
                 }
             } else{
@@ -641,11 +642,11 @@ class TransactionService {
 
                 // Mark the P2P delivery chain as completed since transaction was received (using MessageDeliveryService directly)
                 if ($this->messageDeliveryService !== null) {
-                    $this->messageDeliveryService->markDeliveryCompleted('p2p', 'p2p-direct-' . $memo);
+                    $this->messageDeliveryService->markDeliveryCompleted('p2p', 'direct-' . $memo);
                 }
 
                 // Send completion message with delivery tracking
-                // Format: tx-completion-response-{txid}-{timestamp} (P2P end-recipient responding with completion)
+                // Format: completion-response-{txid}-{timestamp} (P2P end-recipient responding with completion)
                 $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, 'completion-response-' . $txid);
             }
         }

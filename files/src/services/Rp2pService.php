@@ -126,8 +126,8 @@ class RP2pService {
      */
     private function sendRp2pMessage(string $address, array $payload, string $hash): array {
         // Generate unique message ID for tracking
-        // Format: rp2p-relay-{hash}-{timestamp} (relaying RP2P onwards)
-        $messageId = 'rp2p-relay-' . $hash . '-' . $this->timeUtility->getCurrentMicrotime();
+        // Format: relay-{hash}-{timestamp} (message_type 'rp2p' provides context)
+        $messageId = 'relay-' . $hash . '-' . $this->timeUtility->getCurrentMicrotime();
 
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
