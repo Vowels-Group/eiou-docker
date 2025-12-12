@@ -451,14 +451,14 @@ class ServiceContainer {
     }
 
     /**
-     * Get SynchService instance
+     * Get SyncService instance
      *
-     * @return SynchService
+     * @return SyncService
      */
-    public function getSynchService(): SynchService {
-        if (!isset($this->services['SynchService'])) {
-            require_once __DIR__ . '/SynchService.php';
-            $this->services['SynchService'] = new SynchService(
+    public function getSyncService(): SyncService {
+        if (!isset($this->services['SyncService'])) {
+            require_once __DIR__ . '/SyncService.php';
+            $this->services['SyncService'] = new SyncService(
                 $this->getContactRepository(),
                 $this->getAddressRepository(),
                 $this->getP2pRepository(),
@@ -468,7 +468,7 @@ class ServiceContainer {
                 $this->currentUser
             );
         }
-        return $this->services['SynchService'];
+        return $this->services['SyncService'];
     }
 
     /**
