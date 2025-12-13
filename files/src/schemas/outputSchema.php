@@ -192,6 +192,10 @@ function outputP2pStatusUpdated($status,$hash){
     return "Updated status to '" . $status . "' for p2p hash: " . $hash."\n";
 }
 
+function outputP2pDescriptionUpdated($description,$hash){
+    return "Updated description to '" . $description . "' for p2p:" . $hash."\n";
+}
+
 function outputSendP2PToAmountContacts($contactsCount){
     return "Sent Peer to peer request to " . $contactsCount . " contacts.\n";
 }
