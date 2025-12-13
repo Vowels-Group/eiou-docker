@@ -296,6 +296,17 @@ class MessageService {
     private function handleTransactionMessageInquiryRequest(array $decodedMessage): void {
         // Handle inquiry about transaction status
         output(outputHandleTransactionMessageResponse($decodedMessage),'SILENT');
+
+        // Store description from inquiry if provided (for P2P transactions)
+        // The original sender includes the description in the inquiry so end-recipient can store it
+        if (isset($decodedMessage['description']) && $decodedMessage['description'] !== null && isset($decodedMessage['hash'])) {
+            $hash = $decodedMessage['hash'];
+            // Update description in p2p table
+            $this->p2pRepository->updateDescription($hash, $decodedMessage['description']);
+            // Update description in transaction table (using memo/hash)
+            $this->transactionRepository->updateDescription($hash, $decodedMessage['description'], false);
+        }
+
         echo $this->messagePayload->buildTransactionCompletedCorrectly($decodedMessage);
     }
 
@@ -324,6 +335,10 @@ class MessageService {
                         // Send direct message inquiry to end recipient double checking if completion of transaction correct
                         // This is a direct message (no forwarding) - completes on 'inserted' status
                         // Subtype 'inquiry' creates message_id: tx-inquiry-{hash}-{timestamp}
+                        // Include description from p2p table so end-recipient can store it
+                        if (isset($p2p['description']) && $p2p['description'] !== null) {
+                            $decodedMessage['description'] = $p2p['description'];
+                        }
                         $completedTransactionInquiry = $this->messagePayload->buildTransactionCompletedInquiry($decodedMessage);
                         $sendResult = $this->sendMessage('inquiry', $p2p['destination_address'], $completedTransactionInquiry, $hash);
                         $response = $sendResult['response'];
