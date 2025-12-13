@@ -3,7 +3,7 @@
     // Simple script to show/hide the floating action button
     // This is minimal JavaScript that should work in Tor Browser
     window.addEventListener('scroll', function() {
-        const fab = document.getElementById('backToTop');
+        var fab = document.getElementById('backToTop');
         if (window.pageYOffset > 300) {
             fab.classList.remove('hidden');
         } else {
@@ -13,33 +13,32 @@
 
     // Hide FAB initially
     document.addEventListener('DOMContentLoaded', function() {
-        const fab = document.getElementById('backToTop');
+        var fab = document.getElementById('backToTop');
         fab.classList.add('hidden');
     });
 
 // Manual refresh function (Tor Browser compatible)
 function refreshWalletData() {
-    const refreshBtn = document.getElementById('manualRefresh');
-    const icon = refreshBtn.querySelector('i');
-    
+    var refreshBtn = document.getElementById('manualRefresh');
+    var icon = refreshBtn.querySelector('i');
+
     // Show loading state
     icon.className = 'fas fa-spinner fa-spin';
     refreshBtn.disabled = true;
-    
-    // Preserve auth code when refreshing
-    const url = new URL(window.location.href);
-    window.location.href = url.toString();
+
+    // Preserve auth code when refreshing - use simple string to avoid URL constructor issues
+    window.location.href = window.location.href;
 }
 
 // Send eIOU form handling
 function initializeSendForm() {
-    const recipientSelect = document.getElementById('recipient');
-    const manualAddressGroup = document.getElementById('manual-address-group');
-    const manualAddressInput = document.getElementById('manual-address');
-    const transactionTypeIndicator = document.getElementById('transaction-type-indicator');
-    const transactionTypeText = document.getElementById('transaction-type-text');
-    const addressTypeGroup = document.getElementById('address-type-group');
-    const addressTypeSelect = document.getElementById('address-type');
+    var recipientSelect = document.getElementById('recipient');
+    var manualAddressGroup = document.getElementById('manual-address-group');
+    var manualAddressInput = document.getElementById('manual-address');
+    var transactionTypeIndicator = document.getElementById('transaction-type-indicator');
+    var transactionTypeText = document.getElementById('transaction-type-text');
+    var addressTypeGroup = document.getElementById('address-type-group');
+    var addressTypeSelect = document.getElementById('address-type');
 
     // Set initial state - manual address is visible by default
     if (manualAddressInput) manualAddressInput.required = true;
@@ -52,8 +51,8 @@ function initializeSendForm() {
 
     if (recipientSelect) {
         recipientSelect.addEventListener('change', function() {
-            const selectedValue = this.value;
-            const selectedOption = this.options[this.selectedIndex];
+            var selectedValue = this.value;
+            var selectedOption = this.options[this.selectedIndex];
 
             if (selectedValue === '') {
                 // Show manual address input (default state)
@@ -119,7 +118,7 @@ function initializeSendForm() {
     // Handle manual address input
     if (manualAddressInput) {
         manualAddressInput.addEventListener('input', function() {
-            const address = this.value.trim();
+            var address = this.value.trim();
             if (address) {
                 transactionTypeIndicator.style.display = 'block';
                 if (address.includes('.onion') || address.startsWith('http')) {
@@ -348,10 +347,11 @@ function initializeTransactionToast() {
             var currency = document.getElementById('currency');
 
             var recipient = '';
+            var addr;
             if (recipientSelect && recipientSelect.value) {
                 recipient = recipientSelect.options[recipientSelect.selectedIndex].text;
             } else if (manualAddress && manualAddress.value) {
-                var addr = manualAddress.value;
+                addr = manualAddress.value;
                 recipient = addr.length > 25 ? addr.substring(0, 25) + '...' : addr;
             }
 
