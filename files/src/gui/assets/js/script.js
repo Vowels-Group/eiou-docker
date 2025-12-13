@@ -375,13 +375,44 @@ function initializeTransactionToast() {
 document.addEventListener('DOMContentLoaded', function() {
     initializeTransactionToast();
 });
-// Loading Overlay Functions  
-function showLoader(message) {
+// Loading Overlay Functions
+var loaderTimerInterval = null;
+var loaderStartTime = null;
+
+function showLoader(message, subtext) {
     message = message || 'Loading...';
     var overlay = document.getElementById('loadingOverlay');
     var loadingText = document.getElementById('loadingText');
+    var loadingSubtext = document.getElementById('loadingSubtext');
+    var loadingTimer = document.getElementById('loadingTimer');
+
     if (overlay && loadingText) {
         loadingText.textContent = message;
+
+        // Set subtext if provided
+        if (loadingSubtext) {
+            loadingSubtext.textContent = subtext || '';
+            loadingSubtext.style.display = subtext ? 'block' : 'none';
+        }
+
+        // Start elapsed timer
+        if (loadingTimer) {
+            loaderStartTime = Date.now();
+            loadingTimer.textContent = 'Elapsed: 0s';
+            loadingTimer.style.display = 'block';
+
+            // Clear any existing timer
+            if (loaderTimerInterval) {
+                clearInterval(loaderTimerInterval);
+            }
+
+            // Update timer every second
+            loaderTimerInterval = setInterval(function() {
+                var elapsed = Math.floor((Date.now() - loaderStartTime) / 1000);
+                loadingTimer.textContent = 'Elapsed: ' + elapsed + 's';
+            }, 1000);
+        }
+
         overlay.classList.add('active');
     }
 }
@@ -391,15 +422,25 @@ function hideLoader() {
     if (overlay) {
         overlay.classList.remove('active');
     }
+
+    // Clear timer
+    if (loaderTimerInterval) {
+        clearInterval(loaderTimerInterval);
+        loaderTimerInterval = null;
+    }
+    loaderStartTime = null;
 }
 
 // Form loaders initialization
 function initializeFormLoaders() {
+    // Retry info text for contact operations
+    var retryInfoText = 'Connecting to contact server. If unreachable, up to 5 retry attempts will be made automatically.';
+
     // Add contact form
     var addContactForm = document.querySelector('#add-contact form');
     if (addContactForm) {
         addContactForm.addEventListener('submit', function() {
-            showLoader('Adding contact...');
+            showLoader('Adding contact...', retryInfoText);
         });
     }
 
@@ -417,7 +458,7 @@ function initializeFormLoaders() {
         var form = acceptContactForms[i].closest('form');
         if (form) {
             form.addEventListener('submit', function() {
-                showLoader('Accepting contact request...');
+                showLoader('Accepting contact request...', retryInfoText);
             });
         }
     }
@@ -467,7 +508,7 @@ function initializeFormLoaders() {
     var sendForm = document.querySelector('#send-form form');
     if (sendForm) {
         sendForm.addEventListener('submit', function() {
-            showLoader('Sending transaction...');
+            showLoader('Sending transaction...', 'Processing your transaction. This may take a moment.');
         });
     }
 }
