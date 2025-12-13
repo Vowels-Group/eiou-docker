@@ -18,6 +18,7 @@ $debugService = $serviceContainer->getDebugService();
 
 $utilityContainer = $app->utilityServices;
 $validationUtility = $utilityContainer->getValidationUtility();
+$inputValidator = $app->getInputValidator();
 
 // Verify the request signature before decoding message content
 // This allows rejecting invalid requests early without processing the payload
@@ -46,7 +47,7 @@ if (!isset($envelope['senderPublicKey']) || !isset($envelope['senderAddress'])) 
 }
 
 // Validate public key format
-$publicKeyValidation = InputValidator::validatePublicKey($envelope['senderPublicKey']);
+$publicKeyValidation = $inputValidator->validatePublicKey($envelope['senderPublicKey']);
 if (!$publicKeyValidation['valid']) {
     http_response_code(400);
     echo json_encode([
@@ -59,7 +60,7 @@ if (!$publicKeyValidation['valid']) {
 }
 
 // Validate address format
-$addressValidation = InputValidator::validateAddress($envelope['senderAddress']);
+$addressValidation = $inputValidator->validateAddress($envelope['senderAddress']);
 if (!$addressValidation['valid']) {
     http_response_code(400);
     echo json_encode([
