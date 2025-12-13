@@ -544,12 +544,14 @@ function submitFormWithRetryTracking(form, message) {
 
 // Form loaders initialization
 function initializeFormLoaders() {
-    // Add contact form - use AJAX with retry tracking
+    // Retry info text for contact operations
+    var retryInfoText = 'Connecting to contact server. If unreachable, up to 5 retry attempts will be made automatically.';
+
+    // Add contact form - standard submission with loader
     var addContactForm = document.querySelector('#add-contact form');
     if (addContactForm) {
-        addContactForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            submitFormWithRetryTracking(this, 'Adding contact...');
+        addContactForm.addEventListener('submit', function() {
+            showLoader('Adding contact...', retryInfoText);
         });
     }
 
@@ -561,14 +563,13 @@ function initializeFormLoaders() {
         });
     }
 
-    // Accept contact forms - use AJAX with retry tracking
+    // Accept contact forms - standard submission with loader
     var acceptContactForms = document.querySelectorAll('form input[name="action"][value="acceptContact"]');
     for (var i = 0; i < acceptContactForms.length; i++) {
         var form = acceptContactForms[i].closest('form');
         if (form) {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                submitFormWithRetryTracking(this, 'Accepting contact request...');
+            form.addEventListener('submit', function() {
+                showLoader('Accepting contact request...', retryInfoText);
             });
         }
     }
