@@ -22,6 +22,48 @@ $validationUtility = $utilityContainer->getValidationUtility();
 // Verify the request signature BEFORE decoding message content
 // This allows rejecting invalid requests early without processing the payload
 if (!$validationUtility->verifyRequestSignature($envelope)) {
+    http_response_code(400);
+    echo json_encode([
+        'error' => 1,
+        'message' => 'Invalid signature',
+        'details' => 'The request signature could not be verified'
+    ]);
+    die;
+}
+
+// Validate envelope fields AFTER signature verification
+// Check that required fields exist
+if (!isset($envelope['senderPublicKey']) || !isset($envelope['senderAddress'])) {
+    http_response_code(400);
+    echo json_encode([
+        'error' => 3,
+        'message' => 'Missing required envelope fields',
+        'details' => 'senderPublicKey and senderAddress are required'
+    ]);
+    die;
+}
+
+// Validate public key format
+$publicKeyValidation = InputValidator::validatePublicKey($envelope['senderPublicKey']);
+if (!$publicKeyValidation['valid']) {
+    http_response_code(400);
+    echo json_encode([
+        'error' => 4,
+        'message' => 'Invalid public key format',
+        'details' => $publicKeyValidation['error']
+    ]);
+    die;
+}
+
+// Validate address format
+$addressValidation = InputValidator::validateAddress($envelope['senderAddress']);
+if (!$addressValidation['valid']) {
+    http_response_code(400);
+    echo json_encode([
+        'error' => 5,
+        'message' => 'Invalid address format',
+        'details' => $addressValidation['error']
+    ]);
     die;
 }
 
