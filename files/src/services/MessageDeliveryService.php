@@ -4,7 +4,6 @@
 require_once __DIR__ . '/../database/MessageDeliveryRepository.php';
 require_once __DIR__ . '/../database/DeadLetterQueueRepository.php';
 require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
-require_once __DIR__ . '/../utils/RetryStatusTracker.php';
 
 /**
  * Message Delivery Service
@@ -492,14 +491,6 @@ class MessageDeliveryService {
             // Update stage to sent
             $this->deliveryRepository->updateStage($messageType, $messageId, 'sent');
 
-            // Update retry status tracker for GUI polling
-            RetryStatusTracker::updateRetryStatus(
-                $attempt + 1,
-                $this->maxRetries + 1,
-                'attempting',
-                'Attempt ' . ($attempt + 1) . ' of ' . ($this->maxRetries + 1)
-            );
-
             $this->log('info', "Attempting message delivery", [
                 'message_type' => $messageType,
                 'message_id' => $messageId,
@@ -572,14 +563,6 @@ class MessageDeliveryService {
             // If we haven't exhausted retries, wait and try again
             if ($attempt < $this->maxRetries) {
                 $delay = $this->calculateRetryDelay($attempt);
-
-                // Update retry status tracker - waiting for next attempt
-                RetryStatusTracker::updateRetryStatus(
-                    $attempt + 1,
-                    $this->maxRetries + 1,
-                    'waiting',
-                    'Attempt ' . ($attempt + 1) . ' failed. Retrying in ' . $delay . 's...'
-                );
 
                 $this->emitDebugEvent('outputMessageDeliveryRetry', [
                     $messageType,

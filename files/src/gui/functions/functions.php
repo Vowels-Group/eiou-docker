@@ -1,34 +1,9 @@
 <?php
 // Copyright 2025
 
-// Handle retry status polling (AJAX)
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['retry_status'])) {
-    require_once '/etc/eiou/src/utils/RetryStatusTracker.php';
-    header('Content-Type: application/json');
-
-    $requestId = $_GET['retry_status'];
-    $status = RetryStatusTracker::getStatus($requestId);
-
-    if ($status) {
-        echo json_encode($status);
-    } else {
-        echo json_encode(['status' => 'not_found']);
-    }
-    exit;
-}
-
 // Route controllers if POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
-
-    // Initialize retry status tracker for contact operations that involve network calls
-    if (in_array($action, ['addContact', 'acceptContact'])) {
-        require_once '/etc/eiou/src/utils/RetryStatusTracker.php';
-        $requestId = $_POST['retry_request_id'] ?? null;
-        if ($requestId) {
-            RetryStatusTracker::init($requestId);
-        }
-    }
 
     // Contact actions
     if (in_array($action, ['addContact', 'acceptContact', 'deleteContact', 'blockContact', 'unblockContact', 'editContact'])) {
@@ -38,11 +13,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // Transaction actions
     if (in_array($action, ['sendEIOU'])) {
         $transactionController->routeAction();
-    }
-
-    // Mark retry status as complete after action
-    if (in_array($action, ['addContact', 'acceptContact']) && isset($requestId) && $requestId) {
-        RetryStatusTracker::complete(true, 'Operation completed');
     }
 }
 
