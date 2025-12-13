@@ -158,6 +158,8 @@ function wait_for_contact(){
     done
 
     return 1
+}
+
 # Function to remove a container if it exists and any volumes associated
 remove_container_if_exists() {
     local container_name=$1

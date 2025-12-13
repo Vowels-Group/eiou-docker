@@ -296,6 +296,16 @@ class MessageService {
     private function handleTransactionMessageInquiryRequest(array $decodedMessage): void {
         // Handle inquiry about transaction status
         output(outputHandleTransactionMessageResponse($decodedMessage),'SILENT');
+
+        // Fetch description from p2p table to include in response
+        // This ensures the original sender receives the description when they query the end-recipient
+        if (isset($decodedMessage['hash'])) {
+            $p2p = $this->p2pRepository->getByHash($decodedMessage['hash']);
+            if ($p2p && isset($p2p['description']) && $p2p['description'] !== null) {
+                $decodedMessage['description'] = $p2p['description'];
+            }
+        }
+
         echo $this->messagePayload->buildTransactionCompletedCorrectly($decodedMessage);
     }
 
