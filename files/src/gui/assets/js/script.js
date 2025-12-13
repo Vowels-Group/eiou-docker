@@ -411,6 +411,50 @@ function initializeFormLoaders() {
         });
     }
 
+    // Accept contact forms (in pending contact requests section)
+    var acceptContactForms = document.querySelectorAll('form input[name="action"][value="acceptContact"]');
+    for (var i = 0; i < acceptContactForms.length; i++) {
+        var form = acceptContactForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Accepting contact request...');
+            });
+        }
+    }
+
+    // Block contact forms
+    var blockContactForms = document.querySelectorAll('form input[name="action"][value="blockContact"]');
+    for (var i = 0; i < blockContactForms.length; i++) {
+        var form = blockContactForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Blocking contact...');
+            });
+        }
+    }
+
+    // Unblock contact forms
+    var unblockContactForms = document.querySelectorAll('form input[name="action"][value="unblockContact"]');
+    for (var i = 0; i < unblockContactForms.length; i++) {
+        var form = unblockContactForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Unblocking contact...');
+            });
+        }
+    }
+
+    // Delete contact forms
+    var deleteContactForms = document.querySelectorAll('form input[name="action"][value="deleteContact"]');
+    for (var i = 0; i < deleteContactForms.length; i++) {
+        var form = deleteContactForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Deleting contact request...');
+            });
+        }
+    }
+
     // Auth form
     var authForm = document.querySelector('.auth-form');
     if (authForm) {
