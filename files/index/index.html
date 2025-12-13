@@ -19,24 +19,26 @@ $debugService = $serviceContainer->getDebugService();
 $utilityContainer = $app->utilityServices;
 $validationUtility = $utilityContainer->getValidationUtility();
 
-// Verify the request signature BEFORE decoding message content
+// Verify the request signature before decoding message content
 // This allows rejecting invalid requests early without processing the payload
 if (!$validationUtility->verifyRequestSignature($envelope)) {
     http_response_code(400);
     echo json_encode([
         'success' => false,
+        'status' => 'rejected',
         'error' => 'The request signature could not be verified',
         'error_code' => 'invalid_signature'
     ]);
     die;
 }
 
-// Validate envelope fields AFTER signature verification
+// Validate envelope fields after signature verification
 // Check that required fields exist
 if (!isset($envelope['senderPublicKey']) || !isset($envelope['senderAddress'])) {
     http_response_code(400);
     echo json_encode([
         'success' => false,
+        'status' => 'rejected',
         'error' => 'senderPublicKey and senderAddress are required',
         'error_code' => 'missing_envelope_fields'
     ]);
@@ -49,6 +51,7 @@ if (!$publicKeyValidation['valid']) {
     http_response_code(400);
     echo json_encode([
         'success' => false,
+        'status' => 'rejected',
         'error' => $publicKeyValidation['error'],
         'error_code' => 'invalid_public_key_format'
     ]);
@@ -61,6 +64,7 @@ if (!$addressValidation['valid']) {
     http_response_code(400);
     echo json_encode([
         'success' => false,
+        'status' => 'rejected',
         'error' => $addressValidation['error'],
         'error_code' => 'invalid_address_format'
     ]);
