@@ -3,7 +3,7 @@
     // Simple script to show/hide the floating action button
     // This is minimal JavaScript that should work in Tor Browser
     window.addEventListener('scroll', function() {
-        const fab = document.getElementById('backToTop');
+        var fab = document.getElementById('backToTop');
         if (window.pageYOffset > 300) {
             fab.classList.remove('hidden');
         } else {
@@ -13,33 +13,32 @@
 
     // Hide FAB initially
     document.addEventListener('DOMContentLoaded', function() {
-        const fab = document.getElementById('backToTop');
+        var fab = document.getElementById('backToTop');
         fab.classList.add('hidden');
     });
 
 // Manual refresh function (Tor Browser compatible)
 function refreshWalletData() {
-    const refreshBtn = document.getElementById('manualRefresh');
-    const icon = refreshBtn.querySelector('i');
-    
+    var refreshBtn = document.getElementById('manualRefresh');
+    var icon = refreshBtn.querySelector('i');
+
     // Show loading state
     icon.className = 'fas fa-spinner fa-spin';
     refreshBtn.disabled = true;
-    
+
     // Preserve auth code when refreshing
-    const url = new URL(window.location.href);
-    window.location.href = url.toString();
+    window.location.href = window.location.href;
 }
 
 // Send eIOU form handling
 function initializeSendForm() {
-    const recipientSelect = document.getElementById('recipient');
-    const manualAddressGroup = document.getElementById('manual-address-group');
-    const manualAddressInput = document.getElementById('manual-address');
-    const transactionTypeIndicator = document.getElementById('transaction-type-indicator');
-    const transactionTypeText = document.getElementById('transaction-type-text');
-    const addressTypeGroup = document.getElementById('address-type-group');
-    const addressTypeSelect = document.getElementById('address-type');
+    var recipientSelect = document.getElementById('recipient');
+    var manualAddressGroup = document.getElementById('manual-address-group');
+    var manualAddressInput = document.getElementById('manual-address');
+    var transactionTypeIndicator = document.getElementById('transaction-type-indicator');
+    var transactionTypeText = document.getElementById('transaction-type-text');
+    var addressTypeGroup = document.getElementById('address-type-group');
+    var addressTypeSelect = document.getElementById('address-type');
 
     // Set initial state - manual address is visible by default
     if (manualAddressInput) manualAddressInput.required = true;
@@ -52,8 +51,8 @@ function initializeSendForm() {
 
     if (recipientSelect) {
         recipientSelect.addEventListener('change', function() {
-            const selectedValue = this.value;
-            const selectedOption = this.options[this.selectedIndex];
+            var selectedValue = this.value;
+            var selectedOption = this.options[this.selectedIndex];
 
             if (selectedValue === '') {
                 // Show manual address input (default state)
@@ -119,7 +118,7 @@ function initializeSendForm() {
     // Handle manual address input
     if (manualAddressInput) {
         manualAddressInput.addEventListener('input', function() {
-            const address = this.value.trim();
+            var address = this.value.trim();
             if (address) {
                 transactionTypeIndicator.style.display = 'block';
                 if (address.includes('.onion') || address.startsWith('http')) {
@@ -375,13 +374,44 @@ function initializeTransactionToast() {
 document.addEventListener('DOMContentLoaded', function() {
     initializeTransactionToast();
 });
-// Loading Overlay Functions  
-function showLoader(message) {
+// Loading Overlay Functions
+var loaderTimerInterval = null;
+var loaderStartTime = null;
+
+function showLoader(message, subtext) {
     message = message || 'Loading...';
     var overlay = document.getElementById('loadingOverlay');
     var loadingText = document.getElementById('loadingText');
+    var loadingSubtext = document.getElementById('loadingSubtext');
+    var loadingTimer = document.getElementById('loadingTimer');
+
     if (overlay && loadingText) {
         loadingText.textContent = message;
+
+        // Set subtext if provided
+        if (loadingSubtext) {
+            loadingSubtext.textContent = subtext || '';
+            loadingSubtext.style.display = subtext ? 'block' : 'none';
+        }
+
+        // Start elapsed timer
+        if (loadingTimer) {
+            loaderStartTime = Date.now();
+            loadingTimer.textContent = 'Elapsed: 0s';
+            loadingTimer.style.display = 'block';
+
+            // Clear any existing timer
+            if (loaderTimerInterval) {
+                clearInterval(loaderTimerInterval);
+            }
+
+            // Update timer every second
+            loaderTimerInterval = setInterval(function() {
+                var elapsed = Math.floor((Date.now() - loaderStartTime) / 1000);
+                loadingTimer.textContent = 'Elapsed: ' + elapsed + 's';
+            }, 1000);
+        }
+
         overlay.classList.add('active');
     }
 }
@@ -391,15 +421,25 @@ function hideLoader() {
     if (overlay) {
         overlay.classList.remove('active');
     }
+
+    // Clear timer
+    if (loaderTimerInterval) {
+        clearInterval(loaderTimerInterval);
+        loaderTimerInterval = null;
+    }
+    loaderStartTime = null;
 }
 
 // Form loaders initialization
 function initializeFormLoaders() {
+    // Retry info text for contact operations
+    var retryInfoText = 'Connecting to contact server. If unreachable, up to 5 retry attempts will be made automatically.';
+
     // Add contact form
     var addContactForm = document.querySelector('#add-contact form');
     if (addContactForm) {
         addContactForm.addEventListener('submit', function() {
-            showLoader('Adding contact...');
+            showLoader('Adding contact...', retryInfoText);
         });
     }
 
@@ -409,6 +449,50 @@ function initializeFormLoaders() {
         editContactForm.addEventListener('submit', function() {
             showLoader('Updating contact...');
         });
+    }
+
+    // Accept contact forms (in pending contact requests section)
+    var acceptContactForms = document.querySelectorAll('form input[name="action"][value="acceptContact"]');
+    for (var i = 0; i < acceptContactForms.length; i++) {
+        var form = acceptContactForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Accepting contact request...', retryInfoText);
+            });
+        }
+    }
+
+    // Block contact forms
+    var blockContactForms = document.querySelectorAll('form input[name="action"][value="blockContact"]');
+    for (var i = 0; i < blockContactForms.length; i++) {
+        var form = blockContactForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Blocking contact...');
+            });
+        }
+    }
+
+    // Unblock contact forms
+    var unblockContactForms = document.querySelectorAll('form input[name="action"][value="unblockContact"]');
+    for (var i = 0; i < unblockContactForms.length; i++) {
+        var form = unblockContactForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Unblocking contact...');
+            });
+        }
+    }
+
+    // Delete contact forms
+    var deleteContactForms = document.querySelectorAll('form input[name="action"][value="deleteContact"]');
+    for (var i = 0; i < deleteContactForms.length; i++) {
+        var form = deleteContactForms[i].closest('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                showLoader('Deleting contact request...');
+            });
+        }
     }
 
     // Auth form
@@ -423,7 +507,7 @@ function initializeFormLoaders() {
     var sendForm = document.querySelector('#send-form form');
     if (sendForm) {
         sendForm.addEventListener('submit', function() {
-            showLoader('Sending transaction...');
+            showLoader('Sending transaction...', 'Processing your transaction. This may take a moment.');
         });
     }
 }
