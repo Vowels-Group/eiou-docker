@@ -140,7 +140,7 @@ class Constants {
     // Contact management
     const CONTACT_DEFAULT_FEE_PERCENT = 0.1;
     const CONTACT_DEFAULT_FEE_PERCENT_MAX = 5;
-    const CONTACT_DEFAULT_CREDIT_LIMIT = 0;
+    const CONTACT_DEFAULT_CREDIT_LIMIT = 1000;
     const CONTACT_MAX_NAME_LENGTH = 255;
     const CONTACT_MIN_NAME_LENGTH = 2;
     const CONTACT_MAX_ADDRESS_LENGTH = 255;

@@ -411,6 +411,16 @@ body {
     box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
+.form-group input.default-value {
+    background-color: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+.form-group input.default-value:focus {
+    background-color: white;
+    border-color: #0d6efd;
+}
+
 .form-actions {
     display: flex;
     gap: 1rem;
