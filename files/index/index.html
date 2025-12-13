@@ -24,9 +24,9 @@ $validationUtility = $utilityContainer->getValidationUtility();
 if (!$validationUtility->verifyRequestSignature($envelope)) {
     http_response_code(400);
     echo json_encode([
-        'error' => 1,
-        'message' => 'Invalid signature',
-        'details' => 'The request signature could not be verified'
+        'success' => false,
+        'error' => 'The request signature could not be verified',
+        'error_code' => 'invalid_signature'
     ]);
     die;
 }
@@ -36,9 +36,9 @@ if (!$validationUtility->verifyRequestSignature($envelope)) {
 if (!isset($envelope['senderPublicKey']) || !isset($envelope['senderAddress'])) {
     http_response_code(400);
     echo json_encode([
-        'error' => 3,
-        'message' => 'Missing required envelope fields',
-        'details' => 'senderPublicKey and senderAddress are required'
+        'success' => false,
+        'error' => 'senderPublicKey and senderAddress are required',
+        'error_code' => 'missing_envelope_fields'
     ]);
     die;
 }
@@ -48,9 +48,9 @@ $publicKeyValidation = InputValidator::validatePublicKey($envelope['senderPublic
 if (!$publicKeyValidation['valid']) {
     http_response_code(400);
     echo json_encode([
-        'error' => 4,
-        'message' => 'Invalid public key format',
-        'details' => $publicKeyValidation['error']
+        'success' => false,
+        'error' => $publicKeyValidation['error'],
+        'error_code' => 'invalid_public_key_format'
     ]);
     die;
 }
@@ -60,9 +60,9 @@ $addressValidation = InputValidator::validateAddress($envelope['senderAddress'])
 if (!$addressValidation['valid']) {
     http_response_code(400);
     echo json_encode([
-        'error' => 5,
-        'message' => 'Invalid address format',
-        'details' => $addressValidation['error']
+        'success' => false,
+        'error' => $addressValidation['error'],
+        'error_code' => 'invalid_address_format'
     ]);
     die;
 }
