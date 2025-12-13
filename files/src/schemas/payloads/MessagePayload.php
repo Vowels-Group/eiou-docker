@@ -132,14 +132,14 @@ class MessagePayload extends BasePayload
     /**
      * Build payload regarding the successful completion of a transaction
      *
-     * @param array $message Message data containing transaction hash and optional description
+     * @param array $message Message data containing transaction hash
      * @return string JSON-encoded transaction completion payload
      */
     public function buildTransactionCompletedCorrectly(array $message): string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
         $hash = $message['hash'];
-        $payload = [
+        return json_encode([
             'type' => 'message', // message request type
             'typeMessage' => 'transaction', // type of message
             'status' => 'completed',
@@ -147,14 +147,7 @@ class MessagePayload extends BasePayload
             'message' => 'Transaction with hash ' . print_r($hash, true) . ' was received succesfully by end-recipient',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-        ];
-
-        // Include description if present (for original sender to store)
-        if (isset($message['description']) && $message['description'] !== null) {
-            $payload['description'] = $this->sanitizeString($message['description']);
-        }
-
-        return json_encode($payload);
+        ]);
     }
 
     /**
