@@ -26,7 +26,7 @@ function refreshWalletData() {
     icon.className = 'fas fa-spinner fa-spin';
     refreshBtn.disabled = true;
 
-    // Preserve auth code when refreshing - use simple string to avoid URL constructor issues
+    // Preserve auth code when refreshing
     window.location.href = window.location.href;
 }
 
@@ -347,11 +347,10 @@ function initializeTransactionToast() {
             var currency = document.getElementById('currency');
 
             var recipient = '';
-            var addr;
             if (recipientSelect && recipientSelect.value) {
                 recipient = recipientSelect.options[recipientSelect.selectedIndex].text;
             } else if (manualAddress && manualAddress.value) {
-                addr = manualAddress.value;
+                var addr = manualAddress.value;
                 recipient = addr.length > 25 ? addr.substring(0, 25) + '...' : addr;
             }
 
@@ -378,8 +377,6 @@ document.addEventListener('DOMContentLoaded', function() {
 // Loading Overlay Functions
 var loaderTimerInterval = null;
 var loaderStartTime = null;
-var retryPollingInterval = null;
-var currentRetryRequestId = null;
 
 function showLoader(message, subtext) {
     message = message || 'Loading...';
@@ -419,14 +416,6 @@ function showLoader(message, subtext) {
     }
 }
 
-function updateLoaderSubtext(text) {
-    var loadingSubtext = document.getElementById('loadingSubtext');
-    if (loadingSubtext) {
-        loadingSubtext.textContent = text;
-        loadingSubtext.style.display = 'block';
-    }
-}
-
 function hideLoader() {
     var overlay = document.getElementById('loadingOverlay');
     if (overlay) {
@@ -439,107 +428,6 @@ function hideLoader() {
         loaderTimerInterval = null;
     }
     loaderStartTime = null;
-
-    // Clear retry polling
-    stopRetryPolling();
-}
-
-// Generate unique request ID for retry tracking
-function generateRequestId() {
-    return 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-}
-
-// Start polling for retry status
-function startRetryPolling(requestId, onUpdate) {
-    currentRetryRequestId = requestId;
-
-    // Clear any existing polling
-    stopRetryPolling();
-
-    retryPollingInterval = setInterval(function() {
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', window.location.pathname + '?retry_status=' + encodeURIComponent(requestId), true);
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4 && xhr.status === 200) {
-                try {
-                    var status = JSON.parse(xhr.responseText);
-                    if (onUpdate && status.status !== 'not_found') {
-                        onUpdate(status);
-                    }
-                } catch (e) {
-                    // Ignore parse errors
-                }
-            }
-        };
-        xhr.send();
-    }, 500); // Poll every 500ms
-}
-
-// Stop retry polling
-function stopRetryPolling() {
-    if (retryPollingInterval) {
-        clearInterval(retryPollingInterval);
-        retryPollingInterval = null;
-    }
-    currentRetryRequestId = null;
-}
-
-// Submit form via AJAX with retry tracking
-function submitFormWithRetryTracking(form, message) {
-    var requestId = generateRequestId();
-
-    // Show loader
-    showLoader(message, 'Connecting to contact server...');
-
-    // Start polling for retry status
-    startRetryPolling(requestId, function(status) {
-        if (status.attempt && status.max_attempts) {
-            var attemptText = 'Attempt ' + status.attempt + ' of ' + status.max_attempts;
-            if (status.status === 'waiting') {
-                attemptText = status.message || attemptText;
-            } else if (status.status === 'attempting') {
-                attemptText += ' - Connecting...';
-            }
-            updateLoaderSubtext(attemptText);
-        }
-
-        // Stop polling if complete
-        if (status.complete) {
-            stopRetryPolling();
-        }
-    });
-
-    // Build form data
-    var formData = new FormData(form);
-    formData.append('retry_request_id', requestId);
-
-    // Submit via AJAX
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', form.action || window.location.pathname, true);
-    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            stopRetryPolling();
-
-            if (xhr.status === 200) {
-                try {
-                    var response = JSON.parse(xhr.responseText);
-                    // Redirect with message parameters
-                    var redirectUrl = window.location.pathname +
-                        '?message=' + encodeURIComponent(response.message) +
-                        '&type=' + encodeURIComponent(response.type);
-                    window.location = redirectUrl;
-                } catch (e) {
-                    // If not valid JSON, just reload (fallback for non-AJAX responses)
-                    window.location.reload();
-                }
-            } else {
-                // Error - reload to show error message
-                window.location.reload();
-            }
-        }
-    };
-    xhr.send(formData);
 }
 
 // Form loaders initialization
@@ -547,7 +435,7 @@ function initializeFormLoaders() {
     // Retry info text for contact operations
     var retryInfoText = 'Connecting to contact server. If unreachable, up to 5 retry attempts will be made automatically.';
 
-    // Add contact form - standard submission with loader
+    // Add contact form
     var addContactForm = document.querySelector('#add-contact form');
     if (addContactForm) {
         addContactForm.addEventListener('submit', function() {
@@ -563,7 +451,7 @@ function initializeFormLoaders() {
         });
     }
 
-    // Accept contact forms - standard submission with loader
+    // Accept contact forms (in pending contact requests section)
     var acceptContactForms = document.querySelectorAll('form input[name="action"][value="acceptContact"]');
     for (var i = 0; i < acceptContactForms.length; i++) {
         var form = acceptContactForms[i].closest('form');

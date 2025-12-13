@@ -25,43 +25,12 @@ class ContactController
      * @param ContactService $contactService
      */
     public function __construct(
-        Session $session,
+        Session $session, 
         ContactService $contactService
         )
     {
         $this->session = $session;
         $this->contactService = $contactService;
-    }
-
-    /**
-     * Check if this is an AJAX request
-     *
-     * @return bool
-     */
-    private function isAjaxRequest(): bool
-    {
-        return !empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
-               strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
-    }
-
-    /**
-     * Send JSON response for AJAX requests
-     *
-     * @param bool $success Whether the operation succeeded
-     * @param string $message Response message
-     * @param string $type Message type (success, error, warning, info)
-     * @param array $data Additional data
-     */
-    private function sendJsonResponse(bool $success, string $message, string $type = 'success', array $data = []): void
-    {
-        header('Content-Type: application/json');
-        echo json_encode([
-            'success' => $success,
-            'message' => $message,
-            'type' => $type,
-            'data' => $data
-        ]);
-        exit;
     }
 
     /**
@@ -77,8 +46,6 @@ class ContactController
         // CSRF Protection: Verify token before processing
         $this->session->verifyCSRFToken();
 
-        $isAjax = $this->isAjaxRequest();
-
         // Import validation and security classes
         require_once __DIR__ . '/../../utils/InputValidator.php';
         require_once __DIR__ . '/../../utils/Security.php';
@@ -93,62 +60,39 @@ class ContactController
         if (empty($address) || empty($name) || $fee === '' || $credit === '' || empty($currency)) {
             $message = 'All fields are required';
             $messageType = 'error';
-            if ($isAjax) {
-                $this->sendJsonResponse(false, $message, $messageType);
-            }
         } else {
             // Validate address
             $addressValidation = InputValidator::validateAddress($address);
             if (!$addressValidation['valid']) {
-                $message = 'Invalid address: ' . $addressValidation['error'];
-                if ($isAjax) {
-                    $this->sendJsonResponse(false, $message, 'error');
-                }
-                MessageHelper::redirectMessage($message, 'error');
+                MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
                 return;
             }
 
             // Validate contact name
             $nameValidation = InputValidator::validateContactName($name);
             if (!$nameValidation['valid']) {
-                $message = 'Invalid contact name: ' . $nameValidation['error'];
-                if ($isAjax) {
-                    $this->sendJsonResponse(false, $message, 'error');
-                }
-                MessageHelper::redirectMessage($message, 'error');
+                MessageHelper::redirectMessage('Invalid contact name: ' . $nameValidation['error'], 'error');
                 return;
             }
 
             // Validate fee percentage
             $feeValidation = InputValidator::validateFeePercent($fee);
             if (!$feeValidation['valid']) {
-                $message = 'Invalid fee: ' . $feeValidation['error'];
-                if ($isAjax) {
-                    $this->sendJsonResponse(false, $message, 'error');
-                }
-                MessageHelper::redirectMessage($message, 'error');
+                MessageHelper::redirectMessage('Invalid fee: ' . $feeValidation['error'], 'error');
                 return;
             }
 
             // Validate credit limit
             $creditValidation = InputValidator::validateCreditLimit($credit);
             if (!$creditValidation['valid']) {
-                $message = 'Invalid credit limit: ' . $creditValidation['error'];
-                if ($isAjax) {
-                    $this->sendJsonResponse(false, $message, 'error');
-                }
-                MessageHelper::redirectMessage($message, 'error');
+                MessageHelper::redirectMessage('Invalid credit limit: ' . $creditValidation['error'], 'error');
                 return;
             }
 
             // Validate currency
             $currencyValidation = InputValidator::validateCurrency($currency);
             if (!$currencyValidation['valid']) {
-                $message = 'Invalid currency: ' . $currencyValidation['error'];
-                if ($isAjax) {
-                    $this->sendJsonResponse(false, $message, 'error');
-                }
-                MessageHelper::redirectMessage($message, 'error');
+                MessageHelper::redirectMessage('Invalid currency: ' . $currencyValidation['error'], 'error');
                 return;
             }
 
@@ -184,12 +128,6 @@ class ContactController
                 $messageType = 'error';
             }
         }
-
-        // Return JSON for AJAX requests, redirect otherwise
-        if ($isAjax) {
-            $success = !MessageHelper::isErrorMessage($messageType);
-            $this->sendJsonResponse($success, $message, $messageType);
-        }
         MessageHelper::redirectMessage($message, $messageType);
     }
 
@@ -202,8 +140,6 @@ class ContactController
     {
         // CSRF Protection: Verify token before processing
         $this->session->verifyCSRFToken();
-
-        $isAjax = $this->isAjaxRequest();
 
         $contactAddress = $_POST['contact_address'] ?? '';
         $contactName = $_POST['contact_name'] ?? '';
@@ -240,12 +176,6 @@ class ContactController
                     : 'Internal server error';
                 $messageType = 'error';
             }
-        }
-
-        // Return JSON for AJAX requests, redirect otherwise
-        if ($isAjax) {
-            $success = !MessageHelper::isErrorMessage($messageType);
-            $this->sendJsonResponse($success, $message, $messageType);
         }
         MessageHelper::redirectMessage($message, $messageType);
     }
