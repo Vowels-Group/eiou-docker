@@ -153,14 +153,14 @@ class MessagePayload extends BasePayload
     /**
      * Build inquiry payload regarding the completion status of a transaction
      *
-     * @param array $message Message data containing transaction details
+     * @param array $message Message data containing transaction details and optional description
      * @return array The transaction inquiry payload
      */
     public function buildTransactionCompletedInquiry(array $message): array
     {
         $hash = $message['hash'];
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
-        return [
+        $payload = [
             'type' => 'message', // message request type
             'typeMessage' => 'transaction', // type of message
             'inquiry' => true, // request for information
@@ -171,6 +171,13 @@ class MessagePayload extends BasePayload
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
+
+        // Include description if present (for end-recipient to store)
+        if (isset($message['description']) && $message['description'] !== null) {
+            $payload['description'] = $this->sanitizeString($message['description']);
+        }
+
+        return $payload;
     }
 
     /**

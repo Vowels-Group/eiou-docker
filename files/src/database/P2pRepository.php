@@ -412,6 +412,24 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
+     * Update P2P description
+     *
+     * @param string $hash P2P hash
+     * @param string $description Description
+     * @return bool Success status
+     */
+    public function updateDescription(string $hash, string $description): bool {
+        $affectedRows = $this->update(['description' => $description], 'hash', $hash);
+
+        // Output silent logging if function exists
+        if (function_exists('output') && function_exists('outputP2pDescriptionUpdated')) {
+            output(outputP2pDescriptionUpdated($description, $hash), 'SILENT');
+        }
+
+        return $affectedRows >= 0;
+    }
+
+    /**
      * Delete expired P2P records older than specified days
      *
      * @param int $days Number of days to keep
