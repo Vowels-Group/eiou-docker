@@ -232,13 +232,21 @@ class SettingsController
                 $apacheLogContent = shell_exec("tail -50 " . escapeshellarg($apacheLogPath));
             }
 
+            // Collect EIOU app log (last 50 lines)
+            $eiouLogContent = '';
+            $eiouLogPath = '/var/log/eiou/app.log';
+            if (file_exists($eiouLogPath) && is_readable($eiouLogPath)) {
+                $eiouLogContent = shell_exec("tail -50 " . escapeshellarg($eiouLogPath));
+            }
+
             // Build report
             $report = [
                 'description' => $description,
                 'system_info' => $systemInfo,
                 'debug_entries' => $debugEntries,
                 'php_errors' => $phpLogContent,
-                'apache_errors' => $apacheLogContent
+                'apache_errors' => $apacheLogContent,
+                'eiou_app_log' => $eiouLogContent
             ];
 
             // For now, save the report to a file (email integration would be added later)
