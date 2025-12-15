@@ -53,6 +53,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function addPendingContact(string $senderPublicKey): string {
         $data = [
+            'contact_id' => $this->generateContactId(),
             'pubkey' => $senderPublicKey,
             'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $senderPublicKey),
             'name' => null,
@@ -60,7 +61,7 @@ class ContactRepository extends AbstractRepository {
             'fee_percent' => null,
             'credit_limit' => null,
             'currency' => null
-        ];  
+        ];
         return $this->insert($data);
     }
 
