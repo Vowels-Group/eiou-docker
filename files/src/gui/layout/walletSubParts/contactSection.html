@@ -18,90 +18,99 @@
         <?php else: ?>
         <!-- Accepted Contacts (with Balance) -->
             <?php foreach ($acceptedContacts as $contact): ?>
-                <div class="contact-card" onclick="openEditContactModal('<?php if($contact['http']){ echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>','<?php echo htmlspecialchars($contact['name']); ?>', '<?php echo $contact['fee']; ?>', '<?php echo $contact['credit_limit']; ?>', '<?php echo htmlspecialchars($contact['currency']); ?>')" style="cursor: pointer;">
+                <?php
+                    $contactAddress = $contact['http'] ?? $contact['tor'] ?? '';
+                    $contactData = htmlspecialchars(json_encode([
+                        'address' => $contactAddress,
+                        'name' => $contact['name'],
+                        'fee' => $contact['fee'],
+                        'credit_limit' => $contact['credit_limit'],
+                        'currency' => $contact['currency'],
+                        'status' => 'accepted',
+                        'pubkey' => $contact['pubkey'] ?? '',
+                        'http' => $contact['http'] ?? '',
+                        'tor' => $contact['tor'] ?? '',
+                        'balance' => $contact['balance'] ?? 0,
+                        'contact_id' => $contact['contact_id'] ?? ''
+                    ]), ENT_QUOTES, 'UTF-8');
+                ?>
+                <div class="contact-card" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
                         <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                     </div>
                     <div class="contact-info">
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
-                        <span style="background: lightgreen; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Accepted</span>
+                        <div class="contact-badges">
+                            <span class="badge badge-accepted">Accepted</span>
+                        </div>
+                        <div class="contact-address-icons">
+                            <?php if (!empty($contact['http'])): ?>
+                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
+                                    <i class="fas fa-globe"></i>
+                                </span>
+                            <?php endif; ?>
+                            <?php if (!empty($contact['tor'])): ?>
+                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
+                                    <i class="fas fa-user-secret"></i>
+                                </span>
+                            <?php endif; ?>
+                            <?php if (empty($contact['http']) && empty($contact['tor'])): ?>
+                                <span class="address-icon address-none" title="No address available">
+                                    <i class="fas fa-question-circle"></i>
+                                </span>
+                            <?php endif; ?>
+                        </div>
                         <div class="contact-details">
-                            <?php
-                            // Display up to 2 addresses dynamically
-                            $displayedCount = 0;
-                            foreach ($addressTypes as $type) {
-                                if ($displayedCount >= 2) break;
-                                $addr = $contact[$type] ?? null;
-                                if ($addr) {
-                                    echo '<div class="contact-address"><strong>' . strtoupper(htmlspecialchars($type)) . ':</strong> ' . htmlspecialchars($generalUtility->truncateAddress($addr)) . '</div>';
-                                    $displayedCount++;
-                                }
-                            }
-                            if ($displayedCount === 0) {
-                                echo '<div class="contact-address">No address available</div>';
-                            } elseif ($displayedCount === 1) {
-                                echo '<div class="contact-address" style="color: #6c757d; font-style: italic;">No other address available</div>';
-                            }
-                            ?>
                             <div>Balance: <span class="<?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>">
                                 <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?>
                             </span> <?php echo $contact['currency']; ?></div>
-                            <div>Credit Limit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo $contact['currency']; ?></div>
-                            <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                            <form method="POST" style="flex: 1;" onclick="event.stopPropagation();">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                                <input type="hidden" name="action" value="blockContact">
-                                <input type="hidden" name="contact_address" value="<?php if($contact['http']) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>">
-                                <button type="submit" class="btn btn-danger btn-sm" style="width: 100%;" onclick="return confirm('Are you sure you want to block this contact?')">
-                                    <i class="fas fa-ban"></i> Block
-                                </button>
-                            </form>
-                            <form method="POST" style="flex: 1; display: none;" onclick="event.stopPropagation();">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                                <input type="hidden" name="action" value="unblockContact">
-                                <input type="hidden" name="contact_address" value="<?php if($contact['http']) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>">
-                                <button type="submit" class="btn btn-success btn-sm" style="width: 100%;">
-                                    <i class="fas fa-check"></i> Unblock
-                                </button>
-                            </form>
+                            <div>Credit: <?php echo number_format($contact['credit_limit'], 2); ?> | Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
                         </div>
                     </div>
                 </div>
             <?php endforeach; ?>
+
             <!-- Pending User Contacts -->
             <?php foreach ($pendingUserContacts as $contact): ?>
-                <div class="contact-card pending" style="cursor: pointer;">
+                <?php
+                    $contactAddress = $contact['http'] ?? $contact['tor'] ?? '';
+                    $contactData = htmlspecialchars(json_encode([
+                        'address' => $contactAddress,
+                        'name' => $contact['name'],
+                        'fee' => $contact['fee'],
+                        'credit_limit' => $contact['credit_limit'],
+                        'currency' => $contact['currency'],
+                        'status' => 'pending',
+                        'pubkey' => $contact['pubkey'] ?? '',
+                        'http' => $contact['http'] ?? '',
+                        'tor' => $contact['tor'] ?? '',
+                        'balance' => 0,
+                        'contact_id' => $contact['contact_id'] ?? ''
+                    ]), ENT_QUOTES, 'UTF-8');
+                ?>
+                <div class="contact-card pending" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, grey, grey);">
                         <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                     </div>
                     <div class="contact-info">
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
-                        <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending Response</span>
+                        <div class="contact-badges">
+                            <span class="badge badge-pending">Pending Response</span>
+                        </div>
+                        <div class="contact-address-icons">
+                            <?php if (!empty($contact['http'])): ?>
+                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
+                                    <i class="fas fa-globe"></i>
+                                </span>
+                            <?php endif; ?>
+                            <?php if (!empty($contact['tor'])): ?>
+                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
+                                    <i class="fas fa-user-secret"></i>
+                                </span>
+                            <?php endif; ?>
+                        </div>
                         <div class="contact-details">
-                            <?php
-                            // Display up to 2 addresses dynamically
-                            $displayedCount = 0;
-                            foreach ($addressTypes as $type) {
-                                if ($displayedCount >= 2) break;
-                                $addr = $contact[$type] ?? null;
-                                if ($addr) {
-                                    echo '<div class="contact-address"><strong>' . strtoupper(htmlspecialchars($type)) . ':</strong> ' . htmlspecialchars($generalUtility->truncateAddress($addr)) . '</div>';
-                                    $displayedCount++;
-                                }
-                            }
-                            if ($displayedCount === 0) {
-                                echo '<div class="contact-address">No address available</div>';
-                            } elseif ($displayedCount === 1) {
-                                echo '<div class="contact-address" style="color: #6c757d; font-style: italic;">No other address available</div>';
-                            }
-                            ?>
-                            <div>Balance: <span class="balance-negative">
-                                -
-                            </span> <?php echo $contact['currency']; ?></div>
-                            <div>Credit Limit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo $contact['currency']; ?></div>
-                            <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
+                            <div>Credit: <?php echo number_format($contact['credit_limit'], 2); ?> | Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
                         </div>
                     </div>
                 </div>
@@ -109,132 +118,300 @@
 
             <!-- Blocked Contacts -->
             <?php foreach ($blockedContacts as $contact): ?>
-                <div class="contact-card pending" style="cursor: pointer;">
-                    <div class="contact-avatar" style="background: linear-gradient(135deg, grey, grey);">
-                        <?php echo $contact['name'] ? strtoupper(substr($contact['name'], 0, 1)) : "-"; ?>
+                <?php
+                    $contactAddress = $contact['http'] ?? $contact['tor'] ?? '';
+                    $contactData = htmlspecialchars(json_encode([
+                        'address' => $contactAddress,
+                        'name' => $contact['name'] ?? '-',
+                        'fee' => $contact['fee'] ?? 0,
+                        'credit_limit' => $contact['credit_limit'] ?? 0,
+                        'currency' => $contact['currency'] ?? 'USD',
+                        'status' => 'blocked',
+                        'pubkey' => $contact['pubkey'] ?? '',
+                        'http' => $contact['http'] ?? '',
+                        'tor' => $contact['tor'] ?? '',
+                        'balance' => 0,
+                        'contact_id' => $contact['contact_id'] ?? ''
+                    ]), ENT_QUOTES, 'UTF-8');
+                ?>
+                <div class="contact-card blocked" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
+                    <div class="contact-avatar" style="background: linear-gradient(135deg, #dc3545, #c82333);">
+                        <?php echo $contact['name'] ? strtoupper(substr($contact['name'], 0, 1)) : "X"; ?>
                     </div>
                     <div class="contact-info">
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name'] ?? "-"); ?></div>
-                        <span style="background: red; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Blocked</span>
-                        <div class="contact-details">
-                            <?php
-                            // Display up to 2 addresses dynamically
-                            $displayedCount = 0;
-                            foreach ($addressTypes as $type) {
-                                if ($displayedCount >= 2) break;
-                                $addr = $contact[$type] ?? null;
-                                if ($addr) {
-                                    echo '<div class="contact-address"><strong>' . strtoupper(htmlspecialchars($type)) . ':</strong> ' . htmlspecialchars($generalUtility->truncateAddress($addr)) . '</div>';
-                                    $displayedCount++;
-                                }
-                            }
-                            if ($displayedCount === 0) {
-                                echo '<div class="contact-address">No address available</div>';
-                            } elseif ($displayedCount === 1) {
-                                echo '<div class="contact-address" style="color: #6c757d; font-style: italic;">No other address available</div>';
-                            }
-                            ?>
-                            <div>Balance: <span class="balance-negative">
-                                -
-                            </span> <?php echo $contact['currency'] ?? "USD"; ?></div>
-                            <div>Credit Limit: <?php echo $contact['credit_limit'] ? (number_format($contact['credit_limit'], 2)) : "-"; ?> <?php echo $contact['currency'] ?? "USD"; ?></div>
-                            <div>Fee: <?php echo $contact['fee'] ? number_format($contact['fee'], 2) : "-"; ?>%</div>
+                        <div class="contact-badges">
+                            <span class="badge badge-blocked">Blocked</span>
                         </div>
-                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                            <form method="POST" style="flex: 1;" onclick="event.stopPropagation();">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                                <input type="hidden" name="action" value="unblockContact">
-                                <input type="hidden" name="contact_address" value="<?php if($contact['http']) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>">
-                                <button type="submit" class="btn btn-success btn-sm" style="width: 100%;" onclick="return confirm('Are you sure you want to unblock this contact?')">
-                                    <i class="fas fa-check"></i> Unblock
-                                </button>
-                            </form>
+                        <div class="contact-address-icons">
+                            <?php if (!empty($contact['http'])): ?>
+                                <span class="address-icon address-http" title="HTTP Address: <?php echo htmlspecialchars($contact['http']); ?>">
+                                    <i class="fas fa-globe"></i>
+                                </span>
+                            <?php endif; ?>
+                            <?php if (!empty($contact['tor'])): ?>
+                                <span class="address-icon address-tor" title="Tor Address: <?php echo htmlspecialchars($contact['tor']); ?>">
+                                    <i class="fas fa-user-secret"></i>
+                                </span>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
             <?php endforeach; ?>
-            
+
         <?php endif; ?>
     </div>
 </div>
 
-<!-- Edit Contact Modal -->
-<div id="editContactModal" class="modal" style="display: none;">
-    <div class="modal-content">
+<!-- Contact Modal (Tabbed Interface) -->
+<div id="contactModal" class="modal" style="display: none;">
+    <div class="modal-content modal-lg">
         <div class="modal-header">
-            <h3><i class="fas fa-edit"></i> Edit Contact</h3>
-            <span class="close" onclick="closeEditContactModal()">&times;</span>
+            <h3><i class="fas fa-user"></i> <span id="modal_contact_name">Contact</span></h3>
+            <span class="close" onclick="closeContactModal()">&times;</span>
         </div>
-        <form method="POST" id="editContactForm">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-            <input type="hidden" name="action" value="editContact">
-            <input type="hidden" name="contact_address" id="edit_contact_address">
-            
-            <div class="form-group">
-                <label for="edit_contact_name">Name:</label>
-                <input type="text" id="edit_contact_name" name="contact_name" required>
+
+        <!-- Modal Tabs -->
+        <div class="modal-tabs">
+            <button type="button" class="modal-tab active" onclick="showModalTab('info-tab')">
+                <i class="fas fa-info-circle"></i> Info
+            </button>
+            <button type="button" class="modal-tab" onclick="showModalTab('settings-tab')">
+                <i class="fas fa-cog"></i> Settings
+            </button>
+            <button type="button" class="modal-tab" onclick="showModalTab('transactions-tab')">
+                <i class="fas fa-exchange-alt"></i> Transactions
+            </button>
+        </div>
+
+        <!-- Info Tab -->
+        <div id="info-tab" class="modal-tab-content active">
+            <div class="contact-info-section">
+                <h4><i class="fas fa-map-marker-alt"></i> Addresses</h4>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label><i class="fas fa-globe"></i> HTTP Address</label>
+                        <div id="modal_http_address" class="info-value monospace">Not Available</div>
+                    </div>
+                    <div class="info-item">
+                        <label><i class="fas fa-user-secret"></i> Tor Address</label>
+                        <div id="modal_tor_address" class="info-value monospace">Not Available</div>
+                    </div>
+                </div>
             </div>
-            
-            <div class="form-group">
-                <label for="edit_contact_fee">Fee (%):</label>
-                <input type="number" id="edit_contact_fee" name="contact_fee" step="0.1" min="0" required>
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-key"></i> Public Key</h4>
+                <div id="modal_pubkey" class="info-value monospace pubkey-display">Not Available</div>
             </div>
-            
-            <div class="form-group">
-                <label for="edit_contact_credit">Credit Limit:</label>
-                <input type="number" id="edit_contact_credit" name="contact_credit" min="0" required>
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-wallet"></i> Balance</h4>
+                <div class="balance-display">
+                    <span id="modal_balance" class="balance-amount">0.00</span>
+                    <span id="modal_balance_currency" class="balance-currency">USD</span>
+                </div>
             </div>
-            
-            <div class="form-group">
-                <label for="edit_contact_currency">Currency:</label>
-                <select id="edit_contact_currency" name="contact_currency" required>
-                    <option value="USD">USD</option>
-                </select>
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-tag"></i> Status</h4>
+                <span id="modal_status_badge" class="badge badge-accepted">Accepted</span>
             </div>
-            
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeEditContactModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save"></i> Save Changes
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="settings-tab" class="modal-tab-content">
+            <form method="POST" id="editContactForm">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <input type="hidden" name="action" value="editContact">
+                <input type="hidden" name="contact_address" id="edit_contact_address">
+
+                <div class="form-group">
+                    <label for="edit_contact_name">Name:</label>
+                    <input type="text" id="edit_contact_name" name="contact_name" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="edit_contact_fee">Fee (%):</label>
+                        <input type="number" id="edit_contact_fee" name="contact_fee" step="0.1" min="0" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_contact_credit">Credit Limit:</label>
+                        <input type="number" id="edit_contact_credit" name="contact_credit" min="0" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_contact_currency">Currency:</label>
+                    <select id="edit_contact_currency" name="contact_currency" required>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                    </select>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Transactions Tab -->
+        <div id="transactions-tab" class="modal-tab-content">
+            <p style="color: #6c757d; margin-bottom: 1rem; font-size: 0.9rem;">
+                <i class="fas fa-info-circle"></i> Showing the <strong>last 5 transactions</strong> with this contact
+            </p>
+            <div id="modal_transactions" class="transactions-list">
+                <p class="loading-text"><i class="fas fa-spinner fa-spin"></i> Loading transactions...</p>
+            </div>
+        </div>
+
+        <!-- Action Buttons (Fixed at bottom) -->
+        <div class="modal-footer">
+            <form method="POST" id="blockForm" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <input type="hidden" name="action" value="blockContact">
+                <input type="hidden" name="contact_address" id="block_contact_address">
+                <button type="submit" id="blockBtn" class="btn btn-warning" onclick="return confirm('Are you sure you want to block this contact?')">
+                    <i class="fas fa-ban"></i> Block
                 </button>
-            </div>
-        </form>
+            </form>
+            <form method="POST" id="unblockForm" style="display: none;">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <input type="hidden" name="action" value="unblockContact">
+                <input type="hidden" name="contact_address" id="unblock_contact_address">
+                <button type="submit" class="btn btn-success" onclick="return confirm('Are you sure you want to unblock this contact?')">
+                    <i class="fas fa-check"></i> Unblock
+                </button>
+            </form>
+            <form method="POST" id="deleteForm" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <input type="hidden" name="action" value="deleteContact">
+                <input type="hidden" name="contact_address" id="delete_contact_address">
+                <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this contact? This cannot be undone.')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </form>
+        </div>
     </div>
 </div>
+
+<script>
+function openContactModal(contact) {
+    // Set contact name in header
+    document.getElementById('modal_contact_name').textContent = contact.name || 'Unknown';
+
+    // Set addresses
+    document.getElementById('modal_http_address').textContent = contact.http || 'Not Available';
+    document.getElementById('modal_tor_address').textContent = contact.tor || 'Not Available';
+
+    // Set public key
+    document.getElementById('modal_pubkey').textContent = contact.pubkey || 'Not Available';
+
+    // Set balance
+    const balance = parseFloat(contact.balance) || 0;
+    const balanceEl = document.getElementById('modal_balance');
+    balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(2);
+    balanceEl.className = balance >= 0 ? 'balance-amount balance-positive' : 'balance-amount balance-negative';
+    document.getElementById('modal_balance_currency').textContent = contact.currency || 'USD';
+
+    // Set status badge
+    const statusBadge = document.getElementById('modal_status_badge');
+    statusBadge.textContent = contact.status.charAt(0).toUpperCase() + contact.status.slice(1);
+    statusBadge.className = 'badge badge-' + contact.status;
+
+    // Set form values
+    document.getElementById('edit_contact_address').value = contact.address;
+    document.getElementById('edit_contact_name').value = contact.name;
+    document.getElementById('edit_contact_fee').value = contact.fee;
+    document.getElementById('edit_contact_credit').value = contact.credit_limit;
+    document.getElementById('edit_contact_currency').value = contact.currency;
+
+    // Set action form addresses
+    document.getElementById('block_contact_address').value = contact.address;
+    document.getElementById('unblock_contact_address').value = contact.address;
+    document.getElementById('delete_contact_address').value = contact.address;
+
+    // Show/hide block/unblock buttons based on status
+    if (contact.status === 'blocked') {
+        document.getElementById('blockForm').style.display = 'none';
+        document.getElementById('unblockForm').style.display = 'inline';
+    } else {
+        document.getElementById('blockForm').style.display = 'inline';
+        document.getElementById('unblockForm').style.display = 'none';
+    }
+
+    // Load transactions (placeholder - would be AJAX in production)
+    document.getElementById('modal_transactions').innerHTML = '<p class="no-transactions">No recent transactions with this contact.</p>';
+
+    // Reset to first tab
+    showModalTab('info-tab');
+
+    // Show modal
+    document.getElementById('contactModal').style.display = 'flex';
+}
+
+function closeContactModal() {
+    document.getElementById('contactModal').style.display = 'none';
+}
+
+function showModalTab(tabId) {
+    // Hide all tabs
+    document.querySelectorAll('.modal-tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.modal-tab').forEach(el => el.classList.remove('active'));
+
+    // Show selected tab
+    document.getElementById(tabId).classList.add('active');
+    event.target.closest('.modal-tab').classList.add('active');
+}
+
+// Close modal when clicking outside
+document.getElementById('contactModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeContactModal();
+    }
+});
+</script>
 
 <!-- Pending Contacts Section -->
 <?php if (!empty($pendingContacts)): ?>
 <div id="pending-contacts" class="contacts-section fade-in-up">
     <h2><i class="fas fa-user-clock"></i> Pending Contact Requests</h2>
     <p style="color: #6c757d; margin-bottom: 1rem;">The following contacts have requested to connect with you:</p>
-    
+
     <?php foreach ($pendingContacts as $index => $contact): ?>
         <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; border-left: 4px solid #0d6efd;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                 <strong style="color: #0d6efd;">Contact Request #<?php echo $index + 1; ?></strong>
-                <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending</span>
+                <span class="badge badge-pending">Pending</span>
             </div>
-            <?php
-            // Display addresses dynamically (up to 2)
-            $pendingDisplayed = 0;
-            foreach ($addressTypes as $type) {
-                if ($pendingDisplayed >= 2) break;
-                $addr = $contact[$type] ?? null;
-            ?>
-            <div style="margin-bottom: 0.5rem;">
-                <div class="info-label"><?php echo strtoupper(htmlspecialchars($type)); ?> Address:</div>
-                <div style="font-family: monospace; font-size: 0.9rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px;">
-                    <?php if ($addr) { echo htmlspecialchars($addr); $pendingDisplayed++; } else { echo strtoupper(htmlspecialchars($type)) . ' not available.'; } ?>
-                </div>
+
+            <div class="pending-addresses">
+                <?php if (!empty($contact['http'])): ?>
+                    <div class="address-line">
+                        <span class="address-icon address-http" title="HTTP Address"><i class="fas fa-globe"></i></span>
+                        <span class="monospace"><?php echo htmlspecialchars($contact['http']); ?></span>
+                    </div>
+                <?php endif; ?>
+                <?php if (!empty($contact['tor'])): ?>
+                    <div class="address-line">
+                        <span class="address-icon address-tor" title="Tor Address"><i class="fas fa-user-secret"></i></span>
+                        <span class="monospace"><?php echo htmlspecialchars($contact['tor']); ?></span>
+                    </div>
+                <?php endif; ?>
             </div>
-            <?php } ?>
+
             <div style="margin-bottom: 1rem;">
                 <div class="info-label">Public Key:</div>
-                <div style="font-family: monospace; font-size: 0.8rem; word-break: break-all; background: white; padding: 0.5rem; border-radius: 4px; max-height: 100px; overflow-y: auto;">
+                <div class="pubkey-display monospace">
                     <?php echo htmlspecialchars($contact['pubkey']); ?>
                 </div>
             </div>
-            
+
             <!-- Accept Contact Form -->
             <div style="margin-top: 1rem; padding: 1rem; background: white; border-radius: 4px; border: 1px solid #dee2e6;">
                 <h4 style="color: #0d6efd; margin-bottom: 1rem;">
@@ -243,38 +420,32 @@
                 <form method="POST" style="margin-bottom: 1rem;">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="acceptContact">
-                    <input type="hidden" name="contact_address" value="<?php if(isset($contact['http'])) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);} ?>">
+                    <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['http'] ?? $contact['tor'] ?? ''); ?>">
                     <input type="hidden" name="contact_pubkey" value="<?php echo htmlspecialchars($contact['pubkey']); ?>">
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                        <div class="form-group" style="margin-bottom: 0;">
+
+                    <div class="form-row">
+                        <div class="form-group">
                             <label for="contact_name_<?php echo $index; ?>">Name:</label>
                             <input type="text" id="contact_name_<?php echo $index; ?>" name="contact_name" placeholder="Enter contact name" required>
                         </div>
-                        <div class="form-group" style="margin-bottom: 0;">
+                        <div class="form-group">
                             <label for="contact_fee_<?php echo $index; ?>">Fee (%):</label>
                             <input type="number" id="contact_fee_<?php echo $index; ?>" name="contact_fee" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.1" min="0" required class="default-value">
-                            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i>
-                                Default value from your wallet settings
-                            </small>
                         </div>
-                        <div class="form-group" style="margin-bottom: 0;">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
                             <label for="contact_credit_<?php echo $index; ?>">Credit Limit:</label>
                             <input type="number" id="contact_credit_<?php echo $index; ?>" name="contact_credit" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">
-                            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
-                                <i class="fas fa-info-circle"></i>
-                                Default value from your wallet settings
-                            </small>
                         </div>
-                        <div class="form-group" style="margin-bottom: 0;">
+                        <div class="form-group">
                             <label for="contact_currency_<?php echo $index; ?>">Currency:</label>
                             <select id="contact_currency_<?php echo $index; ?>" name="contact_currency" required>
                                 <option value="USD">USD</option>
                             </select>
                         </div>
                     </div>
-                    
+
                     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                         <button type="submit" class="btn btn-success" style="flex: 1; min-width: 120px;">
                             <i class="fas fa-check"></i> Accept Contact
@@ -282,34 +453,28 @@
                     </div>
                 </form>
             </div>
-            
+
             <!-- Action Buttons -->
             <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
                 <form method="POST" style="flex: 1; min-width: 120px;">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="deleteContact">
-                    <input type="hidden" name="contact_address" value="<?php if(isset($contact['http'])) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>">
+                    <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['http'] ?? $contact['tor'] ?? ''); ?>">
                     <button type="submit" class="btn btn-secondary" style="width: 100%;" onclick="return confirm('Are you sure you want to delete this contact request?')">
                         <i class="fas fa-trash"></i> Delete Request
                     </button>
                 </form>
-                
+
                 <form method="POST" style="flex: 1; min-width: 120px;">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     <input type="hidden" name="action" value="blockContact">
-                    <input type="hidden" name="contact_address" value="<?php if(isset($contact['http'])) { echo htmlspecialchars($contact['http']);}  else{echo htmlspecialchars($contact['tor']);}?>">
-                    <button type="submit" class="btn btn-danger" style="width: 100%;" onclick="return confirm('Are you sure you want to block this contact? This action cannot be undone.')">
+                    <input type="hidden" name="contact_address" value="<?php echo htmlspecialchars($contact['http'] ?? $contact['tor'] ?? ''); ?>">
+                    <button type="submit" class="btn btn-danger" style="width: 100%;" onclick="return confirm('Are you sure you want to block this contact?')">
                         <i class="fas fa-ban"></i> Block Contact
                     </button>
                 </form>
             </div>
         </div>
     <?php endforeach; ?>
-    
-    <div style="text-align: center; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
-        <p style="color: #6c757d; font-size: 0.9rem;">
-            <i class="fas fa-lightbulb"></i> You can now accept, delete, or block contact requests directly from this interface.
-        </p>
-    </div>
 </div>
 <?php endif; ?>
