@@ -1230,3 +1230,240 @@ html {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+
+/* Contact Address Icons */
+.contact-address-icons {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+}
+
+.address-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: help;
+    transition: transform 0.2s ease;
+}
+
+.address-icon:hover {
+    transform: scale(1.1);
+}
+
+.address-icon.address-http {
+    background: #0d6efd;
+    color: white;
+}
+
+.address-icon.address-tor {
+    background: #6f42c1;
+    color: white;
+}
+
+.address-icon.address-none {
+    background: #6c757d;
+    color: white;
+}
+
+/* Contact Badges */
+.contact-badges {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    margin-top: 0.25rem;
+}
+
+.badge {
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge-id {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.badge-accepted {
+    background: #d1e7dd;
+    color: #0f5132;
+}
+
+.badge-pending {
+    background: #fff3cd;
+    color: #664d03;
+}
+
+.badge-blocked {
+    background: #f8d7da;
+    color: #842029;
+}
+
+/* Modal Enhancements */
+.modal-lg {
+    max-width: 600px;
+    min-height: 500px;
+}
+
+.modal-tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 2px solid #dee2e6;
+    padding: 0 1rem;
+    margin-bottom: 1rem;
+}
+
+.modal-tab {
+    padding: 0.75rem 1rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-weight: 500;
+    color: #6c757d;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s ease;
+}
+
+.modal-tab:hover {
+    color: #0d6efd;
+}
+
+.modal-tab.active {
+    color: #0d6efd;
+    border-bottom-color: #0d6efd;
+}
+
+.modal-tab-content {
+    display: none;
+    padding: 0 1rem 1rem;
+    min-height: 300px;
+}
+
+.modal-tab-content.active {
+    display: block;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem;
+    border-top: 1px solid #dee2e6;
+    justify-content: flex-end;
+    background: #f8f9fa;
+    border-radius: 0 0 8px 8px;
+}
+
+/* Contact Info Section */
+.contact-info-section {
+    margin-bottom: 1.5rem;
+}
+
+.contact-info-section h4 {
+    color: #495057;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 0.25rem;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.info-item label {
+    display: block;
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+}
+
+.info-value {
+    font-size: 0.9rem;
+    color: #212529;
+    word-break: break-all;
+}
+
+.info-value.monospace {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85rem;
+    background: #f8f9fa;
+    padding: 0.5rem;
+    border-radius: 4px;
+}
+
+.pubkey-display {
+    max-height: 80px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.balance-display {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.balance-amount.balance-positive {
+    color: #198754;
+}
+
+.balance-amount.balance-negative {
+    color: #dc3545;
+}
+
+.balance-currency {
+    color: #6c757d;
+    font-size: 1rem;
+    margin-left: 0.25rem;
+}
+
+/* Form Row */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+@media (max-width: 576px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Transactions List */
+.transactions-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.no-transactions {
+    text-align: center;
+    color: #6c757d;
+    padding: 2rem;
+}
+
+/* Address Line */
+.address-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.pending-addresses {
+    margin: 0.5rem 0;
+}
+
+.monospace {
+    font-family: 'Consolas', 'Monaco', monospace;
+}
