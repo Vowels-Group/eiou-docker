@@ -11,7 +11,7 @@ for container in "${containers[@]}"; do
     containerAddress="http://"$container
     # Get Http addresses if exists
     containerAddresses[$container]=$(docker exec $container php -r '
-        $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true);
+        $json = json_decode(file_get_contents("'"${USERCONFIG}"'"),true);
         if (isset($json["hostname"])) {
             echo $json["hostname"];
         }

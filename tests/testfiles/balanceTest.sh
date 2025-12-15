@@ -20,7 +20,7 @@ for container in "${containers[@]}"; do
 
     # Method 2: Direct PHP query for verification
     phpBalance=$(docker exec ${container} php -r "
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
         \$balances = \$app->services->getBalanceRepository()->getAllBalances();
         if (!empty(\$balances)) {
@@ -62,7 +62,7 @@ if [[ "$firstLink" ]]; then
 
     # Get initial balances
     senderInitial=$(docker exec ${sender} php -r "
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
         \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${receiver}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
@@ -70,7 +70,7 @@ if [[ "$firstLink" ]]; then
     " 2>/dev/null || echo "0")
 
     receiverInitial=$(docker exec ${receiver} php -r "
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
         \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${sender}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
@@ -90,7 +90,7 @@ if [[ "$firstLink" ]]; then
     # Wait for transaction to process with polling
     echo -e "\t   Waiting for balance change (timeout: 20s)..."
     balance_cmd="php -r \"
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         \\\$app = Application::getInstance();
         \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${sender}]}');
         \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
@@ -100,7 +100,7 @@ if [[ "$firstLink" ]]; then
 
     # Get new balances
     senderFinal=$(docker exec ${sender} php -r "
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
         \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${receiver}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
@@ -108,7 +108,7 @@ if [[ "$firstLink" ]]; then
     " 2>/dev/null || echo "0")
 
     receiverFinal=$(docker exec ${receiver} php -r "
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
         \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${sender}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');

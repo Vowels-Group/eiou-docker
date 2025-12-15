@@ -16,7 +16,7 @@ for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
 
     tableCheck=$(docker exec ${container} php -r "
-        require_once('/etc/eiou/src/database/pdo.php');
+        require_once('${PDO_FILE}');
         \$pdo = createPDOConnection();
         \$stmt = \$pdo->query('SHOW TABLES LIKE \"message_delivery\"');
         echo \$stmt->rowCount() > 0 ? 'EXISTS' : 'NOT_FOUND';
@@ -39,7 +39,7 @@ for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
 
     tableCheck=$(docker exec ${container} php -r "
-        require_once('/etc/eiou/src/database/pdo.php');
+        require_once('${PDO_FILE}');
         \$pdo = createPDOConnection();
         \$stmt = \$pdo->query('SHOW TABLES LIKE \"dead_letter_queue\"');
         echo \$stmt->rowCount() > 0 ? 'EXISTS' : 'NOT_FOUND';
@@ -62,7 +62,7 @@ for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
 
     tableCheck=$(docker exec ${container} php -r "
-        require_once('/etc/eiou/src/database/pdo.php');
+        require_once('${PDO_FILE}');
         \$pdo = createPDOConnection();
         \$stmt = \$pdo->query('SHOW TABLES LIKE \"delivery_metrics\"');
         echo \$stmt->rowCount() > 0 ? 'EXISTS' : 'NOT_FOUND';
@@ -85,7 +85,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 createResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/database/MessageDeliveryRepository.php');
+    require_once('${DATABASE_DIR}//MessageDeliveryRepository.php');
 
     \$repo = new MessageDeliveryRepository();
 
@@ -126,7 +126,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 updateResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/database/MessageDeliveryRepository.php');
+    require_once('${DATABASE_DIR}//MessageDeliveryRepository.php');
 
     \$repo = new MessageDeliveryRepository();
 
@@ -163,7 +163,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 dlqResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/database/DeadLetterQueueRepository.php');
+    require_once('${DATABASE_DIR}//DeadLetterQueueRepository.php');
 
     \$repo = new DeadLetterQueueRepository();
 
@@ -204,7 +204,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 statsResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/database/DeadLetterQueueRepository.php');
+    require_once('${DATABASE_DIR}//DeadLetterQueueRepository.php');
 
     \$repo = new DeadLetterQueueRepository();
 
@@ -233,7 +233,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 metricsResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/database/DeliveryMetricsRepository.php');
+    require_once('${DATABASE_DIR}//DeliveryMetricsRepository.php');
 
     \$repo = new DeliveryMetricsRepository();
 
@@ -266,7 +266,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 serviceResult=$(docker exec ${container} php -r "
-    require_once('./etc/eiou/src/core/Application.php');
+    require_once('${REL_APPLICATION}');
 
     \$app = Application::getInstance();
     \$service = \$app->services->getMessageDeliveryService();
@@ -294,7 +294,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 serviceStatsResult=$(docker exec ${container} php -r "
-    require_once('./etc/eiou/src/core/Application.php');
+    require_once('${REL_APPLICATION}');
 
     \$app = Application::getInstance();
     \$service = \$app->services->getMessageDeliveryService();
@@ -324,7 +324,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 debugCheck=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/database/pdo.php');
+    require_once('${PDO_FILE}');
     \$pdo = createPDOConnection();
 
     // Check for MessageDelivery related log entries
@@ -352,7 +352,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 dlqAlertResult=$(docker exec ${container} php -r "
-    require_once('./etc/eiou/src/core/Application.php');
+    require_once('${REL_APPLICATION}');
 
     \$app = Application::getInstance();
     \$service = \$app->services->getMessageDeliveryService();
@@ -382,7 +382,7 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 stageResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/database/MessageDeliveryRepository.php');
+    require_once('${DATABASE_DIR}//MessageDeliveryRepository.php');
 
     \$repo = new MessageDeliveryRepository();
 

@@ -1,295 +1,316 @@
 <?php
 # Copyright 2025
 
+// ============================================================================
+// CONTACT SERVICE OUTPUT FUNCTIONS
+// ============================================================================
+
 function outputAdressContactIssue($address){
-    return "No contact with supplied address: " . $address." exists \n";
+    return "[Contact] No contact with supplied address: " . $address." exists \n";
 }
 
 function outputAdressOrContactIssue($data){
-    return "Not an address nor existing contact with name: " . $data[2]."\n";
-}
-
-function outputBuildingP2pPayload($data){
-    return "Building P2p payload: " . print_r($data, true)."\n";
-}
-
-function outputBuildingRp2pPayload($data){
-    return "Building rP2p payload: " . print_r($data, true)."\n";
-}
-
-function outputBuildingTransactionPayload($data){
-    return "Building Transaction payload: " . print_r($data, true)."\n";
+    return "[Contact] Not an address nor existing contact with name: " . $data[2]."\n";
 }
 
 function outputCalculatedContactHash($contactHash){
-    return "Calculated contact hash: " . $contactHash."\n";
+    return "[Contact] Calculated contact hash: " . $contactHash."\n";
 }
 
 function outputContactMatched($contactHash){
-    return "Contact matched with hash: " . $contactHash."\n";
+    return "[Contact] Matched with hash: " . $contactHash."\n";
 }
 
 function outputContactSuccesfullysynced($address){
-    return "Contact " . $address . " was successfully synced.\n";
+    return "[Contact] " . $address . " was successfully synced.\n";
 }
 
 function outputContactNoResponseSync(){
-    return "Contact did not respond to sync request immediately.\n";
+    return "[Contact] Did not respond to sync request immediately.\n";
 }
 
 function outputContactNoNeedSync($address){
-    return "Contact " . $address . " has no need for syncing as it's already an accepted contact.\n";
+    return "[Contact] " . $address . " has no need for syncing as it's already an accepted contact.\n";
 }
 
 function outputContactNotFoundTryP2p($request){
-    return "Contact not found, trying p2p with data: " . print_r($request, true)."\n";
+    return "[Contact] Not found, trying p2p with data: " . print_r($request, true)."\n";
 }
 
 function outputContactRequestWasAccepted($address){
-    return "Contact request was accepted by " . $address ."\n";
+    return "[Contact] Request was accepted by " . $address ."\n";
 }
 
 function outputContactBlockedNoTransaction(){
-    return "Contact is blocked and transaction will not be sent.\n";
+    return "[Contact] Is blocked and transaction will not be sent.\n";
 }
 
 function outputContactUnblockedAndAdded(){
-    return "Contact was unblocked and name/credit/fee/currency information was added upon acceptance.\n";
+    return "[Contact] Was unblocked and name/credit/fee/currency information was added upon acceptance.\n";
 }
 
 function outputContactUnblockedAndAddedFailure(){
-    return "Contact could not be unblocked and no name/credit/fee/currency information was added.\n";
+    return "[Contact] Could not be unblocked and no name/credit/fee/currency information was added.\n";
 }
 
 function outputContactUnblockedAndOverwritten(){
-    return "Contact was unblocked and name/credit/fee/currency information was overwritten.\n";
+    return "[Contact] Was unblocked and name/credit/fee/currency information was overwritten.\n";
 }
 
 function outputContactUnblockedAndOverwrittenFailure(){
-    return "Contact could not be unblocked and no name/credit/fee/currency information was overwritten.\n";
+    return "[Contact] Could not be unblocked and no name/credit/fee/currency information was overwritten.\n";
 }
 
 function outputContactUpdatedAddress(){
-    return "Contact was updated succesfully with new address.\n";
+    return "[Contact] Was updated succesfully with new address.\n";
 }
 
 function outputContactUpdatedAddressFailure(){
-    return "Contact could not be updated with new address.\n";
-}
-
-function outputEiouSend($request){
-    return "Getting ready to send eIOU with request: " . print_r($request, true)."\n";
+    return "[Contact] Could not be updated with new address.\n";
 }
 
 function outputFailedContactInteraction(){
-    return "Contact request address does not exist at the current time (or is unable to respond, due to downtime), Please try again later.\n";
+    return "[Contact] Request address does not exist at the current time (or is unable to respond, due to downtime), Please try again later.\n";
 }
 
 function outputFailedContactRequest($payload){
-    return "Failed contact request payload: ". print_r($payload, true)."\n";
-}
-
-function outputFeeInformation($feePercent,$request,$maxFee){
-    return "They want a fee of " . $feePercent . " percent, for transaction with hash " . $request['hash'] .  ", my max fee is " . $maxFee . " percent.\n";
-}
-
-function outputFeeRejection(){
-    return "I reject the fee, transaction will be ignored and it will expire.\n";
-}
-
-function outputFoundRp2pMatch($message){
-    return "Found rp2p match for hash: " . $message['hash']."\n";
-}
-
-function outputGeneratedP2pHash($hash){
-    return "Generated p2pHash: " . $hash."\n";
-}
-
-function outputHandleTransactionMessageResponse($decodedMessage){
-    return "Responding to Transaction message inquiry from: " . $decodedMessage['senderAddress']."\n";
-}
-
-function outputInsertedP2p($request){
-    return "Inserted P2P with hash: " .print_r($request['hash'],true)."\n";
-}
-
-function outputInsertedRp2p($request){
-    return "Inserted RP2P with hash: " .print_r($request['hash'],true)."\n";
-}
-
-function outputInsertedTransactionMemo($request){
-    return "Inserted Transaction with memo: " .print_r($request['memo'],true)."\n";
-}
-
-function outputInsertedTransactionTxid($request){
-    return "Inserted Transaction with txid: " .print_r($request['txid'],true)."\n";
-}
-
-function outputInsertingP2pRequest($address){
-    return "Inserting p2p request with receiver address: " . $address."\n";
-}
-
-function outputIssueTransactionTryP2p($response){
-    return "Direct Transaction not succesfull, trying P2P. Error: " . print_r($response,true)."\n";
+    return "[Contact] Failed request payload: ". print_r($payload, true)."\n";
 }
 
 function outputLookedUpContactInfo($contactInfo){
-    return "Looked up contact info: " . print_r($contactInfo, true)."\n";
-}
-
-function outputNoViableTransportAddress(){
-    return "No viable transport address for sending Transaction could be determined.\n";
-}
-
-function outputNoViableTransportMode(){
-    return "No viable transport mode for sending Transaction could be determined.\n";
-}
-
-function outputNoViableRouteP2p($hash){
-    return "No viable route for forwarding p2p message with hash " . $hash . "\n";
-}
-
-function outputNoSuppliedAddress(){
-    return "No address was supplied.\n";
-}
-
-function outputNoContactsForTransaction($request){
-    return "No contacts exist in database for transaction.\n";
-}
-
-function outputPrepareP2pData($request){
-    return "Prepare send p2p data: " . print_r($request, true)."\n";
-}
-
-function outputPrepareSendData($request){
-    return "Prepare send data: " . print_r($request, true)."\n";
-}
-function outputReceiverAddressNotSet($request){
-    return "$request[2] (receiverAddress) is not set: " . print_r($request, true)."\n";
-}
-
-function outputP2pComponents($data){
-    return "p2pHash components: " . "receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time']."\n";
-}
-
-function outputP2pEiouSend($request){
-    return "Getting ready to send P2p eIOU with hash: " . print_r($request['hash'], true)."\n";
-}
-
-function outputP2pExpired($message){
-    return "P2P request with hash: " . $message['hash'] . " has expired\n";
-}
-
-function outputP2pResponse($response){
-    return "Received P2P message response: " . print_r($response,true)."\n";
-}
-
-function outputP2pSendResult($response){
-    return "P2P send result for matched contact: " . print_r($response,true)."\n";
-}
-
-function outputP2pStatusUpdated($status,$hash){
-    return "Updated status to '" . $status . "' for p2p hash: " . $hash."\n";
-}
-
-function outputP2pDescriptionUpdated($description,$hash){
-    return "Updated description to '" . $description . "' for p2p:" . $hash."\n";
-}
-
-function outputSendP2PToAmountContacts($contactsCount){
-    return "Sent Peer to peer request to " . $contactsCount . " contacts.\n";
-}
-
-function outputP2pUnableToAffordRp2p($result,$request){
-    return "P2P sender cannot afford RP2P with " . $result['my_fee_amount'] . " " . $result['currency'] . " worth of fees added: " . print_r($request, true)."\n";
-}
-
-function outputResponseTransactionTimes($httpExpectedResponseTime,$torExpectedResponseTime){
-    return "You should expect a response within " . $httpExpectedResponseTime . " seconds for http and " . $torExpectedResponseTime . " seconds for tor.\n"; 
-}
-
-function outputRp2pInsertionFailure($request){
-    return "Failed to insert rp2p request: " . print_r($request, true)."\n";
-}
-
-function outputRp2pTransactionResponse($response){
-    return "Transaction (RP2P) send response: " . print_r($response, true)."\n";  
-}
-
-function outputRp2pResponse($response){
-    return "RP2P response: " . print_r($response,true)."\n";
+    return "[Contact] Looked up info: " . print_r($contactInfo, true)."\n";
 }
 
 function outputSendContactAcceptedSuccesfullyMessage($address){
-    return "Sending Contact accepted succesfully message to " . $address."\n";
-}
-
-function outputSendP2p($request){
-    return "Sending " . $request[3] . " " . $request[4] . " to " . $request[2]." via routing through your network of contacts!\n";
-}
-
-function outputSendTransaction($payload){
-    return "Sending " . $payload['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $payload['currency'] . " to " . $payload['receiverAddress']." via direct transaction!\n";
-}
-
-function outputSendTransactionCompletionMessageMemo($message){
-    return "Sending Transaction completion of message with memo " . $message['memo'] . " to " . $message['sender_address']."\n";
-}
-
-function outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$senderAddress){
-    return "Sending Transaction completion message onwards " . print_r($payloadTransactionCompleted,true) . " to " . $senderAddress."\n";
-}
-
-function outputSendTransactionCompletionMessageTxid($message){
-    return "Sending Transaction completion of message with txid " . $message['txid'] . " to " . $message['sender_address']."\n";
-}
-
-function outputSendTransactionOnwards($message){
-    return "Sending Transaction onwards to: " . $message['receiver_address']."\n";
+    return "[Contact] Sending acceptance message to " . $address."\n";
 }
 
 function outputSyncContactDueToPendingStatus($address){
-    return "Contact " . $address . " is being synced due to pending contact request status\n";
+    return "[Contact] " . $address . " is being synced due to pending contact request status\n";
+}
+
+// ============================================================================
+// TRANSACTION SERVICE OUTPUT FUNCTIONS
+// ============================================================================
+
+function outputBuildingTransactionPayload($data){
+    return "[Transaction] Building payload: " . print_r($data, true)."\n";
+}
+
+function outputEiouSend($request){
+    return "[Transaction] Getting ready to send eIOU with request: " . print_r($request, true)."\n";
+}
+
+function outputFeeInformation($feePercent,$request,$maxFee){
+    return "[Transaction] They want a fee of " . $feePercent . " percent, for transaction with hash " . $request['hash'] .  ", my max fee is " . $maxFee . " percent.\n";
+}
+
+function outputFeeRejection(){
+    return "[Transaction] I reject the fee, transaction will be ignored and it will expire.\n";
+}
+
+function outputHandleTransactionMessageResponse($decodedMessage){
+    return "[Transaction] Responding to inquiry from: " . $decodedMessage['senderAddress']."\n";
+}
+
+function outputInsertedTransactionMemo($request){
+    return "[Transaction] Inserted with memo: " .print_r($request['memo'],true)."\n";
+}
+
+function outputInsertedTransactionTxid($request){
+    return "[Transaction] Inserted with txid: " .print_r($request['txid'],true)."\n";
+}
+
+function outputIssueTransactionTryP2p($response){
+    return "[Transaction] Direct not succesfull, trying P2P. Error: " . print_r($response,true)."\n";
+}
+
+function outputNoViableTransportAddress(){
+    return "[Transaction] No viable transport address for sending could be determined.\n";
+}
+
+function outputNoViableTransportMode(){
+    return "[Transaction] No viable transport mode for sending could be determined.\n";
+}
+
+function outputNoContactsForTransaction($request){
+    return "[Transaction] No contacts exist in database for transaction.\n";
+}
+
+function outputPrepareSendData($request){
+    return "[Transaction] Prepare send data: " . print_r($request, true)."\n";
+}
+
+function outputReceiverAddressNotSet($request){
+    return "[Transaction] $request[2] (receiverAddress) is not set: " . print_r($request, true)."\n";
+}
+
+function outputResponseTransactionTimes($httpExpectedResponseTime,$torExpectedResponseTime){
+    return "[Transaction] You should expect a response within " . $httpExpectedResponseTime . " seconds for http and " . $torExpectedResponseTime . " seconds for tor.\n";
+}
+
+function outputSendTransaction($payload){
+    return "[Transaction] Sending " . $payload['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $payload['currency'] . " to " . $payload['receiverAddress']." via direct transaction!\n";
+}
+
+function outputSendTransactionCompletionMessageMemo($message){
+    return "[Transaction] Sending completion of message with memo " . $message['memo'] . " to " . $message['sender_address']."\n";
+}
+
+function outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$senderAddress){
+    return "[Transaction] Sending completion message onwards " . print_r($payloadTransactionCompleted,true) . " to " . $senderAddress."\n";
+}
+
+function outputSendTransactionCompletionMessageTxid($message){
+    return "[Transaction] Sending completion of message with txid " . $message['txid'] . " to " . $message['sender_address']."\n";
+}
+
+function outputSendTransactionOnwards($message){
+    return "[Transaction] Sending onwards to: " . $message['receiver_address']."\n";
 }
 
 function outputTransactionAmountReceived($message){
-    return "Received " . $message['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $message['currency'] . " from " . $message['sender_address']."\n";
+    return "[Transaction] Received " . $message['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $message['currency'] . " from " . $message['sender_address']."\n";
 }
 
 function outputTransactionExpired($message){
-    return "Transaction request with hash: " . $message['hash'] . " has expired\n";
+    return "[Transaction] Request with hash: " . $message['hash'] . " has expired\n";
 }
 
 function outputTransactionInsertion($insertTransactionResponse){
-    return "Inserting Transaction response: " . print_r($insertTransactionResponse, true)."\n";
+    return "[Transaction] Inserting response: " . print_r($insertTransactionResponse, true)."\n";
 }
 
 function outputTransactionInquiryResponse($response){
-    return "Transaction Inquiry response: " . print_r($response, true)."\n";
+    return "[Transaction] Inquiry response: " . print_r($response, true)."\n";
 }
 
 function outputTransactionP2pSentSuccesfully($p2p){
-    return "Sent " . $p2p['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully\n";
+    return "[Transaction] Sent " . $p2p['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $p2p['currency'] . " to " . $p2p['destination_address'] . " succesfully\n";
 }
 
 function outputTransactionDirectSentSuccesfully($data){
-    return "Sent " . $data['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
+    return "[Transaction] Sent " . $data['amount']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . " " . $data['currency'] . " to " . $data['senderAddress'] . " succesfully\n";
 }
 
 function outputTransactionDescriptionUpdated($description,$typeTransaction,$memo){
-    return "Updated description to '" . $description . "' for transaction of type $typeTransaction: " . $memo."\n";
+    return "[Transaction] Updated description to '" . $description . "' for transaction of type $typeTransaction: " . $memo."\n";
 }
 
 function outputTransactionStatusUpdated($status,$typeTransaction,$memo){
-    return "Updated status to '" . $status . "' for transaction of type $typeTransaction: " . $memo."\n";
+    return "[Transaction] Updated status to '" . $status . "' for transaction of type $typeTransaction: " . $memo."\n";
 }
 
 function outputTransactionResponse($response){
-    return "Received transaction message response: " . print_r($response,true)."\n";
+    return "[Transaction] Received message response: " . print_r($response,true)."\n";
+}
+
+// ============================================================================
+// P2P SERVICE OUTPUT FUNCTIONS
+// ============================================================================
+
+function outputBuildingP2pPayload($data){
+    return "[P2P] Building payload: " . print_r($data, true)."\n";
+}
+
+function outputGeneratedP2pHash($hash){
+    return "[P2P] Generated hash: " . $hash."\n";
+}
+
+function outputInsertedP2p($request){
+    return "[P2P] Inserted with hash: " .print_r($request['hash'],true)."\n";
+}
+
+function outputInsertingP2pRequest($address){
+    return "[P2P] Inserting request with receiver address: " . $address."\n";
+}
+
+function outputNoViableRouteP2p($hash){
+    return "[P2P] No viable route for forwarding message with hash " . $hash . "\n";
+}
+
+function outputPrepareP2pData($request){
+    return "[P2P] Prepare send data: " . print_r($request, true)."\n";
+}
+
+function outputP2pComponents($data){
+    return "[P2P] Hash components: " . "receiverAddress: " . $data['receiverAddress'] . ", salt: " . $data['salt'] . ", time: " . $data['time']."\n";
+}
+
+function outputP2pEiouSend($request){
+    return "[P2P] Getting ready to send eIOU with hash: " . print_r($request['hash'], true)."\n";
+}
+
+function outputP2pExpired($message){
+    return "[P2P] Request with hash: " . $message['hash'] . " has expired\n";
+}
+
+function outputP2pResponse($response){
+    return "[P2P] Received message response: " . print_r($response,true)."\n";
+}
+
+function outputP2pSendResult($response){
+    return "[P2P] Send result for matched contact: " . print_r($response,true)."\n";
+}
+
+function outputP2pStatusUpdated($status,$hash){
+    return "[P2P] Updated status to '" . $status . "' for hash: " . $hash."\n";
+}
+
+function outputP2pDescriptionUpdated($description,$hash){
+    return "[P2P] Updated description to '" . $description . "' for hash:" . $hash."\n";
+}
+
+function outputSendP2PToAmountContacts($contactsCount){
+    return "[P2P] Sent peer to peer request to " . $contactsCount . " contacts.\n";
+}
+
+function outputSendP2p($request){
+    return "[P2P] Sending " . $request[3] . " " . $request[4] . " to " . $request[2]." via routing through your network of contacts!\n";
+}
+
+// ============================================================================
+// RP2P SERVICE OUTPUT FUNCTIONS
+// ============================================================================
+
+function outputBuildingRp2pPayload($data){
+    return "[RP2P] Building payload: " . print_r($data, true)."\n";
+}
+
+function outputFoundRp2pMatch($message){
+    return "[RP2P] Found match for hash: " . $message['hash']."\n";
+}
+
+function outputInsertedRp2p($request){
+    return "[RP2P] Inserted with hash: " .print_r($request['hash'],true)."\n";
+}
+
+function outputP2pUnableToAffordRp2p($result,$request){
+    return "[RP2P] P2P sender cannot afford with " . $result['my_fee_amount'] . " " . $result['currency'] . " worth of fees added: " . print_r($request, true)."\n";
+}
+
+function outputRp2pInsertionFailure($request){
+    return "[RP2P] Failed to insert request: " . print_r($request, true)."\n";
+}
+
+function outputRp2pTransactionResponse($response){
+    return "[RP2P] Transaction send response: " . print_r($response, true)."\n";
+}
+
+function outputRp2pResponse($response){
+    return "[RP2P] Response: " . print_r($response,true)."\n";
 }
 
 function outputUpdatedTxid($txid,$which_txid,$hash){
-    return "Updated " . $which_txid . " to " . $txid . " for p2p with hash " . $hash ."\n";
+    return "[RP2P] Updated " . $which_txid . " to " . $txid . " for p2p with hash " . $hash ."\n";
+}
+
+// ============================================================================
+// VALIDATION OUTPUT FUNCTIONS
+// ============================================================================
+
+function outputNoSuppliedAddress(){
+    return "[Validation] No address was supplied.\n";
 }
 
 // ============================================================================

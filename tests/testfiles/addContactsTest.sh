@@ -22,7 +22,7 @@ while [ $wait_elapsed -lt 10 ]; do
     first_keys=(${first_key//,/ })
     transportCheck=$(determineTransport ${containerAddresses[${first_keys[1]}]})
     statusCheck=$(docker exec ${first_keys[0]} php -r "
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         echo Application::getInstance()->services->getContactRepository()->getContactStatus(
             '""${transportCheck}""','""${containerAddresses[${first_keys[1]}]}""'
         );
@@ -50,7 +50,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # httpA -> httpB (i.e forwards and the next LinkKey should be httpB -> httpA (i.e backwards))
     transportType1=$(determineTransport ${containerAddresses[${containerKeys[1]}]})
     statusContact1=$(docker exec ${containerKeys[0]} php -r "
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         echo Application::getInstance()->services->getContactRepository()->getContactStatus(
             '""${transportType1}""','""${containerAddresses[${containerKeys[1]}]}""'
         );

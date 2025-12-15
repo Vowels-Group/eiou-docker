@@ -12,9 +12,24 @@ CROSS='\u274c'              # Crossmark
 network="eioud-network"
 
 # Define paths with double slashes to prevent Git Bash MSYS path conversion
+# These paths are used INSIDE Docker containers, not on the host system
+# Double slashes prevent Git Bash on Windows from converting /etc/ to C:/Program Files/Git/etc/
 EIOU_DIR="//etc//eiou"
 USERCONFIG="${EIOU_DIR}//userconfig.json"
 MASTER_KEY="${EIOU_DIR}//.master.key"
+SRC_DIR="${EIOU_DIR}//src"
+CORE_DIR="${SRC_DIR}//core"
+DATABASE_DIR="${SRC_DIR}//database"
+SERVICES_DIR="${SRC_DIR}//services"
+SECURITY_DIR="${SRC_DIR}//security"
+APPLICATION_FILE="${CORE_DIR}//Application.php"
+PDO_FILE="${DATABASE_DIR}//pdo.php"
+PHP_ERRORS_LOG="//var//log//php_errors.log"
+APACHE_ERROR_LOG="//var//log//apache2//error.log"
+
+# Relative paths used with require_once from current working directory
+# These use ./ prefix and are relative to container working directory
+REL_APPLICATION=".//etc//eiou//src//core//Application.php"
 
 #############################################################################
 
@@ -113,7 +128,7 @@ function wait_for_tx_status(){
 
     while [ $elapsed -lt $timeout ]; do
         status=$(docker exec $container php -r "
-            require_once('./etc/eiou/src/core/Application.php');
+            require_once('${REL_APPLICATION}');
             \$app = Application::getInstance();
             \$tx = \$app->services->getTransactionRepository()->getByTxid('$txid');
             echo \$tx['status'] ?? 'unknown';
@@ -143,7 +158,7 @@ function wait_for_contact(){
     transportCheck=$(determineTransport ${address})
     while [ $elapsed -lt $timeout ]; do
         local contact_exists=$(docker exec $container php -r "
-            require_once('./etc/eiou/src/core/Application.php');
+            require_once('${REL_APPLICATION}');
             \$app = Application::getInstance();
             \$contact = \$app->services->getContactRepository()->getContactByAddress('""${transportCheck}""','$address');
             echo \$contact ? 'yes' : 'no';

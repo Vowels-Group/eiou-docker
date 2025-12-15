@@ -291,3 +291,18 @@ function getDeliveryMetricsTableSchema() {
         INDEX idx_metrics_created (created_at)
     )";
 }
+
+// Rate Limits table - prevents abuse and brute force attacks
+function getRateLimitsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS rate_limits (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        identifier VARCHAR(255) NOT NULL,
+        action VARCHAR(100) NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        first_attempt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_attempt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        blocked_until TIMESTAMP NULL,
+        INDEX idx_identifier_action (identifier, action),
+        INDEX idx_blocked_until (blocked_until)
+    )";
+}

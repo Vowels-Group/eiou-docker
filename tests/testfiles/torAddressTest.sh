@@ -10,7 +10,7 @@ failure=0
 for container in "${containers[@]}"; do
     # Get Tor addresses (exists by default if container created succesfully)
     containerAddresses[$container]=$(docker exec $container php -r '
-        $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true);
+        $json = json_decode(file_get_contents("'"${USERCONFIG}"'"),true);
         if (isset($json["torAddress"])) {
             echo $json["torAddress"];
         }
