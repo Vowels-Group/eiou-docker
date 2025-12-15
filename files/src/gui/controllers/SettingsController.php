@@ -150,7 +150,7 @@ class SettingsController
             $config = array_merge($config, $settings);
 
             // Write back to file
-            if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
+            if (file_put_contents($configFile, json_encode($config, true), LOCK_EX) === false) {
                 throw new Exception('Failed to write configuration file');
             }
 
