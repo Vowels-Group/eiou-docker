@@ -269,16 +269,28 @@
         <!-- Transactions Tab -->
         <div id="transactions-tab" class="modal-tab-content">
             <div class="modal-tab-scroll">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <p style="color: #6c757d; margin: 0; font-size: 0.9rem;">
-                        <i class="fas fa-info-circle"></i> Showing the <strong>last 5 transactions</strong> with this contact
-                    </p>
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="refreshTransactions();">
-                        <i class="fas fa-sync-alt"></i> Refresh
-                    </button>
+                <!-- Transaction List View -->
+                <div id="tx-list-view">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <p style="color: #6c757d; margin: 0; font-size: 0.9rem;">
+                            <i class="fas fa-info-circle"></i> Showing the <strong>last 5 transactions</strong> with this contact
+                        </p>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="window.location.reload();">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                    <div id="modal_transactions" class="transactions-list">
+                        <p class="no-transactions">No recent transactions with this contact.</p>
+                    </div>
                 </div>
-                <div id="modal_transactions" class="transactions-list">
-                    <p class="no-transactions">No recent transactions with this contact.</p>
+                <!-- Transaction Detail View -->
+                <div id="tx-detail-view" style="display: none;">
+                    <div style="margin-bottom: 1rem;">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="hideContactTxDetail()">
+                            <i class="fas fa-arrow-left"></i> Back to Transactions
+                        </button>
+                    </div>
+                    <div id="contact-tx-detail-content"></div>
                 </div>
             </div>
         </div>
@@ -316,10 +328,13 @@
 <script>
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
 var currentContactAddress = null;
+var contactTransactionData = [];
 
 function openContactModal(contact, openTab) {
     // Store current contact address for refresh
     currentContactAddress = contact.address;
+    // Store transactions for detail view
+    contactTransactionData = contact.transactions || [];
 
     // Set contact name in header
     document.getElementById('modal_contact_name').textContent = contact.name || 'Unknown';
@@ -382,17 +397,23 @@ function openContactModal(contact, openTab) {
             var typeLabel = tx.type === 'sent' ? 'Sent' : 'Received';
             var amountPrefix = tx.type === 'sent' ? '-' : '+';
 
-            html += '<div class="transaction-item ' + typeClass + '">';
+            html += '<div class="transaction-item ' + typeClass + '" style="cursor: pointer;" onclick="showContactTxDetail(' + i + ')" title="Click for details">';
             html += '<div class="tx-icon"><i class="fas ' + typeIcon + '"></i></div>';
             html += '<div class="tx-details">';
             html += '<div class="tx-type">' + typeLabel + '</div>';
             html += '<div class="tx-date">' + (tx.date || 'Unknown date') + '</div>';
             html += '</div>';
-            html += '<div class="tx-amount">' + amountPrefix + parseFloat(tx.amount).toFixed(2) + ' ' + (tx.currency || 'USD') + '</div>';
+            html += '<div class="tx-amount">' + amountPrefix + parseFloat(tx.amount).toFixed(2) + ' ' + (tx.currency || 'USD') + '<i class="fas fa-chevron-right" style="margin-left: 0.5rem; font-size: 0.8rem; color: #6c757d;"></i></div>';
             html += '</div>';
         }
         transactionsEl.innerHTML = html;
     }
+
+    // Reset transaction view to list (in case detail was open before)
+    var txListView = document.getElementById('tx-list-view');
+    var txDetailView = document.getElementById('tx-detail-view');
+    if (txListView) txListView.style.display = 'block';
+    if (txDetailView) txDetailView.style.display = 'none';
 
     // Open specified tab or default to info tab
     var tabToOpen = openTab || 'info-tab';
@@ -452,59 +473,108 @@ if (contactModalEl) {
     };
 }
 
-// Refresh transactions - reloads page and reopens modal on transactions tab
-function refreshTransactions() {
-    if (currentContactAddress) {
-        var url = window.location.pathname + '?open_contact=' + encodeURIComponent(currentContactAddress) + '&tab=transactions-tab#contacts';
-        window.location.href = url;
-    } else {
-        window.location.reload();
+// Show transaction detail view (Tor Browser compatible)
+function showContactTxDetail(index) {
+    if (!contactTransactionData || !contactTransactionData[index]) {
+        return;
     }
+
+    var tx = contactTransactionData[index];
+    var content = document.getElementById('contact-tx-detail-content');
+
+    // Build direction info
+    var directionColor = tx.type === 'sent' ? '#dc3545' : '#28a745';
+    var directionIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
+    var directionText = tx.type === 'sent' ? 'Sent' : 'Received';
+    var gradientEnd = tx.type === 'sent' ? '#ff6b6b' : '#20c997';
+
+    // Build status badge
+    var status = tx.status || 'completed';
+    var statusBadge = '<span class="tx-status-badge tx-status-' + status + '">' + status.charAt(0).toUpperCase() + status.slice(1) + '</span>';
+
+    // Build transaction type badge
+    var txType = tx.tx_type || 'standard';
+    var txTypeBadge = txType === 'p2p'
+        ? '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-network-wired"></i> P2P</span>'
+        : '<span style="background: #28a745; color: #fff; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-arrow-right"></i> Direct</span>';
+
+    // Build HTML content
+    var html = '';
+
+    // Header with amount
+    html += '<div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, ' + directionColor + ' 0%, ' + gradientEnd + ' 100%); border-radius: 8px; margin-bottom: 1.5rem;">';
+    html += '<div style="font-size: 2rem; font-weight: bold; color: white;">' + (tx.type === 'sent' ? '-' : '+') + '$' + parseFloat(tx.amount).toFixed(2) + ' ' + (tx.currency || 'USD') + '</div>';
+    html += '<div style="color: rgba(255,255,255,0.9); margin-top: 0.5rem;"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    html += '</div>';
+
+    // Status and type badges
+    html += '<div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">';
+    html += statusBadge;
+    html += txTypeBadge;
+    html += '</div>';
+
+    // Details section
+    html += '<div class="tx-detail-section">';
+
+    // Date/Time
+    html += '<div class="tx-detail-row">';
+    html += '<div class="tx-detail-label">Date & Time</div>';
+    html += '<div class="tx-detail-value">' + (tx.date || 'Unknown') + '</div>';
+    html += '</div>';
+
+    // Transaction ID
+    if (tx.txid) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Transaction ID</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.txid + '</div>';
+        html += '</div>';
+    }
+
+    // Sender Address
+    if (tx.sender_address) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Sender Address</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.sender_address + '</div>';
+        html += '</div>';
+    }
+
+    // Receiver Address
+    if (tx.receiver_address) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Receiver Address</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.receiver_address + '</div>';
+        html += '</div>';
+    }
+
+    // Memo (for P2P transactions)
+    if (tx.memo && tx.memo !== 'standard') {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Routing Hash</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.memo + '</div>';
+        html += '</div>';
+    }
+
+    // Description
+    if (tx.description) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Description</div>';
+        html += '<div class="tx-detail-value">' + tx.description + '</div>';
+        html += '</div>';
+    }
+
+    html += '</div>';
+
+    content.innerHTML = html;
+
+    // Show detail view, hide list view
+    document.getElementById('tx-list-view').style.display = 'none';
+    document.getElementById('tx-detail-view').style.display = 'block';
 }
 
-// Auto-open contact modal on page load if URL param present (Tor Browser compatible)
-var autoOpenTab = null;
-
-function checkAutoOpenModal() {
-    var params = {};
-    var queryString = window.location.search.substring(1);
-    var pairs = queryString.split('&');
-    for (var i = 0; i < pairs.length; i++) {
-        var pair = pairs[i].split('=');
-        if (pair.length === 2) {
-            params[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1]);
-        }
-    }
-
-    if (params.open_contact) {
-        // Store the tab to open
-        autoOpenTab = params.tab || 'info-tab';
-
-        // Find the contact card with matching address and simulate click
-        var contactCards = document.querySelectorAll('.contact-card');
-        for (var j = 0; j < contactCards.length; j++) {
-            var card = contactCards[j];
-            var onclickAttr = card.getAttribute('onclick');
-            if (onclickAttr && onclickAttr.indexOf(params.open_contact) !== -1) {
-                // Trigger the onclick by clicking the card
-                card.click();
-                // After click, switch to the correct tab
-                setTimeout(function() {
-                    if (autoOpenTab) {
-                        showModalTab(autoOpenTab, null);
-                    }
-                }, 50);
-                break;
-            }
-        }
-    }
-}
-
-// Run auto-open check when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', checkAutoOpenModal);
-} else {
-    checkAutoOpenModal();
+// Hide transaction detail view and show list (Tor Browser compatible)
+function hideContactTxDetail() {
+    document.getElementById('tx-detail-view').style.display = 'none';
+    document.getElementById('tx-list-view').style.display = 'block';
 }
 </script>
 

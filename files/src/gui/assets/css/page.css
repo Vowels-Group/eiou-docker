@@ -1352,7 +1352,7 @@ html {
 .modal-tab-content {
     display: none;
     padding: 1rem;
-    height: 320px;
+    height: 500px;
     overflow-y: auto;
 }
 

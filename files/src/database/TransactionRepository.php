@@ -1457,7 +1457,7 @@ class TransactionRepository extends AbstractRepository {
         $contactPlaceholders = str_repeat('?,', count($contactAddresses) - 1) . '?';
 
         // Get transactions where user sent to contact OR user received from contact
-        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp
+        $query = "SELECT txid, tx_type, status, sender_address, receiver_address, amount, currency, timestamp, memo, description
                   FROM {$this->tableName}
                   WHERE (sender_address IN ($userPlaceholders) AND receiver_address IN ($contactPlaceholders))
                      OR (sender_address IN ($contactPlaceholders) AND receiver_address IN ($userPlaceholders))
@@ -1486,10 +1486,17 @@ class TransactionRepository extends AbstractRepository {
             $isSent = in_array($tx['sender_address'], $userAddresses);
 
             $formattedTransactions[] = [
+                'txid' => $tx['txid'] ?? '',
+                'tx_type' => $tx['tx_type'] ?? 'standard',
+                'status' => $tx['status'] ?? 'completed',
                 'date' => $tx['timestamp'],
                 'type' => $isSent ? 'sent' : 'received',
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
-                'currency' => $tx['currency']
+                'currency' => $tx['currency'],
+                'sender_address' => $tx['sender_address'] ?? '',
+                'receiver_address' => $tx['receiver_address'] ?? '',
+                'memo' => $tx['memo'] ?? '',
+                'description' => $tx['description'] ?? ''
             ];
         }
 
