@@ -286,7 +286,7 @@ class BalanceRepository extends AbstractRepository {
      * @param string $currency currency
      * @return bool Success/Failure of balance update
      */
-    public function updateBothDirectionBalance(array $amounts, string $contactPubkeyHash, string$currency){
+    public function updateBothDirectionBalance(array $amounts, string $contactPubkeyHash, string $currency){
         $query = "UPDATE balances SET received = :received, sent = :sent
                 WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
         $stmt = $this->execute($query, [
