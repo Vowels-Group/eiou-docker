@@ -365,8 +365,8 @@ class CliService {
             echo "\tDefault currency: " . $settings['default_currency'] . "\n";
             echo "\tMinimum fee amount: " . $settings['minimum_fee_amount'] . " " . $settings['minimum_fee_currency'] ."\n";
             echo "\tDefault fee percent: " . $settings['default_fee_percent'] ."%\n";
-            echo "\tMaximum fee percent: " . $settings['default_credit_limit'] . "\n";
-            echo "\tDefault credit limit: " . $settings['defa'] ."%\n";
+            echo "\tMaximum fee percent: " . $settings['maximum_fee_percent'] . "\n";
+            echo "\tDefault credit limit: " . $settings['default_credit_limit'] ."%\n";
             echo "\tMaximum peer to peer Level: " .  $settings['max_p2p_level'] . "\n";
             echo "\tDefault peer to peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
             echo "\tDefault maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
