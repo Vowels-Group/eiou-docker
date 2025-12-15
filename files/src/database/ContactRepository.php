@@ -358,10 +358,10 @@ class ContactRepository extends AbstractRepository {
      * @return array Array of pending contacts
      */
     public function getPendingContactRequests(): array {
-        $query = "SELECT * 
+        $query = "SELECT c.id as contact_id, c.*, a.*
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
-                    WHERE c.name IS NULL 
+                    WHERE c.name IS NULL
                     AND c.status = 'pending'";
         $stmt = $this->execute($query);
 
@@ -399,15 +399,15 @@ class ContactRepository extends AbstractRepository {
     public function getUserPendingContactRequests(): array
     {
         // Get all pending contact requests (where name IS NOT NULL and status = 'pending')
-        $query = "SELECT * 
+        $query = "SELECT c.id as contact_id, c.*, a.*
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
-                    WHERE c.name IS NOT NULL 
+                    WHERE c.name IS NOT NULL
                     AND c.status = 'pending'";
         $stmt = $this->execute($query);
         if(!$stmt){
             return [];
-        } 
+        }
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -418,7 +418,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function getAcceptedContacts(): array
     {
-        $query = "SELECT * 
+        $query = "SELECT c.id as contact_id, c.*, a.*
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND c.status = 'accepted'";
@@ -426,7 +426,7 @@ class ContactRepository extends AbstractRepository {
         $stmt = $this->execute($query);
         if(!$stmt){
             return [];
-        } 
+        }
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -437,7 +437,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function getBlockedContacts(): array
     {
-        $query = "SELECT * 
+        $query = "SELECT c.id as contact_id, c.*, a.*
                     FROM addresses a JOIN {$this->tableName} c
                     ON a.pubkey_hash = c.pubkey_hash
                     AND c.status = 'blocked'";
@@ -445,7 +445,7 @@ class ContactRepository extends AbstractRepository {
         $stmt = $this->execute($query);
         if(!$stmt){
             return [];
-        } 
+        }
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 

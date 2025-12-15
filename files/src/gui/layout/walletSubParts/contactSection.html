@@ -24,6 +24,7 @@
                     </div>
                     <div class="contact-info">
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
+                        <span style="background: #e9ecef; color: #495057; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.7rem; margin-right: 0.25rem;">ID: <?php echo htmlspecialchars($contact['contact_id'] ?? '-'); ?></span>
                         <span style="background: lightgreen; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Accepted</span>
                         <div class="contact-details">
                             <?php
@@ -78,6 +79,7 @@
                     </div>
                     <div class="contact-info">
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
+                        <span style="background: #e9ecef; color: #495057; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.7rem; margin-right: 0.25rem;">ID: <?php echo htmlspecialchars($contact['contact_id'] ?? '-'); ?></span>
                         <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending Response</span>
                         <div class="contact-details">
                             <?php
@@ -115,6 +117,7 @@
                     </div>
                     <div class="contact-info">
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name'] ?? "-"); ?></div>
+                        <span style="background: #e9ecef; color: #495057; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.7rem; margin-right: 0.25rem;">ID: <?php echo htmlspecialchars($contact['contact_id'] ?? '-'); ?></span>
                         <span style="background: red; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Blocked</span>
                         <div class="contact-details">
                             <?php
@@ -211,7 +214,7 @@
     <?php foreach ($pendingContacts as $index => $contact): ?>
         <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; border-left: 4px solid #0d6efd;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <strong style="color: #0d6efd;">Contact Request #<?php echo $index + 1; ?></strong>
+                <strong style="color: #0d6efd;">Contact Request #<?php echo $index + 1; ?> <span style="background: #e9ecef; color: #495057; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.7rem; margin-left: 0.25rem;">ID: <?php echo htmlspecialchars($contact['contact_id'] ?? '-'); ?></span></strong>
                 <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending</span>
             </div>
             <?php
