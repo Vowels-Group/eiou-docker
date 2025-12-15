@@ -110,3 +110,163 @@
         </div>
     </form>
 </div>
+
+<!-- Debug Section -->
+<div id="debug-section" class="form-container fade-in-up">
+    <h2><i class="fas fa-bug"></i> Debug Information</h2>
+    <p style="color: #6c757d; margin-bottom: 1rem;">
+        View application logs and debug information. Use this section to troubleshoot issues.
+    </p>
+
+    <!-- Debug Tabs -->
+    <div class="debug-tabs">
+        <button type="button" class="debug-tab active" onclick="showDebugTab('app-logs')">
+            <i class="fas fa-database"></i> App Logs
+        </button>
+        <button type="button" class="debug-tab" onclick="showDebugTab('php-logs')">
+            <i class="fab fa-php"></i> PHP Logs
+        </button>
+        <button type="button" class="debug-tab" onclick="showDebugTab('apache-logs')">
+            <i class="fas fa-server"></i> Apache Logs
+        </button>
+        <button type="button" class="debug-tab" onclick="showDebugTab('system-info')">
+            <i class="fas fa-info-circle"></i> System Info
+        </button>
+    </div>
+
+    <!-- App Logs (from debug table) -->
+    <div id="app-logs" class="debug-content active">
+        <div class="debug-header">
+            <span class="debug-count">
+                <?php
+                $debugRepo = $serviceContainer->getDebugRepository();
+                $debugEntries = $debugRepo->getRecentDebugEntries(50);
+                $debugCount = $debugRepo->getDebugEntryCount();
+                echo $debugCount . ' entries';
+                ?>
+            </span>
+            <form method="POST" style="display: inline;">
+                <input type="hidden" name="action" value="clearDebugLogs">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Clear all debug entries?');">
+                    <i class="fas fa-trash"></i> Clear Logs
+                </button>
+            </form>
+        </div>
+        <div class="debug-log-container">
+            <?php if (empty($debugEntries)): ?>
+                <p class="debug-empty">No debug entries found.</p>
+            <?php else: ?>
+                <?php foreach ($debugEntries as $entry): ?>
+                    <div class="debug-entry debug-level-<?php echo strtolower($entry['level'] ?? 'info'); ?>">
+                        <div class="debug-entry-header">
+                            <span class="debug-level"><?php echo htmlspecialchars($entry['level'] ?? 'INFO'); ?></span>
+                            <span class="debug-timestamp"><?php echo htmlspecialchars($entry['created_at'] ?? ''); ?></span>
+                        </div>
+                        <div class="debug-message"><?php echo htmlspecialchars($entry['message'] ?? ''); ?></div>
+                        <?php if (!empty($entry['file'])): ?>
+                            <div class="debug-location">
+                                <i class="fas fa-file-code"></i>
+                                <?php echo htmlspecialchars($entry['file']); ?>:<?php echo htmlspecialchars($entry['line'] ?? ''); ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- PHP Error Logs -->
+    <div id="php-logs" class="debug-content">
+        <div class="debug-header">
+            <span class="debug-count">PHP Error Log</span>
+        </div>
+        <div class="debug-log-container">
+            <?php
+            $phpLogPath = '/var/log/php_errors.log';
+            $phpLogContent = '';
+            if (file_exists($phpLogPath) && is_readable($phpLogPath)) {
+                $phpLogContent = shell_exec("tail -100 " . escapeshellarg($phpLogPath));
+            } elseif (file_exists('/var/log/eiou/eiou-php-error.log')) {
+                $phpLogContent = shell_exec("tail -100 /var/log/eiou/eiou-php-error.log");
+            }
+            ?>
+            <?php if (empty(trim($phpLogContent))): ?>
+                <p class="debug-empty">No PHP errors logged.</p>
+            <?php else: ?>
+                <pre class="debug-pre"><?php echo htmlspecialchars($phpLogContent); ?></pre>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- Apache Logs -->
+    <div id="apache-logs" class="debug-content">
+        <div class="debug-header">
+            <span class="debug-count">Apache Error Log</span>
+        </div>
+        <div class="debug-log-container">
+            <?php
+            $apacheLogPath = '/var/log/apache2/error.log';
+            $apacheLogContent = '';
+            if (file_exists($apacheLogPath) && is_readable($apacheLogPath)) {
+                $apacheLogContent = shell_exec("tail -100 " . escapeshellarg($apacheLogPath));
+            }
+            ?>
+            <?php if (empty(trim($apacheLogContent))): ?>
+                <p class="debug-empty">No Apache errors logged or log not accessible.</p>
+            <?php else: ?>
+                <pre class="debug-pre"><?php echo htmlspecialchars($apacheLogContent); ?></pre>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <!-- System Info -->
+    <div id="system-info" class="debug-content">
+        <div class="debug-header">
+            <span class="debug-count">System Information</span>
+        </div>
+        <div class="debug-log-container">
+            <table class="debug-info-table">
+                <tr><td><strong>PHP Version</strong></td><td><?php echo phpversion(); ?></td></tr>
+                <tr><td><strong>SAPI</strong></td><td><?php echo php_sapi_name(); ?></td></tr>
+                <tr><td><strong>OS</strong></td><td><?php echo PHP_OS; ?></td></tr>
+                <tr><td><strong>Memory Limit</strong></td><td><?php echo ini_get('memory_limit'); ?></td></tr>
+                <tr><td><strong>Max Execution Time</strong></td><td><?php echo ini_get('max_execution_time'); ?>s</td></tr>
+                <tr><td><strong>Server Software</strong></td><td><?php echo $_SERVER['SERVER_SOFTWARE'] ?? 'N/A'; ?></td></tr>
+                <tr><td><strong>Document Root</strong></td><td><?php echo $_SERVER['DOCUMENT_ROOT'] ?? 'N/A'; ?></td></tr>
+                <tr><td><strong>App Debug Mode</strong></td><td><?php echo Constants::get('APP_DEBUG') ? 'Enabled' : 'Disabled'; ?></td></tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- Send Debug Report -->
+    <div class="debug-report-section">
+        <h4><i class="fas fa-envelope"></i> Send Debug Report</h4>
+        <p style="color: #6c757d; font-size: 0.9rem;">
+            Send all debug information to developers for troubleshooting assistance.
+        </p>
+        <form method="POST">
+            <input type="hidden" name="action" value="sendDebugReport">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label for="debugDescription">Issue Description (optional):</label>
+                <textarea id="debugDescription" name="description" rows="3" placeholder="Describe the issue you're experiencing..." style="width: 100%; padding: 0.8rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 1rem;"></textarea>
+            </div>
+            <button type="submit" class="btn btn-info">
+                <i class="fas fa-paper-plane"></i> Send Debug Report
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+function showDebugTab(tabId) {
+    // Hide all content
+    document.querySelectorAll('.debug-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.debug-tab').forEach(el => el.classList.remove('active'));
+
+    // Show selected content
+    document.getElementById(tabId).classList.add('active');
+    event.target.closest('.debug-tab').classList.add('active');
+}
+</script>
