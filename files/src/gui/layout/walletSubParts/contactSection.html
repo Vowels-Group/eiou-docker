@@ -173,13 +173,13 @@
 
         <!-- Modal Tabs -->
         <div class="modal-tabs">
-            <button type="button" class="modal-tab active" onclick="showModalTab('info-tab')">
+            <button type="button" class="modal-tab active" onclick="showModalTab('info-tab', this)">
                 <i class="fas fa-info-circle"></i> Info
             </button>
-            <button type="button" class="modal-tab" onclick="showModalTab('settings-tab')">
+            <button type="button" class="modal-tab" onclick="showModalTab('settings-tab', this)">
                 <i class="fas fa-cog"></i> Settings
             </button>
-            <button type="button" class="modal-tab" onclick="showModalTab('transactions-tab')">
+            <button type="button" class="modal-tab" onclick="showModalTab('transactions-tab', this)">
                 <i class="fas fa-exchange-alt"></i> Transactions
             </button>
         </div>
@@ -217,6 +217,11 @@
                 <h4><i class="fas fa-tag"></i> Status</h4>
                 <span id="modal_status_badge" class="badge badge-accepted">Accepted</span>
             </div>
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-fingerprint"></i> Contact ID</h4>
+                <div id="modal_contact_id" class="info-value monospace">Not Available</div>
+            </div>
         </div>
 
         <!-- Settings Tab -->
@@ -246,9 +251,7 @@
                 <div class="form-group">
                     <label for="edit_contact_currency">Currency:</label>
                     <select id="edit_contact_currency" name="contact_currency" required>
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
+                        <option value="USD" selected>USD</option>
                     </select>
                 </div>
 
@@ -301,6 +304,7 @@
 </div>
 
 <script>
+// Contact Modal Functions (Tor Browser compatible - uses var and for loops)
 function openContactModal(contact) {
     // Set contact name in header
     document.getElementById('modal_contact_name').textContent = contact.name || 'Unknown';
@@ -312,15 +316,18 @@ function openContactModal(contact) {
     // Set public key
     document.getElementById('modal_pubkey').textContent = contact.pubkey || 'Not Available';
 
+    // Set contact ID
+    document.getElementById('modal_contact_id').textContent = contact.contact_id || 'Not Available';
+
     // Set balance
-    const balance = parseFloat(contact.balance) || 0;
-    const balanceEl = document.getElementById('modal_balance');
+    var balance = parseFloat(contact.balance) || 0;
+    var balanceEl = document.getElementById('modal_balance');
     balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(2);
     balanceEl.className = balance >= 0 ? 'balance-amount balance-positive' : 'balance-amount balance-negative';
     document.getElementById('modal_balance_currency').textContent = contact.currency || 'USD';
 
     // Set status badge
-    const statusBadge = document.getElementById('modal_status_badge');
+    var statusBadge = document.getElementById('modal_status_badge');
     statusBadge.textContent = contact.status.charAt(0).toUpperCase() + contact.status.slice(1);
     statusBadge.className = 'badge badge-' + contact.status;
 
@@ -349,7 +356,7 @@ function openContactModal(contact) {
     document.getElementById('modal_transactions').innerHTML = '<p class="no-transactions">No recent transactions with this contact.</p>';
 
     // Reset to first tab
-    showModalTab('info-tab');
+    showModalTab('info-tab', null);
 
     // Show modal
     document.getElementById('contactModal').style.display = 'flex';
@@ -359,22 +366,46 @@ function closeContactModal() {
     document.getElementById('contactModal').style.display = 'none';
 }
 
-function showModalTab(tabId) {
-    // Hide all tabs
-    document.querySelectorAll('.modal-tab-content').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.modal-tab').forEach(el => el.classList.remove('active'));
+function showModalTab(tabId, button) {
+    // Hide all tab contents
+    var tabContents = document.querySelectorAll('.modal-tab-content');
+    for (var i = 0; i < tabContents.length; i++) {
+        tabContents[i].classList.remove('active');
+    }
 
-    // Show selected tab
-    document.getElementById(tabId).classList.add('active');
-    event.target.closest('.modal-tab').classList.add('active');
+    // Deactivate all tab buttons
+    var tabButtons = document.querySelectorAll('.modal-tab');
+    for (var j = 0; j < tabButtons.length; j++) {
+        tabButtons[j].classList.remove('active');
+    }
+
+    // Show selected tab content
+    var targetTab = document.getElementById(tabId);
+    if (targetTab) {
+        targetTab.classList.add('active');
+    }
+
+    // Activate the clicked button
+    if (button) {
+        button.classList.add('active');
+    } else {
+        // Find and activate the first tab button when called programmatically
+        var firstTab = document.querySelector('.modal-tab');
+        if (firstTab) {
+            firstTab.classList.add('active');
+        }
+    }
 }
 
-// Close modal when clicking outside
-document.getElementById('contactModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeContactModal();
-    }
-});
+// Close modal when clicking outside (Tor Browser compatible)
+var contactModalEl = document.getElementById('contactModal');
+if (contactModalEl) {
+    contactModalEl.onclick = function(e) {
+        if (e.target === contactModalEl) {
+            closeContactModal();
+        }
+    };
+}
 </script>
 
 <!-- Pending Contacts Section -->
