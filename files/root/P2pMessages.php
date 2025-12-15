@@ -9,10 +9,10 @@
  *
  */
 
-require_once(__DIR__ . "/functions.php");
+require_once(__DIR__ . "/Functions.php");
 
 // Initialize security components for P2P message processing
-require_once __DIR__ . '/security_init.php';
+require_once __DIR__ . '/SecurityInit.php';
 
 $app = Application::getInstance();
 
