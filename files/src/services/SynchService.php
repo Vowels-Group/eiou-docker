@@ -150,11 +150,13 @@ class SynchService {
         // Synch both contacts and transactions
         $contactResults = $this->synchAllContactsInternal();
         $transactionResults = $this->synchAllTransactionsInternal();
+        $balanceResults = $this->synchAllBalancesInternal();
 
         $output->success("Sync completed", [
             'contacts' => $contactResults,
-            'transactions' => $transactionResults
-        ], "Synched contacts and transactions");
+            'transactions' => $transactionResults,
+            'balances' => $balanceResults
+        ], "Synched contacts, transactions and balances");
     }
 
     /**
@@ -281,12 +283,14 @@ class SynchService {
         return [
             'total' => 0,
             'synced' => 0,
+            'failed' => 0,
+            'details' => [],
             'message' => 'Transaction sync not yet implemented'
         ];
     }
 
     /**
-     * Synch contact
+     * Synch singular (specific) Transaction
      *
      * @return bool True if syched succesfully, false otherwise
      */
