@@ -295,6 +295,21 @@ class ServiceContainer {
     }
 
     /**
+     * Get RateLimiterRepository instance
+     *
+     * @return RateLimiterRepository
+     */
+    public function getRateLimiterRepository(): RateLimiterRepository {
+        if (!isset($this->repositories['RateLimiterRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/RateLimiterRepository.php';
+            $this->repositories['RateLimiterRepository'] = new RateLimiterRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['RateLimiterRepository'];
+    }
+
+    /**
      * Get ContactService instance
      *
      * Integrates MessageDeliveryService for reliable contact message delivery
@@ -525,6 +540,21 @@ class ServiceContainer {
             );
         }
         return $this->services['CliService'];
+    }
+
+    /**
+     * Get RateLimiterService instance
+     *
+     * @return RateLimiterService
+     */
+    public function getRateLimiterService(): RateLimiterService {
+        if (!isset($this->services['RateLimiterService'])) {
+            require_once __DIR__ . '/RateLimiterService.php';
+            $this->services['RateLimiterService'] = new RateLimiterService(
+                $this->getRateLimiterRepository()
+            );
+        }
+        return $this->services['RateLimiterService'];
     }
 
     /**

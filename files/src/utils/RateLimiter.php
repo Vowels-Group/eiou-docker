@@ -1,14 +1,23 @@
 <?php
-
 # Copyright 2025
+
 /**
- * Rate limiting implementation for eIOU application
- * Prevents abuse and brute force attacks
+ * Rate Limiter (Legacy Facade)
+ *
+ * This class now acts as a facade to RateLimiterService and RateLimiterRepository.
+ * Maintained for backward compatibility with existing code.
+ *
+ * For new code, prefer using RateLimiterService via ServiceContainer:
+ *   $container->getRateLimiterService()->checkLimit(...)
+ *
+ * @package Utils
+ * @deprecated Use RateLimiterService via ServiceContainer instead
  */
 
 class RateLimiter {
     private $pdo;
-    private $prefix = 'rate_limit_';
+    private ?RateLimiterRepository $repository = null;
+    private ?RateLimiterService $service = null;
 
     /**
      * Initialize rate limiter with database connection
@@ -17,26 +26,17 @@ class RateLimiter {
      */
     public function __construct($pdo) {
         $this->pdo = $pdo;
-        $this->createTableIfNotExists();
+        $this->ensureTableExists();
+        $this->initializeComponents();
     }
 
     /**
-     * Create rate limiting table if it doesn't exist
+     * Ensure rate_limits table exists using schema definition
      */
-    private function createTableIfNotExists() {
-        $sql = "CREATE TABLE IF NOT EXISTS rate_limits (
-            id INTEGER PRIMARY KEY AUTO_INCREMENT,
-            identifier VARCHAR(255) NOT NULL,
-            action VARCHAR(100) NOT NULL,
-            attempts INTEGER DEFAULT 0,
-            first_attempt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_attempt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            blocked_until TIMESTAMP NULL,
-            INDEX idx_identifier_action (identifier, action),
-            INDEX idx_blocked_until (blocked_until)
-        )";
-
+    private function ensureTableExists(): void {
         try {
+            require_once '/etc/eiou/src/database/databaseSchema.php';
+            $sql = getRateLimitsTableSchema();
             $this->pdo->exec($sql);
         } catch (PDOException $e) {
             if (class_exists('SecureLogger')) {
@@ -50,6 +50,17 @@ class RateLimiter {
     }
 
     /**
+     * Initialize repository and service components
+     */
+    private function initializeComponents(): void {
+        require_once '/etc/eiou/src/database/RateLimiterRepository.php';
+        require_once '/etc/eiou/src/services/RateLimiterService.php';
+
+        $this->repository = new RateLimiterRepository($this->pdo);
+        $this->service = new RateLimiterService($this->repository);
+    }
+
+    /**
      * Check if an action is rate limited
      *
      * @param string $identifier User identifier (IP, user ID, etc.)
@@ -60,87 +71,7 @@ class RateLimiter {
      * @return array ['allowed' => bool, 'remaining' => int, 'reset_at' => timestamp]
      */
     public function checkLimit($identifier, $action, $maxAttempts = 10, $windowSeconds = 60, $blockSeconds = 300) {
-        // Clean up old entries
-        $this->cleanup($windowSeconds);
-
-        // Check if currently blocked
-        $stmt = $this->pdo->prepare("
-            SELECT * FROM rate_limits
-            WHERE identifier = ? AND action = ?
-            AND blocked_until IS NOT NULL AND blocked_until > NOW()
-        ");
-        $stmt->execute([$identifier, $action]);
-        $blocked = $stmt->fetch();
-
-        if ($blocked) {
-            return [
-                'allowed' => false,
-                'remaining' => 0,
-                'reset_at' => $blocked['blocked_until'],
-                'retry_after' => strtotime($blocked['blocked_until']) - time()
-            ];
-        }
-
-        // Get current attempts within window
-        $stmt = $this->pdo->prepare("
-            SELECT * FROM rate_limits
-            WHERE identifier = ? AND action = ?
-            AND last_attempt > DATE_SUB(NOW(), INTERVAL ? SECOND)
-        ");
-        $stmt->execute([$identifier, $action, $windowSeconds]);
-        $record = $stmt->fetch();
-
-        if (!$record) {
-            // First attempt
-            $stmt = $this->pdo->prepare("
-                INSERT INTO rate_limits (identifier, action, attempts, first_attempt, last_attempt)
-                VALUES (?, ?, 1, NOW(), NOW())
-                ON DUPLICATE KEY UPDATE
-                attempts = 1, first_attempt = NOW(), last_attempt = NOW()
-            ");
-            $stmt->execute([$identifier, $action]);
-
-            return [
-                'allowed' => true,
-                'remaining' => $maxAttempts - 1,
-                'reset_at' => time() + $windowSeconds
-            ];
-        }
-
-        // Increment attempts
-        $attempts = $record['attempts'] + 1;
-
-        if ($attempts > $maxAttempts) {
-            // Block the user
-            $blockedUntil = date(Constants::DISPLAY_DATE_FORMAT, time() + $blockSeconds);
-            $stmt = $this->pdo->prepare("
-                UPDATE rate_limits
-                SET attempts = ?, last_attempt = NOW(), blocked_until = ?
-                WHERE identifier = ? AND action = ?
-            ");
-            $stmt->execute([$attempts, $blockedUntil, $identifier, $action]);
-
-            return [
-                'allowed' => false,
-                'remaining' => 0,
-                'reset_at' => $blockedUntil,
-                'retry_after' => $blockSeconds
-            ];
-        }
-
-        // Update attempts
-        $stmt = $this->pdo->prepare("
-            UPDATE rate_limits
-            SET attempts = ?, last_attempt = NOW()
-            WHERE identifier = ? AND action = ?
-        ");
-        $stmt->execute([$attempts, $identifier, $action]);
-
-        return [
-            'allowed' => true,
-            'remaining' => $maxAttempts - $attempts,
-            'reset_at' => strtotime($record['first_attempt']) + $windowSeconds
-        ];
+        return $this->service->checkLimit($identifier, $action, $maxAttempts, $windowSeconds, $blockSeconds);
     }
 
     /**
@@ -150,35 +81,7 @@ class RateLimiter {
      * @param string $action Action being performed
      */
     public function reset($identifier, $action) {
-        $stmt = $this->pdo->prepare("
-            DELETE FROM rate_limits
-            WHERE identifier = ? AND action = ?
-        ");
-        $stmt->execute([$identifier, $action]);
-    }
-
-    /**
-     * Clean up old rate limit records
-     *
-     * @param int $olderThanSeconds Remove records older than this
-     */
-    private function cleanup($olderThanSeconds = 3600) {
-        try {
-            $stmt = $this->pdo->prepare("
-                DELETE FROM rate_limits
-                WHERE last_attempt < DATE_SUB(NOW(), INTERVAL ? SECOND)
-                AND (blocked_until IS NULL OR blocked_until < NOW())
-            ");
-            $stmt->execute([$olderThanSeconds]);
-        } catch (PDOException $e) {
-            if (class_exists('SecureLogger')) {
-                SecureLogger::warning("Rate limit cleanup failed", [
-                    'error' => $e->getMessage()
-                ]);
-            } else {
-                error_log("Rate limit cleanup failed: " . $e->getMessage());
-            }
-        }
+        $this->service->reset($identifier, $action);
     }
 
     /**
@@ -187,17 +90,7 @@ class RateLimiter {
      * @return string IP address
      */
     public static function getClientIp() {
-        $ipKeys = ['HTTP_CF_CONNECTING_IP', 'HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'];
-        foreach ($ipKeys as $key) {
-            if (array_key_exists($key, $_SERVER) === true) {
-                $ip = $_SERVER[$key];
-                if (strpos($ip, ',') !== false) {
-                    $ip = explode(',', $ip)[0];
-                }
-                return trim($ip);
-            }
-        }
-        return '0.0.0.0';
+        return RateLimiterService::getClientIp();
     }
 
     /**
@@ -208,28 +101,6 @@ class RateLimiter {
      * @return bool True if allowed, sends HTTP 429 and returns false if blocked
      */
     public function enforce($action, $limits = ['max' => 10, 'window' => 60, 'block' => 300]) {
-        $ip = self::getClientIp();
-        $result = $this->checkLimit($ip, $action, $limits['max'], $limits['window'], $limits['block']);
-
-        if (!$result['allowed']) {
-            http_response_code(Constants::HTTP_TOO_MANY_REQUESTS);
-            header('Retry-After: ' . $result['retry_after']);
-            header('X-RateLimit-Limit: ' . $limits['max']);
-            header('X-RateLimit-Remaining: 0');
-            header('X-RateLimit-Reset: ' . $result['reset_at']);
-
-            echo json_encode([
-                'error' => 'Too many requests',
-                'retry_after' => $result['retry_after']
-            ]);
-            exit;
-        }
-
-        // Add rate limit headers
-        header('X-RateLimit-Limit: ' . $limits['max']);
-        header('X-RateLimit-Remaining: ' . $result['remaining']);
-        header('X-RateLimit-Reset: ' . $result['reset_at']);
-
-        return true;
+        return $this->service->enforce($action, $limits);
     }
 }
