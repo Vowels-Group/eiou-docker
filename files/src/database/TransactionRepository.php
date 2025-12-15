@@ -1189,6 +1189,31 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Get transactions that are in progress (not completed/rejected/cancelled)
+     * Returns transactions with status: pending, sent, accepted (but not yet confirmed)
+     *
+     * @param int $limit Maximum number of transactions to retrieve
+     * @return array Array of in-progress transactions
+     */
+    public function getInProgressTransactions(int $limit = 10): array {
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE status IN ('pending', 'sent', 'accepted')
+                  ORDER BY timestamp DESC
+                  LIMIT :limit";
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve in-progress transactions", $e);
+            return [];
+        }
+    }
+
+    /**
      * Update transaction status
      *
      * @param string $identifier Transaction memo or txid

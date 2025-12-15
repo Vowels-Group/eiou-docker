@@ -4,11 +4,58 @@
 <div id="transactions" class="transactions-section fade-in-up">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
         <h2><i class="fas fa-history"></i> Recent Transactions</h2>
-        <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-            <i class="fas fa-sync-alt"></i> Refresh
-        </a>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span id="tx-auto-refresh-status" class="tx-refresh-indicator" title="Auto-refresh active when transactions are in progress">
+                <i class="fas fa-sync-alt"></i>
+            </span>
+            <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </a>
+        </div>
     </div>
-    <div class="transactions-list">
+
+    <!-- In-Progress Transactions Banner (within section) -->
+    <?php if (!empty($inProgressTransactions)): ?>
+    <div class="tx-in-progress-section" id="tx-in-progress-list">
+        <div class="tx-in-progress-header">
+            <i class="fas fa-spinner fa-spin"></i> In-Progress Transactions
+            <span class="tx-in-progress-count"><?php echo count($inProgressTransactions); ?></span>
+        </div>
+        <?php foreach ($inProgressTransactions as $ipTx): ?>
+            <div class="tx-in-progress-item" data-txid="<?php echo htmlspecialchars($ipTx['txid']); ?>" data-status="<?php echo htmlspecialchars($ipTx['status']); ?>">
+                <div class="tx-in-progress-info">
+                    <div class="tx-in-progress-counterparty">
+                        <?php
+                        $ipType = ($ipTx['sender_address'] === ($user->getHttpAddress() ?? '') || $ipTx['sender_address'] === ($user->getTorAddress() ?? '')) ? 'sent' : 'received';
+                        $ipCounterparty = $ipType === 'sent' ? ($ipTx['receiver_address'] ?? 'Unknown') : ($ipTx['sender_address'] ?? 'Unknown');
+                        echo $ipType === 'sent' ? 'Sending to' : 'Receiving from';
+                        ?> <span class="monospace"><?php echo htmlspecialchars(substr($ipCounterparty, 0, 30) . (strlen($ipCounterparty) > 30 ? '...' : '')); ?></span>
+                    </div>
+                    <div class="tx-in-progress-status">
+                        <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($ipTx['status']); ?>">
+                            <?php if ($ipTx['status'] === 'pending'): ?>
+                                <i class="fas fa-hourglass-half"></i>
+                            <?php elseif ($ipTx['status'] === 'sent'): ?>
+                                <i class="fas fa-paper-plane"></i>
+                            <?php elseif ($ipTx['status'] === 'accepted'): ?>
+                                <i class="fas fa-check"></i>
+                            <?php endif; ?>
+                            <?php echo ucfirst(htmlspecialchars($ipTx['status'])); ?>
+                        </span>
+                        <?php if ($ipTx['memo'] !== 'standard'): ?>
+                            <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="tx-in-progress-amount <?php echo $ipType === 'sent' ? 'amount-sent' : 'amount-received'; ?>">
+                    <?php echo ($ipType === 'sent' ? '-' : '+'); ?>$<?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <div class="transactions-list" id="transaction-list">
         <?php if (empty($transactions)): ?>
             <div class="empty-state">
                 <i class="fas fa-receipt"></i>
@@ -17,13 +64,26 @@
             </div>
         <?php else: ?>
             <?php foreach ($transactions as $index => $tx): ?>
-                <div class="transaction-item" style="cursor: pointer;" onclick="openTransactionModal(<?php echo $index; ?>)" title="Click for details">
+                <div class="transaction-item <?php echo ($tx['status'] !== 'completed' && $tx['status'] !== 'rejected' && $tx['status'] !== 'cancelled') ? 'tx-item-in-progress' : ''; ?>" style="cursor: pointer;" onclick="openTransactionModal(<?php echo $index; ?>)" title="Click for details" data-txid="<?php echo htmlspecialchars($tx['txid'] ?? ''); ?>">
                     <div class="transaction-info">
                         <div>
                             <strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars($tx['counterparty']); ?></strong>
-                            <?php if ($tx['status'] !== 'completed'): ?>
-                                <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($tx['status']); ?>"><?php echo ucfirst(htmlspecialchars($tx['status'])); ?></span>
-                            <?php endif; ?>
+                            <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($tx['status']); ?>">
+                                <?php if ($tx['status'] === 'pending'): ?>
+                                    <i class="fas fa-hourglass-half"></i>
+                                <?php elseif ($tx['status'] === 'sent'): ?>
+                                    <i class="fas fa-paper-plane"></i>
+                                <?php elseif ($tx['status'] === 'accepted'): ?>
+                                    <i class="fas fa-check"></i>
+                                <?php elseif ($tx['status'] === 'completed'): ?>
+                                    <i class="fas fa-check-double"></i>
+                                <?php elseif ($tx['status'] === 'rejected'): ?>
+                                    <i class="fas fa-times"></i>
+                                <?php elseif ($tx['status'] === 'cancelled'): ?>
+                                    <i class="fas fa-ban"></i>
+                                <?php endif; ?>
+                                <?php echo ucfirst(htmlspecialchars($tx['status'])); ?>
+                            </span>
                         </div>
                         <div style="font-size: 0.9rem; color: #6c757d;">
                             <?php echo $tx['date']; ?>
@@ -79,4 +139,61 @@
             'previous_txid' => $tx['previous_txid'] ?? ''
         ];
     }, $transactions ?? [])); ?>;
+
+    // Auto-refresh for in-progress transactions
+    var hasInProgressTx = <?php echo !empty($inProgressTransactions) ? 'true' : 'false'; ?>;
+    var autoRefreshInterval = null;
+    var AUTO_REFRESH_DELAY = 15000; // 15 seconds
+
+    function startAutoRefresh() {
+        if (hasInProgressTx && !autoRefreshInterval) {
+            var indicator = document.getElementById('tx-auto-refresh-status');
+            if (indicator) indicator.classList.add('active');
+
+            autoRefreshInterval = setInterval(function() {
+                // Use existing check_updates mechanism
+                fetch(window.location.pathname + '?check_updates=1&_=' + Date.now())
+                    .then(function(response) {
+                        if (response.ok) {
+                            // Reload page to get updated transaction status
+                            window.location.reload();
+                        }
+                    })
+                    .catch(function(err) {
+                        console.log('Auto-refresh check failed:', err);
+                    });
+            }, AUTO_REFRESH_DELAY);
+        }
+    }
+
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+            var indicator = document.getElementById('tx-auto-refresh-status');
+            if (indicator) indicator.classList.remove('active');
+        }
+    }
+
+    // Start auto-refresh when page loads if there are in-progress transactions
+    document.addEventListener('DOMContentLoaded', function() {
+        if (hasInProgressTx) {
+            startAutoRefresh();
+
+            // Show toast notification about in-progress transactions
+            if (typeof showToast === 'function') {
+                var inProgressCount = document.querySelectorAll('.tx-in-progress-item').length;
+                if (inProgressCount > 0) {
+                    showToast(
+                        'Transactions In Progress',
+                        inProgressCount + ' transaction' + (inProgressCount > 1 ? 's are' : ' is') + ' being processed. Page will refresh automatically.',
+                        'info'
+                    );
+                }
+            }
+        }
+    });
+
+    // Stop auto-refresh when leaving page
+    window.addEventListener('beforeunload', stopAutoRefresh);
 </script>
