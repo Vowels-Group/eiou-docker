@@ -24,12 +24,7 @@
                     </div>
                     <div class="contact-info">
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
-                        <div class="contact-badges">
-                            <?php if (!empty($contact['contact_id'])): ?>
-                                <span class="badge badge-id" title="Contact ID: <?php echo htmlspecialchars($contact['contact_id']); ?>">ID: <?php echo htmlspecialchars(substr($contact['contact_id'], 0, 8)); ?>...</span>
-                            <?php endif; ?>
-                            <span style="background: lightgreen; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Accepted</span>
-                        </div>
+                        <span style="background: lightgreen; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Accepted</span>
                         <div class="contact-details">
                             <?php
                             // Display up to 2 addresses dynamically
@@ -83,12 +78,7 @@
                     </div>
                     <div class="contact-info">
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
-                        <div class="contact-badges">
-                            <?php if (!empty($contact['contact_id'])): ?>
-                                <span class="badge badge-id" title="Contact ID: <?php echo htmlspecialchars($contact['contact_id']); ?>">ID: <?php echo htmlspecialchars(substr($contact['contact_id'], 0, 8)); ?>...</span>
-                            <?php endif; ?>
-                            <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending Response</span>
-                        </div>
+                        <span style="background: #ffc107; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Pending Response</span>
                         <div class="contact-details">
                             <?php
                             // Display up to 2 addresses dynamically
@@ -125,12 +115,7 @@
                     </div>
                     <div class="contact-info">
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name'] ?? "-"); ?></div>
-                        <div class="contact-badges">
-                            <?php if (!empty($contact['contact_id'])): ?>
-                                <span class="badge badge-id" title="Contact ID: <?php echo htmlspecialchars($contact['contact_id']); ?>">ID: <?php echo htmlspecialchars(substr($contact['contact_id'], 0, 8)); ?>...</span>
-                            <?php endif; ?>
-                            <span style="background: red; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Blocked</span>
-                        </div>
+                        <span style="background: red; color: #212529; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">Blocked</span>
                         <div class="contact-details">
                             <?php
                             // Display up to 2 addresses dynamically
