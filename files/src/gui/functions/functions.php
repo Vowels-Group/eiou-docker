@@ -14,6 +14,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if (in_array($action, ['sendEIOU'])) {
         $transactionController->routeAction();
     }
+
+    // Settings actions
+    if (in_array($action, ['updateSettings'])) {
+        $settingsController->routeAction();
+    }
 }
 
 // Handle GET requests for update checking
