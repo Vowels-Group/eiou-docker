@@ -77,7 +77,7 @@ class DebugRepository extends AbstractRepository {
             return [];
         }
 
-        $query = "SELECT * FROM {$this->tableName} ORDER BY created_at DESC LIMIT :limit";
+        $query = "SELECT * FROM {$this->tableName} ORDER BY timestamp DESC LIMIT :limit";
         $stmt = $this->pdo->prepare($query);
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
 
