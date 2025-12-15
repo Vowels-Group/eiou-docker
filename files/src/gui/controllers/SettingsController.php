@@ -161,6 +161,98 @@ class SettingsController
     }
 
     /**
+     * Handle clear debug logs action
+     *
+     * @return void
+     */
+    public function handleClearDebugLogs(): void
+    {
+        // CSRF Protection
+        $this->session->verifyCSRFToken();
+
+        try {
+            require_once __DIR__ . '/../../database/DebugRepository.php';
+            $debugRepo = new DebugRepository();
+
+            if ($debugRepo->clearDebugEntries()) {
+                MessageHelper::redirectMessage('Debug logs cleared successfully', 'success');
+            } else {
+                MessageHelper::redirectMessage('Failed to clear debug logs', 'error');
+            }
+        } catch (Exception $e) {
+            MessageHelper::redirectMessage('Error clearing logs: ' . $e->getMessage(), 'error');
+        }
+    }
+
+    /**
+     * Handle send debug report action
+     *
+     * @return void
+     */
+    public function handleSendDebugReport(): void
+    {
+        // CSRF Protection
+        $this->session->verifyCSRFToken();
+
+        require_once __DIR__ . '/../../utils/Security.php';
+
+        $description = Security::sanitizeInput($_POST['description'] ?? '');
+
+        try {
+            // Collect all debug information
+            require_once __DIR__ . '/../../database/DebugRepository.php';
+            $debugRepo = new DebugRepository();
+            $debugEntries = $debugRepo->getRecentDebugEntries(100);
+
+            // Collect system info
+            $systemInfo = [
+                'php_version' => phpversion(),
+                'sapi' => php_sapi_name(),
+                'os' => PHP_OS,
+                'memory_limit' => ini_get('memory_limit'),
+                'max_execution_time' => ini_get('max_execution_time'),
+                'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'N/A',
+                'timestamp' => date('Y-m-d H:i:s')
+            ];
+
+            // Collect PHP error log (last 50 lines)
+            $phpLogContent = '';
+            $phpLogPaths = ['/var/log/php_errors.log', '/var/log/eiou/eiou-php-error.log'];
+            foreach ($phpLogPaths as $logPath) {
+                if (file_exists($logPath) && is_readable($logPath)) {
+                    $phpLogContent = shell_exec("tail -50 " . escapeshellarg($logPath));
+                    break;
+                }
+            }
+
+            // Collect Apache error log (last 50 lines)
+            $apacheLogContent = '';
+            $apacheLogPath = '/var/log/apache2/error.log';
+            if (file_exists($apacheLogPath) && is_readable($apacheLogPath)) {
+                $apacheLogContent = shell_exec("tail -50 " . escapeshellarg($apacheLogPath));
+            }
+
+            // Build report
+            $report = [
+                'description' => $description,
+                'system_info' => $systemInfo,
+                'debug_entries' => $debugEntries,
+                'php_errors' => $phpLogContent,
+                'apache_errors' => $apacheLogContent
+            ];
+
+            // For now, save the report to a file (email integration would be added later)
+            $reportPath = '/tmp/eiou-debug-report-' . date('YmdHis') . '.json';
+            file_put_contents($reportPath, json_encode($report, JSON_PRETTY_PRINT));
+
+            MessageHelper::redirectMessage('Debug report saved to ' . $reportPath . '. Email functionality coming soon.', 'success');
+
+        } catch (Exception $e) {
+            MessageHelper::redirectMessage('Failed to generate debug report: ' . $e->getMessage(), 'error');
+        }
+    }
+
+    /**
      * Route POST actions to appropriate handlers
      *
      * @return void
@@ -172,6 +264,12 @@ class SettingsController
         switch ($action) {
             case 'updateSettings':
                 $this->handleUpdateSettings();
+                break;
+            case 'clearDebugLogs':
+                $this->handleClearDebugLogs();
+                break;
+            case 'sendDebugReport':
+                $this->handleSendDebugReport();
                 break;
             default:
                 MessageHelper::redirectMessage('Unknown settings action', 'error');

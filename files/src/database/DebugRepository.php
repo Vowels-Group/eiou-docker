@@ -65,4 +65,67 @@ class DebugRepository extends AbstractRepository {
             $this->logError($originalMessage);
         }
     }
+
+    /**
+     * Get recent debug entries
+     *
+     * @param int $limit Number of entries to retrieve
+     * @return array
+     */
+    public function getRecentDebugEntries(int $limit = 100): array {
+        if (!$this->getPdo()) {
+            return [];
+        }
+
+        $query = "SELECT * FROM {$this->tableName} ORDER BY timestamp DESC LIMIT :limit";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to fetch debug entries: ", $e);
+            return [];
+        }
+    }
+
+    /**
+     * Clear all debug entries
+     *
+     * @return bool
+     */
+    public function clearDebugEntries(): bool {
+        if (!$this->getPdo()) {
+            return false;
+        }
+
+        $query = "DELETE FROM {$this->tableName}";
+        try {
+            $this->pdo->exec($query);
+            return true;
+        } catch (PDOException $e) {
+            $this->logError("Failed to clear debug entries: ", $e);
+            return false;
+        }
+    }
+
+    /**
+     * Get debug entry count
+     *
+     * @return int
+     */
+    public function getDebugEntryCount(): int {
+        if (!$this->getPdo()) {
+            return 0;
+        }
+
+        $query = "SELECT COUNT(*) FROM {$this->tableName}";
+        try {
+            return (int) $this->pdo->query($query)->fetchColumn();
+        } catch (PDOException $e) {
+            $this->logError("Failed to count debug entries: ", $e);
+            return 0;
+        }
+    }
 }
