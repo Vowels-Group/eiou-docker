@@ -27,7 +27,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
 
     # Get initial balance of recipient
     initialBalance=$(docker exec ${containerKeys[1]} php -r "
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
         \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'${testCurrency}');
@@ -40,7 +40,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Wait for balance change with polling (faster than fixed sleep)
     echo -e "\t   Waiting for balance change (timeout: 20s)..."
     balance_cmd="php -r \"
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         \\\$app = Application::getInstance();
         \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
         \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'${testCurrency}');
@@ -70,7 +70,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
 
     # Get initial balance of httpD
     initialBalanceD=$(docker exec httpD php -r "
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
         \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
@@ -83,7 +83,7 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     # Wait for balance change with polling (multi-hop may take longer)
     echo -e "\t   Waiting for multi-hop routing (timeout: 30s)..."
     balance_cmd_d="php -r \"
-        require_once('./etc/eiou/src/core/Application.php');
+        require_once('${REL_APPLICATION}');
         \\\$app = Application::getInstance();
         \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
         \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
