@@ -10,6 +10,7 @@
  */
 
 require_once __DIR__ . '/CliJsonResponse.php';
+require_once __DIR__ . '/../core/ErrorCodes.php';
 require_once __DIR__ . '/../utils/SecureLogger.php';
 
 class CliOutputManager
@@ -161,20 +162,23 @@ class CliOutputManager
      */
     public function error(
         string $message,
-        string $code = 'GENERAL_ERROR',
-        int $status = 400,
+        string $code = ErrorCodes::GENERAL_ERROR,
+        ?int $status = null,
         array $additionalData = []
     ): void {
+        // Auto-detect HTTP status if not provided
+        $httpStatus = $status ?? ErrorCodes::getHttpStatus($code);
+
         // Log the error to the log file
         SecureLogger::error($message, [
-            'error_code' => $code,
-            'status' => $status,
+            'code' => $code,
+            'status' => $httpStatus,
             'additional_data' => $additionalData,
             'command' => $this->command
         ]);
 
         if ($this->jsonMode) {
-            echo $this->jsonResponse->error($message, $code, $status, $additionalData) . "\n";
+            echo $this->jsonResponse->error($message, $code, $httpStatus, $additionalData) . "\n";
         } else {
             echo "Error: " . $message . "\n";
         }
@@ -190,7 +194,7 @@ class CliOutputManager
     {
         // Log the validation error to the log file
         SecureLogger::error("Validation error: $message", [
-            'error_code' => 'VALIDATION_ERROR',
+            'code' => ErrorCodes::VALIDATION_ERROR,
             'field' => $field,
             'command' => $this->command
         ]);
