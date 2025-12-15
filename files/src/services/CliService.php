@@ -138,7 +138,7 @@ class CliService {
                 $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'p2pexpiration'){
                 $key = 'p2pExpiration';
-                $validation = InputValidator::validateTimestamp($argv[3]);
+                $validation = InputValidator::validatePositiveInteger($argv[3], Constants::P2P_MIN_EXPIRATION_SECONDS);
                 if (!$validation['valid']) {
                     $output->validationError('p2pExpiration', $validation['error']);
                     return;
@@ -268,9 +268,9 @@ class CliService {
                     break;
 
                 case '7':
-                    echo "Enter new peer to peer expiration (in seconds): ";
+                    echo "Enter new peer to peer expiration (in seconds, minimum " . Constants::P2P_MIN_EXPIRATION_SECONDS . "): ";
                     $key = 'p2pExpiration';
-                    $validation = InputValidator::validateTimestamp(trim(fgets(STDIN)));
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), Constants::P2P_MIN_EXPIRATION_SECONDS);
                     if (!$validation['valid']) {
                         echo "Error: " . $validation['error'] . "\n";
                         return;

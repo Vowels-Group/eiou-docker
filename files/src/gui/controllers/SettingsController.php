@@ -101,9 +101,9 @@ class SettingsController
             }
         }
 
-        // P2P Expiration
+        // P2P Expiration (seconds, must be positive integer >= minimum)
         if (isset($_POST['p2pExpiration'])) {
-            $validation = InputValidator::validateTimestamp($_POST['p2pExpiration']);
+            $validation = InputValidator::validatePositiveInteger($_POST['p2pExpiration'], Constants::P2P_MIN_EXPIRATION_SECONDS);
             if ($validation['valid']) {
                 $settings['p2pExpiration'] = $validation['value'];
             } else {
