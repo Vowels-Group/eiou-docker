@@ -648,6 +648,41 @@ body {
     transform: translateY(20px);
 }
 
+/* Manual Refresh Button - positioned above backToTop */
+.manual-refresh {
+    position: fixed;
+    bottom: 100px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: #198754;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.manual-refresh:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
+    background: #157347;
+}
+
+.manual-refresh:active {
+    transform: translateY(-1px);
+}
+
+.manual-refresh.spinning i {
+    animation: spin 1s linear infinite;
+}
+
 /* Smooth scrolling for the page */
 html {
     scroll-behavior: smooth;
