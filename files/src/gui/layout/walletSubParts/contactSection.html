@@ -61,10 +61,9 @@
                             <?php endif; ?>
                         </div>
                         <div class="contact-details">
-                            <div>Balance: <span class="<?php echo $contact['balance'] >= 0 ? 'balance-positive' : 'balance-negative'; ?>">
-                                <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?>
-                            </span> <?php echo $contact['currency']; ?></div>
-                            <div>Credit: <?php echo number_format($contact['credit_limit'], 2); ?> | Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
+                            <div>Balance: <?php echo ($contact['balance'] >= 0 ? '+' : '') . number_format($contact['balance'], 2); ?> <?php echo $contact['currency']; ?></div>
+                            <div>Credit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo $contact['currency']; ?></div>
+                            <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
                         </div>
                     </div>
                 </div>
@@ -110,7 +109,8 @@
                             <?php endif; ?>
                         </div>
                         <div class="contact-details">
-                            <div>Credit: <?php echo number_format($contact['credit_limit'], 2); ?> | Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
+                            <div>Credit: <?php echo number_format($contact['credit_limit'], 2); ?> <?php echo $contact['currency']; ?></div>
+                            <div>Fee: <?php echo number_format($contact['fee'], 2); ?>%</div>
                         </div>
                     </div>
                 </div>
@@ -167,7 +167,10 @@
 <div id="contactModal" class="modal" style="display: none;">
     <div class="modal-content modal-lg">
         <div class="modal-header">
-            <h3><i class="fas fa-user"></i> <span id="modal_contact_name">Contact</span></h3>
+            <div class="modal-header-content">
+                <h3><i class="fas fa-user"></i> <span id="modal_contact_name">Contact</span></h3>
+                <span id="modal_status_badge" class="badge badge-accepted">Accepted</span>
+            </div>
             <span class="close" onclick="closeContactModal()">&times;</span>
         </div>
 
@@ -186,90 +189,91 @@
 
         <!-- Info Tab -->
         <div id="info-tab" class="modal-tab-content active">
-            <div class="contact-info-section">
-                <h4><i class="fas fa-map-marker-alt"></i> Addresses</h4>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <label><i class="fas fa-globe"></i> HTTP Address</label>
-                        <div id="modal_http_address" class="info-value monospace">Not Available</div>
-                    </div>
-                    <div class="info-item">
-                        <label><i class="fas fa-user-secret"></i> Tor Address</label>
-                        <div id="modal_tor_address" class="info-value monospace">Not Available</div>
+            <div class="modal-tab-scroll">
+                <div class="contact-info-section">
+                    <h4><i class="fas fa-map-marker-alt"></i> Addresses</h4>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label><i class="fas fa-globe"></i> HTTP Address</label>
+                            <div id="modal_http_address" class="info-value monospace">Not Available</div>
+                        </div>
+                        <div class="info-item">
+                            <label><i class="fas fa-user-secret"></i> Tor Address</label>
+                            <div id="modal_tor_address" class="info-value monospace">Not Available</div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="contact-info-section">
-                <h4><i class="fas fa-key"></i> Public Key</h4>
-                <div id="modal_pubkey" class="info-value monospace pubkey-display">Not Available</div>
-            </div>
-
-            <div class="contact-info-section">
-                <h4><i class="fas fa-wallet"></i> Balance</h4>
-                <div class="balance-display">
-                    <span id="modal_balance" class="balance-amount">0.00</span>
-                    <span id="modal_balance_currency" class="balance-currency">USD</span>
+                <div class="contact-info-section">
+                    <h4><i class="fas fa-fingerprint"></i> Contact ID</h4>
+                    <div id="modal_contact_id" class="info-value monospace">Not Available</div>
                 </div>
-            </div>
 
-            <div class="contact-info-section">
-                <h4><i class="fas fa-tag"></i> Status</h4>
-                <span id="modal_status_badge" class="badge badge-accepted">Accepted</span>
-            </div>
+                <div class="contact-info-section">
+                    <h4><i class="fas fa-key"></i> Public Key</h4>
+                    <div id="modal_pubkey" class="info-value monospace pubkey-display">Not Available</div>
+                </div>
 
-            <div class="contact-info-section">
-                <h4><i class="fas fa-fingerprint"></i> Contact ID</h4>
-                <div id="modal_contact_id" class="info-value monospace">Not Available</div>
+                <div class="contact-info-section">
+                    <h4><i class="fas fa-wallet"></i> Balance</h4>
+                    <div class="balance-display">
+                        <span id="modal_balance" class="balance-amount">0.00</span>
+                        <span id="modal_balance_currency" class="balance-currency">USD</span>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Settings Tab -->
         <div id="settings-tab" class="modal-tab-content">
-            <form method="POST" id="editContactForm">
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-                <input type="hidden" name="action" value="editContact">
-                <input type="hidden" name="contact_address" id="edit_contact_address">
+            <div class="modal-tab-scroll">
+                <form method="POST" id="editContactForm">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                    <input type="hidden" name="action" value="editContact">
+                    <input type="hidden" name="contact_address" id="edit_contact_address">
 
-                <div class="form-group">
-                    <label for="edit_contact_name">Name:</label>
-                    <input type="text" id="edit_contact_name" name="contact_name" required>
-                </div>
-
-                <div class="form-row">
                     <div class="form-group">
-                        <label for="edit_contact_fee">Fee (%):</label>
-                        <input type="number" id="edit_contact_fee" name="contact_fee" step="0.1" min="0" required>
+                        <label for="edit_contact_name">Name:</label>
+                        <input type="text" id="edit_contact_name" name="contact_name" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="edit_contact_fee">Fee (%):</label>
+                            <input type="number" id="edit_contact_fee" name="contact_fee" step="0.1" min="0" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="edit_contact_credit">Credit Limit:</label>
+                            <input type="number" id="edit_contact_credit" name="contact_credit" min="0" required>
+                        </div>
                     </div>
 
                     <div class="form-group">
-                        <label for="edit_contact_credit">Credit Limit:</label>
-                        <input type="number" id="edit_contact_credit" name="contact_credit" min="0" required>
+                        <label for="edit_contact_currency">Currency:</label>
+                        <select id="edit_contact_currency" name="contact_currency" required>
+                            <option value="USD" selected>USD</option>
+                        </select>
                     </div>
-                </div>
 
-                <div class="form-group">
-                    <label for="edit_contact_currency">Currency:</label>
-                    <select id="edit_contact_currency" name="contact_currency" required>
-                        <option value="USD" selected>USD</option>
-                    </select>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Save Changes
-                    </button>
-                </div>
-            </form>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
 
         <!-- Transactions Tab -->
         <div id="transactions-tab" class="modal-tab-content">
-            <p style="color: #6c757d; margin-bottom: 1rem; font-size: 0.9rem;">
-                <i class="fas fa-info-circle"></i> Showing the <strong>last 5 transactions</strong> with this contact
-            </p>
-            <div id="modal_transactions" class="transactions-list">
-                <p class="loading-text"><i class="fas fa-spinner fa-spin"></i> Loading transactions...</p>
+            <div class="modal-tab-scroll">
+                <p style="color: #6c757d; margin-bottom: 1rem; font-size: 0.9rem;">
+                    <i class="fas fa-info-circle"></i> Showing the <strong>last 5 transactions</strong> with this contact
+                </p>
+                <div id="modal_transactions" class="transactions-list">
+                    <p class="loading-text"><i class="fas fa-spinner fa-spin"></i> Loading transactions...</p>
+                </div>
             </div>
         </div>
 
@@ -319,11 +323,11 @@ function openContactModal(contact) {
     // Set contact ID
     document.getElementById('modal_contact_id').textContent = contact.contact_id || 'Not Available';
 
-    // Set balance
+    // Set balance (no color styling)
     var balance = parseFloat(contact.balance) || 0;
     var balanceEl = document.getElementById('modal_balance');
     balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(2);
-    balanceEl.className = balance >= 0 ? 'balance-amount balance-positive' : 'balance-amount balance-negative';
+    balanceEl.className = 'balance-amount';
     document.getElementById('modal_balance_currency').textContent = contact.currency || 'USD';
 
     // Set status badge

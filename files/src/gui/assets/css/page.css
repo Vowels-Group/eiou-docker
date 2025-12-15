@@ -929,6 +929,16 @@ html {
     color: #212529;
 }
 
+.modal-header-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.modal-header-content .badge {
+    align-self: flex-start;
+}
+
 .close {
     color: #aaa;
     font-size: 28px;
@@ -1342,11 +1352,17 @@ html {
 .modal-tab-content {
     display: none;
     padding: 0 1rem 1rem;
-    min-height: 300px;
+    height: 300px;
 }
 
 .modal-tab-content.active {
     display: block;
+}
+
+.modal-tab-scroll {
+    height: 100%;
+    overflow-y: auto;
+    padding-right: 0.5rem;
 }
 
 .modal-footer {
