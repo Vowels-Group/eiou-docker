@@ -74,11 +74,11 @@ class ApiController {
         $authResult = $this->authService->authenticate($method, $path, $body, $headers);
 
         if (!$authResult['success']) {
-            $this->logRequest($authResult['error_code'] ?? 'unknown', $path, $method, 401);
+            $this->logRequest($authResult['code'] ?? 'unknown', $path, $method, 401);
             return $this->errorResponse(
                 $authResult['error'],
                 401,
-                $authResult['error_code']
+                $authResult['code']
             );
         }
 
