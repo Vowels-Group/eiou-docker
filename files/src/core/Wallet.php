@@ -36,6 +36,8 @@ class Wallet{
             'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE             // Default way to send messages (fallback in case uncertain)
         ]);
         file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);
+        chown('/etc/eiou/defaultconfig.json', 'www-data');
+        chmod('/etc/eiou/defaultconfig.json', 0600);
 
         // Generate BIP39 mnemonic seed phrase (24 words)
         $mnemonic = BIP39::generateMnemonic(24);
@@ -188,6 +190,8 @@ class Wallet{
             'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE
         ]);
         file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);
+        chown('/etc/eiou/defaultconfig.json', 'www-data');
+        chmod('/etc/eiou/defaultconfig.json', 0600);
 
         // Derive deterministic EC key pair from seed using secp256k1
         // This generates the EXACT same key pair as the original wallet
