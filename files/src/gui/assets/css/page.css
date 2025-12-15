@@ -428,6 +428,23 @@ body {
     margin-top: 2rem;
 }
 
+/* Settings Grid Layout */
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.settings-grid .form-group {
+    margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .btn {
     padding: 0.8rem 1.5rem;
     border: none;
