@@ -26,27 +26,7 @@ class RateLimiter {
      */
     public function __construct($pdo) {
         $this->pdo = $pdo;
-        $this->ensureTableExists();
         $this->initializeComponents();
-    }
-
-    /**
-     * Ensure rate_limits table exists using schema definition
-     */
-    private function ensureTableExists(): void {
-        try {
-            require_once '/etc/eiou/src/database/databaseSchema.php';
-            $sql = getRateLimitsTableSchema();
-            $this->pdo->exec($sql);
-        } catch (PDOException $e) {
-            if (class_exists('SecureLogger')) {
-                SecureLogger::error("Failed to create rate_limits table", [
-                    'error' => $e->getMessage()
-                ]);
-            } else {
-                error_log("Failed to create rate_limits table: " . $e->getMessage());
-            }
-        }
     }
 
     /**

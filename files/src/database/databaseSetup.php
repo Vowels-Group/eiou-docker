@@ -72,6 +72,7 @@ function freshInstall(){
                 $dbConn->exec(getMessageDeliveryTableSchema());
                 $dbConn->exec(getDeadLetterQueueTableSchema());
                 $dbConn->exec(getDeliveryMetricsTableSchema());
+                $dbConn->exec(getRateLimitsTableSchema());
             } catch (PDOException $tableError) {
                 if (class_exists('SecureLogger')) {
                     SecureLogger::error("Table creation failed", [
