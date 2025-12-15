@@ -1,74 +1,78 @@
 <?php
 # Copyright 2025
 
+// ============================================================================
+// CONTACT ECHO FUNCTIONS
+// ============================================================================
+
 function returnContactAccepted() {
-    return "Contact accepted successfully.\n";
+    return "[Contact] Accepted successfully.\n";
 }
 
 function returnContactAcceptanceFailed() {
-    return "Failed to accept contact.\n";
+    return "[Contact] Failed to accept.\n";
 }
 
 function returnContactAddInvalidInput() {
-    return "Invalid input. Please provide a valid address, name, fee, credit, and currency.\n" .
+    return "[Contact] Invalid input. Please provide a valid address, name, fee, credit, and currency.\n" .
            "Example command: eiou add [address] [name] [fee percent] [credit] [currency]\n";
 }
 
 function returnContactCreationSuccessful() {
-    return "Contact created successfully.\n";
+    return "[Contact] Created successfully.\n";
 }
 
 function returnContactCreationFailed() {
-    return "Failed to create contact.\n";
+    return "[Contact] Failed to create.\n";
 }
 
 function returnContactRequestAlreadyInserted() {
-    return "Warning: Contact was previously added but no response has yet been received from other user.\n" .
+    return "[Contact] Warning: Previously added but no response has yet been received from other user.\n" .
             "Trying to resync contact...\n";
 }
 
 function returnContactCreationWarning($message) {
-    return "Warning: " . $message . "\n" .
+    return "[Contact] Warning: " . $message . "\n" .
            "Contact was previously deleted and will be added again.\n";
 }
 
 function returnContactDeletedSuccesfully(){
-    return "Contact deleted successfully.\n";
+    return "[Contact] Deleted successfully.\n";
 }
 
 function returnContactDetails($data) {
     // Return contact details in a nice format
     $app = Application::getInstance();
     $currencyUtility = $app->utilityServices->getCurrencyUtility();
-    return "Contact Details:\n" .
+    return "[Contact] Details:\n" .
            "---------------\n" .
            "Http Address: " . ($data['http'] ?? 'Http address not available') . "\n" .
            "Tor Address: " . ($data['tor'] ?? 'Tor address not available'). "\n" .
            "Name: " . ($data['name'] ?? 'N/A') . "\n" .
-           "Public Key: " . "..." . substr($data['pubkey'], 51, 25) . "...\n" .              
+           "Public Key: " . "..." . substr($data['pubkey'], 51, 25) . "...\n" .
            "Fee: " .  $currencyUtility->convertCentsToDollars(($data['fee_percent'] ?? '0.00')) . "%\n" .
            "Credit Limit: " . $currencyUtility->convertCentsToDollars(($data['credit_limit'] ?? '0.00')) . "\n" .
            "Currency: " . $data['currency'] . "\n";
 }
 
 function returnContactExists() {
-    return "This contact has already been added or accepted.\n";
+    return "[Contact] Already added or accepted.\n";
 }
 
 function returnContactNotFound() {
-    return "Contact not found.\n";
+    return "[Contact] Not found.\n";
 }
 
 function returnContactNotFoundNoAction() {
-    return "Contact not found, no action taken.\n";
+    return "[Contact] Not found, no action taken.\n";
 }
 
 function returnContactUpdate() {
-    return "Contact updated successfully.\n";
+    return "[Contact] Updated successfully.\n";
 }
 
 function returnContactUpdateInvalidInput() {
-    return "Incorrect field given. Please provide a valid field to update.\n" .
+    return "[Contact] Incorrect field given. Please provide a valid field to update.\n" .
            "Example command: eiou update [type] [address/name] [(name)] [(fee)] [(credit)]\n" .
            "Valid fields include:\n" .
            "• 'name' - Update contact name (e.g., eiou update name 123abc.onion name John)\n" .
@@ -78,7 +82,7 @@ function returnContactUpdateInvalidInput() {
 }
 
 function returnContactUpdateInvalidInputParameters() {
-    return "Incorrect amount of parameters given. Please provide a valid field & corresponding parameter amount to update.\n" .
+    return "[Contact] Incorrect amount of parameters given. Please provide a valid field & corresponding parameter amount to update.\n" .
            "Example command: eiou update [type] [address/name] [(name)] [(fee)] [(credit)]\n" .
            "Valid fields & parameter amounts include:\n" .
            "• 'name' - Update contact name -> 1 parameter (e.g., eiou update name 123abc.onion name John)\n" .
@@ -88,100 +92,113 @@ function returnContactUpdateInvalidInputParameters() {
 }
 
 function returnContactReadInvalidInput() {
-    return "Invalid input. Example command: eiou viewcontact [address/name]\n";       
+    return "[Contact] Invalid input. Example command: eiou viewcontact [address/name]\n";
 }
 
 function returnContactRejected($data) {
-    return "Contact creation was not accepted by the recipient ". print_r($data, TRUE) . "\n";
+    return "[Contact] Creation was not accepted by the recipient ". print_r($data, TRUE) . "\n";
 }
 
 function returnContactSearchNoResults() {
-    return "No contacts found matching your search.\n";
+    return "[Contact] No contacts found matching your search.\n";
 }
 
 function returnContactSearchResults ($data) {
     // Return contact information in a nice format
-    return "Search Results:\n" .
+    return "[Contact] Search Results:\n" .
             "--------------------------------------------\n" .
-            str_pad("Http address", 56, ' ') . " | " . 
-            str_pad("Tor address", 56, ' ') . " | " . 
-            str_pad("Name", 20, ' ') . " | " . 
-            str_pad("Fee %", 10, ' ') . " | " . 
-            str_pad("Credit Limit", 15, ' ') . " | " . 
+            str_pad("Http address", 56, ' ') . " | " .
+            str_pad("Tor address", 56, ' ') . " | " .
+            str_pad("Name", 20, ' ') . " | " .
+            str_pad("Fee %", 10, ' ') . " | " .
+            str_pad("Credit Limit", 15, ' ') . " | " .
             "Currency\n" .
             "--------------------------------------------\n" .
             implode("\n", array_map(function($contact) {
-                return str_pad($contact['http'] ?? '', 56, ' ') . " | " . 
-                        str_pad($contact['tor'] ?? '', 56, ' ') . " | " . 
-                        str_pad($contact['name'] ?? 'N/A', 20, ' ') . " | " . 
-                        str_pad(($contact['fee_percent'] !== null ? Application::getInstance()->utilityServices->getCurrencyUtility()->convertCentsToDollars($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " . 
-                        str_pad(($contact['credit_limit'] !== null ? Application::getInstance()->utilityServices->getCurrencyUtility()->convertCentsToDollars($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " . 
+                return str_pad($contact['http'] ?? '', 56, ' ') . " | " .
+                        str_pad($contact['tor'] ?? '', 56, ' ') . " | " .
+                        str_pad($contact['name'] ?? 'N/A', 20, ' ') . " | " .
+                        str_pad(($contact['fee_percent'] !== null ? Application::getInstance()->utilityServices->getCurrencyUtility()->convertCentsToDollars($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " .
+                        str_pad(($contact['credit_limit'] !== null ? Application::getInstance()->utilityServices->getCurrencyUtility()->convertCentsToDollars($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " .
                         ($contact['currency'] ?? 'N/A');
             }, $data)) . "\n" .
             "--------------------------------------------\n" .
             "Total contacts found: " . count($data) ."\n";
 }
 
+// ============================================================================
+// WALLET ECHO FUNCTIONS
+// ============================================================================
+
+function returnNoWalletExists(){
+    return "[Wallet] No wallet found. Please generate a new wallet by running 'eiou generate' or restore an existing wallet by running 'eiou restore'.\n";
+}
+
+function returnOverwritingExistingWallet(){
+    return "[Wallet] Will now be overwritten...\n";
+}
+
+function returnOverwritingExistingWalletCancelled(){
+    return "[Wallet] Will not be overwritten.\n";
+}
+
+function returnUserInputRequestOverwritingWallet(){
+    return "[Wallet] A wallet already exists, do you want to overwrite the existing wallet?\n" .
+           "\tWARNING: this act is irreversible!\n" .
+           "\tenter 'y' to continue overwriting, anything else to abort.\n";
+}
+
+function returnWalletAlreadyExists(){
+    return "[Wallet] Already exists";
+}
+
+function returnWalletUpdatedSuccesfully($key){
+    return "[Wallet] " . $key ." updated successfully.\n";;
+}
+
+// ============================================================================
+// SYSTEM ECHO FUNCTIONS
+// ============================================================================
+
 function returnHostnameSaved($hostname){
-    return "Hostname saved: " . $hostname . "\n";
+    return "[System] Hostname saved: " . $hostname . "\n";
 }
 
 function returnInstanceAlreadyRunning(){
-    return "Another instance is already running.\n";
+    return "[System] Another instance is already running.\n";
 }
 
+function returnInvalidHostnameFormat(){
+    return "[System] Invalid hostname format. Please provide a valid URL.\n";
+}
+
+function returnLockfileCreation($lockfile,$pid){
+    return "[System] Created lockfile at $lockfile with PID $pid\n";
+}
+
+function returnTorSaved($toraddress){
+    return "[System] Tor saved: " . $toraddress . "\n";
+}
+
+// ============================================================================
+// TRANSACTION ECHO FUNCTIONS
+// ============================================================================
+
 function returnInvalidSendRequest(){
-    return "Incorrect usage. Please use the following format:\n" .
+    return "[Transaction] Incorrect usage. Please use the following format:\n" .
            "eiou send [recipient] [amount] [optional: currency]\n" .
            "Example: eiou send Bob 50\n" .
            "Example: eiou send 123abc.onion 100 USD\n";
 }
 
 function returnInvalidAmountSendRequest(){
-    return "Invalid amount. Please enter a positive number.\n";
-}
-function returnInvalidHostnameFormat(){
-    return "Invalid hostname format. Please provide a valid URL.\n";
+    return "[Transaction] Invalid amount. Please enter a positive number.\n";
 }
 
 function returnInvalidCurrencySendRequest(){
-    return "Invalid currency. Please use a 3-letter currency code (e.g., USD).\n";
-}
-
-function returnLockfileCreation($lockfile,$pid){
-    return "Created lockfile at $lockfile with PID $pid\n";
+    return "[Transaction] Invalid currency. Please use a 3-letter currency code (e.g., USD).\n";
 }
 
 function returnNotProvidedCurrencySendRequest(){
-    return "Currency not provided. Please provide a 3-letter currency code (e.g., USD).\n";
-}
-
-function returnNoWalletExists(){
-    return "No wallet found. Please generate a new wallet by running 'eiou generate' or restore an existing wallet by running 'eiou restore'.\n";
-}
-
-function returnOverwritingExistingWallet(){
-    return "Wallet will now be overwritten...\n";
-}
-
-function returnOverwritingExistingWalletCancelled(){
-    return "Wallet will not be overwritten.\n";
-}
-
-function returnTorSaved($toraddress){
-    return "Tor saved: " . $toraddress . "\n";
-}
-
-function returnUserInputRequestOverwritingWallet(){
-    return "A wallet already exists, do you want to overwrite the existing wallet?\n" .
-           "\tWARNING: this act is irreversible!\n" .
-           "\tenter 'y' to continue overwriting, anything else to abort.\n";
-}
-
-function returnWalletAlreadyExists(){
-    return "Wallet already exists";
-}
-
-function returnWalletUpdatedSuccesfully($key){
-    return "Wallet " . $key ." updated successfully.\n";;
+    return "[Transaction] Currency not provided. Please provide a 3-letter currency code (e.g., USD).\n";
 }
