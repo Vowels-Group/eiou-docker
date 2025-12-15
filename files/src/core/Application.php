@@ -268,16 +268,12 @@ class Application {
     }
 
     /**
-     * Get rate limiter instance
+     * Get rate limiter service instance
      *
-     * @return RateLimiter
+     * @return RateLimiterService
      */
-    public function getRateLimiter(): RateLimiter {
-        if (!isset($this->utils['rateLimiter'])) {
-            require_once $this->getRootPath() . '/src/utils/RateLimiter.php';
-            $this->utils['rateLimiter'] = new RateLimiter($this->pdo);
-        }
-        return $this->utils['rateLimiter'];
+    public function getRateLimiter(): RateLimiterService {
+        return $this->services->getRateLimiterService();
     }
 
     /**

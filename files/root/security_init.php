@@ -12,7 +12,8 @@ require_once __DIR__ . '/src/core/ErrorHandler.php';
 
 // Load security classes
 require_once __DIR__ . '/src/utils/Security.php';
-require_once __DIR__ . '/src/utils/RateLimiter.php';
+require_once __DIR__ . '/src/database/RateLimiterRepository.php';
+require_once __DIR__ . '/src/services/RateLimiterService.php';
 require_once __DIR__ . '/src/utils/SecureLogger.php';
 
 // Initialize secure logging
@@ -51,7 +52,8 @@ if (php_sapi_name() !== 'cli') {
 
     // Initialize rate limiting (requires PDO connection)
     if (isset($pdo) && $pdo instanceof PDO) {
-        $rateLimiter = new RateLimiter($pdo);
+        $rateLimiterRepository = new RateLimiterRepository($pdo);
+        $rateLimiterService = new RateLimiterService($rateLimiterRepository);
 
         // Define rate limits for different actions
         $rateLimits = [
@@ -83,7 +85,7 @@ if (php_sapi_name() !== 'cli') {
         }
 
         // Enforce rate limit
-        $rateLimiter->enforce($action, $rateLimits[$action]);
+        $rateLimiterService->enforce($action, $rateLimits[$action]);
     }
 }
 
@@ -108,6 +110,6 @@ function u($string) {
 // Log application start
 SecureLogger::info("Application initialized", [
     'sapi' => php_sapi_name(),
-    'ip' => php_sapi_name() !== 'cli' ? RateLimiter::getClientIp() : 'CLI',
+    'ip' => php_sapi_name() !== 'cli' ? RateLimiterService::getClientIp() : 'CLI',
     'request_uri' => $_SERVER['REQUEST_URI'] ?? 'N/A'
 ]);
