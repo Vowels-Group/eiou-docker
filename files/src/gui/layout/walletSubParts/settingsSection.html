@@ -12,11 +12,7 @@
             <div class="form-group">
                 <label for="defaultCurrency">Default Currency:</label>
                 <select id="defaultCurrency" name="defaultCurrency" class="default-value">
-                    <option value="USD" <?php echo ($user->getDefaultCurrency() === 'USD') ? 'selected' : ''; ?>>USD</option>
-                    <option value="EUR" <?php echo ($user->getDefaultCurrency() === 'EUR') ? 'selected' : ''; ?>>EUR</option>
-                    <option value="GBP" <?php echo ($user->getDefaultCurrency() === 'GBP') ? 'selected' : ''; ?>>GBP</option>
-                    <option value="CAD" <?php echo ($user->getDefaultCurrency() === 'CAD') ? 'selected' : ''; ?>>CAD</option>
-                    <option value="AUD" <?php echo ($user->getDefaultCurrency() === 'AUD') ? 'selected' : ''; ?>>AUD</option>
+                    <option value="USD" selected>USD</option>
                 </select>
                 <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                     <i class="fas fa-info-circle"></i>
@@ -67,20 +63,20 @@
             <!-- Max P2P Level -->
             <div class="form-group">
                 <label for="maxP2pLevel">Max P2P Routing Level:</label>
-                <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="10" class="default-value">
+                <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo Constants::P2P_MAX_ROUTING_LEVEL; ?>" class="default-value">
                 <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                     <i class="fas fa-info-circle"></i>
-                    Maximum number of hops for P2P routing (1-10)
+                    Maximum number of hops for P2P routing (1-<?php echo Constants::P2P_MAX_ROUTING_LEVEL; ?>)
                 </small>
             </div>
 
             <!-- P2P Expiration -->
             <div class="form-group">
                 <label for="p2pExpiration">P2P Request Expiration (seconds):</label>
-                <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="30" class="default-value">
+                <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="<?php echo Constants::P2P_MIN_EXPIRATION_SECONDS; ?>" class="default-value">
                 <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                     <i class="fas fa-info-circle"></i>
-                    How long P2P routing requests remain valid
+                    How long P2P routing requests remain valid (minimum <?php echo Constants::P2P_MIN_EXPIRATION_SECONDS; ?> seconds)
                 </small>
             </div>
 
