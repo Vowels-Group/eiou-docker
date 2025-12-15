@@ -190,6 +190,7 @@ transactionHistoryTest
 messageDeliveryTest
 cliCommandsTest
 apiEndpointsTest
+synchTest
 seedPhraseTest
 "
 
