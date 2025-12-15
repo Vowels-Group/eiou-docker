@@ -1,0 +1,112 @@
+<!-- Copyright 2025  -->
+
+<!-- Settings Section -->
+<div id="settings" class="form-container fade-in-up">
+    <h2><i class="fas fa-cog"></i> Wallet Settings</h2>
+    <form method="POST">
+        <input type="hidden" name="action" value="updateSettings">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
+
+        <div class="settings-grid">
+            <!-- Default Currency -->
+            <div class="form-group">
+                <label for="defaultCurrency">Default Currency:</label>
+                <select id="defaultCurrency" name="defaultCurrency" class="default-value">
+                    <option value="USD" selected>USD</option>
+                </select>
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    Default currency for new contacts and transactions
+                </small>
+            </div>
+
+            <!-- Default Fee -->
+            <div class="form-group">
+                <label for="defaultFee">Default Fee (%):</label>
+                <input type="number" id="defaultFee" name="defaultFee" value="<?php echo htmlspecialchars($user->getDefaultFee()); ?>" step="0.01" min="0" max="100" class="default-value">
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    Default fee percentage charged when routing transactions
+                </small>
+            </div>
+
+            <!-- Minimum Fee -->
+            <div class="form-group">
+                <label for="minFee">Minimum Fee Amount:</label>
+                <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.01" min="0" class="default-value">
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    Minimum fee amount in default currency
+                </small>
+            </div>
+
+            <!-- Maximum Fee -->
+            <div class="form-group">
+                <label for="maxFee">Maximum Fee (%):</label>
+                <input type="number" id="maxFee" name="maxFee" value="<?php echo htmlspecialchars($user->getMaxFee()); ?>" step="0.01" min="0" max="100" class="default-value">
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    Maximum fee percentage allowed
+                </small>
+            </div>
+
+            <!-- Default Credit Limit -->
+            <div class="form-group">
+                <label for="defaultCreditLimit">Default Credit Limit:</label>
+                <input type="number" id="defaultCreditLimit" name="defaultCreditLimit" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" step="1" min="0" class="default-value">
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    Default credit limit for new contacts
+                </small>
+            </div>
+
+            <!-- Max P2P Level -->
+            <div class="form-group">
+                <label for="maxP2pLevel">Max P2P Routing Level:</label>
+                <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo Constants::P2P_MAX_ROUTING_LEVEL; ?>" class="default-value">
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    Maximum number of hops for P2P routing (1-<?php echo Constants::P2P_MAX_ROUTING_LEVEL; ?>)
+                </small>
+            </div>
+
+            <!-- P2P Expiration -->
+            <div class="form-group">
+                <label for="p2pExpiration">P2P Request Expiration (seconds):</label>
+                <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="<?php echo Constants::P2P_MIN_EXPIRATION_SECONDS; ?>" class="default-value">
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    How long P2P routing requests remain valid (minimum <?php echo Constants::P2P_MIN_EXPIRATION_SECONDS; ?> seconds)
+                </small>
+            </div>
+
+            <!-- Max Output Lines -->
+            <div class="form-group">
+                <label for="maxOutput">Max Display Lines:</label>
+                <input type="number" id="maxOutput" name="maxOutput" value="<?php echo htmlspecialchars($user->getMaxOutput()); ?>" step="1" min="1" class="default-value">
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    Maximum lines to display in transaction/balance lists
+                </small>
+            </div>
+
+            <!-- Default Transport Mode -->
+            <div class="form-group">
+                <label for="defaultTransportMode">Default Transport Mode:</label>
+                <select id="defaultTransportMode" name="defaultTransportMode" class="default-value">
+                    <option value="http" <?php echo ($user->getDefaultTransportMode() === 'http') ? 'selected' : ''; ?>>HTTP</option>
+                    <option value="tor" <?php echo ($user->getDefaultTransportMode() === 'tor') ? 'selected' : ''; ?>>Tor</option>
+                </select>
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    Preferred network transport for communications
+                </small>
+            </div>
+        </div>
+
+        <div class="form-actions" style="margin-top: 1.5rem;">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Settings</button>
+            <button type="reset" class="btn btn-secondary"><i class="fas fa-undo"></i> Reset</button>
+        </div>
+    </form>
+</div>

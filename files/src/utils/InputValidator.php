@@ -309,6 +309,27 @@ class InputValidator {
     }
 
     /**
+     * Validate positive integer with optional minimum value
+     *
+     * @param mixed $value Value to validate
+     * @param int $min Minimum allowed value (default: 1)
+     * @return array ['valid' => bool, 'value' => int|null, 'error' => string|null]
+     */
+    public static function validatePositiveInteger($value, int $min = 1): array {
+        if (!is_numeric($value)) {
+            return ['valid' => false, 'value' => null, 'error' => 'Value must be numeric'];
+        }
+
+        $intValue = intval($value);
+
+        if ($intValue < $min) {
+            return ['valid' => false, 'value' => null, 'error' => "Value must be at least $min"];
+        }
+
+        return ['valid' => true, 'value' => $intValue, 'error' => null];
+    }
+
+    /**
      * Validate request level for P2P
      *
      * @param mixed $level Request level to validate

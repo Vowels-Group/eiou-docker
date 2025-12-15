@@ -138,7 +138,7 @@ class CliService {
                 $value = $validation['value'];
             } elseif(strtolower($argv[2]) === 'p2pexpiration'){
                 $key = 'p2pExpiration';
-                $validation = InputValidator::validateTimestamp($argv[3]);
+                $validation = InputValidator::validatePositiveInteger($argv[3], Constants::P2P_MIN_EXPIRATION_SECONDS);
                 if (!$validation['valid']) {
                     $output->validationError('p2pExpiration', $validation['error']);
                     return;
@@ -268,9 +268,9 @@ class CliService {
                     break;
 
                 case '7':
-                    echo "Enter new peer to peer expiration (in seconds): ";
+                    echo "Enter new peer to peer expiration (in seconds, minimum " . Constants::P2P_MIN_EXPIRATION_SECONDS . "): ";
                     $key = 'p2pExpiration';
-                    $validation = InputValidator::validateTimestamp(trim(fgets(STDIN)));
+                    $validation = InputValidator::validatePositiveInteger(trim(fgets(STDIN)), Constants::P2P_MIN_EXPIRATION_SECONDS);
                     if (!$validation['valid']) {
                         echo "Error: " . $validation['error'] . "\n";
                         return;
@@ -365,8 +365,8 @@ class CliService {
             echo "\tDefault currency: " . $settings['default_currency'] . "\n";
             echo "\tMinimum fee amount: " . $settings['minimum_fee_amount'] . " " . $settings['minimum_fee_currency'] ."\n";
             echo "\tDefault fee percent: " . $settings['default_fee_percent'] ."%\n";
-            echo "\tMaximum fee percent: " . $settings['default_credit_limit'] . "\n";
-            echo "\tDefault credit limit: " . $settings['defa'] ."%\n";
+            echo "\tMaximum fee percent: " . $settings['maximum_fee_percent'] . "%\n";
+            echo "\tDefault credit limit: " . $settings['default_credit_limit'] ."\n";
             echo "\tMaximum peer to peer Level: " .  $settings['max_p2p_level'] . "\n";
             echo "\tDefault peer to peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
             echo "\tDefault maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
