@@ -272,7 +272,7 @@ body {
 .pending {   
     border-left: 4px solid grey;
 }
-.blocked {   
+.blocked {
     border-left: 4px solid red;
 }
 

@@ -5,18 +5,20 @@
 function getContactsTableSchema() {
     return "CREATE TABLE IF NOT EXISTS contacts (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        contact_id VARCHAR(128) NOT NULL UNIQUE,
         pubkey TEXT NOT NULL,
         pubkey_hash VARCHAR(64),
         name VARCHAR(255),
         status ENUM(
-            'pending',  /* Contact request Created */ 
-            'accepted', /* Contact request Accepted */ 
-            'blocked'   /* Contact request Blocked */ 
+            'pending',  /* Contact request Created */
+            'accepted', /* Contact request Accepted */
+            'blocked'   /* Contact request Blocked */
         ) DEFAULT 'pending',
         currency VARCHAR(10),
         fee_percent INT,
         credit_limit INT,
         created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_contacts_contact_id (contact_id),
         INDEX idx_contacts_pubkey_hash (pubkey_hash),
         INDEX idx_contacts_name (name),
         INDEX idx_contacts_status (status),

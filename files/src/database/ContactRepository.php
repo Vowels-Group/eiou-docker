@@ -53,6 +53,7 @@ class ContactRepository extends AbstractRepository {
      */
     public function addPendingContact(string $senderPublicKey): string {
         $data = [
+            'contact_id' => $this->generateContactId(),
             'pubkey' => $senderPublicKey,
             'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $senderPublicKey),
             'name' => null,
@@ -60,7 +61,7 @@ class ContactRepository extends AbstractRepository {
             'fee_percent' => null,
             'credit_limit' => null,
             'currency' => null
-        ];  
+        ];
         return $this->insert($data);
     }
 
@@ -506,6 +507,7 @@ class ContactRepository extends AbstractRepository {
         string $currency
     ): bool {
         $data = [
+            'contact_id' => $this->generateContactId(),
             'pubkey' => $contactPublicKey,
             'pubkey_hash' => hash(Constants::HASH_ALGORITHM, $contactPublicKey),
             'name' => $name,
@@ -517,6 +519,16 @@ class ContactRepository extends AbstractRepository {
 
         $result = $this->insert($data);
         return $result !== false;
+    }
+
+    /**
+     * Generate a unique random contact ID
+     *
+     * @return string A random 128-character alphanumeric string
+     */
+    private function generateContactId(): string {
+        // Generate 64 bytes of random data and convert to hex (128 characters)
+        return bin2hex(random_bytes(64));
     }
 
     /**
