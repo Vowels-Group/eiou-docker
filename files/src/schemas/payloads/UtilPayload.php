@@ -1,13 +1,14 @@
 <?php
 
 require_once __DIR__ . '/BasePayload.php';
+require_once __DIR__ . '/../../core/ErrorCodes.php';
 
 /**
  * Utility payload builder
  *
  * Copyright 2025
  * Handles building utility payloads for error responses, validation failures,
- * and other system messages. 
+ * and other system messages.
  */
 class UtilPayload extends BasePayload
 {
@@ -106,15 +107,15 @@ class UtilPayload extends BasePayload
      * Build generic error payload
      *
      * @param string $errorMessage The error message
-     * @param string $errorCode Optional error code
+     * @param string $errorCode Optional error code (use ErrorCodes constants)
      * @param array $additionalData Optional additional error data
      * @return array The error payload
      */
-    public static function buildError(string $errorMessage, string $errorCode = 'GENERAL_ERROR', array $additionalData = []): array
+    public static function buildError(string $errorMessage, string $errorCode = ErrorCodes::GENERAL_ERROR, array $additionalData = []): array
     {
         return array_merge([
             'status' => 'error',
-            'error_code' => $errorCode,
+            'code' => $errorCode,
             'message' => $errorMessage,
             'timestamp' => time(),
         ], $additionalData);
@@ -130,7 +131,7 @@ class UtilPayload extends BasePayload
     {
         return [
             'status' => 'error',
-            'error_code' => 'VALIDATION_ERROR',
+            'code' => ErrorCodes::VALIDATION_ERROR,
             'message' => 'Validation failed',
             'errors' => $validationErrors,
             'timestamp' => time(),
@@ -148,7 +149,7 @@ class UtilPayload extends BasePayload
     {
         return [
             'status' => 'error',
-            'error_code' => 'TIMEOUT',
+            'code' => ErrorCodes::TIMEOUT,
             'message' => "Operation '{$operation}' timed out after {$timeoutSeconds} seconds",
             'operation' => $operation,
             'timeout' => $timeoutSeconds,
@@ -168,7 +169,7 @@ class UtilPayload extends BasePayload
     {
         return [
             'status' => 'error',
-            'error_code' => 'RATE_LIMIT_EXCEEDED',
+            'code' => ErrorCodes::RATE_LIMIT_EXCEEDED,
             'message' => "Rate limit of {$limit} requests per {$window} seconds exceeded",
             'limit' => $limit,
             'window' => $window,
