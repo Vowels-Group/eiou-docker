@@ -1066,6 +1066,120 @@ html {
     transition: background 0.2s ease;
 }
 
+/* In-Progress Transaction Highlight */
+.tx-item-in-progress {
+    border-left: 3px solid #ffc107;
+    animation: tx-pulse 2s ease-in-out infinite;
+}
+
+@keyframes tx-pulse {
+    0%, 100% { background: white; }
+    50% { background: rgba(255, 193, 7, 0.05); }
+}
+
+/* In-Progress Transactions Section */
+.tx-in-progress-section {
+    background: linear-gradient(135deg, #fff3cd 0%, #fffbeb 100%);
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.tx-in-progress-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: #664d03;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(102, 77, 3, 0.2);
+}
+
+.tx-in-progress-count {
+    background: #664d03;
+    color: white;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    margin-left: auto;
+}
+
+.tx-in-progress-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: white;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.tx-in-progress-item:last-child {
+    margin-bottom: 0;
+}
+
+.tx-in-progress-info {
+    flex: 1;
+}
+
+.tx-in-progress-counterparty {
+    font-size: 0.9rem;
+    color: #333;
+    margin-bottom: 0.25rem;
+}
+
+.tx-in-progress-status {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.tx-in-progress-amount {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.tx-in-progress-amount.amount-sent {
+    color: #dc3545;
+}
+
+.tx-in-progress-amount.amount-received {
+    color: #198754;
+}
+
+.tx-type-badge {
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.tx-type-p2p {
+    background: #fff3cd;
+    color: #664d03;
+}
+
+/* Auto-refresh indicator */
+.tx-refresh-indicator {
+    display: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #ffc107;
+    color: #664d03;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+}
+
+.tx-refresh-indicator.active {
+    display: inline-flex;
+    animation: spin 2s linear infinite;
+}
+
 /* Toast Notification System */
 .toast-container {
     position: fixed;

@@ -39,6 +39,7 @@ if (isset($_GET['message']) && isset($_GET['type'])) {
 $totalBalance = $transactionService->getUserTotalBalance();
 $totalEarnings = $currencyUtility->convertCentsToDollars($p2pService->getUserTotalEarnings());
 $transactions = $transactionService->getTransactionHistory(10);
+$inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
 // Contact data
 $allContacts = $contactService->getAllContacts();
