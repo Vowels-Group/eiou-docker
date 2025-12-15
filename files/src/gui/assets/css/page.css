@@ -272,8 +272,29 @@ body {
 .pending {   
     border-left: 4px solid grey;
 }
-.blocked {   
+.blocked {
     border-left: 4px solid red;
+}
+
+.contact-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.3rem;
+}
+
+.badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.badge-id {
+    background: #e9ecef;
+    color: #495057;
+    font-family: monospace;
+    cursor: help;
 }
 
 .contact-avatar {
