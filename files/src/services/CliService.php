@@ -521,6 +521,32 @@ class CliService {
                     'sync transactions' => 'Sync only transactions',
                     'sync balances' => 'Recalculate balances from transaction history'
                 ]
+            ],
+            'apikey' => [
+                'description' => 'Manage API keys for external API access',
+                'usage' => 'apikey [action] ([args...])',
+                'arguments' => [
+                    'action' => ['type' => 'required', 'description' => 'Action: create, list, delete, disable, enable, help'],
+                    'args' => ['type' => 'optional', 'description' => 'Arguments for the action']
+                ],
+                'examples' => [
+                    'apikey help' => 'Show detailed API key help',
+                    'apikey create "My App"' => 'Create new API key with default permissions',
+                    'apikey create "My App" wallet:read,contacts:read' => 'Create key with specific permissions',
+                    'apikey list' => 'List all API keys',
+                    'apikey delete <key_id>' => 'Delete an API key permanently',
+                    'apikey disable <key_id>' => 'Disable an API key',
+                    'apikey enable <key_id>' => 'Enable a disabled API key'
+                ],
+                'permissions' => [
+                    'wallet:read' => 'Read wallet balance and transactions',
+                    'wallet:send' => 'Send transactions',
+                    'contacts:read' => 'List and view contacts',
+                    'contacts:write' => 'Add, update, delete contacts',
+                    'system:read' => 'View system status and metrics',
+                    'admin' => 'Full administrative access',
+                    '*' => 'All permissions'
+                ]
             ]
         ];
 
