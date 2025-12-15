@@ -42,6 +42,9 @@ $contactController = new ContactController($secureSession, $contactService);
 require_once '/etc/eiou/src/gui/controllers/TransactionController.php';
 $transactionController = new TransactionController($secureSession, $contactService, $transactionService);
 
+require_once '/etc/eiou/src/gui/controllers/SettingsController.php';
+$settingsController = new SettingsController($secureSession);
+
 // Handle logout request
 if (isset($_GET['logout'])) {
     $secureSession->logout();
