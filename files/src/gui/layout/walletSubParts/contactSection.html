@@ -192,38 +192,36 @@
 
         <!-- Info Tab -->
         <div id="info-tab" class="modal-tab-content active">
-            <div class="modal-tab-scroll">
-                <div class="contact-info-section">
-                    <h4><i class="fas fa-map-marker-alt"></i> Addresses</h4>
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <label><i class="fas fa-globe"></i> HTTP Address</label>
-                            <div id="modal_http_address" class="info-value monospace">Not Available</div>
-                        </div>
-                        <div class="info-item">
-                            <label><i class="fas fa-user-secret"></i> Tor Address</label>
-                            <div id="modal_tor_address" class="info-value monospace">Not Available</div>
-                        </div>
+            <div class="contact-info-section">
+                <h4><i class="fas fa-wallet"></i> Balance</h4>
+                <div class="balance-display">
+                    <span id="modal_balance" class="balance-amount">0.00</span>
+                    <span id="modal_balance_currency" class="balance-currency">USD</span>
+                </div>
+            </div>
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-fingerprint"></i> Contact ID</h4>
+                <div id="modal_contact_id" class="info-value monospace">Not Available</div>
+            </div>
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-map-marker-alt"></i> Addresses</h4>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label><i class="fas fa-globe"></i> HTTP Address</label>
+                        <div id="modal_http_address" class="info-value monospace">Not Available</div>
+                    </div>
+                    <div class="info-item">
+                        <label><i class="fas fa-user-secret"></i> Tor Address</label>
+                        <div id="modal_tor_address" class="info-value monospace">Not Available</div>
                     </div>
                 </div>
+            </div>
 
-                <div class="contact-info-section">
-                    <h4><i class="fas fa-fingerprint"></i> Contact ID</h4>
-                    <div id="modal_contact_id" class="info-value monospace">Not Available</div>
-                </div>
-
-                <div class="contact-info-section">
-                    <h4><i class="fas fa-key"></i> Public Key</h4>
-                    <div id="modal_pubkey" class="info-value monospace pubkey-display">Not Available</div>
-                </div>
-
-                <div class="contact-info-section">
-                    <h4><i class="fas fa-wallet"></i> Balance</h4>
-                    <div class="balance-display">
-                        <span id="modal_balance" class="balance-amount">0.00</span>
-                        <span id="modal_balance_currency" class="balance-currency">USD</span>
-                    </div>
-                </div>
+            <div class="contact-info-section">
+                <h4><i class="fas fa-key"></i> Public Key</h4>
+                <div id="modal_pubkey" class="info-value monospace pubkey-display">Not Available</div>
             </div>
         </div>
 
@@ -275,7 +273,7 @@
                     <p style="color: #6c757d; margin: 0; font-size: 0.9rem;">
                         <i class="fas fa-info-circle"></i> Showing the <strong>last 5 transactions</strong> with this contact
                     </p>
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="window.location.reload();">
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="refreshTransactions();">
                         <i class="fas fa-sync-alt"></i> Refresh
                     </button>
                 </div>
@@ -317,7 +315,12 @@
 
 <script>
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
-function openContactModal(contact) {
+var currentContactAddress = null;
+
+function openContactModal(contact, openTab) {
+    // Store current contact address for refresh
+    currentContactAddress = contact.address;
+
     // Set contact name in header
     document.getElementById('modal_contact_name').textContent = contact.name || 'Unknown';
 
@@ -391,8 +394,9 @@ function openContactModal(contact) {
         transactionsEl.innerHTML = html;
     }
 
-    // Reset to first tab
-    showModalTab('info-tab', null);
+    // Open specified tab or default to info tab
+    var tabToOpen = openTab || 'info-tab';
+    showModalTab(tabToOpen, null);
 
     // Show modal
     document.getElementById('contactModal').style.display = 'flex';
@@ -421,14 +425,19 @@ function showModalTab(tabId, button) {
         targetTab.classList.add('active');
     }
 
-    // Activate the clicked button
+    // Activate the clicked button or find matching button
     if (button) {
         button.classList.add('active');
     } else {
-        // Find and activate the first tab button when called programmatically
-        var firstTab = document.querySelector('.modal-tab');
-        if (firstTab) {
-            firstTab.classList.add('active');
+        // Find the button that corresponds to this tab
+        var tabButtons = document.querySelectorAll('.modal-tab');
+        for (var k = 0; k < tabButtons.length; k++) {
+            var btn = tabButtons[k];
+            var onclickStr = btn.getAttribute('onclick') || '';
+            if (onclickStr.indexOf(tabId) !== -1) {
+                btn.classList.add('active');
+                break;
+            }
         }
     }
 }
@@ -441,6 +450,61 @@ if (contactModalEl) {
             closeContactModal();
         }
     };
+}
+
+// Refresh transactions - reloads page and reopens modal on transactions tab
+function refreshTransactions() {
+    if (currentContactAddress) {
+        var url = window.location.pathname + '?open_contact=' + encodeURIComponent(currentContactAddress) + '&tab=transactions-tab#contacts';
+        window.location.href = url;
+    } else {
+        window.location.reload();
+    }
+}
+
+// Auto-open contact modal on page load if URL param present (Tor Browser compatible)
+var autoOpenTab = null;
+
+function checkAutoOpenModal() {
+    var params = {};
+    var queryString = window.location.search.substring(1);
+    var pairs = queryString.split('&');
+    for (var i = 0; i < pairs.length; i++) {
+        var pair = pairs[i].split('=');
+        if (pair.length === 2) {
+            params[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1]);
+        }
+    }
+
+    if (params.open_contact) {
+        // Store the tab to open
+        autoOpenTab = params.tab || 'info-tab';
+
+        // Find the contact card with matching address and simulate click
+        var contactCards = document.querySelectorAll('.contact-card');
+        for (var j = 0; j < contactCards.length; j++) {
+            var card = contactCards[j];
+            var onclickAttr = card.getAttribute('onclick');
+            if (onclickAttr && onclickAttr.indexOf(params.open_contact) !== -1) {
+                // Trigger the onclick by clicking the card
+                card.click();
+                // After click, switch to the correct tab
+                setTimeout(function() {
+                    if (autoOpenTab) {
+                        showModalTab(autoOpenTab, null);
+                    }
+                }, 50);
+                break;
+            }
+        }
+    }
+}
+
+// Run auto-open check when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkAutoOpenModal);
+} else {
+    checkAutoOpenModal();
 }
 </script>
 
