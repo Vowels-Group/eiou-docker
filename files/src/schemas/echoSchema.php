@@ -24,7 +24,7 @@ function returnContactCreationFailed() {
 
 function returnContactRequestAlreadyInserted() {
     return "Warning: Contact was previously added but no response has yet been received from other user.\n" .
-            "Trying to resynch contact...\n";
+            "Trying to resync contact...\n";
 }
 
 function returnContactCreationWarning($message) {

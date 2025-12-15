@@ -156,7 +156,6 @@ function wait_for_contact(){
         sleep 1
         elapsed=$((elapsed + 1))
     done
-
     return 1
 }
 

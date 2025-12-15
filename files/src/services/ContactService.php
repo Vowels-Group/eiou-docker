@@ -442,7 +442,7 @@ class ContactService {
             }
             // Our contact pubkey and adress both exist on their end (Case when we delete the contact and try re-adding it)
             elseif($responseData['status'] === 'warning'){
-                // Insert contact and try re-synching (inquiry about acceptance status)
+                // Insert contact and try re-syncing (inquiry about acceptance status)
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);

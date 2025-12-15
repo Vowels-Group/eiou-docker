@@ -214,7 +214,7 @@ function getApiRequestLogTableSchema() {
         INDEX idx_api_log_endpoint (endpoint)
     )";
 }
-    
+
 // Message Delivery Tracking table - tracks multi-stage acknowledgments and retries
 function getMessageDeliveryTableSchema() {
     return "CREATE TABLE IF NOT EXISTS message_delivery (

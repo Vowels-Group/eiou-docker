@@ -508,6 +508,19 @@ class CliService {
                     'generate' => 'Create new wallet with seed phrase',
                     'generate restore word1 word2 ... word24' => 'Restore from 24-word seed'
                 ]
+            ],
+            'sync' => [
+                'description' => 'Synchronize data (contacts, transactions, balances)',
+                'usage' => 'sync ([type])',
+                'arguments' => [
+                    'type' => ['type' => 'optional', 'description' => 'Sync type: contacts, transactions, or balances. If omitted, syncs all.']
+                ],
+                'examples' => [
+                    'sync' => 'Sync all (contacts, transactions, and balances)',
+                    'sync contacts' => 'Sync only contacts',
+                    'sync transactions' => 'Sync only transactions',
+                    'sync balances' => 'Recalculate balances from transaction history'
+                ]
             ]
         ];
 
