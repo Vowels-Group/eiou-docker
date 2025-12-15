@@ -1469,6 +1469,65 @@ html {
     padding: 2rem;
 }
 
+.transaction-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    border-bottom: 1px solid #dee2e6;
+    gap: 0.75rem;
+}
+
+.transaction-item:last-child {
+    border-bottom: none;
+}
+
+.tx-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+}
+
+.tx-sent .tx-icon {
+    background: #f8d7da;
+    color: #dc3545;
+}
+
+.tx-received .tx-icon {
+    background: #d4edda;
+    color: #198754;
+}
+
+.tx-details {
+    flex: 1;
+}
+
+.tx-type {
+    font-weight: 500;
+    color: #212529;
+}
+
+.tx-date {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.tx-amount {
+    font-weight: 600;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.tx-sent .tx-amount {
+    color: #dc3545;
+}
+
+.tx-received .tx-amount {
+    color: #198754;
+}
+
 /* Address Line */
 .address-line {
     display: flex;

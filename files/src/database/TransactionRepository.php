@@ -1431,4 +1431,68 @@ class TransactionRepository extends AbstractRepository {
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result ?: [];
     }
+
+    /**
+     * Get recent transactions with a specific contact by their addresses
+     *
+     * @param array $contactAddresses Array of contact addresses (http, tor, etc.)
+     * @param int $limit Maximum number of transactions to return
+     * @return array Formatted transactions with contact
+     */
+    public function getTransactionsWithContact(array $contactAddresses, int $limit = 5): array {
+        $userAddresses = $this->currentUser->getUserAddresses();
+
+        if (empty($userAddresses) || empty($contactAddresses)) {
+            return [];
+        }
+
+        // Filter out empty addresses
+        $contactAddresses = array_filter($contactAddresses);
+        if (empty($contactAddresses)) {
+            return [];
+        }
+
+        // Create placeholders for IN clauses
+        $userPlaceholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $contactPlaceholders = str_repeat('?,', count($contactAddresses) - 1) . '?';
+
+        // Get transactions where user sent to contact OR user received from contact
+        $query = "SELECT sender_address, receiver_address, amount, currency, timestamp
+                  FROM {$this->tableName}
+                  WHERE (sender_address IN ($userPlaceholders) AND receiver_address IN ($contactPlaceholders))
+                     OR (sender_address IN ($contactPlaceholders) AND receiver_address IN ($userPlaceholders))
+                  ORDER BY timestamp DESC LIMIT ?";
+
+        // Build params: user addresses, contact addresses, contact addresses, user addresses, limit
+        $params = array_merge(
+            $userAddresses,
+            $contactAddresses,
+            $contactAddresses,
+            $userAddresses,
+            [$limit]
+        );
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($params);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $formattedTransactions = [];
+
+        foreach ($transactions as $tx) {
+            $isSent = in_array($tx['sender_address'], $userAddresses);
+
+            $formattedTransactions[] = [
+                'date' => $tx['timestamp'],
+                'type' => $isSent ? 'sent' : 'received',
+                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
+                'currency' => $tx['currency']
+            ];
+        }
+
+        return $formattedTransactions;
+    }
 }

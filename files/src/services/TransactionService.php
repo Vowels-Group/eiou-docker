@@ -938,16 +938,27 @@ class TransactionService {
 
             // Add all addresses
             $addressesAssociative = [];
+            $contactAddresses = [];
             foreach($addressTypes as $addressType){
-                $addressesAssociative[$addressType] = $contact[$addressType] ?? '';
+                $addr = $contact[$addressType] ?? '';
+                $addressesAssociative[$addressType] = $addr;
+                if (!empty($addr)) {
+                    $contactAddresses[] = $addr;
+                }
             }
+
+            // Get recent transactions with this contact
+            $transactions = $this->transactionRepository->getTransactionsWithContact($contactAddresses, 5);
 
             $contactsWithBalances[] = array_merge($addressesAssociative,[
                 'name' => $contact['name'],
                 'balance' =>  $balance ? $this->currencyUtility->convertCentsToDollars($balance) : $balance,
                 'fee' =>  $fee_percent ? $this->currencyUtility->convertCentsToDollars($fee_percent) : $fee_percent,
                 'credit_limit' =>  $credit_limit ? $this->currencyUtility->convertCentsToDollars($credit_limit) : $credit_limit,
-                'currency' => $contact['currency']
+                'currency' => $contact['currency'],
+                'pubkey' => $contact['pubkey'] ?? '',
+                'contact_id' => $contact['contact_id'] ?? '',
+                'transactions' => $transactions
             ]);
         }
         return $contactsWithBalances;
