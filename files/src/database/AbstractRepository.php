@@ -49,7 +49,7 @@ abstract class AbstractRepository {
             $this->pdo = $pdo;
         } else {
             // Get PDO from DatabaseConnection helper
-            require_once __DIR__ . '/pdo.php';
+            require_once __DIR__ . '/Pdo.php';
             try {
                 $this->pdo = createPDOConnection();
             } catch (RuntimeException $e) {

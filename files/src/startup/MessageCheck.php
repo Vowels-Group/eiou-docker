@@ -9,7 +9,7 @@ try{
         error_log("messageCheck: dbconfig.json not found at /etc/eiou/dbconfig.json");
         return;
     }
-    require_once '/etc/eiou/src/database/pdo.php';
+    require_once '/etc/eiou/src/database/Pdo.php';
     // create PDO connection, will return the connection or raise an exception (check if PDO functions)
     $pdo = createPDOConnection();
     $pdo = null; // reset PDO

@@ -106,7 +106,7 @@ class ServiceContainer {
      * @return PDO|null
      */
     public function loadDatabase() {
-        require_once '/etc/eiou/src/database/pdo.php';
+        require_once '/etc/eiou/src/database/Pdo.php';
         try {
             $this->pdo = createPDOConnection();
         } catch (RuntimeException $e) {
