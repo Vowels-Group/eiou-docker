@@ -478,17 +478,17 @@ class CliService {
                     'generate restore word1 word2 ... word24' => 'Restore from 24-word seed'
                 ]
             ],
-            'synch' => [
+            'sync' => [
                 'description' => 'Synchronize data (contacts, transactions, balances)',
-                'usage' => 'synch ([type])',
+                'usage' => 'sync ([type])',
                 'arguments' => [
                     'type' => ['type' => 'optional', 'description' => 'Sync type: contacts, transactions, or balances. If omitted, syncs all.']
                 ],
                 'examples' => [
-                    'synch' => 'Sync all (contacts, transactions, and balances)',
-                    'synch contacts' => 'Sync only contacts',
-                    'synch transactions' => 'Sync only transactions',
-                    'synch balances' => 'Recalculate balances from transaction history'
+                    'sync' => 'Sync all (contacts, transactions, and balances)',
+                    'sync contacts' => 'Sync only contacts',
+                    'sync transactions' => 'Sync only transactions',
+                    'sync balances' => 'Recalculate balances from transaction history'
                 ]
             ]
         ];

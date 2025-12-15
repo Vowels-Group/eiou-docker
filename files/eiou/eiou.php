@@ -161,11 +161,11 @@ elseif($request === "changesettings"){
   $cliService = $app->services->getCliService();
   $cliService->changeSettings($cleanArgv, $output);
 }
-elseif($request === "synch"){
-  // Synch
-  $debugService->output("Executing synch request", 'SILENT');
-  $synchService = $app->services->getSynchService();
-  $synchService->sych($cleanArgv, $output);
+elseif($request === "sync"){
+  // Sync
+  $debugService->output("Executing sync request", 'SILENT');
+  $syncService = $app->services->getSyncService();
+  $syncService->sync($cleanArgv, $output);
 } elseif($request === "generate"){
   // Handle for Wallet request after wallet has been created
   $output->walletExists();
