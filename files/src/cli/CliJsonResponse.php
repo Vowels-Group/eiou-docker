@@ -9,6 +9,8 @@
  * @package Cli
  */
 
+require_once __DIR__ . '/../core/ErrorCodes.php';
+
 class CliJsonResponse
 {
     /** @var string Current CLI version */
@@ -86,23 +88,26 @@ class CliJsonResponse
      * Build error response (RFC 9457 compliant)
      *
      * @param string $message Human-readable error message
-     * @param string $code Machine-readable error code
-     * @param int $status HTTP-style status code
+     * @param string $code Machine-readable error code (use ErrorCodes constants)
+     * @param int|null $status HTTP-style status code (auto-detected if null)
      * @param array $additionalData Additional error context
      * @return string JSON encoded response
      */
     public function error(
         string $message,
-        string $code = 'GENERAL_ERROR',
-        int $status = 400,
+        string $code = ErrorCodes::GENERAL_ERROR,
+        ?int $status = null,
         array $additionalData = []
     ): string {
+        // Auto-detect HTTP status from error code if not provided
+        $httpStatus = $status ?? ErrorCodes::getHttpStatus($code);
+
         $response = [
             'success' => false,
             'error' => array_merge([
                 'type' => 'https://eiou.org/docs/errors#' . strtolower(str_replace('_', '-', $code)),
-                'title' => $this->codeToTitle($code),
-                'status' => $status,
+                'title' => ErrorCodes::getTitle($code),
+                'status' => $httpStatus,
                 'detail' => $message,
                 'code' => $code,
                 'timestamp' => $this->getTimestamp()
@@ -124,8 +129,8 @@ class CliJsonResponse
     {
         return $this->error(
             $message ?? 'One or more fields failed validation',
-            'VALIDATION_ERROR',
-            400,
+            ErrorCodes::VALIDATION_ERROR,
+            null,
             ['validation_errors' => $errors]
         );
     }
@@ -256,8 +261,7 @@ class CliJsonResponse
         if ($contact === null) {
             return $this->error(
                 $message ?? 'Contact not found',
-                'NOT_FOUND',
-                404
+                ErrorCodes::CONTACT_NOT_FOUND
             );
         }
 
@@ -295,8 +299,8 @@ class CliJsonResponse
     {
         return $this->error(
             "Rate limit exceeded for command '$command'. Please try again in $retryAfter seconds.",
-            'RATE_LIMIT_EXCEEDED',
-            429,
+            ErrorCodes::RATE_LIMIT_EXCEEDED,
+            null,
             [
                 'retry_after' => $retryAfter,
                 'command' => $command
@@ -313,8 +317,7 @@ class CliJsonResponse
     {
         return $this->error(
             'Wallet already exists',
-            'WALLET_EXISTS',
-            409
+            ErrorCodes::WALLET_EXISTS
         );
     }
 
@@ -327,8 +330,7 @@ class CliJsonResponse
     {
         return $this->error(
             "Wallet does not exist. Please run the 'generate' command first.",
-            'WALLET_NOT_FOUND',
-            404
+            ErrorCodes::WALLET_NOT_FOUND
         );
     }
 
@@ -407,35 +409,6 @@ class CliJsonResponse
     private function getTimestamp(): string
     {
         return date('c'); // ISO 8601 format
-    }
-
-    /**
-     * Convert error code to human-readable title
-     *
-     * @param string $code Error code
-     * @return string Human-readable title
-     */
-    private function codeToTitle(string $code): string
-    {
-        $titles = [
-            'GENERAL_ERROR' => 'General Error',
-            'VALIDATION_ERROR' => 'Validation Error',
-            'NOT_FOUND' => 'Not Found',
-            'RATE_LIMIT_EXCEEDED' => 'Rate Limit Exceeded',
-            'WALLET_EXISTS' => 'Wallet Already Exists',
-            'WALLET_NOT_FOUND' => 'Wallet Not Found',
-            'INSUFFICIENT_FUNDS' => 'Insufficient Funds',
-            'INVALID_ADDRESS' => 'Invalid Address',
-            'CONTACT_NOT_FOUND' => 'Contact Not Found',
-            'CONTACT_EXISTS' => 'Contact Already Exists',
-            'TRANSACTION_FAILED' => 'Transaction Failed',
-            'AUTHENTICATION_ERROR' => 'Authentication Error',
-            'PERMISSION_DENIED' => 'Permission Denied',
-            'TIMEOUT' => 'Request Timeout',
-            'INTERNAL_ERROR' => 'Internal Server Error'
-        ];
-
-        return $titles[$code] ?? ucwords(strtolower(str_replace('_', ' ', $code)));
     }
 
     /**

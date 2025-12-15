@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../core/ErrorCodes.php';
+
 /**
  * API Authentication Service with HMAC Signature Verification
  *
@@ -63,18 +65,18 @@ class ApiAuthService {
 
         // Validate all required headers are present
         if (!$apiKey) {
-            return $this->authError('Missing X-API-Key header', 'missing_key');
+            return $this->authError('Missing X-API-Key header', ErrorCodes::AUTH_MISSING_KEY);
         }
         if (!$timestamp) {
-            return $this->authError('Missing X-API-Timestamp header', 'missing_timestamp');
+            return $this->authError('Missing X-API-Timestamp header', ErrorCodes::AUTH_MISSING_TIMESTAMP);
         }
         if (!$signature) {
-            return $this->authError('Missing X-API-Signature header', 'missing_signature');
+            return $this->authError('Missing X-API-Signature header', ErrorCodes::AUTH_MISSING_SIGNATURE);
         }
 
         // Validate timestamp format
         if (!is_numeric($timestamp)) {
-            return $this->authError('Invalid timestamp format', 'invalid_timestamp');
+            return $this->authError('Invalid timestamp format', ErrorCodes::AUTH_INVALID_TIMESTAMP);
         }
 
         // Validate timestamp age (prevent replay attacks)
@@ -83,24 +85,24 @@ class ApiAuthService {
         if (abs($now - $timestampInt) > self::MAX_REQUEST_AGE) {
             return $this->authError(
                 'Request timestamp too old or in the future. Max age: ' . self::MAX_REQUEST_AGE . ' seconds',
-                'expired_timestamp'
+                ErrorCodes::AUTH_EXPIRED_TIMESTAMP
             );
         }
 
         // Look up the API key to get the secret hash
         $keyData = $this->apiKeyRepository->getByKeyId($apiKey);
         if (!$keyData) {
-            return $this->authError('Invalid API key', 'invalid_key');
+            return $this->authError('Invalid API key', ErrorCodes::AUTH_INVALID_KEY);
         }
 
         // Check if key is enabled
         if (!$keyData['enabled']) {
-            return $this->authError('API key is disabled', 'disabled_key');
+            return $this->authError('API key is disabled', ErrorCodes::AUTH_KEY_DISABLED);
         }
 
         // Check if key is expired
         if ($keyData['expires_at'] && strtotime($keyData['expires_at']) < time()) {
-            return $this->authError('API key has expired', 'expired_key');
+            return $this->authError('API key has expired', ErrorCodes::AUTH_KEY_EXPIRED);
         }
 
         // Check rate limit
@@ -108,7 +110,7 @@ class ApiAuthService {
         if ($requestCount >= $keyData['rate_limit_per_minute']) {
             return $this->authError(
                 'Rate limit exceeded. Limit: ' . $keyData['rate_limit_per_minute'] . '/minute',
-                'rate_limit_exceeded'
+                ErrorCodes::RATE_LIMIT_EXCEEDED
             );
         }
 
@@ -126,7 +128,7 @@ class ApiAuthService {
         // Split signature: secret:hmac
         $signatureParts = explode(':', $signature, 2);
         if (count($signatureParts) !== 2) {
-            return $this->authError('Invalid signature format. Expected: secret:hmac', 'invalid_signature_format');
+            return $this->authError('Invalid signature format. Expected: secret:hmac', ErrorCodes::AUTH_INVALID_SIGNATURE_FORMAT);
         }
 
         $secret = $signatureParts[0];
@@ -135,7 +137,7 @@ class ApiAuthService {
         // Validate the secret against the stored hash
         $keyResult = $this->apiKeyRepository->validateKey($apiKey, $secret);
         if (!$keyResult) {
-            return $this->authError('Invalid API credentials', 'invalid_credentials');
+            return $this->authError('Invalid API credentials', ErrorCodes::AUTH_INVALID_CREDENTIALS);
         }
 
         // Build the string to sign
@@ -150,7 +152,7 @@ class ApiAuthService {
                 'key_id' => $apiKey,
                 'path' => $path
             ]);
-            return $this->authError('Invalid signature', 'invalid_signature');
+            return $this->authError('Invalid signature', ErrorCodes::AUTH_INVALID_SIGNATURE);
         }
 
         // Authentication successful
@@ -164,7 +166,7 @@ class ApiAuthService {
             'success' => true,
             'key' => $keyResult,
             'error' => null,
-            'error_code' => null
+            'code' => null
         ];
     }
 
@@ -258,19 +260,19 @@ class ApiAuthService {
      * Create an authentication error response
      *
      * @param string $message Error message
-     * @param string $code Error code
+     * @param string $code Error code (use ErrorCodes constants)
      * @return array Error response
      */
     private function authError(string $message, string $code): array {
         $this->log('warning', 'API authentication failed: ' . $message, [
-            'error_code' => $code
+            'code' => $code
         ]);
 
         return [
             'success' => false,
             'key' => null,
             'error' => $message,
-            'error_code' => $code
+            'code' => $code
         ];
     }
 
