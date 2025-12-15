@@ -38,6 +38,7 @@ class ContactController
      *
      * This method uses InputValidator and Security classes to validate and sanitize
      * all user input before processing the contact addition.
+     * Supports multi-address input (HTTP and/or Tor addresses).
      *
      * @return void
      */
@@ -50,22 +51,60 @@ class ContactController
         require_once __DIR__ . '/../../utils/InputValidator.php';
         require_once __DIR__ . '/../../utils/Security.php';
 
-        // Sanitize input data
-        $address = Security::sanitizeInput($_POST['address'] ?? '');
+        // Sanitize input data - support both legacy single address and new multi-address format
+        $httpAddress = Security::sanitizeInput($_POST['http_address'] ?? '');
+        $torAddress = Security::sanitizeInput($_POST['tor_address'] ?? '');
+        $legacyAddress = Security::sanitizeInput($_POST['address'] ?? '');
         $name = Security::sanitizeInput($_POST['name'] ?? '');
         $fee = $_POST['fee'] ?? '';
         $credit = $_POST['credit'] ?? '';
         $currency = $_POST['currency'] ?? '';
 
-        if (empty($address) || empty($name) || $fee === '' || $credit === '' || empty($currency)) {
-            $message = 'All fields are required';
+        // Determine which address to use for initial contact (at least one required)
+        // Priority: HTTP > Tor > Legacy single address field
+        $primaryAddress = '';
+        if (!empty($httpAddress)) {
+            $primaryAddress = $httpAddress;
+        } elseif (!empty($torAddress)) {
+            $primaryAddress = $torAddress;
+        } elseif (!empty($legacyAddress)) {
+            $primaryAddress = $legacyAddress;
+        }
+
+        if (empty($primaryAddress) || empty($name) || $fee === '' || $credit === '' || empty($currency)) {
+            $message = empty($primaryAddress)
+                ? 'At least one address (HTTP or Tor) is required'
+                : 'All fields are required';
             $messageType = 'error';
         } else {
-            // Validate address
-            $addressValidation = InputValidator::validateAddress($address);
-            if (!$addressValidation['valid']) {
-                MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
-                return;
+            // Validate HTTP address if provided
+            if (!empty($httpAddress)) {
+                $httpValidation = InputValidator::validateAddress($httpAddress);
+                if (!$httpValidation['valid']) {
+                    MessageHelper::redirectMessage('Invalid HTTP address: ' . $httpValidation['error'], 'error');
+                    return;
+                }
+                $httpAddress = $httpValidation['value'];
+            }
+
+            // Validate Tor address if provided
+            if (!empty($torAddress)) {
+                $torValidation = InputValidator::validateAddress($torAddress);
+                if (!$torValidation['valid']) {
+                    MessageHelper::redirectMessage('Invalid Tor address: ' . $torValidation['error'], 'error');
+                    return;
+                }
+                $torAddress = $torValidation['value'];
+            }
+
+            // Validate legacy address if used (for backward compatibility)
+            if (!empty($legacyAddress) && empty($httpAddress) && empty($torAddress)) {
+                $addressValidation = InputValidator::validateAddress($legacyAddress);
+                if (!$addressValidation['valid']) {
+                    MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
+                    return;
+                }
+                $primaryAddress = $addressValidation['value'];
             }
 
             // Validate contact name
@@ -97,13 +136,14 @@ class ContactController
             }
 
             // Use sanitized and validated values
-            $address = $addressValidation['value'];
             $name = $nameValidation['value'];
             $fee = $feeValidation['value'];
             $credit = $creditValidation['value'];
             $currency = $currencyValidation['value'];
-            // Create argv array for addContact function
-            $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency];
+
+            // Create argv array for addContact function using primary address
+            // The service will determine the address type automatically
+            $argv = ['eiou', 'add', $primaryAddress, $name, $fee, $credit, $currency];
 
             // Capture output
             ob_start();
