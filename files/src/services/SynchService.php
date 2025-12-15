@@ -150,6 +150,7 @@ class SynchService {
         // Synch both contacts and transactions
         $contactResults = $this->synchAllContactsInternal();
         $transactionResults = $this->synchAllTransactionsInternal();
+        // Balances only synched after transactions synched!
         $balanceResults = $this->synchAllBalancesInternal();
 
         $output->success("Sync completed", [
@@ -370,14 +371,7 @@ class SynchService {
 
                     if ($existingBalance && count($existingBalance) > 0) {
                         // Update existing balance - use raw SQL to set exact values instead of incrementing
-                        $query = "UPDATE balances SET received = :received, sent = :sent
-                                  WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
-                        $stmt = $this->balanceRepository->execute($query, [
-                            ':received' => $amounts['received'],
-                            ':sent' => $amounts['sent'],
-                            ':pubkey_hash' => $contactPubkeyHash,
-                            ':currency' => $currency
-                        ]);
+                       $this->balanceRepository->updateBothDirectionBalance($amounts, $contactPubkeyHash, $currency);
                     } else {
                         // Insert new balance record
                         $this->balanceRepository->insertBalance(

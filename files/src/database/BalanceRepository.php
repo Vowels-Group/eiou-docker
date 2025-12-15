@@ -260,7 +260,6 @@ class BalanceRepository extends AbstractRepository {
        
     }
 
-
     /**
      * Update contact balance
      *
@@ -273,6 +272,29 @@ class BalanceRepository extends AbstractRepository {
     public function updateBalance(string $pubkey, string $direction, int $amount, string $currency): bool{
         $query = "UPDATE {$this->tableName} SET {$direction} = {$direction} + :amount WHERE {$this->primaryKey} = :pubkey_hash AND currency = :currency";
         $stmt = $this->execute($query, [':amount' => $amount,':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $pubkey),':currency' => $currency]);    
+        if(!$stmt){
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Update contact balance (both directions)
+     *
+     * @param array $amounts Associative array of received => amount, sent => amount
+     * @param string $contactPubkeyHash Contact's Public Key hash
+     * @param string $currency currency
+     * @return bool Success/Failure of balance update
+     */
+    public function updateBothDirectionBalance(array $amounts, string $contactPubkeyHash, string$currency){
+        $query = "UPDATE balances SET received = :received, sent = :sent
+                WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
+        $stmt = $this->execute($query, [
+            ':received' => $amounts['received'],
+            ':sent' => $amounts['sent'],
+            ':pubkey_hash' => $contactPubkeyHash,
+            ':currency' => $currency
+        ]);
         if(!$stmt){
             return false;
         }
