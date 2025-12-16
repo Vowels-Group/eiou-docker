@@ -212,8 +212,63 @@ class SettingsController
                 'memory_limit' => ini_get('memory_limit'),
                 'max_execution_time' => ini_get('max_execution_time'),
                 'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'N/A',
+                'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'N/A',
                 'timestamp' => date('Y-m-d H:i:s')
             ];
+
+            // Get MySQL/MariaDB version
+            try {
+                require_once __DIR__ . '/../../services/ServiceContainer.php';
+                $serviceContainer = ServiceContainer::getInstance();
+                $pdo = $serviceContainer->getPdo();
+                if ($pdo) {
+                    $stmt = $pdo->query('SELECT VERSION() as version');
+                    $result = $stmt->fetch();
+                    $systemInfo['mysql_version'] = $result['version'] ?? 'N/A';
+                }
+            } catch (Exception $e) {
+                $systemInfo['mysql_version'] = 'Error: ' . $e->getMessage();
+            }
+
+            // Get Debian version
+            $systemInfo['debian_version'] = 'N/A';
+            if (file_exists('/etc/debian_version') && is_readable('/etc/debian_version')) {
+                $systemInfo['debian_version'] = trim(file_get_contents('/etc/debian_version'));
+            }
+
+            // Get OS release info
+            $systemInfo['os_release'] = 'N/A';
+            if (file_exists('/etc/os-release') && is_readable('/etc/os-release')) {
+                $osInfo = parse_ini_file('/etc/os-release');
+                $systemInfo['os_release'] = $osInfo['PRETTY_NAME'] ?? 'N/A';
+            }
+
+            // Get PHP config path and contents
+            $phpIniPath = php_ini_loaded_file() ?: 'Not found';
+            $systemInfo['php_ini_path'] = $phpIniPath;
+            $systemInfo['php_ini_content'] = 'N/A';
+            if ($phpIniPath && $phpIniPath !== 'Not found' && file_exists($phpIniPath) && is_readable($phpIniPath)) {
+                $systemInfo['php_ini_content'] = file_get_contents($phpIniPath);
+            }
+
+            // Get Apache config path and contents
+            $apacheConfigPath = '/etc/apache2/apache2.conf';
+            $systemInfo['apache_config_path'] = file_exists($apacheConfigPath) ? $apacheConfigPath : 'N/A';
+            $systemInfo['apache_config_content'] = 'N/A';
+            if (file_exists($apacheConfigPath) && is_readable($apacheConfigPath)) {
+                $systemInfo['apache_config_content'] = file_get_contents($apacheConfigPath);
+            }
+
+            // Get PHP extensions with versions
+            $phpExtensions = get_loaded_extensions();
+            sort($phpExtensions);
+            $phpExtensionsWithVersions = [];
+            foreach ($phpExtensions as $ext) {
+                $version = phpversion($ext);
+                $phpExtensionsWithVersions[$ext] = $version ?: 'N/A';
+            }
+            $systemInfo['php_extensions_count'] = count($phpExtensions);
+            $systemInfo['php_extensions'] = $phpExtensionsWithVersions;
 
             // Collect PHP error log (last 50 lines)
             $phpLogContent = '';

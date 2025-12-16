@@ -277,17 +277,31 @@
                 $osRelease = $osInfo['PRETTY_NAME'] ?? 'N/A';
             }
 
-            // Get PHP config path
+            // Get PHP config path and contents
             $phpIniPath = php_ini_loaded_file() ?: 'Not found';
+            $phpIniContent = 'N/A';
+            if ($phpIniPath && $phpIniPath !== 'Not found' && file_exists($phpIniPath) && is_readable($phpIniPath)) {
+                $phpIniContent = file_get_contents($phpIniPath);
+            }
 
-            // Get PHP extensions
+            // Get PHP extensions with versions
             $phpExtensions = get_loaded_extensions();
             sort($phpExtensions);
             $phpExtensionsCount = count($phpExtensions);
-            $phpExtensionsFormatted = implode(', ', $phpExtensions);
+            $phpExtensionsWithVersions = [];
+            foreach ($phpExtensions as $ext) {
+                $version = phpversion($ext);
+                $phpExtensionsWithVersions[] = $ext . ($version ? ' (v' . $version . ')' : '');
+            }
+            $phpExtensionsFormatted = implode("\n", $phpExtensionsWithVersions);
 
-            // Apache config paths
-            $apacheMainConfig = file_exists('/etc/apache2/apache2.conf') ? '/etc/apache2/apache2.conf' : 'N/A';
+            // Apache config path and contents
+            $apacheMainConfigPath = '/etc/apache2/apache2.conf';
+            $apacheMainConfig = file_exists($apacheMainConfigPath) ? $apacheMainConfigPath : 'N/A';
+            $apacheConfigContent = 'N/A';
+            if (file_exists($apacheMainConfigPath) && is_readable($apacheMainConfigPath)) {
+                $apacheConfigContent = file_get_contents($apacheMainConfigPath);
+            }
             ?>
             <table class="debug-info-table">
                 <tr><td><strong>PHP Version</strong></td><td><?php echo phpversion(); ?></td></tr>
@@ -301,11 +315,28 @@
                 <tr><td><strong>Debian Version</strong></td><td><?php echo htmlspecialchars($debianVersion); ?></td></tr>
                 <tr><td><strong>OS Release</strong></td><td><?php echo htmlspecialchars($osRelease); ?></td></tr>
                 <tr><td><strong>MySQL/MariaDB Version</strong></td><td><?php echo htmlspecialchars($mysqlVersion); ?></td></tr>
-                <tr><td><strong>PHP Config (php.ini)</strong></td><td><?php echo htmlspecialchars($phpIniPath); ?></td></tr>
-                <tr><td><strong>Apache Main Config</strong></td><td><?php echo htmlspecialchars($apacheMainConfig); ?></td></tr>
+                <tr><td><strong>PHP Config Path</strong></td><td><?php echo htmlspecialchars($phpIniPath); ?></td></tr>
+                <tr><td><strong>Apache Config Path</strong></td><td><?php echo htmlspecialchars($apacheMainConfig); ?></td></tr>
                 <tr><td><strong>PHP Extensions</strong></td><td><?php echo $phpExtensionsCount; ?> loaded</td></tr>
-                <tr><td><strong>PHP Extensions List</strong></td><td style="font-size: 0.8rem; word-wrap: break-word; max-width: 400px;"><?php echo htmlspecialchars($phpExtensionsFormatted); ?></td></tr>
             </table>
+
+            <!-- PHP Extensions with Versions -->
+            <div style="margin-top: 1rem;">
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem;"><i class="fas fa-puzzle-piece"></i> PHP Extensions (with versions)</h4>
+                <pre class="debug-pre" style="max-height: 200px; overflow-y: auto;"><?php echo htmlspecialchars($phpExtensionsFormatted); ?></pre>
+            </div>
+
+            <!-- php.ini Contents -->
+            <div style="margin-top: 1rem;">
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem;"><i class="fab fa-php"></i> php.ini Contents</h4>
+                <pre class="debug-pre" style="max-height: 300px; overflow-y: auto;"><?php echo htmlspecialchars($phpIniContent); ?></pre>
+            </div>
+
+            <!-- apache2.conf Contents -->
+            <div style="margin-top: 1rem;">
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem;"><i class="fas fa-server"></i> apache2.conf Contents</h4>
+                <pre class="debug-pre" style="max-height: 300px; overflow-y: auto;"><?php echo htmlspecialchars($apacheConfigContent); ?></pre>
+            </div>
         </div>
     </div>
 
