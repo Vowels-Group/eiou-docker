@@ -71,9 +71,9 @@
         <div class="info-item">
             <div class="info-label">Public Key:</div>
             <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
-                <span style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo $user->has('public') ? $user->getPublicKey() : 'Not available'; ?></span>
+                <span id="public-key-value" style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo $user->has('public') ? htmlspecialchars($user->getPublicKey()) : 'Not available'; ?></span>
                 <?php if ($user->has('public')): ?>
-                    <button class="btn btn-sm btn-outline" onclick="copyToClipboard('<?php echo htmlspecialchars($user->getPublicKey(), ENT_QUOTES); ?>', 'Public key copied to clipboard!');" title="Copy public key">
+                    <button class="btn btn-sm btn-outline" onclick="var pk = document.getElementById('public-key-value').textContent; copyToClipboard(pk, 'Public key copied to clipboard!');" title="Copy public key">
                         <i class="fas fa-copy"></i> Copy
                     </button>
                 <?php endif; ?>
