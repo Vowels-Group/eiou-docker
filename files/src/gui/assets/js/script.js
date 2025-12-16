@@ -795,6 +795,58 @@ function closeContactModal() {
     document.getElementById('contactModal').style.display = 'none';
 }
 
+// Refresh contact modal and reopen on transactions tab (Tor Browser compatible)
+function refreshContactModalTransactions() {
+    // Store the current contact address to reopen after refresh
+    if (currentContactAddress) {
+        sessionStorage.setItem('eiou_reopen_contact_address', currentContactAddress);
+        sessionStorage.setItem('eiou_reopen_contact_tab', 'transactions-tab');
+    }
+    window.location.reload();
+}
+
+// Check if we need to reopen contact modal after refresh (Tor Browser compatible)
+function checkReopenContactModal() {
+    var reopenAddress = sessionStorage.getItem('eiou_reopen_contact_address');
+    var reopenTab = sessionStorage.getItem('eiou_reopen_contact_tab');
+
+    if (reopenAddress) {
+        // Clear the stored values
+        sessionStorage.removeItem('eiou_reopen_contact_address');
+        sessionStorage.removeItem('eiou_reopen_contact_tab');
+
+        // Find the contact card with matching address and click it
+        var contactCards = document.querySelectorAll('.contact-card');
+        for (var i = 0; i < contactCards.length; i++) {
+            var card = contactCards[i];
+            var onclickAttr = card.getAttribute('onclick');
+            if (onclickAttr && onclickAttr.indexOf(reopenAddress) !== -1) {
+                // Extract the contact data from the onclick attribute
+                var match = onclickAttr.match(/openContactModal\((\{.*\})\)/);
+                if (match && match[1]) {
+                    try {
+                        // Parse the JSON (it's already valid JSON in the onclick)
+                        var contactData = JSON.parse(match[1].replace(/&quot;/g, '"'));
+                        // Open the modal with the transactions tab
+                        openContactModal(contactData, reopenTab || 'transactions-tab');
+                        return;
+                    } catch (e) {
+                        // If parsing fails, just click the card
+                        card.click();
+                        // Then switch to transactions tab after a short delay
+                        if (reopenTab) {
+                            setTimeout(function() {
+                                showModalTab(reopenTab, null);
+                            }, 100);
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
 function showModalTab(tabId, button) {
     // Hide all tab contents
     var tabContents = document.querySelectorAll('.modal-tab-content');
@@ -959,6 +1011,9 @@ window.addEventListener('DOMContentLoaded', function() {
             }
         };
     }
+
+    // Check if we need to reopen contact modal after refresh
+    checkReopenContactModal();
 });
 
 // ============================================================================
