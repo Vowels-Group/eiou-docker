@@ -326,16 +326,22 @@
                 <pre class="debug-pre" style="max-height: 200px; overflow-y: auto;"><?php echo htmlspecialchars($phpExtensionsFormatted); ?></pre>
             </div>
 
-            <!-- php.ini Contents -->
+            <!-- php.ini Contents (Collapsible) -->
             <div style="margin-top: 1rem;">
-                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem;"><i class="fab fa-php"></i> php.ini Contents</h4>
-                <pre class="debug-pre" style="max-height: 300px; overflow-y: auto;"><?php echo htmlspecialchars($phpIniContent); ?></pre>
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleConfigSection('phpini-content', 'phpini-arrow')">
+                    <i class="fab fa-php"></i> php.ini Contents
+                    <i id="phpini-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
+                </h4>
+                <pre id="phpini-content" class="debug-pre" style="max-height: 300px; overflow-y: auto; display: none;"><?php echo htmlspecialchars($phpIniContent); ?></pre>
             </div>
 
-            <!-- apache2.conf Contents -->
+            <!-- apache2.conf Contents (Collapsible) -->
             <div style="margin-top: 1rem;">
-                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem;"><i class="fas fa-server"></i> apache2.conf Contents</h4>
-                <pre class="debug-pre" style="max-height: 300px; overflow-y: auto;"><?php echo htmlspecialchars($apacheConfigContent); ?></pre>
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleConfigSection('apache-content', 'apache-arrow')">
+                    <i class="fas fa-server"></i> apache2.conf Contents
+                    <i id="apache-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
+                </h4>
+                <pre id="apache-content" class="debug-pre" style="max-height: 300px; overflow-y: auto; display: none;"><?php echo htmlspecialchars($apacheConfigContent); ?></pre>
             </div>
         </div>
     </div>

@@ -992,6 +992,22 @@ function showDebugTab(tabId, button) {
     }
 }
 
+// Toggle config section visibility (Tor Browser compatible)
+function toggleConfigSection(contentId, arrowId) {
+    var content = document.getElementById(contentId);
+    var arrow = document.getElementById(arrowId);
+
+    if (content && arrow) {
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            arrow.style.transform = 'rotate(180deg)';
+        } else {
+            content.style.display = 'none';
+            arrow.style.transform = 'rotate(0deg)';
+        }
+    }
+}
+
 // ============================================================================
 // WALLET INFORMATION FUNCTIONS
 // ============================================================================
