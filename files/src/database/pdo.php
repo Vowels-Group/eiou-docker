@@ -13,6 +13,7 @@
 
 require_once dirname(__DIR__) . '/core/Constants.php';
 require_once dirname(__DIR__) . '/core/DatabaseContext.php';
+require_once dirname(__DIR__) . '/utils/SecureLogger.php';
 
 function createPDOConnection(): PDO {
     // Try to use UserContext if available, fallback to global $user
@@ -28,16 +29,7 @@ function createPDOConnection(): PDO {
     
     // Validate required configuration
     if (!$dbHost || !$dbName || !$dbUser || !$dbPass) {
-        if (class_exists('SecureLogger')) {
-            SecureLogger::error("Missing database configuration parameters", [
-                'has_host' => !empty($dbHost),
-                'has_name' => !empty($dbName),
-                'has_user' => !empty($dbUser),
-                'has_pass' => !empty($dbPass)
-            ]);
-        } else {
-            error_log("Missing database configuration parameters");
-        }
+        SecureLogger::error("Missing database configuration parameters");
         throw new RuntimeException("Database configuration incomplete");
     }
 
@@ -60,16 +52,7 @@ function createPDOConnection(): PDO {
         return $pdo;
     } catch (PDOException $e) {
         // Log the error securely (don't expose connection details)
-        // Use SecureLogger if available, otherwise error_log
-        if (class_exists('SecureLogger')) {
-            SecureLogger::critical("Database connection failed", [
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
-        } else {
-            error_log("Database connection failed: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
-        }
+        SecureLogger::logException($e, 'CRITICAL');
 
         // Throw exception to let ErrorHandler handle it
         // This allows upper layers to decide how to handle the error

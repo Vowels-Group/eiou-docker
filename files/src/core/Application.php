@@ -64,7 +64,7 @@ class Application {
                         'error' => $e->getMessage()
                     ]);
                 } else {
-                    error_log("Application: Database setup failed - " . $e->getMessage());
+                    SecureLogger::logException($e, 'CRITICAL');
                 }
                 // If database setup fails, we cannot continue initialization
                 throw new RuntimeException("Failed to initialize application: " . $e->getMessage(), 0, $e);

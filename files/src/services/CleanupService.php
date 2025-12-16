@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../utils/SecureLogger.php';
+
 /**
  * Cleanup Service
  *
@@ -87,7 +89,7 @@ class CleanupService {
 
             return count($expiredMessages);
         } catch (PDOException $e) {
-            error_log("Error processing cleanup messages: " . $e->getMessage());
+            SecureLogger::error("Error processing cleanup messages", ['error' => $e->getMessage()]);
             return 0;
         }
     }
