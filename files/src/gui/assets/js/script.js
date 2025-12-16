@@ -804,6 +804,17 @@ function showContactTxDetail(index) {
         ? '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-network-wired"></i> P2P</span>'
         : '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-exchange-alt"></i> Direct</span>';
 
+    // Build role badge (Sent/Received/Relay)
+    var roleIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
+    var roleLabel = tx.type === 'sent' ? 'Sent' : 'Received';
+    var roleColor = tx.type === 'sent' ? '#dc3545' : '#28a745';
+    if (tx.direction === 'relay') {
+        roleIcon = 'fa-random';
+        roleLabel = 'Relay';
+        roleColor = '#17a2b8';
+    }
+    var roleBadge = '<span style="background: ' + roleColor + '; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
+
     // Build HTML content
     var html = '';
 
@@ -813,10 +824,11 @@ function showContactTxDetail(index) {
     html += '<div style="color: rgba(255,255,255,0.9); margin-top: 0.5rem;"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
     html += '</div>';
 
-    // Status and type badges
+    // Status, type, and role badges
     html += '<div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">';
     html += statusBadge;
     html += txTypeBadge;
+    html += roleBadge;
     html += '</div>';
 
     // Details section
