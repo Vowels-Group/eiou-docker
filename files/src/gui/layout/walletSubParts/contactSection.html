@@ -219,16 +219,11 @@
             </div>
 
             <div class="contact-info-section">
-                <h4><i class="fas fa-map-marker-alt"></i> Addresses</h4>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <label><i class="fas fa-globe"></i> HTTP Address</label>
-                        <div id="modal_http_address" class="info-value monospace">Not Available</div>
-                    </div>
-                    <div class="info-item">
-                        <label><i class="fas fa-user-secret"></i> Tor Address</label>
-                        <div id="modal_tor_address" class="info-value monospace">Not Available</div>
-                    </div>
+                <h4><i class="fas fa-map-marker-alt"></i> Address</h4>
+                <div id="modal_address_container">
+                    <select id="modal_address_selector" class="info-value" style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #ced4da; margin-bottom: 0.5rem; display: none;" onchange="showSelectedContactAddress()">
+                    </select>
+                    <div id="modal_address_display" class="info-value monospace" style="word-break: break-all;">Not Available</div>
                 </div>
             </div>
 
@@ -348,9 +343,36 @@ function openContactModal(contact, openTab) {
     // Set contact name in header
     document.getElementById('modal_contact_name').textContent = contact.name || 'Unknown';
 
-    // Set addresses
-    document.getElementById('modal_http_address').textContent = contact.http || 'Not Available';
-    document.getElementById('modal_tor_address').textContent = contact.tor || 'Not Available';
+    // Set addresses dropdown
+    var addressSelector = document.getElementById('modal_address_selector');
+    var addressDisplay = document.getElementById('modal_address_display');
+    addressSelector.innerHTML = '';
+
+    var addresses = [];
+    if (contact.http) {
+        addresses.push({ type: 'HTTP', address: contact.http, icon: 'fa-globe' });
+    }
+    if (contact.tor) {
+        addresses.push({ type: 'TOR', address: contact.tor, icon: 'fa-user-secret' });
+    }
+
+    if (addresses.length === 0) {
+        addressSelector.style.display = 'none';
+        addressDisplay.textContent = 'Not Available';
+    } else if (addresses.length === 1) {
+        addressSelector.style.display = 'none';
+        addressDisplay.textContent = addresses[0].address;
+    } else {
+        addressSelector.style.display = 'block';
+        for (var i = 0; i < addresses.length; i++) {
+            var option = document.createElement('option');
+            option.value = addresses[i].type;
+            option.setAttribute('data-address', addresses[i].address);
+            option.textContent = addresses[i].type;
+            addressSelector.appendChild(option);
+        }
+        addressDisplay.textContent = addresses[0].address;
+    }
 
     // Set public key
     document.getElementById('modal_pubkey').textContent = contact.pubkey || 'Not Available';
@@ -591,6 +613,14 @@ function showContactTxDetail(index) {
 function hideContactTxDetail() {
     document.getElementById('tx-detail-view').style.display = 'none';
     document.getElementById('tx-list-view').style.display = 'block';
+}
+
+// Show selected contact address from dropdown (Tor Browser compatible)
+function showSelectedContactAddress() {
+    var select = document.getElementById('modal_address_selector');
+    var selectedOption = select.options[select.selectedIndex];
+    var address = selectedOption.getAttribute('data-address');
+    document.getElementById('modal_address_display').textContent = address;
 }
 </script>
 
