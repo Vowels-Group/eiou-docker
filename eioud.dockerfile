@@ -33,7 +33,7 @@ RUN echo "ServerName localhost" | tee -a /etc/apache2/apache2.conf
 RUN a2enmod rewrite
 
 # Add API endpoint alias to Apache configuration
-# This allows /api/* to be served by the api.php script
+# This allows /api/* to be served by the Api.php script
 RUN echo 'Alias /api /var/www/html/api' >> /etc/apache2/sites-available/000-default.conf && \
     echo '<Directory /var/www/html>' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    AllowOverride All' >> /etc/apache2/sites-available/000-default.conf && \
@@ -44,8 +44,8 @@ RUN echo 'Alias /api /var/www/html/api' >> /etc/apache2/sites-available/000-defa
     echo '    RewriteRule ^api/(.*)$ /var/www/html/api/index.php [L,QSA]' >> /etc/apache2/sites-available/000-default.conf && \
     echo '</Directory>' >> /etc/apache2/sites-available/000-default.conf
 
-# Copy eiou.php file to /usr/local/bin and create a wrapper script
-COPY files/eiou/eiou.php /usr/local/bin/eiou.php
+# Copy Eiou.php file to /usr/local/bin and create a wrapper script
+COPY files/eiou/Eiou.php /usr/local/bin/eiou.php
 RUN echo '#!/bin/bash\nphp /usr/local/bin/eiou.php "$@"' > /usr/local/bin/eiou && \
     chmod +x /usr/local/bin/eiou
 
@@ -61,11 +61,11 @@ COPY files/root/ /etc/eiou/
 # Copy src folder to /etc/eiou/src
 COPY files/src/ /etc/eiou/src/
 
-RUN chown www-data:www-data /etc/eiou/security_init.php
-RUN chown www-data:www-data /etc/eiou/functions.php
-RUN chown www-data:www-data /etc/eiou/p2pMessages.php
-RUN chown www-data:www-data /etc/eiou/transactionMessages.php
-RUN chown www-data:www-data /etc/eiou/cleanupMessages.php
+RUN chown www-data:www-data /etc/eiou/SecurityInit.php
+RUN chown www-data:www-data /etc/eiou/Functions.php
+RUN chown www-data:www-data /etc/eiou/P2pMessages.php
+RUN chown www-data:www-data /etc/eiou/TransactionMessages.php
+RUN chown www-data:www-data /etc/eiou/CleanupMessages.php
 
 # Set _directories_ in the /etc/eiou/ directory to 755
 RUN find /etc/eiou/ -type d -exec chmod 755 "{}" \;
@@ -73,9 +73,9 @@ RUN find /etc/eiou/ -type d -exec chmod 755 "{}" \;
 # Set _files_ in the /etc/eiou/ directory and its subdirectories to 644
 RUN find /etc/eiou/ -type f -exec chmod 644 "{}" \;
 
-# Create API directory in web root and symlink to actual api.php
+# Create API directory in web root and symlink to actual Api.php
 RUN mkdir -p /var/www/html/api && \
-    ln -s /etc/eiou/api.php /var/www/html/api/index.php
+    ln -s /etc/eiou/Api.php /var/www/html/api/index.php
 
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini

@@ -2,7 +2,7 @@
 # Copyright 2025
 
 // This file accepts incoming messages from the eIOU network
-require_once '/etc/eiou/functions.php';
+require_once '/etc/eiou/Functions.php';
 
 if (!file_exists("/etc/eiou/userconfig.json")) {
   echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
@@ -10,7 +10,7 @@ if (!file_exists("/etc/eiou/userconfig.json")) {
 }
 
 // Require session management
-require_once '/etc/eiou/src/gui/includes/session.php';
+require_once '/etc/eiou/src/gui/includes/Session.php';
 
 // Start secure session
 $secureSession = new Session();
@@ -90,7 +90,7 @@ $secureSession->verifyCSRFToken();
 $csrfToken = $secureSession->getCSRFToken();
 
 // This file handles wallet interaction with the eIOU network
-require_once("/etc/eiou/src/gui/functions/functions.php");
+require_once("/etc/eiou/src/gui/functions/Functions.php");
 
 // Set content type for HTML
 header('Content-Type: text/html; charset=UTF-8');

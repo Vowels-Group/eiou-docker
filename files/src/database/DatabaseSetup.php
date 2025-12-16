@@ -21,7 +21,7 @@ function freshInstall(){
 
         // Connect as root to create database and user
         try {
-            require_once '/etc/eiou/src/database/databaseSchema.php';
+            require_once '/etc/eiou/src/database/DatabaseSchema.php';
             $rootConn = new PDO("mysql:host=$dbHost;unix_socket=/var/run/mysqld/mysqld.sock", $dbRootUser, $dbRootPass);         
             $rootConn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -118,7 +118,7 @@ function freshInstall(){
  * @return array Migration results
  */
 function runMigrations(PDO $pdo): array {
-    require_once '/etc/eiou/src/database/databaseSchema.php';
+    require_once '/etc/eiou/src/database/DatabaseSchema.php';
 
     $results = [];
 

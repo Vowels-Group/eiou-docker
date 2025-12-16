@@ -2,10 +2,10 @@
 # Copyright 2025
 
 // This file is how users interact with eiou
-require_once '/etc/eiou/functions.php';
+require_once '/etc/eiou/Functions.php';
 
 // Initialize security components for CLI
-require_once '/etc/eiou/security_init.php';
+require_once '/etc/eiou/SecurityInit.php';
 
 // Load CLI output manager for JSON support
 require_once '/etc/eiou/src/cli/CliOutputManager.php';

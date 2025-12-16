@@ -15,5 +15,5 @@ require_once 'src/services/ServiceContainer.php';
 require_once 'src/services/ServiceWrappers.php';
 
 // Require schema (echo/output/payload) functionality
-require_once 'src/schemas/echoSchema.php';
-require_once 'src/schemas/outputSchema.php';
+require_once 'src/schemas/EchoSchema.php';
+require_once 'src/schemas/OutputSchema.php';

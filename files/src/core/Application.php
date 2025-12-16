@@ -106,7 +106,7 @@ class Application {
      * Create Database
      */
     private function constructDatabase() {
-        require_once '/etc/eiou/src/database/databaseSetup.php';
+        require_once '/etc/eiou/src/database/DatabaseSetup.php';
         freshInstall();
     }
 
@@ -116,7 +116,7 @@ class Application {
      * @return PDO|null
      */
     private function getDatabase() {
-        require_once '/etc/eiou/src/database/pdo.php';
+        require_once '/etc/eiou/src/database/Pdo.php';
         try{
             $this->pdo = createPDOConnection();
         } catch (Exception $e) {
@@ -134,7 +134,7 @@ class Application {
         }
 
         try {
-            require_once '/etc/eiou/src/database/databaseSetup.php';
+            require_once '/etc/eiou/src/database/DatabaseSetup.php';
             $results = runMigrations($this->pdo);
 
             // Log any newly created tables

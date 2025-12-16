@@ -23,7 +23,7 @@ DATABASE_DIR="${SRC_DIR}//database"
 SERVICES_DIR="${SRC_DIR}//services"
 SECURITY_DIR="${SRC_DIR}//security"
 APPLICATION_FILE="${CORE_DIR}//Application.php"
-PDO_FILE="${DATABASE_DIR}//pdo.php"
+PDO_FILE="${DATABASE_DIR}//Pdo.php"
 PHP_ERRORS_LOG="//var//log//php_errors.log"
 APACHE_ERROR_LOG="//var//log//apache2//error.log"
 
