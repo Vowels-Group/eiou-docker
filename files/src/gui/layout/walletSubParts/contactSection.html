@@ -201,6 +201,19 @@
             </div>
 
             <div class="contact-info-section">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label><i class="fas fa-credit-card"></i> Credit Limit</label>
+                        <div class="info-value"><span id="modal_credit_limit">0.00</span> <span id="modal_credit_currency">USD</span></div>
+                    </div>
+                    <div class="info-item">
+                        <label><i class="fas fa-percent"></i> Fee</label>
+                        <div class="info-value"><span id="modal_fee">0.00</span>%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="contact-info-section">
                 <h4><i class="fas fa-fingerprint"></i> Contact ID</h4>
                 <div id="modal_contact_id" class="info-value monospace">Not Available</div>
             </div>
@@ -355,6 +368,13 @@ function openContactModal(contact, openTab) {
     balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(2);
     balanceEl.className = 'balance-amount';
     document.getElementById('modal_balance_currency').textContent = contact.currency || 'USD';
+
+    // Set credit limit and fee
+    var creditLimit = parseFloat(contact.credit_limit) || 0;
+    document.getElementById('modal_credit_limit').textContent = creditLimit.toFixed(2);
+    document.getElementById('modal_credit_currency').textContent = contact.currency || 'USD';
+    var fee = parseFloat(contact.fee) || 0;
+    document.getElementById('modal_fee').textContent = fee.toFixed(2);
 
     // Set status badge
     var statusBadge = document.getElementById('modal_status_badge');
