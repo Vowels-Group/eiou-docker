@@ -7,6 +7,7 @@
  */
 
 require_once dirname(__DIR__) . '/core/Constants.php';
+require_once __DIR__ . '/SecureLogger.php';
 class Security {
     /**
      * Encode output for safe HTML display (prevents XSS)
@@ -129,8 +130,8 @@ class Security {
         if (class_exists('SecureLogger')) {
             SecureLogger::logException($e, 'ERROR');
         } else {
-            // Fallback to error_log if SecureLogger not available
-            error_log("Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+            // Fallback to SecureLogger static method
+            SecureLogger::error($e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
         }
 
         // Return generic message to user
@@ -226,7 +227,7 @@ class Security {
                     'error' => $e->getMessage()
                 ]);
             } else {
-                error_log("Failed to generate secure token: " . $e->getMessage());
+                SecureLogger::error("Failed to generate secure token", ['error' => $e->getMessage()]);
             }
             throw new RuntimeException("Failed to generate secure random token");
         }
@@ -361,8 +362,7 @@ class Security {
         if (class_exists('SecureLogger')) {
             SecureLogger::warning("SECURITY EVENT: $event", $maskedContext);
         } else {
-            $logMessage = "SECURITY EVENT: $event | Context: " . json_encode($maskedContext);
-            error_log($logMessage);
+            SecureLogger::warning("SECURITY EVENT: $event", $maskedContext);
         }
     }
 }

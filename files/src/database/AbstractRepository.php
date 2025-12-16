@@ -1,5 +1,8 @@
 <?php
 # Copyright 2025
+
+require_once __DIR__ . '/../utils/SecureLogger.php';
+
 /**
  * Abstract Repository Base Class
  *
@@ -53,15 +56,9 @@ abstract class AbstractRepository {
             try {
                 $this->pdo = createPDOConnection();
             } catch (RuntimeException $e) {
-                // Use SecureLogger if available, otherwise fallback
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::logException($e, [
-                        'repository' => static::class,
-                        'context' => 'repository_initialization'
-                    ]);
-                } else {
-                    error_log("[" . static::class . "] Repository initialization failed: " . $e->getMessage());
-                }
+                SecureLogger::error("[" . static::class . "] Repository initialization failed", [
+                    'error' => $e->getMessage()
+                ]);
                 throw new RuntimeException(
                     "Failed to initialize " . static::class . ": " . $e->getMessage(),
                     $e->getCode(),
@@ -72,14 +69,7 @@ abstract class AbstractRepository {
 
         if (!$this->pdo) {
             $errorMessage = "Failed to initialize repository: Database connection unavailable";
-            if (class_exists('SecureLogger')) {
-                SecureLogger::error($errorMessage, [
-                    'repository' => static::class,
-                    'context' => 'repository_initialization'
-                ]);
-            } else {
-                error_log("[" . static::class . "] $errorMessage");
-            }
+            SecureLogger::error("[" . static::class . "] " . $errorMessage);
             throw new RuntimeException($errorMessage);
         }
         $this->loadCurrentUser();
@@ -394,22 +384,14 @@ abstract class AbstractRepository {
         }
 
         // Use SecureLogger for consistent error logging
-        if (class_exists('SecureLogger')) {
-            if ($exception) {
-                SecureLogger::logException($exception, $context);
-            } else {
-                SecureLogger::error($message, $context);
-            }
+        if ($exception) {
+            SecureLogger::logException($exception, $context);
         } else {
-            // Fallback to error_log if SecureLogger not available
             $logMessage = "[" . static::class . "] $message";
-            if ($exception) {
-                $logMessage .= ": " . $exception->getMessage();
-            }
             if ($query) {
                 $logMessage .= " | Query: $query";
             }
-            error_log($logMessage);
+            SecureLogger::debug($logMessage);
         }
     }
 

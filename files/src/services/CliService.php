@@ -1,6 +1,7 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../core/ErrorCodes.php';
 require_once __DIR__ . '/../utils/InputValidator.php';
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 
@@ -168,7 +169,7 @@ class CliService {
                 }
                 $value = $validation['value'];
             } else{
-                $output->error('Setting provided does not exist. No changes made.', 'INVALID_SETTING', 400);
+                $output->error('Setting provided does not exist. No changes made.', ErrorCodes::INVALID_SETTING, 400);
                 return;
             }
         } else{
@@ -555,7 +556,7 @@ class CliService {
                 if (isset($commands[$specificCommand])) {
                     $output->help([$specificCommand => $commands[$specificCommand]], $specificCommand);
                 } else {
-                    $output->error("Command '$specificCommand' does not exist", 'COMMAND_NOT_FOUND', 404);
+                    $output->error("Command '$specificCommand' does not exist", ErrorCodes::COMMAND_NOT_FOUND, 404);
                 }
             } else {
                 $output->help($commands);

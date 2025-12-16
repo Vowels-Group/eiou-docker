@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../utils/SecureLogger.php';
+
 /**
  * Message Service
  *
@@ -407,12 +409,12 @@ class MessageService {
      */
     public function validateMessageStructure(array $request): bool {
         if (!isset($request['typeMessage'])) {
-            error_log("Message structure invalid: missing 'typeMessage' field");
+            SecureLogger::warning("Message structure invalid: missing 'typeMessage' field");
             return false;
         }
 
         if (!isset($request['senderAddress'])) {
-            error_log("Message structure invalid: missing 'senderAddress' field");
+            SecureLogger::warning("Message structure invalid: missing 'senderAddress' field");
             return false;
         }
 

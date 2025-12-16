@@ -2,6 +2,7 @@
 # Copyright 2025
 
 require_once __DIR__ . '/../cli/CliOutputManager.php';
+require_once __DIR__ . '/../core/ErrorCodes.php';
 
 /**
  * Sync Service
@@ -130,7 +131,7 @@ class SyncService {
             } elseif($argument === 'balances'){
                 $this->syncAllBalances($output);
             } else {
-                $output->error("Invalid sync type. Use 'contacts', 'transactions', or 'balances'", 'INVALID_SYNC_TYPE', 400, [
+                $output->error("Invalid sync type. Use 'contacts', 'transactions', or 'balances'", ErrorCodes::INVALID_SYNC_TYPE, 400, [
                     'valid_types' => ['contacts', 'transactions', 'balances']
                 ]);
             }

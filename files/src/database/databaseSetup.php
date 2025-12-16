@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../utils/SecureLogger.php';
+
 function freshInstall(){
     // Check if the configuration file exists
     if (!file_exists('/etc/eiou/dbconfig.json')) {
@@ -40,13 +42,9 @@ function freshInstall(){
             } catch (PDOException $userExists) {
                 // User might already exist - try to use existing credentials
                 // This happens if database exists but dbconfig.json was deleted
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::warning("Database user creation failed (user might already exist)", [
-                        'error' => $userExists->getMessage()
-                    ]);
-                } else {
-                    error_log("Database user creation failed (user might already exist): " . $userExists->getMessage());
-                }
+                SecureLogger::warning("Database user creation failed (user might already exist)", [
+                    'error' => $userExists->getMessage()
+                ]);
                 throw new RuntimeException(
                     "Database exists but cannot create user. Please restore dbconfig.json or drop the existing database.",
                     500,
@@ -74,13 +72,9 @@ function freshInstall(){
                 $dbConn->exec(getDeliveryMetricsTableSchema());
                 $dbConn->exec(getRateLimitsTableSchema());
             } catch (PDOException $tableError) {
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::error("Table creation failed", [
-                        'error' => $tableError->getMessage()
-                    ]);
-                } else {
-                    error_log("Table creation failed: " . $tableError->getMessage());
-                }
+                SecureLogger::error("Table creation failed", [
+                    'error' => $tableError->getMessage()
+                ]);
                 throw new RuntimeException(
                     "Failed to create database tables: " . $tableError->getMessage(),
                     500,
@@ -98,16 +92,8 @@ function freshInstall(){
 
 
         } catch (PDOException $e) {
-            // Handle database error - use SecureLogger if available, otherwise error_log
-            if (class_exists('SecureLogger')) {
-                SecureLogger::critical("Database setup error", [
-                    'error' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine()
-                ]);
-            } else {
-                error_log("Database setup error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
-            }
+            // Handle database error
+            SecureLogger::logException($e, 'ERROR');
 
             // Throw exception to let ErrorHandler handle it
             throw new \RuntimeException(

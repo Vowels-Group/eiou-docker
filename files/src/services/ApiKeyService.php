@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../core/ErrorCodes.php';
+
 /**
  * API Key Service for CLI management
  *
@@ -80,7 +82,7 @@ class ApiKeyService {
         $name = $argv[3] ?? null;
 
         if (!$name) {
-            $this->output->error('Missing required argument: name', 'MISSING_ARGUMENT', 400);
+            $this->output->error('Missing required argument: name', ErrorCodes::MISSING_ARGUMENT, 400);
             $this->output->info("\nUsage: eiou apikey create <name> [permissions]\n");
             $this->output->info("Example: eiou apikey create \"My App\" wallet:read,contacts:read\n");
             return;
@@ -93,7 +95,7 @@ class ApiKeyService {
         // Validate permissions
         foreach ($permissions as $perm) {
             if (!in_array($perm, self::PERMISSIONS) && !preg_match('/^[a-z]+:\*$/', $perm)) {
-                $this->output->error("Invalid permission: $perm", 'INVALID_PERMISSION', 400);
+                $this->output->error("Invalid permission: $perm", ErrorCodes::INVALID_PERMISSION, 400);
                 $this->output->info("\nValid permissions: " . implode(', ', self::PERMISSIONS) . "\n");
                 return;
             }
@@ -127,7 +129,7 @@ class ApiKeyService {
             echo "\n";
 
         } catch (Exception $e) {
-            $this->output->error('Failed to create API key: ' . $e->getMessage(), 'CREATE_FAILED', 500);
+            $this->output->error('Failed to create API key: ' . $e->getMessage(), ErrorCodes::CREATE_FAILED, 500);
         }
     }
 
@@ -165,7 +167,7 @@ class ApiKeyService {
             echo "\n";
 
         } catch (Exception $e) {
-            $this->output->error('Failed to list API keys: ' . $e->getMessage(), 'LIST_FAILED', 500);
+            $this->output->error('Failed to list API keys: ' . $e->getMessage(), ErrorCodes::LIST_FAILED, 500);
         }
     }
 
@@ -178,7 +180,7 @@ class ApiKeyService {
         $keyId = $argv[3] ?? null;
 
         if (!$keyId) {
-            $this->output->error('Missing required argument: key_id', 'MISSING_ARGUMENT', 400);
+            $this->output->error('Missing required argument: key_id', ErrorCodes::MISSING_ARGUMENT, 400);
             $this->output->info("\nUsage: eiou apikey delete <key_id>\n");
             return;
         }
@@ -190,10 +192,10 @@ class ApiKeyService {
                 $this->output->success("API key deleted successfully", ['key_id' => $keyId]);
                 echo "API key $keyId has been permanently deleted.\n";
             } else {
-                $this->output->error("API key not found: $keyId", 'NOT_FOUND', 404);
+                $this->output->error("API key not found: $keyId", ErrorCodes::NOT_FOUND, 404);
             }
         } catch (Exception $e) {
-            $this->output->error('Failed to delete API key: ' . $e->getMessage(), 'DELETE_FAILED', 500);
+            $this->output->error('Failed to delete API key: ' . $e->getMessage(), ErrorCodes::DELETE_FAILED, 500);
         }
     }
 
@@ -206,7 +208,7 @@ class ApiKeyService {
         $keyId = $argv[3] ?? null;
 
         if (!$keyId) {
-            $this->output->error('Missing required argument: key_id', 'MISSING_ARGUMENT', 400);
+            $this->output->error('Missing required argument: key_id', ErrorCodes::MISSING_ARGUMENT, 400);
             $this->output->info("\nUsage: eiou apikey disable <key_id>\n");
             return;
         }
@@ -218,10 +220,10 @@ class ApiKeyService {
                 $this->output->success("API key disabled", ['key_id' => $keyId]);
                 echo "API key $keyId has been disabled. It can no longer be used.\n";
             } else {
-                $this->output->error("API key not found: $keyId", 'NOT_FOUND', 404);
+                $this->output->error("API key not found: $keyId", ErrorCodes::NOT_FOUND, 404);
             }
         } catch (Exception $e) {
-            $this->output->error('Failed to disable API key: ' . $e->getMessage(), 'DISABLE_FAILED', 500);
+            $this->output->error('Failed to disable API key: ' . $e->getMessage(), ErrorCodes::DISABLE_FAILED, 500);
         }
     }
 
@@ -234,7 +236,7 @@ class ApiKeyService {
         $keyId = $argv[3] ?? null;
 
         if (!$keyId) {
-            $this->output->error('Missing required argument: key_id', 'MISSING_ARGUMENT', 400);
+            $this->output->error('Missing required argument: key_id', ErrorCodes::MISSING_ARGUMENT, 400);
             $this->output->info("\nUsage: eiou apikey enable <key_id>\n");
             return;
         }
@@ -246,10 +248,10 @@ class ApiKeyService {
                 $this->output->success("API key enabled", ['key_id' => $keyId]);
                 echo "API key $keyId has been enabled and is now active.\n";
             } else {
-                $this->output->error("API key not found: $keyId", 'NOT_FOUND', 404);
+                $this->output->error("API key not found: $keyId", ErrorCodes::NOT_FOUND, 404);
             }
         } catch (Exception $e) {
-            $this->output->error('Failed to enable API key: ' . $e->getMessage(), 'ENABLE_FAILED', 500);
+            $this->output->error('Failed to enable API key: ' . $e->getMessage(), ErrorCodes::ENABLE_FAILED, 500);
         }
     }
 

@@ -1,6 +1,7 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 
 /**
@@ -255,7 +256,7 @@ class RP2pService {
             return true;
         } catch (PDOException $e) {
             // Handle database error
-            error_log("Error retrieving existence of RP2P by hash" . $e->getMessage());
+            SecureLogger::error("Error retrieving existence of RP2P by hash", ['error' => $e->getMessage()]);
             if($echo){
                 echo json_encode([
                     "status" => "rejected",

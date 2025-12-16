@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../utils/SecureLogger.php';
+
 /**
  * Service Container
  *
@@ -111,11 +113,7 @@ class ServiceContainer {
             $this->pdo = createPDOConnection();
         } catch (RuntimeException $e) {
             // Log the error
-            if (isset($this->utils['SecureLogger'])) {
-                $this->utils['SecureLogger']->logException($e, 'CRITICAL');
-            } else {
-                error_log("ServiceContainer: Database connection failed - " . $e->getMessage());
-            }
+            SecureLogger::logException($e, 'CRITICAL');
             // Set PDO to null to indicate unavailability
             $this->pdo = null;
         }

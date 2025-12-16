@@ -4,6 +4,8 @@
  * Provides consistent error handling patterns across the application
  */
 
+require_once __DIR__ . '/ErrorCodes.php';
+
 class ErrorHandler {
 
     private static $errorHandlers = [];
@@ -174,10 +176,10 @@ class ErrorHandler {
      */
     private static function displaySafeError() {
         if (php_sapi_name() === 'cli') {
-            echo Constants::ERROR_GENERIC . "\n";
+            echo ErrorCodes::MESSAGE_GENERIC . "\n";
         } else {
-            http_response_code(Constants::HTTP_INTERNAL_SERVER_ERROR);
-            echo Constants::ERROR_GENERIC;
+            http_response_code(ErrorCodes::HTTP_INTERNAL_SERVER_ERROR);
+            echo ErrorCodes::MESSAGE_GENERIC;
         }
     }
 

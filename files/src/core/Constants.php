@@ -163,15 +163,6 @@ class Constants {
     const VALIDATION_STRING_MAX_LENGTH = 255;
     const VALIDATION_STRING_MIN_LENGTH = 1;
 
-    // HTTP status codes
-    const HTTP_OK = 200;
-    const HTTP_BAD_REQUEST = 400;
-    const HTTP_UNAUTHORIZED = 401;
-    const HTTP_FORBIDDEN = 403;
-    const HTTP_NOT_FOUND = 404;
-    const HTTP_TOO_MANY_REQUESTS = 429;
-    const HTTP_INTERNAL_SERVER_ERROR = 500;
-
     // Time conversion factors
     const TIME_MICROSECONDS_PER_MILLISECOND = 1000;
     const TIME_MICROSECONDS_TO_INT = 10000;
@@ -212,13 +203,6 @@ class Constants {
 
     const LOG_FILE_APP = '/var/log/eiou/app.log';
     const LOG_LEVEL = 'INFO';
-
-    // Error messages
-    const ERROR_GENERIC = "An error occurred. Please try again later.";
-    const ERROR_INVALID_INPUT = "Invalid input provided.";
-    const ERROR_DATABASE_CONNECTION = "Database connection failed.";
-    const ERROR_UNAUTHORIZED = "Unauthorized access.";
-    const ERROR_RATE_LIMITED = "Too many requests. Please try again later.";
 
     /**
      * Get a constant value with optional default

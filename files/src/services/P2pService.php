@@ -2,6 +2,7 @@
 # Copyright 2025
 
 require_once __DIR__ . '/../utils/InputValidator.php';
+require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 
 /**
@@ -311,7 +312,7 @@ class P2pService {
             return true;
         } catch (PDOException $e) {
             // Handle database error
-            error_log("Error retrieving existence of P2P by hash" , $e->getMessage());
+            SecureLogger::error("Error retrieving existence of P2P by hash", ['error' => $e->getMessage()]);
             if($echo){
                 echo json_encode([
                     "status" => "rejected",
@@ -335,7 +336,7 @@ class P2pService {
         try {
             // Validate required fields
             if (!isset($request['senderAddress'], $request['hash'], $request['amount'])) {
-                error_log("Missing required fields in P2P request: " . json_encode(Security::maskSensitiveData($request)));
+                SecureLogger::warning("Missing required fields in P2P request");
                 throw new InvalidArgumentException("Invalid P2P request structure");
             }
 
@@ -370,10 +371,10 @@ class P2pService {
                 $this->p2pRepository->updateStatus($request['hash'], 'queued');
             }
         } catch (PDOException $e) {
-            error_log("Database error in handleP2pRequest: " . $e->getMessage());
+            SecureLogger::logException($e, 'ERROR');
             throw $e;
         } catch (Exception $e) {
-            error_log("Error in handleP2pRequest: " . $e->getMessage());
+            SecureLogger::error("Error in handleP2pRequest", ['error' => $e->getMessage()]);
             throw $e;
         }
     }
@@ -455,7 +456,7 @@ class P2pService {
         try {
             $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
         } catch (Exception $e) {
-            error_log("Failed to generate random salt: " . $e->getMessage());
+            SecureLogger::error("Failed to generate random salt", ['error' => $e->getMessage()]);
             throw new RuntimeException("Failed to generate secure random data");
         }
 
@@ -491,7 +492,7 @@ class P2pService {
         try {
             $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
         } catch (Exception $e) {
-            error_log("Failed to generate random salt: " . $e->getMessage());
+            SecureLogger::error("Failed to generate random salt", ['error' => $e->getMessage()]);
             throw new RuntimeException("Failed to generate secure random data");
         }
 

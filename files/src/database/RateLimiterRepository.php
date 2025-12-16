@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../utils/SecureLogger.php';
+
 /**
  * Rate Limiter Repository
  *
@@ -138,13 +140,9 @@ class RateLimiterRepository {
             ");
             return $stmt->execute([$olderThanSeconds]);
         } catch (PDOException $e) {
-            if (class_exists('SecureLogger')) {
-                SecureLogger::warning("Rate limit cleanup failed", [
-                    'error' => $e->getMessage()
-                ]);
-            } else {
-                error_log("Rate limit cleanup failed: " . $e->getMessage());
-            }
+            SecureLogger::warning("Rate limit cleanup failed", [
+                'error' => $e->getMessage()
+            ]);
             return false;
         }
     }
