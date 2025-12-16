@@ -1415,8 +1415,6 @@ html {
 }
 
 .pubkey-display {
-    max-height: 80px;
-    overflow-y: auto;
     white-space: pre-wrap;
     word-break: break-all;
 }
