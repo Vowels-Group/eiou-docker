@@ -10,7 +10,8 @@
  */
 class ContactDataBuilder
 {
-    private array $addressTypes;
+    /** @var array */
+    private $addressTypes;
 
     /**
      * Constructor

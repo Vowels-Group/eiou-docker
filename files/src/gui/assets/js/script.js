@@ -267,11 +267,13 @@ window.onclick = function(event) {
     }
 }
 
-// Close modal with Escape key
+// Close modal with Escape key (Tor Browser compatible - uses keyCode fallback)
 document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') {
+    var isEscape = event.key === 'Escape' || event.keyCode === 27;
+    if (isEscape) {
         closeEditContactModal();
         closeTransactionModal();
+        closeContactModal();
     }
 });
 
@@ -305,7 +307,7 @@ function showToast(title, message, type) {
         '<div class="toast-title">' + title + '</div>' +
         '<div class="toast-message">' + message + '</div>' +
         '</div>' +
-        '<button class="toast-close" onclick="this.parentElement.remove()">&times;</button>';
+        '<button class="toast-close" onclick="this.parentElement.parentNode.removeChild(this.parentElement)">&times;</button>';
 
     container.appendChild(toast);
 
@@ -317,7 +319,7 @@ function showToast(title, message, type) {
             toast.style.transition = 'all 0.3s ease';
             setTimeout(function() {
                 if (toast.parentElement) {
-                    toast.remove();
+                    toast.parentElement.removeChild(toast);
                 }
             }, 300);
         }
@@ -881,6 +883,4 @@ function showSelectedUserAddress() {
     var selectedOption = select.options[select.selectedIndex];
     var address = selectedOption.getAttribute('data-address');
     document.getElementById('user-address-value').textContent = address;
-    document.getElementById('user-address-copy').value = address;
-    document.getElementById('user-address-copy').style.display = 'none';
 }

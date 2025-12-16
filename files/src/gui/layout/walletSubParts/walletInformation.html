@@ -27,7 +27,12 @@
         // Use getUserLocaters() for dynamic address handling
         $userAddresses = $user->getUserLocaters();
         $addressCount = count($userAddresses);
-        $firstAddressType = $addressCount > 0 ? array_key_first($userAddresses) : null;
+        // Get first key in PHP 5.4+ compatible way
+        $firstAddressType = null;
+        if ($addressCount > 0) {
+            $keys = array_keys($userAddresses);
+            $firstAddressType = $keys[0];
+        }
         ?>
         <div class="info-item">
             <div class="info-label">Your Address<?php echo $addressCount > 1 ? 'es' : ''; ?>:</div>
