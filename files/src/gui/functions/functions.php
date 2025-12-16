@@ -36,16 +36,17 @@ if (isset($_GET['message']) && isset($_GET['type'])) {
 }
 
 // Get user based data
+$maxDisplayLines = $user->getMaxOutput();
 $totalBalance = $transactionService->getUserTotalBalance();
 $totalEarnings = $currencyUtility->convertCentsToDollars($p2pService->getUserTotalEarnings());
-$transactions = $transactionService->getTransactionHistory(10);
+$transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 
 // Contact data
 $allContacts = $contactService->getAllContacts();
 $pendingContacts = $contactService->getPendingContactRequests();
-$pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests());
-$acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts());
-$blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts());
+$pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $maxDisplayLines);
+$acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $maxDisplayLines);
+$blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $maxDisplayLines);
 
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
