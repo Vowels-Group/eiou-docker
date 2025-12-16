@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messages - EIOU</title>
+    <link rel="stylesheet" href="/plugins/messages/assets/css/messages.css">
+</head>
+<body>
+    <div class="messages-container">
+        <!-- Sidebar: Conversation List -->
+        <aside class="conversations-sidebar">
+            <div class="sidebar-header">
+                <h2>Messages</h2>
+                <button id="new-conversation-btn" class="btn-icon" title="New Conversation">
+                    <span class="icon">+</span>
+                </button>
+            </div>
+
+            <div class="search-bar">
+                <input type="text" id="search-input" placeholder="Search messages..." />
+            </div>
+
+            <div class="conversations-list" id="conversations-list">
+                <!-- Conversations loaded dynamically -->
+                <div class="loading">Loading conversations...</div>
+            </div>
+        </aside>
+
+        <!-- Main: Message Thread -->
+        <main class="message-thread">
+            <div class="thread-header" id="thread-header">
+                <div class="recipient-info">
+                    <span class="recipient-name" id="recipient-name">Select a conversation</span>
+                    <span class="recipient-key" id="recipient-key"></span>
+                </div>
+                <div class="thread-actions">
+                    <button id="archive-btn" class="btn-icon" title="Archive" style="display: none;">
+                        <span class="icon">📁</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="messages-list" id="messages-list">
+                <div class="empty-state" id="empty-state">
+                    <div class="empty-icon">💬</div>
+                    <p>Select a conversation to view messages</p>
+                </div>
+            </div>
+
+            <div class="message-composer" id="message-composer" style="display: none;">
+                <textarea id="message-input" placeholder="Type a message..." rows="1"></textarea>
+                <button id="send-btn" class="btn-primary" disabled>Send</button>
+            </div>
+        </main>
+    </div>
+
+    <!-- New Conversation Modal -->
+    <div class="modal" id="new-conversation-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>New Conversation</h3>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="recipient-key-input">Recipient's Public Key</label>
+                <input type="text" id="recipient-key-input" placeholder="Enter public key..." />
+                <p class="hint">Enter the public key of the user you want to message.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="modal-cancel">Cancel</button>
+                <button class="btn-primary" id="modal-start">Start Conversation</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Results Modal -->
+    <div class="modal" id="search-results-modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Search Results</h3>
+                <button class="modal-close" id="search-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-results" id="search-results">
+                    <!-- Search results loaded dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/plugins/messages/assets/js/messages.js"></script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+{
+    "name": "Messages",
+    "id": "messages",
+    "version": "1.0.0",
+    "description": "Peer-to-peer messaging between users on eiou-docker nodes. Send encrypted messages using public keys.",
+    "author": "EIOU Team",
+    "license": "MIT",
+    "homepage": "https://github.com/eiou-org/eiou-docker",
+    "category": "communication",
+    "tags": ["messaging", "p2p", "encrypted", "communication"],
+    "entrypoint": "MessagesPlugin.php",
+    "minimum_eiou_version": "1.0.0",
+    "dependencies": [],
+    "permissions": [
+        "messages:read",
+        "messages:write",
+        "contacts:read"
+    ],
+    "settings": {
+        "max_message_length": 10000,
+        "max_attachments": 5,
+        "max_attachment_size_mb": 10,
+        "message_retention_days": 365,
+        "encryption_enabled": true,
+        "read_receipts_enabled": true,
+        "typing_indicators_enabled": true
+    },
+    "autoload": {
+        "classes": {
+            "MessagesPlugin": "MessagesPlugin.php",
+            "MessagesService": "services/MessagesService.php",
+            "MessagesRepository": "repositories/MessagesRepository.php",
+            "MessagesApiController": "api/MessagesApiController.php",
+            "MessagesCliHandler": "cli/MessagesCliHandler.php",
+            "Message": "models/Message.php",
+            "Conversation": "models/Conversation.php"
+        }
+    },
+    "api": {
+        "prefix": "/api/v1/messages",
+        "controller": "MessagesApiController",
+        "routes": [
+            {
+                "method": "GET",
+                "path": "/conversations",
+                "action": "listConversations",
+                "description": "List all conversations",
+                "auth_required": true
+            },
+            {
+                "method": "POST",
+                "path": "/conversations",
+                "action": "createConversation",
+                "description": "Start a new conversation",
+                "auth_required": true
+            },
+            {
+                "method": "GET",
+                "path": "/conversations/:id",
+                "action": "getConversation",
+                "description": "Get conversation details",
+                "auth_required": true
+            },
+            {
+                "method": "DELETE",
+                "path": "/conversations/:id",
+                "action": "deleteConversation",
+                "description": "Delete a conversation",
+                "auth_required": true
+            },
+            {
+                "method": "GET",
+                "path": "/conversations/:id/messages",
+                "action": "getMessages",
+                "description": "Get messages in a conversation",
+                "auth_required": true
+            },
+            {
+                "method": "POST",
+                "path": "/send",
+                "action": "sendMessage",
+                "description": "Send a message",
+                "auth_required": true
+            },
+            {
+                "method": "POST",
+                "path": "/read/:id",
+                "action": "markAsRead",
+                "description": "Mark message as read",
+                "auth_required": true
+            },
+            {
+                "method": "DELETE",
+                "path": "/:id",
+                "action": "deleteMessage",
+                "description": "Delete a message",
+                "auth_required": true
+            },
+            {
+                "method": "GET",
+                "path": "/unread",
+                "action": "getUnreadCount",
+                "description": "Get unread message count",
+                "auth_required": true
+            },
+            {
+                "method": "GET",
+                "path": "/search",
+                "action": "searchMessages",
+                "description": "Search messages",
+                "auth_required": true
+            }
+        ]
+    },
+    "cli": {
+        "command": "messages",
+        "handler": "MessagesCliHandler",
+        "subcommands": [
+            {
+                "name": "list",
+                "description": "List conversations",
+                "usage": "eiou messages list"
+            },
+            {
+                "name": "send",
+                "description": "Send a message",
+                "usage": "eiou messages send <public-key> <message>"
+            },
+            {
+                "name": "read",
+                "description": "Read messages from a conversation",
+                "usage": "eiou messages read <conversation-id> [--limit=<n>]"
+            },
+            {
+                "name": "unread",
+                "description": "Show unread message count",
+                "usage": "eiou messages unread"
+            },
+            {
+                "name": "delete",
+                "description": "Delete a message or conversation",
+                "usage": "eiou messages delete <id> [--conversation]"
+            },
+            {
+                "name": "search",
+                "description": "Search messages",
+                "usage": "eiou messages search <query>"
+            }
+        ]
+    },
+    "gui": {
+        "menu_item": {
+            "label": "Messages",
+            "icon": "message-circle",
+            "position": 30
+        },
+        "templates": [
+            "gui/templates/messages.html"
+        ],
+        "assets": {
+            "css": ["gui/assets/css/messages.css"],
+            "js": ["gui/assets/js/messages.js"]
+        }
+    },
+    "hooks": {
+        "on_install": "onInstall",
+        "on_uninstall": "onUninstall",
+        "on_message_sent": "onMessageSent",
+        "on_message_received": "onMessageReceived",
+        "on_message_read": "onMessageRead"
+    }
+}
