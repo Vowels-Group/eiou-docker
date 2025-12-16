@@ -65,6 +65,9 @@ class ErrorCodes
     public const WALLET_NOT_FOUND = 'WALLET_NOT_FOUND';
     public const INVALID_HOSTNAME = 'INVALID_HOSTNAME';
     public const SEED_RESTORE_FAILED = 'SEED_RESTORE_FAILED';
+    public const INVALID_SEED_PHRASE = 'INVALID_SEED_PHRASE';
+    public const INVALID_WORD_COUNT = 'INVALID_WORD_COUNT';
+    public const INVALID_CHECKSUM = 'INVALID_CHECKSUM';
 
     // Contact errors
     public const CONTACT_NOT_FOUND = 'CONTACT_NOT_FOUND';
@@ -81,6 +84,7 @@ class ErrorCodes
     public const UPDATE_FAILED = 'UPDATE_FAILED';
     public const ADDRESS_UPDATE_FAILED = 'ADDRESS_UPDATE_FAILED';
     public const NO_CONTACTS = 'NO_CONTACTS';
+    public const CONTACT_UNREACHABLE = 'CONTACT_UNREACHABLE';
 
     // Transaction errors
     public const TRANSACTION_FAILED = 'TRANSACTION_FAILED';
@@ -129,6 +133,7 @@ class ErrorCodes
     public const HTTP_CONFLICT = 409;
     public const HTTP_TOO_MANY_REQUESTS = 429;
     public const HTTP_INTERNAL_SERVER_ERROR = 500;
+    public const HTTP_SERVICE_UNAVAILABLE = 503;
     public const HTTP_GATEWAY_TIMEOUT = 504;
 
     // User-facing error messages
@@ -161,6 +166,9 @@ class ErrorCodes
             self::INVALID_SETTING => 400,
             self::INVALID_SYNC_TYPE => 400,
             self::INVALID_HOSTNAME => 400,
+            self::INVALID_SEED_PHRASE => 400,
+            self::INVALID_WORD_COUNT => 400,
+            self::INVALID_CHECKSUM => 400,
             self::INVALID_RECIPIENT => 400,
             self::MISSING_ARGUMENT => 400,
             self::MISSING_PARAMS => 400,
@@ -232,6 +240,9 @@ class ErrorCodes
             self::CONNECTION_FAILED => 500,
             self::NETWORK_ERROR => 500,
 
+            // 503 Service Unavailable
+            self::CONTACT_UNREACHABLE => 503,
+
             // 504 Gateway Timeout
             self::TIMEOUT => 504,
         ];
@@ -282,6 +293,9 @@ class ErrorCodes
             self::WALLET_NOT_FOUND => 'Wallet Not Found',
             self::INVALID_HOSTNAME => 'Invalid Hostname',
             self::SEED_RESTORE_FAILED => 'Seed Restore Failed',
+            self::INVALID_SEED_PHRASE => 'Invalid Seed Phrase',
+            self::INVALID_WORD_COUNT => 'Invalid Word Count',
+            self::INVALID_CHECKSUM => 'Invalid Checksum',
 
             self::CONTACT_NOT_FOUND => 'Contact Not Found',
             self::CONTACT_EXISTS => 'Contact Already Exists',
@@ -297,6 +311,7 @@ class ErrorCodes
             self::UPDATE_FAILED => 'Update Failed',
             self::ADDRESS_UPDATE_FAILED => 'Address Update Failed',
             self::NO_CONTACTS => 'No Contacts Available',
+            self::CONTACT_UNREACHABLE => 'Contact Unreachable',
 
             self::TRANSACTION_FAILED => 'Transaction Failed',
             self::INSUFFICIENT_FUNDS => 'Insufficient Funds',

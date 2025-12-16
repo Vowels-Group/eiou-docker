@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
+require_once __DIR__ . '/../core/ErrorCodes.php';
 
 /**
  * Contact Service
@@ -188,13 +189,13 @@ class ContactService {
                 'address' => $data[2] ?? 'empty',
                 'error' => $addressValidation['error']
             ]);
-            $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
+            $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
             exit(1);
         }
         $address = $addressValidation['value'];
 
         if(in_array($address,$this->currentUser->getUserAddresses())){
-            $output->error("Cannot add yourself as a contact", 'SELF_CONTACT', 400);
+            $output->error("Cannot add yourself as a contact", ErrorCodes::SELF_CONTACT, 400);
             exit(1);
         }
 
@@ -205,7 +206,7 @@ class ContactService {
                 'name' => $data[3] ?? 'empty',
                 'error' => $nameValidation['error']
             ]);
-            $output->error("Invalid name: " . $nameValidation['error'], 'INVALID_NAME', 400);
+            $output->error("Invalid name: " . $nameValidation['error'], ErrorCodes::INVALID_NAME, 400);
             exit(1);
         }
         $name = $nameValidation['value'];
@@ -217,7 +218,7 @@ class ContactService {
                 'fee' => $data[4] ?? 'empty',
                 'error' => $feeValidation['error']
             ]);
-            $output->error("Invalid Fee: " . $feeValidation['error'], 'INVALID_FEE', 400);
+            $output->error("Invalid Fee: " . $feeValidation['error'], ErrorCodes::INVALID_FEE, 400);
             exit(1);
         }
         $fee = $feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR;
@@ -229,7 +230,7 @@ class ContactService {
                 'credit' => $data[5] ?? 'empty',
                 'error' => $creditValidation['error']
             ]);
-            $output->error("Invalid credit: " . $creditValidation['error'], 'INVALID_CREDIT', 400);
+            $output->error("Invalid credit: " . $creditValidation['error'], ErrorCodes::INVALID_CREDIT, 400);
             exit(1);
         }
         $credit = $creditValidation['value'] * Constants::CREDIT_CONVERSION_FACTOR;
@@ -241,7 +242,7 @@ class ContactService {
                 'currency' => $data[6] ?? 'empty',
                 'error' => $currencyValidation['error']
             ]);
-            $output->error("Invalid currency: " . $currencyValidation['error'], 'INVALID_CURRENCY', 400);
+            $output->error("Invalid currency: " . $currencyValidation['error'], ErrorCodes::INVALID_CURRENCY, 400);
             exit(1);
         }
         $currency = $currencyValidation['value'];
@@ -288,7 +289,7 @@ class ContactService {
 
         // Check if contact is already an accepted contact
         if($contact['status'] === 'accepted'){
-            $output->error("Contact " . $address . " already exists ", 'CONTACT_EXISTS', 409, ['contact' => $contactData]);
+            $output->error("Contact " . $address . " already exists ", ErrorCodes::CONTACT_EXISTS, 409, ['contact' => $contactData]);
         }
         // Check if contact was blocked
         elseif($contact['status'] === 'blocked'){
@@ -298,7 +299,7 @@ class ContactService {
                 if($this->contactRepository->updateUnblockContact($contact['pubkey'], $name, $fee, $credit, $currency)){
                     $output->success("Contact" . $address . "unblocked and updated", $contactData, "Contact unblocked and updated successfully");
                 } else{
-                    $output->error("Failed to unblock and update contact " . $address, 'UNBLOCK_FAILED', 500, ['contact' => $contactData]);
+                    $output->error("Failed to unblock and update contact " . $address, ErrorCodes::UNBLOCK_FAILED, 500, ['contact' => $contactData]);
                 }
             }
             // Contact was blocked when user received contact request
@@ -318,7 +319,7 @@ class ContactService {
 
                     $output->success("Contact " . $address . " unblocked and added", $contactData, "Contact unblocked and added successfully");
                 } else{
-                    $output->error("Failed to unblock and add contact " . $address, 'UNBLOCK_ADD_FAILED', 500, ['contact' => $contactData]);
+                    $output->error("Failed to unblock and add contact " . $address, ErrorCodes::UNBLOCK_ADD_FAILED, 500, ['contact' => $contactData]);
                 }
             }
         }
@@ -354,7 +355,7 @@ class ContactService {
                     $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
                 }
                 else {
-                    $output->error("Failed to accept contact request from " . $address, 'ACCEPT_FAILED', 500, ['contact' => $contactData]);
+                    $output->error("Failed to accept contact request from " . $address, ErrorCodes::ACCEPT_FAILED, 500, ['contact' => $contactData]);
                     exit(1);
                 }
             }
@@ -416,7 +417,7 @@ class ContactService {
                     $contactData['pubkey'] = $senderPublicKey;
                     $output->success("Contact request sent successfully to " . $address, $contactData, "Contact request sent, awaiting acceptance");
                 } else{
-                    $output->error("Failed to create contact with " . $address, 'CONTACT_CREATE_FAILED', 500, ['contact' => $contactData]);
+                    $output->error("Failed to create contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
                     exit(1);
                 }
             }
@@ -437,7 +438,7 @@ class ContactService {
                     $contactData['updated_address'] = $senderAddress;
                     $output->success("Contact address updated with " . $address, $contactData, "Contact address updated successfully");
                 } else{
-                    $output->error("Failed to update contact address with " . $address, 'ADDRESS_UPDATE_FAILED', 500, ['contact' => $contactData]);
+                    $output->error("Failed to update contact address with " . $address, ErrorCodes::ADDRESS_UPDATE_FAILED, 500, ['contact' => $contactData]);
                 }
             }
             // Our contact pubkey and adress both exist on their end (Case when we delete the contact and try re-adding it)
@@ -465,7 +466,7 @@ class ContactService {
             }
             // Our contact request could not be processed on their end
             elseif($responseData['status'] === 'rejection'){
-                $output->error("Contact request rejected by " . $address . " : " . ($responseData['reason'] ?? 'Unknown reason'), 'CONTACT_REJECTED', 403, [
+                $output->error("Contact request rejected by " . $address . " : " . ($responseData['reason'] ?? 'Unknown reason'), ErrorCodes::CONTACT_REJECTED, 403, [
                     'contact' => $contactData,
                     'response' => $responseData
                 ]);
@@ -482,8 +483,8 @@ class ContactService {
             $output->error(
                 "Failed to reach contact address after " . $attempts . " attempts. " .
                 "Address " . $address . " may not exist or is offline.",
-                'CONTACT_UNREACHABLE',
-                503,
+                ErrorCodes::CONTACT_UNREACHABLE,
+                null,
                 [
                     'contact' => $contactData,
                     'attempts' => $attempts,
@@ -632,7 +633,7 @@ class ContactService {
                     'name' => $data[2] ?? 'empty',
                     'error' => $nameValidation['error']
                 ]);
-                $output->error("Invalid name: " . $nameValidation['error'], 'INVALID_NAME', 400);
+                $output->error("Invalid name: " . $nameValidation['error'], ErrorCodes::INVALID_NAME, 400);
                 exit(1);
             }
             $name = $nameValidation['value'];
@@ -679,7 +680,7 @@ class ContactService {
                 'value' => $data,
                 'error' => $amountValidation['error']
             ]);
-            $output->error("Invalid parameter amount: " . $amountValidation['error'], 'INVALID_PARAMS', 400);
+            $output->error("Invalid parameter amount: " . $amountValidation['error'], ErrorCodes::INVALID_PARAMS, 400);
             exit(0);
         }
 
@@ -690,7 +691,7 @@ class ContactService {
                     'address' => $data[2] ?? 'empty',
                     'error' => $addressValidation['error']
                 ]);
-                $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
+                $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
                 exit(1);
             }
             $address = $addressValidation['value'];
@@ -726,7 +727,7 @@ class ContactService {
                 if (isset($contactResult['currency'])) echo "\tCurrency: " . $contactResult['currency'] . "\n";
             }
         } else {
-            $output->error("Contact not found", 'CONTACT_NOT_FOUND', 404, ['query' => $data[2] ?? null]);
+            $output->error("Contact not found", ErrorCodes::CONTACT_NOT_FOUND, 404, ['query' => $data[2] ?? null]);
         }
     }
 
@@ -782,7 +783,7 @@ class ContactService {
         $output = $output ?? CliOutputManager::getInstance();
 
         if ($addressOrName === null) {
-            $output->error("Address or name is required", 'MISSING_IDENTIFIER', 400);
+            $output->error("Address or name is required", ErrorCodes::MISSING_IDENTIFIER, 400);
             exit(1);
         }
 
@@ -794,7 +795,7 @@ class ContactService {
                     'address' => $addressOrName,
                     'error' => $addressValidation['error']
                 ]);
-                $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
+                $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
                 exit(1);
             }
             $address = $addressValidation['value'];
@@ -803,12 +804,12 @@ class ContactService {
             // Check if the name yields an address
             $contact = $this->contactRepository->lookupByName($addressOrName);
             if (!$contact) {
-                $output->error("Contact not found with name: " . $addressOrName, 'CONTACT_NOT_FOUND', 404);
+                $output->error("Contact not found with name: " . $addressOrName, ErrorCodes::CONTACT_NOT_FOUND, 404);
                 exit(1);
             }
             $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
-                $output->error("Contact has no valid address", 'NO_ADDRESS', 500);
+                $output->error("Contact has no valid address", ErrorCodes::NO_ADDRESS, 500);
                 exit(1);
             }
             $transportIndex = $this->transportUtility->determineTransportType($address);
@@ -821,7 +822,7 @@ class ContactService {
             ]);
             return true;
         } else {
-            $output->error("Failed to block contact", 'BLOCK_FAILED', 500, ['address' => $address]);
+            $output->error("Failed to block contact", ErrorCodes::BLOCK_FAILED, 500, ['address' => $address]);
             return false;
         }
     }
@@ -837,7 +838,7 @@ class ContactService {
         $output = $output ?? CliOutputManager::getInstance();
 
         if ($addressOrName === null) {
-            $output->error("Address or name is required", 'MISSING_IDENTIFIER', 400);
+            $output->error("Address or name is required", ErrorCodes::MISSING_IDENTIFIER, 400);
             exit(1);
         }
 
@@ -849,7 +850,7 @@ class ContactService {
                     'address' => $addressOrName,
                     'error' => $addressValidation['error']
                 ]);
-                $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
+                $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
                 exit(1);
             }
             $address = $addressValidation['value'];
@@ -857,12 +858,12 @@ class ContactService {
             // Check if the name yields an address
             $contact = $this->contactRepository->lookupByName($addressOrName);
             if (!$contact) {
-                $output->error("Contact not found with name: " . $addressOrName, 'CONTACT_NOT_FOUND', 404);
+                $output->error("Contact not found with name: " . $addressOrName, ErrorCodes::CONTACT_NOT_FOUND, 404);
                 exit(1);
             }
             $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
-                $output->error("Contact has no valid address", 'NO_ADDRESS', 500);
+                $output->error("Contact has no valid address", ErrorCodes::NO_ADDRESS, 500);
                 exit(1);
             }
         }
@@ -876,7 +877,7 @@ class ContactService {
             ]);
             return true;
         } else {
-            $output->error("Failed to unblock contact", 'UNBLOCK_FAILED', 500, ['address' => $address]);
+            $output->error("Failed to unblock contact", ErrorCodes::UNBLOCK_FAILED, 500, ['address' => $address]);
             return false;
         }
     }
@@ -892,7 +893,7 @@ class ContactService {
         $output = $output ?? CliOutputManager::getInstance();
 
         if ($addressOrName === null) {
-            $output->error("Address or name is required", 'MISSING_IDENTIFIER', 400);
+            $output->error("Address or name is required", ErrorCodes::MISSING_IDENTIFIER, 400);
             exit(1);
         }
 
@@ -904,7 +905,7 @@ class ContactService {
                     'address' => $addressOrName,
                     'error' => $addressValidation['error']
                 ]);
-                $output->error("Invalid Address: " . $addressValidation['error'], 'INVALID_ADDRESS', 400);
+                $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
                 exit(1);
             }
             $address = $addressValidation['value'];
@@ -912,12 +913,12 @@ class ContactService {
             // Check if the name yields an address
             $contact = $this->contactRepository->lookupByName($addressOrName);
             if (!$contact) {
-                $output->error("Contact not found with name: " . $addressOrName, 'CONTACT_NOT_FOUND', 404);
+                $output->error("Contact not found with name: " . $addressOrName, ErrorCodes::CONTACT_NOT_FOUND, 404);
                 exit(1);
             }
             $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
-                $output->error("Contact has no valid address", 'NO_ADDRESS', 500);
+                $output->error("Contact has no valid address", ErrorCodes::NO_ADDRESS, 500);
                 exit(1);
             }
         }
@@ -931,7 +932,7 @@ class ContactService {
             ]);
             return true;
         } else {
-            $output->error("Failed to delete contact", 'DELETE_FAILED', 500, ['address' => $address]);
+            $output->error("Failed to delete contact", ErrorCodes::DELETE_FAILED, 500, ['address' => $address]);
             return false;
         }
     }
@@ -953,7 +954,7 @@ class ContactService {
 
         // Validate address
         if (!$address) {
-            $output->error("Address is required", 'MISSING_ADDRESS', 400);
+            $output->error("Address is required", ErrorCodes::MISSING_ADDRESS, 400);
             return;
         }
         $transportIndex = $this->transportUtility->determineTransportType($address);
@@ -964,13 +965,13 @@ class ContactService {
         }
 
         if (!$contact) {
-            $output->error("Contact not found: $address", 'CONTACT_NOT_FOUND', 404);
+            $output->error("Contact not found: $address", ErrorCodes::CONTACT_NOT_FOUND, 404);
             return;
         }
 
         // Validate field
         if (!in_array($field, ['name', 'fee', 'credit', 'all'])) {
-            $output->error("Invalid field. Must be one of: name, fee, credit, all", 'INVALID_FIELD', 400, [
+            $output->error("Invalid field. Must be one of: name, fee, credit, all", ErrorCodes::INVALID_FIELD, 400, [
                 'valid_fields' => ['name', 'fee', 'credit', 'all']
             ]);
             return;
@@ -978,7 +979,7 @@ class ContactService {
 
         // Validate values
         if (!$value || ($field === 'all' && (!$value2 || !$value3))) {
-            $output->error("Insufficient parameters for update", 'MISSING_PARAMS', 400, [
+            $output->error("Insufficient parameters for update", ErrorCodes::MISSING_PARAMS, 400, [
                 'field' => $field,
                 'usage' => $field === 'all'
                     ? 'update [address] all [name] [fee] [credit]'
@@ -1015,7 +1016,7 @@ class ContactService {
         if ($this->contactRepository->updateContactFields($contact['pubkey'], $updateFields)) {
             $output->success("Contact updated successfully", $updateData);
         } else {
-            $output->error("Failed to update contact", 'UPDATE_FAILED', 500, $updateData);
+            $output->error("Failed to update contact", ErrorCodes::UPDATE_FAILED, 500, $updateData);
         }
     }
 

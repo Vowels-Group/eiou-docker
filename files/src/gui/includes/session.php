@@ -1,11 +1,13 @@
 <?php
 /**
- * 
+ *
  * Session Management for eIOU Wallet
- * 
+ *
  * Copyright 2025
  * Handles secure session-based authentication
  */
+
+require_once __DIR__ . '/../../core/ErrorCodes.php';
 
 class Session
 {
@@ -207,7 +209,7 @@ class Session
 
             if (!$this->validateCSRFToken($token)) {
                 // CSRF token validation failed
-                http_response_code(403);
+                http_response_code(ErrorCodes::HTTP_FORBIDDEN);
                 die('CSRF token validation failed. Please refresh the page and try again.');
             }
         }

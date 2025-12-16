@@ -4,6 +4,7 @@
 require_once __DIR__ . '/../utils/InputValidator.php';
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
+require_once __DIR__ . '/../core/ErrorCodes.php';
 
 /**
  * Transaction Service
@@ -738,7 +739,7 @@ class TransactionService {
                     'value' => $request,
                     'error' => $amountValidation['error']
                 ]);
-                $output->error("Invalid parameter amount: " . $amountValidation['error'], 'INVALID_PARAMS', 400);
+                $output->error("Invalid parameter amount: " . $amountValidation['error'], ErrorCodes::INVALID_PARAMS, 400);
                 exit(0);
             }
         }
@@ -753,7 +754,7 @@ class TransactionService {
                         'value' => $request[2],
                         'error' => $addressValidation['error'] . " / " . $nameValidation['error']
                     ]);
-                    $output->error("Invalid Address/name: " . $addressValidation['error'], 'INVALID_RECIPIENT', 400);
+                    $output->error("Invalid Address/name: " . $addressValidation['error'], ErrorCodes::INVALID_RECIPIENT, 400);
                     exit(0);
                 }
             }
@@ -767,7 +768,7 @@ class TransactionService {
                     'amount' => $request[3],
                     'error' => $amountValidation['error']
                 ]);
-                $output->error("Invalid amount: " . $amountValidation['error'], 'INVALID_AMOUNT', 400);
+                $output->error("Invalid amount: " . $amountValidation['error'], ErrorCodes::INVALID_AMOUNT, 400);
                 exit(0);
             }
             $request[3] = $amountValidation['value'];
@@ -782,7 +783,7 @@ class TransactionService {
                     'currency' => $request[4],
                     'error' => $currencyValidation['error']
                 ]);
-                $output->error("Invalid currency: " . $currencyValidation['error'], 'INVALID_CURRENCY', 400);
+                $output->error("Invalid currency: " . $currencyValidation['error'], ErrorCodes::INVALID_CURRENCY, 400);
                 exit(0);
             }
             $request[4] = $currencyValidation['value'];

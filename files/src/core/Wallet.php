@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../cli/CliOutputManager.php';
+require_once __DIR__ . '/ErrorCodes.php';
 
 class Wallet{
     /**
@@ -86,7 +87,7 @@ class Wallet{
                 $userconfig['hostname'] = addslashes($argv[2]); // HTTP address
                 $walletData['http_address'] = $argv[2];
             } else {
-                $output->error("Invalid hostname format. Must be a valid URL.", 'INVALID_HOSTNAME', 400, [
+                $output->error("Invalid hostname format. Must be a valid URL.", ErrorCodes::INVALID_HOSTNAME, 400, [
                     'provided' => $argv[2]
                 ]);
                 return;
@@ -131,7 +132,7 @@ class Wallet{
         if (count($argv) < 27) { // eiou generate restore + 24 words
             $output->error(
                 "Seed phrase required. Usage: eiou generate restore <24 words>",
-                'INVALID_SEED_PHRASE',
+                ErrorCodes::INVALID_SEED_PHRASE,
                 400,
                 ['expected_words' => '24', 'provided' => count($argv) - 3]
             );
@@ -147,7 +148,7 @@ class Wallet{
         if ($wordCount !== 24) {
             $output->error(
                 "Invalid seed phrase length. Must be 24 words.",
-                'INVALID_WORD_COUNT',
+                ErrorCodes::INVALID_WORD_COUNT,
                 400,
                 ['expected' => '24', 'provided' => $wordCount]
             );
@@ -158,7 +159,7 @@ class Wallet{
         if (!BIP39::validateMnemonic($mnemonic)) {
             $output->error(
                 "Invalid seed phrase. Checksum verification failed.",
-                'INVALID_CHECKSUM',
+                ErrorCodes::INVALID_CHECKSUM,
                 400,
                 ['hint' => 'Check that all words are correct and in the right order']
             );

@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025
 
+require_once __DIR__ . '/../src/core/ErrorCodes.php';
+
 /**
  * API Entry Point
  *
@@ -20,7 +22,7 @@ header('Access-Control-Allow-Headers: X-API-Key, X-API-Timestamp, X-API-Signatur
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
+    http_response_code(ErrorCodes::HTTP_OK);
     exit;
 }
 
@@ -31,7 +33,7 @@ require_once '/etc/eiou/src/core/Constants.php';
 try {
     $app = Application::getInstance();
 } catch (Exception $e) {
-    http_response_code(500);
+    http_response_code(ErrorCodes::HTTP_INTERNAL_SERVER_ERROR);
     echo json_encode([
         'success' => false,
         'error' => [
