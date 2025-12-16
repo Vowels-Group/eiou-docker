@@ -910,9 +910,10 @@ class TransactionService {
      * Convert Contact Information back to proper units for display
      *
      * @param array $contacts Contact Information
+     * @param int $transactionLimit Maximum number of transactions to fetch per contact
      * @return array Converted contact information
      */
-    public function contactBalanceConversion($contacts): array {
+    public function contactBalanceConversion($contacts, int $transactionLimit = 5): array {
         // If no contacts, return empty array
         if (empty($contacts)) {
             return [];
@@ -948,7 +949,7 @@ class TransactionService {
             }
 
             // Get recent transactions with this contact
-            $transactions = $this->transactionRepository->getTransactionsWithContact($contactAddresses, 5);
+            $transactions = $this->transactionRepository->getTransactionsWithContact($contactAddresses, $transactionLimit);
 
             $contactsWithBalances[] = array_merge($addressesAssociative,[
                 'name' => $contact['name'],

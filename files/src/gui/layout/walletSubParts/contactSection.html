@@ -240,7 +240,7 @@
                 <div id="tx-list-view">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <p style="color: #6c757d; margin: 0; font-size: 0.9rem;">
-                            <i class="fas fa-info-circle"></i> Showing the <strong>last 5 transactions</strong> with this contact
+                            <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
                         </p>
                         <button type="button" class="btn btn-sm btn-secondary" onclick="window.location.reload();">
                             <i class="fas fa-sync-alt"></i> Refresh
