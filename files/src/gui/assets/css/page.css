@@ -1588,7 +1588,12 @@ html {
     margin-left: 0.25rem;
 }
 
-/* Override balance-currency color when inside balance-display (Issue #271) */
+/* Override balance text colors when inside balance-display (Issue #271) */
+.balance-display .balance-amount {
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
 .balance-display .balance-currency {
     color: white;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
