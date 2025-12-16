@@ -33,17 +33,19 @@
                     </div>
                     <div class="tx-in-progress-status">
                         <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($ipTx['status']); ?>">
-                            <?php if ($ipTx['status'] === 'pending'): ?>
+                            <?php if ($ipTx['status'] === 'pending' || $ipTx['status'] === 'queued' || $ipTx['status'] === 'initial'): ?>
                                 <i class="fas fa-hourglass-half"></i>
                             <?php elseif ($ipTx['status'] === 'sent'): ?>
                                 <i class="fas fa-paper-plane"></i>
-                            <?php elseif ($ipTx['status'] === 'accepted'): ?>
+                            <?php elseif ($ipTx['status'] === 'accepted' || $ipTx['status'] === 'found'): ?>
                                 <i class="fas fa-check"></i>
                             <?php endif; ?>
                             <?php echo ucfirst(htmlspecialchars($ipTx['status'])); ?>
                         </span>
                         <?php if ($ipTx['memo'] !== 'standard'): ?>
                             <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
+                        <?php else: ?>
+                            <span class="tx-type-badge tx-type-direct"><i class="fas fa-exchange-alt"></i> Direct</span>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -88,7 +90,9 @@
                         <div style="font-size: 0.9rem; color: #6c757d;">
                             <?php echo $tx['date']; ?>
                             <?php if ($tx['tx_type'] === 'p2p'): ?>
-                                <span style="color: #ffc107; margin-left: 0.5rem;"><i class="fas fa-network-wired"></i> P2P</span>
+                                <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
+                            <?php else: ?>
+                                <span class="tx-type-badge tx-type-direct"><i class="fas fa-exchange-alt"></i> Direct</span>
                             <?php endif; ?>
                         </div>
                     </div>

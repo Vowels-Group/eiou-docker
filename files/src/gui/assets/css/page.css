@@ -1041,6 +1041,18 @@ html {
     color: #fff;
 }
 
+/* P2P request statuses */
+.tx-status-queued,
+.tx-status-initial {
+    background: #ffc107;
+    color: #000;
+}
+
+.tx-status-found {
+    background: #28a745;
+    color: #fff;
+}
+
 /* Transaction Detail Modal */
 .tx-detail-section {
     border: 1px solid #dee2e6;
@@ -1172,8 +1184,13 @@ html {
 }
 
 .tx-type-p2p {
-    background: #fff3cd;
-    color: #664d03;
+    background: #ffc107;
+    color: #000;
+}
+
+.tx-type-direct {
+    background: #ffc107;
+    color: #000;
 }
 
 /* Auto-refresh indicator */
