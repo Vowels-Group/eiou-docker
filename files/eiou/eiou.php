@@ -1,8 +1,6 @@
 <?php
 # Copyright 2025
 
-require_once __DIR__ . '/../src/core/ErrorCodes.php';
-
 // This file is how users interact with eiou
 require_once '/etc/eiou/functions.php';
 

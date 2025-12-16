@@ -1,7 +1,7 @@
 <?php
 # Copyright 2025
 
-require_once __DIR__ . '/../src/core/ErrorCodes.php';
+require_once __DIR__ . '/src/core/ErrorCodes.php';
 
 /**
  * API Entry Point
