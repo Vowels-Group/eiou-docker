@@ -123,14 +123,14 @@
         <button type="button" class="debug-tab active" onclick="showDebugTab('app-logs', this)">
             <i class="fas fa-database"></i> App Logs
         </button>
+        <button type="button" class="debug-tab" onclick="showDebugTab('eiou-log', this)">
+            <i class="fas fa-file-alt"></i> EIOU Log
+        </button>
         <button type="button" class="debug-tab" onclick="showDebugTab('php-logs', this)">
             <i class="fab fa-php"></i> PHP Logs
         </button>
         <button type="button" class="debug-tab" onclick="showDebugTab('apache-logs', this)">
             <i class="fas fa-server"></i> Apache Logs
-        </button>
-        <button type="button" class="debug-tab" onclick="showDebugTab('eiou-log', this)">
-            <i class="fas fa-file-alt"></i> EIOU Log
         </button>
         <button type="button" class="debug-tab" onclick="showDebugTab('system-info', this)">
             <i class="fas fa-info-circle"></i> System Info
@@ -179,6 +179,27 @@
         </div>
     </div>
 
+    <!-- EIOU App Log File -->
+    <div id="eiou-log" class="debug-content">
+        <div class="debug-header">
+            <span class="debug-count">EIOU Application Log</span>
+        </div>
+        <div class="debug-log-container">
+            <?php
+            $eiouLogPath = '/var/log/eiou/app.log';
+            $eiouLogContent = '';
+            if (file_exists($eiouLogPath) && is_readable($eiouLogPath)) {
+                $eiouLogContent = shell_exec("tail -100 " . escapeshellarg($eiouLogPath));
+            }
+            ?>
+            <?php if (empty(trim($eiouLogContent))): ?>
+                <p class="debug-empty">No EIOU application log entries or log not accessible.</p>
+            <?php else: ?>
+                <pre class="debug-pre"><?php echo htmlspecialchars($eiouLogContent); ?></pre>
+            <?php endif; ?>
+        </div>
+    </div>
+
     <!-- PHP Error Logs -->
     <div id="php-logs" class="debug-content">
         <div class="debug-header">
@@ -219,27 +240,6 @@
                 <p class="debug-empty">No Apache errors logged or log not accessible.</p>
             <?php else: ?>
                 <pre class="debug-pre"><?php echo htmlspecialchars($apacheLogContent); ?></pre>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <!-- EIOU App Log File -->
-    <div id="eiou-log" class="debug-content">
-        <div class="debug-header">
-            <span class="debug-count">EIOU Application Log</span>
-        </div>
-        <div class="debug-log-container">
-            <?php
-            $eiouLogPath = '/var/log/eiou/app.log';
-            $eiouLogContent = '';
-            if (file_exists($eiouLogPath) && is_readable($eiouLogPath)) {
-                $eiouLogContent = shell_exec("tail -100 " . escapeshellarg($eiouLogPath));
-            }
-            ?>
-            <?php if (empty(trim($eiouLogContent))): ?>
-                <p class="debug-empty">No EIOU application log entries or log not accessible.</p>
-            <?php else: ?>
-                <pre class="debug-pre"><?php echo htmlspecialchars($eiouLogContent); ?></pre>
             <?php endif; ?>
         </div>
     </div>
