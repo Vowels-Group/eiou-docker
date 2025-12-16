@@ -251,13 +251,9 @@
                     </div>
                 </div>
                 <!-- Transaction Detail View -->
-                <div id="tx-detail-view" style="display: none;">
-                    <div style="margin-bottom: 1rem;">
-                        <button type="button" class="btn btn-sm btn-secondary" onclick="hideContactTxDetail()">
-                            <i class="fas fa-arrow-left"></i> Back to Transactions
-                        </button>
-                    </div>
-                    <div id="contact-tx-detail-content"></div>
+                <div id="tx-detail-view" style="display: none; position: relative;">
+                    <span class="close" onclick="hideContactTxDetail()" title="Back to transactions" style="position: absolute; top: 0; right: 0; cursor: pointer;">&times;</span>
+                    <div id="contact-tx-detail-content" style="padding-top: 1rem;"></div>
                 </div>
             </div>
         </div>
