@@ -1,0 +1,595 @@
+/* File Hosting Plugin Styles */
+
+:root {
+    --fh-primary: #4a90d9;
+    --fh-primary-dark: #357abd;
+    --fh-success: #28a745;
+    --fh-warning: #ffc107;
+    --fh-danger: #dc3545;
+    --fh-bg: #f8f9fa;
+    --fh-card-bg: #ffffff;
+    --fh-text: #333333;
+    --fh-text-muted: #6c757d;
+    --fh-border: #dee2e6;
+    --fh-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --fh-radius: 8px;
+}
+
+/* Container */
+.file-hosting-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    color: var(--fh-text);
+}
+
+/* Header */
+.file-hosting-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.file-hosting-header h1 {
+    margin: 0;
+    font-size: 2rem;
+    color: var(--fh-primary);
+}
+
+.file-hosting-header .subtitle {
+    margin: 8px 0 0;
+    color: var(--fh-text-muted);
+}
+
+/* Storage Overview */
+.storage-overview {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+@media (max-width: 768px) {
+    .storage-overview {
+        grid-template-columns: 1fr;
+    }
+}
+
+.storage-card,
+.pricing-card {
+    background: var(--fh-card-bg);
+    border-radius: var(--fh-radius);
+    padding: 20px;
+    box-shadow: var(--fh-shadow);
+}
+
+.storage-card h3,
+.pricing-card h3 {
+    margin: 0 0 15px;
+    font-size: 1.1rem;
+    color: var(--fh-text);
+}
+
+.storage-bar {
+    height: 12px;
+    background: var(--fh-bg);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.storage-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--fh-primary), var(--fh-success));
+    border-radius: 6px;
+    transition: width 0.3s ease;
+}
+
+.storage-stats {
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+}
+
+.storage-percent {
+    color: var(--fh-text-muted);
+}
+
+.storage-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--fh-text-muted);
+}
+
+.price-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--fh-border);
+}
+
+.price-item:last-child {
+    border-bottom: none;
+}
+
+/* Upload Section */
+.upload-section {
+    background: var(--fh-card-bg);
+    border-radius: var(--fh-radius);
+    padding: 20px;
+    box-shadow: var(--fh-shadow);
+    margin-bottom: 30px;
+}
+
+.upload-section h2 {
+    margin: 0 0 20px;
+    font-size: 1.2rem;
+}
+
+.upload-area {
+    border: 2px dashed var(--fh-border);
+    border-radius: var(--fh-radius);
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.upload-area:hover,
+.upload-area.dragover {
+    border-color: var(--fh-primary);
+    background: rgba(74, 144, 217, 0.05);
+}
+
+.upload-icon {
+    color: var(--fh-text-muted);
+    margin-bottom: 10px;
+}
+
+.upload-area p {
+    margin: 0;
+    color: var(--fh-text-muted);
+}
+
+.upload-form {
+    margin-top: 20px;
+}
+
+.file-preview {
+    display: flex;
+    align-items: center;
+    background: var(--fh-bg);
+    padding: 12px 15px;
+    border-radius: var(--fh-radius);
+    margin-bottom: 20px;
+}
+
+.file-name {
+    flex: 1;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-size {
+    color: var(--fh-text-muted);
+    margin: 0 15px;
+}
+
+.btn-clear {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: var(--fh-text-muted);
+}
+
+.btn-clear:hover {
+    color: var(--fh-danger);
+}
+
+.form-row {
+    margin-bottom: 15px;
+}
+
+.form-row label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+
+.form-row input[type="number"],
+.form-row input[type="password"],
+.form-row input[type="text"],
+.form-row textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--fh-border);
+    border-radius: 4px;
+    font-size: 0.95rem;
+    box-sizing: border-box;
+}
+
+.form-row input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.cost-estimate {
+    background: var(--fh-bg);
+    padding: 12px 15px;
+    border-radius: var(--fh-radius);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cost-estimate strong {
+    color: var(--fh-primary);
+    font-size: 1.1rem;
+}
+
+.free-indicator {
+    color: var(--fh-success);
+    font-size: 0.9rem;
+}
+
+/* Buttons */
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+    padding: 12px 24px;
+    border: none;
+    border-radius: var(--fh-radius);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background: var(--fh-primary);
+    color: white;
+    width: 100%;
+}
+
+.btn-primary:hover {
+    background: var(--fh-primary-dark);
+}
+
+.btn-secondary {
+    background: var(--fh-bg);
+    color: var(--fh-text);
+    border: 1px solid var(--fh-border);
+}
+
+.btn-secondary:hover {
+    background: var(--fh-border);
+}
+
+.btn-danger {
+    background: var(--fh-danger);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+}
+
+.btn-refresh,
+.btn-page {
+    padding: 8px 16px;
+    background: var(--fh-bg);
+    border: 1px solid var(--fh-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.btn-refresh:hover,
+.btn-page:hover:not(:disabled) {
+    background: var(--fh-border);
+}
+
+.btn-page:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Files Section */
+.files-section {
+    background: var(--fh-card-bg);
+    border-radius: var(--fh-radius);
+    padding: 20px;
+    box-shadow: var(--fh-shadow);
+    margin-bottom: 30px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.section-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.filters {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.files-list {
+    min-height: 100px;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    border: 1px solid var(--fh-border);
+    border-radius: var(--fh-radius);
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.file-item:hover {
+    background: var(--fh-bg);
+    border-color: var(--fh-primary);
+}
+
+.file-item.expired {
+    opacity: 0.6;
+    background: #fff5f5;
+}
+
+.file-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--fh-bg);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+    color: var(--fh-text-muted);
+}
+
+.file-info {
+    flex: 1;
+}
+
+.file-info-name {
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.file-info-meta {
+    font-size: 0.85rem;
+    color: var(--fh-text-muted);
+}
+
+.file-status {
+    text-align: right;
+}
+
+.file-status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.badge-active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-expiring {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge-expired {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.file-downloads {
+    font-size: 0.85rem;
+    color: var(--fh-text-muted);
+    margin-top: 4px;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.loading {
+    text-align: center;
+    padding: 30px;
+    color: var(--fh-text-muted);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--fh-text-muted);
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--fh-card-bg);
+    border-radius: var(--fh-radius);
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid var(--fh-border);
+}
+
+.modal-header h3 {
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--fh-text-muted);
+}
+
+.modal-close:hover {
+    color: var(--fh-danger);
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    padding: 20px;
+    border-top: 1px solid var(--fh-border);
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--fh-border);
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-label {
+    color: var(--fh-text-muted);
+}
+
+.detail-value {
+    font-weight: 500;
+}
+
+/* Payments Section */
+.payments-section {
+    background: var(--fh-card-bg);
+    border-radius: var(--fh-radius);
+    padding: 20px;
+    box-shadow: var(--fh-shadow);
+}
+
+.payments-section h2 {
+    margin: 0 0 20px;
+    font-size: 1.2rem;
+}
+
+.payment-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--fh-border);
+}
+
+.payment-item:last-child {
+    border-bottom: none;
+}
+
+.payment-info {
+    flex: 1;
+}
+
+.payment-type {
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.payment-date {
+    font-size: 0.85rem;
+    color: var(--fh-text-muted);
+}
+
+.payment-amount {
+    font-weight: 600;
+    color: var(--fh-primary);
+}
+
+.payment-status {
+    margin-left: 10px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+}
+
+.status-completed {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-failed {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .file-item {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .file-icon {
+        margin: 0 0 10px;
+    }
+
+    .file-status {
+        margin-top: 10px;
+        text-align: center;
+    }
+
+    .modal-actions {
+        flex-direction: column;
+    }
+}

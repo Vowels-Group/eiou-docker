@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Hosting - EIOU</title>
+    <link rel="stylesheet" href="/plugins/claude_code_file_hosting/gui/assets/css/file-hosting.css">
+</head>
+<body>
+    <div class="file-hosting-container">
+        <!-- Header -->
+        <header class="file-hosting-header">
+            <h1>File Hosting</h1>
+            <p class="subtitle">Store and share files on the EIOU network</p>
+        </header>
+
+        <!-- Storage Overview -->
+        <section class="storage-overview">
+            <div class="storage-card">
+                <h3>Storage Usage</h3>
+                <div class="storage-bar">
+                    <div class="storage-bar-fill" id="storageBarFill" style="width: 0%"></div>
+                </div>
+                <div class="storage-stats">
+                    <span id="storageUsed">0 MB</span> / <span id="storageQuota">10 MB</span>
+                    <span class="storage-percent" id="storagePercent">(0%)</span>
+                </div>
+                <div class="storage-details">
+                    <span id="fileCount">0 files</span>
+                    <span id="totalSpent">0 eIOU spent</span>
+                </div>
+            </div>
+            <div class="pricing-card">
+                <h3>Current Pricing</h3>
+                <div class="price-item">
+                    <span>Per MB/day:</span>
+                    <strong id="pricePerMbDay">0.001 eIOU</strong>
+                </div>
+                <div class="price-item">
+                    <span>Per GB/month:</span>
+                    <strong id="pricePerGbMonth">0.03 eIOU</strong>
+                </div>
+                <div class="price-item">
+                    <span>Free storage:</span>
+                    <strong id="freeStorage">10 MB</strong>
+                </div>
+            </div>
+        </section>
+
+        <!-- Upload Section -->
+        <section class="upload-section">
+            <h2>Upload File</h2>
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                </div>
+                <p>Drag and drop a file here, or click to select</p>
+                <input type="file" id="fileInput" hidden>
+            </div>
+
+            <div class="upload-form" id="uploadForm" style="display: none;">
+                <div class="file-preview">
+                    <span class="file-name" id="selectedFileName"></span>
+                    <span class="file-size" id="selectedFileSize"></span>
+                    <button class="btn-clear" id="clearFile">&times;</button>
+                </div>
+
+                <div class="form-row">
+                    <label for="storageDays">Storage Duration (days):</label>
+                    <input type="number" id="storageDays" value="30" min="1" max="365">
+                </div>
+
+                <div class="form-row">
+                    <label>
+                        <input type="checkbox" id="isPublic">
+                        Make file publicly accessible
+                    </label>
+                </div>
+
+                <div class="form-row">
+                    <label for="accessPassword">Access Password (optional):</label>
+                    <input type="password" id="accessPassword" placeholder="Leave empty for no password">
+                </div>
+
+                <div class="form-row">
+                    <label for="fileDescription">Description (optional):</label>
+                    <textarea id="fileDescription" rows="2" placeholder="Add a description..."></textarea>
+                </div>
+
+                <div class="cost-estimate">
+                    <span>Estimated Cost:</span>
+                    <strong id="estimatedCost">0 eIOU</strong>
+                    <span class="free-indicator" id="freeIndicator" style="display: none;">(FREE - within free tier)</span>
+                </div>
+
+                <button class="btn-primary" id="uploadBtn">
+                    <span class="btn-text">Upload File</span>
+                    <span class="btn-loading" style="display: none;">Uploading...</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Files List -->
+        <section class="files-section">
+            <div class="section-header">
+                <h2>My Files</h2>
+                <div class="filters">
+                    <label>
+                        <input type="checkbox" id="showExpired">
+                        Show expired
+                    </label>
+                    <button class="btn-refresh" id="refreshFiles">Refresh</button>
+                </div>
+            </div>
+
+            <div class="files-list" id="filesList">
+                <div class="loading">Loading files...</div>
+            </div>
+
+            <div class="pagination" id="pagination" style="display: none;">
+                <button class="btn-page" id="prevPage" disabled>&laquo; Previous</button>
+                <span id="pageInfo">Page 1 of 1</span>
+                <button class="btn-page" id="nextPage" disabled>Next &raquo;</button>
+            </div>
+        </section>
+
+        <!-- File Details Modal -->
+        <div class="modal" id="fileModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>File Details</h3>
+                    <button class="modal-close" id="closeModal">&times;</button>
+                </div>
+                <div class="modal-body" id="fileDetails">
+                    <!-- File details will be loaded here -->
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-secondary" id="downloadFileBtn">Download</button>
+                    <button class="btn-secondary" id="extendStorageBtn">Extend Storage</button>
+                    <button class="btn-danger" id="deleteFileBtn">Delete</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Extend Storage Modal -->
+        <div class="modal" id="extendModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Extend Storage</h3>
+                    <button class="modal-close" id="closeExtendModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>File: <strong id="extendFileName"></strong></p>
+                    <div class="form-row">
+                        <label for="extendDays">Additional Days:</label>
+                        <input type="number" id="extendDays" value="30" min="1" max="365">
+                    </div>
+                    <div class="cost-estimate">
+                        <span>Cost:</span>
+                        <strong id="extendCost">0 eIOU</strong>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-secondary" id="cancelExtend">Cancel</button>
+                    <button class="btn-primary" id="confirmExtend">Confirm Extension</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment History -->
+        <section class="payments-section">
+            <h2>Payment History</h2>
+            <div class="payments-list" id="paymentsList">
+                <div class="loading">Loading payments...</div>
+            </div>
+        </section>
+    </div>
+
+    <script src="/plugins/claude_code_file_hosting/gui/assets/js/file-hosting.js"></script>
+</body>
+</html>

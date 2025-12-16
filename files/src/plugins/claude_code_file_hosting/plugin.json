@@ -1,0 +1,195 @@
+{
+    "name": "Claude Code File Hosting",
+    "id": "claude_code_file_hosting",
+    "version": "1.0.0",
+    "description": "Decentralized file hosting service with eIOU payments. Host and share files on eiou-docker nodes, paying for storage with eIOUs.",
+    "author": "EIOU Team",
+    "license": "MIT",
+    "homepage": "https://github.com/eiou-org/eiou-docker",
+    "category": "storage",
+    "tags": ["file-hosting", "storage", "payments", "decentralized", "eiou"],
+    "entrypoint": "ClaudeCodeFileHostingPlugin.php",
+    "minimum_eiou_version": "1.0.0",
+    "dependencies": [],
+    "permissions": [
+        "storage:read",
+        "storage:write",
+        "transactions:create",
+        "balance:read"
+    ],
+    "settings": {
+        "max_file_size_mb": 100,
+        "allowed_extensions": ["*"],
+        "storage_price_per_mb_per_day": 0.001,
+        "min_storage_days": 1,
+        "max_storage_days": 365,
+        "free_storage_mb": 10,
+        "require_payment_upfront": true,
+        "auto_delete_expired": true,
+        "public_downloads_enabled": true,
+        "encryption_enabled": true
+    },
+    "autoload": {
+        "classes": {
+            "ClaudeCodeFileHostingPlugin": "ClaudeCodeFileHostingPlugin.php",
+            "ClaudeCodeFileHostingService": "services/ClaudeCodeFileHostingService.php",
+            "ClaudeCodeFileHostingRepository": "repositories/ClaudeCodeFileHostingRepository.php",
+            "ClaudeCodeFileHostingApiController": "api/ClaudeCodeFileHostingApiController.php",
+            "ClaudeCodeFileHostingCliHandler": "cli/ClaudeCodeFileHostingCliHandler.php",
+            "HostedFile": "models/HostedFile.php",
+            "StoragePlan": "models/StoragePlan.php",
+            "FilePayment": "models/FilePayment.php"
+        }
+    },
+    "api": {
+        "prefix": "/api/v1/file-hosting",
+        "controller": "ClaudeCodeFileHostingApiController",
+        "routes": [
+            {
+                "method": "POST",
+                "path": "/upload",
+                "action": "upload",
+                "description": "Upload a file",
+                "auth_required": true
+            },
+            {
+                "method": "GET",
+                "path": "/files",
+                "action": "listFiles",
+                "description": "List user's hosted files",
+                "auth_required": true
+            },
+            {
+                "method": "GET",
+                "path": "/files/:id",
+                "action": "getFile",
+                "description": "Get file metadata",
+                "auth_required": false
+            },
+            {
+                "method": "GET",
+                "path": "/download/:id",
+                "action": "download",
+                "description": "Download a file",
+                "auth_required": false
+            },
+            {
+                "method": "DELETE",
+                "path": "/files/:id",
+                "action": "deleteFile",
+                "description": "Delete a file",
+                "auth_required": true
+            },
+            {
+                "method": "POST",
+                "path": "/extend/:id",
+                "action": "extendStorage",
+                "description": "Extend storage duration",
+                "auth_required": true
+            },
+            {
+                "method": "GET",
+                "path": "/storage",
+                "action": "getStorageInfo",
+                "description": "Get storage usage info",
+                "auth_required": true
+            },
+            {
+                "method": "GET",
+                "path": "/pricing",
+                "action": "getPricing",
+                "description": "Get current pricing",
+                "auth_required": false
+            },
+            {
+                "method": "POST",
+                "path": "/calculate",
+                "action": "calculateCost",
+                "description": "Calculate storage cost",
+                "auth_required": false
+            },
+            {
+                "method": "GET",
+                "path": "/payments",
+                "action": "getPayments",
+                "description": "Get payment history",
+                "auth_required": true
+            }
+        ]
+    },
+    "cli": {
+        "command": "file-hosting",
+        "handler": "ClaudeCodeFileHostingCliHandler",
+        "subcommands": [
+            {
+                "name": "upload",
+                "description": "Upload a file",
+                "usage": "eiou file-hosting upload <path> [--days=<days>] [--public]"
+            },
+            {
+                "name": "list",
+                "description": "List hosted files",
+                "usage": "eiou file-hosting list [--expired]"
+            },
+            {
+                "name": "info",
+                "description": "Get file information",
+                "usage": "eiou file-hosting info <file-id>"
+            },
+            {
+                "name": "download",
+                "description": "Download a file",
+                "usage": "eiou file-hosting download <file-id> [--output=<path>]"
+            },
+            {
+                "name": "delete",
+                "description": "Delete a file",
+                "usage": "eiou file-hosting delete <file-id>"
+            },
+            {
+                "name": "extend",
+                "description": "Extend storage duration",
+                "usage": "eiou file-hosting extend <file-id> --days=<days>"
+            },
+            {
+                "name": "storage",
+                "description": "Show storage usage",
+                "usage": "eiou file-hosting storage"
+            },
+            {
+                "name": "pricing",
+                "description": "Show pricing information",
+                "usage": "eiou file-hosting pricing"
+            },
+            {
+                "name": "payments",
+                "description": "Show payment history",
+                "usage": "eiou file-hosting payments [--limit=<n>]"
+            }
+        ]
+    },
+    "gui": {
+        "menu_item": {
+            "label": "File Hosting",
+            "icon": "cloud-upload",
+            "position": 50
+        },
+        "templates": [
+            "gui/templates/file-hosting.html"
+        ],
+        "assets": {
+            "css": ["gui/assets/css/file-hosting.css"],
+            "js": ["gui/assets/js/file-hosting.js"]
+        }
+    },
+    "hooks": {
+        "on_install": "onInstall",
+        "on_uninstall": "onUninstall",
+        "on_activate": "onActivate",
+        "on_deactivate": "onDeactivate",
+        "on_file_upload": "onFileUpload",
+        "on_file_delete": "onFileDelete",
+        "on_payment_received": "onPaymentReceived",
+        "on_storage_expired": "onStorageExpired"
+    }
+}
