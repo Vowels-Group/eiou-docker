@@ -555,6 +555,14 @@ function showContactTxDetail(index) {
     // Details section
     html += '<div class="tx-detail-section">';
 
+    // Description (moved to top, above Date & Time)
+    if (tx.description) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Description</div>';
+        html += '<div class="tx-detail-value">' + tx.description + '</div>';
+        html += '</div>';
+    }
+
     // Date/Time
     html += '<div class="tx-detail-row">';
     html += '<div class="tx-detail-label">Date & Time</div>';
@@ -569,35 +577,11 @@ function showContactTxDetail(index) {
         html += '</div>';
     }
 
-    // Sender Address
-    if (tx.sender_address) {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">Sender Address</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.sender_address + '</div>';
-        html += '</div>';
-    }
-
-    // Receiver Address
-    if (tx.receiver_address) {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">Receiver Address</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.receiver_address + '</div>';
-        html += '</div>';
-    }
-
-    // Memo (for P2P transactions)
+    // Routing Hash (moved to below Transaction ID, for P2P transactions)
     if (tx.memo && tx.memo !== 'standard') {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Routing Hash</div>';
         html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.memo + '</div>';
-        html += '</div>';
-    }
-
-    // Description
-    if (tx.description) {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + tx.description + '</div>';
         html += '</div>';
     }
 
