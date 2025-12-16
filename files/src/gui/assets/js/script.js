@@ -233,10 +233,43 @@ function openTransactionModal(index) {
         html += '</div>';
     }
 
-    // P2P Transaction Details (end recipient, amount, fee)
+    // Routing Hash (for P2P transactions)
+    if (tx.memo && tx.memo !== 'standard') {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Routing Hash</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + truncate(tx.memo, 64) + '</div>';
+        html += '</div>';
+    }
+
+    html += '</div>';
+
+    // P2P Transaction Details (end recipient, amount, fee) - displayed below main details
     if (tx.tx_type === 'p2p' && tx.p2p_destination) {
+        // Determine P2P role icon and label
+        var p2pRoleIcon = 'fa-exchange-alt';
+        var p2pRoleLabel = 'P2P Transaction';
+        var p2pRoleColor = '#ffc107';
+
+        if (tx.direction === 'relay') {
+            p2pRoleIcon = 'fa-random';
+            p2pRoleLabel = 'Relay Transaction';
+            p2pRoleColor = '#17a2b8';
+        } else if (tx.type === 'sent') {
+            p2pRoleIcon = 'fa-arrow-up';
+            p2pRoleLabel = 'Sent via P2P';
+            p2pRoleColor = '#dc3545';
+        } else if (tx.type === 'received') {
+            p2pRoleIcon = 'fa-arrow-down';
+            p2pRoleLabel = 'Received via P2P';
+            p2pRoleColor = '#28a745';
+        }
+
         html += '<div style="margin-top: 1rem; padding: 1rem; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">';
-        html += '<div style="font-weight: bold; margin-bottom: 0.5rem; color: #856404;"><i class="fas fa-network-wired"></i> P2P Transaction Details</div>';
+        html += '<div style="display: flex; align-items: center; gap: 0.5rem; font-weight: bold; margin-bottom: 0.75rem; color: #856404;">';
+        html += '<i class="fas fa-network-wired"></i> P2P Transaction Details';
+        html += '<span style="background: ' + p2pRoleColor + '; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-left: auto;">';
+        html += '<i class="fas ' + p2pRoleIcon + '"></i> ' + p2pRoleLabel + '</span>';
+        html += '</div>';
 
         // End Recipient
         html += '<div class="tx-detail-row">';
@@ -262,16 +295,6 @@ function openTransactionModal(index) {
 
         html += '</div>';
     }
-
-    // Routing Hash (for P2P transactions)
-    if (tx.memo && tx.memo !== 'standard') {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">Routing Hash</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + truncate(tx.memo, 64) + '</div>';
-        html += '</div>';
-    }
-
-    html += '</div>';
 
     content.innerHTML = html;
     modal.style.display = 'flex';
