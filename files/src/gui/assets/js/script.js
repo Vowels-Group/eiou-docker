@@ -514,7 +514,7 @@ function checkForTimeoutToast() {
 
         // Show the toast after a brief delay to ensure page is ready
         setTimeout(function() {
-            showToast('Operation Timeout', timeoutMessage, 'warning');
+            showToast('Background Processing', timeoutMessage, 'info');
         }, 500);
     }
 }
@@ -527,14 +527,14 @@ document.addEventListener('DOMContentLoaded', function() {
 // Form loaders initialization
 function initializeFormLoaders() {
     // Retry info text for contact operations
-    var retryInfoText = 'Connecting to contact server. If unreachable, up to 5 retry attempts will be made automatically.';
+    var retryInfoText = 'Connecting to contact server. The message processor will continue retrying in the background.';
 
     // Add contact form
     var addContactForm = document.querySelector('#add-contact form');
     if (addContactForm) {
         addContactForm.addEventListener('submit', function() {
             showLoader('Adding contact...', retryInfoText);
-            startOperationTimeout('addContact', 'Adding contact timed out. The contact server may be unreachable. Please try again.');
+            startOperationTimeout('addContact', 'Still waiting for response. The message is being retried in the background. You can continue using the app and check back later.');
         });
     }
 
@@ -553,7 +553,7 @@ function initializeFormLoaders() {
         if (form) {
             form.addEventListener('submit', function() {
                 showLoader('Accepting contact request...', retryInfoText);
-                startOperationTimeout('acceptContact', 'Accepting contact timed out. The contact server may be unreachable. Please try again.');
+                startOperationTimeout('acceptContact', 'Still waiting for response. The message is being retried in the background. You can continue using the app and check back later.');
             });
         }
     }
@@ -603,8 +603,8 @@ function initializeFormLoaders() {
     var sendForm = document.querySelector('#send-form form');
     if (sendForm) {
         sendForm.addEventListener('submit', function() {
-            showLoader('Sending transaction...', 'Processing your transaction. This may take a moment.');
-            startOperationTimeout('sendTransaction', 'Transaction timed out. The network may be slow. Please check your transaction history.');
+            showLoader('Sending transaction...', 'Processing your transaction. The message processor will continue retrying in the background.');
+            startOperationTimeout('sendTransaction', 'Still waiting for response. The transaction is being retried in the background. Check your transaction history for updates.');
         });
     }
 }
