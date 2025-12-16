@@ -320,10 +320,13 @@
                 <tr><td><strong>PHP Extensions</strong></td><td><?php echo $phpExtensionsCount; ?> loaded</td></tr>
             </table>
 
-            <!-- PHP Extensions with Versions -->
+            <!-- PHP Extensions with Versions (Collapsible) -->
             <div style="margin-top: 1rem;">
-                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem;"><i class="fas fa-puzzle-piece"></i> PHP Extensions (with versions)</h4>
-                <pre class="debug-pre" style="max-height: 200px; overflow-y: auto;"><?php echo htmlspecialchars($phpExtensionsFormatted); ?></pre>
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleConfigSection('phpext-content', 'phpext-arrow')">
+                    <i class="fas fa-puzzle-piece"></i> PHP Extensions (with versions)
+                    <i id="phpext-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
+                </h4>
+                <pre id="phpext-content" class="debug-pre" style="max-height: 200px; overflow-y: auto; display: none;"><?php echo htmlspecialchars($phpExtensionsFormatted); ?></pre>
             </div>
 
             <!-- php.ini Contents (Collapsible) -->
