@@ -99,13 +99,25 @@
                                 <?php echo ucfirst(htmlspecialchars($tx['status'])); ?>
                             </span>
                         </div>
-                        <div style="font-size: 0.9rem; color: #6c757d;">
+                        <div style="font-size: 0.9rem; color: #6c757d; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                             <?php echo $tx['date']; ?>
                             <?php if ($tx['tx_type'] === 'p2p'): ?>
                                 <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
                             <?php else: ?>
                                 <span class="tx-type-badge tx-type-direct"><i class="fas fa-exchange-alt"></i> Direct</span>
                             <?php endif; ?>
+                            <?php
+                            // Role badge (Sent/Received/Relay)
+                            $roleIcon = $tx['type'] === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
+                            $roleLabel = $tx['type'] === 'sent' ? 'Sent' : 'Received';
+                            $roleColor = $tx['type'] === 'sent' ? '#dc3545' : '#28a745';
+                            if (($tx['direction'] ?? '') === 'relay') {
+                                $roleIcon = 'fa-random';
+                                $roleLabel = 'Relay';
+                                $roleColor = '#17a2b8';
+                            }
+                            ?>
+                            <span style="background: <?php echo $roleColor; ?>; color: white; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem;"><i class="fas <?php echo $roleIcon; ?>"></i> <?php echo $roleLabel; ?></span>
                         </div>
                     </div>
                     <div class="transaction-amount <?php echo $tx['type'] === 'sent' ? 'transaction-sent' : 'transaction-received'; ?>">
