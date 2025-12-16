@@ -1458,8 +1458,7 @@ html {
 
 /* Transactions List */
 .transactions-list {
-    max-height: 200px;
-    overflow-y: auto;
+    /* No max-height - uses full available space in modal tab */
 }
 
 .no-transactions {
