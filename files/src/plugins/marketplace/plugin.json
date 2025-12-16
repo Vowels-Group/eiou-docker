@@ -1,0 +1,76 @@
+{
+    "name": "Claude Code Marketplace",
+    "id": "claude-code-marketplace",
+    "version": "1.0.0",
+    "description": "A self-hosted marketplace/appstore plugin for Claude Code that allows users to discover, install, and manage Claude Code extensions, tools, and integrations",
+    "author": "EIOU Organization",
+    "license": "MIT",
+    "homepage": "https://github.com/eiou-org/eiou",
+    "keywords": ["marketplace", "appstore", "plugins", "claude-code", "extensions"],
+    "compatibility": {
+        "eiou-docker": ">=1.0.0",
+        "php": ">=8.1"
+    },
+    "entrypoint": "MarketplacePlugin.php",
+    "autoload": {
+        "classes": {
+            "MarketplacePlugin": "MarketplacePlugin.php",
+            "MarketplaceService": "services/MarketplaceService.php",
+            "MarketplaceRepository": "repositories/MarketplaceRepository.php",
+            "MarketplaceApiController": "api/MarketplaceApiController.php",
+            "MarketplaceCliHandler": "cli/MarketplaceCliHandler.php"
+        }
+    },
+    "database": {
+        "migrations": [
+            "migrations/001_create_marketplace_tables.sql"
+        ]
+    },
+    "api": {
+        "prefix": "/api/v1/marketplace",
+        "routes": [
+            {"method": "GET", "path": "/plugins", "handler": "listPlugins", "auth": "optional"},
+            {"method": "GET", "path": "/plugins/:id", "handler": "getPlugin", "auth": "optional"},
+            {"method": "POST", "path": "/plugins", "handler": "publishPlugin", "auth": "required"},
+            {"method": "PUT", "path": "/plugins/:id", "handler": "updatePlugin", "auth": "required"},
+            {"method": "DELETE", "path": "/plugins/:id", "handler": "unpublishPlugin", "auth": "required"},
+            {"method": "GET", "path": "/categories", "handler": "listCategories", "auth": "optional"},
+            {"method": "GET", "path": "/search", "handler": "searchPlugins", "auth": "optional"},
+            {"method": "POST", "path": "/install/:id", "handler": "installPlugin", "auth": "required"},
+            {"method": "POST", "path": "/uninstall/:id", "handler": "uninstallPlugin", "auth": "required"},
+            {"method": "GET", "path": "/installed", "handler": "listInstalledPlugins", "auth": "required"},
+            {"method": "GET", "path": "/updates", "handler": "checkUpdates", "auth": "required"},
+            {"method": "POST", "path": "/sync", "handler": "syncRepository", "auth": "required"},
+            {"method": "GET", "path": "/repositories", "handler": "listRepositories", "auth": "optional"},
+            {"method": "POST", "path": "/repositories", "handler": "addRepository", "auth": "required"},
+            {"method": "DELETE", "path": "/repositories/:id", "handler": "removeRepository", "auth": "required"}
+        ]
+    },
+    "cli": {
+        "commands": [
+            {"name": "marketplace", "description": "Marketplace management commands"},
+            {"name": "marketplace list", "description": "List available plugins"},
+            {"name": "marketplace search <query>", "description": "Search for plugins"},
+            {"name": "marketplace install <plugin-id>", "description": "Install a plugin"},
+            {"name": "marketplace uninstall <plugin-id>", "description": "Uninstall a plugin"},
+            {"name": "marketplace update [plugin-id]", "description": "Update plugins"},
+            {"name": "marketplace publish <path>", "description": "Publish a plugin to marketplace"},
+            {"name": "marketplace repo add <url>", "description": "Add a plugin repository"},
+            {"name": "marketplace repo remove <url>", "description": "Remove a plugin repository"},
+            {"name": "marketplace repo list", "description": "List configured repositories"}
+        ]
+    },
+    "settings": {
+        "auto_update": false,
+        "check_updates_interval": 86400,
+        "default_repository": "https://marketplace.eiou.org/api/v1",
+        "allow_unsigned_plugins": false,
+        "max_plugin_size_mb": 50
+    },
+    "hooks": {
+        "onInstall": "onPluginInstall",
+        "onUninstall": "onPluginUninstall",
+        "onActivate": "onPluginActivate",
+        "onDeactivate": "onPluginDeactivate"
+    }
+}

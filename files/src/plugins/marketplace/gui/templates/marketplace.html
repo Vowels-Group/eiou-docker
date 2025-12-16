@@ -1,0 +1,193 @@
+<!-- Marketplace Plugin GUI Template -->
+<div id="marketplace-container" class="marketplace-page">
+    <!-- Header -->
+    <div class="marketplace-header">
+        <h1>Claude Code Marketplace</h1>
+        <p class="marketplace-subtitle">Discover, install, and manage plugins</p>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="marketplace-tabs">
+        <button class="tab-btn active" data-tab="browse">Browse</button>
+        <button class="tab-btn" data-tab="installed">Installed</button>
+        <button class="tab-btn" data-tab="updates">Updates <span id="update-badge" class="badge hidden">0</span></button>
+        <button class="tab-btn" data-tab="repositories">Repositories</button>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="marketplace-controls">
+        <div class="search-box">
+            <input type="text" id="plugin-search" placeholder="Search plugins..." />
+            <button id="search-btn" class="btn-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            </button>
+        </div>
+        <div class="filter-controls">
+            <select id="category-filter">
+                <option value="">All Categories</option>
+                <option value="tools">Tools</option>
+                <option value="integrations">Integrations</option>
+                <option value="workflows">Workflows</option>
+                <option value="themes">Themes</option>
+                <option value="utilities">Utilities</option>
+            </select>
+            <select id="sort-filter">
+                <option value="downloads">Most Downloaded</option>
+                <option value="rating">Highest Rated</option>
+                <option value="updated">Recently Updated</option>
+                <option value="name">Alphabetical</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+        <!-- Browse Tab -->
+        <div id="browse-tab" class="tab-panel active">
+            <div id="plugin-grid" class="plugin-grid">
+                <!-- Plugin cards will be loaded here -->
+            </div>
+            <div id="pagination" class="pagination">
+                <button id="prev-page" class="btn-secondary" disabled>Previous</button>
+                <span id="page-info">Page 1 of 1</span>
+                <button id="next-page" class="btn-secondary" disabled>Next</button>
+            </div>
+        </div>
+
+        <!-- Installed Tab -->
+        <div id="installed-tab" class="tab-panel hidden">
+            <div id="installed-list" class="plugin-list">
+                <!-- Installed plugins will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Updates Tab -->
+        <div id="updates-tab" class="tab-panel hidden">
+            <div class="updates-header">
+                <button id="check-updates-btn" class="btn-primary">Check for Updates</button>
+                <button id="update-all-btn" class="btn-secondary hidden">Update All</button>
+            </div>
+            <div id="updates-list" class="plugin-list">
+                <!-- Available updates will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Repositories Tab -->
+        <div id="repositories-tab" class="tab-panel hidden">
+            <div class="repo-header">
+                <button id="add-repo-btn" class="btn-primary">Add Repository</button>
+                <button id="sync-all-btn" class="btn-secondary">Sync All</button>
+            </div>
+            <div id="repo-list" class="repo-list">
+                <!-- Repositories will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Plugin Detail Modal -->
+    <div id="plugin-modal" class="modal hidden">
+        <div class="modal-content">
+            <button class="modal-close">&times;</button>
+            <div id="plugin-detail">
+                <!-- Plugin details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Repository Modal -->
+    <div id="repo-modal" class="modal hidden">
+        <div class="modal-content modal-small">
+            <h2>Add Repository</h2>
+            <button class="modal-close">&times;</button>
+            <form id="add-repo-form">
+                <div class="form-group">
+                    <label for="repo-url">Repository URL</label>
+                    <input type="url" id="repo-url" required placeholder="https://plugins.example.com/api/v1" />
+                </div>
+                <div class="form-group">
+                    <label for="repo-name">Name (optional)</label>
+                    <input type="text" id="repo-name" placeholder="My Plugin Repository" />
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary modal-cancel">Cancel</button>
+                    <button type="submit" class="btn-primary">Add Repository</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <p id="loading-message">Loading...</p>
+    </div>
+</div>
+
+<!-- Plugin Card Template -->
+<template id="plugin-card-template">
+    <div class="plugin-card" data-plugin-id="">
+        <div class="plugin-header">
+            <h3 class="plugin-name"></h3>
+            <span class="plugin-version"></span>
+        </div>
+        <p class="plugin-description"></p>
+        <div class="plugin-meta">
+            <span class="plugin-author"></span>
+            <span class="plugin-downloads"></span>
+            <span class="plugin-rating"></span>
+        </div>
+        <div class="plugin-tags"></div>
+        <div class="plugin-actions">
+            <button class="btn-primary install-btn">Install</button>
+            <button class="btn-secondary details-btn">Details</button>
+        </div>
+    </div>
+</template>
+
+<!-- Installed Plugin Template -->
+<template id="installed-plugin-template">
+    <div class="installed-plugin" data-plugin-id="">
+        <div class="plugin-info">
+            <h3 class="plugin-name"></h3>
+            <span class="plugin-version"></span>
+            <span class="plugin-status"></span>
+        </div>
+        <div class="plugin-controls">
+            <button class="btn-icon toggle-btn" title="Toggle">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M17 7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h10c2.76 0 5-2.24 5-5s-2.24-5-5-5zM7 15c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/></svg>
+            </button>
+            <button class="btn-icon update-btn hidden" title="Update">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 10.12h-6.78l2.74-2.82c-2.73-2.7-7.15-2.8-9.88-.1-2.73 2.71-2.73 7.08 0 9.79 2.73 2.71 7.15 2.71 9.88 0C18.32 15.65 19 14.08 19 12.1h2c0 1.98-.88 4.55-2.64 6.29-3.51 3.48-9.21 3.48-12.72 0-3.5-3.47-3.53-9.11-.02-12.58 3.51-3.47 9.14-3.47 12.65 0L21 3v7.12z"/></svg>
+            </button>
+            <button class="btn-icon uninstall-btn" title="Uninstall">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </button>
+        </div>
+    </div>
+</template>
+
+<!-- Repository Template -->
+<template id="repo-template">
+    <div class="repo-item" data-repo-id="">
+        <div class="repo-info">
+            <h3 class="repo-name"></h3>
+            <span class="repo-url"></span>
+            <div class="repo-stats">
+                <span class="repo-plugins"></span>
+                <span class="repo-sync"></span>
+            </div>
+        </div>
+        <div class="repo-badges">
+            <span class="badge-official hidden">Official</span>
+            <span class="badge-status"></span>
+        </div>
+        <div class="repo-controls">
+            <button class="btn-icon sync-btn" title="Sync">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+            </button>
+            <button class="btn-icon remove-btn" title="Remove">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+        </div>
+    </div>
+</template>
