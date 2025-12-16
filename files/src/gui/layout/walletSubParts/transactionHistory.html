@@ -90,6 +90,9 @@
                     <div class="transaction-info">
                         <div>
                             <strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars($tx['counterparty']); ?></strong>
+                        </div>
+                        <div style="font-size: 0.9rem; color: #6c757d; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <?php echo $tx['date']; ?>
                             <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($tx['status']); ?>">
                                 <?php if ($tx['status'] === 'pending'): ?>
                                     <i class="fas fa-hourglass-half"></i>
@@ -106,9 +109,6 @@
                                 <?php endif; ?>
                                 <?php echo ucfirst(htmlspecialchars($tx['status'])); ?>
                             </span>
-                        </div>
-                        <div style="font-size: 0.9rem; color: #6c757d; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                            <?php echo $tx['date']; ?>
                             <?php if ($tx['tx_type'] === 'p2p'): ?>
                                 <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
                             <?php else: ?>
