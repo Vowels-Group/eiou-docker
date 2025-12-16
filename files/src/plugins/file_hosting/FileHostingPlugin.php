@@ -2,7 +2,7 @@
 # Copyright 2025
 
 /**
- * Claude Code File Hosting Plugin
+ * File Hosting Plugin
  *
  * A decentralized file hosting service for eiou-docker nodes that allows users
  * to store and share files, paying for storage with eIOUs.
@@ -15,15 +15,15 @@
  * - Storage quota management
  * - Download tracking
  *
- * @package Plugins\ClaudeCodeFileHosting
+ * @package Plugins\FileHosting
  * @version 1.0.0
  */
 
-class ClaudeCodeFileHostingPlugin {
+class FileHostingPlugin {
     /**
-     * @var ClaudeCodeFileHostingPlugin|null Singleton instance
+     * @var FileHostingPlugin|null Singleton instance
      */
-    private static ?ClaudeCodeFileHostingPlugin $instance = null;
+    private static ?FileHostingPlugin $instance = null;
 
     /**
      * @var array Plugin configuration
@@ -41,9 +41,9 @@ class ClaudeCodeFileHostingPlugin {
     private ServiceContainer $services;
 
     /**
-     * @var ClaudeCodeFileHostingService Main file hosting service
+     * @var FileHostingService Main file hosting service
      */
-    private ?ClaudeCodeFileHostingService $fileHostingService = null;
+    private ?FileHostingService $fileHostingService = null;
 
     /**
      * @var SecureLogger Logger instance
@@ -53,9 +53,9 @@ class ClaudeCodeFileHostingPlugin {
     /**
      * Plugin constants
      */
-    const PLUGIN_ID = 'claude_code_file_hosting';
+    const PLUGIN_ID = 'file_hosting';
     const PLUGIN_VERSION = '1.0.0';
-    const PLUGIN_NAME = 'Claude Code File Hosting';
+    const PLUGIN_NAME = 'File Hosting';
     const CONFIG_FILE = __DIR__ . '/plugin.json';
     const STORAGE_DIR = '/etc/eiou/file-hosting/';
     const TEMP_DIR = '/etc/eiou/file-hosting/temp/';
@@ -70,9 +70,9 @@ class ClaudeCodeFileHostingPlugin {
     /**
      * Get singleton instance
      *
-     * @return ClaudeCodeFileHostingPlugin
+     * @return FileHostingPlugin
      */
-    public static function getInstance(): ClaudeCodeFileHostingPlugin {
+    public static function getInstance(): FileHostingPlugin {
         if (self::$instance === null) {
             self::$instance = new self();
         }
@@ -182,16 +182,16 @@ class ClaudeCodeFileHostingPlugin {
         require_once $basePath . '/models/FilePayment.php';
 
         // Load repository
-        require_once $basePath . '/repositories/ClaudeCodeFileHostingRepository.php';
+        require_once $basePath . '/repositories/FileHostingRepository.php';
 
         // Load service
-        require_once $basePath . '/services/ClaudeCodeFileHostingService.php';
+        require_once $basePath . '/services/FileHostingService.php';
 
         // Load API controller
-        require_once $basePath . '/api/ClaudeCodeFileHostingApiController.php';
+        require_once $basePath . '/api/FileHostingApiController.php';
 
         // Load CLI handler
-        require_once $basePath . '/cli/ClaudeCodeFileHostingCliHandler.php';
+        require_once $basePath . '/cli/FileHostingCliHandler.php';
     }
 
     /**
@@ -301,12 +301,12 @@ class ClaudeCodeFileHostingPlugin {
     /**
      * Get the file hosting service
      *
-     * @return ClaudeCodeFileHostingService
+     * @return FileHostingService
      */
-    public function getFileHostingService(): ClaudeCodeFileHostingService {
+    public function getFileHostingService(): FileHostingService {
         if ($this->fileHostingService === null) {
-            $this->fileHostingService = new ClaudeCodeFileHostingService(
-                new ClaudeCodeFileHostingRepository($this->services->getPdo()),
+            $this->fileHostingService = new FileHostingService(
+                new FileHostingRepository($this->services->getPdo()),
                 $this->services->getUtilityContainer(),
                 $this->logger,
                 $this->config

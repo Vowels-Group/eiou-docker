@@ -10,11 +10,11 @@
  * @package Plugins\FileHosting\Services
  */
 
-class ClaudeCodeFileHostingService {
+class FileHostingService {
     /**
-     * @var ClaudeCodeFileHostingRepository Data repository
+     * @var FileHostingRepository Data repository
      */
-    private ClaudeCodeFileHostingRepository $repository;
+    private FileHostingRepository $repository;
 
     /**
      * @var UtilityServiceContainer Utility services
@@ -45,13 +45,13 @@ class ClaudeCodeFileHostingService {
     /**
      * Constructor
      *
-     * @param ClaudeCodeFileHostingRepository $repository Data repository
+     * @param FileHostingRepository $repository Data repository
      * @param UtilityServiceContainer $utilities Utility services
      * @param SecureLogger|null $logger Logger
      * @param array $config Plugin configuration
      */
     public function __construct(
-        ClaudeCodeFileHostingRepository $repository,
+        FileHostingRepository $repository,
         UtilityServiceContainer $utilities,
         ?SecureLogger $logger = null,
         array $config = []

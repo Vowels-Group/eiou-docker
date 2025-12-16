@@ -22,11 +22,11 @@
  * @package Plugins\FileHosting\Cli
  */
 
-class ClaudeCodeFileHostingCliHandler {
+class FileHostingCliHandler {
     /**
-     * @var ClaudeCodeFileHostingService File hosting service
+     * @var FileHostingService File hosting service
      */
-    private ClaudeCodeFileHostingService $service;
+    private FileHostingService $service;
 
     /**
      * @var CliOutputManager Output manager
@@ -36,9 +36,9 @@ class ClaudeCodeFileHostingCliHandler {
     /**
      * Constructor
      *
-     * @param ClaudeCodeFileHostingService $service File hosting service
+     * @param FileHostingService $service File hosting service
      */
-    public function __construct(ClaudeCodeFileHostingService $service) {
+    public function __construct(FileHostingService $service) {
         $this->service = $service;
     }
 

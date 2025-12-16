@@ -4,7 +4,7 @@
 /**
  * File Hosting Service Tests
  *
- * Unit tests for the ClaudeCodeFileHostingService
+ * Unit tests for the FileHostingService
  *
  * @package Tests\FileHosting
  */
@@ -27,7 +27,7 @@ class FileHostingServiceTest extends TestCase {
         $this->createTables();
 
         // Create repository
-        $this->repository = new ClaudeCodeFileHostingRepository($this->pdo);
+        $this->repository = new FileHostingRepository($this->pdo);
 
         // Create mock utilities and logger
         $this->mockUtilities = $this->createMock(UtilityServiceContainer::class);
@@ -45,7 +45,7 @@ class FileHostingServiceTest extends TestCase {
             ]
         ];
 
-        $this->service = new ClaudeCodeFileHostingService(
+        $this->service = new FileHostingService(
             $this->repository,
             $this->mockUtilities,
             $this->mockLogger,

@@ -1,6 +1,6 @@
 {
-    "name": "Claude Code File Hosting",
-    "id": "claude_code_file_hosting",
+    "name": "File Hosting",
+    "id": "file_hosting",
     "version": "1.0.0",
     "description": "Decentralized file hosting service with eIOU payments. Host and share files on eiou-docker nodes, paying for storage with eIOUs.",
     "author": "EIOU Team",
@@ -8,7 +8,7 @@
     "homepage": "https://github.com/eiou-org/eiou-docker",
     "category": "storage",
     "tags": ["file-hosting", "storage", "payments", "decentralized", "eiou"],
-    "entrypoint": "ClaudeCodeFileHostingPlugin.php",
+    "entrypoint": "FileHostingPlugin.php",
     "minimum_eiou_version": "1.0.0",
     "dependencies": [],
     "permissions": [
@@ -31,11 +31,11 @@
     },
     "autoload": {
         "classes": {
-            "ClaudeCodeFileHostingPlugin": "ClaudeCodeFileHostingPlugin.php",
-            "ClaudeCodeFileHostingService": "services/ClaudeCodeFileHostingService.php",
-            "ClaudeCodeFileHostingRepository": "repositories/ClaudeCodeFileHostingRepository.php",
-            "ClaudeCodeFileHostingApiController": "api/ClaudeCodeFileHostingApiController.php",
-            "ClaudeCodeFileHostingCliHandler": "cli/ClaudeCodeFileHostingCliHandler.php",
+            "FileHostingPlugin": "FileHostingPlugin.php",
+            "FileHostingService": "services/FileHostingService.php",
+            "FileHostingRepository": "repositories/FileHostingRepository.php",
+            "FileHostingApiController": "api/FileHostingApiController.php",
+            "FileHostingCliHandler": "cli/FileHostingCliHandler.php",
             "HostedFile": "models/HostedFile.php",
             "StoragePlan": "models/StoragePlan.php",
             "FilePayment": "models/FilePayment.php"
@@ -43,7 +43,7 @@
     },
     "api": {
         "prefix": "/api/v1/file-hosting",
-        "controller": "ClaudeCodeFileHostingApiController",
+        "controller": "FileHostingApiController",
         "routes": [
             {
                 "method": "POST",
@@ -119,7 +119,7 @@
     },
     "cli": {
         "command": "file-hosting",
-        "handler": "ClaudeCodeFileHostingCliHandler",
+        "handler": "FileHostingCliHandler",
         "subcommands": [
             {
                 "name": "upload",

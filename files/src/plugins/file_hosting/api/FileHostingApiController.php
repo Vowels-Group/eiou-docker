@@ -21,11 +21,11 @@
  * @package Plugins\FileHosting\Api
  */
 
-class ClaudeCodeFileHostingApiController {
+class FileHostingApiController {
     /**
-     * @var ClaudeCodeFileHostingService File hosting service
+     * @var FileHostingService File hosting service
      */
-    private ClaudeCodeFileHostingService $service;
+    private FileHostingService $service;
 
     /**
      * @var SecureLogger|null Logger
@@ -45,10 +45,10 @@ class ClaudeCodeFileHostingApiController {
     /**
      * Constructor
      *
-     * @param ClaudeCodeFileHostingService $service File hosting service
+     * @param FileHostingService $service File hosting service
      * @param SecureLogger|null $logger Logger
      */
-    public function __construct(ClaudeCodeFileHostingService $service, ?SecureLogger $logger = null) {
+    public function __construct(FileHostingService $service, ?SecureLogger $logger = null) {
         $this->service = $service;
         $this->logger = $logger;
     }

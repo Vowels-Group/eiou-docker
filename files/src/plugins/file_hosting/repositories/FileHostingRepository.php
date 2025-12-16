@@ -9,7 +9,7 @@
  * @package Plugins\FileHosting\Repositories
  */
 
-class ClaudeCodeFileHostingRepository {
+class FileHostingRepository {
     /**
      * @var PDO Database connection
      */
