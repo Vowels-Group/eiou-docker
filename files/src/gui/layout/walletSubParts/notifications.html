@@ -92,3 +92,20 @@
     </div>
 </div>
 <?php endif; ?>
+
+<!-- Toast notifications for newly completed transactions -->
+<?php if (!empty($newlyCompletedTransactions)): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    <?php foreach ($newlyCompletedTransactions as $tx): ?>
+    if (typeof showToast === 'function') {
+        showToast(
+            'Transaction Complete',
+            'Your $<?php echo number_format(($tx['amount'] ?? 0) / 100, 2); ?> <?php echo htmlspecialchars($tx['currency'] ?? 'USD'); ?> transfer has completed successfully.',
+            'success'
+        );
+    }
+    <?php endforeach; ?>
+});
+</script>
+<?php endif; ?>
