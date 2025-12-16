@@ -40,6 +40,7 @@ $maxDisplayLines = $user->getMaxOutput();
 $totalBalance = $transactionService->getUserTotalBalance();
 $totalEarnings = $currencyUtility->convertCentsToDollars($p2pService->getUserTotalEarnings());
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
+$inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
 // Contact data
 $allContacts = $contactService->getAllContacts();

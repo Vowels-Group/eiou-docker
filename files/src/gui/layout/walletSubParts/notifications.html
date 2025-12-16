@@ -39,6 +39,40 @@
     </script>
 <?php endif; ?>
 
+<!-- In-Progress Transactions Notification -->
+<?php if (!empty($inProgressTransactions)): ?>
+<div id="in-progress-banner" class="alert alert-warning fade-in-up" style="margin-bottom: 1rem;">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <div class="tx-in-progress-spinner">
+            <i class="fas fa-spinner fa-spin" style="font-size: 1.5rem; color: #ffc107;"></i>
+        </div>
+        <div style="flex: 1;">
+            <h4 style="margin: 0; color: #664d03;">
+                <i class="fas fa-clock"></i> <?php echo count($inProgressTransactions); ?> Transaction<?php echo count($inProgressTransactions) > 1 ? 's' : ''; ?> In Progress
+            </h4>
+            <p style="margin: 0.5rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                <?php
+                $pending = 0; $sent = 0; $accepted = 0;
+                foreach ($inProgressTransactions as $tx) {
+                    if ($tx['status'] === 'pending') $pending++;
+                    elseif ($tx['status'] === 'sent') $sent++;
+                    elseif ($tx['status'] === 'accepted') $accepted++;
+                }
+                $parts = [];
+                if ($pending > 0) $parts[] = "$pending pending";
+                if ($sent > 0) $parts[] = "$sent sent";
+                if ($accepted > 0) $parts[] = "$accepted awaiting confirmation";
+                echo implode(', ', $parts);
+                ?>
+            </p>
+        </div>
+        <a href="#transactions" class="btn btn-warning" style="padding: 0.5rem 1rem;">
+            <i class="fas fa-eye"></i> View
+        </a>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Pending Contact Requests Notification -->
 <?php if (!empty($pendingContacts)): ?>
 <div class="alert alert-info fade-in-up" style="margin-bottom: 2rem;">

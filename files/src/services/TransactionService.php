@@ -1120,4 +1120,15 @@ class TransactionService {
     public function getStatistics(): array {
         return $this->transactionRepository->getStatistics();
     }
+
+    /**
+     * Get pending/in-progress transactions for GUI display
+     * Returns transactions that are pending, sent, or in progress (not completed)
+     *
+     * @param int $limit Maximum number of transactions to return
+     * @return array Array of pending transaction data
+     */
+    public function getInProgressTransactions(int $limit = 10): array {
+        return $this->transactionRepository->getInProgressTransactions($limit);
+    }
 }

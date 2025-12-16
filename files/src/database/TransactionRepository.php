@@ -1189,6 +1189,79 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Get transactions that are in progress (not completed/rejected/cancelled)
+     * Returns transactions with status: pending, sent, accepted (but not yet confirmed)
+     * Also includes P2P route discovery requests sent by user that are not expired
+     *
+     * @param int $limit Maximum number of transactions to retrieve
+     * @return array Array of in-progress transactions
+     */
+    public function getInProgressTransactions(int $limit = 10): array {
+        $userAddresses = $this->currentUser->getUserAddresses();
+
+        if (empty($userAddresses)) {
+            return [];
+        }
+
+        // Create placeholders for IN clause
+        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+
+        // Current microtime for expiration check (P2P expiration is stored as microtime * TIME_MICROSECONDS_TO_INT)
+        $currentMicrotime = (int)(microtime(true) * Constants::TIME_MICROSECONDS_TO_INT);
+
+        // Query combines:
+        // 1. Regular in-progress transactions (pending, sent, accepted) where user is sender
+        // 2. P2P route requests sent by user (destination_address NOT NULL) that are not expired
+        $query = "SELECT
+                    txid,
+                    tx_type,
+                    status,
+                    sender_address,
+                    receiver_address,
+                    amount,
+                    currency,
+                    memo,
+                    timestamp,
+                    'transaction' as source_type
+                  FROM {$this->tableName}
+                  WHERE status IN ('pending', 'sent', 'accepted')
+                    AND sender_address IN ($placeholders)
+
+                  UNION ALL
+
+                  SELECT
+                    hash as txid,
+                    'p2p' as tx_type,
+                    status,
+                    sender_address,
+                    destination_address as receiver_address,
+                    amount,
+                    currency,
+                    hash as memo,
+                    created_at as timestamp,
+                    'p2p_request' as source_type
+                  FROM p2p
+                  WHERE destination_address IS NOT NULL
+                    AND status NOT IN ('completed', 'expired', 'cancelled')
+                    AND expiration > ?
+
+                  ORDER BY timestamp DESC
+                  LIMIT ?";
+
+        // Build params: user addresses for transactions, current time for p2p expiration, limit
+        $params = array_merge($userAddresses, [$currentMicrotime, $limit]);
+        $stmt = $this->pdo->prepare($query);
+
+        try {
+            $stmt->execute($params);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve in-progress transactions", $e);
+            return [];
+        }
+    }
+
+    /**
      * Update transaction status
      *
      * @param string $identifier Transaction memo or txid

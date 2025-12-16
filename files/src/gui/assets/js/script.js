@@ -171,10 +171,10 @@ function openTransactionModal(index) {
     var statusClass = 'tx-status-' + tx.status;
     var statusBadge = '<span class="tx-status-badge ' + statusClass + '">' + tx.status.charAt(0).toUpperCase() + tx.status.slice(1) + '</span>';
 
-    // Build transaction type badge
+    // Build transaction type badge (both yellow for consistency)
     var txTypeBadge = tx.tx_type === 'p2p'
         ? '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-network-wired"></i> P2P Routed</span>'
-        : '<span style="background: #28a745; color: #fff; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-arrow-right"></i> Direct</span>';
+        : '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-exchange-alt"></i> Direct</span>';
 
     // Build direction badge
     var directionColor = tx.type === 'sent' ? '#dc3545' : '#28a745';
@@ -205,11 +205,19 @@ function openTransactionModal(index) {
     // Details section
     html += '<div class="tx-detail-section">';
 
-    // Counterparty
+    // Counterparty (To/From)
     html += '<div class="tx-detail-row">';
     html += '<div class="tx-detail-label">' + (tx.type === 'sent' ? 'To' : 'From') + '</div>';
     html += '<div class="tx-detail-value">' + (tx.counterparty_name ? '<strong>' + tx.counterparty_name + '</strong><br>' : '') + '<span style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + tx.counterparty_address + '</span></div>';
     html += '</div>';
+
+    // Description (moved up, right after To/From)
+    if (tx.description) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Description</div>';
+        html += '<div class="tx-detail-value">' + tx.description + '</div>';
+        html += '</div>';
+    }
 
     // Date/Time
     html += '<div class="tx-detail-row">';
@@ -225,33 +233,13 @@ function openTransactionModal(index) {
         html += '</div>';
     }
 
-    // Memo (for P2P transactions)
+    // Routing Hash (for P2P transactions)
     if (tx.memo && tx.memo !== 'standard') {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Routing Hash</div>';
         html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + truncate(tx.memo, 64) + '</div>';
         html += '</div>';
     }
-
-    // Description
-    if (tx.description) {
-        html += '<div class="tx-detail-row">';
-        html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + tx.description + '</div>';
-        html += '</div>';
-    }
-
-    // Sender Address
-    html += '<div class="tx-detail-row">';
-    html += '<div class="tx-detail-label">Sender Address</div>';
-    html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.sender_address + '</div>';
-    html += '</div>';
-
-    // Receiver Address
-    html += '<div class="tx-detail-row">';
-    html += '<div class="tx-detail-label">Receiver Address</div>';
-    html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.receiver_address + '</div>';
-    html += '</div>';
 
     html += '</div>';
 
