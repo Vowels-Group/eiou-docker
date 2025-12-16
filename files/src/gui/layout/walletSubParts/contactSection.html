@@ -182,11 +182,11 @@
             <button type="button" class="modal-tab active" onclick="showModalTab('info-tab', this)">
                 <i class="fas fa-info-circle"></i> Info
             </button>
-            <button type="button" class="modal-tab" onclick="showModalTab('settings-tab', this)">
-                <i class="fas fa-cog"></i> Settings
-            </button>
             <button type="button" class="modal-tab" onclick="showModalTab('transactions-tab', this)">
                 <i class="fas fa-exchange-alt"></i> Transactions
+            </button>
+            <button type="button" class="modal-tab" onclick="showModalTab('settings-tab', this)">
+                <i class="fas fa-cog"></i> Settings
             </button>
         </div>
 
@@ -238,6 +238,35 @@
             </div>
         </div>
 
+        <!-- Transactions Tab -->
+        <div id="transactions-tab" class="modal-tab-content">
+            <div class="modal-tab-scroll">
+                <!-- Transaction List View -->
+                <div id="tx-list-view">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <p style="color: #6c757d; margin: 0; font-size: 0.9rem;">
+                            <i class="fas fa-info-circle"></i> Showing the <strong>last 5 transactions</strong> with this contact
+                        </p>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="window.location.reload();">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                    <div id="modal_transactions" class="transactions-list">
+                        <p class="no-transactions">No recent transactions with this contact.</p>
+                    </div>
+                </div>
+                <!-- Transaction Detail View -->
+                <div id="tx-detail-view" style="display: none;">
+                    <div style="margin-bottom: 1rem;">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="hideContactTxDetail()">
+                            <i class="fas fa-arrow-left"></i> Back to Transactions
+                        </button>
+                    </div>
+                    <div id="contact-tx-detail-content"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Settings Tab -->
         <div id="settings-tab" class="modal-tab-content">
             <div class="modal-tab-scroll">
@@ -276,35 +305,6 @@
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
-
-        <!-- Transactions Tab -->
-        <div id="transactions-tab" class="modal-tab-content">
-            <div class="modal-tab-scroll">
-                <!-- Transaction List View -->
-                <div id="tx-list-view">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <p style="color: #6c757d; margin: 0; font-size: 0.9rem;">
-                            <i class="fas fa-info-circle"></i> Showing the <strong>last 5 transactions</strong> with this contact
-                        </p>
-                        <button type="button" class="btn btn-sm btn-secondary" onclick="window.location.reload();">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                    </div>
-                    <div id="modal_transactions" class="transactions-list">
-                        <p class="no-transactions">No recent transactions with this contact.</p>
-                    </div>
-                </div>
-                <!-- Transaction Detail View -->
-                <div id="tx-detail-view" style="display: none;">
-                    <div style="margin-bottom: 1rem;">
-                        <button type="button" class="btn btn-sm btn-secondary" onclick="hideContactTxDetail()">
-                            <i class="fas fa-arrow-left"></i> Back to Transactions
-                        </button>
-                    </div>
-                    <div id="contact-tx-detail-content"></div>
-                </div>
             </div>
         </div>
 
