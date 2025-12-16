@@ -693,6 +693,7 @@ body {
     border-radius: 4px;
     cursor: pointer;
     font-weight: 600;
+    font-size: 1rem;
     margin-bottom: 1rem;
     transition: background 0.3s ease;
     text-decoration: none;
@@ -1456,7 +1457,8 @@ html {
 
 /* Transactions List */
 .transactions-list {
-    /* No max-height - uses full available space in modal tab */
+    max-height: 350px;
+    overflow-y: auto;
 }
 
 .no-transactions {
