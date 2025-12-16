@@ -650,9 +650,7 @@ function showSelectedContactAddress() {
 
             <div style="margin-bottom: 1rem;">
                 <div class="info-label">Public Key:</div>
-                <div class="pubkey-display monospace">
-                    <?php echo htmlspecialchars($contact['pubkey']); ?>
-                </div>
+                <div class="pubkey-display monospace"><?php echo htmlspecialchars(trim($contact['pubkey'])); ?></div>
             </div>
 
             <!-- Accept Contact Form -->
