@@ -9,7 +9,7 @@
  * @package Plugins\Marketplace\Repositories
  */
 
-class MarketplaceRepository {
+class ClaudeCodeMarketplaceRepository {
     /**
      * @var PDO Database connection
      */

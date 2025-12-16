@@ -10,11 +10,11 @@
  * @package Plugins\Marketplace\Services
  */
 
-class MarketplaceService {
+class ClaudeCodeMarketplaceService {
     /**
-     * @var MarketplaceRepository Data repository
+     * @var ClaudeCodeMarketplaceRepository Data repository
      */
-    private MarketplaceRepository $repository;
+    private ClaudeCodeMarketplaceRepository $repository;
 
     /**
      * @var UtilityServiceContainer Utility services
@@ -41,13 +41,13 @@ class MarketplaceService {
     /**
      * Constructor
      *
-     * @param MarketplaceRepository $repository Data repository
+     * @param ClaudeCodeMarketplaceRepository $repository Data repository
      * @param UtilityServiceContainer $utilities Utility services
      * @param SecureLogger|null $logger Logger
      * @param array $config Plugin configuration
      */
     public function __construct(
-        MarketplaceRepository $repository,
+        ClaudeCodeMarketplaceRepository $repository,
         UtilityServiceContainer $utilities,
         ?SecureLogger $logger,
         array $config = []

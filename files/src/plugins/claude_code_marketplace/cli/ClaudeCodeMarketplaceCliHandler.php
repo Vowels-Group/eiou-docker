@@ -24,11 +24,11 @@
  * @package Plugins\Marketplace\Cli
  */
 
-class MarketplaceCliHandler {
+class ClaudeCodeMarketplaceCliHandler {
     /**
-     * @var MarketplaceService Marketplace service
+     * @var ClaudeCodeMarketplaceService Marketplace service
      */
-    private MarketplaceService $service;
+    private ClaudeCodeMarketplaceService $service;
 
     /**
      * @var CliOutputManager Output manager
@@ -38,9 +38,9 @@ class MarketplaceCliHandler {
     /**
      * Constructor
      *
-     * @param MarketplaceService $service Marketplace service
+     * @param ClaudeCodeMarketplaceService $service Marketplace service
      */
-    public function __construct(MarketplaceService $service) {
+    public function __construct(ClaudeCodeMarketplaceService $service) {
         $this->service = $service;
     }
 

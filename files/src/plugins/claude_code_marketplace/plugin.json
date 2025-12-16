@@ -1,6 +1,6 @@
 {
     "name": "Claude Code Marketplace",
-    "id": "claude-code-marketplace",
+    "id": "claude_code_marketplace",
     "version": "1.0.0",
     "description": "A self-hosted marketplace/appstore plugin for Claude Code that allows users to discover, install, and manage Claude Code extensions, tools, and integrations",
     "author": "EIOU Organization",
@@ -11,14 +11,14 @@
         "eiou-docker": ">=1.0.0",
         "php": ">=8.1"
     },
-    "entrypoint": "MarketplacePlugin.php",
+    "entrypoint": "ClaudeCodeMarketplacePlugin.php",
     "autoload": {
         "classes": {
-            "MarketplacePlugin": "MarketplacePlugin.php",
-            "MarketplaceService": "services/MarketplaceService.php",
-            "MarketplaceRepository": "repositories/MarketplaceRepository.php",
-            "MarketplaceApiController": "api/MarketplaceApiController.php",
-            "MarketplaceCliHandler": "cli/MarketplaceCliHandler.php"
+            "ClaudeCodeMarketplacePlugin": "ClaudeCodeMarketplacePlugin.php",
+            "ClaudeCodeMarketplaceService": "services/ClaudeCodeMarketplaceService.php",
+            "ClaudeCodeMarketplaceRepository": "repositories/ClaudeCodeMarketplaceRepository.php",
+            "ClaudeCodeMarketplaceApiController": "api/ClaudeCodeMarketplaceApiController.php",
+            "ClaudeCodeMarketplaceCliHandler": "cli/ClaudeCodeMarketplaceCliHandler.php"
         }
     },
     "database": {

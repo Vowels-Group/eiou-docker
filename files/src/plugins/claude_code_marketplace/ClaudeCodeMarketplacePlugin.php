@@ -10,15 +10,15 @@
  * This is the first plugin for eiou-docker and serves as a reference implementation
  * for the plugin architecture.
  *
- * @package Plugins\Marketplace
+ * @package Plugins\ClaudeCodeMarketplace
  * @version 1.0.0
  */
 
-class MarketplacePlugin {
+class ClaudeCodeMarketplacePlugin {
     /**
-     * @var MarketplacePlugin|null Singleton instance
+     * @var ClaudeCodeMarketplacePlugin|null Singleton instance
      */
-    private static ?MarketplacePlugin $instance = null;
+    private static ?ClaudeCodeMarketplacePlugin $instance = null;
 
     /**
      * @var array Plugin configuration
@@ -36,9 +36,9 @@ class MarketplacePlugin {
     private ServiceContainer $services;
 
     /**
-     * @var MarketplaceService Main marketplace service
+     * @var ClaudeCodeMarketplaceService Main marketplace service
      */
-    private ?MarketplaceService $marketplaceService = null;
+    private ?ClaudeCodeMarketplaceService $marketplaceService = null;
 
     /**
      * @var SecureLogger Logger instance
@@ -48,7 +48,7 @@ class MarketplacePlugin {
     /**
      * Plugin constants
      */
-    const PLUGIN_ID = 'claude-code-marketplace';
+    const PLUGIN_ID = 'claude_code_marketplace';
     const PLUGIN_VERSION = '1.0.0';
     const PLUGIN_NAME = 'Claude Code Marketplace';
     const CONFIG_FILE = __DIR__ . '/plugin.json';
@@ -65,9 +65,9 @@ class MarketplacePlugin {
     /**
      * Get singleton instance
      *
-     * @return MarketplacePlugin
+     * @return ClaudeCodeMarketplacePlugin
      */
-    public static function getInstance(): MarketplacePlugin {
+    public static function getInstance(): ClaudeCodeMarketplacePlugin {
         if (self::$instance === null) {
             self::$instance = new self();
         }
@@ -170,16 +170,16 @@ class MarketplacePlugin {
         require_once $basePath . '/models/InstalledPlugin.php';
 
         // Load repository
-        require_once $basePath . '/repositories/MarketplaceRepository.php';
+        require_once $basePath . '/repositories/ClaudeCodeMarketplaceRepository.php';
 
         // Load service
-        require_once $basePath . '/services/MarketplaceService.php';
+        require_once $basePath . '/services/ClaudeCodeMarketplaceService.php';
 
         // Load API controller
-        require_once $basePath . '/api/MarketplaceApiController.php';
+        require_once $basePath . '/api/ClaudeCodeMarketplaceApiController.php';
 
         // Load CLI handler
-        require_once $basePath . '/cli/MarketplaceCliHandler.php';
+        require_once $basePath . '/cli/ClaudeCodeMarketplaceCliHandler.php';
     }
 
     /**
@@ -321,12 +321,12 @@ class MarketplacePlugin {
     /**
      * Get the marketplace service
      *
-     * @return MarketplaceService
+     * @return ClaudeCodeMarketplaceService
      */
-    public function getMarketplaceService(): MarketplaceService {
+    public function getMarketplaceService(): ClaudeCodeMarketplaceService {
         if ($this->marketplaceService === null) {
-            $this->marketplaceService = new MarketplaceService(
-                new MarketplaceRepository($this->services->getPdo()),
+            $this->marketplaceService = new ClaudeCodeMarketplaceService(
+                new ClaudeCodeMarketplaceRepository($this->services->getPdo()),
                 $this->services->getUtilityContainer(),
                 $this->logger,
                 $this->config

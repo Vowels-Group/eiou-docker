@@ -27,11 +27,11 @@
  * @package Plugins\Marketplace\Api
  */
 
-class MarketplaceApiController {
+class ClaudeCodeMarketplaceApiController {
     /**
-     * @var MarketplaceService Marketplace service
+     * @var ClaudeCodeMarketplaceService Marketplace service
      */
-    private MarketplaceService $service;
+    private ClaudeCodeMarketplaceService $service;
 
     /**
      * @var SecureLogger|null Logger
@@ -46,10 +46,10 @@ class MarketplaceApiController {
     /**
      * Constructor
      *
-     * @param MarketplaceService $service Marketplace service
+     * @param ClaudeCodeMarketplaceService $service Marketplace service
      * @param SecureLogger|null $logger Logger
      */
-    public function __construct(MarketplaceService $service, ?SecureLogger $logger = null) {
+    public function __construct(ClaudeCodeMarketplaceService $service, ?SecureLogger $logger = null) {
         $this->service = $service;
         $this->logger = $logger;
     }
