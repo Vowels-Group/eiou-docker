@@ -1,5 +1,9 @@
    // Copyright 2025
-    
+
+// Operation timeout configuration (15 seconds)
+var OPERATION_TIMEOUT_MS = 15000;
+var operationTimeoutId = null;
+
     // Simple script to show/hide the floating action button
     // This is minimal JavaScript that should work in Tor Browser
     window.addEventListener('scroll', function() {
@@ -472,6 +476,54 @@ function hideLoader() {
     loaderStartTime = null;
 }
 
+// Operation Timeout Functions for 15-second reload
+function startOperationTimeout(operationType, timeoutMessage) {
+    // Store operation info in sessionStorage
+    sessionStorage.setItem('eiou_pending_operation', operationType);
+    sessionStorage.setItem('eiou_operation_start_time', Date.now().toString());
+    sessionStorage.setItem('eiou_timeout_message', timeoutMessage);
+
+    // Clear any existing timeout
+    if (operationTimeoutId) {
+        clearTimeout(operationTimeoutId);
+    }
+
+    // Set 15-second timeout to reload page
+    operationTimeoutId = setTimeout(function() {
+        window.location.reload();
+    }, OPERATION_TIMEOUT_MS);
+}
+
+function clearOperationTimeout() {
+    if (operationTimeoutId) {
+        clearTimeout(operationTimeoutId);
+        operationTimeoutId = null;
+    }
+    sessionStorage.removeItem('eiou_pending_operation');
+    sessionStorage.removeItem('eiou_operation_start_time');
+    sessionStorage.removeItem('eiou_timeout_message');
+}
+
+function checkForTimeoutToast() {
+    var timeoutMessage = sessionStorage.getItem('eiou_timeout_message');
+    if (timeoutMessage) {
+        // Clear storage first to prevent showing again on refresh
+        sessionStorage.removeItem('eiou_pending_operation');
+        sessionStorage.removeItem('eiou_operation_start_time');
+        sessionStorage.removeItem('eiou_timeout_message');
+
+        // Show the toast after a brief delay to ensure page is ready
+        setTimeout(function() {
+            showToast('Operation Timeout', timeoutMessage, 'warning');
+        }, 500);
+    }
+}
+
+// Check for timeout toast on page load
+document.addEventListener('DOMContentLoaded', function() {
+    checkForTimeoutToast();
+});
+
 // Form loaders initialization
 function initializeFormLoaders() {
     // Retry info text for contact operations
@@ -482,6 +534,7 @@ function initializeFormLoaders() {
     if (addContactForm) {
         addContactForm.addEventListener('submit', function() {
             showLoader('Adding contact...', retryInfoText);
+            startOperationTimeout('addContact', 'Adding contact timed out. The contact server may be unreachable. Please try again.');
         });
     }
 
@@ -500,6 +553,7 @@ function initializeFormLoaders() {
         if (form) {
             form.addEventListener('submit', function() {
                 showLoader('Accepting contact request...', retryInfoText);
+                startOperationTimeout('acceptContact', 'Accepting contact timed out. The contact server may be unreachable. Please try again.');
             });
         }
     }
@@ -550,6 +604,7 @@ function initializeFormLoaders() {
     if (sendForm) {
         sendForm.addEventListener('submit', function() {
             showLoader('Sending transaction...', 'Processing your transaction. This may take a moment.');
+            startOperationTimeout('sendTransaction', 'Transaction timed out. The network may be slow. Please check your transaction history.');
         });
     }
 }

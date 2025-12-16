@@ -250,6 +250,45 @@
             <span class="debug-count">System Information</span>
         </div>
         <div class="debug-log-container">
+            <?php
+            // Get MySQL version
+            $mysqlVersion = 'N/A';
+            try {
+                $pdo = $serviceContainer->getPdo();
+                if ($pdo) {
+                    $stmt = $pdo->query('SELECT VERSION() as version');
+                    $result = $stmt->fetch();
+                    $mysqlVersion = $result['version'] ?? 'N/A';
+                }
+            } catch (Exception $e) {
+                $mysqlVersion = 'Error retrieving version';
+            }
+
+            // Get Debian version
+            $debianVersion = 'N/A';
+            if (file_exists('/etc/debian_version') && is_readable('/etc/debian_version')) {
+                $debianVersion = trim(file_get_contents('/etc/debian_version'));
+            }
+
+            // Get OS release info
+            $osRelease = 'N/A';
+            if (file_exists('/etc/os-release') && is_readable('/etc/os-release')) {
+                $osInfo = parse_ini_file('/etc/os-release');
+                $osRelease = $osInfo['PRETTY_NAME'] ?? 'N/A';
+            }
+
+            // Get PHP config path
+            $phpIniPath = php_ini_loaded_file() ?: 'Not found';
+
+            // Get PHP extensions
+            $phpExtensions = get_loaded_extensions();
+            sort($phpExtensions);
+            $phpExtensionsCount = count($phpExtensions);
+            $phpExtensionsFormatted = implode(', ', $phpExtensions);
+
+            // Apache config paths
+            $apacheMainConfig = file_exists('/etc/apache2/apache2.conf') ? '/etc/apache2/apache2.conf' : 'N/A';
+            ?>
             <table class="debug-info-table">
                 <tr><td><strong>PHP Version</strong></td><td><?php echo phpversion(); ?></td></tr>
                 <tr><td><strong>SAPI</strong></td><td><?php echo php_sapi_name(); ?></td></tr>
@@ -259,6 +298,13 @@
                 <tr><td><strong>Server Software</strong></td><td><?php echo $_SERVER['SERVER_SOFTWARE'] ?? 'N/A'; ?></td></tr>
                 <tr><td><strong>Document Root</strong></td><td><?php echo $_SERVER['DOCUMENT_ROOT'] ?? 'N/A'; ?></td></tr>
                 <tr><td><strong>App Debug Mode</strong></td><td><?php echo Constants::get('APP_DEBUG') ? 'Enabled' : 'Disabled'; ?></td></tr>
+                <tr><td><strong>Debian Version</strong></td><td><?php echo htmlspecialchars($debianVersion); ?></td></tr>
+                <tr><td><strong>OS Release</strong></td><td><?php echo htmlspecialchars($osRelease); ?></td></tr>
+                <tr><td><strong>MySQL/MariaDB Version</strong></td><td><?php echo htmlspecialchars($mysqlVersion); ?></td></tr>
+                <tr><td><strong>PHP Config (php.ini)</strong></td><td><?php echo htmlspecialchars($phpIniPath); ?></td></tr>
+                <tr><td><strong>Apache Main Config</strong></td><td><?php echo htmlspecialchars($apacheMainConfig); ?></td></tr>
+                <tr><td><strong>PHP Extensions</strong></td><td><?php echo $phpExtensionsCount; ?> loaded</td></tr>
+                <tr><td><strong>PHP Extensions List</strong></td><td style="font-size: 0.8rem; word-wrap: break-word; max-width: 400px;"><?php echo htmlspecialchars($phpExtensionsFormatted); ?></td></tr>
             </table>
         </div>
     </div>
