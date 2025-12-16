@@ -809,8 +809,8 @@ body {
     display: block;
 }
 
-/* Floating Action Button */
-.fab {
+/* Floating Action Button (Back to Top) */
+.back-to-top-btn {
     position: fixed;
     bottom: 30px;
     right: 30px;
@@ -832,7 +832,7 @@ body {
     visibility: visible;
 }
 
-.fab:hover {
+.back-to-top-btn:hover {
     transform: translateY(-3px);
     box-shadow: 0 6px 25px rgba(0, 0, 0, 0.4);
     text-decoration: none;
@@ -840,12 +840,12 @@ body {
     background: #0b5ed7;
 }
 
-.fab:active {
+.back-to-top-btn:active {
     transform: translateY(-1px);
 }
 
-/* Hide FAB when at top of page */
-.fab.hidden {
+/* Hide back-to-top button when at top of page */
+.back-to-top-btn.hidden {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
