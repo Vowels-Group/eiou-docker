@@ -24,16 +24,15 @@
         </div>
 
         <?php
-        // Build dynamic user addresses array
-        $userAddresses = [];
-        if ($user->has('hostname')) {
-            $userAddresses['http'] = $user->getHttpAddress();
-        }
-        if ($user->has('torAddress')) {
-            $userAddresses['tor'] = $user->getTorAddress();
-        }
+        // Use getUserLocaters() for dynamic address handling
+        $userAddresses = $user->getUserLocaters();
         $addressCount = count($userAddresses);
-        $firstAddressType = $addressCount > 0 ? array_key_first($userAddresses) : null;
+        // Get first key in PHP 5.4+ compatible way
+        $firstAddressType = null;
+        if ($addressCount > 0) {
+            $keys = array_keys($userAddresses);
+            $firstAddressType = $keys[0];
+        }
         ?>
         <div class="info-item">
             <div class="info-label">Your Address<?php echo $addressCount > 1 ? 'es' : ''; ?>:</div>
@@ -46,8 +45,7 @@
                         <strong style="text-transform: uppercase;"><?php echo htmlspecialchars($firstAddressType); ?>:</strong>
                         <?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?>
                     </span>
-                    <textarea class="copy-textarea" readonly style="display: none;" id="user-address"><?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?></textarea>
-                    <button class="btn btn-sm btn-outline" onclick="document.getElementById('user-address').style.display='block'; document.getElementById('user-address').select();" title="Copy address">
+                    <button class="btn btn-sm btn-outline" onclick="copyToClipboard('<?php echo htmlspecialchars($userAddresses[$firstAddressType], ENT_QUOTES); ?>', 'Address copied to clipboard!');" title="Copy address">
                         <i class="fas fa-copy"></i> Copy
                     </button>
                 </div>
@@ -64,30 +62,18 @@
                 </div>
                 <div id="user-address-display" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                     <span id="user-address-value" style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?></span>
-                    <textarea class="copy-textarea" readonly style="display: none;" id="user-address-copy"><?php echo htmlspecialchars($userAddresses[$firstAddressType]); ?></textarea>
-                    <button class="btn btn-sm btn-outline" onclick="document.getElementById('user-address-copy').style.display='block'; document.getElementById('user-address-copy').select();" title="Copy address">
+                    <button class="btn btn-sm btn-outline" onclick="var address = document.getElementById('user-address-value').textContent; copyToClipboard(address, 'Address copied to clipboard!');" title="Copy address">
                         <i class="fas fa-copy"></i> Copy
                     </button>
                 </div>
-                <script>
-                function showSelectedUserAddress() {
-                    var select = document.getElementById('user-address-selector');
-                    var selectedOption = select.options[select.selectedIndex];
-                    var address = selectedOption.getAttribute('data-address');
-                    document.getElementById('user-address-value').textContent = address;
-                    document.getElementById('user-address-copy').value = address;
-                    document.getElementById('user-address-copy').style.display = 'none';
-                }
-                </script>
             <?php endif; ?>
         </div>
         <div class="info-item">
             <div class="info-label">Public Key:</div>
             <div style="display: flex; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
-                <span style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo $user->has('public') ? $user->getPublicKey() : 'Not available'; ?></span>
+                <span id="public-key-value" style="flex: 1; word-break: break-all; font-family: 'Courier New', monospace; font-size: 0.9rem;"><?php echo $user->has('public') ? htmlspecialchars($user->getPublicKey()) : 'Not available'; ?></span>
                 <?php if ($user->has('public')): ?>
-                    <textarea class="copy-textarea" readonly style="display: none;" id="public-key"><?php echo $user->getPublicKey(); ?></textarea>
-                    <button class="btn btn-sm btn-outline" onclick="document.getElementById('public-key').style.display='block'; document.getElementById('public-key').select();" title="Copy public key">
+                    <button class="btn btn-sm btn-outline" onclick="var pk = document.getElementById('public-key-value').textContent; copyToClipboard(pk, 'Public key copied to clipboard!');" title="Copy public key">
                         <i class="fas fa-copy"></i> Copy
                     </button>
                 <?php endif; ?>

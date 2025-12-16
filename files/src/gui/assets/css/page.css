@@ -684,28 +684,6 @@ body {
     color: white;
 }
 
-/* Add Contact Button */
-.add-contact-btn {
-    background: #198754;
-    color: white;
-    border: none;
-    padding: 0.8rem 1.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 1rem;
-    margin-bottom: 1rem;
-    transition: background 0.3s ease;
-    text-decoration: none;
-    display: inline-block;
-}
-
-.add-contact-btn:hover {
-    background: #157347;
-    text-decoration: none;
-    color: white;
-}
-
 /* Empty state */
 .empty-state {
     text-align: center;
@@ -1376,6 +1354,22 @@ html {
     to { transform: rotate(360deg); }
 }
 
+/* Transaction Phase Badges */
+.tx-phase-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tx-phase-badge i {
+    font-size: 0.7rem;
+}
+
 /* Contact Address Icons */
 .contact-address-icons {
     display: flex;
@@ -1570,6 +1564,18 @@ html {
     color: #6c757d;
     font-size: 1rem;
     margin-left: 0.25rem;
+}
+
+/* Override balance text colors when inside balance-display (Issue #271) */
+.balance-display .balance-amount {
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+.balance-display .balance-currency {
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
+    opacity: 1;
 }
 
 /* Form Row */

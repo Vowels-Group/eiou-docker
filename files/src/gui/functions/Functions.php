@@ -42,6 +42,31 @@ $totalEarnings = $currencyUtility->convertCentsToDollars($p2pService->getUserTot
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
+// Track completed transactions for notifications
+// Get previously known in-progress txids from session
+$prevInProgressTxids = $_SESSION['in_progress_txids'] ?? [];
+
+// Get current in-progress transaction IDs
+$currentInProgressTxids = array_column($inProgressTransactions ?? [], 'txid');
+
+// Find completed txids (were in progress, now are not)
+$completedTxids = array_diff($prevInProgressTxids, $currentInProgressTxids);
+
+// Get details for completed transactions
+$newlyCompletedTransactions = [];
+foreach ($completedTxids as $txid) {
+    // Check if the transaction is now completed
+    foreach ($transactions ?? [] as $tx) {
+        if (($tx['txid'] ?? '') === $txid && ($tx['status'] ?? '') === 'completed') {
+            $newlyCompletedTransactions[] = $tx;
+            break;
+        }
+    }
+}
+
+// Store current in-progress txids for next comparison
+$_SESSION['in_progress_txids'] = $currentInProgressTxids;
+
 // Contact data
 $allContacts = $contactService->getAllContacts();
 $pendingContacts = $contactService->getPendingContactRequests();
@@ -51,3 +76,7 @@ $blockedContacts = $transactionService->contactBalanceConversion($contactService
 
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
+
+// Initialize ContactDataBuilder helper
+require_once __DIR__ . '/../helpers/ContactDataBuilder.php';
+$contactDataBuilder = new ContactDataBuilder($addressTypes);
