@@ -684,28 +684,6 @@ body {
     color: white;
 }
 
-/* Add Contact Button */
-.add-contact-btn {
-    background: #198754;
-    color: white;
-    border: none;
-    padding: 0.8rem 1.5rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 1rem;
-    margin-bottom: 1rem;
-    transition: background 0.3s ease;
-    text-decoration: none;
-    display: inline-block;
-}
-
-.add-contact-btn:hover {
-    background: #157347;
-    text-decoration: none;
-    color: white;
-}
-
 /* Empty state */
 .empty-state {
     text-align: center;
