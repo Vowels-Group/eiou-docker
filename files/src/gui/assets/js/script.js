@@ -233,6 +233,36 @@ function openTransactionModal(index) {
         html += '</div>';
     }
 
+    // P2P Transaction Details (end recipient, amount, fee)
+    if (tx.tx_type === 'p2p' && tx.p2p_destination) {
+        html += '<div style="margin-top: 1rem; padding: 1rem; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">';
+        html += '<div style="font-weight: bold; margin-bottom: 0.5rem; color: #856404;"><i class="fas fa-network-wired"></i> P2P Transaction Details</div>';
+
+        // End Recipient
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">End Recipient</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + tx.p2p_destination + '</div>';
+        html += '</div>';
+
+        // Amount to Recipient
+        if (tx.p2p_amount) {
+            html += '<div class="tx-detail-row">';
+            html += '<div class="tx-detail-label">Amount to Recipient</div>';
+            html += '<div class="tx-detail-value">$' + parseFloat(tx.p2p_amount).toFixed(2) + ' ' + tx.currency + '</div>';
+            html += '</div>';
+        }
+
+        // Transaction Fee
+        if (tx.p2p_fee) {
+            html += '<div class="tx-detail-row">';
+            html += '<div class="tx-detail-label">Transaction Fee</div>';
+            html += '<div class="tx-detail-value">$' + parseFloat(tx.p2p_fee).toFixed(2) + ' ' + tx.currency + '</div>';
+            html += '</div>';
+        }
+
+        html += '</div>';
+    }
+
     // Routing Hash (for P2P transactions)
     if (tx.memo && tx.memo !== 'standard') {
         html += '<div class="tx-detail-row">';

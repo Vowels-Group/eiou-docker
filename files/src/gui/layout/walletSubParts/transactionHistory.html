@@ -152,7 +152,10 @@
             'receiver_address' => $tx['receiver_address'] ?? '',
             'memo' => $tx['memo'] ?? '',
             'description' => $tx['description'] ?? '',
-            'previous_txid' => $tx['previous_txid'] ?? ''
+            'previous_txid' => $tx['previous_txid'] ?? '',
+            'p2p_destination' => $tx['p2p_destination'] ?? null,
+            'p2p_amount' => $tx['p2p_amount'] ?? null,
+            'p2p_fee' => $tx['p2p_fee'] ?? null
         ];
     }, $transactions ?? [])); ?>;
 

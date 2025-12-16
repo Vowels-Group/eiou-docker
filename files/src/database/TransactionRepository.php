@@ -846,7 +846,7 @@ class TransactionRepository extends AbstractRepository {
         // Create placeholders for IN clause
         $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
 
-        // Query with LEFT JOINs to get contact names and full transaction details
+        // Query with LEFT JOINs to get contact names, p2p details, and full transaction details
         $query = "SELECT
                     t.id,
                     t.txid,
@@ -864,12 +864,16 @@ class TransactionRepository extends AbstractRepository {
                     t.description,
                     t.previous_txid,
                     sender_contact.name AS sender_name,
-                    receiver_contact.name AS receiver_name
+                    receiver_contact.name AS receiver_name,
+                    p2p.destination_address AS p2p_destination,
+                    p2p.amount AS p2p_amount,
+                    p2p.my_fee_amount AS p2p_fee
                   FROM {$this->tableName} t
                   LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.tor)
                   LEFT JOIN contacts sender_contact ON sender_addr.pubkey_hash = sender_contact.pubkey_hash
                   LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.tor)
                   LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
+                  LEFT JOIN p2p ON t.memo = p2p.hash
                   WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders))
                   ORDER BY t.timestamp DESC LIMIT ?";
 
@@ -913,7 +917,10 @@ class TransactionRepository extends AbstractRepository {
                 'receiver_public_key' => $tx['receiver_public_key'],
                 'memo' => $tx['memo'],
                 'description' => $tx['description'],
-                'previous_txid' => $tx['previous_txid']
+                'previous_txid' => $tx['previous_txid'],
+                'p2p_destination' => $tx['p2p_destination'] ?? null,
+                'p2p_amount' => isset($tx['p2p_amount']) ? $tx['p2p_amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR : null,
+                'p2p_fee' => isset($tx['p2p_fee']) ? $tx['p2p_fee'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR : null
             ];
         }
         return $formattedTransactions;
