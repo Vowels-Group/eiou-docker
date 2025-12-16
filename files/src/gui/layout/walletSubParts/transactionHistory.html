@@ -32,36 +32,34 @@
                         ?> <span class="monospace"><?php echo htmlspecialchars(substr($ipCounterparty, 0, 30) . (strlen($ipCounterparty) > 30 ? '...' : '')); ?></span>
                     </div>
                     <div class="tx-in-progress-status">
-                        <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($ipTx['status']); ?>">
-                            <?php if ($ipTx['status'] === 'pending' || $ipTx['status'] === 'queued' || $ipTx['status'] === 'initial'): ?>
-                                <i class="fas fa-hourglass-half"></i>
-                            <?php elseif ($ipTx['status'] === 'sent'): ?>
-                                <i class="fas fa-paper-plane"></i>
-                            <?php elseif ($ipTx['status'] === 'accepted' || $ipTx['status'] === 'found'): ?>
-                                <i class="fas fa-check"></i>
-                            <?php endif; ?>
-                            <?php echo ucfirst(htmlspecialchars($ipTx['status'])); ?>
-                        </span>
                         <?php
                         $phaseLabels = [
+                            'pending' => ['label' => 'Pending', 'icon' => 'fa-hourglass-half', 'color' => '#6c757d'],
                             'route_search' => ['label' => 'Searching for route...', 'icon' => 'fa-search', 'color' => '#ffc107'],
                             'route_found' => ['label' => 'Route found', 'icon' => 'fa-route', 'color' => '#17a2b8'],
-                            'sending' => ['label' => 'Sending...', 'icon' => 'fa-paper-plane', 'color' => '#0d6efd'],
-                            'finalizing' => ['label' => 'Finalizing...', 'icon' => 'fa-check-circle', 'color' => '#28a745']
+                            'sending' => ['label' => 'Sending...', 'icon' => 'fa-paper-plane', 'color' => '#0d6efd']
                         ];
-                        $phase = $ipTx['phase'] ?? 'sending';
-                        $phaseInfo = $phaseLabels[$phase] ?? $phaseLabels['sending'];
+                        $phase = $ipTx['phase'] ?? 'pending';
+                        $phaseInfo = $phaseLabels[$phase] ?? $phaseLabels['pending'];
                         ?>
                         <span class="tx-phase-badge" style="background: <?php echo $phaseInfo['color']; ?>; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.25rem;">
                             <i class="fas <?php echo $phaseInfo['icon']; ?>"></i>
                             <?php echo htmlspecialchars($phaseInfo['label']); ?>
                         </span>
-                        <?php if ($ipTx['memo'] !== 'standard'): ?>
+                        <?php if ($ipTx['source_type'] === 'p2p_request'): ?>
                             <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
                         <?php else: ?>
                             <span class="tx-type-badge tx-type-direct"><i class="fas fa-exchange-alt"></i> Direct</span>
                         <?php endif; ?>
                     </div>
+                    <?php if ($ipTx['source_type'] === 'p2p_request' && !empty($ipTx['destination_address'])): ?>
+                    <div class="tx-in-progress-details" style="font-size: 0.8rem; color: #6c757d; margin-top: 0.25rem;">
+                        <div><i class="fas fa-user"></i> To: <span class="monospace"><?php echo htmlspecialchars(substr($ipTx['destination_address'], 0, 25) . (strlen($ipTx['destination_address']) > 25 ? '...' : '')); ?></span></div>
+                        <?php if (!empty($ipTx['fee_amount'])): ?>
+                        <div><i class="fas fa-coins"></i> Fee: $<?php echo number_format($ipTx['fee_amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
                 </div>
                 <div class="tx-in-progress-amount <?php echo $ipType === 'sent' ? 'amount-sent' : 'amount-received'; ?>">
                     <?php echo ($ipType === 'sent' ? '-' : '+'); ?>$<?php echo number_format($ipTx['amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?>

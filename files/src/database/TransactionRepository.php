@@ -1211,7 +1211,8 @@ class TransactionRepository extends AbstractRepository {
 
         // Query combines:
         // 1. Regular in-progress transactions (pending, sent, accepted) where user is sender
-        // 2. P2P route requests sent by user (destination_address NOT NULL) that are not expired
+        // 2. P2P route requests sent by user (destination_address NOT NULL) that are in route search phase
+        //    Note: 'paid' status is excluded as the transaction has moved to regular transaction flow
         $query = "SELECT
                     txid,
                     tx_type,
@@ -1223,11 +1224,13 @@ class TransactionRepository extends AbstractRepository {
                     memo,
                     timestamp,
                     'transaction' as source_type,
+                    NULL as destination_address,
+                    NULL as fee_amount,
                     CASE
-                        WHEN status = 'pending' THEN 'sending'
+                        WHEN status = 'pending' THEN 'pending'
                         WHEN status = 'sent' THEN 'sending'
-                        WHEN status = 'accepted' THEN 'finalizing'
-                        ELSE 'sending'
+                        WHEN status = 'accepted' THEN 'sending'
+                        ELSE 'pending'
                     END as phase
                   FROM {$this->tableName}
                   WHERE status IN ('pending', 'sent', 'accepted')
@@ -1246,15 +1249,17 @@ class TransactionRepository extends AbstractRepository {
                     hash as memo,
                     created_at as timestamp,
                     'p2p_request' as source_type,
+                    destination_address,
+                    my_fee_amount as fee_amount,
                     CASE
-                        WHEN status IN ('initial', 'queued', 'sent') THEN 'route_search'
+                        WHEN status IN ('initial', 'queued') THEN 'pending'
+                        WHEN status = 'sent' THEN 'route_search'
                         WHEN status = 'found' THEN 'route_found'
-                        WHEN status = 'paid' THEN 'sending'
-                        ELSE 'route_search'
+                        ELSE 'pending'
                     END as phase
                   FROM p2p
                   WHERE destination_address IS NOT NULL
-                    AND status NOT IN ('completed', 'expired', 'cancelled')
+                    AND status NOT IN ('completed', 'expired', 'cancelled', 'paid')
                     AND expiration > ?
 
                   ORDER BY timestamp DESC
