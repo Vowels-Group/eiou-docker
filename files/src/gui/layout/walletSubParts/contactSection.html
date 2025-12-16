@@ -251,9 +251,11 @@
                     </div>
                 </div>
                 <!-- Transaction Detail View -->
-                <div id="tx-detail-view" style="display: none; position: relative;">
-                    <span class="close" onclick="hideContactTxDetail()" title="Back to transactions" style="position: absolute; top: 0; right: 0; cursor: pointer;">&times;</span>
-                    <div id="contact-tx-detail-content" style="padding-top: 1rem;"></div>
+                <div id="tx-detail-view" style="display: none;">
+                    <div style="text-align: right; margin-bottom: 0.5rem;">
+                        <span class="close" onclick="hideContactTxDetail()" title="Back to transactions" style="position: static; cursor: pointer;">&times;</span>
+                    </div>
+                    <div id="contact-tx-detail-content"></div>
                 </div>
             </div>
         </div>
@@ -291,7 +293,7 @@
                     </div>
                 </form>
 
-                <div class="form-actions" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; padding: 0 1rem;">
+                <div class="form-actions" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; justify-content: center;">
                     <form method="POST" id="blockForm" style="display: inline;">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
                         <input type="hidden" name="action" value="blockContact">
@@ -316,7 +318,7 @@
                             <i class="fas fa-trash"></i> Delete
                         </button>
                     </form>
-                    <button type="submit" form="editContactForm" class="btn btn-primary" style="margin-left: auto;">
+                    <button type="submit" form="editContactForm" class="btn btn-primary">
                         <i class="fas fa-save"></i> Save Changes
                     </button>
                 </div>
