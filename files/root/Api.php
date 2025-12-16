@@ -9,7 +9,7 @@ require_once __DIR__ . '/src/core/ErrorCodes.php';
  * Handles all incoming REST API requests
  *
  * All requests should be directed here via Apache rewrite:
- * RewriteRule ^api/(.*)$ /etc/eiou/api.php [L,QSA]
+ * RewriteRule ^api/(.*)$ /etc/eiou/Api.php [L,QSA]
  */
 
 // Set JSON content type
@@ -55,7 +55,7 @@ require_once '/etc/eiou/src/database/ApiKeyRepository.php';
 require_once '/etc/eiou/src/api/ApiAuthService.php';
 require_once '/etc/eiou/src/api/ApiController.php';
 require_once '/etc/eiou/src/services/ServiceWrappers.php';
-require_once '/etc/eiou/src/schemas/outputSchema.php';
+require_once '/etc/eiou/src/schemas/OutputSchema.php';
 
 // Initialize API components
 $apiKeyRepo = $app->services->getApiKeyRepository();

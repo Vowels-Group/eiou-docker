@@ -1,5 +1,5 @@
 # run the p2p message processing script
-docker exec eioud0http php /etc/eiou/p2pMessages.php
+docker exec eioud0http php /etc/eiou/P2pMessages.php
 
 # check php errors
 docker exec eioud0http cat /var/log/php_errors.log
