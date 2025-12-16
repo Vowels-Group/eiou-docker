@@ -478,18 +478,17 @@ function hideLoader() {
 
 // Operation Timeout Functions for 15-second reload
 function startOperationTimeout(operationType, timeoutMessage) {
-    // Store operation info in sessionStorage
-    sessionStorage.setItem('eiou_pending_operation', operationType);
-    sessionStorage.setItem('eiou_operation_start_time', Date.now().toString());
-    sessionStorage.setItem('eiou_timeout_message', timeoutMessage);
-
     // Clear any existing timeout
     if (operationTimeoutId) {
         clearTimeout(operationTimeoutId);
     }
 
     // Set 15-second timeout to reload page
+    // Only store the message when timeout actually fires (not on successful completion)
     operationTimeoutId = setTimeout(function() {
+        // Store message only when timeout fires, so it shows after reload
+        sessionStorage.setItem('eiou_pending_operation', operationType);
+        sessionStorage.setItem('eiou_timeout_message', timeoutMessage);
         window.location.reload();
     }, OPERATION_TIMEOUT_MS);
 }
@@ -500,7 +499,6 @@ function clearOperationTimeout() {
         operationTimeoutId = null;
     }
     sessionStorage.removeItem('eiou_pending_operation');
-    sessionStorage.removeItem('eiou_operation_start_time');
     sessionStorage.removeItem('eiou_timeout_message');
 }
 
@@ -509,7 +507,6 @@ function checkForTimeoutToast() {
     if (timeoutMessage) {
         // Clear storage first to prevent showing again on refresh
         sessionStorage.removeItem('eiou_pending_operation');
-        sessionStorage.removeItem('eiou_operation_start_time');
         sessionStorage.removeItem('eiou_timeout_message');
 
         // Show the toast after a brief delay to ensure page is ready
