@@ -1376,6 +1376,22 @@ html {
     to { transform: rotate(360deg); }
 }
 
+/* Transaction Phase Badges */
+.tx-phase-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tx-phase-badge i {
+    font-size: 0.7rem;
+}
+
 /* Contact Address Icons */
 .contact-address-icons {
     display: flex;

@@ -504,3 +504,383 @@ function initializeFormLoaders() {
 window.addEventListener('DOMContentLoaded', function() {
     initializeFormLoaders();
 });
+
+// Copy to clipboard function with modern Clipboard API
+function copyToClipboard(text, successMessage) {
+    successMessage = successMessage || 'Copied to clipboard!';
+
+    // Try modern Clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text)
+            .then(function() {
+                showToast('Success', successMessage, 'success');
+            })
+            .catch(function(err) {
+                // Fallback for clipboard permission denied
+                fallbackCopyToClipboard(text, successMessage);
+            });
+    } else {
+        // Fallback for older browsers / Tor Browser
+        fallbackCopyToClipboard(text, successMessage);
+    }
+}
+
+// Fallback copy method using execCommand
+function fallbackCopyToClipboard(text, successMessage) {
+    var tempTextarea = document.createElement('textarea');
+    tempTextarea.value = text;
+    tempTextarea.style.position = 'fixed';
+    tempTextarea.style.left = '-9999px';
+    tempTextarea.style.top = '0';
+    document.body.appendChild(tempTextarea);
+    tempTextarea.focus();
+    tempTextarea.select();
+
+    try {
+        var successful = document.execCommand('copy');
+        if (successful) {
+            showToast('Success', successMessage, 'success');
+        } else {
+            showToast('Error', 'Failed to copy. Please copy manually.', 'error');
+        }
+    } catch (err) {
+        showToast('Error', 'Failed to copy. Please copy manually.', 'error');
+    }
+
+    document.body.removeChild(tempTextarea);
+}
+
+// ============================================================================
+// CONTACT SECTION FUNCTIONS
+// ============================================================================
+
+// Contact Modal Functions (Tor Browser compatible - uses var and for loops)
+var currentContactAddress = null;
+var contactTransactionData = [];
+
+function openContactModal(contact, openTab) {
+    // Store current contact address for refresh
+    currentContactAddress = contact.address;
+    // Store transactions for detail view
+    contactTransactionData = contact.transactions || [];
+
+    // Set contact name in header
+    document.getElementById('modal_contact_name').textContent = contact.name || 'Unknown';
+
+    // Set addresses dropdown
+    var addressSelector = document.getElementById('modal_address_selector');
+    var addressDisplay = document.getElementById('modal_address_display');
+    addressSelector.innerHTML = '';
+
+    var addresses = [];
+    if (contact.http) {
+        addresses.push({ type: 'HTTP', address: contact.http, icon: 'fa-globe' });
+    }
+    if (contact.tor) {
+        addresses.push({ type: 'TOR', address: contact.tor, icon: 'fa-user-secret' });
+    }
+
+    if (addresses.length === 0) {
+        addressSelector.style.display = 'none';
+        addressDisplay.textContent = 'Not Available';
+    } else if (addresses.length === 1) {
+        addressSelector.style.display = 'none';
+        addressDisplay.textContent = addresses[0].address;
+    } else {
+        addressSelector.style.display = 'block';
+        for (var i = 0; i < addresses.length; i++) {
+            var option = document.createElement('option');
+            option.value = addresses[i].type;
+            option.setAttribute('data-address', addresses[i].address);
+            option.textContent = addresses[i].type;
+            addressSelector.appendChild(option);
+        }
+        addressDisplay.textContent = addresses[0].address;
+    }
+
+    // Set public key
+    document.getElementById('modal_pubkey').textContent = contact.pubkey || 'Not Available';
+
+    // Set contact ID
+    document.getElementById('modal_contact_id').textContent = contact.contact_id || 'Not Available';
+
+    // Set balance (no color styling)
+    var balance = parseFloat(contact.balance) || 0;
+    var balanceEl = document.getElementById('modal_balance');
+    balanceEl.textContent = (balance >= 0 ? '+' : '') + balance.toFixed(2);
+    balanceEl.className = 'balance-amount';
+    document.getElementById('modal_balance_currency').textContent = contact.currency || 'USD';
+
+    // Set credit limit and fee
+    var creditLimit = parseFloat(contact.credit_limit) || 0;
+    document.getElementById('modal_credit_limit').textContent = creditLimit.toFixed(2);
+    document.getElementById('modal_credit_currency').textContent = contact.currency || 'USD';
+    var fee = parseFloat(contact.fee) || 0;
+    document.getElementById('modal_fee').textContent = fee.toFixed(2);
+
+    // Set status badge
+    var statusBadge = document.getElementById('modal_status_badge');
+    statusBadge.textContent = contact.status.charAt(0).toUpperCase() + contact.status.slice(1);
+    statusBadge.className = 'badge badge-' + contact.status;
+
+    // Set form values
+    document.getElementById('edit_contact_address').value = contact.address;
+    document.getElementById('edit_contact_name').value = contact.name;
+    document.getElementById('edit_contact_fee').value = contact.fee;
+    document.getElementById('edit_contact_credit').value = contact.credit_limit;
+    document.getElementById('edit_contact_currency').value = contact.currency;
+
+    // Set action form addresses
+    document.getElementById('block_contact_address').value = contact.address;
+    document.getElementById('unblock_contact_address').value = contact.address;
+    document.getElementById('delete_contact_address').value = contact.address;
+
+    // Show/hide block/unblock buttons based on status
+    if (contact.status === 'blocked') {
+        document.getElementById('blockForm').style.display = 'none';
+        document.getElementById('unblockForm').style.display = 'inline';
+    } else {
+        document.getElementById('blockForm').style.display = 'inline';
+        document.getElementById('unblockForm').style.display = 'none';
+    }
+
+    // Display transactions (Tor Browser compatible)
+    var transactionsEl = document.getElementById('modal_transactions');
+    var transactions = contact.transactions || [];
+
+    if (transactions.length === 0) {
+        transactionsEl.innerHTML = '<p class="no-transactions">No recent transactions with this contact.</p>';
+    } else {
+        var html = '';
+        for (var i = 0; i < transactions.length; i++) {
+            var tx = transactions[i];
+            var typeClass = tx.type === 'sent' ? 'tx-sent' : 'tx-received';
+            var typeIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
+            var typeLabel = tx.type === 'sent' ? 'Sent' : 'Received';
+            var amountPrefix = tx.type === 'sent' ? '-' : '+';
+
+            html += '<div class="transaction-item ' + typeClass + '" style="cursor: pointer;" onclick="showContactTxDetail(' + i + ')" title="Click for details">';
+            html += '<div class="tx-icon"><i class="fas ' + typeIcon + '"></i></div>';
+            html += '<div class="tx-details">';
+            html += '<div class="tx-type">' + typeLabel + '</div>';
+            html += '<div class="tx-date">' + (tx.date || 'Unknown date') + '</div>';
+            html += '</div>';
+            html += '<div class="tx-amount">' + amountPrefix + parseFloat(tx.amount).toFixed(2) + ' ' + (tx.currency || 'USD') + '<i class="fas fa-chevron-right" style="margin-left: 0.5rem; font-size: 0.8rem; color: #6c757d;"></i></div>';
+            html += '</div>';
+        }
+        transactionsEl.innerHTML = html;
+    }
+
+    // Reset transaction view to list (in case detail was open before)
+    var txListView = document.getElementById('tx-list-view');
+    var txDetailView = document.getElementById('tx-detail-view');
+    if (txListView) txListView.style.display = 'block';
+    if (txDetailView) txDetailView.style.display = 'none';
+
+    // Open specified tab or default to info tab
+    var tabToOpen = openTab || 'info-tab';
+    showModalTab(tabToOpen, null);
+
+    // Show modal
+    document.getElementById('contactModal').style.display = 'flex';
+}
+
+function closeContactModal() {
+    document.getElementById('contactModal').style.display = 'none';
+}
+
+function showModalTab(tabId, button) {
+    // Hide all tab contents
+    var tabContents = document.querySelectorAll('.modal-tab-content');
+    for (var i = 0; i < tabContents.length; i++) {
+        tabContents[i].classList.remove('active');
+    }
+
+    // Deactivate all tab buttons
+    var tabButtons = document.querySelectorAll('.modal-tab');
+    for (var j = 0; j < tabButtons.length; j++) {
+        tabButtons[j].classList.remove('active');
+    }
+
+    // Show selected tab content
+    var targetTab = document.getElementById(tabId);
+    if (targetTab) {
+        targetTab.classList.add('active');
+    }
+
+    // Activate the clicked button or find matching button
+    if (button) {
+        button.classList.add('active');
+    } else {
+        // Find the button that corresponds to this tab
+        var tabButtons = document.querySelectorAll('.modal-tab');
+        for (var k = 0; k < tabButtons.length; k++) {
+            var btn = tabButtons[k];
+            var onclickStr = btn.getAttribute('onclick') || '';
+            if (onclickStr.indexOf(tabId) !== -1) {
+                btn.classList.add('active');
+                break;
+            }
+        }
+    }
+}
+
+// Show transaction detail view (Tor Browser compatible)
+function showContactTxDetail(index) {
+    if (!contactTransactionData || !contactTransactionData[index]) {
+        return;
+    }
+
+    var tx = contactTransactionData[index];
+    var content = document.getElementById('contact-tx-detail-content');
+
+    // Build direction info
+    var directionColor = tx.type === 'sent' ? '#dc3545' : '#28a745';
+    var directionIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
+    var directionText = tx.type === 'sent' ? 'Sent' : 'Received';
+    var gradientEnd = tx.type === 'sent' ? '#ff6b6b' : '#20c997';
+
+    // Build status badge
+    var status = tx.status || 'completed';
+    var statusBadge = '<span class="tx-status-badge tx-status-' + status + '">' + status.charAt(0).toUpperCase() + status.slice(1) + '</span>';
+
+    // Build transaction type badge (both yellow for consistency)
+    var txType = tx.tx_type || 'standard';
+    var txTypeBadge = txType === 'p2p'
+        ? '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-network-wired"></i> P2P</span>'
+        : '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-exchange-alt"></i> Direct</span>';
+
+    // Build HTML content
+    var html = '';
+
+    // Header with amount
+    html += '<div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, ' + directionColor + ' 0%, ' + gradientEnd + ' 100%); border-radius: 8px; margin-bottom: 1.5rem;">';
+    html += '<div style="font-size: 2rem; font-weight: bold; color: white;">' + (tx.type === 'sent' ? '-' : '+') + '$' + parseFloat(tx.amount).toFixed(2) + ' ' + (tx.currency || 'USD') + '</div>';
+    html += '<div style="color: rgba(255,255,255,0.9); margin-top: 0.5rem;"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
+    html += '</div>';
+
+    // Status and type badges
+    html += '<div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">';
+    html += statusBadge;
+    html += txTypeBadge;
+    html += '</div>';
+
+    // Details section
+    html += '<div class="tx-detail-section">';
+
+    // To/From address (shows which address the transaction was sent to/from)
+    var counterpartyAddress = tx.type === 'sent' ? tx.receiver_address : tx.sender_address;
+    if (counterpartyAddress) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">' + (tx.type === 'sent' ? 'To' : 'From') + '</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + counterpartyAddress + '</div>';
+        html += '</div>';
+    }
+
+    // Description
+    if (tx.description) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Description</div>';
+        html += '<div class="tx-detail-value">' + tx.description + '</div>';
+        html += '</div>';
+    }
+
+    // Date/Time
+    html += '<div class="tx-detail-row">';
+    html += '<div class="tx-detail-label">Date & Time</div>';
+    html += '<div class="tx-detail-value">' + (tx.date || 'Unknown') + '</div>';
+    html += '</div>';
+
+    // Transaction ID
+    if (tx.txid) {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Transaction ID</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.txid + '</div>';
+        html += '</div>';
+    }
+
+    // Routing Hash (moved to below Transaction ID, for P2P transactions)
+    if (tx.memo && tx.memo !== 'standard') {
+        html += '<div class="tx-detail-row">';
+        html += '<div class="tx-detail-label">Routing Hash</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.memo + '</div>';
+        html += '</div>';
+    }
+
+    html += '</div>';
+
+    content.innerHTML = html;
+
+    // Show detail view, hide list view
+    document.getElementById('tx-list-view').style.display = 'none';
+    document.getElementById('tx-detail-view').style.display = 'block';
+}
+
+// Hide transaction detail view and show list (Tor Browser compatible)
+function hideContactTxDetail() {
+    document.getElementById('tx-detail-view').style.display = 'none';
+    document.getElementById('tx-list-view').style.display = 'block';
+}
+
+// Show selected contact address from dropdown (Tor Browser compatible)
+function showSelectedContactAddress() {
+    var select = document.getElementById('modal_address_selector');
+    var selectedOption = select.options[select.selectedIndex];
+    var address = selectedOption.getAttribute('data-address');
+    document.getElementById('modal_address_display').textContent = address;
+}
+
+// Close contact modal when clicking outside (Tor Browser compatible)
+// Note: We need to wait until DOM is loaded to attach this handler
+window.addEventListener('DOMContentLoaded', function() {
+    var contactModalEl = document.getElementById('contactModal');
+    if (contactModalEl) {
+        contactModalEl.onclick = function(e) {
+            if (e.target === contactModalEl) {
+                closeContactModal();
+            }
+        };
+    }
+});
+
+// ============================================================================
+// SETTINGS SECTION FUNCTIONS
+// ============================================================================
+
+// Debug tab switching (Tor Browser compatible - uses var and for loops)
+function showDebugTab(tabId, button) {
+    // Hide all content
+    var contents = document.querySelectorAll('.debug-content');
+    for (var i = 0; i < contents.length; i++) {
+        contents[i].classList.remove('active');
+    }
+
+    // Deactivate all tabs
+    var tabs = document.querySelectorAll('.debug-tab');
+    for (var j = 0; j < tabs.length; j++) {
+        tabs[j].classList.remove('active');
+    }
+
+    // Show selected content and activate tab
+    var targetContent = document.getElementById(tabId);
+    if (targetContent) {
+        targetContent.classList.add('active');
+    }
+    if (button) {
+        button.classList.add('active');
+    }
+}
+
+// ============================================================================
+// WALLET INFORMATION FUNCTIONS
+// ============================================================================
+
+// Show selected user address from dropdown (Tor Browser compatible)
+function showSelectedUserAddress() {
+    var select = document.getElementById('user-address-selector');
+    var selectedOption = select.options[select.selectedIndex];
+    var address = selectedOption.getAttribute('data-address');
+    document.getElementById('user-address-value').textContent = address;
+    document.getElementById('user-address-copy').value = address;
+    document.getElementById('user-address-copy').style.display = 'none';
+}

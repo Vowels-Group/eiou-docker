@@ -1222,7 +1222,13 @@ class TransactionRepository extends AbstractRepository {
                     currency,
                     memo,
                     timestamp,
-                    'transaction' as source_type
+                    'transaction' as source_type,
+                    CASE
+                        WHEN status = 'pending' THEN 'sending'
+                        WHEN status = 'sent' THEN 'sending'
+                        WHEN status = 'accepted' THEN 'finalizing'
+                        ELSE 'sending'
+                    END as phase
                   FROM {$this->tableName}
                   WHERE status IN ('pending', 'sent', 'accepted')
                     AND sender_address IN ($placeholders)
@@ -1239,7 +1245,13 @@ class TransactionRepository extends AbstractRepository {
                     currency,
                     hash as memo,
                     created_at as timestamp,
-                    'p2p_request' as source_type
+                    'p2p_request' as source_type,
+                    CASE
+                        WHEN status IN ('initial', 'queued', 'sent') THEN 'route_search'
+                        WHEN status = 'found' THEN 'route_found'
+                        WHEN status = 'paid' THEN 'sending'
+                        ELSE 'route_search'
+                    END as phase
                   FROM p2p
                   WHERE destination_address IS NOT NULL
                     AND status NOT IN ('completed', 'expired', 'cancelled')

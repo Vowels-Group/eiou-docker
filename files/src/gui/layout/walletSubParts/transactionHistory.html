@@ -42,6 +42,20 @@
                             <?php endif; ?>
                             <?php echo ucfirst(htmlspecialchars($ipTx['status'])); ?>
                         </span>
+                        <?php
+                        $phaseLabels = [
+                            'route_search' => ['label' => 'Searching for route...', 'icon' => 'fa-search', 'color' => '#ffc107'],
+                            'route_found' => ['label' => 'Route found', 'icon' => 'fa-route', 'color' => '#17a2b8'],
+                            'sending' => ['label' => 'Sending...', 'icon' => 'fa-paper-plane', 'color' => '#0d6efd'],
+                            'finalizing' => ['label' => 'Finalizing...', 'icon' => 'fa-check-circle', 'color' => '#28a745']
+                        ];
+                        $phase = $ipTx['phase'] ?? 'sending';
+                        $phaseInfo = $phaseLabels[$phase] ?? $phaseLabels['sending'];
+                        ?>
+                        <span class="tx-phase-badge" style="background: <?php echo $phaseInfo['color']; ?>; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+                            <i class="fas <?php echo $phaseInfo['icon']; ?>"></i>
+                            <?php echo htmlspecialchars($phaseInfo['label']); ?>
+                        </span>
                         <?php if ($ipTx['memo'] !== 'standard'): ?>
                             <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
                         <?php else: ?>

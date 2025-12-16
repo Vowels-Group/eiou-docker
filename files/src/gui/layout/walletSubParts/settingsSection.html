@@ -283,28 +283,3 @@
     </div>
 </div>
 
-<script>
-// Debug tab switching (Tor Browser compatible - uses var and for loops)
-function showDebugTab(tabId, button) {
-    // Hide all content
-    var contents = document.querySelectorAll('.debug-content');
-    for (var i = 0; i < contents.length; i++) {
-        contents[i].classList.remove('active');
-    }
-
-    // Deactivate all tabs
-    var tabs = document.querySelectorAll('.debug-tab');
-    for (var j = 0; j < tabs.length; j++) {
-        tabs[j].classList.remove('active');
-    }
-
-    // Show selected content and activate tab
-    var targetContent = document.getElementById(tabId);
-    if (targetContent) {
-        targetContent.classList.add('active');
-    }
-    if (button) {
-        button.classList.add('active');
-    }
-}
-</script>

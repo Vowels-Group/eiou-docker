@@ -76,3 +76,7 @@ $blockedContacts = $transactionService->contactBalanceConversion($contactService
 
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
+
+// Initialize ContactDataBuilder helper
+require_once __DIR__ . '/../helpers/ContactDataBuilder.php';
+$contactDataBuilder = new ContactDataBuilder($addressTypes);
