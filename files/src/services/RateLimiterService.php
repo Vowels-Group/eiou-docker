@@ -10,6 +10,8 @@
  * @package Services
  */
 
+require_once __DIR__ . '/../core/ErrorCodes.php';
+
 class RateLimiterService {
     private RateLimiterRepository $repository;
 
@@ -127,7 +129,7 @@ class RateLimiterService {
         $result = $this->checkLimit($ip, $action, $limits['max'], $limits['window'], $limits['block']);
 
         if (!$result['allowed']) {
-            http_response_code(Constants::HTTP_TOO_MANY_REQUESTS);
+            http_response_code(ErrorCodes::HTTP_TOO_MANY_REQUESTS);
             header('Retry-After: ' . $result['retry_after']);
             header('X-RateLimit-Limit: ' . $limits['max']);
             header('X-RateLimit-Remaining: 0');

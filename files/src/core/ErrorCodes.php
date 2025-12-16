@@ -120,6 +120,24 @@ class ErrorCodes
     public const CONNECTION_FAILED = 'CONNECTION_FAILED';
     public const NETWORK_ERROR = 'NETWORK_ERROR';
 
+    // HTTP Status Codes
+    public const HTTP_OK = 200;
+    public const HTTP_BAD_REQUEST = 400;
+    public const HTTP_UNAUTHORIZED = 401;
+    public const HTTP_FORBIDDEN = 403;
+    public const HTTP_NOT_FOUND = 404;
+    public const HTTP_CONFLICT = 409;
+    public const HTTP_TOO_MANY_REQUESTS = 429;
+    public const HTTP_INTERNAL_SERVER_ERROR = 500;
+    public const HTTP_GATEWAY_TIMEOUT = 504;
+
+    // User-facing error messages
+    public const MESSAGE_GENERIC = 'An error occurred. Please try again later.';
+    public const MESSAGE_INVALID_INPUT = 'Invalid input provided.';
+    public const MESSAGE_DATABASE_CONNECTION = 'Database connection failed.';
+    public const MESSAGE_UNAUTHORIZED = 'Unauthorized access.';
+    public const MESSAGE_RATE_LIMITED = 'Too many requests. Please try again later.';
+
     /**
      * Get HTTP status code for an error code
      *
