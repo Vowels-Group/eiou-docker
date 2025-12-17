@@ -243,6 +243,14 @@ body {
 
 .contacts-section h2 {
     color: #212529;
+    margin: 0;
+}
+
+/* Section header for consistent styling with form containers */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 1rem;
     border-bottom: 2px solid #dee2e6;
     padding-bottom: 0.5rem;
@@ -336,9 +344,7 @@ body {
 
 .transactions-section h2 {
     color: #212529;
-    margin-bottom: 1rem;
-    border-bottom: 2px solid #dee2e6;
-    padding-bottom: 0.5rem;
+    margin: 0;
 }
 
 .transaction-item {
