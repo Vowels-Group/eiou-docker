@@ -392,6 +392,40 @@ class TransactionService {
     }
 
     /**
+     * Create unique transaction ID for contact requests
+     *
+     * For contact transactions, amount is always 0, so txid is generated from:
+     * senderPublicKey + receiverPublicKey + 0 + time
+     *
+     * @param array $data Transaction data including receiverPublicKey and time
+     * @return string The generated transaction ID (SHA-256 hash)
+     */
+    public function createContactTxid(array $data): string {
+        // Validate required fields
+        if (!isset($data['receiverPublicKey'], $data['time'])) {
+            throw new InvalidArgumentException("Missing required fields for contact txid creation");
+        }
+
+        // Create Txid for contact transactions (amount is always 0)
+        $txid = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $data['receiverPublicKey'] . '0' . $data['time']);
+        return $txid;
+    }
+
+    /**
+     * Create contact request hash (memo)
+     *
+     * The hash for contact requests is: address + salt + time
+     *
+     * @param string $receiverAddress The receiver's address
+     * @param string $salt Random salt value
+     * @param string $time Timestamp
+     * @return string The generated hash (SHA-256)
+     */
+    public function createContactHash(string $receiverAddress, string $salt, string $time): string {
+        return hash(Constants::HASH_ALGORITHM, $receiverAddress . $salt . $time);
+    }
+
+    /**
      * Check if the Transaction end-recipient is user
      *
      * @param array $request Request data

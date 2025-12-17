@@ -109,7 +109,9 @@
                                 <?php endif; ?>
                                 <?php echo ucfirst(htmlspecialchars($tx['status'])); ?>
                             </span>
-                            <?php if ($tx['tx_type'] === 'p2p'): ?>
+                            <?php if ($tx['tx_type'] === 'contact'): ?>
+                                <span class="tx-type-badge tx-type-contact"><i class="fas fa-user-plus"></i> Contact</span>
+                            <?php elseif ($tx['tx_type'] === 'p2p'): ?>
                                 <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
                             <?php else: ?>
                                 <span class="tx-type-badge tx-type-direct"><i class="fas fa-exchange-alt"></i> Direct</span>

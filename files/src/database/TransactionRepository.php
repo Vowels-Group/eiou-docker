@@ -1102,7 +1102,14 @@ class TransactionRepository extends AbstractRepository {
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $request['receiverPublicKey']);
 
         // Determine transaction type
-        $txType = ($request['memo'] === 'standard') ? 'standard' : 'p2p';
+        // 'contact' for contact requests (amount=0), 'standard' for direct transactions, 'p2p' for p2p routing
+        if ($request['memo'] === 'contact' || (isset($request['amount']) && $request['amount'] == 0)) {
+            $txType = 'contact';
+        } elseif ($request['memo'] === 'standard') {
+            $txType = 'standard';
+        } else {
+            $txType = 'p2p';
+        }
         $result = false;
         try{
             $this->beginTransaction();

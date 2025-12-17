@@ -313,12 +313,19 @@ class BalanceRepository extends AbstractRepository {
         $amountTransactions = count($transactions);
 
         foreach($transactions as $transaction){
+            // Contact Request Transaction (amount=0, no balance change)
+            if($transaction['tx_type'] == 'contact'){
+                // Contact requests don't affect balances (amount is always 0)
+                // Just mark as processed successfully
+                $updateSender = true;
+                $updateReceiver = true;
+            }
             // P2P Transaction
-            if($transaction['tx_type'] == 'p2p'){
+            elseif($transaction['tx_type'] == 'p2p'){
                 // Intermediary or original sender of P2P Transaction
                 if(in_array($transaction['sender_address'],$userAddresses)){
                     $updateSender = $this->updateBalance($transaction['receiver_public_key'], 'sent', $transaction['amount'], $transaction['currency']);
-                } 
+                }
                 // Intermediary or end receiver of P2P Transaction
                 elseif(in_array($transaction['receiver_address'],$userAddresses)){
                     $updateReceiver = $this->updateBalance($transaction['sender_public_key'], 'received', $transaction['amount'], $transaction['currency']);
@@ -329,7 +336,7 @@ class BalanceRepository extends AbstractRepository {
                 // Original sender of Direct Transaction
                 if(in_array($transaction['sender_address'],$userAddresses)){
                     $updateSender = $this->updateBalance($transaction['receiver_public_key'], 'sent', $transaction['amount'], $transaction['currency']);
-                } 
+                }
                 // Receiver of Direct Transaction
                 elseif($transaction['tx_type'] == 'standard' && in_array($transaction['receiver_address'],$userAddresses)){
                     $updateReceiver = $this->updateBalance($transaction['sender_public_key'], 'received', $transaction['amount'], $transaction['currency']);
