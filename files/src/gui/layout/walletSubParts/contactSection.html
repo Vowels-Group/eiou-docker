@@ -6,7 +6,18 @@
         <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
         <a href="#add-contact" class="btn btn-success" style="padding: 0.5rem 1rem; font-size: 0.9rem;"><i class="fas fa-user-plus"></i> New Contact</a>
     </div>
-    <div class="contacts-grid">
+    <?php if (!empty($allContacts)): ?>
+    <div class="contacts-search-bar" style="margin-bottom: 1rem;">
+        <div style="position: relative;">
+            <i class="fas fa-search" style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: #6c757d;"></i>
+            <input type="text" id="contact-search-input" placeholder="Search contacts by name..." onkeyup="filterContacts()" style="width: 100%; padding: 0.5rem 0.75rem 0.5rem 2.25rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9rem;">
+        </div>
+        <div id="contact-search-status" style="margin-top: 0.5rem; font-size: 0.85rem; color: #6c757d; display: none;">
+            <span id="contact-search-count">0</span> contacts found
+        </div>
+    </div>
+    <?php endif; ?>
+    <div class="contacts-grid" id="contacts-grid">
         <?php if (empty($allContacts)): ?>
             <div class="empty-state">
                 <i class="fas fa-users"></i>
@@ -19,7 +30,7 @@
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'accepted');
                 ?>
-                <div class="contact-card" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
+                <div class="contact-card" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
                         <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                     </div>
@@ -59,7 +70,7 @@
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'pending');
                 ?>
-                <div class="contact-card pending" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
+                <div class="contact-card pending" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, grey, grey);">
                         <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                     </div>
@@ -93,7 +104,7 @@
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'blocked');
                 ?>
-                <div class="contact-card blocked" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
+                <div class="contact-card blocked" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, #dc3545, #c82333);">
                         <?php echo $contact['name'] ? strtoupper(substr($contact['name'], 0, 1)) : "X"; ?>
                     </div>
@@ -125,6 +136,13 @@
 
         <?php endif; ?>
     </div>
+    <?php if (count($allContacts) > 16): ?>
+    <div id="contacts-show-more" style="text-align: center; margin-top: 1rem;">
+        <button type="button" class="btn btn-outline" onclick="toggleShowAllContacts()" id="show-more-btn">
+            <i class="fas fa-chevron-down"></i> Show All (<span id="hidden-contacts-count"><?php echo count($allContacts) - 16; ?></span> more)
+        </button>
+    </div>
+    <?php endif; ?>
 </div>
 
 <!-- Contact Modal (Tabbed Interface) -->

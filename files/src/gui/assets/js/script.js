@@ -667,6 +667,103 @@ function fallbackCopyToClipboard(text, successMessage) {
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
 var currentContactId = null;
 var contactTransactionData = [];
+var contactsShowAll = false;
+var CONTACTS_DEFAULT_LIMIT = 16;
+
+// Filter contacts by search term (Tor Browser compatible)
+function filterContacts() {
+    var searchInput = document.getElementById('contact-search-input');
+    var searchStatus = document.getElementById('contact-search-status');
+    var searchCount = document.getElementById('contact-search-count');
+    var showMoreBtn = document.getElementById('contacts-show-more');
+
+    if (!searchInput) return;
+
+    var searchTerm = searchInput.value.toLowerCase().trim();
+    var contactCards = document.querySelectorAll('.contact-card');
+    var visibleCount = 0;
+
+    for (var i = 0; i < contactCards.length; i++) {
+        var card = contactCards[i];
+        var contactName = card.getAttribute('data-contact-name') || '';
+
+        if (searchTerm === '' || contactName.indexOf(searchTerm) !== -1) {
+            // Show card if matches search (respecting limit when not searching)
+            if (searchTerm === '') {
+                // When not searching, respect the show all / limited state
+                if (contactsShowAll || visibleCount < CONTACTS_DEFAULT_LIMIT) {
+                    card.style.display = '';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            } else {
+                // When searching, show all matches
+                card.style.display = '';
+                visibleCount++;
+            }
+        } else {
+            card.style.display = 'none';
+        }
+    }
+
+    // Update search status
+    if (searchStatus && searchCount) {
+        if (searchTerm !== '') {
+            searchStatus.style.display = 'block';
+            searchCount.textContent = visibleCount;
+        } else {
+            searchStatus.style.display = 'none';
+        }
+    }
+
+    // Hide show more button when searching
+    if (showMoreBtn) {
+        showMoreBtn.style.display = searchTerm !== '' ? 'none' : '';
+    }
+}
+
+// Toggle showing all contacts or limited (Tor Browser compatible)
+function toggleShowAllContacts() {
+    contactsShowAll = !contactsShowAll;
+
+    var showMoreBtn = document.getElementById('show-more-btn');
+    var hiddenCount = document.getElementById('hidden-contacts-count');
+    var contactCards = document.querySelectorAll('.contact-card');
+    var totalContacts = contactCards.length;
+
+    if (contactsShowAll) {
+        // Show all contacts
+        for (var i = 0; i < contactCards.length; i++) {
+            contactCards[i].style.display = '';
+        }
+        if (showMoreBtn) {
+            showMoreBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Show Less';
+        }
+    } else {
+        // Show only first 16 contacts
+        for (var j = 0; j < contactCards.length; j++) {
+            if (j < CONTACTS_DEFAULT_LIMIT) {
+                contactCards[j].style.display = '';
+            } else {
+                contactCards[j].style.display = 'none';
+            }
+        }
+        if (showMoreBtn && hiddenCount) {
+            showMoreBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Show All (<span id="hidden-contacts-count">' + (totalContacts - CONTACTS_DEFAULT_LIMIT) + '</span> more)';
+        }
+    }
+}
+
+// Initialize contacts display limit on page load (Tor Browser compatible)
+function initContactsDisplay() {
+    var contactCards = document.querySelectorAll('.contact-card');
+    if (contactCards.length > CONTACTS_DEFAULT_LIMIT) {
+        for (var i = CONTACTS_DEFAULT_LIMIT; i < contactCards.length; i++) {
+            contactCards[i].style.display = 'none';
+        }
+    }
+}
 
 function openContactModal(contact, openTab) {
     // Store current contact ID for refresh
@@ -1009,6 +1106,9 @@ window.addEventListener('DOMContentLoaded', function() {
 
     // Check if we need to reopen contact modal after refresh
     checkReopenContactModal();
+
+    // Initialize contacts display limit (show only first 16 by default)
+    initContactsDisplay();
 });
 
 // ============================================================================
