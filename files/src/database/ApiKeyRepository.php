@@ -34,19 +34,15 @@ class ApiKeyRepository extends AbstractRepository {
         // Generate secret key (shown only once to user)
         $secret = bin2hex(random_bytes(32));
 
-        // Hash the secret for backward compatibility and quick validation
-        $keyHash = hash('sha256', $secret);
-
         // Encrypt the secret for secure storage (allows retrieval for HMAC verification)
         $encryptedSecret = KeyEncryption::encrypt($secret);
 
-        $sql = "INSERT INTO api_keys (key_id, key_hash, encrypted_secret, name, permissions, rate_limit_per_minute, expires_at)
-                VALUES (:key_id, :key_hash, :encrypted_secret, :name, :permissions, :rate_limit, :expires_at)";
+        $sql = "INSERT INTO api_keys (key_id, encrypted_secret, name, permissions, rate_limit_per_minute, expires_at)
+                VALUES (:key_id, :encrypted_secret, :name, :permissions, :rate_limit, :expires_at)";
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             ':key_id' => $keyId,
-            ':key_hash' => $keyHash,
             ':encrypted_secret' => json_encode($encryptedSecret),
             ':name' => $name,
             ':permissions' => json_encode($permissions),
@@ -62,42 +58,6 @@ class ApiKeyRepository extends AbstractRepository {
             'rate_limit_per_minute' => $rateLimitPerMinute,
             'expires_at' => $expiresAt
         ];
-    }
-
-    /**
-     * Validate an API key and return its details
-     *
-     * @param string $keyId The public key identifier
-     * @param string $secret The secret key
-     * @return array|null Key details if valid, null if invalid
-     */
-    public function validateKey(string $keyId, string $secret): ?array {
-        $keyHash = hash('sha256', $secret);
-
-        $sql = "SELECT id, key_id, name, permissions, rate_limit_per_minute, enabled, expires_at
-                FROM api_keys
-                WHERE key_id = :key_id
-                AND key_hash = :key_hash
-                AND enabled = 1
-                AND (expires_at IS NULL OR expires_at > NOW())";
-
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([
-            ':key_id' => $keyId,
-            ':key_hash' => $keyHash
-        ]);
-
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($result) {
-            // Update last_used_at
-            $this->updateLastUsed($keyId);
-
-            // Decode permissions JSON
-            $result['permissions'] = json_decode($result['permissions'], true);
-        }
-
-        return $result ?: null;
     }
 
     /**

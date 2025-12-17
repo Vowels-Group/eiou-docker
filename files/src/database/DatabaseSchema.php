@@ -186,8 +186,7 @@ function getApiKeysTableSchema() {
     return "CREATE TABLE IF NOT EXISTS api_keys (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         key_id VARCHAR(32) NOT NULL UNIQUE,
-        key_hash VARCHAR(64) NOT NULL,
-        encrypted_secret JSON NULL,
+        encrypted_secret JSON NOT NULL,
         name VARCHAR(255) NOT NULL,
         permissions JSON NOT NULL,
         rate_limit_per_minute INT DEFAULT 100,

@@ -165,22 +165,26 @@ function runMigrations(PDO $pdo): array {
 function runColumnMigrations(PDO $pdo): array {
     $results = [];
 
-    // List of column migrations: [tableName => [columnName => columnDefinition]]
-    $columnMigrations = [
+    // List of columns to ADD: [tableName => [columnName => columnDefinition]]
+    $columnsToAdd = [
         'api_keys' => [
-            'encrypted_secret' => 'JSON NULL AFTER key_hash'
+            'encrypted_secret' => 'JSON NOT NULL AFTER key_id'
         ]
     ];
 
-    foreach ($columnMigrations as $tableName => $columns) {
+    // List of columns to DROP: [tableName => [columnName, ...]]
+    $columnsToDrop = [
+        'api_keys' => ['key_hash']
+    ];
+
+    // Add new columns
+    foreach ($columnsToAdd as $tableName => $columns) {
         foreach ($columns as $columnName => $columnDefinition) {
             try {
-                // Check if column exists
                 $stmt = $pdo->prepare("SHOW COLUMNS FROM `$tableName` LIKE :column");
                 $stmt->execute([':column' => $columnName]);
 
                 if ($stmt->rowCount() === 0) {
-                    // Column doesn't exist, add it
                     $pdo->exec("ALTER TABLE `$tableName` ADD COLUMN `$columnName` $columnDefinition");
                     $results["{$tableName}.{$columnName}"] = 'added';
                 } else {
@@ -190,6 +194,30 @@ function runColumnMigrations(PDO $pdo): array {
                 $results["{$tableName}.{$columnName}"] = 'error: ' . $e->getMessage();
                 if (class_exists('SecureLogger')) {
                     SecureLogger::error("Column migration failed for {$tableName}.{$columnName}", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+        }
+    }
+
+    // Drop deprecated columns
+    foreach ($columnsToDrop as $tableName => $columns) {
+        foreach ($columns as $columnName) {
+            try {
+                $stmt = $pdo->prepare("SHOW COLUMNS FROM `$tableName` LIKE :column");
+                $stmt->execute([':column' => $columnName]);
+
+                if ($stmt->rowCount() > 0) {
+                    $pdo->exec("ALTER TABLE `$tableName` DROP COLUMN `$columnName`");
+                    $results["{$tableName}.{$columnName}"] = 'dropped';
+                } else {
+                    $results["{$tableName}.{$columnName}"] = 'already_dropped';
+                }
+            } catch (PDOException $e) {
+                $results["{$tableName}.{$columnName}"] = 'error: ' . $e->getMessage();
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::error("Column drop failed for {$tableName}.{$columnName}", [
                         'error' => $e->getMessage()
                     ]);
                 }
