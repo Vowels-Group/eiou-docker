@@ -665,12 +665,12 @@ function fallbackCopyToClipboard(text, successMessage) {
 // ============================================================================
 
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
-var currentContactAddress = null;
+var currentContactId = null;
 var contactTransactionData = [];
 
 function openContactModal(contact, openTab) {
-    // Store current contact address for refresh
-    currentContactAddress = contact.address;
+    // Store current contact ID for refresh
+    currentContactId = contact.contact_id;
     // Store transactions for detail view
     contactTransactionData = contact.transactions || [];
 
@@ -801,9 +801,9 @@ function closeContactModal() {
 
 // Refresh contact modal and reopen on transactions tab (Tor Browser compatible)
 function refreshContactModalTransactions() {
-    // Store the current contact address to reopen after refresh
-    if (currentContactAddress) {
-        sessionStorage.setItem('eiou_reopen_contact_address', currentContactAddress);
+    // Store the current contact ID to reopen after refresh
+    if (currentContactId) {
+        sessionStorage.setItem('eiou_reopen_contact_id', currentContactId);
         sessionStorage.setItem('eiou_reopen_contact_tab', 'transactions-tab');
     }
     window.location.reload();
@@ -812,20 +812,20 @@ function refreshContactModalTransactions() {
 // Check if we need to reopen contact modal after refresh (Tor Browser compatible)
 function checkReopenContactModal() {
     try {
-        var reopenAddress = sessionStorage.getItem('eiou_reopen_contact_address');
+        var reopenContactId = sessionStorage.getItem('eiou_reopen_contact_id');
         var reopenTab = sessionStorage.getItem('eiou_reopen_contact_tab');
 
-        if (reopenAddress) {
+        if (reopenContactId) {
             // Clear the stored values first
-            sessionStorage.removeItem('eiou_reopen_contact_address');
+            sessionStorage.removeItem('eiou_reopen_contact_id');
             sessionStorage.removeItem('eiou_reopen_contact_tab');
 
-            // Find the contact card with matching address and click it
+            // Find the contact card with matching contact ID using data attribute
             var contactCards = document.querySelectorAll('.contact-card');
             for (var i = 0; i < contactCards.length; i++) {
                 var card = contactCards[i];
-                var onclickAttr = card.getAttribute('onclick');
-                if (onclickAttr && onclickAttr.indexOf(reopenAddress) !== -1) {
+                var cardContactId = card.getAttribute('data-contact-id');
+                if (cardContactId && cardContactId === reopenContactId) {
                     // Click the card to open the modal
                     card.click();
                     // Then switch to transactions tab after a short delay

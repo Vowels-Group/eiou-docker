@@ -19,7 +19,7 @@
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'accepted');
                 ?>
-                <div class="contact-card" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
+                <div class="contact-card" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
                         <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                     </div>
@@ -59,7 +59,7 @@
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'pending');
                 ?>
-                <div class="contact-card pending" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
+                <div class="contact-card pending" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, grey, grey);">
                         <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                     </div>
@@ -93,7 +93,7 @@
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'blocked');
                 ?>
-                <div class="contact-card blocked" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
+                <div class="contact-card blocked" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, #dc3545, #c82333);">
                         <?php echo $contact['name'] ? strtoupper(substr($contact['name'], 0, 1)) : "X"; ?>
                     </div>
