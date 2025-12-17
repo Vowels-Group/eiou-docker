@@ -122,35 +122,6 @@ class ApiAuthService {
         // The secret is stored encrypted, not hashed, allowing server-side HMAC computation
         $secret = $this->apiKeyRepository->getSecretByKeyId($apiKey);
         if (!$secret) {
-            // Fallback for legacy keys without encrypted_secret: try old format (secret:hmac)
-            $signatureParts = explode(':', $signature, 2);
-            if (count($signatureParts) === 2) {
-                $legacySecret = $signatureParts[0];
-                $providedHmac = $signatureParts[1];
-
-                // Validate against stored hash
-                $keyResult = $this->apiKeyRepository->validateKey($apiKey, $legacySecret);
-                if ($keyResult) {
-                    $stringToSign = $this->buildStringToSign($method, $path, $timestamp, $body);
-                    $expectedHmac = hash_hmac(self::HMAC_ALGORITHM, $stringToSign, $legacySecret);
-
-                    if (hash_equals($expectedHmac, $providedHmac)) {
-                        $this->log('info', 'API authentication successful (legacy mode)', [
-                            'key_id' => $apiKey,
-                            'key_name' => $keyResult['name'],
-                            'path' => $path
-                        ]);
-
-                        return [
-                            'success' => true,
-                            'key' => $keyResult,
-                            'error' => null,
-                            'code' => null
-                        ];
-                    }
-                }
-            }
-
             return $this->authError('Invalid API credentials', ErrorCodes::AUTH_INVALID_CREDENTIALS);
         }
 
