@@ -167,14 +167,12 @@ function runColumnMigrations(PDO $pdo): array {
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
     $columnsToAdd = [
-        'api_keys' => [
-            'encrypted_secret' => 'JSON NOT NULL AFTER key_id'
-        ]
+    
     ];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
     $columnsToDrop = [
-        'api_keys' => ['key_hash']
+        
     ];
 
     // Add new columns
