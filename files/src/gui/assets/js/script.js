@@ -8,17 +8,21 @@ var operationTimeoutId = null;
     // This is minimal JavaScript that should work in Tor Browser
     window.addEventListener('scroll', function() {
         var fab = document.getElementById('backToTop');
-        if (window.pageYOffset > 300) {
-            fab.classList.remove('hidden');
-        } else {
-            fab.classList.add('hidden');
+        if (fab) {
+            if (window.pageYOffset > 300) {
+                fab.classList.remove('hidden');
+            } else {
+                fab.classList.add('hidden');
+            }
         }
     });
 
     // Hide FAB initially
     document.addEventListener('DOMContentLoaded', function() {
         var fab = document.getElementById('backToTop');
-        fab.classList.add('hidden');
+        if (fab) {
+            fab.classList.add('hidden');
+        }
     });
 
 // Manual refresh function (Tor Browser compatible)
@@ -807,43 +811,34 @@ function refreshContactModalTransactions() {
 
 // Check if we need to reopen contact modal after refresh (Tor Browser compatible)
 function checkReopenContactModal() {
-    var reopenAddress = sessionStorage.getItem('eiou_reopen_contact_address');
-    var reopenTab = sessionStorage.getItem('eiou_reopen_contact_tab');
+    try {
+        var reopenAddress = sessionStorage.getItem('eiou_reopen_contact_address');
+        var reopenTab = sessionStorage.getItem('eiou_reopen_contact_tab');
 
-    if (reopenAddress) {
-        // Clear the stored values
-        sessionStorage.removeItem('eiou_reopen_contact_address');
-        sessionStorage.removeItem('eiou_reopen_contact_tab');
+        if (reopenAddress) {
+            // Clear the stored values first
+            sessionStorage.removeItem('eiou_reopen_contact_address');
+            sessionStorage.removeItem('eiou_reopen_contact_tab');
 
-        // Find the contact card with matching address and click it
-        var contactCards = document.querySelectorAll('.contact-card');
-        for (var i = 0; i < contactCards.length; i++) {
-            var card = contactCards[i];
-            var onclickAttr = card.getAttribute('onclick');
-            if (onclickAttr && onclickAttr.indexOf(reopenAddress) !== -1) {
-                // Extract the contact data from the onclick attribute
-                var match = onclickAttr.match(/openContactModal\((\{.*\})\)/);
-                if (match && match[1]) {
-                    try {
-                        // Parse the JSON (it's already valid JSON in the onclick)
-                        var contactData = JSON.parse(match[1].replace(/&quot;/g, '"'));
-                        // Open the modal with the transactions tab
-                        openContactModal(contactData, reopenTab || 'transactions-tab');
-                        return;
-                    } catch (e) {
-                        // If parsing fails, just click the card
-                        card.click();
-                        // Then switch to transactions tab after a short delay
-                        if (reopenTab) {
-                            setTimeout(function() {
-                                showModalTab(reopenTab, null);
-                            }, 100);
-                        }
-                        return;
-                    }
+            // Find the contact card with matching address and click it
+            var contactCards = document.querySelectorAll('.contact-card');
+            for (var i = 0; i < contactCards.length; i++) {
+                var card = contactCards[i];
+                var onclickAttr = card.getAttribute('onclick');
+                if (onclickAttr && onclickAttr.indexOf(reopenAddress) !== -1) {
+                    // Click the card to open the modal
+                    card.click();
+                    // Then switch to transactions tab after a short delay
+                    setTimeout(function() {
+                        var tabToOpen = reopenTab || 'transactions-tab';
+                        showModalTab(tabToOpen, null);
+                    }, 150);
+                    return;
                 }
             }
         }
+    } catch (e) {
+        // Silently fail - don't break the page if something goes wrong
     }
 }
 
