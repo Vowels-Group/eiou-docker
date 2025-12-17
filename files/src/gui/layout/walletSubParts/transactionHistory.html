@@ -8,9 +8,9 @@
             <span id="tx-auto-refresh-status" class="tx-refresh-indicator" title="Auto-refresh active when transactions are in progress">
                 <i class="fas fa-sync-alt"></i>
             </span>
-            <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+            <button type="button" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;" onclick="window.location.href = window.location.pathname + '#transactions'; window.location.reload();">
                 <i class="fas fa-sync-alt"></i> Refresh
-            </a>
+            </button>
         </div>
     </div>
 
@@ -90,6 +90,9 @@
                     <div class="transaction-info">
                         <div>
                             <strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars($tx['counterparty']); ?></strong>
+                        </div>
+                        <div style="font-size: 0.9rem; color: #6c757d; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <?php echo $tx['date']; ?>
                             <span class="tx-status-badge tx-status-<?php echo htmlspecialchars($tx['status']); ?>">
                                 <?php if ($tx['status'] === 'pending'): ?>
                                     <i class="fas fa-hourglass-half"></i>
@@ -106,9 +109,6 @@
                                 <?php endif; ?>
                                 <?php echo ucfirst(htmlspecialchars($tx['status'])); ?>
                             </span>
-                        </div>
-                        <div style="font-size: 0.9rem; color: #6c757d; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                            <?php echo $tx['date']; ?>
                             <?php if ($tx['tx_type'] === 'p2p'): ?>
                                 <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>
                             <?php else: ?>

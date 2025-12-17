@@ -4,7 +4,7 @@
 <div id="contacts" class="contacts-section fade-in-up">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
         <h2><i class="fas fa-address-book"></i> Your Contacts</h2>
-        <a href="#add-contact" class="btn btn-success">New</a>
+        <a href="#add-contact" class="btn btn-success" style="padding: 0.5rem 1rem; font-size: 0.9rem;"><i class="fas fa-user-plus"></i> New Contact</a>
     </div>
     <div class="contacts-grid">
         <?php if (empty($allContacts)): ?>
@@ -19,7 +19,7 @@
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'accepted');
                 ?>
-                <div class="contact-card" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
+                <div class="contact-card" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
                         <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                     </div>
@@ -59,7 +59,7 @@
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'pending');
                 ?>
-                <div class="contact-card pending" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
+                <div class="contact-card pending" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, grey, grey);">
                         <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                     </div>
@@ -93,7 +93,7 @@
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'blocked');
                 ?>
-                <div class="contact-card blocked" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
+                <div class="contact-card blocked" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
                     <div class="contact-avatar" style="background: linear-gradient(135deg, #dc3545, #c82333);">
                         <?php echo $contact['name'] ? strtoupper(substr($contact['name'], 0, 1)) : "X"; ?>
                     </div>
@@ -218,7 +218,7 @@
                         <p style="color: #6c757d; margin: 0; font-size: 0.9rem;">
                             <i class="fas fa-info-circle"></i> Showing the <strong>last <?php echo $maxDisplayLines; ?> transactions</strong> with this contact
                         </p>
-                        <button type="button" class="btn btn-sm btn-secondary" onclick="window.location.reload();">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="refreshContactModalTransactions();">
                             <i class="fas fa-sync-alt"></i> Refresh
                         </button>
                     </div>

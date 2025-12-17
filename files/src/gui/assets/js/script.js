@@ -1,20 +1,28 @@
    // Copyright 2025
-    
+
+// Operation timeout configuration (15 seconds)
+var OPERATION_TIMEOUT_MS = 15000;
+var operationTimeoutId = null;
+
     // Simple script to show/hide the floating action button
     // This is minimal JavaScript that should work in Tor Browser
     window.addEventListener('scroll', function() {
         var fab = document.getElementById('backToTop');
-        if (window.pageYOffset > 300) {
-            fab.classList.remove('hidden');
-        } else {
-            fab.classList.add('hidden');
+        if (fab) {
+            if (window.pageYOffset > 300) {
+                fab.classList.remove('hidden');
+            } else {
+                fab.classList.add('hidden');
+            }
         }
     });
 
     // Hide FAB initially
     document.addEventListener('DOMContentLoaded', function() {
         var fab = document.getElementById('backToTop');
-        fab.classList.add('hidden');
+        if (fab) {
+            fab.classList.add('hidden');
+        }
     });
 
 // Manual refresh function (Tor Browser compatible)
@@ -472,16 +480,62 @@ function hideLoader() {
     loaderStartTime = null;
 }
 
+// Operation Timeout Functions for 15-second reload
+function startOperationTimeout(operationType, timeoutMessage) {
+    // Clear any existing timeout
+    if (operationTimeoutId) {
+        clearTimeout(operationTimeoutId);
+    }
+
+    // Set 15-second timeout to reload page
+    // Only store the message when timeout actually fires (not on successful completion)
+    operationTimeoutId = setTimeout(function() {
+        // Store message only when timeout fires, so it shows after reload
+        sessionStorage.setItem('eiou_pending_operation', operationType);
+        sessionStorage.setItem('eiou_timeout_message', timeoutMessage);
+        window.location.reload();
+    }, OPERATION_TIMEOUT_MS);
+}
+
+function clearOperationTimeout() {
+    if (operationTimeoutId) {
+        clearTimeout(operationTimeoutId);
+        operationTimeoutId = null;
+    }
+    sessionStorage.removeItem('eiou_pending_operation');
+    sessionStorage.removeItem('eiou_timeout_message');
+}
+
+function checkForTimeoutToast() {
+    var timeoutMessage = sessionStorage.getItem('eiou_timeout_message');
+    if (timeoutMessage) {
+        // Clear storage first to prevent showing again on refresh
+        sessionStorage.removeItem('eiou_pending_operation');
+        sessionStorage.removeItem('eiou_timeout_message');
+
+        // Show the toast after a brief delay to ensure page is ready
+        setTimeout(function() {
+            showToast('Background Processing', timeoutMessage, 'info');
+        }, 500);
+    }
+}
+
+// Check for timeout toast on page load
+document.addEventListener('DOMContentLoaded', function() {
+    checkForTimeoutToast();
+});
+
 // Form loaders initialization
 function initializeFormLoaders() {
     // Retry info text for contact operations
-    var retryInfoText = 'Connecting to contact server. If unreachable, up to 5 retry attempts will be made automatically.';
+    var retryInfoText = 'Connecting to contact server. The message processor will continue retrying in the background.';
 
     // Add contact form
     var addContactForm = document.querySelector('#add-contact form');
     if (addContactForm) {
         addContactForm.addEventListener('submit', function() {
             showLoader('Adding contact...', retryInfoText);
+            startOperationTimeout('addContact', 'Still waiting for response. The message is being retried in the background. You can continue using the app and check back later.');
         });
     }
 
@@ -500,6 +554,7 @@ function initializeFormLoaders() {
         if (form) {
             form.addEventListener('submit', function() {
                 showLoader('Accepting contact request...', retryInfoText);
+                startOperationTimeout('acceptContact', 'Still waiting for response. The message is being retried in the background. You can continue using the app and check back later.');
             });
         }
     }
@@ -549,7 +604,8 @@ function initializeFormLoaders() {
     var sendForm = document.querySelector('#send-form form');
     if (sendForm) {
         sendForm.addEventListener('submit', function() {
-            showLoader('Sending transaction...', 'Processing your transaction. This may take a moment.');
+            showLoader('Sending transaction...', 'Processing your transaction. The message processor will continue retrying in the background.');
+            startOperationTimeout('sendTransaction', 'Still waiting for response. The transaction is being retried in the background. Check your transaction history for updates.');
         });
     }
 }
@@ -609,12 +665,12 @@ function fallbackCopyToClipboard(text, successMessage) {
 // ============================================================================
 
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
-var currentContactAddress = null;
+var currentContactId = null;
 var contactTransactionData = [];
 
 function openContactModal(contact, openTab) {
-    // Store current contact address for refresh
-    currentContactAddress = contact.address;
+    // Store current contact ID for refresh
+    currentContactId = contact.contact_id;
     // Store transactions for detail view
     contactTransactionData = contact.transactions || [];
 
@@ -741,6 +797,49 @@ function openContactModal(contact, openTab) {
 
 function closeContactModal() {
     document.getElementById('contactModal').style.display = 'none';
+}
+
+// Refresh contact modal and reopen on transactions tab (Tor Browser compatible)
+function refreshContactModalTransactions() {
+    // Store the current contact ID to reopen after refresh
+    if (currentContactId) {
+        sessionStorage.setItem('eiou_reopen_contact_id', currentContactId);
+        sessionStorage.setItem('eiou_reopen_contact_tab', 'transactions-tab');
+    }
+    window.location.reload();
+}
+
+// Check if we need to reopen contact modal after refresh (Tor Browser compatible)
+function checkReopenContactModal() {
+    try {
+        var reopenContactId = sessionStorage.getItem('eiou_reopen_contact_id');
+        var reopenTab = sessionStorage.getItem('eiou_reopen_contact_tab');
+
+        if (reopenContactId) {
+            // Clear the stored values first
+            sessionStorage.removeItem('eiou_reopen_contact_id');
+            sessionStorage.removeItem('eiou_reopen_contact_tab');
+
+            // Find the contact card with matching contact ID using data attribute
+            var contactCards = document.querySelectorAll('.contact-card');
+            for (var i = 0; i < contactCards.length; i++) {
+                var card = contactCards[i];
+                var cardContactId = card.getAttribute('data-contact-id');
+                if (cardContactId && cardContactId === reopenContactId) {
+                    // Click the card to open the modal
+                    card.click();
+                    // Then switch to transactions tab after a short delay
+                    setTimeout(function() {
+                        var tabToOpen = reopenTab || 'transactions-tab';
+                        showModalTab(tabToOpen, null);
+                    }, 150);
+                    return;
+                }
+            }
+        }
+    } catch (e) {
+        // Silently fail - don't break the page if something goes wrong
+    }
 }
 
 function showModalTab(tabId, button) {
@@ -907,6 +1006,9 @@ window.addEventListener('DOMContentLoaded', function() {
             }
         };
     }
+
+    // Check if we need to reopen contact modal after refresh
+    checkReopenContactModal();
 });
 
 // ============================================================================
@@ -934,6 +1036,22 @@ function showDebugTab(tabId, button) {
     }
     if (button) {
         button.classList.add('active');
+    }
+}
+
+// Toggle config section visibility (Tor Browser compatible)
+function toggleConfigSection(contentId, arrowId) {
+    var content = document.getElementById(contentId);
+    var arrow = document.getElementById(arrowId);
+
+    if (content && arrow) {
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            arrow.style.transform = 'rotate(180deg)';
+        } else {
+            content.style.display = 'none';
+            arrow.style.transform = 'rotate(0deg)';
+        }
     }
 }
 

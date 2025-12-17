@@ -1230,7 +1230,7 @@ class TransactionRepository extends AbstractRepository {
                     currency,
                     memo,
                     timestamp,
-                    'transaction' as source_type,
+                    CASE WHEN tx_type = 'p2p' THEN 'p2p_request' ELSE 'transaction' END as source_type,
                     NULL as destination_address,
                     NULL as fee_amount,
                     CASE
