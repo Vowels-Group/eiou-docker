@@ -124,7 +124,7 @@ function runMigrations(PDO $pdo): array {
 
     // List of migration tables to create (added after initial release)
     $migrations = [
-    
+
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {
@@ -144,6 +144,81 @@ function runMigrations(PDO $pdo): array {
                 SecureLogger::error("Migration failed for table $tableName", [
                     'error' => $e->getMessage()
                 ]);
+            }
+        }
+    }
+
+    // Run column migrations
+    $columnResults = runColumnMigrations($pdo);
+    $results = array_merge($results, $columnResults);
+
+    return $results;
+}
+
+/**
+ * Run column migrations for existing tables
+ * This function is idempotent - safe to run multiple times
+ *
+ * @param PDO $pdo Database connection
+ * @return array Migration results
+ */
+function runColumnMigrations(PDO $pdo): array {
+    $results = [];
+
+    // List of columns to ADD: [tableName => [columnName => columnDefinition]]
+    $columnsToAdd = [
+    
+    ];
+
+    // List of columns to DROP: [tableName => [columnName, ...]]
+    $columnsToDrop = [
+        
+    ];
+
+    // Add new columns
+    foreach ($columnsToAdd as $tableName => $columns) {
+        foreach ($columns as $columnName => $columnDefinition) {
+            try {
+                $stmt = $pdo->prepare("SHOW COLUMNS FROM `$tableName` LIKE :column");
+                $stmt->execute([':column' => $columnName]);
+
+                if ($stmt->rowCount() === 0) {
+                    $pdo->exec("ALTER TABLE `$tableName` ADD COLUMN `$columnName` $columnDefinition");
+                    $results["{$tableName}.{$columnName}"] = 'added';
+                } else {
+                    $results["{$tableName}.{$columnName}"] = 'exists';
+                }
+            } catch (PDOException $e) {
+                $results["{$tableName}.{$columnName}"] = 'error: ' . $e->getMessage();
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::error("Column migration failed for {$tableName}.{$columnName}", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+        }
+    }
+
+    // Drop deprecated columns
+    foreach ($columnsToDrop as $tableName => $columns) {
+        foreach ($columns as $columnName) {
+            try {
+                $stmt = $pdo->prepare("SHOW COLUMNS FROM `$tableName` LIKE :column");
+                $stmt->execute([':column' => $columnName]);
+
+                if ($stmt->rowCount() > 0) {
+                    $pdo->exec("ALTER TABLE `$tableName` DROP COLUMN `$columnName`");
+                    $results["{$tableName}.{$columnName}"] = 'dropped';
+                } else {
+                    $results["{$tableName}.{$columnName}"] = 'already_dropped';
+                }
+            } catch (PDOException $e) {
+                $results["{$tableName}.{$columnName}"] = 'error: ' . $e->getMessage();
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::error("Column drop failed for {$tableName}.{$columnName}", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
             }
         }
     }

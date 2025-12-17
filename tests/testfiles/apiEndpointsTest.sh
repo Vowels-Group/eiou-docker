@@ -141,11 +141,11 @@ path="/api/v1/system/status"
 body=""
 
 # Create HMAC signature - note: the string to sign uses actual newlines
+# New format: only send the HMAC, never the secret (Issue #266 security fix)
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"${method}\\n${path}\\n${timestamp}\\n${body}\";
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 statusResponse=$(docker exec ${testContainer} curl -s \
@@ -177,8 +177,7 @@ path="/api/v1/wallet/info"
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"GET\\n${path}\\n${timestamp}\\n\";
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 infoResponse=$(docker exec ${testContainer} curl -s \
@@ -210,8 +209,7 @@ path="/api/v1/wallet/balance"
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"GET\\n${path}\\n${timestamp}\\n\";
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 balanceResponse=$(docker exec ${testContainer} curl -s \
@@ -243,8 +241,7 @@ path="/api/v1/contacts"
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"GET\\n${path}\\n${timestamp}\\n\";
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 contactsResponse=$(docker exec ${testContainer} curl -s \
@@ -276,8 +273,7 @@ path="/api/v1/wallet/transactions"
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"GET\\n${path}\\n${timestamp}\\n\";
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 transactionsResponse=$(docker exec ${testContainer} curl -s \
@@ -309,8 +305,7 @@ path="/api/v1/system/metrics"
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"GET\\n${path}\\n${timestamp}\\n\";
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 metricsResponse=$(docker exec ${testContainer} curl -s \
@@ -362,8 +357,7 @@ path="/api/v1/invalid/path"
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"GET\\n${path}\\n${timestamp}\\n\";
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 invalidResponse=$(docker exec ${testContainer} curl -s \
@@ -618,8 +612,7 @@ signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = '${sendBody}';
     \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 sendResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
@@ -664,8 +657,7 @@ signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$body = '${contactBody}';
     \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 createContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
@@ -709,8 +701,7 @@ display_api_request "${testContainer}" "GET" "/api/v1/contacts/${realContactName
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"GET\\n${path}\\n${timestamp}\\n\";
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 getContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
@@ -753,8 +744,7 @@ display_api_request "${testContainer}" "DELETE" "/api/v1/contacts/${testDeleteAd
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"DELETE\\n${path}\\n${timestamp}\\n\";
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 deleteContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
@@ -797,8 +787,7 @@ display_api_request "${testContainer}" "POST" "/api/v1/contacts/block/${blockAdd
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"POST\\n${path}\\n${timestamp}\\n\";
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 blockContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
@@ -841,8 +830,7 @@ display_api_request "${testContainer}" "POST" "/api/v1/contacts/unblock/${unbloc
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"POST\\n${path}\\n${timestamp}\\n\";
-    \$hmac = hash_hmac('sha256', \$message, \$secret);
-    echo \$secret . ':' . \$hmac;
+    echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
 unblockContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
@@ -895,8 +883,7 @@ if [[ -n "$realContactNameFromViewbalances" ]]; then
     signature=$(docker exec ${testContainer} php -r "
         \$secret = '${apiSecret}';
         \$message = \"GET\\n${path}\\n${timestamp}\\n\";
-        \$hmac = hash_hmac('sha256', \$message, \$secret);
-        echo \$secret . ':' . \$hmac;
+        echo hash_hmac('sha256', \$message, \$secret);
     " 2>/dev/null)
 
     realContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
@@ -938,8 +925,7 @@ if [[ -n "$realContactNameFromViewbalances" ]]; then
         \$secret = '${apiSecret}';
         \$body = '${realSendBody}';
         \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
-        \$hmac = hash_hmac('sha256', \$message, \$secret);
-        echo \$secret . ':' . \$hmac;
+        echo hash_hmac('sha256', \$message, \$secret);
     " 2>/dev/null)
 
     realSendResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
