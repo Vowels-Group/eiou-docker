@@ -686,8 +686,10 @@ function filterContacts() {
     for (var i = 0; i < contactCards.length; i++) {
         var card = contactCards[i];
         var contactName = card.getAttribute('data-contact-name') || '';
+        var contactAddress = card.getAttribute('data-contact-address') || '';
+        var matchesSearch = contactName.indexOf(searchTerm) !== -1 || contactAddress.indexOf(searchTerm) !== -1;
 
-        if (searchTerm === '' || contactName.indexOf(searchTerm) !== -1) {
+        if (searchTerm === '' || matchesSearch) {
             // Show card if matches search (respecting limit when not searching)
             if (searchTerm === '') {
                 // When not searching, respect the show all / limited state
