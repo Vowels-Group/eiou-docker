@@ -187,6 +187,7 @@ function getApiKeysTableSchema() {
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         key_id VARCHAR(32) NOT NULL UNIQUE,
         key_hash VARCHAR(64) NOT NULL,
+        encrypted_secret JSON NULL,
         name VARCHAR(255) NOT NULL,
         permissions JSON NOT NULL,
         rate_limit_per_minute INT DEFAULT 100,

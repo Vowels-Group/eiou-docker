@@ -8,9 +8,13 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  *
  * Provides secure API authentication using:
  * - API Key identification
- * - HMAC-SHA256 request signing
+ * - HMAC-SHA256 request signing (server-side verification)
  * - Timestamp validation (prevents replay attacks)
  * - Rate limiting per API key
+ *
+ * Security: API secrets are stored encrypted in the database and retrieved
+ * only when needed for HMAC verification. The client never sends the secret
+ * in requests - only the computed HMAC signature.
  */
 
 class ApiAuthService {
@@ -114,51 +118,80 @@ class ApiAuthService {
             );
         }
 
-        // Verify HMAC signature
-        // The signature should be: HMAC-SHA256(secret, method + path + timestamp + body)
-        // Since we store a hash of the secret, we need to use a different approach:
-        // Client sends: HMAC-SHA256(secret, payload)
-        // We verify by checking if HMAC-SHA256(secret, payload) matches the signature
-        // But we only have the hash of the secret...
+        // Retrieve decrypted secret from database for HMAC verification
+        // The secret is stored encrypted, not hashed, allowing server-side HMAC computation
+        $secret = $this->apiKeyRepository->getSecretByKeyId($apiKey);
+        if (!$secret) {
+            // Fallback for legacy keys without encrypted_secret: try old format (secret:hmac)
+            $signatureParts = explode(':', $signature, 2);
+            if (count($signatureParts) === 2) {
+                $legacySecret = $signatureParts[0];
+                $providedHmac = $signatureParts[1];
 
-        // For HMAC verification with stored hash, client must include the secret in the signature
-        // OR we store the secret encrypted (not just hashed)
+                // Validate against stored hash
+                $keyResult = $this->apiKeyRepository->validateKey($apiKey, $legacySecret);
+                if ($keyResult) {
+                    $stringToSign = $this->buildStringToSign($method, $path, $timestamp, $body);
+                    $expectedHmac = hash_hmac(self::HMAC_ALGORITHM, $stringToSign, $legacySecret);
 
-        // Alternative approach: The signature header contains the raw secret for verification
-        // Split signature: secret:hmac
-        $signatureParts = explode(':', $signature, 2);
-        if (count($signatureParts) !== 2) {
-            return $this->authError('Invalid signature format. Expected: secret:hmac', ErrorCodes::AUTH_INVALID_SIGNATURE_FORMAT);
-        }
+                    if (hash_equals($expectedHmac, $providedHmac)) {
+                        $this->log('info', 'API authentication successful (legacy mode)', [
+                            'key_id' => $apiKey,
+                            'key_name' => $keyResult['name'],
+                            'path' => $path
+                        ]);
 
-        $secret = $signatureParts[0];
-        $providedHmac = $signatureParts[1];
+                        return [
+                            'success' => true,
+                            'key' => $keyResult,
+                            'error' => null,
+                            'code' => null
+                        ];
+                    }
+                }
+            }
 
-        // Validate the secret against the stored hash
-        $keyResult = $this->apiKeyRepository->validateKey($apiKey, $secret);
-        if (!$keyResult) {
             return $this->authError('Invalid API credentials', ErrorCodes::AUTH_INVALID_CREDENTIALS);
         }
 
         // Build the string to sign
         $stringToSign = $this->buildStringToSign($method, $path, $timestamp, $body);
 
-        // Calculate expected HMAC
+        // Calculate expected HMAC using the decrypted secret
         $expectedHmac = hash_hmac(self::HMAC_ALGORITHM, $stringToSign, $secret);
 
         // Constant-time comparison to prevent timing attacks
-        if (!hash_equals($expectedHmac, $providedHmac)) {
+        // Client sends only the HMAC signature, not the secret
+        if (!hash_equals($expectedHmac, $signature)) {
             $this->log('warning', 'HMAC signature mismatch', [
                 'key_id' => $apiKey,
                 'path' => $path
             ]);
+
+            // Clear secret from memory
+            if (function_exists('sodium_memzero')) {
+                sodium_memzero($secret);
+            }
+
             return $this->authError('Invalid signature', ErrorCodes::AUTH_INVALID_SIGNATURE);
         }
+
+        // Clear secret from memory after use
+        if (function_exists('sodium_memzero')) {
+            sodium_memzero($secret);
+        }
+
+        // Get full key data for return
+        $keyResult = $keyData;
+        $keyResult['permissions'] = $keyData['permissions'];
+
+        // Update last used timestamp
+        $this->apiKeyRepository->updateLastUsed($apiKey);
 
         // Authentication successful
         $this->log('info', 'API authentication successful', [
             'key_id' => $apiKey,
-            'key_name' => $keyResult['name'],
+            'key_name' => $keyData['name'],
             'path' => $path
         ]);
 
@@ -200,12 +233,15 @@ class ApiAuthService {
     /**
      * Generate a signature for a request (client-side helper)
      *
+     * The client computes HMAC-SHA256(secret, stringToSign) and sends only the
+     * resulting signature. The secret is NEVER transmitted in the request.
+     *
      * @param string $secret The API secret
      * @param string $method HTTP method
      * @param string $path Request path
      * @param string $timestamp Unix timestamp
      * @param string $body Request body
-     * @return string The complete signature header value (secret:hmac)
+     * @return string The HMAC signature (hex encoded)
      */
     public static function generateSignature(
         string $secret,
@@ -221,9 +257,7 @@ class ApiAuthService {
             $body
         ]);
 
-        $hmac = hash_hmac(self::HMAC_ALGORITHM, $stringToSign, $secret);
-
-        return $secret . ':' . $hmac;
+        return hash_hmac(self::HMAC_ALGORITHM, $stringToSign, $secret);
     }
 
     /**

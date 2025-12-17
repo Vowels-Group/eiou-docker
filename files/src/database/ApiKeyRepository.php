@@ -4,10 +4,12 @@
 /**
  * Repository for managing API keys
  *
- * Handles CRUD operations for API keys with secure storage
+ * Handles CRUD operations for API keys with secure storage.
+ * Secrets are stored encrypted (not hashed) to enable server-side HMAC verification.
  */
 
 require_once dirname(__DIR__) . '/database/AbstractRepository.php';
+require_once dirname(__DIR__) . '/security/KeyEncryption.php';
 
 class ApiKeyRepository extends AbstractRepository {
 
@@ -32,16 +34,20 @@ class ApiKeyRepository extends AbstractRepository {
         // Generate secret key (shown only once to user)
         $secret = bin2hex(random_bytes(32));
 
-        // Hash the secret for storage (we never store the raw secret)
+        // Hash the secret for backward compatibility and quick validation
         $keyHash = hash('sha256', $secret);
 
-        $sql = "INSERT INTO api_keys (key_id, key_hash, name, permissions, rate_limit_per_minute, expires_at)
-                VALUES (:key_id, :key_hash, :name, :permissions, :rate_limit, :expires_at)";
+        // Encrypt the secret for secure storage (allows retrieval for HMAC verification)
+        $encryptedSecret = KeyEncryption::encrypt($secret);
+
+        $sql = "INSERT INTO api_keys (key_id, key_hash, encrypted_secret, name, permissions, rate_limit_per_minute, expires_at)
+                VALUES (:key_id, :key_hash, :encrypted_secret, :name, :permissions, :rate_limit, :expires_at)";
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             ':key_id' => $keyId,
             ':key_hash' => $keyHash,
+            ':encrypted_secret' => json_encode($encryptedSecret),
             ':name' => $name,
             ':permissions' => json_encode($permissions),
             ':rate_limit' => $rateLimitPerMinute,
@@ -115,6 +121,44 @@ class ApiKeyRepository extends AbstractRepository {
         }
 
         return $result ?: null;
+    }
+
+    /**
+     * Get decrypted API secret by key_id
+     *
+     * Retrieves and decrypts the API secret for server-side HMAC verification.
+     * This method should only be called during authentication.
+     *
+     * @param string $keyId The public key identifier
+     * @return string|null Decrypted secret if found and valid, null otherwise
+     */
+    public function getSecretByKeyId(string $keyId): ?string {
+        $sql = "SELECT encrypted_secret
+                FROM api_keys
+                WHERE key_id = :key_id
+                AND enabled = 1
+                AND (expires_at IS NULL OR expires_at > NOW())";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':key_id' => $keyId]);
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$result || empty($result['encrypted_secret'])) {
+            return null;
+        }
+
+        try {
+            $encryptedData = json_decode($result['encrypted_secret'], true);
+            if (!$encryptedData) {
+                return null;
+            }
+            return KeyEncryption::decrypt($encryptedData);
+        } catch (Exception $e) {
+            // Log decryption failure but don't expose details
+            error_log('API key decryption failed for key_id: ' . $keyId);
+            return null;
+        }
     }
 
     /**

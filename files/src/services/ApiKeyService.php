@@ -125,7 +125,12 @@ class ApiKeyService {
             echo "To use this key, include these headers in your API requests:\n";
             echo "  X-API-Key: " . $key['key_id'] . "\n";
             echo "  X-API-Timestamp: <unix_timestamp>\n";
-            echo "  X-API-Signature: <secret>:<hmac_signature>\n";
+            echo "  X-API-Signature: <hmac_signature>\n";
+            echo "\n";
+            echo "The HMAC signature is computed as:\n";
+            echo "  HMAC-SHA256(secret, METHOD + \"\\n\" + PATH + \"\\n\" + TIMESTAMP + \"\\n\" + BODY)\n";
+            echo "\n";
+            echo "NOTE: Never send the secret in requests - only the computed HMAC signature.\n";
             echo "\n";
 
         } catch (Exception $e) {
@@ -300,10 +305,13 @@ Once you have an API key, make requests to:
 Required headers for each request:
   X-API-Key: <key_id>
   X-API-Timestamp: <unix_timestamp>
-  X-API-Signature: <secret>:<hmac>
+  X-API-Signature: <hmac>
 
-The HMAC is calculated as:
+The HMAC signature is calculated as:
   HMAC-SHA256(secret, METHOD + "\\n" + PATH + "\\n" + TIMESTAMP + "\\n" + BODY)
+
+IMPORTANT: Never send the secret in requests - only the computed HMAC signature.
+The server retrieves and decrypts your secret to verify the signature.
 
 Example endpoints:
   GET  /api/v1/wallet/balance      - Get wallet balances
