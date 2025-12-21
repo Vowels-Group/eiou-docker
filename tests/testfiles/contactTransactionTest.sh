@@ -286,7 +286,7 @@ for container in "${containers[@]:0:1}"; do  # Test first container
     fi
 done
 
-# Test 8: Verify contact transaction status is 'sent' or 'completed'
+# Test 8: Verify contact transaction status is valid (sent/accepted/completed)
 echo -e "\n[Contact Transaction Status Test]"
 
 for container in "${containers[@]:0:2}"; do  # Test first 2 containers
@@ -303,7 +303,11 @@ for container in "${containers[@]:0:2}"; do  # Test first 2 containers
         if (empty(\$transactions)) {
             echo 'NO_CONTACT_TX';
         } else {
-            \$validStatuses = ['sent', 'completed'];
+            // Valid statuses for contact transactions:
+            // - 'sent': sender-side, awaiting acceptance
+            // - 'accepted': receiver-side, awaiting user acceptance
+            // - 'completed': both sides after acceptance
+            \$validStatuses = ['sent', 'accepted', 'completed'];
             \$allValid = true;
             \$invalidStatus = '';
             foreach (\$transactions as \$tx) {
@@ -322,7 +326,7 @@ for container in "${containers[@]:0:2}"; do  # Test first 2 containers
     " 2>/dev/null || echo "ERROR")
 
     if [[ "$statusCheck" == "ALL_VALID" ]]; then
-        printf "\t   Contact transaction status ${GREEN}PASSED${NC} (all sent or completed)\n"
+        printf "\t   Contact transaction status ${GREEN}PASSED${NC} (all sent/accepted/completed)\n"
         passed=$(( passed + 1 ))
     elif [[ "$statusCheck" == "NO_CONTACT_TX" ]]; then
         printf "\t   No contact transactions to verify ${NC}(skipped)${NC}\n"
