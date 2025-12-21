@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     openssl \
     php \
     php-curl \
+    php-mbstring \
     php-mysql \
     tor 
 
