@@ -232,7 +232,8 @@ class ContactService {
         ];
 
         // Insert the contact transaction with 'accepted' status
-        $result = $this->transactionRepository->insertTransaction($transactionData, 'accepted');
+        // Second parameter is transaction type: 'received' (we are receiving a contact request)
+        $result = $this->transactionRepository->insertTransaction($transactionData, 'received');
 
         return $result !== false;
     }
