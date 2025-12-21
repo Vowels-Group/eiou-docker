@@ -345,7 +345,7 @@ for container in "${containers[@]:0:1}"; do  # Test first container
     echo -e "\n\t-> Testing insertTransaction status parameter for ${container}"
 
     # Check if the source file contains the status parameter pattern
-    paramTest=$(docker exec ${container} sh -c "grep -q \"status.*request\" /app/src/database/TransactionRepository.php && echo 'STATUS_SUPPORTED' || echo 'STATUS_NOT_FOUND'" 2>/dev/null || echo "ERROR")
+    paramTest=$(docker exec ${container} sh -c "grep -q \"status.*request\" /etc/eiou/src/database/TransactionRepository.php && echo 'STATUS_SUPPORTED' || echo 'STATUS_NOT_FOUND'" 2>/dev/null || echo "ERROR")
 
     if [[ "$paramTest" == "STATUS_SUPPORTED" ]]; then
         printf "\t   insertTransaction status parameter ${GREEN}PASSED${NC}\n"
@@ -426,8 +426,8 @@ for container in "${containers[@]:0:1}"; do  # Test first container
     echo -e "\n\t-> Testing ContactService receiver transaction methods for ${container}"
 
     # Check if the source file contains both receiver transaction methods
-    hasInsert=$(docker exec ${container} sh -c "grep -q 'function insertReceivedContactTransaction' /app/src/services/ContactService.php && echo 'YES' || echo 'NO'" 2>/dev/null || echo "ERROR")
-    hasComplete=$(docker exec ${container} sh -c "grep -q 'function completeReceivedContactTransaction' /app/src/services/ContactService.php && echo 'YES' || echo 'NO'" 2>/dev/null || echo "ERROR")
+    hasInsert=$(docker exec ${container} sh -c "grep -q 'function insertReceivedContactTransaction' /etc/eiou/src/services/ContactService.php && echo 'YES' || echo 'NO'" 2>/dev/null || echo "ERROR")
+    hasComplete=$(docker exec ${container} sh -c "grep -q 'function completeReceivedContactTransaction' /etc/eiou/src/services/ContactService.php && echo 'YES' || echo 'NO'" 2>/dev/null || echo "ERROR")
 
     if [[ "$hasInsert" == "YES" && "$hasComplete" == "YES" ]]; then
         printf "\t   ContactService receiver methods ${GREEN}PASSED${NC}\n"
