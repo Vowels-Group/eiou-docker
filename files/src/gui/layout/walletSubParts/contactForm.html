@@ -19,7 +19,7 @@
             <label for="name">Name:</label>
             <input type="text" id="name" name="name" placeholder="Enter contact name" required>
         </div>
-        <div class="form-row" style="grid-template-columns: 1fr 1fr 1fr;">
+        <div class="form-row contact-form-row">
             <div class="form-group">
                 <label for="credit">Credit Limit:</label>
                 <input type="number" id="credit" name="credit" value="<?php echo htmlspecialchars($user->getDefaultCreditLimit()); ?>" min="0" required class="default-value">

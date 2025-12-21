@@ -180,9 +180,18 @@
             if (indicator) indicator.classList.add('active');
 
             autoRefreshInterval = setInterval(function() {
+                // Check if manual refresh is in progress
+                if (window.isRefreshing) {
+                    return;
+                }
+
                 // Use existing check_updates mechanism
                 fetch(window.location.pathname + '?check_updates=1&_=' + Date.now())
                     .then(function(response) {
+                        // Double-check flag before reload (in case manual refresh started during fetch)
+                        if (window.isRefreshing) {
+                            return;
+                        }
                         if (response.ok) {
                             // Reload page to get updated transaction status
                             window.location.reload();
@@ -195,7 +204,7 @@
         }
     }
 
-    function stopAutoRefresh() {
+    window.stopAutoRefresh = function() {
         if (autoRefreshInterval) {
             clearInterval(autoRefreshInterval);
             autoRefreshInterval = null;
@@ -224,5 +233,5 @@
     });
 
     // Stop auto-refresh when leaving page
-    window.addEventListener('beforeunload', stopAutoRefresh);
+    window.addEventListener('beforeunload', window.stopAutoRefresh);
 </script>

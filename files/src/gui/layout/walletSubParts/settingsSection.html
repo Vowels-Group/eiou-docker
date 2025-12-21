@@ -310,20 +310,17 @@
                 <tr><td><strong>Memory Limit</strong></td><td><?php echo ini_get('memory_limit'); ?></td></tr>
                 <tr><td><strong>Max Execution Time</strong></td><td><?php echo ini_get('max_execution_time'); ?>s</td></tr>
                 <tr><td><strong>Server Software</strong></td><td><?php echo $_SERVER['SERVER_SOFTWARE'] ?? 'N/A'; ?></td></tr>
-                <tr><td><strong>Document Root</strong></td><td><?php echo $_SERVER['DOCUMENT_ROOT'] ?? 'N/A'; ?></td></tr>
                 <tr><td><strong>App Debug Mode</strong></td><td><?php echo Constants::get('APP_DEBUG') ? 'Enabled' : 'Disabled'; ?></td></tr>
                 <tr><td><strong>Debian Version</strong></td><td><?php echo htmlspecialchars($debianVersion); ?></td></tr>
                 <tr><td><strong>OS Release</strong></td><td><?php echo htmlspecialchars($osRelease); ?></td></tr>
                 <tr><td><strong>MySQL/MariaDB Version</strong></td><td><?php echo htmlspecialchars($mysqlVersion); ?></td></tr>
-                <tr><td><strong>PHP Config Path</strong></td><td><?php echo htmlspecialchars($phpIniPath); ?></td></tr>
-                <tr><td><strong>Apache Config Path</strong></td><td><?php echo htmlspecialchars($apacheMainConfig); ?></td></tr>
                 <tr><td><strong>PHP Extensions</strong></td><td><?php echo $phpExtensionsCount; ?> loaded</td></tr>
             </table>
 
-            <!-- PHP Extensions with Versions (Collapsible) -->
+            <!-- PHP Extensions (Collapsible) -->
             <div style="margin-top: 1rem;">
                 <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleConfigSection('phpext-content', 'phpext-arrow')">
-                    <i class="fas fa-puzzle-piece"></i> PHP Extensions (with versions)
+                    <i class="fas fa-puzzle-piece"></i> PHP Extensions
                     <i id="phpext-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
                 </h4>
                 <pre id="phpext-content" class="debug-pre" style="max-height: 200px; overflow-y: auto; display: none;"><?php echo htmlspecialchars($phpExtensionsFormatted); ?></pre>

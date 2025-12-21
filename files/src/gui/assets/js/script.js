@@ -27,15 +27,25 @@ var operationTimeoutId = null;
 
 // Manual refresh function (Tor Browser compatible)
 function refreshWalletData() {
+    // Set global flag FIRST to prevent race conditions with auto-refresh
+    window.isRefreshing = true;
+
+    // Stop auto-refresh before manual refresh
+    if (typeof window.stopAutoRefresh === 'function') {
+        window.stopAutoRefresh();
+    }
+
     var refreshBtn = document.getElementById('manualRefresh');
-    var icon = refreshBtn.querySelector('i');
+    if (refreshBtn) {
+        var icon = refreshBtn.querySelector('i');
+        if (icon) {
+            icon.className = 'fas fa-spinner fa-spin';
+        }
+        refreshBtn.disabled = true;
+    }
 
-    // Show loading state
-    icon.className = 'fas fa-spinner fa-spin';
-    refreshBtn.disabled = true;
-
-    // Preserve auth code when refreshing
-    window.location.href = window.location.href;
+    // Use reload for consistency with auto-refresh
+    window.location.reload();
 }
 
 // Send eIOU form handling

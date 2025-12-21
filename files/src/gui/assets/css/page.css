@@ -576,6 +576,8 @@ body {
     margin-top: 0.5rem;
     font-size: 0.8rem;
     color: #6c757d;
+    word-break: break-all;
+    overflow-wrap: break-word;
 }
 
 .debug-pre {
@@ -1131,8 +1133,27 @@ html {
     margin-bottom: 0;
 }
 
+/* Pending transactions overflow handling */
+.tx-in-progress-section {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.tx-in-progress-item {
+    min-width: 0;
+}
+
 .tx-in-progress-info {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.tx-in-progress-counterparty .monospace,
+.tx-in-progress-details .monospace {
+    overflow-x: auto;
+    max-width: 100%;
+    display: block;
 }
 
 .tx-in-progress-counterparty {
@@ -1594,6 +1615,17 @@ html {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
+}
+
+/* Contact form mobile layout */
+.contact-form-row {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+@media (max-width: 768px) {
+    .contact-form-row {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 576px) {
