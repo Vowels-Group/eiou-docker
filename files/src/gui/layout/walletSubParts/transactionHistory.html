@@ -188,6 +188,10 @@
                 // Use existing check_updates mechanism
                 fetch(window.location.pathname + '?check_updates=1&_=' + Date.now())
                     .then(function(response) {
+                        // Double-check flag before reload (in case manual refresh started during fetch)
+                        if (window.isRefreshing) {
+                            return;
+                        }
                         if (response.ok) {
                             // Reload page to get updated transaction status
                             window.location.reload();
@@ -229,5 +233,5 @@
     });
 
     // Stop auto-refresh when leaving page
-    window.addEventListener('beforeunload', stopAutoRefresh);
+    window.addEventListener('beforeunload', window.stopAutoRefresh);
 </script>
