@@ -1129,6 +1129,7 @@ class TransactionRepository extends AbstractRepository {
             $data = [
                 'tx_type' => $txType,
                 'type' => $type,
+                'status' => $request['status'] ?? 'pending', // Allow custom status, default to pending
                 'sender_address' => $request['senderAddress'],
                 'sender_public_key' => $request['senderPublicKey'],
                 'sender_public_key_hash' => $senderPublicKeyHash,
@@ -1630,5 +1631,33 @@ class TransactionRepository extends AbstractRepository {
         ]);
 
         return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+    }
+
+    /**
+     * Update contact transaction status to completed when contact is accepted
+     *
+     * Called when receiving an 'accepted' status in handleContactMessageRequest.
+     * Updates the contact transaction from 'sent' to 'completed'.
+     *
+     * @param string $contactPublicKey The public key of the contact who accepted
+     * @return bool True if update was successful
+     */
+    public function completeContactTransaction(string $contactPublicKey): bool {
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
+
+        $query = "UPDATE {$this->tableName}
+                  SET status = 'completed'
+                  WHERE tx_type = 'contact'
+                  AND sender_public_key_hash = :sender_public_key_hash
+                  AND receiver_public_key_hash = :receiver_public_key_hash
+                  AND status = 'sent'";
+
+        $stmt = $this->execute($query, [
+            ':sender_public_key_hash' => $senderPublicKeyHash,
+            ':receiver_public_key_hash' => $receiverPublicKeyHash
+        ]);
+
+        return $stmt->rowCount() > 0;
     }
 }

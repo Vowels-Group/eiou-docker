@@ -178,7 +178,7 @@ class ContactService {
         // Create txid for contact transaction (amount is always 0)
         $txid = $this->createContactTxid($receiverPublicKey, $time);
 
-        // Build transaction data
+        // Build transaction data with status 'sent' (will move to 'completed' upon acceptance)
         $transactionData = [
             'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($receiverAddress),
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -186,6 +186,7 @@ class ContactService {
             'receiverPublicKey' => $receiverPublicKey,
             'amount' => 0,
             'currency' => $currency,
+            'status' => 'sent',
             'txid' => $txid,
             'memo' => 'contact',
             'description' => 'Contact request transaction'
