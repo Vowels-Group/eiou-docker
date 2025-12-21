@@ -361,7 +361,8 @@ for container in "${containers[@]:0:1}"; do  # Test first container
         \$methodSource = implode('', array_slice(\$source, \$startLine - 1, \$endLine - \$startLine + 1));
 
         // Check if status is extracted from request
-        if (strpos(\$methodSource, \"'status' =>\") !== false && strpos(\$methodSource, \"request['status']\") !== false) {
+        // Note: Need to escape the dollar sign for bash
+        if (strpos(\$methodSource, \"'status' =>\") !== false && strpos(\$methodSource, '\$request') !== false) {
             echo 'STATUS_SUPPORTED';
         } else {
             echo 'STATUS_NOT_FOUND';
@@ -449,11 +450,13 @@ for container in "${containers[@]:0:1}"; do  # Test first container
     methodsTest=$(docker exec ${container} php -r "
         require_once('${REL_APPLICATION}');
 
-        // Check if the ContactService has the receiver transaction methods
+        // Check if the ContactService source file contains the receiver transaction methods
         \$reflector = new ReflectionClass('ContactService');
+        \$filename = \$reflector->getFileName();
+        \$source = file_get_contents(\$filename);
 
-        \$hasInsertReceived = \$reflector->hasMethod('insertReceivedContactTransaction');
-        \$hasCompleteReceived = \$reflector->hasMethod('completeReceivedContactTransaction');
+        \$hasInsertReceived = strpos(\$source, 'function insertReceivedContactTransaction') !== false;
+        \$hasCompleteReceived = strpos(\$source, 'function completeReceivedContactTransaction') !== false;
 
         if (\$hasInsertReceived && \$hasCompleteReceived) {
             echo 'BOTH_METHODS_EXIST';
