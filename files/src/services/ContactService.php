@@ -79,6 +79,11 @@ class ContactService {
     private ?MessageDeliveryService $messageDeliveryService = null;
 
     /**
+     * @var TransactionRepository Transaction repository for contact transactions
+     */
+    private TransactionRepository $transactionRepository;
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact Repository
@@ -88,6 +93,7 @@ class ContactService {
      * @param InputValidator $inputValidator InputValidator Util
      * @param SecureLogger $secureLogger SecureLogger Util
      * @param UserContext $currentUser Current user data
+     * @param TransactionRepository $transactionRepository Transaction Repository
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      */
     public function __construct(
@@ -98,6 +104,7 @@ class ContactService {
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
         UserContext $currentUser,
+        TransactionRepository $transactionRepository,
         ?MessageDeliveryService $messageDeliveryService = null
         )
     {
@@ -108,6 +115,7 @@ class ContactService {
         $this->inputValidator = $inputValidator;
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
+        $this->transactionRepository = $transactionRepository;
         $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
         $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->messageDeliveryService = $messageDeliveryService;
@@ -126,6 +134,121 @@ class ContactService {
      */
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Create unique transaction ID for contact requests
+     *
+     * For contact transactions, amount is always 0, so txid is generated from:
+     * senderPublicKey + receiverPublicKey + 0 + time
+     *
+     * @param string $receiverPublicKey The receiver's public key
+     * @param string $time Timestamp
+     * @return string The generated transaction ID (SHA-256 hash)
+     */
+    private function createContactTxid(string $receiverPublicKey, string $time): string {
+        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $receiverPublicKey . '0' . $time);
+    }
+
+    /**
+     * Check if a contact transaction already exists for the given receiver
+     *
+     * @param string $receiverPublicKey The public key of the contact
+     * @return bool True if contact transaction exists
+     */
+    private function contactTransactionExists(string $receiverPublicKey): bool {
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
+        return $this->transactionRepository->contactTransactionExistsForReceiver($receiverPublicKeyHash);
+    }
+
+    /**
+     * Insert a contact transaction after receiving the public key from a contact
+     *
+     * Creates a contact transaction with amount=0 to record the contact request
+     * as the first transaction between users. Used by the sender of the contact request.
+     *
+     * @param string $receiverPublicKey The public key of the contact
+     * @param string $receiverAddress The address of the contact
+     * @param string $currency The currency for the transaction
+     * @return bool True if transaction was inserted successfully
+     */
+    private function insertContactTransaction(string $receiverPublicKey, string $receiverAddress, string $currency): bool {
+        $time = $this->timeUtility->getCurrentMicrotime();
+
+        // Create txid for contact transaction (amount is always 0)
+        $txid = $this->createContactTxid($receiverPublicKey, $time);
+
+        // Build transaction data with status 'sent' (will move to 'completed' upon acceptance)
+        $transactionData = [
+            'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($receiverAddress),
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+            'receiverAddress' => $receiverAddress,
+            'receiverPublicKey' => $receiverPublicKey,
+            'amount' => 0,
+            'currency' => $currency,
+            'status' => 'sent',
+            'txid' => $txid,
+            'memo' => 'contact',
+            'description' => 'Contact request transaction'
+        ];
+
+        // Insert the contact transaction as 'sent' type
+        $result = $this->transactionRepository->insertTransaction($transactionData, 'sent');
+
+        return $result !== false;
+    }
+
+    /**
+     * Insert a received contact transaction when we receive a contact request
+     *
+     * Creates a contact transaction with amount=0 from the perspective of the receiver.
+     * The transaction is created with status 'accepted' (pending user acceptance) and
+     * moves to 'completed' when the user explicitly accepts the contact request.
+     *
+     * @param string $senderPublicKey The public key of the contact who sent the request
+     * @param string $senderAddress The address of the contact who sent the request
+     * @param string $currency The currency for the transaction
+     * @return bool True if transaction was inserted successfully
+     */
+    private function insertReceivedContactTransaction(string $senderPublicKey, string $senderAddress, string $currency = 'USD'): bool {
+        $time = $this->timeUtility->getCurrentMicrotime();
+
+        // Create txid for received contact transaction
+        // From receiver's perspective: sender is the requester, receiver is current user
+        $txid = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $this->currentUser->getPublicKey() . '0' . $time);
+
+        // Build transaction data with status 'accepted' (pending user acceptance, will move to 'completed')
+        $transactionData = [
+            'senderAddress' => $senderAddress,
+            'senderPublicKey' => $senderPublicKey,
+            'receiverAddress' => $this->transportUtility->resolveUserAddressForTransport($senderAddress),
+            'receiverPublicKey' => $this->currentUser->getPublicKey(),
+            'amount' => 0,
+            'currency' => $currency,
+            'status' => 'accepted',
+            'txid' => $txid,
+            'memo' => 'contact',
+            'description' => 'Contact request received'
+        ];
+
+        // Insert the contact transaction with 'accepted' status
+        // Second parameter is transaction type: 'received' (we are receiving a contact request)
+        $result = $this->transactionRepository->insertTransaction($transactionData, 'received');
+
+        return $result !== false;
+    }
+
+    /**
+     * Complete a received contact transaction when user accepts the contact request
+     *
+     * Updates the contact transaction status from 'accepted' to 'completed'.
+     * This is called from the receiver's perspective when they accept an incoming request.
+     *
+     * @param string $senderPublicKey The public key of the contact who sent the request
+     * @return bool True if transaction was updated successfully
+     */
+    private function completeReceivedContactTransaction(string $senderPublicKey): bool {
+        return $this->transactionRepository->completeReceivedContactTransaction($senderPublicKey);
     }
 
     /**
@@ -317,6 +440,9 @@ class ContactService {
                         $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                     }
 
+                    // Complete the received contact transaction (update status from 'accepted' to 'completed')
+                    $this->completeReceivedContactTransaction($contact['pubkey']);
+
                     $output->success("Contact " . $address . " unblocked and added", $contactData, "Contact unblocked and added successfully");
                 } else{
                     $output->error("Failed to unblock and add contact " . $address, ErrorCodes::UNBLOCK_ADD_FAILED, 500, ['contact' => $contactData]);
@@ -350,6 +476,9 @@ class ContactService {
                     if ($sendResult['success'] && $this->messageDeliveryService !== null) {
                         $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                     }
+
+                    // Complete the received contact transaction (update status from 'accepted' to 'completed')
+                    $this->completeReceivedContactTransaction($contact['pubkey']);
 
                     $contactData['status'] = 'accepted';
                     $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
@@ -407,6 +536,9 @@ class ContactService {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
+                    // Insert contact transaction (first transaction between users, amount=0)
+                    $this->insertContactTransaction($senderPublicKey, $address, $currency);
+
                     // Update delivery stage: received -> inserted -> completed (using MessageDeliveryService directly)
                     // Contact request phase is complete (awaiting acceptance is a separate phase)
                     if ($this->messageDeliveryService !== null) {
@@ -447,6 +579,12 @@ class ContactService {
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+                    // Insert contact transaction only if one doesn't already exist
+                    // (contact may have been deleted but transaction still exists in history)
+                    if (!$this->contactTransactionExists($senderPublicKey)) {
+                        $this->insertContactTransaction($senderPublicKey, $address, $currency);
+                    }
 
                     // Update delivery stage: warning -> inserted -> completed (using MessageDeliveryService directly)
                     if ($this->messageDeliveryService !== null) {
@@ -545,6 +683,9 @@ class ContactService {
         } else{
             // Contact request is brand new, no prior users exist in any form
             if($this->contactRepository->addPendingContact($senderPublicKey) && $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative)){
+                // Insert received contact transaction with status 'accepted' (pending user acceptance)
+                // This creates the contact transaction on the receiver's side
+                $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress);
                 return $this->contactPayload->buildReceived($senderAddress);
             } else{
                 // Unable to insert contact

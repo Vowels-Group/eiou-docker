@@ -1177,6 +1177,11 @@ html {
     color: #000;
 }
 
+.tx-type-contact {
+    background: #17a2b8;
+    color: #fff;
+}
+
 /* Auto-refresh indicator */
 .tx-refresh-indicator {
     display: none;

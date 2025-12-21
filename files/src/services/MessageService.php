@@ -278,10 +278,14 @@ class MessageService {
         // Handle contact request status update messages
         $status = $decodedMessage['status'];
         $senderAddress = $decodedMessage['senderAddress'];
+        $senderPublicKey = $decodedMessage['senderPublicKey'];
 
         if($status === 'accepted'){
             output(outputContactRequestWasAccepted($senderAddress),'SILENT');
-            $this->contactRepository->updateStatus($decodedMessage['senderPublicKey'], $status);
+            $this->contactRepository->updateStatus($senderPublicKey, $status);
+
+            // Complete the contact transaction (update status from 'sent' to 'completed')
+            $this->transactionRepository->completeContactTransaction($senderPublicKey);
 
             // Return acknowledgment for delivery tracking
             // This confirms the acceptance message was received and processed

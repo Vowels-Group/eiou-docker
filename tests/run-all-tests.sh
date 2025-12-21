@@ -196,6 +196,7 @@ sendAllPeersTest
 routingTest
 contactListTest
 transactionHistoryTest
+contactTransactionTest
 messageDeliveryTest
 cliCommandsTest
 apiEndpointsTest

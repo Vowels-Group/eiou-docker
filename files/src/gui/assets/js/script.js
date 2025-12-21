@@ -195,7 +195,10 @@ function openTransactionModal(index) {
         roleColor = '#17a2b8';
     }
 
-    if (tx.tx_type === 'p2p') {
+    if (tx.tx_type === 'contact') {
+        txTypeBadge = '<span style="background: #17a2b8; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-user-plus"></i> Contact Request</span>';
+        roleBadge = '<span style="background: ' + roleColor + '; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
+    } else if (tx.tx_type === 'p2p') {
         txTypeBadge = '<span style="background: #ffc107; color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas fa-network-wired"></i> P2P Routed</span>';
         roleBadge = '<span style="background: ' + roleColor + '; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;"><i class="fas ' + roleIcon + '"></i> ' + roleLabel + '</span>';
     } else {

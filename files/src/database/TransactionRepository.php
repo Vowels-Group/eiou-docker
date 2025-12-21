@@ -1102,7 +1102,14 @@ class TransactionRepository extends AbstractRepository {
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $request['receiverPublicKey']);
 
         // Determine transaction type
-        $txType = ($request['memo'] === 'standard') ? 'standard' : 'p2p';
+        // 'contact' for contact requests (amount=0), 'standard' for direct transactions, 'p2p' for p2p routing
+        if ($request['memo'] === 'contact' || (isset($request['amount']) && $request['amount'] == 0)) {
+            $txType = 'contact';
+        } elseif ($request['memo'] === 'standard') {
+            $txType = 'standard';
+        } else {
+            $txType = 'p2p';
+        }
         $result = false;
         try{
             $this->beginTransaction();
@@ -1122,6 +1129,7 @@ class TransactionRepository extends AbstractRepository {
             $data = [
                 'tx_type' => $txType,
                 'type' => $type,
+                'status' => $request['status'] ?? 'pending', // Allow custom status, default to pending
                 'sender_address' => $request['senderAddress'],
                 'sender_public_key' => $request['senderPublicKey'],
                 'sender_public_key_hash' => $senderPublicKeyHash,
@@ -1598,5 +1606,88 @@ class TransactionRepository extends AbstractRepository {
         }
 
         return $formattedTransactions;
+    }
+
+    /**
+     * Check if a contact transaction exists for a given receiver public key hash
+     *
+     * Used to prevent duplicate contact transactions when re-adding a deleted contact.
+     *
+     * @param string $receiverPublicKeyHash The hash of the receiver's public key
+     * @return bool True if a contact transaction exists
+     */
+    public function contactTransactionExistsForReceiver(string $receiverPublicKeyHash): bool {
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+
+        $query = "SELECT 1 FROM {$this->tableName}
+                  WHERE tx_type = 'contact'
+                  AND sender_public_key_hash = :sender_public_key_hash
+                  AND receiver_public_key_hash = :receiver_public_key_hash
+                  LIMIT 1";
+
+        $stmt = $this->execute($query, [
+            ':sender_public_key_hash' => $senderPublicKeyHash,
+            ':receiver_public_key_hash' => $receiverPublicKeyHash
+        ]);
+
+        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+    }
+
+    /**
+     * Update contact transaction status to completed when contact is accepted
+     *
+     * Called when receiving an 'accepted' status in handleContactMessageRequest.
+     * Updates the contact transaction from 'sent' to 'completed'.
+     *
+     * @param string $contactPublicKey The public key of the contact who accepted
+     * @return bool True if update was successful
+     */
+    public function completeContactTransaction(string $contactPublicKey): bool {
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
+
+        $query = "UPDATE {$this->tableName}
+                  SET status = 'completed'
+                  WHERE tx_type = 'contact'
+                  AND sender_public_key_hash = :sender_public_key_hash
+                  AND receiver_public_key_hash = :receiver_public_key_hash
+                  AND status = 'sent'";
+
+        $stmt = $this->execute($query, [
+            ':sender_public_key_hash' => $senderPublicKeyHash,
+            ':receiver_public_key_hash' => $receiverPublicKeyHash
+        ]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Update received contact transaction status to completed when user accepts the request
+     *
+     * Called from the receiver's perspective when they accept a contact request.
+     * Updates the contact transaction from 'accepted' to 'completed'.
+     * The sender (contact who sent the request) is the sender_public_key_hash,
+     * and the current user (receiver) is the receiver_public_key_hash.
+     *
+     * @param string $senderPublicKey The public key of the contact who sent the request
+     * @return bool True if update was successful
+     */
+    public function completeReceivedContactTransaction(string $senderPublicKey): bool {
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+
+        $query = "UPDATE {$this->tableName}
+                  SET status = 'completed'
+                  WHERE tx_type = 'contact'
+                  AND sender_public_key_hash = :sender_public_key_hash
+                  AND receiver_public_key_hash = :receiver_public_key_hash
+                  AND status = 'accepted'";
+
+        $stmt = $this->execute($query, [
+            ':sender_public_key_hash' => $senderPublicKeyHash,
+            ':receiver_public_key_hash' => $receiverPublicKeyHash
+        ]);
+
+        return $stmt->rowCount() > 0;
     }
 }
