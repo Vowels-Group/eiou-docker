@@ -53,12 +53,17 @@ class DebugRepository extends AbstractRepository {
             
         try {
             $stmt->execute();
+
+            // Prune old entries occasionally (1 in 10 chance to avoid performance overhead)
+            if (rand(1, 10) === 1) {
+                $this->pruneOldEntries(100);
+            }
         } catch (PDOException $e) {
             // Fallback error logging if debug table insertion fails
             $this->logError("Debug logging failed: ", $e);
-            
+
             // Also log the original debug message
-            $originalMessage = "Original Debug - Level: " . ($data['level'] ?? 'INFO') 
+            $originalMessage = "Original Debug - Level: " . ($data['level'] ?? 'INFO')
                 . ", Message: " . ($data['message'] ?? '')
                 . ", File: " . ($data['file'] ?? 'Unknown')
                 . ", Line: " . ($data['line'] ?? 'Unknown');
@@ -126,6 +131,40 @@ class DebugRepository extends AbstractRepository {
         } catch (PDOException $e) {
             $this->logError("Failed to count debug entries: ", $e);
             return 0;
+        }
+    }
+
+    /**
+     * Prune old debug entries, keeping only the most recent entries
+     *
+     * @param int $keepCount Number of entries to keep
+     * @return bool
+     */
+    public function pruneOldEntries(int $keepCount = 100): bool {
+        if (!$this->getPdo()) {
+            return false;
+        }
+
+        try {
+            // Get the minimum ID to keep
+            $thresholdQuery = "SELECT id FROM {$this->tableName}
+                               ORDER BY timestamp DESC
+                               LIMIT 1 OFFSET :offset";
+            $stmt = $this->pdo->prepare($thresholdQuery);
+            $stmt->bindValue(':offset', $keepCount - 1, PDO::PARAM_INT);
+            $stmt->execute();
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($result && isset($result['id'])) {
+                $deleteQuery = "DELETE FROM {$this->tableName} WHERE id < :threshold_id";
+                $deleteStmt = $this->pdo->prepare($deleteQuery);
+                $deleteStmt->bindValue(':threshold_id', $result['id'], PDO::PARAM_INT);
+                $deleteStmt->execute();
+            }
+            return true;
+        } catch (PDOException $e) {
+            $this->logError("Failed to prune debug entries: ", $e);
+            return false;
         }
     }
 }

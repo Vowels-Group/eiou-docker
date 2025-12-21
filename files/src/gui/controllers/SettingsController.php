@@ -219,7 +219,7 @@ class SettingsController
             // Get MySQL/MariaDB version
             try {
                 require_once __DIR__ . '/../../services/ServiceContainer.php';
-                $serviceContainer = ServiceContainer::getInstance();
+                $serviceContainer = ServiceContainer::getInstance(null, null);
                 $pdo = $serviceContainer->getPdo();
                 if ($pdo) {
                     $stmt = $pdo->query('SELECT VERSION() as version');
@@ -248,7 +248,14 @@ class SettingsController
             $systemInfo['php_ini_path'] = $phpIniPath;
             $systemInfo['php_ini_content'] = 'N/A';
             if ($phpIniPath && $phpIniPath !== 'Not found' && file_exists($phpIniPath) && is_readable($phpIniPath)) {
-                $systemInfo['php_ini_content'] = file_get_contents($phpIniPath);
+                $fileSize = filesize($phpIniPath);
+                if ($fileSize > 51200) { // 50KB
+                    $content = file_get_contents($phpIniPath, false, null, 0, 51200);
+                    $content .= "\n\n[TRUNCATED - Original size: " . round($fileSize/1024, 1) . "KB]";
+                    $systemInfo['php_ini_content'] = $content;
+                } else {
+                    $systemInfo['php_ini_content'] = file_get_contents($phpIniPath);
+                }
             }
 
             // Get Apache config path and contents
@@ -256,7 +263,14 @@ class SettingsController
             $systemInfo['apache_config_path'] = file_exists($apacheConfigPath) ? $apacheConfigPath : 'N/A';
             $systemInfo['apache_config_content'] = 'N/A';
             if (file_exists($apacheConfigPath) && is_readable($apacheConfigPath)) {
-                $systemInfo['apache_config_content'] = file_get_contents($apacheConfigPath);
+                $fileSize = filesize($apacheConfigPath);
+                if ($fileSize > 51200) { // 50KB
+                    $content = file_get_contents($apacheConfigPath, false, null, 0, 51200);
+                    $content .= "\n\n[TRUNCATED - Original size: " . round($fileSize/1024, 1) . "KB]";
+                    $systemInfo['apache_config_content'] = $content;
+                } else {
+                    $systemInfo['apache_config_content'] = file_get_contents($apacheConfigPath);
+                }
             }
 
             // Get PHP extensions with versions
@@ -304,11 +318,34 @@ class SettingsController
                 'eiou_app_log' => $eiouLogContent
             ];
 
+            // Sanitize log content to ensure valid UTF-8
+            if (isset($report['php_errors'])) {
+                $report['php_errors'] = mb_convert_encoding($report['php_errors'] ?? '', 'UTF-8', 'UTF-8');
+            }
+            if (isset($report['apache_errors'])) {
+                $report['apache_errors'] = mb_convert_encoding($report['apache_errors'] ?? '', 'UTF-8', 'UTF-8');
+            }
+            if (isset($report['eiou_app_log'])) {
+                $report['eiou_app_log'] = mb_convert_encoding($report['eiou_app_log'] ?? '', 'UTF-8', 'UTF-8');
+            }
+
             // For now, save the report to a file (email integration would be added later)
             $reportPath = '/tmp/eiou-debug-report-' . date('YmdHis') . '.json';
-            file_put_contents($reportPath, json_encode($report, JSON_PRETTY_PRINT));
 
-            MessageHelper::redirectMessage('Debug report saved to ' . $reportPath . '. Email functionality coming soon.', 'success');
+            $jsonReport = json_encode($report, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE);
+            if ($jsonReport === false) {
+                $jsonError = json_last_error_msg();
+                MessageHelper::redirectMessage('Failed to encode debug report: ' . $jsonError, 'danger');
+                return;
+            }
+
+            $bytesWritten = file_put_contents($reportPath, $jsonReport);
+            if ($bytesWritten === false) {
+                MessageHelper::redirectMessage('Failed to write debug report to file', 'danger');
+                return;
+            }
+
+            MessageHelper::redirectMessage('Debug report saved to ' . $reportPath . ' (' . round($bytesWritten/1024, 1) . ' KB). Email functionality coming soon.', 'success');
 
         } catch (Exception $e) {
             MessageHelper::redirectMessage('Failed to generate debug report: ' . $e->getMessage(), 'error');

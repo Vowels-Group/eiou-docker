@@ -143,9 +143,9 @@
             <span class="debug-count">
                 <?php
                 $debugRepo = $serviceContainer->getDebugRepository();
-                $debugEntries = $debugRepo->getRecentDebugEntries(50);
+                $debugEntries = $debugRepo->getRecentDebugEntries(100);
                 $debugCount = $debugRepo->getDebugEntryCount();
-                echo $debugCount . ' entries';
+                echo 'Showing ' . count($debugEntries) . ' of ' . $debugCount . ' entries';
                 ?>
             </span>
             <form method="POST" style="display: inline;">
