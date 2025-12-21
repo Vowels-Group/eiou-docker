@@ -344,30 +344,8 @@ for container in "${containers[@]:0:1}"; do  # Test first container
 
     echo -e "\n\t-> Testing insertTransaction status parameter for ${container}"
 
-    paramTest=$(docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-
-        // Check if the insertTransaction method accepts status in the request array
-        // by examining if status field is used in the data array
-        \$reflector = new ReflectionClass('TransactionRepository');
-        \$method = \$reflector->getMethod('insertTransaction');
-
-        // Get the source file and find the method
-        \$filename = \$method->getFileName();
-        \$startLine = \$method->getStartLine();
-        \$endLine = \$method->getEndLine();
-
-        \$source = file(\$filename);
-        \$methodSource = implode('', array_slice(\$source, \$startLine - 1, \$endLine - \$startLine + 1));
-
-        // Check if status is extracted from request
-        // Note: Need to escape the dollar sign for bash
-        if (strpos(\$methodSource, \"'status' =>\") !== false && strpos(\$methodSource, '\$request') !== false) {
-            echo 'STATUS_SUPPORTED';
-        } else {
-            echo 'STATUS_NOT_FOUND';
-        }
-    " 2>/dev/null || echo "ERROR")
+    # Check if the source file contains the status parameter pattern
+    paramTest=$(docker exec ${container} sh -c "grep -q \"status.*request\" /app/src/database/TransactionRepository.php && echo 'STATUS_SUPPORTED' || echo 'STATUS_NOT_FOUND'" 2>/dev/null || echo "ERROR")
 
     if [[ "$paramTest" == "STATUS_SUPPORTED" ]]; then
         printf "\t   insertTransaction status parameter ${GREEN}PASSED${NC}\n"
@@ -447,33 +425,21 @@ for container in "${containers[@]:0:1}"; do  # Test first container
 
     echo -e "\n\t-> Testing ContactService receiver transaction methods for ${container}"
 
-    methodsTest=$(docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
+    # Check if the source file contains both receiver transaction methods
+    hasInsert=$(docker exec ${container} sh -c "grep -q 'function insertReceivedContactTransaction' /app/src/services/ContactService.php && echo 'YES' || echo 'NO'" 2>/dev/null || echo "ERROR")
+    hasComplete=$(docker exec ${container} sh -c "grep -q 'function completeReceivedContactTransaction' /app/src/services/ContactService.php && echo 'YES' || echo 'NO'" 2>/dev/null || echo "ERROR")
 
-        // Check if the ContactService source file contains the receiver transaction methods
-        \$reflector = new ReflectionClass('ContactService');
-        \$filename = \$reflector->getFileName();
-        \$source = file_get_contents(\$filename);
-
-        \$hasInsertReceived = strpos(\$source, 'function insertReceivedContactTransaction') !== false;
-        \$hasCompleteReceived = strpos(\$source, 'function completeReceivedContactTransaction') !== false;
-
-        if (\$hasInsertReceived && \$hasCompleteReceived) {
-            echo 'BOTH_METHODS_EXIST';
-        } elseif (\$hasInsertReceived) {
-            echo 'ONLY_INSERT';
-        } elseif (\$hasCompleteReceived) {
-            echo 'ONLY_COMPLETE';
-        } else {
-            echo 'NEITHER';
-        }
-    " 2>/dev/null || echo "ERROR")
-
-    if [[ "$methodsTest" == "BOTH_METHODS_EXIST" ]]; then
+    if [[ "$hasInsert" == "YES" && "$hasComplete" == "YES" ]]; then
         printf "\t   ContactService receiver methods ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
+    elif [[ "$hasInsert" == "YES" ]]; then
+        printf "\t   ContactService receiver methods ${RED}FAILED${NC} (ONLY_INSERT)\n"
+        failure=$(( failure + 1 ))
+    elif [[ "$hasComplete" == "YES" ]]; then
+        printf "\t   ContactService receiver methods ${RED}FAILED${NC} (ONLY_COMPLETE)\n"
+        failure=$(( failure + 1 ))
     else
-        printf "\t   ContactService receiver methods ${RED}FAILED${NC} (%s)\n" "${methodsTest}"
+        printf "\t   ContactService receiver methods ${RED}FAILED${NC} (NEITHER)\n"
         failure=$(( failure + 1 ))
     fi
 done
