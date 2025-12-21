@@ -319,14 +319,26 @@ class SettingsController
             ];
 
             // Sanitize log content to ensure valid UTF-8
+            // Use iconv as fallback if mbstring is not available
+            $sanitizeUtf8 = function($str) {
+                if (empty($str)) return '';
+                if (function_exists('mb_convert_encoding')) {
+                    return mb_convert_encoding($str, 'UTF-8', 'UTF-8');
+                } elseif (function_exists('iconv')) {
+                    return iconv('UTF-8', 'UTF-8//IGNORE', $str);
+                }
+                // Last resort: strip non-UTF-8 characters with regex
+                return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $str);
+            };
+
             if (isset($report['php_errors'])) {
-                $report['php_errors'] = mb_convert_encoding($report['php_errors'] ?? '', 'UTF-8', 'UTF-8');
+                $report['php_errors'] = $sanitizeUtf8($report['php_errors'] ?? '');
             }
             if (isset($report['apache_errors'])) {
-                $report['apache_errors'] = mb_convert_encoding($report['apache_errors'] ?? '', 'UTF-8', 'UTF-8');
+                $report['apache_errors'] = $sanitizeUtf8($report['apache_errors'] ?? '');
             }
             if (isset($report['eiou_app_log'])) {
-                $report['eiou_app_log'] = mb_convert_encoding($report['eiou_app_log'] ?? '', 'UTF-8', 'UTF-8');
+                $report['eiou_app_log'] = $sanitizeUtf8($report['eiou_app_log'] ?? '');
             }
 
             // For now, save the report to a file (email integration would be added later)
