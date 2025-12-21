@@ -79,6 +79,16 @@ class ContactService {
     private ?MessageDeliveryService $messageDeliveryService = null;
 
     /**
+     * @var TransactionRepository Transaction repository for contact transactions
+     */
+    private TransactionRepository $transactionRepository;
+
+    /**
+     * @var TransactionService Transaction service for contact transaction creation
+     */
+    private TransactionService $transactionService;
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact Repository
@@ -88,6 +98,8 @@ class ContactService {
      * @param InputValidator $inputValidator InputValidator Util
      * @param SecureLogger $secureLogger SecureLogger Util
      * @param UserContext $currentUser Current user data
+     * @param TransactionRepository $transactionRepository Transaction Repository
+     * @param TransactionService $transactionService Transaction Service
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      */
     public function __construct(
@@ -98,6 +110,8 @@ class ContactService {
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
         UserContext $currentUser,
+        TransactionRepository $transactionRepository,
+        TransactionService $transactionService,
         ?MessageDeliveryService $messageDeliveryService = null
         )
     {
@@ -108,6 +122,8 @@ class ContactService {
         $this->inputValidator = $inputValidator;
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
+        $this->transactionRepository = $transactionRepository;
+        $this->transactionService = $transactionService;
         $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
         $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->messageDeliveryService = $messageDeliveryService;
@@ -126,6 +142,45 @@ class ContactService {
      */
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Insert a contact transaction after receiving the public key from a contact
+     *
+     * Creates a contact transaction with amount=0 to record the contact request
+     * as the first transaction between users.
+     *
+     * @param string $receiverPublicKey The public key of the contact
+     * @param string $receiverAddress The address of the contact
+     * @param string $currency The currency for the transaction
+     * @return bool True if transaction was inserted successfully
+     */
+    private function insertContactTransaction(string $receiverPublicKey, string $receiverAddress, string $currency): bool {
+        $time = $this->timeUtility->getCurrentMicrotime();
+
+        // Create txid for contact transaction (amount is always 0)
+        $txid = $this->transactionService->createContactTxid([
+            'receiverPublicKey' => $receiverPublicKey,
+            'time' => $time
+        ]);
+
+        // Build transaction data
+        $transactionData = [
+            'senderAddress' => $this->currentUser->getUserAddresses()[0] ?? '',
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+            'receiverAddress' => $receiverAddress,
+            'receiverPublicKey' => $receiverPublicKey,
+            'amount' => 0,
+            'currency' => $currency,
+            'txid' => $txid,
+            'memo' => 'contact',
+            'description' => 'Contact request transaction'
+        ];
+
+        // Insert the contact transaction as 'sent' type
+        $result = $this->transactionRepository->insertTransaction($transactionData, 'sent');
+
+        return $result !== false;
     }
 
     /**
@@ -407,6 +462,9 @@ class ContactService {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
+                    // Insert contact transaction (first transaction between users, amount=0)
+                    $this->insertContactTransaction($senderPublicKey, $address, $currency);
+
                     // Update delivery stage: received -> inserted -> completed (using MessageDeliveryService directly)
                     // Contact request phase is complete (awaiting acceptance is a separate phase)
                     if ($this->messageDeliveryService !== null) {
@@ -447,6 +505,9 @@ class ContactService {
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+                    // Insert contact transaction (first transaction between users, amount=0)
+                    $this->insertContactTransaction($senderPublicKey, $address, $currency);
 
                     // Update delivery stage: warning -> inserted -> completed (using MessageDeliveryService directly)
                     if ($this->messageDeliveryService !== null) {
