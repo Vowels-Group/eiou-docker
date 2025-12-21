@@ -327,7 +327,6 @@ class ServiceContainer {
                 $this->getLogger(),
                 $this->currentUser,
                 $this->getTransactionRepository(),
-                $this->getTransactionService(),
                 $this->getMessageDeliveryService()
             );
         }

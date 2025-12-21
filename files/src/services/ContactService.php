@@ -84,11 +84,6 @@ class ContactService {
     private TransactionRepository $transactionRepository;
 
     /**
-     * @var TransactionService Transaction service for contact transaction creation
-     */
-    private TransactionService $transactionService;
-
-    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact Repository
@@ -99,7 +94,6 @@ class ContactService {
      * @param SecureLogger $secureLogger SecureLogger Util
      * @param UserContext $currentUser Current user data
      * @param TransactionRepository $transactionRepository Transaction Repository
-     * @param TransactionService $transactionService Transaction Service
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      */
     public function __construct(
@@ -111,7 +105,6 @@ class ContactService {
         SecureLogger $secureLogger,
         UserContext $currentUser,
         TransactionRepository $transactionRepository,
-        TransactionService $transactionService,
         ?MessageDeliveryService $messageDeliveryService = null
         )
     {
@@ -123,7 +116,6 @@ class ContactService {
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
         $this->transactionRepository = $transactionRepository;
-        $this->transactionService = $transactionService;
         $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
         $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->messageDeliveryService = $messageDeliveryService;
@@ -145,6 +137,31 @@ class ContactService {
     }
 
     /**
+     * Create unique transaction ID for contact requests
+     *
+     * For contact transactions, amount is always 0, so txid is generated from:
+     * senderPublicKey + receiverPublicKey + 0 + time
+     *
+     * @param string $receiverPublicKey The receiver's public key
+     * @param string $time Timestamp
+     * @return string The generated transaction ID (SHA-256 hash)
+     */
+    private function createContactTxid(string $receiverPublicKey, string $time): string {
+        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $receiverPublicKey . '0' . $time);
+    }
+
+    /**
+     * Check if a contact transaction already exists for the given receiver
+     *
+     * @param string $receiverPublicKey The public key of the contact
+     * @return bool True if contact transaction exists
+     */
+    private function contactTransactionExists(string $receiverPublicKey): bool {
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
+        return $this->transactionRepository->contactTransactionExistsForReceiver($receiverPublicKeyHash);
+    }
+
+    /**
      * Insert a contact transaction after receiving the public key from a contact
      *
      * Creates a contact transaction with amount=0 to record the contact request
@@ -159,10 +176,7 @@ class ContactService {
         $time = $this->timeUtility->getCurrentMicrotime();
 
         // Create txid for contact transaction (amount is always 0)
-        $txid = $this->transactionService->createContactTxid([
-            'receiverPublicKey' => $receiverPublicKey,
-            'time' => $time
-        ]);
+        $txid = $this->createContactTxid($receiverPublicKey, $time);
 
         // Build transaction data
         $transactionData = [
@@ -506,8 +520,11 @@ class ContactService {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
-                    // Insert contact transaction (first transaction between users, amount=0)
-                    $this->insertContactTransaction($senderPublicKey, $address, $currency);
+                    // Insert contact transaction only if one doesn't already exist
+                    // (contact may have been deleted but transaction still exists in history)
+                    if (!$this->contactTransactionExists($senderPublicKey)) {
+                        $this->insertContactTransaction($senderPublicKey, $address, $currency);
+                    }
 
                     // Update delivery stage: warning -> inserted -> completed (using MessageDeliveryService directly)
                     if ($this->messageDeliveryService !== null) {

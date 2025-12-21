@@ -1606,4 +1606,29 @@ class TransactionRepository extends AbstractRepository {
 
         return $formattedTransactions;
     }
+
+    /**
+     * Check if a contact transaction exists for a given receiver public key hash
+     *
+     * Used to prevent duplicate contact transactions when re-adding a deleted contact.
+     *
+     * @param string $receiverPublicKeyHash The hash of the receiver's public key
+     * @return bool True if a contact transaction exists
+     */
+    public function contactTransactionExistsForReceiver(string $receiverPublicKeyHash): bool {
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+
+        $query = "SELECT 1 FROM {$this->tableName}
+                  WHERE tx_type = 'contact'
+                  AND sender_public_key_hash = :sender_public_key_hash
+                  AND receiver_public_key_hash = :receiver_public_key_hash
+                  LIMIT 1";
+
+        $stmt = $this->execute($query, [
+            ':sender_public_key_hash' => $senderPublicKeyHash,
+            ':receiver_public_key_hash' => $receiverPublicKeyHash
+        ]);
+
+        return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+    }
 }
