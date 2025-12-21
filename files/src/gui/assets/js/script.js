@@ -30,6 +30,14 @@ function refreshWalletData() {
     var refreshBtn = document.getElementById('manualRefresh');
     var icon = refreshBtn.querySelector('i');
 
+    // Stop auto-refresh before manual refresh
+    if (typeof window.stopAutoRefresh === 'function') {
+        window.stopAutoRefresh();
+    }
+
+    // Set global flag to prevent race conditions
+    window.isRefreshing = true;
+
     // Show loading state
     icon.className = 'fas fa-spinner fa-spin';
     refreshBtn.disabled = true;

@@ -180,6 +180,11 @@
             if (indicator) indicator.classList.add('active');
 
             autoRefreshInterval = setInterval(function() {
+                // Check if manual refresh is in progress
+                if (window.isRefreshing) {
+                    return;
+                }
+
                 // Use existing check_updates mechanism
                 fetch(window.location.pathname + '?check_updates=1&_=' + Date.now())
                     .then(function(response) {
@@ -195,7 +200,7 @@
         }
     }
 
-    function stopAutoRefresh() {
+    window.stopAutoRefresh = function() {
         if (autoRefreshInterval) {
             clearInterval(autoRefreshInterval);
             autoRefreshInterval = null;

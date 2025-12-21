@@ -313,13 +313,13 @@ class ContactService {
                 'error' => $addressValidation['error']
             ]);
             $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
-            exit(1);
+            return;
         }
         $address = $addressValidation['value'];
 
         if(in_array($address,$this->currentUser->getUserAddresses())){
             $output->error("Cannot add yourself as a contact", ErrorCodes::SELF_CONTACT, 400);
-            exit(1);
+            return;
         }
 
         // Validate and sanitize contact name
@@ -330,7 +330,7 @@ class ContactService {
                 'error' => $nameValidation['error']
             ]);
             $output->error("Invalid name: " . $nameValidation['error'], ErrorCodes::INVALID_NAME, 400);
-            exit(1);
+            return;
         }
         $name = $nameValidation['value'];
 
@@ -342,7 +342,7 @@ class ContactService {
                 'error' => $feeValidation['error']
             ]);
             $output->error("Invalid Fee: " . $feeValidation['error'], ErrorCodes::INVALID_FEE, 400);
-            exit(1);
+            return;
         }
         $fee = $feeValidation['value'] * Constants::FEE_CONVERSION_FACTOR;
 
@@ -354,7 +354,7 @@ class ContactService {
                 'error' => $creditValidation['error']
             ]);
             $output->error("Invalid credit: " . $creditValidation['error'], ErrorCodes::INVALID_CREDIT, 400);
-            exit(1);
+            return;
         }
         $credit = $creditValidation['value'] * Constants::CREDIT_CONVERSION_FACTOR;
 
@@ -366,7 +366,7 @@ class ContactService {
                 'error' => $currencyValidation['error']
             ]);
             $output->error("Invalid currency: " . $currencyValidation['error'], ErrorCodes::INVALID_CURRENCY, 400);
-            exit(1);
+            return;
         }
         $currency = $currencyValidation['value'];
 
@@ -485,7 +485,7 @@ class ContactService {
                 }
                 else {
                     $output->error("Failed to accept contact request from " . $address, ErrorCodes::ACCEPT_FAILED, 500, ['contact' => $contactData]);
-                    exit(1);
+                    return;
                 }
             }
         }
@@ -550,7 +550,7 @@ class ContactService {
                     $output->success("Contact request sent successfully to " . $address, $contactData, "Contact request sent, awaiting acceptance");
                 } else{
                     $output->error("Failed to create contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
-                    exit(1);
+                    return;
                 }
             }
             // Our contact pubkey exists on their end, but not provided address
@@ -608,7 +608,7 @@ class ContactService {
                     'contact' => $contactData,
                     'response' => $responseData
                 ]);
-                exit(1);
+                return;
             }
         } else{
             // No valid response - MessageDeliveryService has already exhausted all retries
@@ -630,7 +630,7 @@ class ContactService {
                     'moved_to_dlq' => $trackingResult['dlq'] ?? false
                 ]
             );
-            exit(1);
+            return;
         }
     }
 
