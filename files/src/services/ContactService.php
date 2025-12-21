@@ -180,7 +180,7 @@ class ContactService {
 
         // Build transaction data
         $transactionData = [
-            'senderAddress' => $this->currentUser->getUserAddresses()[0] ?? '',
+            'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($receiverAddress),
             'senderPublicKey' => $this->currentUser->getPublicKey(),
             'receiverAddress' => $receiverAddress,
             'receiverPublicKey' => $receiverPublicKey,
