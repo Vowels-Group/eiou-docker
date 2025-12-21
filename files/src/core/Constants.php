@@ -84,6 +84,7 @@ class Constants {
     const P2P_DEFAULT_EXPIRATION_SECONDS = 300; // 5 minutes
     const P2P_MIN_EXPIRATION_SECONDS = 60; // Minimum expiration time
     const P2P_REQUEST_LEVEL_VALIDATION_MAX = 1000;
+    const P2P_MAX_ROUTING_LEVEL = 20; // Maximum allowed P2P routing hops
 
     // Contact management
     const CONTACT_DEFAULT_FEE_PERCENT = 0.1;
