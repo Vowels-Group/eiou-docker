@@ -1660,4 +1660,34 @@ class TransactionRepository extends AbstractRepository {
 
         return $stmt->rowCount() > 0;
     }
+
+    /**
+     * Update received contact transaction status to completed when user accepts the request
+     *
+     * Called from the receiver's perspective when they accept a contact request.
+     * Updates the contact transaction from 'accepted' to 'completed'.
+     * The sender (contact who sent the request) is the sender_public_key_hash,
+     * and the current user (receiver) is the receiver_public_key_hash.
+     *
+     * @param string $senderPublicKey The public key of the contact who sent the request
+     * @return bool True if update was successful
+     */
+    public function completeReceivedContactTransaction(string $senderPublicKey): bool {
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+
+        $query = "UPDATE {$this->tableName}
+                  SET status = 'completed'
+                  WHERE tx_type = 'contact'
+                  AND sender_public_key_hash = :sender_public_key_hash
+                  AND receiver_public_key_hash = :receiver_public_key_hash
+                  AND status = 'accepted'";
+
+        $stmt = $this->execute($query, [
+            ':sender_public_key_hash' => $senderPublicKeyHash,
+            ':receiver_public_key_hash' => $receiverPublicKeyHash
+        ]);
+
+        return $stmt->rowCount() > 0;
+    }
 }

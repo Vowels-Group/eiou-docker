@@ -373,4 +373,102 @@ for container in "${containers[@]:0:1}"; do  # Test first container
     fi
 done
 
+# Test 10: Verify completeReceivedContactTransaction method exists
+echo -e "\n[Complete Received Contact Transaction Method Test]"
+
+for container in "${containers[@]:0:1}"; do  # Test first container
+    totaltests=$(( totaltests + 1 ))
+
+    echo -e "\n\t-> Testing completeReceivedContactTransaction method for ${container}"
+
+    methodTest=$(docker exec ${container} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$txRepo = \$app->services->getTransactionRepository();
+
+        // Test that the method exists and can be called
+        if (method_exists(\$txRepo, 'completeReceivedContactTransaction')) {
+            // Call with a fake public key (should return false as no matching tx exists)
+            \$result = \$txRepo->completeReceivedContactTransaction('fake_public_key_' . time());
+            // Method should return false (no rows updated) but not throw an error
+            echo 'METHOD_EXISTS';
+        } else {
+            echo 'METHOD_MISSING';
+        }
+    " 2>/dev/null || echo "ERROR")
+
+    if [[ "$methodTest" == "METHOD_EXISTS" ]]; then
+        printf "\t   completeReceivedContactTransaction method ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   completeReceivedContactTransaction method ${RED}FAILED${NC} (%s)\n" "${methodTest}"
+        failure=$(( failure + 1 ))
+    fi
+done
+
+# Test 11: Verify contact transaction status supports 'accepted' for receiver-side
+echo -e "\n[Receiver Contact Transaction Status Test]"
+
+for container in "${containers[@]:0:1}"; do  # Test first container
+    totaltests=$(( totaltests + 1 ))
+
+    echo -e "\n\t-> Testing receiver contact transaction 'accepted' status support for ${container}"
+
+    # Check that 'accepted' is a valid status in the transactions table
+    statusCheck=$(docker exec ${container} php -r "
+        require_once('${REL_APPLICATION}');
+        \$pdo = Application::getInstance()->services->getPdo();
+        \$result = \$pdo->query(\"SHOW COLUMNS FROM transactions LIKE 'status'\");
+        \$row = \$result->fetch(PDO::FETCH_ASSOC);
+        echo \$row['Type'];
+    " 2>/dev/null || echo "ERROR")
+
+    if [[ "$statusCheck" == *"accepted"* ]]; then
+        printf "\t   'accepted' status in schema ${GREEN}PASSED${NC}\n"
+        printf "\t   Status values: %s\n" "${statusCheck}"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   'accepted' status in schema ${RED}FAILED${NC}\n"
+        printf "\t   Status values: %s\n" "${statusCheck}"
+        failure=$(( failure + 1 ))
+    fi
+done
+
+# Test 12: Verify receiver-side contact transaction flow methods exist in ContactService
+echo -e "\n[ContactService Receiver Methods Test]"
+
+for container in "${containers[@]:0:1}"; do  # Test first container
+    totaltests=$(( totaltests + 1 ))
+
+    echo -e "\n\t-> Testing ContactService receiver transaction methods for ${container}"
+
+    methodsTest=$(docker exec ${container} php -r "
+        require_once('${REL_APPLICATION}');
+
+        // Check if the ContactService has the receiver transaction methods
+        \$reflector = new ReflectionClass('ContactService');
+
+        \$hasInsertReceived = \$reflector->hasMethod('insertReceivedContactTransaction');
+        \$hasCompleteReceived = \$reflector->hasMethod('completeReceivedContactTransaction');
+
+        if (\$hasInsertReceived && \$hasCompleteReceived) {
+            echo 'BOTH_METHODS_EXIST';
+        } elseif (\$hasInsertReceived) {
+            echo 'ONLY_INSERT';
+        } elseif (\$hasCompleteReceived) {
+            echo 'ONLY_COMPLETE';
+        } else {
+            echo 'NEITHER';
+        }
+    " 2>/dev/null || echo "ERROR")
+
+    if [[ "$methodsTest" == "BOTH_METHODS_EXIST" ]]; then
+        printf "\t   ContactService receiver methods ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   ContactService receiver methods ${RED}FAILED${NC} (%s)\n" "${methodsTest}"
+        failure=$(( failure + 1 ))
+    fi
+done
+
 succesrate "${totaltests}" "${passed}" "${failure}" "'contact transaction'"
