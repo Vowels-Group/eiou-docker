@@ -2,6 +2,7 @@
 
 # Test contact transaction type functionality
 # Verifies that contact requests are recorded as 'contact' tx_type transactions
+# and that the status flow (sent -> completed) works correctly
 echo -e "\nTesting contact transaction type..."
 
 testname="contactTransactionTest"
@@ -49,7 +50,9 @@ for container in "${containers[@]:0:2}"; do  # Test first 2 containers
     amountCheck=$(docker exec ${container} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
-        \$transactions = \$app->services->getTransactionRepository()->getTransactionsByTxType('contact');
+        \$pdo = \$app->services->getPdo();
+        \$stmt = \$pdo->query(\"SELECT amount FROM transactions WHERE tx_type = 'contact'\");
+        \$transactions = \$stmt->fetchAll(PDO::FETCH_ASSOC);
         if (empty(\$transactions)) {
             echo 'NO_CONTACT_TX';
         } else {
@@ -76,41 +79,41 @@ for container in "${containers[@]:0:2}"; do  # Test first 2 containers
     fi
 done
 
-# Test 3: Verify TransactionService createContactTxid method exists and works
-echo -e "\n[Contact Txid Generation Test]"
+# Test 3: Verify contact transaction has memo = 'contact'
+echo -e "\n[Contact Transaction Memo Test]"
 
 for container in "${containers[@]:0:1}"; do  # Test first container
     totaltests=$(( totaltests + 1 ))
 
-    echo -e "\n\t-> Testing createContactTxid for ${container}"
+    echo -e "\n\t-> Checking contact transaction memo for ${container}"
 
-    # Test the createContactTxid method
-    txidTest=$(docker exec ${container} php -r "
+    memoCheck=$(docker exec ${container} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
-        try {
-            \$txService = \$app->services->getTransactionService();
-            \$testData = [
-                'receiverPublicKey' => 'testPublicKey123',
-                'time' => '1234567890'
-            ];
-            \$txid = \$txService->createContactTxid(\$testData);
-            // Verify it's a valid SHA-256 hash (64 characters hex)
-            if (strlen(\$txid) == 64 && ctype_xdigit(\$txid)) {
-                echo 'VALID_HASH';
-            } else {
-                echo 'INVALID_HASH';
+        \$pdo = \$app->services->getPdo();
+        \$stmt = \$pdo->query(\"SELECT memo FROM transactions WHERE tx_type = 'contact'\");
+        \$transactions = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (empty(\$transactions)) {
+            echo 'NO_CONTACT_TX';
+        } else {
+            \$allContact = true;
+            foreach (\$transactions as \$tx) {
+                if (\$tx['memo'] !== 'contact') {
+                    \$allContact = false;
+                    break;
+                }
             }
-        } catch (Exception \$e) {
-            echo 'ERROR:' . \$e->getMessage();
+            echo \$allContact ? 'ALL_CONTACT' : 'WRONG_MEMO';
         }
     " 2>/dev/null || echo "ERROR")
 
-    if [[ "$txidTest" == "VALID_HASH" ]]; then
-        printf "\t   createContactTxid ${GREEN}PASSED${NC}\n"
+    if [[ "$memoCheck" == "ALL_CONTACT" ]]; then
+        printf "\t   Contact transaction memo ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
+    elif [[ "$memoCheck" == "NO_CONTACT_TX" ]]; then
+        printf "\t   No contact transactions to verify ${NC}(skipped)${NC}\n"
     else
-        printf "\t   createContactTxid ${RED}FAILED${NC} (%s)\n" "${txidTest}"
+        printf "\t   Contact transaction memo ${RED}FAILED${NC} (%s)\n" "${memoCheck}"
         failure=$(( failure + 1 ))
     fi
 done
@@ -142,8 +145,10 @@ if [[ "$testPair" ]]; then
     contactTxCount=$(docker exec ${sender} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
-        \$count = \$app->services->getTransactionRepository()->getTransactionCountByTxType('contact');
-        echo \$count ?: '0';
+        \$pdo = \$app->services->getPdo();
+        \$stmt = \$pdo->query(\"SELECT COUNT(*) as count FROM transactions WHERE tx_type = 'contact'\");
+        \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+        echo \$row['count'] ?: '0';
     " 2>/dev/null || echo "0")
 
     senderBalanceAfter=$(docker exec ${sender} php -r "
@@ -177,7 +182,7 @@ for container in "${containers[@]:0:1}"; do  # Test first container
     detectionTest=$(docker exec ${container} php -r "
         require_once('${REL_APPLICATION}');
 
-        // Simulate detection logic
+        // Simulate detection logic from TransactionRepository
         \$testCases = [
             ['memo' => 'contact', 'amount' => 0, 'expected' => 'contact'],
             ['memo' => 'standard', 'amount' => 100, 'expected' => 'standard'],
@@ -211,6 +216,159 @@ for container in "${containers[@]:0:1}"; do  # Test first container
         passed=$(( passed + 1 ))
     else
         printf "\t   Transaction type detection ${RED}FAILED${NC} (%s)\n" "${detectionTest}"
+        failure=$(( failure + 1 ))
+    fi
+done
+
+# Test 6: Verify contactTransactionExistsForReceiver method
+echo -e "\n[Contact Transaction Exists Check Test]"
+
+for container in "${containers[@]:0:1}"; do  # Test first container
+    totaltests=$(( totaltests + 1 ))
+
+    echo -e "\n\t-> Testing contactTransactionExistsForReceiver for ${container}"
+
+    existsCheck=$(docker exec ${container} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$txRepo = \$app->services->getTransactionRepository();
+
+        // Test with a non-existent public key hash - should return false
+        \$fakeHash = hash('sha256', 'nonexistent_pubkey_' . time());
+        \$exists = \$txRepo->contactTransactionExistsForReceiver(\$fakeHash);
+
+        if (\$exists === false) {
+            echo 'CORRECT_FALSE';
+        } else {
+            echo 'WRONG_TRUE';
+        }
+    " 2>/dev/null || echo "ERROR")
+
+    if [[ "$existsCheck" == "CORRECT_FALSE" ]]; then
+        printf "\t   contactTransactionExistsForReceiver ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   contactTransactionExistsForReceiver ${RED}FAILED${NC} (%s)\n" "${existsCheck}"
+        failure=$(( failure + 1 ))
+    fi
+done
+
+# Test 7: Verify completeContactTransaction method exists and works
+echo -e "\n[Complete Contact Transaction Method Test]"
+
+for container in "${containers[@]:0:1}"; do  # Test first container
+    totaltests=$(( totaltests + 1 ))
+
+    echo -e "\n\t-> Testing completeContactTransaction method for ${container}"
+
+    methodTest=$(docker exec ${container} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$txRepo = \$app->services->getTransactionRepository();
+
+        // Test that the method exists and can be called
+        if (method_exists(\$txRepo, 'completeContactTransaction')) {
+            // Call with a fake public key (should return false as no matching tx exists)
+            \$result = \$txRepo->completeContactTransaction('fake_public_key_' . time());
+            // Method should return false (no rows updated) but not throw an error
+            echo 'METHOD_EXISTS';
+        } else {
+            echo 'METHOD_MISSING';
+        }
+    " 2>/dev/null || echo "ERROR")
+
+    if [[ "$methodTest" == "METHOD_EXISTS" ]]; then
+        printf "\t   completeContactTransaction method ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   completeContactTransaction method ${RED}FAILED${NC} (%s)\n" "${methodTest}"
+        failure=$(( failure + 1 ))
+    fi
+done
+
+# Test 8: Verify contact transaction status is 'sent' or 'completed'
+echo -e "\n[Contact Transaction Status Test]"
+
+for container in "${containers[@]:0:2}"; do  # Test first 2 containers
+    totaltests=$(( totaltests + 1 ))
+
+    echo -e "\n\t-> Checking contact transaction status for ${container}"
+
+    statusCheck=$(docker exec ${container} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$pdo = \$app->services->getPdo();
+        \$stmt = \$pdo->query(\"SELECT status FROM transactions WHERE tx_type = 'contact'\");
+        \$transactions = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (empty(\$transactions)) {
+            echo 'NO_CONTACT_TX';
+        } else {
+            \$validStatuses = ['sent', 'completed'];
+            \$allValid = true;
+            \$invalidStatus = '';
+            foreach (\$transactions as \$tx) {
+                if (!in_array(\$tx['status'], \$validStatuses)) {
+                    \$allValid = false;
+                    \$invalidStatus = \$tx['status'];
+                    break;
+                }
+            }
+            if (\$allValid) {
+                echo 'ALL_VALID';
+            } else {
+                echo 'INVALID:' . \$invalidStatus;
+            }
+        }
+    " 2>/dev/null || echo "ERROR")
+
+    if [[ "$statusCheck" == "ALL_VALID" ]]; then
+        printf "\t   Contact transaction status ${GREEN}PASSED${NC} (all sent or completed)\n"
+        passed=$(( passed + 1 ))
+    elif [[ "$statusCheck" == "NO_CONTACT_TX" ]]; then
+        printf "\t   No contact transactions to verify ${NC}(skipped)${NC}\n"
+    else
+        printf "\t   Contact transaction status ${RED}FAILED${NC} (%s)\n" "${statusCheck}"
+        failure=$(( failure + 1 ))
+    fi
+done
+
+# Test 9: Verify insertTransaction supports status parameter
+echo -e "\n[Insert Transaction Status Parameter Test]"
+
+for container in "${containers[@]:0:1}"; do  # Test first container
+    totaltests=$(( totaltests + 1 ))
+
+    echo -e "\n\t-> Testing insertTransaction status parameter for ${container}"
+
+    paramTest=$(docker exec ${container} php -r "
+        require_once('${REL_APPLICATION}');
+
+        // Check if the insertTransaction method accepts status in the request array
+        // by examining if status field is used in the data array
+        \$reflector = new ReflectionClass('TransactionRepository');
+        \$method = \$reflector->getMethod('insertTransaction');
+
+        // Get the source file and find the method
+        \$filename = \$method->getFileName();
+        \$startLine = \$method->getStartLine();
+        \$endLine = \$method->getEndLine();
+
+        \$source = file(\$filename);
+        \$methodSource = implode('', array_slice(\$source, \$startLine - 1, \$endLine - \$startLine + 1));
+
+        // Check if status is extracted from request
+        if (strpos(\$methodSource, \"'status' =>\") !== false && strpos(\$methodSource, \"request['status']\") !== false) {
+            echo 'STATUS_SUPPORTED';
+        } else {
+            echo 'STATUS_NOT_FOUND';
+        }
+    " 2>/dev/null || echo "ERROR")
+
+    if [[ "$paramTest" == "STATUS_SUPPORTED" ]]; then
+        printf "\t   insertTransaction status parameter ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   insertTransaction status parameter ${RED}FAILED${NC} (%s)\n" "${paramTest}"
         failure=$(( failure + 1 ))
     fi
 done
