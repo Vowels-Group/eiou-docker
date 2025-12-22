@@ -4,7 +4,10 @@
  *
  * Copyright 2025
  * Handles HTTP POST requests for contact-related actions.
+ * Uses JSON output mode for proper message handling (Issue #295).
  */
+
+require_once __DIR__ . '/../../cli/CliOutputManager.php';
 
 class ContactController
 {
@@ -25,7 +28,7 @@ class ContactController
      * @param ContactService $contactService
      */
     public function __construct(
-        Session $session, 
+        Session $session,
         ContactService $contactService
         )
     {
@@ -38,6 +41,7 @@ class ContactController
      *
      * This method uses InputValidator and Security classes to validate and sanitize
      * all user input before processing the contact addition.
+     * Uses JSON output mode for structured error handling.
      *
      * @return void
      */
@@ -102,17 +106,22 @@ class ContactController
             $fee = $feeValidation['value'];
             $credit = $creditValidation['value'];
             $currency = $currencyValidation['value'];
-            // Create argv array for addContact function
-            $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency];
+
+            // Create argv array with --json flag for structured output
+            $argv = ['eiou', 'add', $address, $name, $fee, $credit, $currency, '--json'];
+
+            // Create CliOutputManager with JSON mode enabled
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
 
             // Capture output
             ob_start();
             try {
-                $this->contactService->addContact($argv);
+                $this->contactService->addContact($argv, $outputManager);
                 $output = ob_get_clean();
 
-                // Parse the output to determine message type and content
-                $messageInfo = MessageHelper::parseContactOutput($output);
+                // Parse the JSON output to determine message type and content
+                $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {
@@ -134,6 +143,8 @@ class ContactController
     /**
      * Handle accept contact request
      *
+     * Uses JSON output mode for structured error handling.
+     *
      * @return void
      */
     public function handleAcceptContact(): void
@@ -151,17 +162,21 @@ class ContactController
             $message = 'All fields are required to accept a contact';
             $messageType = 'error';
         } else {
-            // Create argv array for addContact function
-            $argv = ['eiou', 'add', $contactAddress, $contactName, $contactFee, $contactCredit, $contactCurrency];
+            // Create argv array with --json flag for structured output
+            $argv = ['eiou', 'add', $contactAddress, $contactName, $contactFee, $contactCredit, $contactCurrency, '--json'];
+
+            // Create CliOutputManager with JSON mode enabled
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
 
             // Capture output
             ob_start();
             try {
-                $this->contactService->addContact($argv);
+                $this->contactService->addContact($argv, $outputManager);
                 $output = ob_get_clean();
 
-                // Parse the output to determine message type and content
-                $messageInfo = MessageHelper::parseContactOutput($output);
+                // Parse the JSON output to determine message type and content
+                $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {
@@ -183,6 +198,8 @@ class ContactController
     /**
      * Handle delete contact request
      *
+     * Uses JSON output mode for structured error handling.
+     *
      * @return void
      */
     public function handleDeleteContact(): void
@@ -196,14 +213,21 @@ class ContactController
             $message = 'Contact address is required';
             $messageType = 'error';
         } else {
+            // Create argv with --json flag for structured output
+            $argv = ['eiou', 'delete', $contactAddress, '--json'];
+
+            // Create CliOutputManager with JSON mode enabled
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
+
             // Capture output
             ob_start();
             try {
-                $this->contactService->deleteContact($contactAddress);
+                $this->contactService->deleteContact($contactAddress, $outputManager);
                 $output = ob_get_clean();
 
-                // Parse the output to determine message type and content
-                $messageInfo = MessageHelper::parseContactOutput($output);
+                // Parse the JSON output to determine message type and content
+                $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {
@@ -225,6 +249,8 @@ class ContactController
     /**
      * Handle block contact request
      *
+     * Uses JSON output mode for structured error handling.
+     *
      * @return void
      */
     public function handleBlockContact(): void
@@ -238,14 +264,21 @@ class ContactController
             $message = 'Contact address is required';
             $messageType = 'error';
         } else {
+            // Create argv with --json flag for structured output
+            $argv = ['eiou', 'block', $contactAddress, '--json'];
+
+            // Create CliOutputManager with JSON mode enabled
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
+
             // Capture output
             ob_start();
             try {
-                $this->contactService->blockContact($contactAddress);
+                $this->contactService->blockContact($contactAddress, $outputManager);
                 $output = ob_get_clean();
 
-                // Parse the output to determine message type and content
-                $messageInfo = MessageHelper::parseContactOutput($output);
+                // Parse the JSON output to determine message type and content
+                $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {
@@ -267,6 +300,8 @@ class ContactController
     /**
      * Handle unblock contact request
      *
+     * Uses JSON output mode for structured error handling.
+     *
      * @return void
      */
     public function handleUnblockContact(): void
@@ -280,14 +315,21 @@ class ContactController
             $message = 'Contact address is required';
             $messageType = 'error';
         } else {
+            // Create argv with --json flag for structured output
+            $argv = ['eiou', 'unblock', $contactAddress, '--json'];
+
+            // Create CliOutputManager with JSON mode enabled
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
+
             // Capture output
             ob_start();
             try {
-                $this->contactService->unblockContact($contactAddress);
+                $this->contactService->unblockContact($contactAddress, $outputManager);
                 $output = ob_get_clean();
 
-                // Parse the output to determine message type and content
-                $messageInfo = MessageHelper::parseContactOutput($output);
+                // Parse the JSON output to determine message type and content
+                $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {
@@ -309,6 +351,8 @@ class ContactController
     /**
      * Handle edit contact request
      *
+     * Uses JSON output mode for structured error handling.
+     *
      * @return void
      */
     public function handleEditContact(): void
@@ -326,17 +370,21 @@ class ContactController
             $message = 'All fields are required to edit a contact';
             $messageType = 'error';
         } else {
-            // Create argv array for updateContact function
-            $argv = ['eiou', 'update', $contactAddress, 'all', $contactName, $contactFee, $contactCredit];
+            // Create argv array with --json flag for structured output
+            $argv = ['eiou', 'update', $contactAddress, 'all', $contactName, $contactFee, $contactCredit, '--json'];
+
+            // Create CliOutputManager with JSON mode enabled
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
 
             // Capture output
             ob_start();
             try {
-                $this->contactService->updateContact($argv);
+                $this->contactService->updateContact($argv, $outputManager);
                 $output = ob_get_clean();
 
-                // Parse the output to determine message type and content
-                $messageInfo = MessageHelper::parseContactOutput($output);
+                // Parse the JSON output to determine message type and content
+                $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
             } catch (\Exception $e) {

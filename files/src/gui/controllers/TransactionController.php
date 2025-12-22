@@ -48,6 +48,7 @@ class TransactionController
      *
      * This method uses InputValidator and Security classes to validate and sanitize
      * all user input before processing the transaction.
+     * Uses JSON output mode for proper message handling (Issue #294, #295).
      *
      * @return void
      */
@@ -59,6 +60,7 @@ class TransactionController
         // Import validation and security classes
         require_once __DIR__ . '/../../utils/InputValidator.php';
         require_once __DIR__ . '/../../utils/Security.php';
+        require_once __DIR__ . '/../../cli/CliOutputManager.php';
 
         // Sanitize input data
         $recipient = Security::sanitizeInput($_POST['recipient'] ?? '');
@@ -121,21 +123,24 @@ class TransactionController
             $description = Security::sanitizeInput($_POST['description'] ?? '');
             $description = !empty($description) ? $description : null;
 
-            // Create argv array for sendEiou function
-            $argv = ['eiou', 'send', $finalRecipient, $amount, $currency, $description];
+            // Create argv array with --json flag for structured output
+            $argv = ['eiou', 'send', $finalRecipient, $amount, $currency, $description, '--json'];
+
+            // Create CliOutputManager with JSON mode enabled
+            CliOutputManager::resetInstance();
+            $outputManager = new CliOutputManager($argv);
 
             // Capture output
             ob_start();
             try {
-                if (method_exists($this->transactionService,'sendEiou')) {
-                    $this->transactionService->sendEiou($argv);
+                if (method_exists($this->transactionService, 'sendEiou')) {
+                    $this->transactionService->sendEiou($argv, $outputManager);
                     $output = ob_get_clean();
-                    $message = trim($output);
-                    if (strpos($output, 'ERROR') !== false || strpos($output, 'Failed') !== false) {
-                        $messageType = 'error';
-                    } else {
-                        $messageType = 'success';
-                    }
+
+                    // Parse JSON output using MessageHelper
+                    $messageInfo = MessageHelper::parseCliJsonOutput($output);
+                    $message = $messageInfo['message'];
+                    $messageType = $messageInfo['type'];
                 } else {
                     ob_end_clean();
                     $message = 'Transaction service not available';
@@ -143,7 +148,14 @@ class TransactionController
                 }
             } catch (\Exception $e) {
                 ob_end_clean();
-                $message = 'Internal server error: ' . $e->getMessage();
+                // Use SecureLogger for exception logging
+                SecureLogger::logException($e, [
+                    'controller' => 'TransactionController',
+                    'action' => __FUNCTION__
+                ]);
+                $message = Constants::APP_ENV !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error';
                 $messageType = 'error';
             }
         }
