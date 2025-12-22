@@ -733,10 +733,11 @@ class ContactService {
                 if ($existingContact && $existingContact['status'] === 'pending') {
                     // Contact exists as pending - treat this as a re-confirmation of their request
                     // Return 'received' so sender handles it like a new contact (no sync attempt)
-                    return $this->contactPayload->buildReceived($senderAddress, $myAddresses);
+                    // Don't include other addresses for pending contacts (privacy)
+                    return $this->contactPayload->buildReceived($senderAddress);
                 }
                 // Contact is accepted or other status - return warning (already exists)
-                // Include all our known addresses so sender can store them
+                // Include all our known addresses so sender can store them (re-add scenario)
                 return $this->contactPayload->buildAlreadyExists($senderAddress, $myAddresses);
             } else{
                 // Address unknown prior but pubkey exists (known contact, unknown address)
@@ -745,13 +746,14 @@ class ContactService {
                 if ($existingContact && $existingContact['status'] === 'pending') {
                     // Contact is pending - update their address and return 'received'
                     // so sender handles it like a new contact request
+                    // Don't include other addresses for pending contacts (privacy)
                     if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
-                        return $this->contactPayload->buildReceived($senderAddress, $myAddresses);
+                        return $this->contactPayload->buildReceived($senderAddress);
                     }
                 }
                 // Contact is accepted - update address and return 'updated'
+                // Include all our known addresses so sender can store them (re-add scenario)
                 if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
-                    // Include all our known addresses so sender can store them
                     return $this->contactPayload->buildUpdated($senderAddress, $myAddresses);
                 } else{
                     // Unable to update contact
