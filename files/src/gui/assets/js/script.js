@@ -3,6 +3,7 @@
 // Operation timeout configuration (15 seconds)
 var OPERATION_TIMEOUT_MS = 15000;
 var operationTimeoutId = null;
+var countdownIntervalId = null;
 
     // Simple script to show/hide the floating action button
     // This is minimal JavaScript that should work in Tor Browser
@@ -495,13 +496,36 @@ function hideLoader() {
 
 // Operation Timeout Functions for 15-second reload
 function startOperationTimeout(operationType, timeoutMessage) {
-    // Clear any existing timeout
+    // Clear any existing timeout and countdown
     if (operationTimeoutId) {
         clearTimeout(operationTimeoutId);
     }
+    if (countdownIntervalId) {
+        clearInterval(countdownIntervalId);
+    }
+
+    // Show countdown in loading overlay
+    var countdownEl = document.getElementById('loadingCountdown');
+    var countdownSeconds = Math.floor(OPERATION_TIMEOUT_MS / 1000);
+    var startTime = Date.now();
+
+    if (countdownEl) {
+        countdownEl.textContent = 'Page will refresh automatically in ' + countdownSeconds + 's';
+        countdownEl.style.display = 'block';
+
+        // Update countdown every second
+        countdownIntervalId = setInterval(function() {
+            var elapsed = Math.floor((Date.now() - startTime) / 1000);
+            var remaining = countdownSeconds - elapsed;
+            if (remaining > 0) {
+                countdownEl.textContent = 'Page will refresh automatically in ' + remaining + 's';
+            } else {
+                countdownEl.textContent = 'Refreshing...';
+            }
+        }, 1000);
+    }
 
     // Set 15-second timeout to reload page
-    // Only store the message when timeout actually fires (not on successful completion)
     operationTimeoutId = setTimeout(function() {
         // Store message only when timeout fires, so it shows after reload
         sessionStorage.setItem('eiou_pending_operation', operationType);
@@ -514,6 +538,15 @@ function clearOperationTimeout() {
     if (operationTimeoutId) {
         clearTimeout(operationTimeoutId);
         operationTimeoutId = null;
+    }
+    if (countdownIntervalId) {
+        clearInterval(countdownIntervalId);
+        countdownIntervalId = null;
+    }
+    // Hide countdown element
+    var countdownEl = document.getElementById('loadingCountdown');
+    if (countdownEl) {
+        countdownEl.style.display = 'none';
     }
     sessionStorage.removeItem('eiou_pending_operation');
     sessionStorage.removeItem('eiou_timeout_message');

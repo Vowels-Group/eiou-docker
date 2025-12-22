@@ -7,7 +7,7 @@ require_once __DIR__ . '/AbstractRepository.php';
  * Message Delivery Repository
  *
  * Manages message delivery tracking, multi-stage acknowledgments, and retry logic.
- * Supports the Transaction Reliability & Message Handling System (Issue #139).
+ * Supports the Transaction Reliability & Message Handling System.
  *
  * @package Database\Repository
  */

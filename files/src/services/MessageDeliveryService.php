@@ -11,7 +11,7 @@ require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
  * Handles reliable message delivery with multi-stage acknowledgments,
  * exponential backoff retry, and dead letter queue integration.
  *
- * Implements the Transaction Reliability & Message Handling System (Issue #139).
+ * Implements the Transaction Reliability & Message Handling System.
  *
  * @package Services
  */

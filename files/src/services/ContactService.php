@@ -670,8 +670,8 @@ class ContactService {
             $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
             if($contactAddresses[$transportIndex] === $senderAddress){
                 // Address already exists - check contact status for re-add scenario
-                // Fix for Issue #301: When a deleted contact re-adds us, we may have them
-                // as 'pending' (they added us before but we never accepted, then they deleted and re-added)
+                // When a deleted contact re-adds us, we may have them as 'pending'
+                // (they added us before but we never accepted, then they deleted and re-added)
                 $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
                 if ($existingContact && $existingContact['status'] === 'pending') {
                     // Contact exists as pending - treat this as a re-confirmation of their request
@@ -682,6 +682,16 @@ class ContactService {
                 return $this->contactPayload->buildAlreadyExists($senderAddress);
             } else{
                 // Address unknown prior but pubkey exists (known contact, unknown address)
+                // Check contact status - if pending, treat as re-confirmation with new address
+                $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
+                if ($existingContact && $existingContact['status'] === 'pending') {
+                    // Contact is pending - update their address and return 'received'
+                    // so sender handles it like a new contact request
+                    if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
+                        return $this->contactPayload->buildReceived($senderAddress);
+                    }
+                }
+                // Contact is accepted - update address and return 'updated'
                 if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
                     return $this->contactPayload->buildUpdated($senderAddress);
                 } else{

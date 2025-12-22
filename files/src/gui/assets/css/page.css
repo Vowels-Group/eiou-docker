@@ -1381,6 +1381,15 @@ html {
     font-family: monospace;
 }
 
+.loading-countdown {
+    color: #ffc107;
+    font-size: 0.8rem;
+    text-align: center;
+    margin-top: 0.75rem;
+    font-weight: 500;
+    display: none;
+}
+
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
@@ -1598,7 +1607,7 @@ html {
     margin-left: 0.25rem;
 }
 
-/* Override balance text colors when inside balance-display (Issue #271) */
+/* Override balance text colors when inside balance-display */
 .balance-display .balance-amount {
     color: white;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);

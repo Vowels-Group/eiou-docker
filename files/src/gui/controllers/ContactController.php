@@ -4,7 +4,7 @@
  *
  * Copyright 2025
  * Handles HTTP POST requests for contact-related actions.
- * Uses JSON output mode for proper message handling (Issue #295).
+ * Uses JSON output mode for proper message handling.
  */
 
 require_once __DIR__ . '/../../cli/CliOutputManager.php';

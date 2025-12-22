@@ -48,7 +48,7 @@ class TransactionController
      *
      * This method uses InputValidator and Security classes to validate and sanitize
      * all user input before processing the transaction.
-     * Uses JSON output mode for proper message handling (Issue #294, #295).
+     * Uses JSON output mode for proper message handling.
      *
      * @return void
      */
