@@ -290,7 +290,6 @@ class SettingsController
 
             // Get defaultconfig.json values
             $defaultConfigPath = '/etc/eiou/defaultconfig.json';
-            $systemInfo['user_config_path'] = $defaultConfigPath;
             $systemInfo['user_config'] = [];
             if (file_exists($defaultConfigPath) && is_readable($defaultConfigPath)) {
                 $defaultConfigData = json_decode(file_get_contents($defaultConfigPath), true);
