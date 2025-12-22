@@ -529,6 +529,28 @@ class ContactService {
 
         if (isset($responseData['status'])){
             $senderPublicKey = $responseData['senderPublicKey'];
+            $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+
+            // Check if we already have this contact stored locally (under a different address)
+            // This handles the case where user adds a known contact via new address type
+            $existingLocalContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
+            if ($existingLocalContact) {
+                // Contact already exists locally - just update the address with new transport type
+                if ($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)) {
+                    if ($this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
+
+                    $contactData['status'] = $existingLocalContact['status'];
+                    $contactData['pubkey'] = $senderPublicKey;
+                    $output->success("Contact address updated for " . $name, $contactData, "New address type added to existing contact");
+                    return;
+                } else {
+                    $output->error("Failed to add new address for existing contact", ErrorCodes::ADDRESS_UPDATE_FAILED, 500, ['contact' => $contactData]);
+                    return;
+                }
+            }
+
             // Contact request was received (initial insert on their end as pending, awaiting acceptance)
             if($responseData['status'] === 'received'){
                 // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
@@ -554,23 +576,35 @@ class ContactService {
                 }
             }
             // Our contact pubkey exists on their end, but not provided address
-            //  we are known under a different address or transport type
+            // we are known under a different address or transport type
+            // Note: If contact existed locally, we would have returned early above
+            // So reaching here means contact was deleted locally - need to re-insert and sync
             elseif($responseData['status'] === 'updated'){
                 $senderAddress = $responseData['senderAddress'];
-                $senderPublicKey = $responseData['senderPublicKey'];
-                $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
-                // Update contact address on our end
-                if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
-                    // Update delivery stage: updated -> inserted -> completed (using MessageDeliveryService directly)
+                // Contact was deleted locally - re-insert and sync
+                if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+                    $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+                    if (!$this->contactTransactionExists($senderPublicKey)) {
+                        $this->insertContactTransaction($senderPublicKey, $address, $currency);
+                    }
+
                     if ($this->messageDeliveryService !== null) {
                         $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                     }
 
-                    $contactData['status'] = 'updated';
-                    $contactData['updated_address'] = $senderAddress;
-                    $output->success("Contact address updated with " . $address, $contactData, "Contact address updated successfully");
-                } else{
-                    $output->error("Failed to update contact address with " . $address, ErrorCodes::ADDRESS_UPDATE_FAILED, 500, ['contact' => $contactData]);
+                    // Sync to confirm mutual acceptance status
+                    if(Application::getInstance()->services->getSyncService()->syncSingleContact($address, 'SILENT')){
+                        $contactData['status'] = 'accepted';
+                        $contactData['pubkey'] = $senderPublicKey;
+                        $output->success("Contact re-added and synced with " . $address, $contactData, "Contact created successfully");
+                    } else {
+                        $contactData['status'] = 'pending';
+                        $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
+                    }
+                } else {
+                    $output->error("Failed to re-add contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
                 }
             }
             // Our contact pubkey and adress both exist on their end (Case when we delete the contact and try re-adding it)
@@ -669,10 +703,29 @@ class ContactService {
             $contactAddresses = $this->addressRepository->lookupByPubkeyHash($senderPublicKeyHash);
             $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
             if($contactAddresses[$transportIndex] === $senderAddress){
-                // Address already exists (Not a new contact)
+                // Address already exists - check contact status for re-add scenario
+                // When a deleted contact re-adds us, we may have them as 'pending'
+                // (they added us before but we never accepted, then they deleted and re-added)
+                $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
+                if ($existingContact && $existingContact['status'] === 'pending') {
+                    // Contact exists as pending - treat this as a re-confirmation of their request
+                    // Return 'received' so sender handles it like a new contact (no sync attempt)
+                    return $this->contactPayload->buildReceived($senderAddress);
+                }
+                // Contact is accepted or other status - return warning (already exists)
                 return $this->contactPayload->buildAlreadyExists($senderAddress);
             } else{
                 // Address unknown prior but pubkey exists (known contact, unknown address)
+                // Check contact status - if pending, treat as re-confirmation with new address
+                $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
+                if ($existingContact && $existingContact['status'] === 'pending') {
+                    // Contact is pending - update their address and return 'received'
+                    // so sender handles it like a new contact request
+                    if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
+                        return $this->contactPayload->buildReceived($senderAddress);
+                    }
+                }
+                // Contact is accepted - update address and return 'updated'
                 if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
                     return $this->contactPayload->buildUpdated($senderAddress);
                 } else{

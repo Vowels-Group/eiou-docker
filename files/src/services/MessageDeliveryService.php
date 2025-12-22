@@ -11,15 +11,16 @@ require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
  * Handles reliable message delivery with multi-stage acknowledgments,
  * exponential backoff retry, and dead letter queue integration.
  *
- * Implements the Transaction Reliability & Message Handling System (Issue #139).
+ * Implements the Transaction Reliability & Message Handling System.
  *
  * @package Services
  */
 class MessageDeliveryService {
     /**
      * Success response statuses that indicate delivery was successful
+     * Includes contact-specific statuses: 'warning' (contact already exists), 'updated' (address updated)
      */
-    private const SUCCESS_STATUSES = ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed'];
+    private const SUCCESS_STATUSES = ['received', 'inserted', 'forwarded', 'accepted', 'acknowledged', 'completed', 'warning', 'updated'];
 
     /**
      * Message types that complete on 'inserted' or 'forwarded' status

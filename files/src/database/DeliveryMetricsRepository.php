@@ -7,7 +7,7 @@ require_once __DIR__ . '/AbstractRepository.php';
  * Delivery Metrics Repository
  *
  * Manages delivery metrics tracking for message delivery success/failure rates.
- * Supports the Transaction Reliability & Message Handling System (Issue #139).
+ * Supports the Transaction Reliability & Message Handling System.
  *
  * @package Database\Repository
  */

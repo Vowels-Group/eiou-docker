@@ -231,6 +231,10 @@ class SyncService {
                 // If you are accepted as a contact by the contact in question then update accordingly
                 $this->contactRepository->updateStatus($senderPublicKey, $status);
                 $this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative);
+
+                // Complete the contact transaction (update status from 'sent' to 'completed')
+                $this->transactionRepository->completeContactTransaction($senderPublicKey);
+
                 output(outputContactSuccesfullySynced($contactAddress),$echo);
                 return true;
             } elseif($status === 'rejected' && $reason === 'unknown'){
