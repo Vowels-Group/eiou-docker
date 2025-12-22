@@ -1,35 +1,39 @@
 <!-- Copyright 2025  -->
 
-<!-- Message alerts -->
+<!-- Toast notifications for operation results -->
 <?php if (!empty($messageForDisplay)): ?>
-    <div class="alert alert-<?php echo $messageTypeForDisplay; ?> fade-in-up">
-        <i class="fas fa-<?php
-            if ($messageTypeForDisplay === 'contact-accepted') {
-                echo 'user-check';
-            } elseif ($messageTypeForDisplay === 'success') {
-                echo 'check-circle';
-            } elseif ($messageTypeForDisplay === 'error') {
-                echo 'exclamation-circle';
-            } elseif ($messageTypeForDisplay === 'warning') {
-                echo 'exclamation-triangle';
-            } else {
-                echo 'info-circle';
-            }
-        ?>"></i>
-        <?php echo htmlspecialchars($messageForDisplay); ?>
-    </div>
-    <!-- Show toast notification for transaction results -->
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         var msgType = '<?php echo addslashes($messageTypeForDisplay); ?>';
         var msg = '<?php echo addslashes($messageForDisplay); ?>';
-        var toastType = msgType === 'success' ? 'success' : (msgType === 'error' ? 'error' : 'info');
-        var title = toastType === 'success' ? 'Success' : (toastType === 'error' ? 'Error' : 'Notice');
 
-        // Check if this is a transaction-related message
-        if (msg.toLowerCase().indexOf('transaction') !== -1 ||
-            msg.toLowerCase().indexOf('sent') !== -1) {
-            title = toastType === 'success' ? 'Transaction Complete' : 'Transaction Failed';
+        // Map message types to toast types
+        var toastType = 'info';
+        var title = 'Notice';
+
+        if (msgType === 'success' || msgType === 'contact-accepted') {
+            toastType = 'success';
+            title = 'Success';
+        } else if (msgType === 'error') {
+            toastType = 'error';
+            title = 'Error';
+        } else if (msgType === 'warning') {
+            toastType = 'warning';
+            title = 'Warning';
+        }
+
+        // Customize title based on message content
+        var msgLower = msg.toLowerCase();
+        if (msgLower.indexOf('transaction') !== -1 || msgLower.indexOf('sent') !== -1) {
+            title = toastType === 'success' ? 'Transaction Sent' : (toastType === 'error' ? 'Transaction Failed' : title);
+        } else if (msgLower.indexOf('contact') !== -1) {
+            if (msgType === 'contact-accepted') {
+                title = 'Contact Accepted';
+            } else if (toastType === 'success') {
+                title = 'Contact Updated';
+            } else if (toastType === 'error') {
+                title = 'Contact Error';
+            }
         }
 
         if (typeof showToast === 'function') {
