@@ -281,4 +281,158 @@ class MessageHelper
     {
         return in_array(strtolower($type), ['success', 'contact-accepted', 'completed']);
     }
+
+    /**
+     * Parse CLI JSON output and determine message type for GUI display
+     *
+     * This method parses structured JSON responses from CLI commands that use
+     * the --json flag. It maps error codes to user-friendly messages and
+     * falls back to parseContactOutput() for non-JSON responses.
+     *
+     * @param string $output Raw CLI output (may be JSON or plain text)
+     * @return array ['message' => string, 'type' => string, 'code' => string|null, 'data' => array|null]
+     */
+    public static function parseCliJsonOutput(string $output): array
+    {
+        $output = trim($output);
+
+        // Handle empty output
+        if (empty($output)) {
+            return [
+                'message' => 'No response received',
+                'type' => 'error',
+                'code' => null,
+                'data' => null
+            ];
+        }
+
+        // Parse JSON
+        $decoded = json_decode($output, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            // JSON parsing failed - this should not happen with properly configured
+            // CLI commands using --json flag, but fall back to legacy parsing for safety
+            return self::parseContactOutput($output);
+        }
+
+        // Handle success response
+        if (isset($decoded['success']) && $decoded['success'] === true) {
+            return [
+                'message' => $decoded['message'] ?? 'Operation completed successfully',
+                'type' => self::mapStatusToMessageType($decoded['data']['status'] ?? 'success'),
+                'code' => null,
+                'data' => $decoded['data'] ?? null
+            ];
+        }
+
+        // Handle error response
+        if (isset($decoded['error'])) {
+            $errorCode = $decoded['error']['code'] ?? 'GENERAL_ERROR';
+            $detail = $decoded['error']['detail'] ?? $decoded['message'] ?? '';
+            return [
+                'message' => self::getGuiFriendlyMessage($errorCode, $detail),
+                'type' => 'error',
+                'code' => $errorCode,
+                'data' => $decoded['error'] ?? null
+            ];
+        }
+
+        // Handle legacy success format (success=false means error in CliJsonResponse)
+        if (isset($decoded['success']) && $decoded['success'] === false) {
+            $errorCode = $decoded['error']['code'] ?? 'GENERAL_ERROR';
+            $detail = $decoded['error']['detail'] ?? $decoded['message'] ?? '';
+            return [
+                'message' => self::getGuiFriendlyMessage($errorCode, $detail),
+                'type' => 'error',
+                'code' => $errorCode,
+                'data' => $decoded['error'] ?? null
+            ];
+        }
+
+        // Fallback for unexpected format
+        return self::parseContactOutput($output);
+    }
+
+    /**
+     * Map CLI error codes to user-friendly GUI messages
+     *
+     * @param string $errorCode Error code from ErrorCodes class
+     * @param string $detail Original error detail message
+     * @return string User-friendly message
+     */
+    public static function getGuiFriendlyMessage(string $errorCode, string $detail): string
+    {
+        // User-friendly messages for error codes
+        $friendlyMessages = [
+            // Validation errors
+            'INVALID_ADDRESS' => 'The address you entered is not valid. Please check and try again.',
+            'INVALID_NAME' => 'The contact name is not valid. Please use alphanumeric characters.',
+            'INVALID_FEE' => 'The fee percentage must be between 0 and 100.',
+            'INVALID_CREDIT' => 'The credit limit must be a positive number.',
+            'INVALID_CURRENCY' => 'The selected currency is not supported.',
+            'INVALID_AMOUNT' => 'Please enter a valid transaction amount.',
+            'INVALID_RECIPIENT' => 'Invalid recipient address or contact name.',
+            'INVALID_PARAMS' => 'Invalid parameters provided. Please check your input.',
+            'SELF_CONTACT' => 'You cannot add yourself as a contact.',
+
+            // Contact state errors
+            'CONTACT_EXISTS' => 'This contact already exists in your contact list.',
+            'CONTACT_NOT_FOUND' => 'Contact not found. It may have been deleted.',
+            'CONTACT_BLOCKED' => 'This contact is currently blocked. Unblock to send transactions.',
+            'CONTACT_REJECTED' => 'The contact request was rejected.',
+            'CONTACT_UNREACHABLE' => 'Could not reach this contact. They may be offline.',
+
+            // Operation errors
+            'ACCEPT_FAILED' => 'Failed to accept the contact request. Please try again.',
+            'BLOCK_FAILED' => 'Failed to block this contact. Please try again.',
+            'UNBLOCK_FAILED' => 'Failed to unblock this contact. Please try again.',
+            'DELETE_FAILED' => 'Failed to delete this contact. Please try again.',
+            'UPDATE_FAILED' => 'Failed to update contact information. Please try again.',
+            'CONTACT_CREATE_FAILED' => 'Failed to create contact. Please try again.',
+
+            // Transaction errors
+            'NO_CONTACTS' => 'You need at least one contact to send transactions. Please add a contact first.',
+            'INSUFFICIENT_FUNDS' => 'Insufficient funds to complete this transaction.',
+            'NO_VIABLE_TRANSPORT' => 'Unable to reach the recipient. They may use a different network type (TOR/HTTP) than your available contacts.',
+            'NO_VIABLE_ROUTE' => 'No route could be found to the recipient through your contact network.',
+            'P2P_CANCELLED' => 'The P2P route search was cancelled. No compatible contacts available for routing.',
+
+            // Missing data errors
+            'MISSING_IDENTIFIER' => 'Please provide a contact address or name.',
+            'MISSING_ADDRESS' => 'Contact address is required.',
+            'MISSING_PARAMS' => 'Required information is missing. Please fill in all fields.',
+            'NO_ADDRESS' => 'No valid address found for this contact.',
+
+            // General errors
+            'GENERAL_ERROR' => 'An error occurred. Please try again.',
+            'VALIDATION_ERROR' => 'Please check your input and try again.',
+        ];
+
+        // Return friendly message if available, otherwise return original detail
+        return $friendlyMessages[$errorCode] ?? ($detail ?: 'An error occurred while processing your request.');
+    }
+
+    /**
+     * Map contact/transaction status to GUI message type
+     *
+     * @param string $status Status from response
+     * @return string Message type for GUI display
+     */
+    private static function mapStatusToMessageType(string $status): string
+    {
+        $statusMap = [
+            'success' => 'success',
+            'accepted' => 'contact-accepted',
+            'pending' => 'info',
+            'blocked' => 'warning',
+            'updated' => 'success',
+            'unblocked' => 'success',
+            'deleted' => 'success',
+            'synced' => 'success',
+            'sent' => 'success',
+            'completed' => 'success',
+        ];
+
+        return $statusMap[strtolower($status)] ?? 'success';
+    }
 }
