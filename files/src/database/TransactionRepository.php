@@ -1250,6 +1250,7 @@ class TransactionRepository extends AbstractRepository {
                   FROM {$this->tableName}
                   WHERE status IN ('pending', 'sent', 'accepted')
                     AND sender_address IN ($placeholders)
+                    AND tx_type != 'contact'
 
                   UNION ALL
 

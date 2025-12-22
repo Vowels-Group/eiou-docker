@@ -274,8 +274,8 @@ function openTransactionModal(index) {
         html += '</div>';
     }
 
-    // Routing Hash (for P2P transactions)
-    if (tx.memo && tx.memo !== 'standard') {
+    // Routing Hash (only for P2P transactions, not direct or contact)
+    if (tx.tx_type === 'p2p' && tx.memo && tx.memo !== 'standard') {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Routing Hash</div>';
         html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + truncate(tx.memo, 64) + '</div>';
@@ -1076,8 +1076,8 @@ function showContactTxDetail(index) {
         html += '</div>';
     }
 
-    // Routing Hash (moved to below Transaction ID, for P2P transactions)
-    if (tx.memo && tx.memo !== 'standard') {
+    // Routing Hash (only for P2P transactions, not direct or contact)
+    if (tx.tx_type === 'p2p' && tx.memo && tx.memo !== 'standard') {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Routing Hash</div>';
         html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.memo + '</div>';

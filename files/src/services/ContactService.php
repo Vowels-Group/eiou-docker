@@ -669,7 +669,16 @@ class ContactService {
             $contactAddresses = $this->addressRepository->lookupByPubkeyHash($senderPublicKeyHash);
             $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
             if($contactAddresses[$transportIndex] === $senderAddress){
-                // Address already exists (Not a new contact)
+                // Address already exists - check contact status for re-add scenario
+                // Fix for Issue #301: When a deleted contact re-adds us, we may have them
+                // as 'pending' (they added us before but we never accepted, then they deleted and re-added)
+                $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
+                if ($existingContact && $existingContact['status'] === 'pending') {
+                    // Contact exists as pending - treat this as a re-confirmation of their request
+                    // Return 'received' so sender handles it like a new contact (no sync attempt)
+                    return $this->contactPayload->buildReceived($senderAddress);
+                }
+                // Contact is accepted or other status - return warning (already exists)
                 return $this->contactPayload->buildAlreadyExists($senderAddress);
             } else{
                 // Address unknown prior but pubkey exists (known contact, unknown address)
