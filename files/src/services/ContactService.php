@@ -529,6 +529,28 @@ class ContactService {
 
         if (isset($responseData['status'])){
             $senderPublicKey = $responseData['senderPublicKey'];
+            $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+
+            // Check if we already have this contact stored locally (under a different address)
+            // This handles the case where user adds a known contact via new address type
+            $existingLocalContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
+            if ($existingLocalContact) {
+                // Contact already exists locally - just update the address with new transport type
+                if ($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)) {
+                    if ($this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
+
+                    $contactData['status'] = $existingLocalContact['status'];
+                    $contactData['pubkey'] = $senderPublicKey;
+                    $output->success("Contact address updated for " . $name, $contactData, "New address type added to existing contact");
+                    return;
+                } else {
+                    $output->error("Failed to add new address for existing contact", ErrorCodes::ADDRESS_UPDATE_FAILED, 500, ['contact' => $contactData]);
+                    return;
+                }
+            }
+
             // Contact request was received (initial insert on their end as pending, awaiting acceptance)
             if($responseData['status'] === 'received'){
                 // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
@@ -557,9 +579,7 @@ class ContactService {
             //  we are known under a different address or transport type
             elseif($responseData['status'] === 'updated'){
                 $senderAddress = $responseData['senderAddress'];
-                $senderPublicKey = $responseData['senderPublicKey'];
-                $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
-                // Update contact address on our end
+                // Update contact address on our end (senderPublicKeyHash already computed above)
                 if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
                     // Update delivery stage: updated -> inserted -> completed (using MessageDeliveryService directly)
                     if ($this->messageDeliveryService !== null) {
