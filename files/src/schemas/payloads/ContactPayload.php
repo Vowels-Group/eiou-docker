@@ -160,7 +160,7 @@ class ContactPayload extends BasePayload
     protected function filterAddresses(array $addresses): array
     {
         $filtered = [];
-        $transportKeys = ['http', 'tor'];
+        $transportKeys = $this->transportUtility->getAllAddressTypes();
 
         foreach ($transportKeys as $key) {
             if (isset($addresses[$key]) && !empty($addresses[$key])) {
