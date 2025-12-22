@@ -50,14 +50,16 @@ class Wallet{
         $privateKey = $keyPair['private'];
         $publicKey = $keyPair['public'];
 
+        // Derive deterministic Tor hidden service keys from seed
+        // This ensures the same .onion address is restored from the seed phrase
+        require_once __DIR__ . '/../security/TorKeyDerivation.php';
+        $torAddress = TorKeyDerivation::generateHiddenServiceFiles($seed);
+
         // Clear seed from memory
         BIP39::secureClear($seed);
 
         // Generate random authentication code of length 20
         $authCode = bin2hex(random_bytes(10));
-
-        // Output Tor address
-        $torAddress = trim(file_get_contents('/var/lib/tor/hidden_service/hostname'));
 
         // SECURITY: Encrypt private key, auth code, and mnemonic before storage
         $encryptedPrivateKey = KeyEncryption::encrypt($privateKey);
@@ -201,14 +203,16 @@ class Wallet{
         $privateKey = $keyPair['private'];
         $publicKey = $keyPair['public'];
 
+        // Derive deterministic Tor hidden service keys from seed
+        // This restores the SAME .onion address as the original wallet
+        require_once __DIR__ . '/../security/TorKeyDerivation.php';
+        $torAddress = TorKeyDerivation::generateHiddenServiceFiles($seed);
+
         // Clear seed from memory
         BIP39::secureClear($seed);
 
         // Generate random authentication code of length 20
         $authCode = bin2hex(random_bytes(10));
-
-        // Get Tor address
-        $torAddress = trim(file_get_contents('/var/lib/tor/hidden_service/hostname'));
 
         // SECURITY: Encrypt private key, auth code, and mnemonic before storage
         $encryptedPrivateKey = KeyEncryption::encrypt($privateKey);
