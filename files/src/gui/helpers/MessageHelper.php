@@ -310,7 +310,8 @@ class MessageHelper
         $decoded = json_decode($output, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            // JSON parsing failed, fall back to legacy parsing
+            // JSON parsing failed - this should not happen with properly configured
+            // CLI commands using --json flag, but fall back to legacy parsing for safety
             return self::parseContactOutput($output);
         }
 
