@@ -84,14 +84,14 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3: Verifying original Tor hidden service key files exist"
 
 # Check for Tor hidden service files
-torSecretKeyExists=$(docker exec ${testContainer} test -f /var/lib/tor/hidden_service/hs_ed25519_secret_key && echo "EXISTS" || echo "NOT_FOUND")
-torPublicKeyExists=$(docker exec ${testContainer} test -f /var/lib/tor/hidden_service/hs_ed25519_public_key && echo "EXISTS" || echo "NOT_FOUND")
-torHostnameExists=$(docker exec ${testContainer} test -f /var/lib/tor/hidden_service/hostname && echo "EXISTS" || echo "NOT_FOUND")
+torSecretKeyExists=$(docker exec ${testContainer} test -f ${TOR_SECRET_KEY} && echo "EXISTS" || echo "NOT_FOUND")
+torPublicKeyExists=$(docker exec ${testContainer} test -f ${TOR_PUBLIC_KEY} && echo "EXISTS" || echo "NOT_FOUND")
+torHostnameExists=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "EXISTS" || echo "NOT_FOUND")
 
 if [[ "$torSecretKeyExists" == "EXISTS" ]] && [[ "$torPublicKeyExists" == "EXISTS" ]] && [[ "$torHostnameExists" == "EXISTS" ]]; then
     # Verify file sizes are correct
-    secretKeySize=$(docker exec ${testContainer} stat -c '%s' /var/lib/tor/hidden_service/hs_ed25519_secret_key 2>/dev/null)
-    publicKeySize=$(docker exec ${testContainer} stat -c '%s' /var/lib/tor/hidden_service/hs_ed25519_public_key 2>/dev/null)
+    secretKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_SECRET_KEY} 2>/dev/null)
+    publicKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_PUBLIC_KEY} 2>/dev/null)
 
     # Secret key should be 96 bytes (32-byte header + 64-byte key)
     # Public key should be 64 bytes (32-byte header + 32-byte key)
@@ -196,8 +196,8 @@ deleteResult=$(docker exec ${testContainer} rm -f ${USERCONFIG} 2>&1)
 verifyDeleted=$(docker exec ${testContainer} test -f ${USERCONFIG} && echo "EXISTS" || echo "DELETED")
 
 # Also delete Tor hidden service files to test deterministic regeneration
-deleteTorResult=$(docker exec ${testContainer} rm -f /var/lib/tor/hidden_service/hs_ed25519_secret_key /var/lib/tor/hidden_service/hs_ed25519_public_key /var/lib/tor/hidden_service/hostname 2>&1)
-verifyTorDeleted=$(docker exec ${testContainer} test -f /var/lib/tor/hidden_service/hostname && echo "EXISTS" || echo "DELETED")
+deleteTorResult=$(docker exec ${testContainer} rm -f ${TOR_SECRET_KEY} ${TOR_PUBLIC_KEY} ${TOR_HOSTNAME} 2>&1)
+verifyTorDeleted=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "EXISTS" || echo "DELETED")
 
 if [[ "$verifyDeleted" == "DELETED" ]] && [[ "$verifyTorDeleted" == "DELETED" ]]; then
     printf "\t   userconfig.json and Tor files deleted ${GREEN}PASSED${NC}\n"
@@ -290,14 +290,14 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 10: Verifying restored Tor hidden service key files"
 
 # Check that Tor files were regenerated
-restoredTorSecretKeyExists=$(docker exec ${testContainer} test -f /var/lib/tor/hidden_service/hs_ed25519_secret_key && echo "EXISTS" || echo "NOT_FOUND")
-restoredTorPublicKeyExists=$(docker exec ${testContainer} test -f /var/lib/tor/hidden_service/hs_ed25519_public_key && echo "EXISTS" || echo "NOT_FOUND")
-restoredTorHostnameExists=$(docker exec ${testContainer} test -f /var/lib/tor/hidden_service/hostname && echo "EXISTS" || echo "NOT_FOUND")
+restoredTorSecretKeyExists=$(docker exec ${testContainer} test -f ${TOR_SECRET_KEY} && echo "EXISTS" || echo "NOT_FOUND")
+restoredTorPublicKeyExists=$(docker exec ${testContainer} test -f ${TOR_PUBLIC_KEY} && echo "EXISTS" || echo "NOT_FOUND")
+restoredTorHostnameExists=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "EXISTS" || echo "NOT_FOUND")
 
 if [[ "$restoredTorSecretKeyExists" == "EXISTS" ]] && [[ "$restoredTorPublicKeyExists" == "EXISTS" ]] && [[ "$restoredTorHostnameExists" == "EXISTS" ]]; then
     # Verify file sizes are correct
-    restoredSecretKeySize=$(docker exec ${testContainer} stat -c '%s' /var/lib/tor/hidden_service/hs_ed25519_secret_key 2>/dev/null)
-    restoredPublicKeySize=$(docker exec ${testContainer} stat -c '%s' /var/lib/tor/hidden_service/hs_ed25519_public_key 2>/dev/null)
+    restoredSecretKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_SECRET_KEY} 2>/dev/null)
+    restoredPublicKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_PUBLIC_KEY} 2>/dev/null)
 
     if [[ "$restoredSecretKeySize" -eq 96 ]] && [[ "$restoredPublicKeySize" -eq 64 ]]; then
         printf "\t   Restored Tor key files verified ${GREEN}PASSED${NC}\n"
