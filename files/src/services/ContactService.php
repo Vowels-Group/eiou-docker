@@ -556,6 +556,12 @@ class ContactService {
                 // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+
+                    // Store any additional addresses from senderAddresses if present
+                    if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                    }
+
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
                     // Insert contact transaction (first transaction between users, amount=0)
@@ -584,6 +590,12 @@ class ContactService {
                 // Contact was deleted locally - re-insert and sync
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+
+                    // Store any additional addresses from senderAddresses if present
+                    if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                    }
+
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
                     if (!$this->contactTransactionExists($senderPublicKey)) {
@@ -612,6 +624,12 @@ class ContactService {
                 // Insert contact and try re-syncing (inquiry about acceptance status)
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+
+                    // Store any additional addresses from senderAddresses if present
+                    if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                    }
+
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
                     // Insert contact transaction only if one doesn't already exist
@@ -698,6 +716,11 @@ class ContactService {
         $senderPublicKey = $request['senderPublicKey'];
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($senderAddress);
+
+        // Get our own (the responder's) addresses to include in response
+        // This allows the requester to store all our known addresses
+        $myAddresses = $this->currentUser->getUserLocaters();
+
         // Check if contact already exists
         if ($this->contactRepository->contactExistsPubkey($senderPublicKey)) {
             $contactAddresses = $this->addressRepository->lookupByPubkeyHash($senderPublicKeyHash);
@@ -710,10 +733,12 @@ class ContactService {
                 if ($existingContact && $existingContact['status'] === 'pending') {
                     // Contact exists as pending - treat this as a re-confirmation of their request
                     // Return 'received' so sender handles it like a new contact (no sync attempt)
+                    // Don't include other addresses for pending contacts (privacy)
                     return $this->contactPayload->buildReceived($senderAddress);
                 }
                 // Contact is accepted or other status - return warning (already exists)
-                return $this->contactPayload->buildAlreadyExists($senderAddress);
+                // Include all our known addresses so sender can store them (re-add scenario)
+                return $this->contactPayload->buildAlreadyExists($senderAddress, $myAddresses);
             } else{
                 // Address unknown prior but pubkey exists (known contact, unknown address)
                 // Check contact status - if pending, treat as re-confirmation with new address
@@ -721,13 +746,15 @@ class ContactService {
                 if ($existingContact && $existingContact['status'] === 'pending') {
                     // Contact is pending - update their address and return 'received'
                     // so sender handles it like a new contact request
+                    // Don't include other addresses for pending contacts (privacy)
                     if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
                         return $this->contactPayload->buildReceived($senderAddress);
                     }
                 }
                 // Contact is accepted - update address and return 'updated'
+                // Include all our known addresses so sender can store them (re-add scenario)
                 if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
-                    return $this->contactPayload->buildUpdated($senderAddress);
+                    return $this->contactPayload->buildUpdated($senderAddress, $myAddresses);
                 } else{
                     // Unable to update contact
                     return $this->contactPayload->buildRejection($senderAddress);

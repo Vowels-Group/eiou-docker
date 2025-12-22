@@ -141,6 +141,15 @@ class TransportUtilityService
     }
 
     /**
+     * Get all available address types from the database schema
+     *
+     * @return array Array of address type names (e.g., ['http', 'tor'])
+     */
+    public function getAllAddressTypes(): array {
+        return $this->container->getAddressRepository()->getAllAddressTypes();
+    }
+
+    /**
      * Determine if adress is HTTP/HTTPS
      *
      * @param string $address The address of the sender
