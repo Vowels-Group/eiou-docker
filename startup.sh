@@ -9,6 +9,19 @@ QUICKSTART=${QUICKSTART:-false}
 #    RESTORE="word1 word2 .... word24"
 RESTORE=${RESTORE:-false}
 
+# Generate self-signed SSL certificate if it doesn't exist
+if [ ! -f /etc/apache2/ssl/server.crt ]; then
+    echo "Generating self-signed SSL certificate..."
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout /etc/apache2/ssl/server.key \
+        -out /etc/apache2/ssl/server.crt \
+        -subj "/C=XX/ST=State/L=City/O=EIOU/OU=Node/CN=localhost" \
+        2>/dev/null
+    chmod 600 /etc/apache2/ssl/server.key
+    chmod 644 /etc/apache2/ssl/server.crt
+    echo "SSL certificate generated successfully."
+fi
+
 # Start services
 service cron start
 service tor start
@@ -97,6 +110,9 @@ fi
 echo "User Information: "
 if [[ ! -z ${http} ]]; then
     echo -e "\t HTTP address: $http"
+    # Also show HTTPS address (replace http:// with https://)
+    https="${http/http:\/\//https:\/\/}"
+    echo -e "\t HTTPS address: $https"
 fi
 echo -e "\t Tor address: $tor"
 readable="${pubkey//$'\n'/$'\n\t\t'}"
