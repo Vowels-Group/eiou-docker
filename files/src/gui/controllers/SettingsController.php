@@ -284,6 +284,21 @@ class SettingsController
             $systemInfo['php_extensions_count'] = count($phpExtensions);
             $systemInfo['php_extensions'] = $phpExtensionsWithVersions;
 
+            // Get Constants.php values
+            require_once __DIR__ . '/../../core/Constants.php';
+            $systemInfo['constants'] = Constants::all();
+
+            // Get defaultconfig.json values
+            $defaultConfigPath = '/etc/eiou/defaultconfig.json';
+            $systemInfo['user_config_path'] = $defaultConfigPath;
+            $systemInfo['user_config'] = [];
+            if (file_exists($defaultConfigPath) && is_readable($defaultConfigPath)) {
+                $defaultConfigData = json_decode(file_get_contents($defaultConfigPath), true);
+                if ($defaultConfigData) {
+                    $systemInfo['user_config'] = $defaultConfigData;
+                }
+            }
+
             // Collect PHP error log (last 50 lines)
             $phpLogContent = '';
             $phpLogPaths = ['/var/log/php_errors.log', '/var/log/eiou/eiou-php-error.log'];
