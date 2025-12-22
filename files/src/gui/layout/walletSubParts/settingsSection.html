@@ -343,6 +343,50 @@
                 </h4>
                 <pre id="apache-content" class="debug-pre" style="max-height: 300px; overflow-y: auto; display: none;"><?php echo htmlspecialchars($apacheConfigContent); ?></pre>
             </div>
+
+            <!-- Constants.php Values (Collapsible) -->
+            <?php
+            $constantsValues = Constants::all();
+            $constantsFormatted = '';
+            foreach ($constantsValues as $key => $value) {
+                $displayValue = is_bool($value) ? ($value ? 'true' : 'false') : (is_array($value) ? json_encode($value) : $value);
+                $constantsFormatted .= str_pad($key, 45) . " = " . $displayValue . "\n";
+            }
+            ?>
+            <div style="margin-top: 1rem;">
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleConfigSection('constants-content', 'constants-arrow')">
+                    <i class="fas fa-cogs"></i> Application Constants
+                    <i id="constants-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
+                </h4>
+                <pre id="constants-content" class="debug-pre" style="max-height: 300px; overflow-y: auto; display: none;"><?php echo htmlspecialchars($constantsFormatted); ?></pre>
+            </div>
+
+            <!-- defaultconfig.json Values (Collapsible) -->
+            <?php
+            $defaultConfigPath = '/etc/eiou/defaultconfig.json';
+            $defaultConfigContent = 'N/A';
+            $defaultConfigFormatted = '';
+            if (file_exists($defaultConfigPath) && is_readable($defaultConfigPath)) {
+                $defaultConfigData = json_decode(file_get_contents($defaultConfigPath), true);
+                if ($defaultConfigData) {
+                    foreach ($defaultConfigData as $key => $value) {
+                        $displayValue = is_bool($value) ? ($value ? 'true' : 'false') : (is_array($value) ? json_encode($value) : $value);
+                        $defaultConfigFormatted .= str_pad($key, 25) . " = " . $displayValue . "\n";
+                    }
+                } else {
+                    $defaultConfigFormatted = 'Unable to parse configuration file';
+                }
+            } else {
+                $defaultConfigFormatted = 'Configuration file not found or not readable';
+            }
+            ?>
+            <div style="margin-top: 1rem;">
+                <h4 style="color: #0dcaf0; margin-bottom: 0.5rem; cursor: pointer;" onclick="toggleConfigSection('defaultconfig-content', 'defaultconfig-arrow')">
+                    <i class="fas fa-sliders-h"></i> User Configuration (defaultconfig.json)
+                    <i id="defaultconfig-arrow" class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem; transition: transform 0.3s;"></i>
+                </h4>
+                <pre id="defaultconfig-content" class="debug-pre" style="max-height: 300px; overflow-y: auto; display: none;"><?php echo htmlspecialchars($defaultConfigFormatted); ?></pre>
+            </div>
         </div>
     </div>
 
