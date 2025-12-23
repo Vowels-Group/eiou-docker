@@ -33,7 +33,7 @@ docker-compose -f docker-compose-10line.yml up -d --build
 docker-compose -f docker-compose-cluster.yml up -d --build
 ```
 
-## Available Configurations
+## Available Configurations (pre-made)
 
 | Configuration | Nodes | Memory Usage | Description |
 |---------------|-------|--------------|-------------|
