@@ -4,7 +4,6 @@
 # Test SSL certificate generation and HTTPS functionality
 # Verifies that self-signed SSL certificates are properly generated
 # and that HTTPS endpoints are accessible
-# PR #309 - Self-signed SSL certificate support (Issue #298)
 #
 # NOTE: All paths use double slashes (//etc/eiou/) to prevent Git Bash on Windows
 # from converting /etc/ to C:/Program Files/Git/etc/. This is safe on Linux too.

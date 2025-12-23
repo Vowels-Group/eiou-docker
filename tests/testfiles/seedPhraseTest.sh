@@ -3,8 +3,6 @@
 
 # Test seed phrase generate and restore functionality
 # Verifies that restoring from a seed phrase yields the same keys as before
-# PR #198 - Seed phrase deterministic derivation test
-# PR #308 - Tor address deterministic derivation test (Issue #299)
 #
 # NOTE: All paths use double slashes (//etc/eiou/) to prevent Git Bash on Windows
 # from converting /etc/ to C:/Program Files/Git/etc/. This is safe on Linux too.
