@@ -189,8 +189,11 @@ fi
 printf "\n${GREEN}[Step 3/3]${NC} Running test suite...\n"
 
 # Define test order (excluding hostnameTest/torAddressTest as it's already run)
+# TOR-specific tests are included for both modes but will validate TOR functionality
 TEST_ORDER="
 sslCertificateTest
+torRestartTest
+torKeyPermissionsTest
 addContactsTest
 sendMessageTest
 balanceTest
@@ -204,6 +207,7 @@ cliCommandsTest
 apiEndpointsTest
 syncTest
 seedPhraseTest
+torRapidRestartTest
 "
 
 # Run each test in order

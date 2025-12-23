@@ -53,8 +53,72 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
     # Restart Tor to load the newly generated hidden service keys
     # Tor was started before wallet generation, so it needs to reload the new keys
     echo "Restarting Tor to load new hidden service keys..."
-    service tor restart
-    sleep 2
+
+    # Configuration for Tor restart
+    TOR_RESTART_MAX_ATTEMPTS=3
+    TOR_RESTART_ATTEMPT=0
+    TOR_RESTART_SUCCESS=false
+    HS_DIR="/var/lib/tor/hidden_service"
+    HS_HOSTNAME_FILE="${HS_DIR}/hostname"
+    HS_MAX_WAIT=30  # Maximum seconds to wait for hidden service
+
+    # Ensure correct permissions on hidden service directory before restart
+    # This fixes potential permission issues from PHP-based key generation
+    if [ -d "$HS_DIR" ]; then
+        chown -R debian-tor:debian-tor "$HS_DIR" 2>/dev/null || true
+        chmod 700 "$HS_DIR" 2>/dev/null || true
+        find "$HS_DIR" -type f -exec chmod 600 {} \; 2>/dev/null || true
+    fi
+
+    # Attempt restart with retry logic
+    while [ $TOR_RESTART_ATTEMPT -lt $TOR_RESTART_MAX_ATTEMPTS ]; do
+        TOR_RESTART_ATTEMPT=$((TOR_RESTART_ATTEMPT + 1))
+        echo "Tor restart attempt $TOR_RESTART_ATTEMPT of $TOR_RESTART_MAX_ATTEMPTS..."
+
+        if service tor restart; then
+            # Wait for Tor process to initialize
+            sleep 3
+
+            # Verify Tor is running
+            if pgrep -x "tor" > /dev/null 2>&1; then
+                # Wait for hidden service hostname file to be generated/verified
+                HS_WAIT=0
+                while [ $HS_WAIT -lt $HS_MAX_WAIT ]; do
+                    if [ -f "$HS_HOSTNAME_FILE" ] && [ -s "$HS_HOSTNAME_FILE" ]; then
+                        ONION_ADDRESS=$(cat "$HS_HOSTNAME_FILE" 2>/dev/null | tr -d '\n')
+                        if [ -n "$ONION_ADDRESS" ]; then
+                            echo "Tor restarted successfully. Hidden service: $ONION_ADDRESS"
+                            TOR_RESTART_SUCCESS=true
+                            break 2  # Exit both loops
+                        fi
+                    fi
+                    sleep 1
+                    HS_WAIT=$((HS_WAIT + 1))
+                done
+
+                echo "WARNING: Hidden service hostname file not ready after ${HS_MAX_WAIT}s"
+            else
+                echo "WARNING: Tor process not running after restart attempt $TOR_RESTART_ATTEMPT"
+            fi
+        else
+            echo "WARNING: Tor restart command failed on attempt $TOR_RESTART_ATTEMPT"
+        fi
+
+        # Wait before retry (exponential backoff)
+        sleep $((TOR_RESTART_ATTEMPT * 2))
+    done
+
+    # Final status check
+    if [ "$TOR_RESTART_SUCCESS" = false ]; then
+        echo "ERROR: Failed to restart Tor after $TOR_RESTART_MAX_ATTEMPTS attempts"
+        echo "The node will continue startup, but Tor-based features may not work."
+        echo "Check Tor logs with: cat /var/log/tor/log"
+        # Log Tor errors for debugging
+        if [ -f /var/log/tor/log ]; then
+            echo "Recent Tor log entries:"
+            tail -10 /var/log/tor/log 2>/dev/null || true
+        fi
+    fi
 fi
 
 # Check if all precursors to the message processors are available and working
