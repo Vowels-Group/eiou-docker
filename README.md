@@ -37,10 +37,10 @@ docker-compose -f docker-compose-cluster.yml up -d --build
 
 | Configuration | Nodes | Memory Usage | Description |
 |---------------|-------|--------------|-------------|
-| [`docker-compose-single.yml`](https://github.com/eiou-org/eiou/blob/main/docker-compose-single.yml) | 1 | ~1.1GB | Single EIOU node for testing |
-| [`docker-compose-4line.yml`](https://github.com/eiou-org/eiou/blob/main/docker-compose-4line.yml) | 4 | ~1.1GB | Basic 4-node line topology |
-| [`docker-compose-10line.yml`](https://github.com/eiou-org/eiou/blob/main/docker-compose-10line.yml) | 10 | ~2.8GB | Extended 10-node line topology |
-| [`docker-compose-cluster.yml`](https://github.com/eiou-org/eiou/blob/main/docker-compose-cluster.yml) | 13 | ~3.5GB | Cluster topology with hierarchical structure |
+| [`docker-compose-single.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-single.yml) | 1 | ~1.1GB | Single EIOU node for testing |
+| [`docker-compose-4line.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-4line.yml) | 4 | ~1.1GB | Basic 4-node line topology |
+| [`docker-compose-10line.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-10line.yml) | 10 | ~2.8GB | Extended 10-node line topology |
+| [`docker-compose-cluster.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-cluster.yml) | 13 | ~3.5GB | Cluster topology with hierarchical structure |
 
 ## Container Management
 
@@ -86,36 +86,36 @@ docker-compose -f docker-compose-4line.yml restart alice
 ## Network Topologies (conceptuals)
 
 ### Pre-made test topologies 
-Under [test/demo](https://github.com/eiou-org/eiou/tree/main/tests/demo) are two folders containing pre-made topologies for both HTTP and TOR. These topologies come with an overview image depicting the topology and several files, either in .txt format (for easy copy-pasting) and/or .sh format for running through bash.
+Under [tests/old/demo](https://github.com/eiou-org/eiou-docker/tree/main/tests/old/demo) are two folders containing pre-made topologies for both HTTP and TOR. These topologies come with an overview image depicting the topology and several files, either in .txt format (for easy copy-pasting) and/or .sh format for running through bash.
 
 Below are all the .sh files listed for easy access, note the two versions of each file. The 'basic setup' and 'basic test setup', the former sets up the topology as described in the image in the folder. The later does the same as the former but also runs a few functions, like sending some transactions and checking contact information.
 
 #### HTTP
 | Configuration | Nodes | Memory Usage | Description |
 |---------------|-------|--------------|-------------|
-| [http4 basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/4%20contacts%20line%20(http4%20~1.1gb%20memory)/http4%20(basic%20setup%2C%20shell%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [http4 basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/4%20contacts%20line%20(http4%20~1.1gb%20memory)/http4%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [demo4 basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(basic%20setup%2C%20shell%20script)%20copy.sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [demo4 basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [http10 basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/10%20contacts%20line%20(http10%20~2.8gb%20memory)/http10%20(basic%20setup%2C%20shell%20script).sh) | 10 | ~2.8GB | Extended 10-node line topology |
-| [http10 basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/10%20contacts%20line%20(http10%20~2.8gb%20memory)/http10%20(shell%20test%20script).sh)| 10 | ~2.8GB | Extended 10-node line topology |
-| [Small Cluster basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/http_small_cluster%20(basic%20setup%2C%20shell%20script).sh) | 13 | ~3.5GB | 13-node cluster topology |
-| [Small Cluster basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/http_small_cluster%20(shell%20test%20script).sh)| 13 | ~3.5GB | 13-node cluster topology |
-| [HTTP Cluster basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/http_cluster%20(basic%20setup%2C%20shell%20script).sh) | 37 | ~9.5GB | 37-node cluster topology |
-| [HTTP Cluster basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/HTTP/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/http_cluster%20(shell%20test%20script).sh)| 37 | ~9.5GB | 37-node cluster topology |
+| [http4 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/4%20contacts%20line%20(http4%20~1.1gb%20memory)/http4%20(basic%20setup%2C%20shell%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [http4 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/4%20contacts%20line%20(http4%20~1.1gb%20memory)/http4%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [demo4 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(basic%20setup%2C%20shell%20script)%20copy.sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [demo4 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [http10 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/10%20contacts%20line%20(http10%20~2.8gb%20memory)/http10%20(basic%20setup%2C%20shell%20script).sh) | 10 | ~2.8GB | Extended 10-node line topology |
+| [http10 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/10%20contacts%20line%20(http10%20~2.8gb%20memory)/http10%20(shell%20test%20script).sh)| 10 | ~2.8GB | Extended 10-node line topology |
+| [Small Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/http_small_cluster%20(basic%20setup%2C%20shell%20script).sh) | 13 | ~3.5GB | 13-node cluster topology |
+| [Small Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/http_small_cluster%20(shell%20test%20script).sh)| 13 | ~3.5GB | 13-node cluster topology |
+| [HTTP Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/http_cluster%20(basic%20setup%2C%20shell%20script).sh) | 37 | ~9.5GB | 37-node cluster topology |
+| [HTTP Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/http_cluster%20(shell%20test%20script).sh)| 37 | ~9.5GB | 37-node cluster topology |
 
 
 #### TOR
 | Configuration | Nodes | Memory Usage | Description |
 |---------------|-------|--------------|-------------|
-| [tor4 basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/Tor/4%20contacts%20line%20(tor4%20~1.1gb%20memory)/tor4%20(basic%20setup%2C%20shell%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [tor4 basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/Tor/4%20contacts%20line%20(tor4%20~1.1gb%20memory)/tor4%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
-| [tor10 basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/Tor/10%20contacts%20line%20(tor10%20~2.8gb%20memory)/tor10%20(basic%20setup%2C%20shell%20script).sh) | 10 | ~2.8GB | Extended 10-node line topology |
-| [tor10 basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/Tor/10%20contacts%20line%20(tor10%20~2.8gb%20memory)/tor10%20(shell%20test%20script).sh)| 10 | ~2.8GB | Extended 10-node line topology |
-| [Tor Small Cluster basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/Tor/13%20contacts%20cluster%20(tor_small_cluster%20~3.5gb%20memory)/tor_small_cluster%20(basic%20setup%2C%20shell%20script).sh) | 13 | ~3.5GB | 13-node cluster topology |
-| [Tor Small Cluster basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/Tor/13%20contacts%20cluster%20(tor_small_cluster%20~3.5gb%20memory)/tor_small_cluster%20(shell%20test%20script).sh)| 13 | ~3.5GB | 13-node cluster topology |
-| [Tor Cluster basic setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/Tor/37%20contacts%20cluster%20(tor_cluster%20%20~9.5gb%20memory)/tor_cluster%20(basic%20setup%2C%20shell%20script).sh) | 37 | ~9.5GB | 37-node cluster topology |
-| [Tor Cluster basic test setup](https://github.com/eiou-org/eiou/blob/main/tests/demo/Tor/37%20contacts%20cluster%20(tor_cluster%20%20~9.5gb%20memory)/tor_cluster%20(shell%20test%20script).sh)| 37 | ~9.5GB | 37-node cluster topology |
+| [tor4 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/4%20contacts%20line%20(tor4%20~1.1gb%20memory)/tor4%20(basic%20setup%2C%20shell%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [tor4 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/4%20contacts%20line%20(tor4%20~1.1gb%20memory)/tor4%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [tor10 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/10%20contacts%20line%20(tor10%20~2.8gb%20memory)/tor10%20(basic%20setup%2C%20shell%20script).sh) | 10 | ~2.8GB | Extended 10-node line topology |
+| [tor10 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/10%20contacts%20line%20(tor10%20~2.8gb%20memory)/tor10%20(shell%20test%20script).sh)| 10 | ~2.8GB | Extended 10-node line topology |
+| [Tor Small Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/13%20contacts%20cluster%20(tor_small_cluster%20~3.5gb%20memory)/tor_small_cluster%20(basic%20setup%2C%20shell%20script).sh) | 13 | ~3.5GB | 13-node cluster topology |
+| [Tor Small Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/13%20contacts%20cluster%20(tor_small_cluster%20~3.5gb%20memory)/tor_small_cluster%20(shell%20test%20script).sh)| 13 | ~3.5GB | 13-node cluster topology |
+| [Tor Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/37%20contacts%20cluster%20(tor_cluster%20%20~9.5gb%20memory)/tor_cluster%20(basic%20setup%2C%20shell%20script).sh) | 37 | ~9.5GB | 37-node cluster topology |
+| [Tor Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/Tor/37%20contacts%20cluster%20(tor_cluster%20%20~9.5gb%20memory)/tor_cluster%20(shell%20test%20script).sh)| 37 | ~9.5GB | 37-node cluster topology |
 
 
 ### Line Topology (4 nodes)
