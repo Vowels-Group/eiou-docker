@@ -75,7 +75,12 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
         TOR_RESTART_ATTEMPT=$((TOR_RESTART_ATTEMPT + 1))
         echo "Tor restart attempt $TOR_RESTART_ATTEMPT of $TOR_RESTART_MAX_ATTEMPTS..."
 
-        if service tor restart; then
+        # Force stop any existing Tor process (service stop often fails with PID issues)
+        pkill -x tor 2>/dev/null || true
+        sleep 1
+
+        # Start Tor fresh
+        if service tor start; then
             # Wait for Tor process to initialize
             sleep 3
 
