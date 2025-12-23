@@ -92,7 +92,7 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
                     if [ -f "$HS_HOSTNAME_FILE" ] && [ -s "$HS_HOSTNAME_FILE" ]; then
                         ONION_ADDRESS=$(cat "$HS_HOSTNAME_FILE" 2>/dev/null | tr -d '\n')
                         if [ -n "$ONION_ADDRESS" ]; then
-                            echo "Tor restarted successfully. Hidden service: $ONION_ADDRESS"
+                            echo "Tor restarted successfully."
                             TOR_RESTART_SUCCESS=true
                             break 2  # Exit both loops
                         fi
