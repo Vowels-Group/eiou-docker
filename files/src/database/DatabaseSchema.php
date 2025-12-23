@@ -255,7 +255,7 @@ function getDeadLetterQueueTableSchema() {
     return "CREATE TABLE IF NOT EXISTS dead_letter_queue (
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         message_type ENUM('transaction', 'p2p', 'rp2p', 'contact') NOT NULL,
-        original_id VARCHAR(255) NOT NULL,  /* txid, hash, etc. */
+        message_id VARCHAR(255) NOT NULL,  /* txid, hash, etc. - matches message_delivery.message_id */
         payload JSON NOT NULL,
         recipient_address VARCHAR(255) NOT NULL,
         retry_count INT DEFAULT 0,

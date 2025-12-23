@@ -345,10 +345,10 @@ function outputMessageDeliveryQueuedForRetry($messageType, $messageId, $maxRetri
     return "[MessageDelivery] Queued for background retry: type=" . $messageType . ", id=" . $messageId . ", max_retries=" . $maxRetries . "\n";
 }
 
-function outputDeadLetterQueueRetry($dlqId, $messageType, $originalId){
-    return "[DLQ] Retrying: dlq_id=" . $dlqId . ", type=" . $messageType . ", original_id=" . $originalId . "\n";
+function outputDeadLetterQueueRetry($dlqId, $messageType, $messageId){
+    return "[DLQ] Retrying: dlq_id=" . $dlqId . ", type=" . $messageType . ", message_id=" . $messageId . "\n";
 }
 
-function outputDeadLetterQueueResolved($dlqId, $messageType, $originalId){
-    return "[DLQ] Resolved: dlq_id=" . $dlqId . ", type=" . $messageType . ", original_id=" . $originalId . "\n";
+function outputDeadLetterQueueResolved($dlqId, $messageType, $messageId){
+    return "[DLQ] Resolved: dlq_id=" . $dlqId . ", type=" . $messageType . ", message_id=" . $messageId . "\n";
 }

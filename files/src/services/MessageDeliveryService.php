@@ -1050,7 +1050,7 @@ class MessageDeliveryService {
 
         foreach ($exhausted as $delivery) {
             // Only move to DLQ if not already there
-            if (!$this->dlqRepository->existsByOriginalId($delivery['message_id'])) {
+            if (!$this->dlqRepository->existsByMessageId($delivery['message_id'])) {
                 $this->dlqRepository->addToQueue(
                     $delivery['message_type'],
                     $delivery['message_id'],
@@ -1140,7 +1140,7 @@ class MessageDeliveryService {
             ];
         }
 
-        $this->emitDebugEvent('outputDeadLetterQueueRetry', [$dlqId, $item['message_type'], $item['original_id']]);
+        $this->emitDebugEvent('outputDeadLetterQueueRetry', [$dlqId, $item['message_type'], $item['message_id']]);
 
         // Mark as retrying
         $this->dlqRepository->markRetrying($dlqId);
@@ -1151,7 +1151,7 @@ class MessageDeliveryService {
 
             if ($result['success'] ?? false) {
                 $this->dlqRepository->markResolved($dlqId);
-                $this->emitDebugEvent('outputDeadLetterQueueResolved', [$dlqId, $item['message_type'], $item['original_id']]);
+                $this->emitDebugEvent('outputDeadLetterQueueResolved', [$dlqId, $item['message_type'], $item['message_id']]);
 
                 return [
                     'success' => true,

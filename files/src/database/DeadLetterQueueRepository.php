@@ -27,7 +27,7 @@ class DeadLetterQueueRepository extends AbstractRepository {
      * Add a failed message to the dead letter queue
      *
      * @param string $messageType Type of message (transaction, p2p, rp2p, contact)
-     * @param string $originalId Original message identifier (txid, hash, etc.)
+     * @param string $messageId Message identifier (txid, hash, etc.) - matches message_delivery.message_id
      * @param array $payload The full message payload
      * @param string $recipientAddress Recipient's address
      * @param int $retryCount Number of retry attempts made
@@ -36,7 +36,7 @@ class DeadLetterQueueRepository extends AbstractRepository {
      */
     public function addToQueue(
         string $messageType,
-        string $originalId,
+        string $messageId,
         array $payload,
         string $recipientAddress,
         int $retryCount,
@@ -48,7 +48,7 @@ class DeadLetterQueueRepository extends AbstractRepository {
 
         $data = [
             'message_type' => $messageType,
-            'original_id' => $originalId,
+            'message_id' => $messageId,
             'payload' => json_encode($payload),
             'recipient_address' => $recipientAddress,
             'retry_count' => $retryCount,
@@ -61,7 +61,7 @@ class DeadLetterQueueRepository extends AbstractRepository {
 
         $this->log('warning', "Message added to Dead Letter Queue", [
             'message_type' => $messageType,
-            'original_id' => $originalId,
+            'message_id' => $messageId,
             'recipient' => $recipientAddress,
             'failure_reason' => $failureReason
         ]);
@@ -285,13 +285,13 @@ class DeadLetterQueueRepository extends AbstractRepository {
     }
 
     /**
-     * Check if item exists by original ID
+     * Check if item exists by message ID
      *
-     * @param string $originalId Original message ID
+     * @param string $messageId Message ID (matches message_delivery.message_id)
      * @return bool True if exists
      */
-    public function existsByOriginalId(string $originalId): bool {
-        return $this->exists('original_id', $originalId);
+    public function existsByMessageId(string $messageId): bool {
+        return $this->exists('message_id', $messageId);
     }
 
     /**
