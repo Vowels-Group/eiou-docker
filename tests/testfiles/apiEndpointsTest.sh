@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2025 The Vowels Company
 
 # Test REST API endpoints for the EIOU API integration
 # Tests API key creation, system status, wallet info, contacts, and error handling

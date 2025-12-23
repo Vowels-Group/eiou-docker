@@ -1,8 +1,9 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * Transaction Controller
  *
- * Copyright 2025
  * Handles HTTP POST requests for transaction-related actions.
  */
 

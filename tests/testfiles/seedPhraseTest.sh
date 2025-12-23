@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2025 The Vowels Company
 
 # Test seed phrase generate and restore functionality
 # Verifies that restoring from a seed phrase yields the same keys as before

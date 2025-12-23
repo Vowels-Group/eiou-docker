@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2025 The Vowels Company
 
 # Test transaction history recording and querying
 echo -e "\nTesting transaction history and records..."

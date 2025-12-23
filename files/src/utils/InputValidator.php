@@ -1,8 +1,9 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * Input Validation Helper Class
  * Provides comprehensive input validation and sanitization for the eIOU application
- * Copyright 2025
  */
 
 class InputValidator {

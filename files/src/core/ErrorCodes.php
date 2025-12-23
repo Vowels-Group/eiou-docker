@@ -1,8 +1,9 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * Error Codes Constants
  *
- * Copyright 2025
  * Centralized error codes for consistent error handling across the codebase.
  * All error codes follow RFC 9457 (Problem Details) conventions.
  *

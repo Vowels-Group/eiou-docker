@@ -1,9 +1,9 @@
 <?php
+# Copyright 2025 The Vowels Company
 
 /**
  * Message Helper
  *
- * Copyright 2025
  * Provides utility functions for message parsing, formatting, and display.
  */
 

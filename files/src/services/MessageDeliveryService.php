@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025
+# Copyright 2025 The Vowels Company
 
 require_once __DIR__ . '/../database/MessageDeliveryRepository.php';
 require_once __DIR__ . '/../database/DeadLetterQueueRepository.php';

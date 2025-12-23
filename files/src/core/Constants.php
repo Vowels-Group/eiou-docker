@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * Application-wide constants and configuration values
  * Replaces magic numbers throughout the codebase

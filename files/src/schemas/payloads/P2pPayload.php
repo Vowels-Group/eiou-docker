@@ -1,11 +1,11 @@
 <?php
+# Copyright 2025 The Vowels Company
 
 require_once __DIR__ . '/BasePayload.php';
 
 /**
  * P2P (Peer to Peer) payload builder
  *
- * Copyright 2025
  * Handles building payloads for P2P operations including initial requests,
  * forwarding, acceptance, and rejection.
  */

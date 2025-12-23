@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * UserContext - Singleton wrapper for user configuration
  *
