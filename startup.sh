@@ -49,6 +49,12 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
         eiou generate
         echo "Generate command completed."
     fi
+
+    # Restart Tor to load the newly generated hidden service keys
+    # Tor was started before wallet generation, so it needs to reload the new keys
+    echo "Restarting Tor to load new hidden service keys..."
+    service tor restart
+    sleep 2
 fi
 
 # Check if all precursors to the message processors are available and working
