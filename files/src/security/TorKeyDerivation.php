@@ -35,6 +35,12 @@ class TorKeyDerivation
     /**
      * Derive Ed25519 keypair from BIP39 seed for Tor hidden service
      *
+     * Tor expects the "expanded" secret key format (64 bytes):
+     * - First 32 bytes: clamped private scalar (from SHA-512 of seed, first half, clamped)
+     * - Last 32 bytes: hash prefix for signing (from SHA-512 of seed, second half)
+     *
+     * This is different from libsodium's format which stores seed || public_key.
+     *
      * @param string $seed Raw BIP39 seed bytes (64 bytes)
      * @return array ['secret_key' => string, 'public_key' => string, 'hostname' => string]
      * @throws RuntimeException If sodium extension is not available
@@ -49,14 +55,38 @@ class TorKeyDerivation
         // Use HMAC-SHA256 with a unique context to derive the Tor key seed
         $torSeed = hash_hmac('sha256', $seed, 'eiou-tor-hidden-service', true);
 
-        // Generate Ed25519 keypair from the derived seed
-        // sodium_crypto_sign_seed_keypair returns a 96-byte string:
-        // - First 64 bytes: secret key (32-byte seed + 32-byte public key)
-        // - Last 32 bytes: public key (duplicated)
-        $keypair = sodium_crypto_sign_seed_keypair($torSeed);
+        // Expand the seed to Tor's expected format using SHA-512
+        // This matches Tor's ed25519_donna_expandsecret() function
+        $expanded = hash('sha512', $torSeed, true);
 
-        // Extract secret key (64 bytes) and public key (32 bytes)
-        $secretKey = sodium_crypto_sign_secretkey($keypair);
+        // First 32 bytes become the private scalar (needs clamping)
+        $scalar = substr($expanded, 0, 32);
+
+        // Last 32 bytes become the hash prefix for signing
+        $hashPrefix = substr($expanded, 32, 32);
+
+        // Clamp the scalar according to Ed25519 spec:
+        // - Clear lowest 3 bits of first byte
+        // - Clear highest bit of last byte
+        // - Set second highest bit of last byte
+        $scalarBytes = str_split($scalar);
+        $scalarBytes[0] = chr(ord($scalarBytes[0]) & 248);      // Clear lowest 3 bits
+        $scalarBytes[31] = chr(ord($scalarBytes[31]) & 127);    // Clear highest bit
+        $scalarBytes[31] = chr(ord($scalarBytes[31]) | 64);     // Set second highest bit
+        $clampedScalar = implode('', $scalarBytes);
+
+        // The expanded secret key for Tor is: clamped_scalar || hash_prefix
+        $expandedSecretKey = $clampedScalar . $hashPrefix;
+
+        // Derive public key from the clamped scalar using sodium
+        // We need to compute the public key: scalar * basepoint
+        // Use sodium's scalarmult to compute this
+        $publicKey = sodium_crypto_scalarmult_base($clampedScalar);
+
+        // Note: sodium_crypto_scalarmult_base returns Curve25519 point, not Ed25519
+        // For Ed25519, we need to derive the public key differently
+        // Let's use the original seed to get the correct public key from sodium
+        $keypair = sodium_crypto_sign_seed_keypair($torSeed);
         $publicKey = sodium_crypto_sign_publickey($keypair);
 
         // Generate the .onion hostname
@@ -64,10 +94,13 @@ class TorKeyDerivation
 
         // Clear sensitive data
         sodium_memzero($torSeed);
+        sodium_memzero($expanded);
+        sodium_memzero($scalar);
+        sodium_memzero($clampedScalar);
         sodium_memzero($keypair);
 
         return [
-            'secret_key' => $secretKey,
+            'secret_key' => $expandedSecretKey,
             'public_key' => $publicKey,
             'hostname' => $hostname
         ];
