@@ -22,10 +22,11 @@ SSL_KEY="${SSL_DIR}//server.key"
 
 ############################ TEST SSL CERTIFICATE EXISTS ############################
 
+echo -e "\n[SSL Certificate File Tests]"
+
 for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
-    echo -e "\n[SSL Certificate Test on ${container}]"
-    echo -e "\n\t-> Step 1: Checking SSL certificate file exists"
+    echo -e "\n\t-> Checking SSL certificate files exist on ${container}"
 
     certExists=$(docker exec ${container} test -f ${SSL_CERT} && echo "EXISTS" || echo "NOT_FOUND")
     keyExists=$(docker exec ${container} test -f ${SSL_KEY} && echo "EXISTS" || echo "NOT_FOUND")
@@ -42,9 +43,11 @@ done
 
 ############################ TEST SSL CERTIFICATE PERMISSIONS ############################
 
+echo -e "\n[SSL File Permission Tests]"
+
 for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
-    echo -e "\n\t-> Step 2: Checking SSL file permissions on ${container}"
+    echo -e "\n\t-> Checking SSL file permissions on ${container}"
 
     # Check key file permissions (should be 600 - owner read/write only)
     keyPerms=$(docker exec ${container} stat -c '%a' ${SSL_KEY} 2>/dev/null)
@@ -64,14 +67,18 @@ done
 
 ############################ TEST SSL CERTIFICATE VALIDITY ############################
 
+echo -e "\n[SSL Certificate Validity Tests]"
+
 for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
-    echo -e "\n\t-> Step 3: Checking SSL certificate validity on ${container}"
+    echo -e "\n\t-> Checking SSL certificate validity on ${container}"
 
     # Use openssl to verify certificate is valid and not expired
-    certValid=$(docker exec ${container} openssl x509 -in ${SSL_CERT} -noout -checkend 0 2>/dev/null && echo "VALID" || echo "EXPIRED")
+    # Redirect stdout to /dev/null to suppress "Certificate will not expire" message
+    docker exec ${container} openssl x509 -in ${SSL_CERT} -noout -checkend 0 >/dev/null 2>&1
+    certExitCode=$?
 
-    if [[ "$certValid" == "VALID" ]]; then
+    if [[ "$certExitCode" -eq 0 ]]; then
         # Get certificate expiry date
         expiryDate=$(docker exec ${container} openssl x509 -in ${SSL_CERT} -noout -enddate 2>/dev/null | cut -d= -f2)
         printf "\t   SSL certificate is valid ${GREEN}PASSED${NC}\n"
@@ -86,9 +93,11 @@ done
 
 ############################ TEST HTTPS ENDPOINT ############################
 
+echo -e "\n[HTTPS Endpoint Tests]"
+
 for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
-    echo -e "\n\t-> Step 4: Testing HTTPS endpoint on ${container}"
+    echo -e "\n\t-> Testing HTTPS endpoint on ${container}"
 
     # Test HTTPS endpoint returns 200 (using -k to accept self-signed cert)
     httpCode=$(docker exec ${container} curl -k -s -o /dev/null -w "%{http_code}" https://localhost/ 2>/dev/null)
@@ -106,9 +115,11 @@ done
 
 ############################ TEST HTTPS API ENDPOINT ############################
 
+echo -e "\n[HTTPS API Endpoint Tests]"
+
 for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
-    echo -e "\n\t-> Step 5: Testing HTTPS API endpoint on ${container}"
+    echo -e "\n\t-> Testing HTTPS API endpoint on ${container}"
 
     # Test HTTPS API endpoint responds with JSON
     apiResponse=$(docker exec ${container} curl -k -s https://localhost/api/ping 2>/dev/null)
@@ -126,9 +137,11 @@ done
 
 ############################ TEST SSL MODULE ENABLED ############################
 
+echo -e "\n[Apache SSL Module Tests]"
+
 for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
-    echo -e "\n\t-> Step 6: Checking Apache SSL module enabled on ${container}"
+    echo -e "\n\t-> Checking Apache SSL module enabled on ${container}"
 
     # Check if mod_ssl is loaded
     sslModLoaded=$(docker exec ${container} apache2ctl -M 2>/dev/null | grep -c "ssl_module" || echo "0")
@@ -145,9 +158,11 @@ done
 
 ############################ TEST PORT 443 LISTENING ############################
 
+echo -e "\n[Port 443 Listening Tests]"
+
 for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
-    echo -e "\n\t-> Step 7: Checking port 443 is listening on ${container}"
+    echo -e "\n\t-> Checking port 443 is listening on ${container}"
 
     # Check if Apache is listening on port 443
     port443Listening=$(docker exec ${container} ss -tlnp 2>/dev/null | grep -c ":443" || echo "0")
@@ -164,4 +179,5 @@ done
 
 ##################################################################
 
+echo ""
 succesrate "${totaltests}" "${passed}" "${failure}" "'SSL certificate'"
