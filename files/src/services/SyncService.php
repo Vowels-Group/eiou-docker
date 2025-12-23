@@ -282,27 +282,166 @@ class SyncService {
     /**
      * Internal method to sync all transactions and return results
      *
+     * Syncs transactions that are in 'sent' or 'pending' status by inquiring
+     * with the counterparty about the transaction status.
+     *
      * @return array Sync results
      */
     private function syncAllTransactionsInternal(): array {
-        // Sync all transactions - placeholder for future implementation
-        return [
-            'total' => 0,
+        // Get transactions that need syncing (sent to others, not yet completed)
+        $transactions = $this->transactionRepository->getByStatus('sent');
+        $pendingTransactions = $this->transactionRepository->getByStatus('pending');
+
+        // Merge and filter to only include transactions we sent (not received)
+        $userAddresses = $this->currentUser->getUserAddresses();
+        $transactionsToSync = [];
+
+        foreach (array_merge($transactions, $pendingTransactions) as $transaction) {
+            // Only sync transactions we sent (where we are the sender)
+            if (in_array($transaction['sender_address'], $userAddresses)) {
+                // Skip contact transactions - they're handled by contact sync
+                if ($transaction['tx_type'] !== 'contact') {
+                    $transactionsToSync[] = $transaction;
+                }
+            }
+        }
+
+        $results = [
+            'total' => count($transactionsToSync),
             'synced' => 0,
             'failed' => 0,
-            'details' => [],
-            'message' => 'Transaction sync not yet implemented'
+            'details' => []
         ];
+
+        foreach ($transactionsToSync as $transaction) {
+            $txid = $transaction['txid'];
+            $receiverAddress = $transaction['receiver_address'];
+            $memo = $transaction['memo'];
+
+            if ($receiverAddress) {
+                $success = $this->syncSingleTransaction($transaction, 'SILENT');
+                if ($success) {
+                    $results['synced']++;
+                    $results['details'][] = [
+                        'txid' => $txid,
+                        'receiver' => $receiverAddress,
+                        'status' => 'synced'
+                    ];
+                } else {
+                    $results['failed']++;
+                    $results['details'][] = [
+                        'txid' => $txid,
+                        'receiver' => $receiverAddress,
+                        'status' => 'failed'
+                    ];
+                }
+            }
+        }
+
+        return $results;
     }
 
     /**
      * Sync singular (specific) Transaction
      *
+     * @param array $transaction Transaction data from database
+     * @param string $echo 'ECHO' (to user & log) or 'SILENT' (only to log)
      * @return bool True if synced successfully, false otherwise
      */
-    public function syncTransaction(): bool {
-        // Sync specific
-        return true;
+    public function syncSingleTransaction(array $transaction, string $echo = 'SILENT'): bool {
+        $txid = $transaction['txid'];
+        $memo = $transaction['memo'];
+        $receiverAddress = $transaction['receiver_address'];
+        $status = $transaction['status'];
+
+        // Already completed, no need to sync
+        if ($status === 'completed') {
+            return true;
+        }
+
+        output(outputSyncTransactionDueToPendingStatus($txid), $echo);
+
+        // Determine hash type for inquiry
+        $hashType = ($memo === 'standard') ? 'txid' : 'memo';
+        $hash = ($memo === 'standard') ? $txid : $memo;
+
+        // Build inquiry payload
+        $inquiryPayload = $this->messagePayload->buildTransactionCompletedInquiry([
+            'hash' => $hash,
+            'hashType' => $hashType,
+            'senderAddress' => $receiverAddress
+        ]);
+
+        output(outputTransactionSyncInquiry($hash, $receiverAddress), $echo);
+
+        // Send inquiry to receiver
+        $syncResponse = json_decode($this->transportUtility->send($receiverAddress, $inquiryPayload), true);
+
+        if ($syncResponse && isset($syncResponse['status'])) {
+            $responseStatus = $syncResponse['status'];
+
+            if ($responseStatus === 'completed') {
+                // Transaction was received and completed by counterparty
+                $this->transactionRepository->updateStatus($hash, 'completed', $hashType === 'txid');
+                output(outputTransactionSuccesfullySynced($txid), $echo);
+                return true;
+            } elseif ($responseStatus === 'accepted') {
+                // Transaction was received but not yet completed
+                if ($status !== 'accepted') {
+                    $this->transactionRepository->updateStatus($hash, 'accepted', $hashType === 'txid');
+                }
+                output(outputTransactionNoResponseSync(), $echo);
+                return false;
+            } elseif ($responseStatus === 'rejected' || $responseStatus === 'unknown') {
+                // Transaction not recognized by counterparty - might need resend
+                output(outputTransactionNoResponseSync(), $echo);
+                return false;
+            }
+        }
+
+        // No valid response
+        output(outputTransactionNoResponseSync(), $echo);
+        return false;
+    }
+
+    /**
+     * Sync a specific transaction by txid
+     *
+     * @param string $txid Transaction ID to sync
+     * @param string $echo 'ECHO' (to user & log) or 'SILENT' (only to log)
+     * @return bool True if synced successfully, false otherwise
+     */
+    public function syncTransactionByTxid(string $txid, string $echo = 'SILENT'): bool {
+        $transactions = $this->transactionRepository->getByTxid($txid);
+
+        if (empty($transactions)) {
+            return false;
+        }
+
+        // Get the first transaction with this txid
+        $transaction = is_array($transactions) && isset($transactions[0]) ? $transactions[0] : $transactions;
+
+        return $this->syncSingleTransaction($transaction, $echo);
+    }
+
+    /**
+     * Sync a specific transaction by memo/hash
+     *
+     * @param string $memo Transaction memo/hash to sync
+     * @param string $echo 'ECHO' (to user & log) or 'SILENT' (only to log)
+     * @return bool True if synced successfully, false otherwise
+     */
+    public function syncTransactionByMemo(string $memo, string $echo = 'SILENT'): bool {
+        $transactions = $this->transactionRepository->getByMemo($memo);
+
+        if (empty($transactions)) {
+            return false;
+        }
+
+        // Get the first transaction with this memo
+        $transaction = is_array($transactions) && isset($transactions[0]) ? $transactions[0] : $transactions;
+
+        return $this->syncSingleTransaction($transaction, $echo);
     }
 
     /**

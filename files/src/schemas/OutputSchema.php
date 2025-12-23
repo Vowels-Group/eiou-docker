@@ -352,3 +352,27 @@ function outputDeadLetterQueueRetry($dlqId, $messageType, $messageId){
 function outputDeadLetterQueueResolved($dlqId, $messageType, $messageId){
     return "[DLQ] Resolved: dlq_id=" . $dlqId . ", type=" . $messageType . ", message_id=" . $messageId . "\n";
 }
+
+// ============================================================================
+// TRANSACTION SYNC OUTPUT FUNCTIONS
+// ============================================================================
+
+function outputSyncTransactionDueToPendingStatus($txid){
+    return "[Sync] Transaction " . $txid . " is being synced due to pending/sent status\n";
+}
+
+function outputTransactionSuccesfullySynced($txid){
+    return "[Sync] Transaction " . $txid . " was successfully synced.\n";
+}
+
+function outputTransactionNoResponseSync(){
+    return "[Sync] Transaction counterparty did not respond to sync request immediately.\n";
+}
+
+function outputTransactionNoNeedSync($txid){
+    return "[Sync] Transaction " . $txid . " has no need for syncing as it's already completed.\n";
+}
+
+function outputTransactionSyncInquiry($txid, $address){
+    return "[Sync] Inquiring about transaction " . $txid . " with " . $address . "\n";
+}
