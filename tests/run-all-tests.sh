@@ -189,6 +189,7 @@ printf "\n${GREEN}[Step 3/3]${NC} Running test suite...\n"
 
 # Define test order (excluding hostnameTest/torAddressTest as it's already run)
 TEST_ORDER="
+sslCertificateTest
 addContactsTest
 sendMessageTest
 balanceTest
