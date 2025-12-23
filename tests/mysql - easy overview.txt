@@ -4,21 +4,20 @@ use eiou
 
 SELECT message FROM debug;
 
-SELECT id, name, status, fee_percent, credit_limit, currency FROM contacts;
+SELECT id, name, contact_id, status, fee_percent, credit_limit, currency FROM contacts;
 
 SELECT * FROM addresses;
 
 SELECT * FROM balances;
 
-SELECT id, hash, time, amount, my_fee_amount, sender_address, destination_address, incoming_txid, outgoing_txid, status, description, created_at, completed_at FROM p2p;
+SELECT id, hash, time, amount, description, my_fee_amount, sender_address, destination_address, incoming_txid, outgoing_txid, status, created_at, completed_at FROM p2p;
 
 SELECT id, hash, time, amount, sender_address FROM rp2p;
 
-SELECT id, status, tx_type, type, sender_address, receiver_address, amount, currency, timestamp, txid, previous_txid, memo, description FROM transactions;
+SELECT id, status, tx_type, type, sender_address, receiver_address, amount, currency, description, timestamp, txid, previous_txid, memo FROM transactions;
 
-SELECT id, message_type, message_id, recipient_address, delivery_stage, retry_count FROM message_delivery;
+SELECT id, message_type, message_id, recipient_address, delivery_stage, retry_count, created_at, updated_at FROM message_delivery;
 
-SELECT id, message_type, original_id, recipient_address, failure_reason, status FROM dead_letter_queue;
+SELECT id, message_type, message_id, recipient_address, failure_reason, status FROM dead_letter_queue;
 
 SELECT id, message_type, Total_sent, total_delivered, total_failed, avg_delivery_time_ms, avg_retry_count FROM delivery_metrics;
-
