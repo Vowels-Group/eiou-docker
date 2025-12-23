@@ -1,5 +1,5 @@
 <?php
-// Copyright 2025
+# Copyright 2025 The Vowels Company
 
 /**
  * ContactDataBuilder - Builds standardized contact data arrays for the GUI

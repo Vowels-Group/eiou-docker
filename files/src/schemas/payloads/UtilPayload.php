@@ -1,4 +1,5 @@
 <?php
+# Copyright 2025 The Vowels Company
 
 require_once __DIR__ . '/BasePayload.php';
 require_once __DIR__ . '/../../core/ErrorCodes.php';
@@ -6,7 +7,6 @@ require_once __DIR__ . '/../../core/ErrorCodes.php';
 /**
  * Utility payload builder
  *
- * Copyright 2025
  * Handles building utility payloads for error responses, validation failures,
  * and other system messages.
  */

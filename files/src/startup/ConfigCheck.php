@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025
+# Copyright 2025 The Vowels Company
 
 // Check if userconfig.json already exists and if so if the user keys are available
 $run = false;

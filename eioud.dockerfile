@@ -1,4 +1,4 @@
-# Copyright 2025
+# Copyright 2025 The Vowels Company
 
 FROM debian:12-slim
 

@@ -1,6 +1,5 @@
 #!/bin/sh
-
-
+# Copyright 2025 The Vowels Company
 
 # Add contacts
 echo -e "\nAdding contacts..."

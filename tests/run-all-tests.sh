@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright 2025 The Vowels Company
 
 # Automated test runner for EIOU Docker test suite
 # Runs all tests in correct dependency order without user interaction

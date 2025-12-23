@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2025 The Vowels Company
 
 # Test balance checking and verification across all containers
 echo -e "\nTesting balance queries and calculations..."

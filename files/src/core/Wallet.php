@@ -1,4 +1,5 @@
 <?php
+# Copyright 2025 The Vowels Company
 
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/ErrorCodes.php';

@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2025 The Vowels Company
 
 # Test sending messages between connected contacts
 echo -e "\nTesting message sending between contacts..."

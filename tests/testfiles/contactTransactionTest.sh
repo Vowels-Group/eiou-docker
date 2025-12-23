@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2025 The Vowels Company
 
 # Test contact transaction type functionality
 # Verifies that contact requests are recorded as 'contact' tx_type transactions

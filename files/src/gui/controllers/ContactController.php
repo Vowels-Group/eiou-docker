@@ -1,8 +1,9 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * Contact Controller
  *
- * Copyright 2025
  * Handles HTTP POST requests for contact-related actions.
  * Uses JSON output mode for proper message handling.
  */

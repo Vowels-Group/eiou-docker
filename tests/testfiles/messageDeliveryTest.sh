@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2025 The Vowels Company
 
 # Test MessageDeliveryService and Dead Letter Queue functionality
 echo -e "\nTesting MessageDeliveryService and DLQ..."

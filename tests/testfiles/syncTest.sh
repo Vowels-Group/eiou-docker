@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2025 The Vowels Company
 
 # Test sync functionality from SyncService.php
 # Tests the sync command for contacts, transactions, and balances

@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2025 The Vowels Company
 
 # Test contact list storage and metadata verification
 echo -e "\nTesting contact list storage and metadata..."

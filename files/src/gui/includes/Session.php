@@ -1,9 +1,10 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  *
  * Session Management for eIOU Wallet
  *
- * Copyright 2025
  * Handles secure session-based authentication
  */
 

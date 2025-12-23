@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2025 The Vowels Company
 
 # Test CLI commands for correct output in both regular and JSON formats
 # Tests help, info, viewsettings, viewbalances, history, viewcontact, search commands

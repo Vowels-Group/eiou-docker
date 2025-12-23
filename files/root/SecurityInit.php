@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * Security initialization file
  * Include this at the beginning of all PHP entry points

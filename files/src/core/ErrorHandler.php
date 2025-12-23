@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * Standardized error handling system
  * Provides consistent error handling patterns across the application

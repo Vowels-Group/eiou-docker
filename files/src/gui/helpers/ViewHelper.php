@@ -1,8 +1,9 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * View Helper
  *
- * Copyright 2025
  * Provides utility functions for view rendering and display formatting.
  */
 

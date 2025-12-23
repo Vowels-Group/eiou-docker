@@ -1,4 +1,6 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * Application singleton to manage global state
  * Replaces global variables with proper encapsulation

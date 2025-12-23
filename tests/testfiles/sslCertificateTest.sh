@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright 2025 The Vowels Company
 
 # Test SSL certificate generation and HTTPS functionality
 # Verifies that self-signed SSL certificates are properly generated

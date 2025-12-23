@@ -1,5 +1,5 @@
 <?php
-// Copyright 2025
+# Copyright 2025 The Vowels Company
 
 // Route controllers if POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {

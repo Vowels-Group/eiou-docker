@@ -1,8 +1,9 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * CLI JSON Response Formatter
  *
- * Copyright 2025
  * Provides standardized JSON response format for all CLI commands.
  * Based on industry best practices from kubectl, docker CLI, gh CLI, and RFC 9457.
  *

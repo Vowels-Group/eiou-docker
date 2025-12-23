@@ -1,8 +1,9 @@
 <?php
+# Copyright 2025 The Vowels Company
+
 /**
  * CLI Output Manager
  *
- * Copyright 2025
  * Manages CLI output format based on user preferences.
  * Supports both human-readable text and JSON output modes.
  *
