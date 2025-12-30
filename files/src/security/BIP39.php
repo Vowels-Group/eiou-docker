@@ -486,4 +486,31 @@ class BIP39 {
         }
         $data = '';
     }
+
+    /**
+     * Derive a deterministic authentication code from BIP39 seed
+     *
+     * This ensures that the same seed phrase always produces the same authcode,
+     * allowing wallet recovery to restore the exact same authcode.
+     *
+     * The authcode is derived using HMAC-SHA256 with a unique context string,
+     * following the same pattern as TorKeyDerivation for consistency.
+     *
+     * @param string $seed Raw BIP39 seed bytes (64 bytes)
+     * @param int $length Desired authcode length in hex characters (default: 20)
+     * @return string Hex-encoded authentication code
+     */
+    public static function seedToAuthCode(string $seed, int $length = 20): string {
+        // Derive authcode deterministically using HMAC-SHA256 with unique context
+        // The context string 'eiou-auth-code' ensures this derivation is
+        // independent from key pair and Tor address derivations
+        $derivedBytes = hash_hmac('sha256', $seed, 'eiou-auth-code', true);
+
+        // Convert to hex and truncate to desired length
+        // Default 20 hex chars = 10 bytes = 80 bits of entropy (matches original)
+        $authCode = bin2hex(substr($derivedBytes, 0, (int) ceil($length / 2)));
+
+        // Ensure exact length by truncating if odd length requested
+        return substr($authCode, 0, $length);
+    }
 }

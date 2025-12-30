@@ -207,6 +207,7 @@ cliCommandsTest
 apiEndpointsTest
 syncTest
 seedPhraseTest
+authcodeRestorationTest
 torRapidRestartTest
 "
 
@@ -227,6 +228,7 @@ for container in "${containers[@]}"; do
 done
 
 remove_container_if_exists $restoreContainer
+remove_container_if_exists $authcodeRestoreContainer
 printf "================================================================\n"
 
 # Final summary

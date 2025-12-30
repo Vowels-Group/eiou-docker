@@ -56,11 +56,12 @@ class Wallet{
         require_once __DIR__ . '/../security/TorKeyDerivation.php';
         $torAddress = TorKeyDerivation::generateHiddenServiceFiles($seed);
 
+        // Derive deterministic authentication code from seed
+        // This ensures the same authcode is restored from the seed phrase
+        $authCode = BIP39::seedToAuthCode($seed);
+
         // Clear seed from memory
         BIP39::secureClear($seed);
-
-        // Generate random authentication code of length 20
-        $authCode = bin2hex(random_bytes(10));
 
         // SECURITY: Encrypt private key, auth code, and mnemonic before storage
         $encryptedPrivateKey = KeyEncryption::encrypt($privateKey);
@@ -209,11 +210,12 @@ class Wallet{
         require_once __DIR__ . '/../security/TorKeyDerivation.php';
         $torAddress = TorKeyDerivation::generateHiddenServiceFiles($seed);
 
+        // Derive deterministic authentication code from seed
+        // This restores the SAME authcode as the original wallet
+        $authCode = BIP39::seedToAuthCode($seed);
+
         // Clear seed from memory
         BIP39::secureClear($seed);
-
-        // Generate random authentication code of length 20
-        $authCode = bin2hex(random_bytes(10));
 
         // SECURITY: Encrypt private key, auth code, and mnemonic before storage
         $encryptedPrivateKey = KeyEncryption::encrypt($privateKey);
