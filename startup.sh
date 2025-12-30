@@ -1,6 +1,10 @@
 #!/bin/bash
 # Copyright 2025 The Vowels Company
 
+# Enable unbuffered output for real-time docker logs
+exec 1> >(stdbuf -oL cat)
+exec 2> >(stdbuf -oL cat >&2)
+
 # Check for quickstart flag
 QUICKSTART=${QUICKSTART:-false}
 
@@ -150,32 +154,49 @@ done
 # Wait for Tor to be ready and connected
 echo "Waiting for Tor to establish connection with container..."
 TOR_MAX_WAIT=60  # Maximum wait time in seconds
-TOR_ELAPSED=0
+TOR_START_TIME=$(date +%s)
 TOR_TEST_URL="${tor}"
+TOR_FIRST_ATTEMPT=true
+TOR_CONNECTED=false
 
-while [ $TOR_ELAPSED -lt $TOR_MAX_WAIT ]; do
-    # Try to access a known .onion address through Tor's SOCKS proxy
+# Note: Using timestamp-based timeout (date +%s) instead of counter
+# because curl --max-time can vary, making counter-based timing inaccurate
+while true; do
+    # Calculate elapsed time from timestamp (accurate regardless of curl duration)
+    TOR_CURRENT_TIME=$(date +%s)
+    TOR_ELAPSED=$((TOR_CURRENT_TIME - TOR_START_TIME))
+
+    # Check if we've exceeded the timeout
+    if [ $TOR_ELAPSED -ge $TOR_MAX_WAIT ]; then
+        break
+    fi
+
+    # Try to access the .onion address through Tor's SOCKS proxy
+    # Reduced --max-time from 10 to 8 to allow faster iteration
     if curl --socks5-hostname 127.0.0.1:9050 \
             --connect-timeout 5 \
-            --max-time 10 \
+            --max-time 8 \
             --silent \
             --fail \
             --output /dev/null \
             "$TOR_TEST_URL" 2>/dev/null; then
-        echo "Tor connected successfully"
+        echo "Tor connected successfully (${TOR_ELAPSED}s)"
+        TOR_CONNECTED=true
         break
     fi
 
-    # If not connected yet, wait and increment counter
-    if [ $TOR_ELAPSED -eq 0 ]; then
+    # Show waiting message on first attempt only
+    if [ "$TOR_FIRST_ATTEMPT" = true ]; then
         echo "Waiting for Tor connection (timeout: ${TOR_MAX_WAIT}s)..."
+        TOR_FIRST_ATTEMPT=false
     fi
+
+    # Brief pause before retry (curl timeout handles most of the delay)
     sleep 2
-    TOR_ELAPSED=$((TOR_ELAPSED + 2))
 done
 
 # Check if Tor connection was established
-if [ $TOR_ELAPSED -ge $TOR_MAX_WAIT ]; then
+if [ "$TOR_CONNECTED" = false ]; then
     echo "WARNING: Tor connection could not be verified after ${TOR_MAX_WAIT}s"
     echo "Continuing startup anyway. Tor-dependent features may not work."
 fi
