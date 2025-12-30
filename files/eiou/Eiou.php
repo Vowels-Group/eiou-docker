@@ -179,8 +179,7 @@ elseif($request === "shutdown"){
 elseif($request === "apikey"){
   // Manage API keys
   $debugService->output("Executing API key management request", 'SILENT');
-  require_once '/etc/eiou/src/services/ApiKeyService.php';
-  $apiKeyService = new ApiKeyService($app->services->getApiKeyRepository(), $output);
+  $apiKeyService = $app->services->getApiKeyService($output);
   $apiKeyService->handleCommand($cleanArgv);
 }
 else{

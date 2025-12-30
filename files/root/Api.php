@@ -51,16 +51,14 @@ if (!defined('Constants::API_ENABLED') || Constants::API_ENABLED !== true) {
 }
 
 // Load API components
-require_once '/etc/eiou/src/database/ApiKeyRepository.php';
-require_once '/etc/eiou/src/api/ApiAuthService.php';
 require_once '/etc/eiou/src/api/ApiController.php';
 require_once '/etc/eiou/src/services/ServiceWrappers.php';
 require_once '/etc/eiou/src/schemas/OutputSchema.php';
 
-// Initialize API components
+// Initialize API components using ServiceContainer
+$authService = $app->services->getApiAuthService();
 $apiKeyRepo = $app->services->getApiKeyRepository();
 $logger = $app->getLogger();
-$authService = new ApiAuthService($apiKeyRepo, $logger);
 $controller = new ApiController($authService, $apiKeyRepo, $app->services, $logger);
 
 // Get request details
