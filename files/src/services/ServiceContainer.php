@@ -557,6 +557,43 @@ class ServiceContainer {
     }
 
     /**
+     * Get ApiAuthService instance
+     *
+     * Provides API authentication using HMAC signature verification.
+     *
+     * @return ApiAuthService
+     */
+    public function getApiAuthService(): ApiAuthService {
+        if (!isset($this->services['ApiAuthService'])) {
+            require_once __DIR__ . '/ApiAuthService.php';
+            $this->services['ApiAuthService'] = new ApiAuthService(
+                $this->getApiKeyRepository(),
+                $this->getLogger()
+            );
+        }
+        return $this->services['ApiAuthService'];
+    }
+
+    /**
+     * Get ApiKeyService instance
+     *
+     * Provides CLI management for API keys.
+     *
+     * @param CliOutputManager $output CLI output manager for formatting
+     * @return ApiKeyService
+     */
+    public function getApiKeyService($output): ApiKeyService {
+        if (!isset($this->services['ApiKeyService'])) {
+            require_once __DIR__ . '/ApiKeyService.php';
+            $this->services['ApiKeyService'] = new ApiKeyService(
+                $this->getApiKeyRepository(),
+                $output
+            );
+        }
+        return $this->services['ApiKeyService'];
+    }
+
+    /**
      * Get UtilityServiceContainer instance
      *
      *
