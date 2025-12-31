@@ -102,6 +102,11 @@ class TransactionService {
     private ?MessageDeliveryService $messageDeliveryService = null;
 
     /**
+     * @var NotificationService|null Notification service for user notifications
+     */
+    private ?NotificationService $notificationService = null;
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
@@ -115,6 +120,7 @@ class TransactionService {
      * @param SecureLogger $secureLogger SecureLogger
      * @param UserContext $currentUser Current user data
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
+     * @param NotificationService|null $notificationService Optional notification service for user alerts
      */
     public function __construct(
         ContactRepository $contactRepository,
@@ -127,7 +133,8 @@ class TransactionService {
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
         UserContext $currentUser,
-        ?MessageDeliveryService $messageDeliveryService = null
+        ?MessageDeliveryService $messageDeliveryService = null,
+        ?NotificationService $notificationService = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->addressRepository = $addressRepository;
@@ -144,6 +151,7 @@ class TransactionService {
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
+        $this->notificationService = $notificationService;
 
         require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
@@ -159,6 +167,15 @@ class TransactionService {
      */
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Set the notification service (for lazy initialization)
+     *
+     * @param NotificationService $service Notification service
+     */
+    public function setNotificationService(NotificationService $service): void {
+        $this->notificationService = $service;
     }
 
     /**
@@ -231,6 +248,15 @@ class TransactionService {
             // If a previous transaction exists, verify the previousTxid matches
             if (isset($request['previousTxid']) && $previousTxResult = $this->transactionRepository->getPreviousTxid($request['senderPublicKey'], $request['receiverAddress'])) {
                 if ($previousTxResult !== $request['previousTxid']) {
+                    // Create notification for user about resync requirement
+                    if ($this->notificationService !== null) {
+                        $this->notificationService->createResyncNotification(
+                            $request['previousTxid'] ?? null,
+                            $previousTxResult['txid'] ?? null,
+                            $request['previousTxid'] ?? null
+                        );
+                    }
+
                     echo $this->utilPayload->buildInvalidTransactionId($previousTxResult, $request);
                     return false;
                 }

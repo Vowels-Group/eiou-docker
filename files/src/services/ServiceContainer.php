@@ -293,6 +293,21 @@ class ServiceContainer {
     }
 
     /**
+     * Get NotificationRepository instance
+     *
+     * @return NotificationRepository
+     */
+    public function getNotificationRepository(): NotificationRepository {
+        if (!isset($this->repositories['NotificationRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/NotificationRepository.php';
+            $this->repositories['NotificationRepository'] = new NotificationRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['NotificationRepository'];
+    }
+
+    /**
      * Get RateLimiterRepository instance
      *
      * @return RateLimiterRepository
@@ -338,6 +353,7 @@ class ServiceContainer {
      *
      * Integrates MessageDeliveryService for reliable transaction message delivery
      * with retry logic and dead letter queue support.
+     * Integrates NotificationService for user notifications on important events.
      *
      * @return TransactionService
      */
@@ -355,7 +371,8 @@ class ServiceContainer {
                 $this->getInputValidator(),
                 $this->getLogger(),
                 $this->currentUser,
-                $this->getMessageDeliveryService()
+                $this->getMessageDeliveryService(),
+                $this->getNotificationService()
             );
         }
         return $this->services['TransactionService'];
@@ -591,6 +608,25 @@ class ServiceContainer {
             );
         }
         return $this->services['ApiKeyService'];
+    }
+
+    /**
+     * Get NotificationService instance
+     *
+     * Provides user notification management for important events
+     * like transaction resync requirements, completions, and errors.
+     *
+     * @return NotificationService
+     */
+    public function getNotificationService(): NotificationService {
+        if (!isset($this->services['NotificationService'])) {
+            require_once __DIR__ . '/NotificationService.php';
+            $this->services['NotificationService'] = new NotificationService(
+                $this->getNotificationRepository(),
+                $this->currentUser
+            );
+        }
+        return $this->services['NotificationService'];
     }
 
     /**

@@ -1,5 +1,75 @@
 <!-- Copyright 2025 The Vowels Company -->
 
+<!-- System notifications from NotificationService -->
+<?php if (!empty($unreadNotifications)): ?>
+<?php foreach ($unreadNotifications as $notification): ?>
+<div class="alert alert-<?php
+    switch($notification['type']) {
+        case 'resync': echo 'warning'; break;
+        case 'success': echo 'success'; break;
+        case 'error': echo 'danger'; break;
+        case 'warning': echo 'warning'; break;
+        default: echo 'info';
+    }
+?> fade-in-up" style="margin-bottom: 1rem;" data-notification-id="<?php echo $notification['id']; ?>">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <i class="fas fa-<?php
+            switch($notification['type']) {
+                case 'resync': echo 'sync'; break;
+                case 'success': echo 'check-circle'; break;
+                case 'error': echo 'exclamation-circle'; break;
+                case 'warning': echo 'exclamation-triangle'; break;
+                default: echo 'info-circle';
+            }
+        ?>" style="font-size: 1.5rem;"></i>
+        <div style="flex: 1;">
+            <h4 style="margin: 0;">
+                <?php echo htmlspecialchars($notification['title']); ?>
+            </h4>
+            <p style="margin: 0.5rem 0 0 0;">
+                <?php echo htmlspecialchars($notification['message']); ?>
+            </p>
+            <?php if (!empty($notification['metadata'])): ?>
+                <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: #6c757d;">
+                    <small>
+                        <?php if (isset($notification['metadata']['expected_txid'])): ?>
+                            Expected: <?php echo htmlspecialchars($notification['metadata']['expected_txid']); ?>
+                        <?php endif; ?>
+                    </small>
+                </p>
+            <?php endif; ?>
+        </div>
+        <button onclick="dismissNotification(<?php echo $notification['id']; ?>)" class="btn btn-sm btn-secondary" style="padding: 0.25rem 0.75rem;">
+            <i class="fas fa-times"></i> Dismiss
+        </button>
+    </div>
+</div>
+<?php endforeach; ?>
+
+<script>
+function dismissNotification(notificationId) {
+    // Send AJAX request to mark notification as dismissed
+    fetch('/api/notifications/' + notificationId + '/dismiss', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    }).then(function(response) {
+        if (response.ok) {
+            // Remove notification from UI
+            var element = document.querySelector('[data-notification-id="' + notificationId + '"]');
+            if (element) {
+                element.style.opacity = '0';
+                setTimeout(function() {
+                    element.remove();
+                }, 300);
+            }
+        }
+    });
+}
+</script>
+<?php endif; ?>
+
 <!-- Toast notifications for operation results -->
 <?php if (!empty($messageForDisplay)): ?>
     <script>
