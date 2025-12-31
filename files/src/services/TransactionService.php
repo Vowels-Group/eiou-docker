@@ -326,7 +326,7 @@ class TransactionService {
      * @param array|null $request Request data
      * @return bool True if Transaction possible, False otherwise.
      */
-    public function checkTransactionPossible(array $request, $echo = true) : bool{
+    public function checkTransactionPossible(array &$request, $echo = true) : bool{
         $senderAddress = $request['senderAddress'];
         $pubkey = $request['senderPublicKey'];
         // Check if User is not blocked
@@ -352,6 +352,17 @@ class TransactionService {
         }
         // Check if Transaction already exists for txid or memo in database
         try{
+            // CRITICAL FIX: Ensure txid is set before building acceptance response
+            // This is needed because buildAcceptance returns the txid, which the sender uses to update status
+            // If txid is missing, generate one now (before the response is sent)
+            if (!isset($request['txid']) || empty($request['txid'])) {
+                // For P2P transactions, we might not have 'time' yet, so use current time as fallback
+                if (!isset($request['time'])) {
+                    $request['time'] = $this->timeUtility->getTimestamp();
+                }
+                $request['txid'] = $this->createUniqueTxid($request);
+            }
+
             $memo = $request['memo'];
             if($memo === "standard"){
                 // If direct transaction
@@ -544,18 +555,12 @@ class TransactionService {
                 // Check if precursors to transactions exist and correspond
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
                     // For relay transactions, preserve the incoming txid from sender
-                    // Ensure txid is set - if not provided, generate one (for backwards compatibility)
-                    if (!isset($request['txid']) || empty($request['txid'])) {
-                        $request['txid'] = $this->createUniqueTxid($request);
-                    }
+                    // Note: txid is now ensured to be set in checkTransactionPossible() before this point
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'relay'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
                     // If Transaction is for end-recipient
-                    // Preserve the sender's txid - generate one if not provided
-                    if (!isset($request['txid']) || empty($request['txid'])) {
-                        $request['txid'] = $this->createUniqueTxid($request);
-                    }
+                    // Note: txid is now ensured to be set in checkTransactionPossible() before this point
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'received'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 }
