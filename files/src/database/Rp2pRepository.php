@@ -327,4 +327,31 @@ class Rp2pRepository extends AbstractRepository {
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+
+    /**
+     * Get intermediary contact used to reach end-recipient in P2P chain
+     *
+     * For a P2P transaction with a given hash (memo), this finds the direct contact
+     * that we sent the transaction to (the next hop in the chain toward the destination).
+     *
+     * @param string $hash P2P transaction hash (memo)
+     * @return array|null Intermediary contact info with 'pubkey', 'address', 'pubkey_hash', or null
+     */
+    public function getChainIntermediaryContact(string $hash): ?array {
+        $query = "SELECT
+                    rp2p.sender_public_key as pubkey,
+                    rp2p.sender_address as address,
+                    SHA2(rp2p.sender_public_key, 256) as pubkey_hash
+                  FROM rp2p
+                  WHERE rp2p.hash = :hash
+                  LIMIT 1";
+
+        $stmt = $this->execute($query, [':hash' => $hash]);
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
 }

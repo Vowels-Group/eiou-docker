@@ -303,6 +303,12 @@ class MessageService {
         // Handle inquiry about transaction status
         output(outputHandleTransactionMessageResponse($decodedMessage),'SILENT');
 
+        // Check if this is a cascading inquiry (for P2P chains)
+        if (isset($decodedMessage['cascading']) && $decodedMessage['cascading'] === true) {
+            $this->handleCascadingInquiry($decodedMessage);
+            return;
+        }
+
         // Store description from inquiry if provided (for P2P transactions)
         // The original sender includes the description in the inquiry so end-recipient can store it
         if (isset($decodedMessage['description']) && $decodedMessage['description'] !== null && isset($decodedMessage['hash'])) {
@@ -314,6 +320,117 @@ class MessageService {
         }
 
         echo $this->messagePayload->buildTransactionCompletedCorrectly($decodedMessage);
+    }
+
+    /**
+     * Handle cascading inquiry for P2P transaction chain
+     *
+     * When an intermediary receives a cascading inquiry:
+     * 1. Check if local P2P is completed
+     * 2. If completed, check if we have destination_address (we're not end-recipient)
+     * 3. If we have destination, we're intermediary - forward inquiry to next hop
+     * 4. Relay response back to sender
+     *
+     * Chain flow: A->B->C->D
+     * - B receives from A, forwards to C, relays C's response to A
+     * - C receives from B, forwards to D, relays D's response to B
+     * - D receives from C, responds 'completed'
+     *
+     * @param array $decodedMessage Decoded message data
+     * @return void
+     */
+    private function handleCascadingInquiry(array $decodedMessage): void {
+        require_once '/etc/eiou/src/database/Rp2pRepository.php';
+        $rp2pRepository = new Rp2pRepository();
+
+        $hash = $decodedMessage['hash'];
+
+        // Get local P2P record
+        $p2p = $this->p2pRepository->getByHash($hash);
+
+        if (!$p2p) {
+            // No P2P record found - we never received this transaction
+            echo json_encode([
+                'status' => 'unknown',
+                'message' => 'Transaction not found',
+                'chain_status' => 'broken',
+                'failed_at' => 'intermediary_no_record'
+            ]);
+            return;
+        }
+
+        // Check local status
+        if ($p2p['status'] !== 'completed') {
+            // Our leg of the chain isn't complete
+            echo json_encode([
+                'status' => 'pending',
+                'message' => 'Transaction not completed at this hop',
+                'chain_status' => 'incomplete',
+                'failed_at' => 'intermediary_not_completed',
+                'current_status' => $p2p['status']
+            ]);
+            return;
+        }
+
+        // Check if we're the end-recipient or an intermediary
+        $isEndRecipient = empty($p2p['destination_address']);
+
+        if ($isEndRecipient) {
+            // We're the end-recipient - respond with completed status
+            $status = $this->transactionRepository->getStatusByMemo($hash);
+            if ($status !== null) {
+                echo $this->messagePayload->buildTransactionStatusResponse($decodedMessage, $status);
+            } else {
+                echo $this->messagePayload->buildTransactionNotFound($decodedMessage);
+            }
+            return;
+        }
+
+        // We're an intermediary - forward inquiry to next hop
+        $nextHop = $rp2pRepository->getChainIntermediaryContact($hash);
+
+        if (!$nextHop) {
+            // Chain broken - we have no record of forwarding this
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Next hop not found',
+                'chain_status' => 'broken',
+                'failed_at' => 'intermediary_no_next_hop'
+            ]);
+            return;
+        }
+
+        // Forward inquiry to next hop
+        $forwardedInquiry = $this->messagePayload->buildTransactionCompletedInquiry($decodedMessage);
+
+        try {
+            $response = json_decode(
+                $this->transportUtility->send($nextHop['address'], $forwardedInquiry),
+                true
+            );
+
+            if (!$response) {
+                // Next hop didn't respond
+                echo json_encode([
+                    'status' => 'error',
+                    'message' => 'Next hop not responding',
+                    'chain_status' => 'broken',
+                    'failed_at' => 'intermediary_forwarding_failed'
+                ]);
+                return;
+            }
+
+            // Relay response back to sender
+            echo json_encode($response);
+
+        } catch (Exception $e) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Failed to forward inquiry: ' . $e->getMessage(),
+                'chain_status' => 'broken',
+                'failed_at' => 'intermediary_exception'
+            ]);
+        }
     }
 
     /**

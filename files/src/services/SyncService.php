@@ -288,53 +288,40 @@ class SyncService {
      * @return array Sync results
      */
     private function syncAllTransactionsInternal(): array {
-        // Get transactions that need syncing (sent to others, not yet completed)
-        $transactions = $this->transactionRepository->getByStatus('sent');
-        $pendingTransactions = $this->transactionRepository->getByStatus('pending');
+        // Get all transactions where we are the sender and status is 'sent' or 'pending'
+        // Exclude contact transactions (handled by contact sync)
+        $userPubkey = $this->currentUser->getPublicKey();
+        $transactions = $this->transactionRepository->getTransactionsBySenderPubkeyAndStatus(
+            $userPubkey,
+            ['sent', 'pending']
+        );
 
-        // Merge and filter to only include transactions we sent (not received)
-        $userAddresses = $this->currentUser->getUserAddresses();
-        $transactionsToSync = [];
-
-        foreach (array_merge($transactions, $pendingTransactions) as $transaction) {
-            // Only sync transactions we sent (where we are the sender)
-            if (in_array($transaction['sender_address'], $userAddresses)) {
-                // Skip contact transactions - they're handled by contact sync
-                if ($transaction['tx_type'] !== 'contact') {
-                    $transactionsToSync[] = $transaction;
-                }
-            }
-        }
+        // Filter out contact transactions
+        $transactions = array_filter($transactions, function($tx) {
+            return $tx['tx_type'] !== 'contact';
+        });
 
         $results = [
-            'total' => count($transactionsToSync),
+            'total' => count($transactions),
             'synced' => 0,
             'failed' => 0,
             'details' => []
         ];
 
-        foreach ($transactionsToSync as $transaction) {
-            $txid = $transaction['txid'];
-            $receiverAddress = $transaction['receiver_address'];
-            $memo = $transaction['memo'];
-
-            if ($receiverAddress) {
-                $success = $this->syncSingleTransaction($transaction, 'SILENT');
-                if ($success) {
-                    $results['synced']++;
-                    $results['details'][] = [
-                        'txid' => $txid,
-                        'receiver' => $receiverAddress,
-                        'status' => 'synced'
-                    ];
-                } else {
-                    $results['failed']++;
-                    $results['details'][] = [
-                        'txid' => $txid,
-                        'receiver' => $receiverAddress,
-                        'status' => 'failed'
-                    ];
-                }
+        foreach ($transactions as $transaction) {
+            $success = $this->syncSingleTransaction($transaction);
+            if ($success) {
+                $results['synced']++;
+                $results['details'][] = [
+                    'txid' => $transaction['txid'],
+                    'status' => 'synced'
+                ];
+            } else {
+                $results['failed']++;
+                $results['details'][] = [
+                    'txid' => $transaction['txid'],
+                    'status' => 'failed'
+                ];
             }
         }
 
@@ -342,76 +329,172 @@ class SyncService {
     }
 
     /**
-     * Sync singular (specific) Transaction
+     * Sync single transaction with cascading chain inquiry
      *
-     * @param array $transaction Transaction data from database
-     * @param string $echo 'ECHO' (to user & log) or 'SILENT' (only to log)
+     * For P2P transactions, this sends the inquiry to the direct intermediary contact,
+     * not to the end-recipient. The inquiry cascades through the chain:
+     * A->B->C->D: A sends inquiry to B, B forwards to C, C forwards to D, D responds back
+     *
+     * @param array $transaction Transaction data
      * @return bool True if synced successfully, false otherwise
      */
-    public function syncSingleTransaction(array $transaction, string $echo = 'SILENT'): bool {
-        $txid = $transaction['txid'];
-        $memo = $transaction['memo'];
-        $receiverAddress = $transaction['receiver_address'];
+    public function syncSingleTransaction(array $transaction): bool {
+        $txType = $transaction['tx_type'];
         $status = $transaction['status'];
 
-        // Already completed, no need to sync
-        if ($status === 'completed') {
-            return true;
+        // Only sync sent/pending transactions
+        if (!in_array($status, ['sent', 'pending'])) {
+            return true; // Already synced or not applicable
         }
 
-        output(outputSyncTransactionDueToPendingStatus($txid), $echo);
+        try {
+            if ($txType === 'standard') {
+                // Direct transaction to known contact - send inquiry directly to receiver
+                return $this->syncDirectTransaction($transaction);
+            } elseif ($txType === 'p2p') {
+                // P2P transaction - use cascading inquiry through chain
+                return $this->syncP2pTransaction($transaction);
+            }
 
-        // Determine hash type for inquiry
-        $hashType = ($memo === 'standard') ? 'txid' : 'memo';
-        $hash = ($memo === 'standard') ? $txid : $memo;
+            return false;
+        } catch (Exception $e) {
+            if (function_exists('output')) {
+                output("[SyncService] Transaction sync error: " . $e->getMessage(), 'SILENT');
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Sync direct (standard) transaction
+     *
+     * @param array $transaction Transaction data
+     * @return bool True if synced successfully
+     */
+    private function syncDirectTransaction(array $transaction): bool {
+        $txid = $transaction['txid'];
+        $receiverAddress = $transaction['receiver_address'];
 
         // Build inquiry payload
         $inquiryPayload = $this->messagePayload->buildTransactionCompletedInquiry([
-            'hash' => $hash,
-            'hashType' => $hashType,
-            'senderAddress' => $receiverAddress
+            'hash' => $txid,
+            'hashType' => 'txid'
         ]);
 
-        output(outputTransactionSyncInquiry($hash, $receiverAddress), $echo);
-
         // Send inquiry to receiver
-        $syncResponse = json_decode($this->transportUtility->send($receiverAddress, $inquiryPayload), true);
+        $response = json_decode(
+            $this->transportUtility->send($receiverAddress, $inquiryPayload),
+            true
+        );
 
-        if ($syncResponse && isset($syncResponse['status'])) {
-            $responseStatus = $syncResponse['status'];
-
-            if ($responseStatus === 'completed') {
-                // Transaction was received and completed by counterparty
-                $this->transactionRepository->updateStatus($hash, 'completed', $hashType === 'txid');
-                output(outputTransactionSuccesfullySynced($txid), $echo);
-                return true;
-            } elseif ($responseStatus === 'accepted') {
-                // Transaction was received but not yet completed
-                if ($status !== 'accepted') {
-                    $this->transactionRepository->updateStatus($hash, 'accepted', $hashType === 'txid');
-                }
-                output(outputTransactionNoResponseSync(), $echo);
-                return false;
-            } elseif ($responseStatus === 'rejected' || $responseStatus === 'unknown') {
-                // Transaction not recognized by counterparty - might need resend
-                output(outputTransactionNoResponseSync(), $echo);
-                return false;
+        if ($response && $response['status'] === 'completed') {
+            $this->transactionRepository->updateStatus($txid, 'completed', true);
+            if (function_exists('output') && function_exists('outputTransactionSuccesfullySynced')) {
+                output(outputTransactionSuccesfullySynced($txid), 'SILENT');
             }
+            return true;
         }
 
-        // No valid response
-        output(outputTransactionNoResponseSync(), $echo);
         return false;
+    }
+
+    /**
+     * Sync P2P transaction using cascading chain inquiry
+     *
+     * Instead of sending inquiry directly to end-recipient (which we may not have as contact),
+     * we send to our intermediary contact who forwards it through the chain.
+     *
+     * Chain example: A->B->C->D
+     * - A sends inquiry to B (intermediary)
+     * - B receives, checks local status, forwards to C
+     * - C receives, checks local status, forwards to D
+     * - D receives, checks local status, responds 'completed' back to C
+     * - C marks complete, responds back to B
+     * - B marks complete, responds back to A
+     * - A marks complete
+     *
+     * @param array $transaction Transaction data
+     * @return bool True if synced successfully
+     */
+    private function syncP2pTransaction(array $transaction): bool {
+        $memo = $transaction['memo'];
+
+        if (!$memo) {
+            return false;
+        }
+
+        // Get P2P record
+        $p2p = $this->p2pRepository->getByHash($memo);
+        if (!$p2p) {
+            return false;
+        }
+
+        // Check if we're the original sender (have destination_address set)
+        $isOriginalSender = !empty($p2p['destination_address']);
+
+        if ($isOriginalSender) {
+            // Original sender: find intermediary contact from rp2p table
+            $intermediary = $this->rp2pRepository->getChainIntermediaryContact($memo);
+
+            if (!$intermediary) {
+                // No intermediary found - transaction never propagated
+                if (function_exists('output')) {
+                    output("[SyncService] No intermediary found for P2P transaction {$memo}", 'SILENT');
+                }
+                return false;
+            }
+
+            // Build cascading inquiry payload
+            $inquiryPayload = $this->messagePayload->buildTransactionCompletedInquiry([
+                'hash' => $memo,
+                'hashType' => 'memo',
+                'description' => $p2p['description'] ?? null,
+                'cascading' => true // Flag for intermediaries to forward
+            ]);
+
+            // Send inquiry to intermediary (not end-recipient)
+            $response = json_decode(
+                $this->transportUtility->send($intermediary['address'], $inquiryPayload),
+                true
+            );
+
+            if ($response && $response['status'] === 'completed') {
+                // Chain completed successfully
+                $this->p2pRepository->updateStatus($memo, 'completed', true);
+                $this->transactionRepository->updateStatus($memo, 'completed');
+
+                // Get all transactions with this memo for balance update
+                $transactions = $this->transactionRepository->getByMemo($memo);
+                $this->balanceRepository->updateBalanceGivenTransactions($transactions);
+
+                if (function_exists('output') && function_exists('outputTransactionP2pSentSuccesfully')) {
+                    output(outputTransactionP2pSentSuccesfully($p2p), 'SILENT');
+                }
+
+                return true;
+            } elseif ($response && isset($response['chain_status'])) {
+                // Partial chain failure - intermediary responded but chain incomplete
+                if (function_exists('output')) {
+                    output("[SyncService] P2P chain incomplete at: " . ($response['failed_at'] ?? 'unknown'), 'SILENT');
+                }
+                return false;
+            }
+
+            return false;
+        } else {
+            // We're an intermediary/relay - check local status only
+            // (sync is driven by original sender)
+            return $p2p['status'] === 'completed';
+        }
     }
 
     /**
      * Sync a specific transaction by txid
      *
      * @param string $txid Transaction ID to sync
-     * @param string $echo 'ECHO' (to user & log) or 'SILENT' (only to log)
      * @return bool True if synced successfully, false otherwise
      */
-    public function syncTransactionByTxid(string $txid, string $echo = 'SILENT'): bool {
+    public function syncTransactionByTxid(string $txid): bool {
         $transactions = $this->transactionRepository->getByTxid($txid);
 
         if (empty($transactions)) {
@@ -421,17 +504,16 @@ class SyncService {
         // Get the first transaction with this txid
         $transaction = is_array($transactions) && isset($transactions[0]) ? $transactions[0] : $transactions;
 
-        return $this->syncSingleTransaction($transaction, $echo);
+        return $this->syncSingleTransaction($transaction);
     }
 
     /**
      * Sync a specific transaction by memo/hash
      *
      * @param string $memo Transaction memo/hash to sync
-     * @param string $echo 'ECHO' (to user & log) or 'SILENT' (only to log)
      * @return bool True if synced successfully, false otherwise
      */
-    public function syncTransactionByMemo(string $memo, string $echo = 'SILENT'): bool {
+    public function syncTransactionByMemo(string $memo): bool {
         $transactions = $this->transactionRepository->getByMemo($memo);
 
         if (empty($transactions)) {
@@ -441,7 +523,7 @@ class SyncService {
         // Get the first transaction with this memo
         $transaction = is_array($transactions) && isset($transactions[0]) ? $transactions[0] : $transactions;
 
-        return $this->syncSingleTransaction($transaction, $echo);
+        return $this->syncSingleTransaction($transaction);
     }
 
     /**

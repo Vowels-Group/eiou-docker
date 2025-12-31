@@ -1691,4 +1691,37 @@ class TransactionRepository extends AbstractRepository {
 
         return $stmt->rowCount() > 0;
     }
+
+    /**
+     * Get transactions by sender public key and status
+     *
+     * Used for transaction sync - gets all transactions sent by user with specific statuses
+     *
+     * @param string $senderPubkey Sender's public key
+     * @param array $statuses Array of statuses to filter by (e.g., ['sent', 'pending'])
+     * @return array Array of transactions
+     */
+    public function getTransactionsBySenderPubkeyAndStatus(string $senderPubkey, array $statuses): array {
+        if (empty($statuses)) {
+            return [];
+        }
+
+        $placeholders = str_repeat('?,', count($statuses) - 1) . '?';
+
+        $query = "SELECT * FROM transactions
+                  WHERE sender_public_key = ?
+                    AND status IN ($placeholders)
+                  ORDER BY timestamp DESC";
+
+        $stmt = $this->pdo->prepare($query);
+
+        try {
+            $params = array_merge([$senderPubkey], $statuses);
+            $stmt->execute($params);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve transactions by sender and status", $e);
+            return [];
+        }
+    }
 }
