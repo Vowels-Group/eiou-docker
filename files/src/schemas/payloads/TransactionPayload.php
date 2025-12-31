@@ -125,13 +125,16 @@ class TransactionPayload extends BasePayload
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($rp2pData['sender_address']);
         $transactionService = Application::getInstance()->services->getTransactionService();
         // This method returns data array for further processing, not final payload
+        // CRITICAL: Preserve the incoming txid from sender instead of generating new one
+        // This ensures A->B->C->D chain maintains same txid throughout
         return [
             'time' => $rp2pData['time'],
             'receiver_address' => $rp2pData['sender_address'] ?? null,
             'receiver_public_key' => $rp2pData['sender_public_key'] ?? null,
             'amount' => $transactionService->removeTransactionFee($message),
             'currency' => $rp2pData['currency'] ?? 'USD',
-            'txid' => $transactionService->createUniqueDatabaseTxid($message, $rp2pData),
+            // Preserve incoming txid from sender - this is the KEY fix for issue #320
+            'txid' => $message['txid'] ?? $transactionService->createUniqueDatabaseTxid($message, $rp2pData),
             //'previous_txid' => $transactionService->fixPreviousTxid($this->currentUser->getPublicKey(), $rp2pData['sender_public_key']),
             'memo' => $rp2pData['hash'] ?? null,
             'senderAddress' => $userAddress,

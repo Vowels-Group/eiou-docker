@@ -531,8 +531,11 @@ class TransactionService {
             }
 
             // Process incoming transactions
+            // Note: We preserve the sender's txid instead of generating a new one
+            // This ensures A->B->C chain maintains: A's outgoing txid = B's incoming txid, B's outgoing txid = C's incoming txid
             if ($request['memo'] === 'standard') {
                 // If direct transaction
+                // Use the txid provided by sender in the transaction payload
                 $insertTransactionResponse = $this->transactionRepository->insertTransaction($request,'received');
             } else {
                 // If p2p type transaction
@@ -540,11 +543,13 @@ class TransactionService {
                 $rP2pResult = $this->rp2pRepository->getByHash($memo);
                 // Check if precursors to transactions exist and correspond
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
-                    $request['txid'] = $this->createUniqueTxid($request);
+                    // For relay transactions, preserve the incoming txid from sender
+                    // Do NOT generate a new txid - use the one from the transaction payload
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'relay'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
                     // If Transaction is for end-recipient
+                    // Preserve the sender's txid
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'received'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 }
