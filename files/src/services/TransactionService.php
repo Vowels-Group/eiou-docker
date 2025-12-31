@@ -544,12 +544,18 @@ class TransactionService {
                 // Check if precursors to transactions exist and correspond
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
                     // For relay transactions, preserve the incoming txid from sender
-                    // Do NOT generate a new txid - use the one from the transaction payload
+                    // Ensure txid is set - if not provided, generate one (for backwards compatibility)
+                    if (!isset($request['txid']) || empty($request['txid'])) {
+                        $request['txid'] = $this->createUniqueTxid($request);
+                    }
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'relay'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
                     // If Transaction is for end-recipient
-                    // Preserve the sender's txid
+                    // Preserve the sender's txid - generate one if not provided
+                    if (!isset($request['txid']) || empty($request['txid'])) {
+                        $request['txid'] = $this->createUniqueTxid($request);
+                    }
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'received'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 }
