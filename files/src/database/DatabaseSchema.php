@@ -309,3 +309,21 @@ function getRateLimitsTableSchema() {
         INDEX idx_blocked_until (blocked_until)
     )";
 }
+
+// Notifications table - user notifications for important events
+function getNotificationsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        type ENUM('resync', 'success', 'error', 'info', 'warning') NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        metadata JSON NULL,
+        status ENUM('unread', 'read', 'dismissed') DEFAULT 'unread',
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        read_at TIMESTAMP(6) NULL,
+        INDEX idx_notifications_status (status),
+        INDEX idx_notifications_type (type),
+        INDEX idx_notifications_created_at (created_at),
+        INDEX idx_notifications_status_created (status, created_at DESC)
+    )";
+}

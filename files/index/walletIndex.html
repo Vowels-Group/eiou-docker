@@ -24,11 +24,16 @@ $serviceContainer = $app->services;
 $contactService = $serviceContainer->getContactService();
 $p2pService = $serviceContainer->getP2pService();
 $transactionService = $serviceContainer->getTransactionService();
+$notificationService = $serviceContainer->getNotificationService();
 
 $utilityContainer = $app->utilityServices;
 $transportUtility = $utilityContainer->getTransportUtility();
 $generalUtility = $utilityContainer->getGeneralUtility();
 $currencyUtility = $utilityContainer->getCurrencyUtility();
+
+// Fetch notifications for display
+$unreadNotifications = $notificationService->getNotifications('unread', 10);
+$unreadNotificationCount = $notificationService->getUnreadCount();
 
 // Require UserContext instance
 require_once '/etc/eiou/src/core/UserContext.php';
