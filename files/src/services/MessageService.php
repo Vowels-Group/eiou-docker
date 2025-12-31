@@ -313,7 +313,23 @@ class MessageService {
             $this->transactionRepository->updateDescription($hash, $decodedMessage['description'], false);
         }
 
-        echo $this->messagePayload->buildTransactionCompletedCorrectly($decodedMessage);
+        // Look up actual transaction status based on hash type
+        $hash = $decodedMessage['hash'];
+        $hashType = $decodedMessage['hashType'] ?? 'memo';
+        $status = null;
+
+        if ($hashType === 'memo') {
+            $status = $this->transactionRepository->getStatusByMemo($hash);
+        } elseif ($hashType === 'txid') {
+            $status = $this->transactionRepository->getStatusByTxid($hash);
+        }
+
+        // Build response based on actual transaction status
+        if ($status !== null) {
+            echo $this->messagePayload->buildTransactionStatusResponse($decodedMessage, $status);
+        } else {
+            echo $this->messagePayload->buildTransactionNotFound($decodedMessage);
+        }
     }
 
     /**

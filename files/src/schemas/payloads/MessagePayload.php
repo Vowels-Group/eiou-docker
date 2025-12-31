@@ -204,4 +204,54 @@ class MessagePayload extends BasePayload
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
+
+    /**
+     * Build transaction status response payload
+     *
+     * Returns the actual status of a transaction in response to an inquiry.
+     * This allows the sender to receive the real transaction status instead
+     * of always getting "completed".
+     *
+     * @param array $message Message data containing transaction hash
+     * @param string $status The actual transaction status
+     * @return string JSON-encoded transaction status response payload
+     */
+    public function buildTransactionStatusResponse(array $message, string $status): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
+        $hash = $message['hash'];
+        return json_encode([
+            'type' => 'message',
+            'typeMessage' => 'transaction',
+            'status' => $status,
+            'hash' => $hash,
+            'message' => 'Transaction with hash ' . print_r($hash, true) . ' has status: ' . $status,
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
+
+    /**
+     * Build transaction not found response payload
+     *
+     * Returns an error response when a transaction inquiry is made
+     * for a hash that doesn't exist in the database.
+     *
+     * @param array $message Message data containing transaction hash
+     * @return string JSON-encoded transaction not found payload
+     */
+    public function buildTransactionNotFound(array $message): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
+        $hash = $message['hash'];
+        return json_encode([
+            'type' => 'message',
+            'typeMessage' => 'transaction',
+            'status' => 'not_found',
+            'hash' => $hash,
+            'message' => 'Transaction with hash ' . print_r($hash, true) . ' was not found',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
 }
