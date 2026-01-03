@@ -167,10 +167,7 @@ function runColumnMigrations(PDO $pdo): array {
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
     $columnsToAdd = [
-        'transactions' => [
-            'end_recipient_address' => 'VARCHAR(255) DEFAULT NULL',
-            'initial_sender_address' => 'VARCHAR(255) DEFAULT NULL'
-        ]
+        
     ];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
@@ -228,10 +225,7 @@ function runColumnMigrations(PDO $pdo): array {
 
     // Add missing indexes
     $indexesToAdd = [
-        'transactions' => [
-            'idx_transactions_end_recipient' => 'end_recipient_address',
-            'idx_transactions_initial_sender' => 'initial_sender_address'
-        ]
+        
     ];
 
     foreach ($indexesToAdd as $tableName => $indexes) {
