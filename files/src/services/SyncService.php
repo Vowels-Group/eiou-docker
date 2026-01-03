@@ -660,6 +660,159 @@ class SyncService {
     }
 
     /**
+     * Sync balance for a specific contact
+     *
+     * Recalculates the balance between the current user and a specific contact
+     * based on their transaction history. This is called after re-adding a
+     * deleted contact to ensure balances are properly restored.
+     *
+     * @param string $contactPubkey The public key of the contact
+     * @return array Result with success status and synced currencies
+     */
+    public function syncContactBalance(string $contactPubkey): array {
+        $result = [
+            'success' => false,
+            'currencies' => [],
+            'error' => null
+        ];
+
+        try {
+            // Get the user's addresses to determine transaction direction
+            $userAddresses = $this->currentUser->getUserAddresses();
+            $userPubkey = $this->currentUser->getPublicKey();
+
+            // Get all transactions between user and this contact
+            $transactions = $this->transactionRepository->getTransactionsBetweenPubkeys($userPubkey, $contactPubkey);
+
+            // Calculate balances from transactions
+            $balancesByCurrency = [];
+
+            foreach ($transactions as $transaction) {
+                $currency = $transaction['currency'];
+
+                // Initialize currency if not exists
+                if (!isset($balancesByCurrency[$currency])) {
+                    $balancesByCurrency[$currency] = [
+                        'received' => 0,
+                        'sent' => 0
+                    ];
+                }
+
+                // Determine if user sent or received this transaction
+                if (in_array($transaction['sender_address'], $userAddresses)) {
+                    // User sent this transaction
+                    $balancesByCurrency[$currency]['sent'] += $transaction['amount'];
+                } elseif (in_array($transaction['receiver_address'], $userAddresses)) {
+                    // User received this transaction
+                    $balancesByCurrency[$currency]['received'] += $transaction['amount'];
+                }
+            }
+
+            // Update or insert balances for each currency
+            $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
+
+            foreach ($balancesByCurrency as $currency => $amounts) {
+                // Check if balance record exists
+                $existingBalance = $this->balanceRepository->getContactBalance($contactPubkey, $currency);
+
+                if ($existingBalance && count($existingBalance) > 0) {
+                    // Update existing balance - use raw SQL to set exact values instead of incrementing
+                    $this->balanceRepository->updateBothDirectionBalance($amounts, $contactPubkeyHash, $currency);
+                } else {
+                    // Insert new balance record
+                    $this->balanceRepository->insertBalance(
+                        $contactPubkey,
+                        $amounts['received'],
+                        $amounts['sent'],
+                        $currency
+                    );
+                }
+            }
+
+            $result['success'] = true;
+            $result['currencies'] = array_keys($balancesByCurrency);
+
+            output("Contact balance sync completed for " . count($balancesByCurrency) . " currency(ies)", 'SILENT');
+
+        } catch (Exception $e) {
+            $result['error'] = $e->getMessage();
+            SecureLogger::logException($e, [
+                'method' => 'syncContactBalance',
+                'contact_pubkey_hash' => hash(Constants::HASH_ALGORITHM, $contactPubkey)
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Full sync for a re-added contact
+     *
+     * Performs a complete sync for a contact that was deleted and then re-added.
+     * This includes syncing the transaction chain (with signature verification)
+     * and recalculating balances from the transaction history.
+     *
+     * @param string $contactAddress Contact's address
+     * @param string $contactPublicKey Contact's public key
+     * @return array Result with success status and sync details
+     */
+    public function syncReaddedContact(string $contactAddress, string $contactPublicKey): array {
+        $result = [
+            'success' => false,
+            'contact_synced' => false,
+            'transactions_synced' => 0,
+            'balances_synced' => false,
+            'currencies' => [],
+            'error' => null
+        ];
+
+        try {
+            // Step 1: Sync contact status (handles pending -> accepted transition)
+            $contactSyncResult = $this->syncSingleContact($contactAddress, 'SILENT');
+            $result['contact_synced'] = $contactSyncResult;
+
+            // Step 2: Sync transaction chain from the beginning
+            // Since lastKnownTxid will be null (contact was deleted), this syncs from the start
+            $txSyncResult = $this->syncTransactionChain($contactAddress, $contactPublicKey);
+
+            if ($txSyncResult['success']) {
+                $result['transactions_synced'] = $txSyncResult['synced_count'];
+            } else {
+                // Log but continue - transactions may already be in sync
+                SecureLogger::info("Transaction chain sync for re-added contact", [
+                    'address' => $contactAddress,
+                    'result' => $txSyncResult
+                ]);
+            }
+
+            // Step 3: Sync balances from transaction history
+            $balanceSyncResult = $this->syncContactBalance($contactPublicKey);
+
+            if ($balanceSyncResult['success']) {
+                $result['balances_synced'] = true;
+                $result['currencies'] = $balanceSyncResult['currencies'];
+            }
+
+            // Overall success if at least contact status is synced
+            $result['success'] = $result['contact_synced'] || $result['transactions_synced'] > 0 || $result['balances_synced'];
+
+            output("Re-added contact sync completed: " .
+                   "contact=" . ($result['contact_synced'] ? 'yes' : 'no') .
+                   ", transactions=" . $result['transactions_synced'] .
+                   ", balances=" . ($result['balances_synced'] ? 'yes' : 'no'), 'SILENT');
+
+        } catch (Exception $e) {
+            $result['error'] = $e->getMessage();
+            SecureLogger::logException($e, [
+                'method' => 'syncReaddedContact',
+                'contact' => $contactAddress
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
      * Sync all balances
      *
      * @param CliOutputManager|null $output Optional output manager for JSON support
