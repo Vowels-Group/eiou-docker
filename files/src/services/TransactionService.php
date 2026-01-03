@@ -231,7 +231,6 @@ class TransactionService {
             // If a previous transaction exists, verify the previousTxid matches
             if (isset($request['previousTxid']) && $previousTxResult = $this->transactionRepository->getPreviousTxid($request['senderPublicKey'], $request['receiverAddress'])) {
                 if ($previousTxResult !== $request['previousTxid']) {
-                    echo $this->utilPayload->buildInvalidTransactionId($previousTxResult, $request);
                     return false;
                 }
             }
@@ -606,6 +605,28 @@ class TransactionService {
                     if($response && $response['status'] === 'accepted'){
                         $this->transactionRepository->updateStatus($txid,'accepted',true);
                     } elseif($response && $response['status'] === 'rejected'){
+                        // Check if rejection is due to invalid_previous_txid - attempt sync before falling back to P2P
+                        if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
+                            output('Transaction rejected due to invalid_previous_txid, attempting sync...', 'SILENT');
+
+                            // Attempt to sync transaction chain with the receiver
+                            $syncService = Application::getInstance()->services->getSyncService();
+                            $syncResult = $syncService->syncTransactionChain(
+                                $message['receiver_address'],
+                                $message['receiver_public_key']
+                            );
+
+                            if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
+                                // Sync successful - retry the transaction (leave as pending for next processing cycle)
+                                output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced. Retrying...', 'SILENT');
+                                // Transaction remains pending and will be retried
+                                continue;
+                            } else {
+                                // Sync failed or no transactions to sync - fall back to P2P
+                                output('Sync failed or no transactions to sync, falling back to P2P', 'SILENT');
+                            }
+                        }
+
                         $this->transactionRepository->updateStatus($txid,'rejected',true);
                         output(outputIssueTransactionTryP2p($response),'SILENT');
                         // Send P2P request for failed direct transaction using P2pService directly
@@ -699,6 +720,29 @@ class TransactionService {
             if($response && $response['status'] === 'accepted'){
                 $this->transactionRepository->updateStatus($txid,'accepted');
             } elseif($response && $response['status'] === 'rejected'){
+                // Check if rejection is due to invalid_previous_txid - attempt sync
+                if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
+                    output('P2P transaction rejected due to invalid_previous_txid, attempting sync...', 'SILENT');
+
+                    // Attempt to sync transaction chain with the receiver
+                    $syncService = Application::getInstance()->services->getSyncService();
+                    $syncResult = $syncService->syncTransactionChain(
+                        $message['receiver_address'],
+                        $message['receiver_public_key']
+                    );
+
+                    if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
+                        // Sync successful - retry the transaction (leave status as sent for retry)
+                        output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced. Will retry...', 'SILENT');
+                        // Revert status to pending for retry
+                        $this->transactionRepository->updateStatus($memo, 'pending');
+                        $this->p2pRepository->updateStatus($memo, 'found');
+                        return; // Exit to allow retry on next processing cycle
+                    } else {
+                        output('Sync failed or no transactions to sync', 'SILENT');
+                    }
+                }
+
                 $this->p2pRepository->updateStatus($memo,'cancelled');
                 $this->transactionRepository->updateStatus($memo,'rejected');
             } elseif(!$sendResult['success']) {

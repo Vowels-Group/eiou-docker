@@ -285,14 +285,44 @@ class SyncService {
      * @return array Sync results
      */
     private function syncAllTransactionsInternal(): array {
-        // Sync all transactions - placeholder for future implementation
-        return [
-            'total' => 0,
+        $contacts = $this->addressRepository->getAllAddresses();
+        $results = [
+            'total' => count($contacts),
             'synced' => 0,
             'failed' => 0,
-            'details' => [],
-            'message' => 'Transaction sync not yet implemented'
+            'total_transactions' => 0,
+            'details' => []
         ];
+
+        foreach ($contacts as $contact) {
+            $address = $contact['http'] ?? $contact['tor'] ?? null;
+            $pubkey = $contact['pubkey'] ?? null;
+
+            if (!$address || !$pubkey) {
+                continue;
+            }
+
+            $syncResult = $this->syncTransactionChain($address, $pubkey);
+
+            if ($syncResult['success']) {
+                $results['synced']++;
+                $results['total_transactions'] += $syncResult['synced_count'];
+                $results['details'][] = [
+                    'address' => $address,
+                    'status' => 'synced',
+                    'transactions' => $syncResult['synced_count']
+                ];
+            } else {
+                $results['failed']++;
+                $results['details'][] = [
+                    'address' => $address,
+                    'status' => 'failed',
+                    'error' => $syncResult['error']
+                ];
+            }
+        }
+
+        return $results;
     }
 
     /**
@@ -303,6 +333,183 @@ class SyncService {
     public function syncTransaction(): bool {
         // Sync specific
         return true;
+    }
+
+    /**
+     * Sync transaction chain with a specific contact
+     *
+     * Called when a transaction is rejected due to invalid_previous_txid.
+     * Requests missing transactions from the contact and inserts them locally.
+     *
+     * @param string $contactAddress Contact's address
+     * @param string $contactPublicKey Contact's public key
+     * @param string|null $expectedTxid The txid the contact expected (from rejection)
+     * @return array Result with success, synced_count, latest_txid, error
+     */
+    public function syncTransactionChain(string $contactAddress, string $contactPublicKey, ?string $expectedTxid = null): array {
+        $result = [
+            'success' => false,
+            'synced_count' => 0,
+            'latest_txid' => null,
+            'error' => null
+        ];
+
+        try {
+            // Get our latest known txid with this contact
+            $lastKnownTxid = $this->transactionRepository->getPreviousTxid(
+                $this->currentUser->getPublicKey(),
+                $contactPublicKey
+            );
+
+            // Build and send sync request
+            $syncRequest = $this->messagePayload->buildTransactionSyncRequest(
+                $contactAddress,
+                $contactPublicKey,
+                $lastKnownTxid
+            );
+
+            output("Requesting transaction chain sync with {$contactAddress}", 'SILENT');
+
+            $syncResponse = json_decode(
+                $this->transportUtility->send($contactAddress, $syncRequest),
+                true
+            );
+
+            if (!$syncResponse || !isset($syncResponse['status'])) {
+                $result['error'] = 'Invalid sync response';
+                return $result;
+            }
+
+            if ($syncResponse['status'] === 'rejected') {
+                $result['error'] = $syncResponse['reason'] ?? 'Sync rejected';
+                return $result;
+            }
+
+            if ($syncResponse['status'] !== 'accepted' || !isset($syncResponse['transactions'])) {
+                $result['error'] = 'Unexpected sync response';
+                return $result;
+            }
+
+            // Process the received transactions
+            $transactions = $syncResponse['transactions'];
+            $syncedCount = 0;
+
+            foreach ($transactions as $tx) {
+                // Check if transaction already exists
+                if ($this->transactionRepository->transactionExistsTxid($tx['txid'])) {
+                    continue;
+                }
+
+                // Insert the missing transaction
+                $insertData = [
+                    'senderAddress' => $tx['sender_address'],
+                    'senderPublicKey' => $tx['sender_public_key'],
+                    'receiverAddress' => $tx['receiver_address'],
+                    'receiverPublicKey' => $tx['receiver_public_key'],
+                    'amount' => $tx['amount'],
+                    'currency' => $tx['currency'],
+                    'txid' => $tx['txid'],
+                    'previousTxid' => $tx['previous_txid'] ?? null,
+                    'memo' => $tx['memo'] ?? 'standard',
+                    'description' => $tx['description'] ?? null,
+                    'status' => 'completed'
+                ];
+
+                // Determine type based on sender
+                $userAddresses = $this->currentUser->getUserAddresses();
+                $type = in_array($tx['sender_address'], $userAddresses) ? 'sent' : 'received';
+
+                $this->transactionRepository->insertTransaction($insertData, $type);
+                $syncedCount++;
+            }
+
+            $result['success'] = true;
+            $result['synced_count'] = $syncedCount;
+            $result['latest_txid'] = $syncResponse['latestTxid'] ?? null;
+
+            output("Transaction chain sync completed: {$syncedCount} transactions synced", 'SILENT');
+
+        } catch (Exception $e) {
+            $result['error'] = $e->getMessage();
+            SecureLogger::logException($e, [
+                'method' => 'syncTransactionChain',
+                'contact' => $contactAddress
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Handle incoming transaction sync request
+     *
+     * Called from MessageService when receiving a sync request.
+     * Returns transactions between the user and requesting contact.
+     *
+     * @param array $request The sync request data
+     * @return void Outputs JSON response
+     */
+    public function handleTransactionSyncRequest(array $request): void {
+        $senderAddress = $request['senderAddress'];
+        $senderPublicKey = $request['senderPublicKey'];
+        $lastKnownTxid = $request['lastKnownTxid'] ?? null;
+
+        // Verify the sender is a known contact
+        if (!$this->contactRepository->contactExistsPubkey($senderPublicKey)) {
+            echo $this->messagePayload->buildTransactionSyncRejection($senderAddress, 'unknown_contact');
+            return;
+        }
+
+        try {
+            // Get all transactions between user and this contact
+            $transactions = $this->transactionRepository->getTransactionsBetweenPubkeys(
+                $this->currentUser->getPublicKey(),
+                $senderPublicKey
+            );
+
+            // Filter to only include transactions after lastKnownTxid if provided
+            $filteredTransactions = [];
+            $foundLastKnown = ($lastKnownTxid === null);
+
+            foreach ($transactions as $tx) {
+                if (!$foundLastKnown) {
+                    if ($tx['txid'] === $lastKnownTxid) {
+                        $foundLastKnown = true;
+                    }
+                    continue;
+                }
+                // Include only necessary fields for security
+                $filteredTransactions[] = [
+                    'txid' => $tx['txid'],
+                    'previous_txid' => $tx['previous_txid'],
+                    'sender_address' => $tx['sender_address'],
+                    'sender_public_key' => $tx['sender_public_key'],
+                    'receiver_address' => $tx['receiver_address'],
+                    'receiver_public_key' => $tx['receiver_public_key'],
+                    'amount' => $tx['amount'],
+                    'currency' => $tx['currency'],
+                    'memo' => $tx['memo'],
+                    'timestamp' => $tx['timestamp'],
+                    'status' => $tx['status']
+                ];
+            }
+
+            // Get latest txid
+            $latestTxid = !empty($transactions) ? $transactions[0]['txid'] : null;
+
+            echo $this->messagePayload->buildTransactionSyncResponse(
+                $senderAddress,
+                $filteredTransactions,
+                $latestTxid
+            );
+
+        } catch (Exception $e) {
+            SecureLogger::logException($e, [
+                'method' => 'handleTransactionSyncRequest',
+                'sender' => $senderAddress
+            ]);
+            echo $this->messagePayload->buildTransactionSyncRejection($senderAddress, 'internal_error');
+        }
     }
 
     /**

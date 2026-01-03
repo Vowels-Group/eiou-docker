@@ -261,4 +261,104 @@ class MessagePayload extends BasePayload
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
+
+    /**
+     * Build transaction chain sync request payload
+     *
+     * Sent when a contact needs to sync their transaction chain due to previousTxid mismatch.
+     *
+     * @param string $contactAddress The contact's address
+     * @param string $contactPublicKey The contact's public key
+     * @param string|null $lastKnownTxid The last known txid in the mutual chain (or null)
+     * @return array The sync request payload
+     */
+    public function buildTransactionSyncRequest(string $contactAddress, string $contactPublicKey, ?string $lastKnownTxid = null): array
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($contactAddress);
+        return [
+            'type' => 'message',
+            'typeMessage' => 'sync',
+            'syncType' => 'transaction_chain',
+            'inquiry' => true,
+            'contactPublicKey' => $contactPublicKey,
+            'lastKnownTxid' => $lastKnownTxid,
+            'message' => $myAddress . ' is requesting transaction chain sync',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+    }
+
+    /**
+     * Build transaction chain sync response payload
+     *
+     * Returns transactions that the requester is missing from their chain.
+     *
+     * @param string $address The requester's address
+     * @param array $transactions Array of transaction data to sync
+     * @param string|null $latestTxid The latest txid in the chain
+     * @return string JSON-encoded sync response payload
+     */
+    public function buildTransactionSyncResponse(string $address, array $transactions, ?string $latestTxid): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return json_encode([
+            'type' => 'message',
+            'typeMessage' => 'sync',
+            'syncType' => 'transaction_chain',
+            'inquiry' => false,
+            'status' => 'accepted',
+            'transactions' => $transactions,
+            'latestTxid' => $latestTxid,
+            'transactionCount' => count($transactions),
+            'message' => 'Transaction chain sync data provided',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
+
+    /**
+     * Build transaction sync acknowledgment payload
+     *
+     * Sent after successfully processing sync data.
+     *
+     * @param string $address The sync responder's address
+     * @param int $processedCount Number of transactions processed
+     * @return string JSON-encoded acknowledgment payload
+     */
+    public function buildTransactionSyncAcknowledgment(string $address, int $processedCount): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return json_encode([
+            'status' => 'acknowledged',
+            'processedCount' => $processedCount,
+            'message' => $myAddress . ' has processed ' . $processedCount . ' transactions from sync',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
+
+    /**
+     * Build transaction sync rejection payload
+     *
+     * Sent when sync request cannot be fulfilled.
+     *
+     * @param string $address The requester's address
+     * @param string $reason Rejection reason
+     * @return string JSON-encoded rejection payload
+     */
+    public function buildTransactionSyncRejection(string $address, string $reason): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return json_encode([
+            'type' => 'message',
+            'typeMessage' => 'sync',
+            'syncType' => 'transaction_chain',
+            'inquiry' => false,
+            'status' => 'rejected',
+            'reason' => $reason,
+            'message' => 'Transaction chain sync rejected: ' . $reason,
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
 }

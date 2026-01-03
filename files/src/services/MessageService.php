@@ -241,6 +241,10 @@ class MessageService {
                 $this->handleContactMessageRequest($request);
             }
         }
+        // Handle Sync messages
+        elseif($request['typeMessage'] === "sync"){
+            $this->handleSyncMessageRequest($request);
+        }
     }
 
     /**
@@ -506,6 +510,42 @@ class MessageService {
         }
 
         return json_encode($response);
+    }
+
+    /**
+     * Handle sync message request
+     *
+     * Processes transaction chain sync requests and delegates to SyncService.
+     *
+     * @param array $request The sync request data
+     * @return void
+     */
+    private function handleSyncMessageRequest(array $request): void {
+        $syncType = $request['syncType'] ?? null;
+
+        if ($syncType === 'transaction_chain') {
+            if (isset($request['inquiry']) && $request['inquiry']) {
+                // This is a sync request - delegate to SyncService
+                $syncService = Application::getInstance()->services->getSyncService();
+                $syncService->handleTransactionSyncRequest($request);
+            } else {
+                // This is a sync response - should be handled by the requester
+                // Log unexpected sync response
+                output('Received unexpected sync response without pending request', 'SILENT');
+                echo json_encode([
+                    'status' => 'rejected',
+                    'reason' => 'no_pending_request',
+                    'message' => 'No pending sync request for this response'
+                ]);
+            }
+        } else {
+            // Unknown sync type
+            echo json_encode([
+                'status' => 'rejected',
+                'reason' => 'unknown_sync_type',
+                'message' => 'Sync type not supported: ' . ($syncType ?? 'null')
+            ]);
+        }
     }
 
     /**
