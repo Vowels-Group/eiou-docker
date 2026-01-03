@@ -47,6 +47,18 @@ class TransactionPayload extends BasePayload
             $payload['description'] = $this->sanitizeString($data['description']);
         }
 
+        // Include address tracking fields if provided (for transaction history)
+        // Accept both snake_case and camelCase input
+        $endRecipient = $data['endRecipientAddress'] ?? $data['end_recipient_address'] ?? null;
+        if ($endRecipient !== null) {
+            $payload['endRecipientAddress'] = $this->sanitizeString($endRecipient);
+        }
+
+        $initialSender = $data['initialSenderAddress'] ?? $data['initial_sender_address'] ?? null;
+        if ($initialSender !== null) {
+            $payload['initialSenderAddress'] = $this->sanitizeString($initialSender);
+        }
+
         return $payload;
     }
 
