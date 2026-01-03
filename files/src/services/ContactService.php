@@ -179,8 +179,9 @@ class ContactService {
         $txid = $this->createContactTxid($receiverPublicKey, $time);
 
         // Build transaction data with status 'sent' (will move to 'completed' upon acceptance)
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($receiverAddress);
         $transactionData = [
-            'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($receiverAddress),
+            'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
             'receiverAddress' => $receiverAddress,
             'receiverPublicKey' => $receiverPublicKey,
@@ -189,7 +190,10 @@ class ContactService {
             'status' => 'sent',
             'txid' => $txid,
             'memo' => 'contact',
-            'description' => 'Contact request transaction'
+            'description' => 'Contact request transaction',
+            // Contact transactions are direct - both parties know sender and recipient
+            'endRecipientAddress' => $receiverAddress,
+            'initialSenderAddress' => $myAddress
         ];
 
         // Insert the contact transaction as 'sent' type
@@ -218,17 +222,21 @@ class ContactService {
         $txid = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $this->currentUser->getPublicKey() . '0' . $time);
 
         // Build transaction data with status 'accepted' (pending user acceptance, will move to 'completed')
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($senderAddress);
         $transactionData = [
             'senderAddress' => $senderAddress,
             'senderPublicKey' => $senderPublicKey,
-            'receiverAddress' => $this->transportUtility->resolveUserAddressForTransport($senderAddress),
+            'receiverAddress' => $myAddress,
             'receiverPublicKey' => $this->currentUser->getPublicKey(),
             'amount' => 0,
             'currency' => $currency,
             'status' => 'accepted',
             'txid' => $txid,
             'memo' => 'contact',
-            'description' => 'Contact request received'
+            'description' => 'Contact request received',
+            // Contact transactions are direct - both parties know sender and recipient
+            'endRecipientAddress' => $myAddress,
+            'initialSenderAddress' => $senderAddress
         ];
 
         // Insert the contact transaction with 'accepted' status
