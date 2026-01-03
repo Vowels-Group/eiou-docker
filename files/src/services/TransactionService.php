@@ -220,8 +220,8 @@ class TransactionService {
      */
     public function checkPreviousTxid(array $request): bool {
         try {
-            // Validate required fields
-            if (!isset($request['senderPublicKey'], $request['receiverAddress'])) {
+            // Validate required fields - need receiverPublicKey for chain validation
+            if (!isset($request['senderPublicKey'], $request['receiverPublicKey'])) {
                 $this->secureLogger->error("Missing required fields for previous txid check", [
                     'request_keys' => array_keys($request)
                 ]);
@@ -229,7 +229,8 @@ class TransactionService {
             }
 
             // If a previous transaction exists, verify the previousTxid matches
-            if (isset($request['previousTxid']) && $previousTxResult = $this->transactionRepository->getPreviousTxid($request['senderPublicKey'], $request['receiverAddress'])) {
+            // getPreviousTxid expects public keys (not addresses) to hash and compare
+            if (isset($request['previousTxid']) && $previousTxResult = $this->transactionRepository->getPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey'])) {
                 if ($previousTxResult !== $request['previousTxid']) {
                     return false;
                 }
