@@ -167,7 +167,7 @@ function getTransactionsTableSchema() {
         txid VARCHAR(255) UNIQUE NOT NULL,
         previous_txid VARCHAR(255),
         sender_signature TEXT,
-        signed_message TEXT,
+        signature_nonce BIGINT,
         memo TEXT,
         description TEXT,
         initial_sender_address VARCHAR(255) DEFAULT NULL,

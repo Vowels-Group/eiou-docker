@@ -412,7 +412,7 @@ class SyncService {
                         'txid' => $tx['txid'],
                         'sender' => $tx['sender_address'],
                         'has_signature' => !empty($tx['sender_signature']),
-                        'has_message' => !empty($tx['signed_message']),
+                        'has_nonce' => !empty($tx['signature_nonce']),
                         'note' => 'Signature enforcement requires message parsing updates'
                     ]);
                     // Continue with sync - don't block on missing signatures for now
@@ -433,7 +433,7 @@ class SyncService {
                     'status' => 'completed',
                     // Include signature data for future verification
                     'signature' => $tx['sender_signature'] ?? null,
-                    'message' => $tx['signed_message'] ?? null
+                    'signatureNonce' => $tx['signature_nonce'] ?? null
                 ];
 
                 // Determine type based on sender
@@ -514,7 +514,7 @@ class SyncService {
                     'status' => $tx['status'],
                     // Include signature data for verification
                     'sender_signature' => $tx['sender_signature'] ?? null,
-                    'signed_message' => $tx['signed_message'] ?? null
+                    'signature_nonce' => $tx['signature_nonce'] ?? null
                 ];
             }
 
@@ -546,17 +546,23 @@ class SyncService {
      * Verifies that the transaction was actually signed by the claimed sender.
      * This prevents fabricated transactions from being synced.
      *
-     * @param array $tx Transaction data with sender_signature and signed_message
+     * The signature was created by:
+     * 1. Building message content (transaction fields in camelCase)
+     * 2. Adding nonce (time() value)
+     * 3. JSON encoding the content
+     * 4. Signing with sender's private key
+     *
+     * @param array $tx Transaction data with sender_signature and signature_nonce
      * @return bool True if signature is valid, false otherwise
      */
     private function verifyTransactionSignature(array $tx): bool {
-        // Both signature and signed_message are required for verification
-        if (empty($tx['sender_signature']) || empty($tx['signed_message'])) {
+        // Both signature and nonce are required for verification
+        if (empty($tx['sender_signature']) || empty($tx['signature_nonce'])) {
             // Log missing signature data
             SecureLogger::debug("Transaction missing signature data for verification", [
                 'txid' => $tx['txid'] ?? 'unknown',
                 'has_signature' => !empty($tx['sender_signature']),
-                'has_message' => !empty($tx['signed_message'])
+                'has_nonce' => !empty($tx['signature_nonce'])
             ]);
             return false;
         }
@@ -564,6 +570,13 @@ class SyncService {
         // Get the sender's public key
         $senderPublicKey = $tx['sender_public_key'] ?? null;
         if (empty($senderPublicKey)) {
+            return false;
+        }
+
+        // Reconstruct the signed message from transaction fields + nonce
+        // The message structure must match how it was originally created
+        $messageContent = $this->reconstructSignedMessage($tx);
+        if ($messageContent === null) {
             return false;
         }
 
@@ -578,7 +591,7 @@ class SyncService {
 
         // Verify the signature
         $verified = openssl_verify(
-            $tx['signed_message'],
+            $messageContent,
             base64_decode($tx['sender_signature']),
             $publicKeyResource
         );
@@ -592,6 +605,48 @@ class SyncService {
         }
 
         return $verified === 1;
+    }
+
+    /**
+     * Reconstruct the signed message from transaction data + nonce
+     *
+     * Rebuilds the original JSON message that was signed by the sender.
+     * The field order and naming must match the original signing process.
+     *
+     * @param array $tx Transaction data including signature_nonce
+     * @return string|null JSON message or null if reconstruction fails
+     */
+    private function reconstructSignedMessage(array $tx): ?string {
+        // Required fields for reconstruction
+        $requiredFields = ['sender_address', 'receiver_address', 'sender_public_key',
+                          'receiver_public_key', 'amount', 'currency', 'txid', 'signature_nonce'];
+
+        foreach ($requiredFields as $field) {
+            if (!isset($tx[$field])) {
+                SecureLogger::debug("Missing field for message reconstruction", [
+                    'field' => $field,
+                    'txid' => $tx['txid'] ?? 'unknown'
+                ]);
+                return null;
+            }
+        }
+
+        // Reconstruct message in the same format as TransactionPayload
+        // Uses camelCase keys as that's the standard for message payloads
+        $messageContent = [
+            'senderAddress' => $tx['sender_address'],
+            'receiverAddress' => $tx['receiver_address'],
+            'senderPublicKey' => $tx['sender_public_key'],
+            'receiverPublicKey' => $tx['receiver_public_key'],
+            'amount' => (int)$tx['amount'],
+            'currency' => $tx['currency'],
+            'previousTxid' => $tx['previous_txid'] ?? null,
+            'txid' => $tx['txid'],
+            'memo' => $tx['memo'] ?? 'standard',
+            'nonce' => (int)$tx['signature_nonce']
+        ];
+
+        return json_encode($messageContent);
     }
 
     /**

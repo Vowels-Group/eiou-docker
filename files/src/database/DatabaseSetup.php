@@ -168,13 +168,13 @@ function runColumnMigrations(PDO $pdo): array {
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
     $columnsToAdd = [
         'transactions' => [
-            'signed_message' => 'TEXT DEFAULT NULL AFTER sender_signature'
+            'signature_nonce' => 'BIGINT DEFAULT NULL AFTER sender_signature'
         ]
     ];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
     $columnsToDrop = [
-        
+        'transactions' => ['signed_message']
     ];
 
     // Add new columns
