@@ -457,6 +457,13 @@ class TransactionService {
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
         $data['txid'] = $this->createUniqueTxid($data);
 
+        // Issue #320: Include previous_txid in outgoing transaction for chain validation
+        // This allows receiver to verify transaction chain integrity
+        $data['previousTxid'] = $this->transactionRepository->getPreviousTxid(
+            $this->currentUser->getPublicKey(),
+            $data['receiverPublicKey']
+        );
+
         // Populate address tracking fields for direct transactions
         // User is the original sender: end_recipient is receiver, initial_sender is own address
         $data['end_recipient_address'] = $data['receiverAddress'];
@@ -484,6 +491,12 @@ class TransactionService {
         $data['currency'] = $request['currency'];
         $data['txid'] = $this->createUniqueTxid($data);
         $data['memo'] = $request['hash'];
+
+        // Issue #320: Include previous_txid in outgoing transaction for chain validation
+        $data['previousTxid'] = $this->transactionRepository->getPreviousTxid(
+            $this->currentUser->getPublicKey(),
+            $data['receiverPublicKey']
+        );
 
         // Privacy: Description only sent to final recipient, not to relay nodes
         if ($description !== null) {
@@ -535,7 +548,8 @@ class TransactionService {
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
                     // Relay transaction - leave address fields NULL (privacy-preserving)
                     // Relay doesn't know the original sender or final recipient
-                    $request['txid'] = $this->createUniqueTxid($request);
+                    // Issue #320: Use the sender's txid from the incoming request
+                    // This ensures both sender and receiver have the same txid
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'relay'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
