@@ -207,6 +207,7 @@ messageDeliveryTest
 cliCommandsTest
 apiEndpointsTest
 syncTest
+transactionChainSyncTest
 seedPhraseTest
 authcodeRestorationTest
 torRapidRestartTest
