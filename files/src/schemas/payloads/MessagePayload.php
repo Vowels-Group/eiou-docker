@@ -178,6 +178,11 @@ class MessagePayload extends BasePayload
             $payload['description'] = $this->sanitizeString($message['description']);
         }
 
+        // Include initialSenderAddress if present (for end-recipient tracking)
+        if (isset($message['initialSenderAddress']) && $message['initialSenderAddress'] !== null) {
+            $payload['initialSenderAddress'] = $this->sanitizeString($message['initialSenderAddress']);
+        }
+
         return $payload;
     }
 

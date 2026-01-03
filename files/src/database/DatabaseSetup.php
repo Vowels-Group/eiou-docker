@@ -167,7 +167,10 @@ function runColumnMigrations(PDO $pdo): array {
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
     $columnsToAdd = [
-    
+        'transactions' => [
+            'end_recipient_address' => 'VARCHAR(255) DEFAULT NULL',
+            'initial_sender_address' => 'VARCHAR(255) DEFAULT NULL'
+        ]
     ];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
@@ -216,6 +219,36 @@ function runColumnMigrations(PDO $pdo): array {
                 $results["{$tableName}.{$columnName}"] = 'error: ' . $e->getMessage();
                 if (class_exists('SecureLogger')) {
                     SecureLogger::error("Column drop failed for {$tableName}.{$columnName}", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+        }
+    }
+
+    // Add missing indexes
+    $indexesToAdd = [
+        'transactions' => [
+            'idx_transactions_end_recipient' => 'end_recipient_address',
+            'idx_transactions_initial_sender' => 'initial_sender_address'
+        ]
+    ];
+
+    foreach ($indexesToAdd as $tableName => $indexes) {
+        foreach ($indexes as $indexName => $columnName) {
+            try {
+                // Check if index exists
+                $stmt = $pdo->query("SHOW INDEX FROM `$tableName` WHERE Key_name = '$indexName'");
+                if ($stmt->rowCount() === 0) {
+                    $pdo->exec("ALTER TABLE `$tableName` ADD INDEX `$indexName` (`$columnName`)");
+                    $results["{$tableName}.{$indexName}"] = 'index_created';
+                } else {
+                    $results["{$tableName}.{$indexName}"] = 'index_exists';
+                }
+            } catch (PDOException $e) {
+                $results["{$tableName}.{$indexName}"] = 'index_error: ' . $e->getMessage();
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::error("Index creation failed for {$tableName}.{$indexName}", [
                         'error' => $e->getMessage()
                     ]);
                 }

@@ -192,6 +192,11 @@ class TransactionPayload extends BasePayload
             $payload['description'] = $this->sanitizeString($request['description']);
         }
 
+        // Include initialSenderAddress if present (for end-recipient tracking)
+        if (isset($request['initialSenderAddress']) && $request['initialSenderAddress'] !== null) {
+            $payload['initialSenderAddress'] = $this->sanitizeString($request['initialSenderAddress']);
+        }
+
         return $payload;
     }
 

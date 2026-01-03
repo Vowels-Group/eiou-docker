@@ -313,7 +313,40 @@ class MessageService {
             $this->transactionRepository->updateDescription($hash, $decodedMessage['description'], false);
         }
 
-        echo $this->messagePayload->buildTransactionCompletedCorrectly($decodedMessage);
+        // Extract and store initial_sender_address from inquiry message (for P2P transactions)
+        // The original sender includes their address in the inquiry so end-recipient can track it
+        if (isset($decodedMessage['hash'])) {
+            $hash = $decodedMessage['hash'];
+            $hashType = $decodedMessage['hashType'] ?? 'memo';
+
+            // Only update for memo-based (P2P) transactions
+            if ($hashType === 'memo') {
+                // Use initialSenderAddress if explicitly provided, otherwise fall back to senderAddress
+                $initialSender = $decodedMessage['initialSenderAddress'] ?? $decodedMessage['senderAddress'] ?? null;
+                if ($initialSender !== null) {
+                    // Update initial_sender_address in transaction table
+                    $this->transactionRepository->updateInitialSenderAddress($hash, $initialSender);
+                }
+            }
+        }
+
+        // Look up actual transaction status based on hash type
+        $hash = $decodedMessage['hash'];
+        $hashType = $decodedMessage['hashType'] ?? 'memo';
+        $status = null;
+
+        if ($hashType === 'memo') {
+            $status = $this->transactionRepository->getStatusByMemo($hash);
+        } elseif ($hashType === 'txid') {
+            $status = $this->transactionRepository->getStatusByTxid($hash);
+        }
+
+        // Build response based on actual transaction status
+        if ($status !== null) {
+            echo $this->messagePayload->buildTransactionStatusResponse($decodedMessage, $status);
+        } else {
+            echo $this->messagePayload->buildTransactionNotFound($decodedMessage);
+        }
     }
 
     /**
@@ -345,6 +378,10 @@ class MessageService {
                         if (isset($p2p['description']) && $p2p['description'] !== null) {
                             $decodedMessage['description'] = $p2p['description'];
                         }
+                        // Include original sender's address for end-recipient to track initial_sender_address
+                        $decodedMessage['initialSenderAddress'] = $this->transportUtility->resolveUserAddressForTransport(
+                            $p2p['destination_address']
+                        );
                         $completedTransactionInquiry = $this->messagePayload->buildTransactionCompletedInquiry($decodedMessage);
                         $sendResult = $this->sendMessage('inquiry', $p2p['destination_address'], $completedTransactionInquiry, $hash);
                         $response = $sendResult['response'];

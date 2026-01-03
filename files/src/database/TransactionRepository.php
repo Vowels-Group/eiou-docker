@@ -863,6 +863,8 @@ class TransactionRepository extends AbstractRepository {
                     t.memo,
                     t.description,
                     t.previous_txid,
+                    t.end_recipient_address,
+                    t.initial_sender_address,
                     sender_contact.name AS sender_name,
                     receiver_contact.name AS receiver_name,
                     p2p.destination_address AS p2p_destination,
@@ -918,6 +920,8 @@ class TransactionRepository extends AbstractRepository {
                 'memo' => $tx['memo'],
                 'description' => $tx['description'],
                 'previous_txid' => $tx['previous_txid'],
+                'end_recipient_address' => $tx['end_recipient_address'] ?? null,
+                'initial_sender_address' => $tx['initial_sender_address'] ?? null,
                 'p2p_destination' => $tx['p2p_destination'] ?? null,
                 'p2p_amount' => isset($tx['p2p_amount']) ? $tx['p2p_amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR : null,
                 'p2p_fee' => isset($tx['p2p_fee']) ? $tx['p2p_fee'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR : null
@@ -1142,7 +1146,9 @@ class TransactionRepository extends AbstractRepository {
                 'previous_txid' => $result ? $result['txid'] : null,
                 'sender_signature' => $request['signature'] ?? null, // upon initial inserting a standard transaction in database of original sender it is null
                 'memo' => $request['memo'],
-                'description' => $request['description'] ?? null
+                'description' => $request['description'] ?? null,
+                'end_recipient_address' => $request['endRecipientAddress'] ?? null,
+                'initial_sender_address' => $request['initialSenderAddress'] ?? null
             ];
             $result = $this->insert($data);
             $this->commit();
@@ -1333,6 +1339,34 @@ class TransactionRepository extends AbstractRepository {
             output(outputTransactionDescriptionUpdated($description, $typeTransaction, $identifier), 'SILENT');
         }
 
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Update end recipient address
+     *
+     * @param string $identifier Transaction memo or txid
+     * @param string $address End recipient address
+     * @param bool $isTxid True if identifier is txid, false if memo
+     * @return bool Success status
+     */
+    public function updateEndRecipientAddress(string $identifier, string $address, bool $isTxid = false): bool {
+        $column = $isTxid ? 'txid' : 'memo';
+        $affectedRows = $this->update(['end_recipient_address' => $address], $column, $identifier);
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Update initial sender address
+     *
+     * @param string $identifier Transaction memo or txid
+     * @param string $address Initial sender address
+     * @param bool $isTxid True if identifier is txid, false if memo
+     * @return bool Success status
+     */
+    public function updateInitialSenderAddress(string $identifier, string $address, bool $isTxid = false): bool {
+        $column = $isTxid ? 'txid' : 'memo';
+        $affectedRows = $this->update(['initial_sender_address' => $address], $column, $identifier);
         return $affectedRows >= 0;
     }
 
