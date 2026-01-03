@@ -42,6 +42,18 @@ if [[ -z "$senderAddress" ]] || [[ -z "$receiverAddress" ]]; then
     exit 0
 fi
 
+############################ Ensure Contacts Exist ############################
+
+echo -e "\n[Ensuring contacts exist between sender and receiver]"
+
+# Add contacts if they don't exist (may be removed by previous tests like apiEndpointsTest)
+# Using 'eiou add' command - format: eiou add <address> <name> <fee> <credit> <currency>
+docker exec ${sender} eiou add ${receiverAddress} ${receiver} 0 0 USD 2>&1 || true
+docker exec ${receiver} eiou add ${senderAddress} ${sender} 0 0 USD 2>&1 || true
+
+# Wait briefly for contacts to be established
+sleep 2
+
 ############################ Get Public Keys ############################
 
 echo -e "\n[Getting container public keys]"
