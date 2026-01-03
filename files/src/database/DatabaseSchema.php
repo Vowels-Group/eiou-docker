@@ -181,8 +181,8 @@ function getTransactionsTableSchema() {
         INDEX idx_transactions_txid (txid),
         INDEX idx_transactions_previous_txid (previous_txid),
         INDEX idx_transactions_memo (memo(255)),
-        INDEX idx_transactions_initial_sender (initial_sender_address)
-        INDEX idx_transactions_end_recipient (end_recipient_address),
+        INDEX idx_transactions_initial_sender (initial_sender_address),
+        INDEX idx_transactions_end_recipient (end_recipient_address)
     )";
 }
 
