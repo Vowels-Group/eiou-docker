@@ -179,18 +179,26 @@ function wait_for_contact(){
     return 1
 }
 
+# Function to remove a volume only if it exists
+remove_volume_if_exists() {
+    local volume_name=$1
+    if docker volume ls -q | grep -q "^${volume_name}$"; then
+        docker volume rm "$volume_name"
+    fi
+}
+
 # Function to remove a container if it exists and any volumes associated
 remove_container_if_exists() {
     local container_name=$1
     if docker ps -a --format '{{.Names}}' | grep -q "^$container_name$"; then
         echo "Removing existing container: $container_name..."
         docker rm -f "$container_name"
-        echo "Removing any volumes of container: $container_name..."
-        docker volume rm "$container_name-mysql-data"
-        docker volume rm "$container_name-files"
-        docker volume rm "$container_name-index"
-        docker volume rm "$container_name-eiou"
     fi
+    echo "Removing any volumes of container: $container_name (if they exist)..."
+    remove_volume_if_exists "$container_name-mysql-data"
+    remove_volume_if_exists "$container_name-files"
+    remove_volume_if_exists "$container_name-index"
+    remove_volume_if_exists "$container_name-eiou"
 }
 
 #############################################################################
