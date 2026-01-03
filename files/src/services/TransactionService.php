@@ -457,6 +457,11 @@ class TransactionService {
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
         $data['txid'] = $this->createUniqueTxid($data);
 
+        // Populate address tracking fields for direct transactions
+        // User is the original sender: end_recipient is receiver, initial_sender is own address
+        $data['end_recipient_address'] = $data['receiverAddress'];
+        $data['initial_sender_address'] = $this->transportUtility->resolveUserAddressForTransport($data['receiverAddress']);
+
         return $data;
     }
 
@@ -485,6 +490,16 @@ class TransactionService {
             $data['description'] = $description;
         }
 
+        // Populate address tracking fields for P2P transactions
+        // Set end_recipient from p2p.destination_address
+        $p2p = $this->p2pRepository->getByHash($request['hash']);
+        if ($p2p && isset($p2p['destination_address'])) {
+            $data['end_recipient_address'] = $p2p['destination_address'];
+        }
+
+        // Set initial_sender_address to own address (original sender perspective)
+        $data['initial_sender_address'] = $this->transportUtility->resolveUserAddressForTransport($data['receiverAddress']);
+
         return $data;
     }
 
@@ -506,7 +521,11 @@ class TransactionService {
 
             // Process incoming transactions
             if ($request['memo'] === 'standard') {
-                // If direct transaction
+                // If direct transaction - receiver knows both sender and recipient
+                // end_recipient is myself (receiver), initial_sender is the sender
+                $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+                $request['endRecipientAddress'] = $myAddress;
+                $request['initialSenderAddress'] = $request['senderAddress'];
                 $insertTransactionResponse = $this->transactionRepository->insertTransaction($request,'received');
             } else {
                 // If p2p type transaction
@@ -514,11 +533,17 @@ class TransactionService {
                 $rP2pResult = $this->rp2pRepository->getByHash($memo);
                 // Check if precursors to transactions exist and correspond
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
+                    // Relay transaction - leave address fields NULL (privacy-preserving)
+                    // Relay doesn't know the original sender or final recipient
                     $request['txid'] = $this->createUniqueTxid($request);
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'relay'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
                     // If Transaction is for end-recipient
+                    // end_recipient is myself, initial_sender will be updated via inquiry message later
+                    $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+                    $request['endRecipientAddress'] = $myAddress;
+                    // initial_sender_address left NULL - will be set when inquiry message arrives
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'received'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 }
@@ -639,6 +664,14 @@ class TransactionService {
             // Intermediary: destination_address is NULL when forwarding P2P request
             $p2p = $this->p2pRepository->getByHash($memo);
             $isRelay = !isset($p2p['destination_address']) || $p2p['destination_address'] === null;
+
+            // Populate address tracking fields only if original sender
+            if (!$isRelay && isset($p2p['destination_address'])) {
+                // Original sender: Set both fields
+                $message['end_recipient_address'] = $p2p['destination_address'];
+                $message['initial_sender_address'] = $this->transportUtility->resolveUserAddressForTransport($message['sender_address']);
+            }
+            // Relay/Intermediary: Leave fields NULL (privacy-preserving)
 
             // If sending transaction forwards
             $payload = $this->transactionPayload->buildFromDatabase($message);
