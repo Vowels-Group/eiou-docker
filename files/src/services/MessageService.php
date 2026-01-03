@@ -384,10 +384,11 @@ class MessageService {
                         );
                         $completedTransactionInquiry = $this->messagePayload->buildTransactionCompletedInquiry($decodedMessage);
                         $sendResult = $this->sendMessage('inquiry', $p2p['destination_address'], $completedTransactionInquiry, $hash);
-                        $response = $sendResult['response'];
+                        $response = $sendResult['response'] ?? null;
                         output(outputTransactionInquiryResponse($response),'SILENT');
 
-                        if($response['status'] === 'completed'){
+                        // Check if inquiry was successful and transaction is completed
+                        if($sendResult['success'] && $response !== null && isset($response['status']) && $response['status'] === 'completed'){
                             $this->p2pRepository->updateStatus($hash,'completed',true);
                             $this->transactionRepository->updateStatus($hash,'completed');
                             $this->balanceRepository->updateBalanceGivenTransactions($transactions);
@@ -400,6 +401,9 @@ class MessageService {
 
                             // Mark all P2P delivery records for this hash as completed
                             $this->markP2pDeliveriesCompleted($hash);
+                        } elseif (!$sendResult['success']) {
+                            // Inquiry failed - log the error but don't block the completion flow
+                            output('Transaction inquiry to end-recipient failed: ' . ($sendResult['tracking']['error'] ?? 'Unknown error'), 'SILENT');
                         }
                     } else{
                         $this->p2pRepository->updateStatus($hash,'completed',true);
@@ -415,6 +419,11 @@ class MessageService {
                         $payloadTransactionCompleted =  $this->transactionPayload->buildCompleted($decodedMessage);
                         output(outputSendTransactionCompletionMessageOnwards($payloadTransactionCompleted,$p2p['sender_address']),'SILENT');
                         $sendResult = $this->sendMessage('completion-relay', $p2p['sender_address'], $payloadTransactionCompleted, $hash);
+
+                        // Log completion-relay result (delivery service handles retries)
+                        if (!$sendResult['success']) {
+                            output('Completion-relay to ' . $p2p['sender_address'] . ' queued for retry: ' . ($sendResult['tracking']['error'] ?? 'delivery in progress'), 'SILENT');
+                        }
                     }
                 }
                 // Return acknowledgment for P2P completion message delivery tracking

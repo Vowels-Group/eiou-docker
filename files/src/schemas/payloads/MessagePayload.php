@@ -209,4 +209,56 @@ class MessagePayload extends BasePayload
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
+
+    /**
+     * Build transaction status response for inquiry requests
+     *
+     * Returns the actual transaction status to the inquiring sender.
+     * Used by end-recipients to respond to original senders checking if transaction completed.
+     *
+     * @param array $message Message data containing transaction hash and hashType
+     * @param string $status The actual transaction status (completed, pending, etc.)
+     * @return string JSON-encoded status response payload
+     */
+    public function buildTransactionStatusResponse(array $message, string $status): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
+        $hash = $message['hash'] ?? 'unknown';
+        $hashType = $message['hashType'] ?? 'unknown';
+        return json_encode([
+            'type' => 'message',
+            'typeMessage' => 'transaction',
+            'status' => $status,
+            'hash' => $hash,
+            'hashType' => $hashType,
+            'message' => 'Transaction status is: ' . $status,
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
+
+    /**
+     * Build transaction not found response for inquiry requests
+     *
+     * Returns a 'not_found' response when the inquired transaction does not exist.
+     *
+     * @param array $message Message data containing transaction hash and hashType
+     * @return string JSON-encoded not found response payload
+     */
+    public function buildTransactionNotFound(array $message): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
+        $hash = $message['hash'] ?? 'unknown';
+        $hashType = $message['hashType'] ?? 'unknown';
+        return json_encode([
+            'type' => 'message',
+            'typeMessage' => 'transaction',
+            'status' => 'not_found',
+            'hash' => $hash,
+            'hashType' => $hashType,
+            'message' => 'Transaction with hash ' . $hash . ' not found',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
 }
