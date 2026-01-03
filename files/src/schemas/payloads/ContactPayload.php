@@ -33,7 +33,7 @@ class ContactPayload extends BasePayload
      * @param string $address The address of the contact request
      * @return array The contact creation payload
      */
-    public function buildCreateRequest($address): array
+    public function buildCreateRequest(string $address): array
     {
         return $this->build(['address' => $address]);
     }
@@ -41,11 +41,15 @@ class ContactPayload extends BasePayload
     /**
      * Build a contact request received payload
      *
+     * Includes the txid so sender can use the same txid for their
+     * contact transaction, ensuring both parties have matching txids.
+     *
      * @param string $address The address to send the acceptance to
      * @param array|null $knownAddresses All known addresses for the sender (http, tor, etc.)
+     * @param string|null $txid The transaction ID for this contact (for txid synchronization)
      * @return string JSON-encoded contact received payload
      */
-    public function buildReceived(string $address, ?array $knownAddresses = null): string
+    public function buildReceived(string $address, ?array $knownAddresses = null, ?string $txid = null): string
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
@@ -58,6 +62,11 @@ class ContactPayload extends BasePayload
         // Include all known addresses if available
         if ($knownAddresses !== null) {
             $payload['senderAddresses'] = $this->filterAddresses($knownAddresses);
+        }
+
+        // Include txid for synchronized contact transactions
+        if ($txid !== null) {
+            $payload['txid'] = $txid;
         }
 
         return json_encode($payload);

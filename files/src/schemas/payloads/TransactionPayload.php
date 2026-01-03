@@ -136,6 +136,8 @@ class TransactionPayload extends BasePayload
     {
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($rp2pData['sender_address']);
         $transactionService = Application::getInstance()->services->getTransactionService();
+        $transactionRepository = Application::getInstance()->services->getTransactionRepository();
+
         // This method returns data array for further processing, not final payload
         return [
             'time' => $rp2pData['time'],
@@ -144,7 +146,11 @@ class TransactionPayload extends BasePayload
             'amount' => $transactionService->removeTransactionFee($message),
             'currency' => $rp2pData['currency'] ?? 'USD',
             'txid' => $transactionService->createUniqueDatabaseTxid($message, $rp2pData),
-            //'previous_txid' => $transactionService->fixPreviousTxid($this->currentUser->getPublicKey(), $rp2pData['sender_public_key']),
+            // Include previous_txid for chain validation on receiver side
+            'previous_txid' => $transactionRepository->getPreviousTxid(
+                $this->currentUser->getPublicKey(),
+                $rp2pData['sender_public_key'] ?? ''
+            ),
             'memo' => $rp2pData['hash'] ?? null,
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),

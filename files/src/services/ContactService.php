@@ -167,16 +167,18 @@ class ContactService {
      * Creates a contact transaction with amount=0 to record the contact request
      * as the first transaction between users. Used by the sender of the contact request.
      *
+     * The txid should come from the receiver's response to ensure both parties
+     * have matching txids for the contact transaction.
+     *
      * @param string $receiverPublicKey The public key of the contact
      * @param string $receiverAddress The address of the contact
      * @param string $currency The currency for the transaction
+     * @param string|null $txid The txid from the receiver's response
      * @return bool True if transaction was inserted successfully
      */
-    private function insertContactTransaction(string $receiverPublicKey, string $receiverAddress, string $currency): bool {
-        $time = $this->timeUtility->getCurrentMicrotime();
-
-        // Create txid for contact transaction (amount is always 0)
-        $txid = $this->createContactTxid($receiverPublicKey, $time);
+    private function insertContactTransaction(string $receiverPublicKey, string $receiverAddress, string $currency, ?string $txid = null): bool {
+        // Use provided txid from receiver, or generate locally as fallback
+        $txid = $txid ?? $this->createContactTxid($receiverPublicKey, $this->timeUtility->getCurrentMicrotime());
 
         // Build transaction data with status 'sent' (will move to 'completed' upon acceptance)
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($receiverAddress);
@@ -209,16 +211,19 @@ class ContactService {
      * The transaction is created with status 'accepted' (pending user acceptance) and
      * moves to 'completed' when the user explicitly accepts the contact request.
      *
+     * The receiver generates the txid and returns it so it can be included in the
+     * response for the sender to use, ensuring both parties have matching txids.
+     *
      * @param string $senderPublicKey The public key of the contact who sent the request
      * @param string $senderAddress The address of the contact who sent the request
      * @param string $currency The currency for the transaction
-     * @return bool True if transaction was inserted successfully
+     * @return string|null The txid on success, null on failure
      */
-    private function insertReceivedContactTransaction(string $senderPublicKey, string $senderAddress, string $currency = 'USD'): bool {
+    private function insertReceivedContactTransaction(string $senderPublicKey, string $senderAddress, string $currency = 'USD'): ?string {
+        // Generate time and txid on receiver side
         $time = $this->timeUtility->getCurrentMicrotime();
 
-        // Create txid for received contact transaction
-        // From receiver's perspective: sender is the requester, receiver is current user
+        // Generate txid using sender's public key + receiver's public key + 0 + time
         $txid = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $this->currentUser->getPublicKey() . '0' . $time);
 
         // Build transaction data with status 'accepted' (pending user acceptance, will move to 'completed')
@@ -243,7 +248,8 @@ class ContactService {
         // Second parameter is transaction type: 'received' (we are receiving a contact request)
         $result = $this->transactionRepository->insertTransaction($transactionData, 'received');
 
-        return $result !== false;
+        // Return the txid so caller can include it in the response
+        return $result !== false ? $txid : null;
     }
 
     /**
@@ -573,7 +579,9 @@ class ContactService {
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
                     // Insert contact transaction (first transaction between users, amount=0)
-                    $this->insertContactTransaction($senderPublicKey, $address, $currency);
+                    // Use the txid from the response to ensure both parties have matching txids
+                    $txid = $responseData['txid'] ?? null;
+                    $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
 
                     // Update delivery stage: received -> inserted -> completed (using MessageDeliveryService directly)
                     // Contact request phase is complete (awaiting acceptance is a separate phase)
@@ -773,8 +781,9 @@ class ContactService {
             if($this->contactRepository->addPendingContact($senderPublicKey) && $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative)){
                 // Insert received contact transaction with status 'accepted' (pending user acceptance)
                 // This creates the contact transaction on the receiver's side
-                $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress);
-                return $this->contactPayload->buildReceived($senderAddress);
+                // Receiver generates txid and includes it in response for sender to use
+                $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress);
+                return $this->contactPayload->buildReceived($senderAddress, null, $txid);
             } else{
                 // Unable to insert contact
                 return $this->contactPayload->buildRejection($senderAddress);
