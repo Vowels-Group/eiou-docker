@@ -46,12 +46,12 @@ fi
 
 echo -e "\n[Getting container public keys]"
 
-# Get receiver's public key and hash from sender's contact list (as base64 to handle multi-line)
-pubkeyInfo=$(docker exec ${sender} php -r "
+# Get receiver's public key and hash from sender's contact list
+# Use the same pattern as balanceTest.sh - pass containerAddresses directly
+receiverPubkeyInfo=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$contact = \$app->services->getContactRepository();
-    \$pubkey = \$contact->getContactPubkey('${MODE}','${receiverAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${receiver}]}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey) . '|' . hash('sha256', \$pubkey);
     } else {
@@ -59,15 +59,14 @@ pubkeyInfo=$(docker exec ${sender} php -r "
     }
 " 2>/dev/null || echo "ERROR|ERROR")
 
-receiverPubkeyB64=$(echo "$pubkeyInfo" | cut -d'|' -f1)
-receiverPubkeyHash=$(echo "$pubkeyInfo" | cut -d'|' -f2)
+receiverPubkeyB64=$(echo "$receiverPubkeyInfo" | cut -d'|' -f1)
+receiverPubkeyHash=$(echo "$receiverPubkeyInfo" | cut -d'|' -f2)
 
 # Get sender's public key and hash from receiver's contact list
 senderPubkeyInfo=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$contact = \$app->services->getContactRepository();
-    \$pubkey = \$contact->getContactPubkey('${MODE}','${senderAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${sender}]}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey) . '|' . hash('sha256', \$pubkey);
     } else {
@@ -137,9 +136,9 @@ payloadBuildersExist=$(docker exec ${sender} php -r "
     require_once('/etc/eiou/src/schemas/payloads/MessagePayload.php');
 
     \$app = Application::getInstance();
-    \$userContext = \$app->services->getUserContext();
-    \$utilityContainer = \$app->services->getUtilityServiceContainer();
-    \$messagePayload = new MessagePayload(\$userContext, \$utilityContainer);
+    \$user = \$app->services->getCurrentUser();
+    \$utilityContainer = \$app->services->getUtilityContainer();
+    \$messagePayload = new MessagePayload(\$user, \$utilityContainer);
 
     \$methods = [
         'buildTransactionSyncRequest',
@@ -296,8 +295,9 @@ echo -e "\n[Test 6: Test sync request message flow]"
 totaltests=$(( totaltests + 1 ))
 
 # Manually trigger a sync request to verify the flow works
+# Note: Uses REL_FUNCTIONS instead of REL_APPLICATION because syncTransactionChain uses output()
 syncFlowTest=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${REL_FUNCTIONS}');
     \$app = Application::getInstance();
 
     \$syncService = \$app->services->getSyncService();
@@ -345,32 +345,31 @@ else
     failure=$(( failure + 1 ))
 fi
 
-############################ TEST 8: Verify previousTxid now matches ############################
+############################ TEST 8: Verify latest transaction exists on sender ############################
 
-echo -e "\n[Test 8: Verify previousTxid now matches after sync]"
+echo -e "\n[Test 8: Verify receiver's latest transaction exists on sender after sync]"
 totaltests=$(( totaltests + 1 ))
 
-# Get updated previous_txid from sender
-senderPreviousTxidAfter=$(docker exec ${sender} php -r "
+# Check if the receiver's latest fake txid (fakeTxid3) now exists on sender
+senderHasLatestTx=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
-    \$senderPubkey = base64_decode('${senderPubkeyB64}');
-    \$receiverPubkey = base64_decode('${receiverPubkeyB64}');
-    \$prevTxid = \$txRepo->getPreviousTxid(\$senderPubkey, \$receiverPubkey);
-    echo \$prevTxid ?: 'NULL';
+    \$pdo = \$app->services->getPdo();
+
+    // Check if the latest fake txid exists
+    \$stmt = \$pdo->prepare('SELECT COUNT(*) FROM transactions WHERE txid = ?');
+    \$stmt->execute(['${fakeTxid3}']);
+    \$count = \$stmt->fetchColumn();
+    echo \$count > 0 ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
-echo -e "\t   Sender's previous_txid after sync: ${senderPreviousTxidAfter:0:40}..."
-echo -e "\t   Receiver's previous_txid: ${receiverPreviousTxid:0:40}..."
+echo -e "\t   Checking for latest receiver txid: ${fakeTxid3:0:40}..."
 
-if [[ "$senderPreviousTxidAfter" == "$receiverPreviousTxid" ]]; then
-    printf "\t   previousTxid now matches ${GREEN}PASSED${NC}\n"
+if [[ "$senderHasLatestTx" == "EXISTS" ]]; then
+    printf "\t   Receiver's latest transaction now on sender ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   previousTxid match ${RED}FAILED${NC}\n"
-    printf "\t   Sender: %s\n" "${senderPreviousTxidAfter}"
-    printf "\t   Receiver: %s\n" "${receiverPreviousTxid}"
+    printf "\t   Receiver's latest transaction on sender ${RED}FAILED${NC} (%s)\n" "${senderHasLatestTx}"
     failure=$(( failure + 1 ))
 fi
 

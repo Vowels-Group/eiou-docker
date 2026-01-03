@@ -35,6 +35,7 @@ TOR_HOSTNAME="${TOR_HIDDEN_SERVICE_DIR}//hostname"
 # Relative paths used with require_once from current working directory
 # These use ./ prefix and are relative to container working directory
 REL_APPLICATION=".//etc//eiou//src//core//Application.php"
+REL_FUNCTIONS=".//etc//eiou//Functions.php"
 
 #############################################################################
 

@@ -467,16 +467,15 @@ class SyncService {
                 $senderPublicKey
             );
 
-            // Filter to only include transactions after lastKnownTxid if provided
+            // Filter to only include transactions NEWER than lastKnownTxid if provided
+            // Transactions are ordered by timestamp DESC (newest first), so we collect
+            // all transactions until we hit the lastKnownTxid
             $filteredTransactions = [];
-            $foundLastKnown = ($lastKnownTxid === null);
 
             foreach ($transactions as $tx) {
-                if (!$foundLastKnown) {
-                    if ($tx['txid'] === $lastKnownTxid) {
-                        $foundLastKnown = true;
-                    }
-                    continue;
+                // If we hit the lastKnownTxid, stop - requester already has this and older
+                if ($lastKnownTxid !== null && $tx['txid'] === $lastKnownTxid) {
+                    break;
                 }
                 // Include only necessary fields for security
                 $filteredTransactions[] = [
