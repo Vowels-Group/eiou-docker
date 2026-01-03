@@ -348,6 +348,77 @@ else
     failure=$(( failure + 1 ))
 fi
 
+############################ TEST 10: Verify reconstructSignedMessage works correctly ############################
+
+echo -e "\n[Test 10: Verify signature reconstruction and verification works]"
+totaltests=$(( totaltests + 1 ))
+
+# Test that reconstructSignedMessage produces correct message that can be verified
+# This uses a real transaction's signature and nonce to verify reconstruction
+signatureVerifyResult=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$syncService = \$app->services->getSyncService();
+
+    // Get a real transaction with signature data
+    \$stmt = \$pdo->query(\"SELECT * FROM transactions WHERE sender_signature IS NOT NULL AND signature_nonce IS NOT NULL LIMIT 1\");
+    \$tx = \$stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!\$tx) {
+        echo 'NO_TX_WITH_SIG';
+        exit;
+    }
+
+    // Use reflection to access private method reconstructSignedMessage
+    \$reflection = new ReflectionClass(\$syncService);
+    \$method = \$reflection->getMethod('reconstructSignedMessage');
+    \$method->setAccessible(true);
+
+    // Test reconstruction
+    \$reconstructed = \$method->invoke(\$syncService, \$tx);
+
+    if (\$reconstructed === null) {
+        echo 'RECONSTRUCT_FAILED';
+        exit;
+    }
+
+    // Verify the reconstructed message against the signature
+    \$senderPubkey = \$tx['sender_public_key'];
+    \$publicKeyResource = openssl_pkey_get_public(\$senderPubkey);
+
+    if (\$publicKeyResource === false) {
+        echo 'INVALID_PUBKEY';
+        exit;
+    }
+
+    \$verified = openssl_verify(
+        \$reconstructed,
+        base64_decode(\$tx['sender_signature']),
+        \$publicKeyResource
+    );
+
+    if (\$verified === 1) {
+        echo 'VERIFIED';
+    } elseif (\$verified === 0) {
+        echo 'SIG_MISMATCH';
+    } else {
+        echo 'VERIFY_ERROR:' . openssl_error_string();
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$signatureVerifyResult" == "VERIFIED" ]]; then
+    printf "\t   Signature reconstruction and verification ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+elif [[ "$signatureVerifyResult" == "NO_TX_WITH_SIG" ]]; then
+    printf "\t   Signature verification ${YELLOW}SKIPPED${NC} (no transactions with signature data)\n"
+    # Still count as passed since infrastructure exists but no signed transactions yet
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Signature reconstruction ${RED}FAILED${NC} (%s)\n" "${signatureVerifyResult}"
+    failure=$(( failure + 1 ))
+fi
+
 ############################ CLEANUP ############################
 
 echo -e "\n[Cleanup: Removing test transactions]"

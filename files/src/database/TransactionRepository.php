@@ -1145,7 +1145,7 @@ class TransactionRepository extends AbstractRepository {
                 'txid' => $request['txid'],
                 'previous_txid' => $result ? $result['txid'] : null,
                 'sender_signature' => $request['signature'] ?? null, // upon initial inserting a standard transaction in database of original sender it is null
-                'signature_nonce' => $request['signatureNonce'] ?? null, // nonce used when signing (for signature verification)
+                'signature_nonce' => $request['nonce'] ?? $request['signatureNonce'] ?? null, // nonce from signed message (for verification)
                 'memo' => $request['memo'],
                 'description' => $request['description'] ?? null,
                 'end_recipient_address' => $request['endRecipientAddress'] ?? null,

@@ -433,7 +433,7 @@ class SyncService {
                     'status' => 'completed',
                     // Include signature data for future verification
                     'signature' => $tx['sender_signature'] ?? null,
-                    'signatureNonce' => $tx['signature_nonce'] ?? null
+                    'nonce' => $tx['signature_nonce'] ?? null
                 ];
 
                 // Determine type based on sender
@@ -611,15 +611,21 @@ class SyncService {
      * Reconstruct the signed message from transaction data + nonce
      *
      * Rebuilds the original JSON message that was signed by the sender.
-     * The field order and naming must match the original signing process.
+     * Must match TransportUtilityService::sign() which:
+     * 1. Removes senderAddress, senderPublicKey, signature from payload
+     * 2. Adds nonce at the end
+     * 3. JSON encodes the content
+     *
+     * The field order must match the original payload order from TransactionPayload
+     * (minus the removed fields, plus nonce at the end).
      *
      * @param array $tx Transaction data including signature_nonce
      * @return string|null JSON message or null if reconstruction fails
      */
     private function reconstructSignedMessage(array $tx): ?string {
-        // Required fields for reconstruction
-        $requiredFields = ['sender_address', 'receiver_address', 'sender_public_key',
-                          'receiver_public_key', 'amount', 'currency', 'txid', 'signature_nonce'];
+        // Required fields for reconstruction (note: senderAddress/senderPublicKey are NOT signed)
+        $requiredFields = ['receiver_address', 'receiver_public_key', 'amount',
+                          'currency', 'txid', 'signature_nonce'];
 
         foreach ($requiredFields as $field) {
             if (!isset($tx[$field])) {
@@ -631,20 +637,24 @@ class SyncService {
             }
         }
 
-        // Reconstruct message in the same format as TransactionPayload
-        // Uses camelCase keys as that's the standard for message payloads
+        // Reconstruct message in the EXACT order from TransactionPayload::buildStandardFromDatabase
+        // after TransportUtilityService::sign() removes senderAddress/senderPublicKey
+        // IMPORTANT: Field order matters for signature verification!
+        // NOTE: description is ALWAYS included (even if null) to match buildStandardFromDatabase
         $messageContent = [
-            'senderAddress' => $tx['sender_address'],
+            'type' => 'send',
             'receiverAddress' => $tx['receiver_address'],
-            'senderPublicKey' => $tx['sender_public_key'],
             'receiverPublicKey' => $tx['receiver_public_key'],
             'amount' => (int)$tx['amount'],
             'currency' => $tx['currency'],
-            'previousTxid' => $tx['previous_txid'] ?? null,
             'txid' => $tx['txid'],
+            'previousTxid' => $tx['previous_txid'] ?? null,
             'memo' => $tx['memo'] ?? 'standard',
-            'nonce' => (int)$tx['signature_nonce']
+            'description' => $tx['description'] ?? null,
         ];
+
+        // Nonce is added last by TransportUtilityService::sign()
+        $messageContent['nonce'] = (int)$tx['signature_nonce'];
 
         return json_encode($messageContent);
     }
