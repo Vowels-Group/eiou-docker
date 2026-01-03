@@ -457,8 +457,7 @@ class TransactionService {
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
         $data['txid'] = $this->createUniqueTxid($data);
 
-        // Issue #320: Include previous_txid in outgoing transaction for chain validation
-        // This allows receiver to verify transaction chain integrity
+        // Include previous_txid in outgoing transaction for chain validation
         $data['previousTxid'] = $this->transactionRepository->getPreviousTxid(
             $this->currentUser->getPublicKey(),
             $data['receiverPublicKey']
@@ -492,7 +491,7 @@ class TransactionService {
         $data['txid'] = $this->createUniqueTxid($data);
         $data['memo'] = $request['hash'];
 
-        // Issue #320: Include previous_txid in outgoing transaction for chain validation
+        // Include previous_txid in outgoing transaction for chain validation
         $data['previousTxid'] = $this->transactionRepository->getPreviousTxid(
             $this->currentUser->getPublicKey(),
             $data['receiverPublicKey']
@@ -548,8 +547,7 @@ class TransactionService {
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
                     // Relay transaction - leave address fields NULL (privacy-preserving)
                     // Relay doesn't know the original sender or final recipient
-                    // Issue #320: Use the sender's txid from the incoming request
-                    // This ensures both sender and receiver have the same txid
+                    // Use the sender's txid from the incoming request (not regenerated)
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'relay'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {

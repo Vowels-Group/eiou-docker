@@ -30,29 +30,18 @@ class ContactPayload extends BasePayload
     /**
      * Build a contact creation request payload
      *
-     * Issue #320: Include time so receiver can generate the txid using both
-     * public keys and the same timestamp, ensuring synchronized txids.
-     *
      * @param string $address The address of the contact request
-     * @param string|null $time The timestamp for this contact request (for txid generation)
      * @return array The contact creation payload
      */
-    public function buildCreateRequest(string $address, ?string $time = null): array
+    public function buildCreateRequest(string $address): array
     {
-        $payload = $this->build(['address' => $address]);
-
-        // Issue #320: Include time for synchronized txid generation
-        if ($time !== null) {
-            $payload['time'] = $time;
-        }
-
-        return $payload;
+        return $this->build(['address' => $address]);
     }
 
     /**
      * Build a contact request received payload
      *
-     * Issue #320: Include txid so sender can use the same txid for their
+     * Includes the txid so sender can use the same txid for their
      * contact transaction, ensuring both parties have matching txids.
      *
      * @param string $address The address to send the acceptance to
@@ -75,7 +64,7 @@ class ContactPayload extends BasePayload
             $payload['senderAddresses'] = $this->filterAddresses($knownAddresses);
         }
 
-        // Issue #320: Include txid for synchronized contact transactions
+        // Include txid for synchronized contact transactions
         if ($txid !== null) {
             $payload['txid'] = $txid;
         }

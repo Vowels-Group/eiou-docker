@@ -146,7 +146,7 @@ class TransactionPayload extends BasePayload
             'amount' => $transactionService->removeTransactionFee($message),
             'currency' => $rp2pData['currency'] ?? 'USD',
             'txid' => $transactionService->createUniqueDatabaseTxid($message, $rp2pData),
-            // Issue #320: Include previous_txid for chain validation on receiver side
+            // Include previous_txid for chain validation on receiver side
             'previous_txid' => $transactionRepository->getPreviousTxid(
                 $this->currentUser->getPublicKey(),
                 $rp2pData['sender_public_key'] ?? ''

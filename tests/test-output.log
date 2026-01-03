@@ -1,0 +1,467 @@
+
+========================================
+  EIOU Docker Automated Test Runner
+========================================
+Build: http4
+Mode:  http
+Time:  2025-12-31 00:15:12
+
+[0;32m[Step 1/3][0m Building topology 'http4'...
+Network already exists.
+Removing existing containers and associated volumes (if any)...
+Removing existing container: httpA...
+httpA
+Removing any volumes of container: httpA...
+httpA-mysql-data
+httpA-files
+httpA-index
+httpA-eiou
+Removing existing container: httpB...
+httpB
+Removing any volumes of container: httpB...
+httpB-mysql-data
+httpB-files
+httpB-index
+httpB-eiou
+Removing existing container: httpC...
+httpC
+Removing any volumes of container: httpC...
+httpC-mysql-data
+httpC-files
+httpC-index
+httpC-eiou
+Removing existing container: httpD...
+httpD
+Removing any volumes of container: httpD...
+httpD-mysql-data
+httpD-files
+httpD-index
+httpD-eiou
+Building base image...
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from eioud.dockerfile
+#1 transferring dockerfile: 5.70kB 0.0s done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/debian:12-slim
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 121B done
+#3 DONE 0.0s
+
+#4 [ 1/34] FROM docker.io/library/debian:12-slim
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 155.76kB 0.0s done
+#5 DONE 0.0s
+
+#6 [ 3/34] RUN chmod o+w /etc/tor/torrc
+#6 CACHED
+
+#7 [14/34] COPY files/eiou/Eiou.php /usr/local/bin/eiou.php
+#7 CACHED
+
+#8 [ 4/34] RUN echo "HiddenServiceDir /var/lib/tor/hidden_service/" >> /etc/tor/torrc
+#8 CACHED
+
+#9 [ 2/34] RUN apt-get update && apt-get install -y     apache2     cron     curl     mariadb-server     openssl     php     php-curl     php-mbstring     php-mysql     tor
+#9 CACHED
+
+#10 [11/34] RUN echo 'Alias /api /var/www/html/api' >> /etc/apache2/sites-available/000-default.conf &&     echo '<Directory /var/www/html>' >> /etc/apache2/sites-available/000-default.conf &&     echo '    AllowOverride All' >> /etc/apache2/sites-available/000-default.conf &&     echo '    Options -Indexes +FollowSymLinks' >> /etc/apache2/sites-available/000-default.conf &&     echo '    RewriteEngine On' >> /etc/apache2/sites-available/000-default.conf &&     echo '    RewriteCond %{REQUEST_FILENAME} !-f' >> /etc/apache2/sites-available/000-default.conf &&     echo '    RewriteCond %{REQUEST_FILENAME} !-d' >> /etc/apache2/sites-available/000-default.conf &&     echo '    RewriteRule ^api/(.*)$ /var/www/html/api/index.php [L,QSA]' >> /etc/apache2/sites-available/000-default.conf &&     echo '</Directory>' >> /etc/apache2/sites-available/000-default.conf
+#10 CACHED
+
+#11 [ 7/34] RUN echo "AddType application/x-httpd-php .html" | tee -a /etc/apache2/apache2.conf
+#11 CACHED
+
+#12 [ 5/34] RUN echo "HiddenServicePort 80 127.0.0.1:80" >> /etc/tor/torrc
+#12 CACHED
+
+#13 [12/34] RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf &&     echo '    ServerAdmin webmaster@localhost' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '    DocumentRoot /var/www/html' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '    SSLEngine on' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '    SSLCertificateFile /etc/apache2/ssl/server.crt' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '    SSLCertificateKeyFile /etc/apache2/ssl/server.key' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '    Alias /api /var/www/html/api' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '    <Directory /var/www/html>' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '        AllowOverride All' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '        Options -Indexes +FollowSymLinks' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '        RewriteEngine On' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '        RewriteCond %{REQUEST_FILENAME} !-f' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '        RewriteCond %{REQUEST_FILENAME} !-d' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '        RewriteRule ^api/(.*)$ /var/www/html/api/index.php [L,QSA]' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '    </Directory>' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '    ErrorLog ${APACHE_LOG_DIR}/error.log' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '    CustomLog ${APACHE_LOG_DIR}/access.log combined' >> /etc/apache2/sites-available/default-ssl.conf &&     echo '</VirtualHost>' >> /etc/apache2/sites-available/default-ssl.conf
+#13 CACHED
+
+#14 [ 6/34] RUN chmod o-w /etc/tor/torrc
+#14 CACHED
+
+#15 [10/34] RUN mkdir -p /etc/apache2/ssl
+#15 CACHED
+
+#16 [13/34] RUN a2ensite default-ssl
+#16 CACHED
+
+#17 [ 8/34] RUN echo "ServerName localhost" | tee -a /etc/apache2/apache2.conf
+#17 CACHED
+
+#18 [ 9/34] RUN a2enmod rewrite ssl
+#18 CACHED
+
+#19 [15/34] RUN echo '#!/bin/bash\nphp /usr/local/bin/eiou.php "$@"' > /usr/local/bin/eiou &&     chmod +x /usr/local/bin/eiou
+#19 CACHED
+
+#20 [16/34] COPY files/index/walletIndex.html /var/www/html/index.html
+#20 DONE 0.1s
+
+#21 [17/34] COPY files/index/index.html /var/www/html/eiou/index.html
+#21 DONE 0.0s
+
+#22 [18/34] RUN chown www-data:www-data /var/www/html/eiou -R
+#22 DONE 0.7s
+
+#23 [19/34] RUN chmod 755 /var/www/html/eiou
+#23 DONE 0.4s
+
+#24 [20/34] COPY files/root/ /etc/eiou/
+#24 DONE 0.1s
+
+#25 [21/34] COPY files/src/ /etc/eiou/src/
+#25 DONE 0.2s
+
+#26 [22/34] RUN chown www-data:www-data /etc/eiou/SecurityInit.php
+#26 DONE 0.4s
+
+#27 [23/34] RUN chown www-data:www-data /etc/eiou/Functions.php
+#27 DONE 0.4s
+
+#28 [24/34] RUN chown www-data:www-data /etc/eiou/P2pMessages.php
+#28 DONE 0.4s
+
+#29 [25/34] RUN chown www-data:www-data /etc/eiou/TransactionMessages.php
+#29 DONE 0.4s
+
+#30 [26/34] RUN chown www-data:www-data /etc/eiou/CleanupMessages.php
+#30 DONE 0.3s
+
+#31 [27/34] RUN find /etc/eiou/ -type d -exec chmod 755 "{}" ;
+#31 DONE 0.5s
+
+#32 [28/34] RUN find /etc/eiou/ -type f -exec chmod 644 "{}" ;
+#32 DONE 1.0s
+
+#33 [29/34] RUN mkdir -p /var/www/html/api &&     ln -s /etc/eiou/Api.php /var/www/html/api/index.php
+#33 DONE 0.3s
+
+#34 [30/34] RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini
+#34 DONE 0.4s
+
+#35 [31/34] RUN touch /var/log/php_errors.log
+#35 DONE 0.3s
+
+#36 [32/34] RUN chmod 666 /var/log/php_errors.log
+#36 DONE 0.3s
+
+#37 [33/34] COPY startup.sh /startup.sh
+#37 DONE 0.1s
+
+#38 [34/34] RUN chmod +x /startup.sh
+#38 DONE 0.3s
+
+#39 exporting to image
+#39 exporting layers
+#39 exporting layers 0.6s done
+#39 writing image sha256:b0f4fcf1b3c5bc4c9c42981faa0ba7cdf665e723df765bfdf1cbd92292eed480 done
+#39 naming to docker.io/library/eioud done
+#39 DONE 0.6s
+
+Creating containers...
+2d6e23e4ceb574cef36c7b991659aba63bf90f16100c9e2bc95d4ddafa5d3fde
+d5cc58f6e748a88fd73cb708335d750f50d1b4bb33e1d3e284de081a5d5ab1fe
+d17571311f1d32af5b81a428a34aa4a405dfe8e1d70d5d140fc1f598e224bddc
+abe50c380553380d365dd3888822c44314704ca6e064e8ac3585768bb1255dd9
+[0;32m✔ Build completed successfully[0m
+
+[0;32mWaiting for containers to initialize...[0m
+Checking httpD... [0;32mReady[0m
+[0;32m✔ All containers initialized successfully[0m
+
+[0;32m[Step 2/3][0m Running prerequisite test...
+
+================================================================
+Running: hostnameTest
+================================================================
+Error response from daemon: No such container: httpA
+	   hostnameTest for httpA [0;31mFAILED[0m
+
+Error response from daemon: No such container: httpB
+	   hostnameTest for httpB [0;31mFAILED[0m
+
+Error response from daemon: No such container: httpC
+	   hostnameTest for httpC [0;31mFAILED[0m
+
+	   hostnameTest for httpD [0;32mPASSED[0m
+
+[0;32mPASSED 1[0m 'generate' tests out of 4
+[0;31mFAILED 3[0m 'generate' tests out of 4
+
+[0;32m[Step 3/3][0m Running test suite...
+
+================================================================
+Running: sslCertificateTest
+================================================================
+
+Testing SSL certificate and HTTPS functionality...
+
+[SSL Certificate File Tests]
+
+	-> Checking SSL certificate files exist on httpA
+Error response from daemon: No such container: httpA
+Error response from daemon: No such container: httpA
+	   SSL certificate files [0;31mFAILED[0m
+	   Certificate: NOT_FOUND, Key: NOT_FOUND
+
+	-> Checking SSL certificate files exist on httpB
+Error response from daemon: No such container: httpB
+Error response from daemon: No such container: httpB
+	   SSL certificate files [0;31mFAILED[0m
+	   Certificate: NOT_FOUND, Key: NOT_FOUND
+
+	-> Checking SSL certificate files exist on httpC
+Error response from daemon: No such container: httpC
+Error response from daemon: No such container: httpC
+	   SSL certificate files [0;31mFAILED[0m
+	   Certificate: NOT_FOUND, Key: NOT_FOUND
+
+	-> Checking SSL certificate files exist on httpD
+	   SSL certificate and key files exist [0;32mPASSED[0m
+
+[SSL File Permission Tests]
+
+	-> Checking SSL file permissions on httpA
+	   SSL file permissions [0;31mFAILED[0m
+	   Key:  (expected 600), Cert:  (expected 644)
+
+	-> Checking SSL file permissions on httpB
+	   SSL file permissions [0;31mFAILED[0m
+	   Key:  (expected 600), Cert:  (expected 644)
+
+	-> Checking SSL file permissions on httpC
+	   SSL file permissions [0;31mFAILED[0m
+	   Key:  (expected 600), Cert:  (expected 644)
+
+	-> Checking SSL file permissions on httpD
+	   SSL file permissions correct [0;32mPASSED[0m
+	   Key: 600 (expected 600), Cert: 644 (expected 644)
+
+[SSL Certificate Validity Tests]
+
+	-> Checking SSL certificate validity on httpA
+	   SSL certificate validity [0;31mFAILED[0m
+	   Certificate is expired or invalid
+
+	-> Checking SSL certificate validity on httpB
+	   SSL certificate validity [0;31mFAILED[0m
+	   Certificate is expired or invalid
+
+	-> Checking SSL certificate validity on httpC
+	   SSL certificate validity [0;31mFAILED[0m
+	   Certificate is expired or invalid
+
+	-> Checking SSL certificate validity on httpD
+	   SSL certificate is valid [0;32mPASSED[0m
+	   Expires: Dec 31 00:16:29 2026 GMT
+
+[HTTPS Endpoint Tests]
+
+	-> Testing HTTPS endpoint on httpA
+	   HTTPS endpoint [0;31mFAILED[0m
+	   HTTP Status:  (expected 200)
+
+	-> Testing HTTPS endpoint on httpB
+	   HTTPS endpoint [0;31mFAILED[0m
+	   HTTP Status:  (expected 200)
+
+	-> Testing HTTPS endpoint on httpC
+	   HTTPS endpoint [0;31mFAILED[0m
+	   HTTP Status:  (expected 200)
+
+	-> Testing HTTPS endpoint on httpD
+	   HTTPS endpoint accessible [0;32mPASSED[0m
+	   HTTP Status: 200
+
+[HTTPS API Endpoint Tests]
+
+	-> Testing HTTPS API endpoint on httpA
+	   HTTPS API endpoint [0;31mFAILED[0m
+	   Response: 
+
+	-> Testing HTTPS API endpoint on httpB
+	   HTTPS API endpoint [0;31mFAILED[0m
+	   Response: 
+
+	-> Testing HTTPS API endpoint on httpC
+	   HTTPS API endpoint [0;31mFAILED[0m
+	   Response: 
+
+	-> Testing HTTPS API endpoint on httpD
+	   HTTPS API endpoint responding [0;32mPASSED[0m
+
+[Apache SSL Module Tests]
+
+	-> Checking Apache SSL module enabled on httpA
+./tests/testfiles/sslCertificateTest.sh: line 149: [[: 0
+0: syntax error in expression (error token is "0")
+	   Apache SSL module [0;31mFAILED[0m
+	   mod_ssl not loaded
+
+	-> Checking Apache SSL module enabled on httpB
+./tests/testfiles/sslCertificateTest.sh: line 149: [[: 0
+0: syntax error in expression (error token is "0")
+	   Apache SSL module [0;31mFAILED[0m
+	   mod_ssl not loaded
+
+	-> Checking Apache SSL module enabled on httpC
+./tests/testfiles/sslCertificateTest.sh: line 149: [[: 0
+0: syntax error in expression (error token is "0")
+	   Apache SSL module [0;31mFAILED[0m
+	   mod_ssl not loaded
+
+	-> Checking Apache SSL module enabled on httpD
+	   Apache SSL module enabled [0;32mPASSED[0m
+
+[Port 443 Listening Tests]
+
+	-> Checking port 443 is listening on httpA
+./tests/testfiles/sslCertificateTest.sh: line 170: [[: 0
+0: syntax error in expression (error token is "0")
+	   Port 443 [0;31mFAILED[0m
+	   Port 443 not listening
+
+	-> Checking port 443 is listening on httpB
+./tests/testfiles/sslCertificateTest.sh: line 170: [[: 0
+0: syntax error in expression (error token is "0")
+	   Port 443 [0;31mFAILED[0m
+	   Port 443 not listening
+
+	-> Checking port 443 is listening on httpC
+./tests/testfiles/sslCertificateTest.sh: line 170: [[: 0
+0: syntax error in expression (error token is "0")
+	   Port 443 [0;31mFAILED[0m
+	   Port 443 not listening
+
+	-> Checking port 443 is listening on httpD
+	   Port 443 listening [0;32mPASSED[0m
+
+[0;32mPASSED 7[0m 'SSL certificate' tests out of 28
+[0;31mFAILED 21[0m 'SSL certificate' tests out of 28
+
+================================================================
+Running: torRestartTest
+================================================================
+	   torRestartTest for httpA [0;31mFAILED[0m - TOR service not running
+	   Status: Error response from daemon: No such container: httpA
+	   torRestartTest for httpB [0;31mFAILED[0m - TOR service not running
+	   Status: Error response from daemon: No such container: httpB
+	   torRestartTest for httpC [0;31mFAILED[0m - TOR service not running
+	   Status: Error response from daemon: No such container: httpC
+	   torRestartTest for httpD [0;32mPASSED[0m
+[0;32mPASSED 1[0m 'tor restart' tests out of 4
+[0;31mFAILED 3[0m 'tor restart' tests out of 4
+
+================================================================
+Running: torKeyPermissionsTest
+================================================================
+Error response from daemon: No such container: httpA
+	   torKeyPermissionsTest for httpA [0;31mFAILED[0m - Hidden service directory does not exist
+Error response from daemon: No such container: httpB
+	   torKeyPermissionsTest for httpB [0;31mFAILED[0m - Hidden service directory does not exist
+Error response from daemon: No such container: httpC
+	   torKeyPermissionsTest for httpC [0;31mFAILED[0m - Hidden service directory does not exist
+	   torKeyPermissionsTest for httpD [1;33mWARNING[0m - Directory permissions: 2700 (expected 700)
+	   torKeyPermissionsTest for httpD [0;32mPASSED[0m
+[0;32mPASSED 1[0m 'tor key permissions' tests out of 4
+[0;31mFAILED 3[0m 'tor key permissions' tests out of 4
+
+================================================================
+Running: addContactsTest
+================================================================
+
+Adding contacts...
+
+	-> Adding httpA To httpB as a contact: 
+Error response from daemon: No such container: httpA
+
+	-> Adding httpB To httpA as a contact: 
+Error response from daemon: No such container: httpB
+
+	-> Adding httpB To httpC as a contact: 
+Error response from daemon: No such container: httpB
+
+	-> Adding httpC To httpB as a contact: 
+Error response from daemon: No such container: httpC
+
+	-> Adding httpC To httpD as a contact: 
+Error response from daemon: No such container: httpC
+
+	-> Adding httpD To httpC as a contact: 
+Error: Invalid Address: Invalid address format
+
+	   Waiting for contact requests to be processed (timeout: 10s)...
+Error response from daemon: No such container: httpA
+
+	   httpB has status httpA with 
+	   addContactsTest for httpA [0;31mFAILED[0m
+Error response from daemon: No such container: httpB
+
+	   httpA has status httpB with 
+	   addContactsTest for httpB [0;31mFAILED[0m
+Error response from daemon: No such container: httpB
+
+	   httpC has status httpB with 
+	   addContactsTest for httpB [0;31mFAILED[0m
+Error response from daemon: No such container: httpC
+
+	   httpB has status httpC with 
+	   addContactsTest for httpC [0;31mFAILED[0m
+Error response from daemon: No such container: httpC
+
+	   httpD has status httpC with 
+	   addContactsTest for httpC [0;31mFAILED[0m
+PHP Fatal error:  Uncaught TypeError: Illegal offset type in isset or empty in /etc/eiou/src/utils/SecureLogger.php:61
+Stack trace:
+#0 /etc/eiou/src/utils/SecureLogger.php(169): SecureLogger::log()
+#1 /etc/eiou/src/database/AbstractRepository.php(388): SecureLogger::logException()
+#2 /etc/eiou/src/database/AbstractRepository.php(104): AbstractRepository->logError()
+#3 /etc/eiou/src/database/ContactRepository.php(346): AbstractRepository->execute()
+#4 Command line code(3): ContactRepository->getContactStatus()
+#5 {main}
+  thrown in /etc/eiou/src/utils/SecureLogger.php on line 61
+
+	   httpC has status httpD with 
+	   addContactsTest for httpD [0;31mFAILED[0m
+[0;31m❌ FAILED all 'add' tests![0m
+
+================================================================
+Running: sendMessageTest
+================================================================
+
+Testing message sending between contacts...
+	-> httpA sending 5 USD to httpB
+	   Waiting for balance change (timeout: 20s)...
+	   sendMessageTest from httpA to httpB [0;31mFAILED[0m (Balance unchanged: 0)
+	   Send result: Error response from daemon: No such container: httpA
+
+	-> httpB sending 5 USD to httpA
+	   Waiting for balance change (timeout: 20s)...
+	   sendMessageTest from httpB to httpA [0;31mFAILED[0m (Balance unchanged: 0)
+	   Send result: Error response from daemon: No such container: httpB
+
+	-> httpB sending 5 USD to httpC
+	   Waiting for balance change (timeout: 20s)...
+	   sendMessageTest from httpB to httpC [0;31mFAILED[0m (Balance unchanged: 0)
+	   Send result: 
+Uncaught Exception: Failed to initialize DebugRepository: Database connection failed. Please check configuration.
+File: /etc/eiou/src/database/AbstractRepository.php:62
+Stack trace:
+#0 /etc/eiou/src/database/DebugRepository.php(20): AbstractRepository->__construct()
+#1 /etc/eiou/src/services/ServiceContainer.php(229): DebugRepository->__construct()
+#2 /etc/eiou/src/services/ServiceContainer.php(515): ServiceContainer->getDebugRepository()
+#3 /usr/local/bin/eiou.php(45): ServiceContainer->getDebugService()
+#4 {main}
+
+	-> httpC sending 5 USD to httpB
+	   Waiting for balance change (timeout: 20s)...
+	   sendMessageTest from httpC to httpB [0;31mFAILED[0m (Balance unchanged: 0)
+	   Send result: Error: Invalid Address/name: Invalid address format
+
+	-> httpC sending 5 USD to httpD
