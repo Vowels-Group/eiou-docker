@@ -357,9 +357,65 @@ else
     failure=$(( failure + 1 ))
 fi
 
-############################ TEST 8: Verify latest transaction exists on sender ############################
+############################ TEST 8: Verify transactions synced in chronological order ############################
 
-echo -e "\n[Test 8: Verify receiver's latest transaction exists on sender after sync]"
+echo -e "\n[Test 8: Verify transactions synced in correct chronological order]"
+totaltests=$(( totaltests + 1 ))
+
+# Verify that the chain is intact: tx1 -> tx2 -> tx3
+# Each transaction's previous_txid should point to the one before it
+chainOrderTest=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+
+    // Get the three fake transactions ordered by their txid suffix (1, 2, 3)
+    \$stmt = \$pdo->query(\"SELECT txid, previous_txid FROM transactions WHERE txid LIKE 'fake-sync-test-%' ORDER BY txid ASC\");
+    \$transactions = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (count(\$transactions) < 3) {
+        echo 'NOT_ENOUGH_TX:' . count(\$transactions);
+        exit;
+    }
+
+    // tx1 should have previous_txid = NULL or empty
+    // tx2 should have previous_txid = tx1
+    // tx3 should have previous_txid = tx2
+    \$tx1 = \$transactions[0];
+    \$tx2 = \$transactions[1];
+    \$tx3 = \$transactions[2];
+
+    \$errors = [];
+
+    // tx2's previous_txid should be tx1's txid
+    if (\$tx2['previous_txid'] !== \$tx1['txid']) {
+        \$errors[] = 'tx2.prev(' . (\$tx2['previous_txid'] ?? 'NULL') . ')!=tx1(' . \$tx1['txid'] . ')';
+    }
+
+    // tx3's previous_txid should be tx2's txid
+    if (\$tx3['previous_txid'] !== \$tx2['txid']) {
+        \$errors[] = 'tx3.prev(' . (\$tx3['previous_txid'] ?? 'NULL') . ')!=tx2(' . \$tx2['txid'] . ')';
+    }
+
+    if (empty(\$errors)) {
+        echo 'CHAIN_ORDER_CORRECT';
+    } else {
+        echo 'CHAIN_ORDER_WRONG:' . implode(',', \$errors);
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$chainOrderTest" == "CHAIN_ORDER_CORRECT" ]]; then
+    printf "\t   Transactions synced in chronological order ${GREEN}PASSED${NC}\n"
+    printf "\t   Chain verified: tx1 -> tx2 -> tx3\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Transactions chain order ${RED}FAILED${NC} (%s)\n" "${chainOrderTest}"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 9: Verify latest transaction exists on sender ############################
+
+echo -e "\n[Test 9: Verify receiver's latest transaction exists on sender after sync]"
 totaltests=$(( totaltests + 1 ))
 
 # Check if the receiver's latest fake txid (fakeTxid3) now exists on sender

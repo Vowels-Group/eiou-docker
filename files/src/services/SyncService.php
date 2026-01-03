@@ -496,6 +496,10 @@ class SyncService {
             // Get latest txid
             $latestTxid = !empty($transactions) ? $transactions[0]['txid'] : null;
 
+            // Reverse to chronological order (oldest first) so requester can insert
+            // in correct chain order - each tx references the previous one
+            $filteredTransactions = array_reverse($filteredTransactions);
+
             echo $this->messagePayload->buildTransactionSyncResponse(
                 $senderAddress,
                 $filteredTransactions,
