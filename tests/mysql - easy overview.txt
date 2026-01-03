@@ -14,7 +14,7 @@ SELECT id, hash, time, amount, description, my_fee_amount, sender_address, desti
 
 SELECT id, hash, time, amount, sender_address FROM rp2p;
 
-SELECT id, status, tx_type, type, sender_address, receiver_address, amount, currency, description, timestamp, txid, previous_txid, memo FROM transactions;
+SELECT id, status, tx_type, type, sender_address, receiver_address, initial_sender_address, end_recipient_address, amount, currency, description, timestamp, txid, previous_txid, memo FROM transactions;
 
 SELECT id, message_type, message_id, recipient_address, delivery_stage, retry_count, created_at, updated_at FROM message_delivery;
 
