@@ -202,6 +202,7 @@ routingTest
 contactListTest
 transactionHistoryTest
 contactTransactionTest
+transactionInquiryTest
 messageDeliveryTest
 cliCommandsTest
 apiEndpointsTest

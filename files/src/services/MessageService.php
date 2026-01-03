@@ -387,22 +387,38 @@ class MessageService {
                         $response = $sendResult['response'] ?? null;
                         output(outputTransactionInquiryResponse($response),'SILENT');
 
-                        // Check if inquiry was successful and transaction is completed
-                        if($sendResult['success'] && $response !== null && isset($response['status']) && $response['status'] === 'completed'){
-                            $this->p2pRepository->updateStatus($hash,'completed',true);
-                            $this->transactionRepository->updateStatus($hash,'completed');
-                            $this->balanceRepository->updateBalanceGivenTransactions($transactions);
-                            output(outputTransactionP2pSentSuccesfully($p2p),'SILENT');
+                        // Check inquiry response and handle based on actual transaction status
+                        if ($sendResult['success'] && $response !== null && isset($response['status'])) {
+                            $inquiryStatus = $response['status'];
 
-                            // Store description from completion message if provided
-                            if (isset($response['description']) && $response['description'] !== null) {
-                                $this->transactionRepository->updateDescription($hash, $response['description'], false);
+                            if ($inquiryStatus === 'completed') {
+                                // Transaction confirmed completed at end-recipient
+                                $this->p2pRepository->updateStatus($hash, 'completed', true);
+                                $this->transactionRepository->updateStatus($hash, 'completed');
+                                $this->balanceRepository->updateBalanceGivenTransactions($transactions);
+                                output(outputTransactionP2pSentSuccesfully($p2p), 'SILENT');
+
+                                // Store description from completion message if provided
+                                if (isset($response['description']) && $response['description'] !== null) {
+                                    $this->transactionRepository->updateDescription($hash, $response['description'], false);
+                                }
+
+                                // Mark all P2P delivery records for this hash as completed
+                                $this->markP2pDeliveriesCompleted($hash);
+                            } elseif ($inquiryStatus === 'not_found') {
+                                // Transaction not found at end-recipient - potential issue
+                                output('Transaction inquiry response: not_found at end-recipient for hash=' . $hash, 'SILENT');
+                                // Do NOT mark as completed - keep current status for investigation
+                            } elseif (in_array($inquiryStatus, ['pending', 'sent', 'accepted'], true)) {
+                                // Transaction still in progress at end-recipient
+                                output('Transaction inquiry response: status=' . $inquiryStatus . ' at end-recipient for hash=' . $hash, 'SILENT');
+                                // Do NOT mark as completed - transaction not yet finalized
+                            } else {
+                                // Unknown status - log for investigation
+                                output('Transaction inquiry response: unexpected status=' . $inquiryStatus . ' for hash=' . $hash, 'SILENT');
                             }
-
-                            // Mark all P2P delivery records for this hash as completed
-                            $this->markP2pDeliveriesCompleted($hash);
                         } elseif (!$sendResult['success']) {
-                            // Inquiry failed - log the error but don't block the completion flow
+                            // Inquiry failed to send - log the error but don't block the completion flow
                             output('Transaction inquiry to end-recipient failed: ' . ($sendResult['tracking']['error'] ?? 'Unknown error'), 'SILENT');
                         }
                     } else{
