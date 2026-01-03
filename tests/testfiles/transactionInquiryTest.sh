@@ -99,8 +99,8 @@ for container in "${containers[@]:0:1}"; do  # Test first container
         require_once('/etc/eiou/src/schemas/payloads/MessagePayload.php');
 
         \$app = Application::getInstance();
-        \$user = \$app->services->getUserContext();
-        \$utilContainer = \$app->services->getUtilityServiceContainer();
+        \$user = \$app->services->getCurrentUser();
+        \$utilContainer = \$app->services->getUtilityContainer();
 
         \$payload = new MessagePayload(\$user, \$utilContainer);
 
@@ -153,8 +153,8 @@ for container in "${containers[@]:0:1}"; do  # Test first container
         require_once('/etc/eiou/src/schemas/payloads/MessagePayload.php');
 
         \$app = Application::getInstance();
-        \$user = \$app->services->getUserContext();
-        \$utilContainer = \$app->services->getUtilityServiceContainer();
+        \$user = \$app->services->getCurrentUser();
+        \$utilContainer = \$app->services->getUtilityContainer();
 
         \$payload = new MessagePayload(\$user, \$utilContainer);
 
@@ -207,8 +207,8 @@ for container in "${containers[@]:0:1}"; do  # Test first container
         require_once('/etc/eiou/src/schemas/payloads/MessagePayload.php');
 
         \$app = Application::getInstance();
-        \$user = \$app->services->getUserContext();
-        \$utilContainer = \$app->services->getUtilityServiceContainer();
+        \$user = \$app->services->getCurrentUser();
+        \$utilContainer = \$app->services->getUtilityContainer();
 
         \$payload = new MessagePayload(\$user, \$utilContainer);
 
