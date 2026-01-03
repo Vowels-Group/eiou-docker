@@ -521,7 +521,11 @@ class TransactionService {
 
             // Process incoming transactions
             if ($request['memo'] === 'standard') {
-                // If direct transaction
+                // If direct transaction - receiver knows both sender and recipient
+                // end_recipient is myself (receiver), initial_sender is the sender
+                $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+                $request['endRecipientAddress'] = $myAddress;
+                $request['initialSenderAddress'] = $request['senderAddress'];
                 $insertTransactionResponse = $this->transactionRepository->insertTransaction($request,'received');
             } else {
                 // If p2p type transaction
@@ -529,11 +533,17 @@ class TransactionService {
                 $rP2pResult = $this->rp2pRepository->getByHash($memo);
                 // Check if precursors to transactions exist and correspond
                 if (isset($rP2pResult) && $memo === $rP2pResult['hash']) {
+                    // Relay transaction - leave address fields NULL (privacy-preserving)
+                    // Relay doesn't know the original sender or final recipient
                     $request['txid'] = $this->createUniqueTxid($request);
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'relay'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 } elseif ($this->matchYourselfTransaction($request, $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']))) {
                     // If Transaction is for end-recipient
+                    // end_recipient is myself, initial_sender will be updated via inquiry message later
+                    $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+                    $request['endRecipientAddress'] = $myAddress;
+                    // initial_sender_address left NULL - will be set when inquiry message arrives
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'received'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
                 }
