@@ -169,8 +169,8 @@ function getTransactionsTableSchema() {
         sender_signature TEXT,
         memo TEXT,
         description TEXT,
-        end_recipient_address VARCHAR(255) DEFAULT NULL,
         initial_sender_address VARCHAR(255) DEFAULT NULL,
+        end_recipient_address VARCHAR(255) DEFAULT NULL,
         INDEX idx_transactions_receiver_public_key_hash (receiver_public_key_hash),
         INDEX idx_transactions_sender_public_key_hash (sender_public_key_hash),
         INDEX idx_transactions_sender_receiver (sender_public_key_hash, receiver_public_key_hash),
@@ -181,8 +181,8 @@ function getTransactionsTableSchema() {
         INDEX idx_transactions_txid (txid),
         INDEX idx_transactions_previous_txid (previous_txid),
         INDEX idx_transactions_memo (memo(255)),
-        INDEX idx_transactions_end_recipient (end_recipient_address),
         INDEX idx_transactions_initial_sender (initial_sender_address)
+        INDEX idx_transactions_end_recipient (end_recipient_address),
     )";
 }
 
