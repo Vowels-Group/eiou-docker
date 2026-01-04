@@ -106,9 +106,80 @@ class CleanupService {
         output(outputP2pExpired($message),'SILENT');
 
         // Cancel transaction if exists
-        if($this->transactionRepository->getByMemo($message['hash'])){
+        $transactions = $this->transactionRepository->getByMemo($message['hash']);
+        if($transactions){
+            foreach ($transactions as $transaction) {
+                // Reorder the chain before marking as cancelled
+                $this->reorderTransactionChain($transaction['txid']);
+            }
             $this->transactionRepository->updateStatus($message['hash'], 'cancelled');
             output(outputTransactionExpired($message),'SILENT');
+        }
+    }
+
+    /**
+     * Cancel a transaction and reorder its chain
+     *
+     * When a transaction is cancelled directly (not through P2P expiration),
+     * this method ensures the chain is properly reordered.
+     *
+     * @param string $txid The transaction ID to cancel
+     * @return bool True if cancellation was successful
+     */
+    public function cancelTransaction(string $txid): bool {
+        $transaction = $this->transactionRepository->getByTxid($txid);
+        if (!$transaction || empty($transaction)) {
+            return false;
+        }
+
+        // Reorder the chain before marking as cancelled
+        $this->reorderTransactionChain($txid);
+
+        // Update status to cancelled
+        return $this->transactionRepository->updateStatus($txid, 'cancelled', true);
+    }
+
+    /**
+     * Reorder transaction chain when a transaction is expired/cancelled
+     *
+     * When a transaction (A2) is expired/cancelled from a chain A1->A2->A3->A4,
+     * the chain should become A1->A3->A4 (with A2 orphaned as A1->A2).
+     *
+     * This is done by:
+     * 1. Finding transactions that reference the cancelled transaction as previous_txid
+     * 2. Updating those transactions to point to the cancelled transaction's previous_txid
+     *
+     * @param string $txid The txid of the transaction being expired/cancelled
+     * @return void
+     */
+    private function reorderTransactionChain(string $txid): void {
+        try {
+            // Get the transaction being cancelled
+            $cancelledTx = $this->transactionRepository->getByTxid($txid);
+            if (!$cancelledTx || empty($cancelledTx)) {
+                return;
+            }
+
+            // Get the first result (getByTxid returns array)
+            $cancelledTx = $cancelledTx[0];
+
+            // Get the previous_txid of the cancelled transaction
+            // This is what transactions pointing to cancelled tx should now point to
+            $newPreviousTxid = $cancelledTx['previous_txid'];
+
+            // Update all transactions that have the cancelled txid as their previous_txid
+            // They should now point to the cancelled transaction's previous_txid
+            $this->transactionRepository->updatePreviousTxidReferences($txid, $newPreviousTxid);
+
+            SecureLogger::info("Transaction chain reordered", [
+                'cancelled_txid' => $txid,
+                'new_previous_txid' => $newPreviousTxid
+            ]);
+        } catch (Exception $e) {
+            SecureLogger::error("Failed to reorder transaction chain", [
+                'txid' => $txid,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 }

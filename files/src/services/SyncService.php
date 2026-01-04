@@ -525,6 +525,7 @@ class SyncService {
             // Filter to only include transactions NEWER than lastKnownTxid if provided
             // Transactions are ordered by timestamp DESC (newest first), so we collect
             // all transactions until we hit the lastKnownTxid
+            // Also exclude cancelled/rejected transactions as they are orphaned from the chain
             $filteredTransactions = [];
 
             foreach ($transactions as $tx) {
@@ -532,6 +533,13 @@ class SyncService {
                 if ($lastKnownTxid !== null && $tx['txid'] === $lastKnownTxid) {
                     break;
                 }
+
+                // Skip cancelled and rejected transactions - they are orphaned from the chain
+                // and should not be synced to maintain chain integrity
+                if (in_array($tx['status'], ['cancelled', 'rejected'])) {
+                    continue;
+                }
+
                 // Include necessary fields for security and signature verification
                 $filteredTransactions[] = [
                     'txid' => $tx['txid'],
