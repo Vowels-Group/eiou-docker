@@ -1136,7 +1136,18 @@ class TransactionRepository extends AbstractRepository {
                 ':second_receiver_public_key_hash' => $receiverPublicKeyHash,
                 ':second_sender_public_key_hash' => $senderPublicKeyHash
             ]);
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            // Check if execute succeeded before fetching
+            if (!$stmt) {
+                $this->rollBack();
+                return json_encode([
+                    "status" => "rejected",
+                    "txid" => $request['txid'],
+                    "message" => "Failed to query previous transaction"
+                ]);
+            }
+
+            $prevTxidResult = $stmt->fetch(PDO::FETCH_ASSOC);
 
             $data = [
                 'tx_type' => $txType,
@@ -1151,7 +1162,7 @@ class TransactionRepository extends AbstractRepository {
                 'amount' => $request['amount'],
                 'currency' => $request['currency'],
                 'txid' => $request['txid'],
-                'previous_txid' => $result ? $result['txid'] : null,
+                'previous_txid' => $prevTxidResult ? $prevTxidResult['txid'] : null,
                 'sender_signature' => $request['signature'] ?? null, // upon initial inserting a standard transaction in database of original sender it is null
                 'signature_nonce' => $request['nonce'] ?? $request['signatureNonce'] ?? null, // nonce from signed message (for verification)
                 'memo' => $request['memo'],

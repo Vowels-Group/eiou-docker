@@ -527,6 +527,7 @@ class SyncService {
             // all transactions until we hit the lastKnownTxid
             // Also exclude cancelled/rejected transactions as they are orphaned from the chain
             $filteredTransactions = [];
+            $latestTxid = null;
 
             foreach ($transactions as $tx) {
                 // If we hit the lastKnownTxid, stop - requester already has this and older
@@ -538,6 +539,11 @@ class SyncService {
                 // and should not be synced to maintain chain integrity
                 if (in_array($tx['status'], ['cancelled', 'rejected'])) {
                     continue;
+                }
+
+                // Track the first valid transaction as the latest (transactions are DESC ordered)
+                if ($latestTxid === null) {
+                    $latestTxid = $tx['txid'];
                 }
 
                 // Include necessary fields for security and signature verification
@@ -559,9 +565,6 @@ class SyncService {
                     'signature_nonce' => $tx['signature_nonce'] ?? null
                 ];
             }
-
-            // Get latest txid
-            $latestTxid = !empty($transactions) ? $transactions[0]['txid'] : null;
 
             // Reverse to chronological order (oldest first) so requester can insert
             // in correct chain order - each tx references the previous one
