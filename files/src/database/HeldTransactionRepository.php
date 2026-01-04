@@ -72,7 +72,7 @@ class HeldTransactionRepository extends AbstractRepository {
             'original_previous_txid' => $originalPreviousTxid,
             'expected_previous_txid' => $expectedPreviousTxid,
             'transaction_type' => $transactionType,
-            'sync_status' => 'pending',
+            'sync_status' => 'not_started',
             'retry_count' => 0,
             'max_retries' => 3,
             'created_at' => date('Y-m-d H:i:s'),
@@ -273,7 +273,7 @@ class HeldTransactionRepository extends AbstractRepository {
         $query = "UPDATE {$this->tableName}
                   SET sync_status = 'in_progress', updated_at = :updated_at
                   WHERE contact_pubkey_hash = :contact_pubkey_hash
-                  AND sync_status = 'pending'";
+                  AND sync_status = 'not_started'";
 
         $stmt = $this->execute($query, [
             ':updated_at' => date('Y-m-d H:i:s'),

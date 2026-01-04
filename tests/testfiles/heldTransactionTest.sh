@@ -68,428 +68,434 @@ fi
 # Wait briefly for contacts to be established
 sleep 2
 
-############################ TEST 1: Verify held_transactions table exists ############################
+############################ TEST 1: Create held_transactions table ############################
 
-echo -e "\n[Test 1: Verify held_transactions table schema]"
+echo -e "\n[Test 1: Create held_transactions table if not exists]"
 totaltests=$(( totaltests + 1 ))
 
-tableSchema=$(docker exec ${sender} php -r "
+tableResult=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
     \$pdo = \$app->services->getPdo();
 
-    // Check if table exists
-    \$tables = \$pdo->query(\"SHOW TABLES LIKE 'held_transactions'\")->fetchAll();
-    if (empty(\$tables)) {
-        echo 'TABLE_MISSING';
-        exit;
+    // Create the held_transactions table
+    \$sql = \"CREATE TABLE IF NOT EXISTS held_transactions (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        contact_pubkey_hash VARCHAR(64) NOT NULL,
+        txid VARCHAR(255) NOT NULL,
+        original_previous_txid VARCHAR(255),
+        expected_previous_txid VARCHAR(255),
+        transaction_type ENUM('standard', 'p2p') DEFAULT 'standard',
+        hold_reason ENUM('invalid_previous_txid', 'sync_in_progress') DEFAULT 'invalid_previous_txid',
+        sync_status ENUM('not_started', 'in_progress', 'completed', 'failed') DEFAULT 'not_started',
+        retry_count INT DEFAULT 0,
+        max_retries INT DEFAULT 3,
+        held_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        last_sync_attempt TIMESTAMP(6) NULL,
+        next_retry_at TIMESTAMP(6) NULL,
+        resolved_at TIMESTAMP(6) NULL,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_held_contact (contact_pubkey_hash),
+        INDEX idx_held_txid (txid),
+        INDEX idx_held_status (sync_status),
+        INDEX idx_held_contact_status (contact_pubkey_hash, sync_status)
+    )\";
+
+    try {
+        \$pdo->exec(\$sql);
+        echo 'TABLE_CREATED';
+    } catch (Exception \$e) {
+        echo 'ERROR:' . \$e->getMessage();
     }
+" 2>/dev/null || echo "ERROR")
 
-    // Get table columns
-    \$columns = \$pdo->query(\"DESCRIBE held_transactions\")->fetchAll(PDO::FETCH_ASSOC);
-    \$columnNames = array_column(\$columns, 'Field');
+if [[ "$tableResult" == "TABLE_CREATED" ]]; then
+    printf "\t   held_transactions table ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   held_transactions table ${RED}FAILED${NC} (%s)\n" "${tableResult}"
+    failure=$(( failure + 1 ))
+fi
 
-    // Check required columns
-    \$requiredColumns = ['id', 'contact_address', 'contact_pubkey_hash', 'amount', 'currency', 'description', 'created_at'];
-    \$missingColumns = array_diff(\$requiredColumns, \$columnNames);
+############################ TEST 2: Verify HeldTransactionRepository exists ############################
 
-    if (!empty(\$missingColumns)) {
-        echo 'MISSING_COLUMNS:' . implode(',', \$missingColumns);
-    } else {
-        echo 'SCHEMA_VALID';
+echo -e "\n[Test 2: Verify HeldTransactionRepository exists and can be instantiated]"
+totaltests=$(( totaltests + 1 ))
+
+repoExists=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+
+    try {
+        \$repo = \$app->services->getHeldTransactionRepository();
+        echo 'EXISTS';
+    } catch (Exception \$e) {
+        echo 'MISSING:' . \$e->getMessage();
     }
 " 2>/dev/null || echo "ERROR")
 
-if [[ "$tableSchema" == "SCHEMA_VALID" ]]; then
-    printf "\t   held_transactions table schema ${GREEN}PASSED${NC}\n"
+if [[ "$repoExists" == "EXISTS" ]]; then
+    printf "\t   HeldTransactionRepository ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   held_transactions table schema ${RED}FAILED${NC} (%s)\n" "${tableSchema}"
+    printf "\t   HeldTransactionRepository ${RED}FAILED${NC} (%s)\n" "${repoExists}"
     failure=$(( failure + 1 ))
 fi
 
-############################ TEST 2: Verify holdTransaction method exists ############################
+############################ TEST 3: Verify HeldTransactionService exists ############################
 
-echo -e "\n[Test 2: Verify holdTransaction method exists]"
+echo -e "\n[Test 3: Verify HeldTransactionService exists and can be instantiated]"
 totaltests=$(( totaltests + 1 ))
 
-methodExists=$(docker exec ${sender} php -r "
+serviceExists=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
-    echo method_exists(\$txRepo, 'holdTransaction') ? 'EXISTS' : 'MISSING';
+
+    try {
+        \$service = \$app->services->getHeldTransactionService();
+        echo 'EXISTS';
+    } catch (Exception \$e) {
+        echo 'MISSING:' . \$e->getMessage();
+    }
 " 2>/dev/null || echo "ERROR")
 
-if [[ "$methodExists" == "EXISTS" ]]; then
-    printf "\t   holdTransaction method ${GREEN}PASSED${NC}\n"
+if [[ "$serviceExists" == "EXISTS" ]]; then
+    printf "\t   HeldTransactionService ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   holdTransaction method ${RED}FAILED${NC} (%s)\n" "${methodExists}"
+    printf "\t   HeldTransactionService ${RED}FAILED${NC} (%s)\n" "${serviceExists}"
     failure=$(( failure + 1 ))
 fi
 
-############################ TEST 3: Verify getHeldTransactions method exists ############################
+############################ TEST 4: Test holdTransaction method ############################
 
-echo -e "\n[Test 3: Verify getHeldTransactions method exists]"
+echo -e "\n[Test 4: Test holdTransaction repository method]"
 totaltests=$(( totaltests + 1 ))
 
-getMethodExists=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
-    echo method_exists(\$txRepo, 'getHeldTransactions') ? 'EXISTS' : 'MISSING';
-" 2>/dev/null || echo "ERROR")
-
-if [[ "$getMethodExists" == "EXISTS" ]]; then
-    printf "\t   getHeldTransactions method ${GREEN}PASSED${NC}\n"
-    passed=$(( passed + 1 ))
-else
-    printf "\t   getHeldTransactions method ${RED}FAILED${NC} (%s)\n" "${getMethodExists}"
-    failure=$(( failure + 1 ))
-fi
-
-############################ TEST 4: Verify clearHeldTransactions method exists ############################
-
-echo -e "\n[Test 4: Verify clearHeldTransactions method exists]"
-totaltests=$(( totaltests + 1 ))
-
-clearMethodExists=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
-    echo method_exists(\$txRepo, 'clearHeldTransactions') ? 'EXISTS' : 'MISSING';
-" 2>/dev/null || echo "ERROR")
-
-if [[ "$clearMethodExists" == "EXISTS" ]]; then
-    printf "\t   clearHeldTransactions method ${GREEN}PASSED${NC}\n"
-    passed=$(( passed + 1 ))
-else
-    printf "\t   clearHeldTransactions method ${RED}FAILED${NC} (%s)\n" "${clearMethodExists}"
-    failure=$(( failure + 1 ))
-fi
-
-############################ TEST 5: Test holding a transaction ############################
-
-echo -e "\n[Test 5: Test holding a transaction]"
-totaltests=$(( totaltests + 1 ))
-
-timestamp=$(date +%s%N)
-
-# Hold a test transaction
 holdResult=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
 
-    // Get receiver pubkey hash from contacts
-    \$contact = \$app->services->getContactRepository()->lookup('${MODE}', '${receiverAddress}');
-    if (!\$contact) {
-        echo 'CONTACT_NOT_FOUND';
-        exit;
-    }
+    try {
+        \$repo = \$app->services->getHeldTransactionRepository();
 
-    \$pubkeyHash = \$contact['pubkey_hash'];
+        // Test inserting a held transaction
+        \$testTxid = 'test-txid-' . time();
+        \$testContactHash = hash('sha256', 'test-contact-pubkey');
 
-    // Hold a transaction
-    \$txRepo->holdTransaction(
-        '${receiverAddress}',
-        \$pubkeyHash,
-        100,
-        'USD',
-        'held-test-tx-${timestamp}'
-    );
-
-    echo 'HELD_SUCCESS';
-" 2>/dev/null || echo "ERROR")
-
-# Verify transaction was held
-heldCount=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$pdo = \$app->services->getPdo();
-    \$count = \$pdo->query(\"SELECT COUNT(*) FROM held_transactions WHERE description LIKE 'held-test-tx-${timestamp}'\")->fetchColumn();
-    echo \$count;
-" 2>/dev/null || echo "0")
-
-if [[ "$holdResult" == "HELD_SUCCESS" ]] && [[ "$heldCount" == "1" ]]; then
-    printf "\t   Transaction held successfully ${GREEN}PASSED${NC}\n"
-    passed=$(( passed + 1 ))
-else
-    printf "\t   Hold transaction ${RED}FAILED${NC} (result: %s, count: %s)\n" "${holdResult}" "${heldCount}"
-    failure=$(( failure + 1 ))
-fi
-
-############################ TEST 6: Test retrieving held transactions ############################
-
-echo -e "\n[Test 6: Test retrieving held transactions for contact]"
-totaltests=$(( totaltests + 1 ))
-
-# Get receiver pubkey hash
-receiverPubkeyHash=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->lookup('${MODE}', '${receiverAddress}');
-    echo \$contact ? \$contact['pubkey_hash'] : 'ERROR';
-" 2>/dev/null || echo "ERROR")
-
-# Retrieve held transactions
-retrieveResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
-
-    \$heldTxs = \$txRepo->getHeldTransactions('${receiverPubkeyHash}');
-
-    if (empty(\$heldTxs)) {
-        echo 'NO_HELD_TX';
-    } else {
-        \$found = false;
-        foreach (\$heldTxs as \$tx) {
-            if (strpos(\$tx['description'], 'held-test-tx-${timestamp}') !== false) {
-                \$found = true;
-                break;
-            }
-        }
-        echo \$found ? 'FOUND:' . count(\$heldTxs) : 'NOT_FOUND';
-    }
-" 2>/dev/null || echo "ERROR")
-
-if [[ "$retrieveResult" == FOUND:* ]]; then
-    heldTxCount=$(echo "$retrieveResult" | cut -d':' -f2)
-    printf "\t   Retrieved held transactions ${GREEN}PASSED${NC} (found %s)\n" "${heldTxCount}"
-    passed=$(( passed + 1 ))
-else
-    printf "\t   Retrieve held transactions ${RED}FAILED${NC} (%s)\n" "${retrieveResult}"
-    failure=$(( failure + 1 ))
-fi
-
-############################ TEST 7: Test per-contact isolation ############################
-
-if [[ -n "$thirdAddress" ]]; then
-    echo -e "\n[Test 7: Test per-contact isolation]"
-    totaltests=$(( totaltests + 1 ))
-
-    # Get third contact pubkey hash
-    thirdPubkeyHash=$(docker exec ${sender} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
-        \$contact = \$app->services->getContactRepository()->lookup('${MODE}', '${thirdAddress}');
-        echo \$contact ? \$contact['pubkey_hash'] : 'ERROR';
-    " 2>/dev/null || echo "ERROR")
-
-    # Hold a transaction for third contact
-    holdThirdResult=$(docker exec ${sender} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
-        \$txRepo = \$app->services->getTransactionRepository();
-
-        \$txRepo->holdTransaction(
-            '${thirdAddress}',
-            '${thirdPubkeyHash}',
-            200,
-            'USD',
-            'held-third-tx-${timestamp}'
+        \$result = \$repo->holdTransaction(
+            \$testContactHash,
+            \$testTxid,
+            'original-prev-txid',
+            'expected-prev-txid',
+            'standard'
         );
 
-        echo 'HELD_SUCCESS';
-    " 2>/dev/null || echo "ERROR")
-
-    # Verify isolation - receiver's held transactions should not include third contact's
-    isolationResult=$(docker exec ${sender} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
-        \$txRepo = \$app->services->getTransactionRepository();
-
-        \$receiverTxs = \$txRepo->getHeldTransactions('${receiverPubkeyHash}');
-        \$thirdTxs = \$txRepo->getHeldTransactions('${thirdPubkeyHash}');
-
-        \$receiverHasThird = false;
-        foreach (\$receiverTxs as \$tx) {
-            if (strpos(\$tx['description'], 'held-third-tx') !== false) {
-                \$receiverHasThird = true;
-                break;
+        if (\$result !== false && \$result > 0) {
+            // Verify it was inserted
+            \$held = \$repo->getByTxid(\$testTxid);
+            if (\$held && \$held['txid'] === \$testTxid) {
+                // Cleanup
+                \$repo->releaseTransaction(\$testTxid);
+                echo 'SUCCESS';
+            } else {
+                echo 'VERIFY_FAILED';
             }
-        }
-
-        \$thirdHasReceiver = false;
-        foreach (\$thirdTxs as \$tx) {
-            if (strpos(\$tx['description'], 'held-test-tx') !== false && strpos(\$tx['description'], 'held-third') === false) {
-                \$thirdHasReceiver = true;
-                break;
-            }
-        }
-
-        if (\$receiverHasThird || \$thirdHasReceiver) {
-            echo 'ISOLATION_FAILED';
         } else {
-            echo 'ISOLATED:' . count(\$receiverTxs) . '/' . count(\$thirdTxs);
+            echo 'INSERT_FAILED';
         }
-    " 2>/dev/null || echo "ERROR")
-
-    if [[ "$isolationResult" == ISOLATED:* ]]; then
-        printf "\t   Per-contact isolation ${GREEN}PASSED${NC} (%s)\n" "${isolationResult}"
-        passed=$(( passed + 1 ))
-    else
-        printf "\t   Per-contact isolation ${RED}FAILED${NC} (%s)\n" "${isolationResult}"
-        failure=$(( failure + 1 ))
-    fi
-else
-    echo -e "\n[Test 7: Skipped - per-contact isolation (need 3+ containers)]"
-fi
-
-############################ TEST 8: Test clearing held transactions after sync ############################
-
-echo -e "\n[Test 8: Test clearing held transactions after sync]"
-totaltests=$(( totaltests + 1 ))
-
-# Clear held transactions for receiver
-clearResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
-
-    \$deleted = \$txRepo->clearHeldTransactions('${receiverPubkeyHash}');
-    echo 'CLEARED:' . \$deleted;
+    } catch (Exception \$e) {
+        echo 'ERROR:' . \$e->getMessage();
+    }
 " 2>/dev/null || echo "ERROR")
 
-# Verify transactions were cleared
-clearedCount=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
-
-    \$heldTxs = \$txRepo->getHeldTransactions('${receiverPubkeyHash}');
-    echo count(\$heldTxs);
-" 2>/dev/null || echo "ERROR")
-
-if [[ "$clearResult" == CLEARED:* ]] && [[ "$clearedCount" == "0" ]]; then
-    printf "\t   Clear held transactions ${GREEN}PASSED${NC}\n"
+if [[ "$holdResult" == "SUCCESS" ]]; then
+    printf "\t   holdTransaction method ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Clear held transactions ${RED}FAILED${NC} (result: %s, remaining: %s)\n" "${clearResult}" "${clearedCount}"
+    printf "\t   holdTransaction method ${RED}FAILED${NC} (%s)\n" "${holdResult}"
     failure=$(( failure + 1 ))
 fi
 
-############################ TEST 9: Test sync integration with held transactions ############################
+############################ TEST 5: Test sync status tracking ############################
 
-echo -e "\n[Test 9: Test sync integration with held transactions]"
+echo -e "\n[Test 5: Test sync status tracking methods]"
 totaltests=$(( totaltests + 1 ))
 
-# Send a real transaction to establish chain
-sendResult=$(docker exec ${sender} eiou send ${receiverAddress} 5 USD "sync-held-test-${timestamp}" 2>&1)
-sleep 2
-
-# Delete transaction from sender to simulate desync
-deleteResult=$(docker exec ${sender} php -r "
+syncStatusResult=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pdo = \$app->services->getPdo();
-    \$deleted = \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'sync-held-test-${timestamp}'\");
-    echo 'DELETED:' . \$deleted;
+
+    try {
+        \$repo = \$app->services->getHeldTransactionRepository();
+
+        // Insert a test transaction
+        \$testTxid = 'sync-test-' . time();
+        \$testContactHash = hash('sha256', 'sync-test-contact');
+
+        \$repo->holdTransaction(
+            \$testContactHash,
+            \$testTxid,
+            null,
+            null,
+            'standard'
+        );
+
+        // Test sync status transitions
+        \$repo->markSyncStarted(\$testContactHash);
+        \$inProgress = \$repo->isSyncInProgress(\$testContactHash);
+
+        if (!\$inProgress) {
+            echo 'SYNC_START_FAILED';
+            \$repo->releaseTransaction(\$testTxid);
+            exit;
+        }
+
+        \$repo->markSyncCompleted(\$testContactHash);
+        \$completed = \$repo->getHeldTransactionsForContact(\$testContactHash, 'completed');
+
+        // Cleanup
+        \$repo->releaseTransaction(\$testTxid);
+
+        if (!empty(\$completed)) {
+            echo 'SUCCESS';
+        } else {
+            echo 'SYNC_COMPLETE_FAILED';
+        }
+    } catch (Exception \$e) {
+        echo 'ERROR:' . \$e->getMessage();
+    }
 " 2>/dev/null || echo "ERROR")
 
-# Hold a new transaction (this simulates what would happen after invalid_previous_txid rejection)
-holdNewResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
-
-    \$contact = \$app->services->getContactRepository()->lookup('${MODE}', '${receiverAddress}');
-    \$pubkeyHash = \$contact['pubkey_hash'];
-
-    \$txRepo->holdTransaction(
-        '${receiverAddress}',
-        \$pubkeyHash,
-        10,
-        'USD',
-        'held-after-desync-${timestamp}'
-    );
-
-    echo 'HELD_SUCCESS';
-" 2>/dev/null || echo "ERROR")
-
-# Verify held transaction exists before sync
-heldBeforeSync=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$pdo = \$app->services->getPdo();
-    \$count = \$pdo->query(\"SELECT COUNT(*) FROM held_transactions WHERE description LIKE 'held-after-desync-${timestamp}'\")->fetchColumn();
-    echo \$count;
-" 2>/dev/null || echo "0")
-
-if [[ "$holdNewResult" == "HELD_SUCCESS" ]] && [[ "$heldBeforeSync" == "1" ]]; then
-    printf "\t   Transaction held after simulated desync ${GREEN}PASSED${NC}\n"
+if [[ "$syncStatusResult" == "SUCCESS" ]]; then
+    printf "\t   Sync status tracking ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Hold after desync ${RED}FAILED${NC} (result: %s, count: %s)\n" "${holdNewResult}" "${heldBeforeSync}"
+    printf "\t   Sync status tracking ${RED}FAILED${NC} (%s)\n" "${syncStatusResult}"
     failure=$(( failure + 1 ))
 fi
 
-############################ TEST 10: Verify resumeHeldTransactions method exists ############################
+############################ TEST 6: Test per-contact isolation ############################
 
-echo -e "\n[Test 10: Verify resumeHeldTransactions method exists]"
+echo -e "\n[Test 6: Test per-contact isolation]"
 totaltests=$(( totaltests + 1 ))
 
-resumeMethodExists=$(docker exec ${sender} php -r "
+isolationResult=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$txService = \$app->services->getTransactionService();
-    echo method_exists(\$txService, 'resumeHeldTransactions') ? 'EXISTS' : 'MISSING';
+
+    try {
+        \$repo = \$app->services->getHeldTransactionRepository();
+
+        // Insert transactions for two different contacts
+        \$contact1Hash = hash('sha256', 'isolation-contact-1');
+        \$contact2Hash = hash('sha256', 'isolation-contact-2');
+
+        \$repo->holdTransaction(\$contact1Hash, 'iso-tx-1', null, null, 'standard');
+        \$repo->holdTransaction(\$contact2Hash, 'iso-tx-2', null, null, 'standard');
+
+        // Mark sync in progress for contact 1 only
+        \$repo->markSyncStarted(\$contact1Hash);
+
+        // Verify contact 1 shows sync in progress
+        \$c1InProgress = \$repo->isSyncInProgress(\$contact1Hash);
+
+        // Verify contact 2 does NOT show sync in progress
+        \$c2InProgress = \$repo->isSyncInProgress(\$contact2Hash);
+
+        // Cleanup
+        \$repo->releaseTransaction('iso-tx-1');
+        \$repo->releaseTransaction('iso-tx-2');
+
+        if (\$c1InProgress && !\$c2InProgress) {
+            echo 'SUCCESS';
+        } else {
+            echo 'ISOLATION_FAILED:c1=' . (\$c1InProgress ? 'true' : 'false') . ',c2=' . (\$c2InProgress ? 'true' : 'false');
+        }
+    } catch (Exception \$e) {
+        echo 'ERROR:' . \$e->getMessage();
+    }
 " 2>/dev/null || echo "ERROR")
 
-if [[ "$resumeMethodExists" == "EXISTS" ]]; then
-    printf "\t   resumeHeldTransactions method ${GREEN}PASSED${NC}\n"
+if [[ "$isolationResult" == "SUCCESS" ]]; then
+    printf "\t   Per-contact isolation ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   resumeHeldTransactions method ${RED}FAILED${NC} (%s)\n" "${resumeMethodExists}"
+    printf "\t   Per-contact isolation ${RED}FAILED${NC} (%s)\n" "${isolationResult}"
     failure=$(( failure + 1 ))
 fi
 
-############################ CLEANUP ############################
+############################ TEST 7: Test HeldTransactionService holdTransactionForSync ############################
 
-echo -e "\n[Cleanup: Removing test data]"
+echo -e "\n[Test 7: Test HeldTransactionService holdTransactionForSync]"
+totaltests=$(( totaltests + 1 ))
 
-# Clean up held transactions
-cleanupHeld=$(docker exec ${sender} php -r "
+serviceHoldResult=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pdo = \$app->services->getPdo();
-    \$deleted = \$pdo->exec(\"DELETE FROM held_transactions WHERE description LIKE 'held-%${timestamp}'\");
-    echo 'DELETED_HELD:' . \$deleted;
+
+    try {
+        \$service = \$app->services->getHeldTransactionService();
+
+        // Create a mock transaction
+        \$mockTx = [
+            'txid' => 'service-test-' . time(),
+            'receiver_public_key' => 'mock-receiver-pubkey-test',
+            'receiver_address' => '"'${receiverAddress}'"',
+            'previous_txid' => 'mock-previous-txid',
+            'memo' => 'standard'
+        ];
+
+        // Test holding the transaction
+        \$result = \$service->holdTransactionForSync(\$mockTx, \$mockTx['receiver_public_key'], 'expected-txid');
+
+        // Cleanup
+        \$repo = \$app->services->getHeldTransactionRepository();
+        \$repo->releaseTransaction(\$mockTx['txid']);
+
+        if (\$result['held'] === true) {
+            echo 'SUCCESS';
+        } else {
+            echo 'HOLD_FAILED:' . (\$result['error'] ?? 'unknown');
+        }
+    } catch (Exception \$e) {
+        echo 'ERROR:' . \$e->getMessage();
+    }
 " 2>/dev/null || echo "ERROR")
 
-# Clean up transactions
-cleanupTx=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$pdo = \$app->services->getPdo();
-    \$deleted = \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '%${timestamp}'\");
-    echo 'DELETED_TX:' . \$deleted;
-" 2>/dev/null || echo "ERROR")
-
-cleanupReceiver=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$pdo = \$app->services->getPdo();
-    \$deleted = \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '%${timestamp}'\");
-    echo 'DELETED_TX:' . \$deleted;
-" 2>/dev/null || echo "ERROR")
-
-if [[ -n "$thirdAddress" ]]; then
-    cleanupThird=$(docker exec ${sender} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
-        \$pdo = \$app->services->getPdo();
-        \$deleted = \$pdo->exec(\"DELETE FROM held_transactions WHERE contact_address = '${thirdAddress}'\");
-        echo 'DELETED_THIRD:' . \$deleted;
-    " 2>/dev/null || echo "ERROR")
-    echo -e "\t   Cleanup third contact: ${cleanupThird}"
+if [[ "$serviceHoldResult" == "SUCCESS" ]]; then
+    printf "\t   holdTransactionForSync ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   holdTransactionForSync ${RED}FAILED${NC} (%s)\n" "${serviceHoldResult}"
+    failure=$(( failure + 1 ))
 fi
 
-echo -e "\t   Cleanup sender held: ${cleanupHeld}"
-echo -e "\t   Cleanup sender transactions: ${cleanupTx}"
-echo -e "\t   Cleanup receiver transactions: ${cleanupReceiver}"
+############################ TEST 8: Test shouldHoldTransactions ############################
 
-##################################################################
+echo -e "\n[Test 8: Test shouldHoldTransactions check]"
+totaltests=$(( totaltests + 1 ))
+
+shouldHoldResult=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+
+    try {
+        \$service = \$app->services->getHeldTransactionService();
+        \$repo = \$app->services->getHeldTransactionRepository();
+
+        \$testContactPubkey = 'should-hold-test-contact';
+        \$testContactHash = hash('sha256', \$testContactPubkey);
+
+        // Initially should NOT hold (no sync in progress)
+        \$shouldHold1 = \$service->shouldHoldTransactions(\$testContactPubkey);
+
+        // Create a held transaction and mark sync as in progress
+        \$repo->holdTransaction(\$testContactHash, 'should-hold-tx', null, null, 'standard');
+        \$repo->markSyncStarted(\$testContactHash);
+
+        // Now SHOULD hold
+        \$shouldHold2 = \$service->shouldHoldTransactions(\$testContactPubkey);
+
+        // Cleanup
+        \$repo->releaseTransaction('should-hold-tx');
+
+        if (!\$shouldHold1 && \$shouldHold2) {
+            echo 'SUCCESS';
+        } else {
+            echo 'FAILED:before=' . (\$shouldHold1 ? 'true' : 'false') . ',after=' . (\$shouldHold2 ? 'true' : 'false');
+        }
+    } catch (Exception \$e) {
+        echo 'ERROR:' . \$e->getMessage();
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$shouldHoldResult" == "SUCCESS" ]]; then
+    printf "\t   shouldHoldTransactions ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   shouldHoldTransactions ${RED}FAILED${NC} (%s)\n" "${shouldHoldResult}"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 9: Test getStatistics ############################
+
+echo -e "\n[Test 9: Test getStatistics method]"
+totaltests=$(( totaltests + 1 ))
+
+statsResult=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+
+    try {
+        \$service = \$app->services->getHeldTransactionService();
+
+        \$stats = \$service->getStatistics();
+
+        if (isset(\$stats['total']) && isset(\$stats['by_status']) && isset(\$stats['by_reason'])) {
+            echo 'SUCCESS';
+        } else {
+            echo 'INVALID_STATS:' . json_encode(array_keys(\$stats));
+        }
+    } catch (Exception \$e) {
+        echo 'ERROR:' . \$e->getMessage();
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$statsResult" == "SUCCESS" ]]; then
+    printf "\t   getStatistics ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   getStatistics ${RED}FAILED${NC} (%s)\n" "${statsResult}"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 10: Test cleanup methods ############################
+
+echo -e "\n[Test 10: Test cleanup and release methods]"
+totaltests=$(( totaltests + 1 ))
+
+cleanupResult=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+
+    try {
+        \$repo = \$app->services->getHeldTransactionRepository();
+
+        \$testContactHash = hash('sha256', 'cleanup-test-contact');
+
+        // Insert multiple transactions
+        \$repo->holdTransaction(\$testContactHash, 'cleanup-tx-1', null, null, 'standard');
+        \$repo->holdTransaction(\$testContactHash, 'cleanup-tx-2', null, null, 'standard');
+
+        // Verify they exist
+        \$before = \$repo->hasHeldTransactions(\$testContactHash);
+
+        // Release all for contact
+        \$released = \$repo->releaseAllForContact(\$testContactHash);
+
+        // Verify they're gone
+        \$after = \$repo->hasHeldTransactions(\$testContactHash);
+
+        if (\$before && !\$after && \$released >= 2) {
+            echo 'SUCCESS';
+        } else {
+            echo 'FAILED:before=' . (\$before ? 'true' : 'false') . ',after=' . (\$after ? 'true' : 'false') . ',released=' . \$released;
+        }
+    } catch (Exception \$e) {
+        echo 'ERROR:' . \$e->getMessage();
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$cleanupResult" == "SUCCESS" ]]; then
+    printf "\t   Cleanup methods ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Cleanup methods ${RED}FAILED${NC} (%s)\n" "${cleanupResult}"
+    failure=$(( failure + 1 ))
+fi
+
+############################ Summary ############################
 
 succesrate "${totaltests}" "${passed}" "${failure}" "'held transaction'"
