@@ -465,6 +465,33 @@ class SyncService {
             ]);
         }
 
+        // Notify HeldTransactionService of sync completion
+        try {
+            $app = Application::getInstance();
+            if ($app->services->hasService('HeldTransactionService')) {
+                $heldService = $app->services->getService('HeldTransactionService');
+                $heldService->onSyncComplete(
+                    $contactPublicKey,
+                    $result['success'],
+                    $result['synced_count']
+                );
+            } else {
+                // Try to get via getter if registered
+                $heldService = $app->services->getHeldTransactionService();
+                $heldService->onSyncComplete(
+                    $contactPublicKey,
+                    $result['success'],
+                    $result['synced_count']
+                );
+            }
+        } catch (Exception $e) {
+            // Log but don't fail - held transaction notification is non-critical
+            SecureLogger::debug("Could not notify HeldTransactionService of sync completion", [
+                'contact' => $contactPublicKey,
+                'error' => $e->getMessage()
+            ]);
+        }
+
         return $result;
     }
 

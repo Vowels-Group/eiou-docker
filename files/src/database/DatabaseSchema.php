@@ -314,3 +314,36 @@ function getRateLimitsTableSchema() {
         INDEX idx_blocked_until (blocked_until)
     )";
 }
+
+// Held Transactions table - tracks transactions pending resync completion
+function getHeldTransactionsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS held_transactions (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        contact_pubkey_hash VARCHAR(64) NOT NULL,
+        txid VARCHAR(255) NOT NULL,
+        original_previous_txid VARCHAR(255),
+        expected_previous_txid VARCHAR(255),
+        transaction_type ENUM('standard', 'p2p') DEFAULT 'standard',
+        hold_reason ENUM(
+            'invalid_previous_txid',
+            'sync_in_progress'
+        ) DEFAULT 'invalid_previous_txid',
+        sync_status ENUM(
+            'not_started',
+            'in_progress',
+            'completed',
+            'failed'
+        ) DEFAULT 'not_started',
+        retry_count INT DEFAULT 0,
+        max_retries INT DEFAULT 3,
+        held_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        last_sync_attempt TIMESTAMP(6) NULL,
+        next_retry_at TIMESTAMP(6) NULL,
+        resolved_at TIMESTAMP(6) NULL,
+        INDEX idx_held_contact (contact_pubkey_hash),
+        INDEX idx_held_txid (txid),
+        INDEX idx_held_status (sync_status),
+        INDEX idx_held_contact_status (contact_pubkey_hash, sync_status),
+        INDEX idx_held_next_retry (next_retry_at, sync_status)
+    )";
+}
