@@ -332,7 +332,7 @@ echo -e "\n[Test 7: Test HeldTransactionService holdTransactionForSync]"
 totaltests=$(( totaltests + 1 ))
 
 serviceHoldResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${REL_FUNCTIONS}');
     \$app = Application::getInstance();
 
     try {
@@ -342,7 +342,7 @@ serviceHoldResult=$(docker exec ${sender} php -r "
         \$mockTx = [
             'txid' => 'service-test-' . time(),
             'receiver_public_key' => 'mock-receiver-pubkey-test',
-            'receiver_address' => '"'${receiverAddress}'"',
+            'receiver_address' => '${receiverAddress}',
             'previous_txid' => 'mock-previous-txid',
             'memo' => 'standard'
         ];
