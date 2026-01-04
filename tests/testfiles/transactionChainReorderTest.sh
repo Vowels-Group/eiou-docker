@@ -299,6 +299,7 @@ fi
 
 echo -e "\n[Cleanup: Removing test transactions]"
 
+# Clean up sender container
 cleanupSender=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
@@ -307,7 +308,18 @@ cleanupSender=$(docker exec ${sender} php -r "
     echo 'DELETED:' . \$deleted;
 " 2>/dev/null || echo "ERROR")
 
-echo -e "\t   Cleanup: ${cleanupSender}"
+echo -e "\t   Cleanup sender: ${cleanupSender}"
+
+# Clean up receiver container (transactions may have synced)
+cleanupReceiver=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$deleted = \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'chain-reorder-test%' OR description LIKE 'insert-test%'\");
+    echo 'DELETED:' . \$deleted;
+" 2>/dev/null || echo "ERROR")
+
+echo -e "\t   Cleanup receiver: ${cleanupReceiver}"
 
 ##################################################################
 
