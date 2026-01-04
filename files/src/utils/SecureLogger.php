@@ -157,16 +157,26 @@ class SecureLogger {
      * Log an exception with stack trace (masked)
      *
      * @param Exception $e Exception to log
-     * @param string $level Log level
+     * @param array|string $contextOrLevel Additional context array OR log level string
+     * @param string $level Log level (only used if second param is context array)
      */
-    public static function logException($e, $level = 'ERROR') {
+    public static function logException($e, $contextOrLevel = 'ERROR', $level = 'ERROR') {
+        // Handle backward compatibility - if second param is an array, treat it as context
+        if (is_array($contextOrLevel)) {
+            $additionalContext = $contextOrLevel;
+            $logLevel = $level;
+        } else {
+            $additionalContext = [];
+            $logLevel = $contextOrLevel;
+        }
+
         $message = get_class($e) . ': ' . $e->getMessage();
-        $context = [
+        $context = array_merge([
             'file' => $e->getFile(),
             'line' => $e->getLine(),
             'trace' => self::maskSensitive($e->getTraceAsString())
-        ];
-        self::log($level, $message, $context);
+        ], $additionalContext);
+        self::log($logLevel, $message, $context);
     }
 
     /**
