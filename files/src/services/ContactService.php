@@ -467,11 +467,22 @@ class ContactService {
             // if pending with name (contact was inserted by user for contact request)
             if($contact['name']){
                 // This contact was already sent a contact request, but has not yet responded to user (try resyncing)
-                // Resync contact using SyncService directly
-                $successfulSync = Application::getInstance()->services->getSyncService()->syncSingleContact($address, 'SILENT');
-                if ($successfulSync) {
+                // Use full sync chain for wallet restoration scenarios: Contact -> Transactions -> Balances
+                $syncService = Application::getInstance()->services->getSyncService();
+                $syncResult = $syncService->syncReaddedContact($address, $contact['pubkey']);
+
+                if ($syncResult['success'] && $syncResult['contact_synced']) {
                     $contactData['status'] = 'accepted';
+                    $contactData['sync'] = [
+                        'transactions_synced' => $syncResult['transactions_synced'],
+                        'balances_synced' => $syncResult['balances_synced'],
+                        'currencies' => $syncResult['currencies']
+                    ];
                     $output->success("Contact request already sent, synced successfully with " . $address, $contactData, "Contact synced");
+                } elseif ($syncResult['contact_synced']) {
+                    // Contact status synced but transactions/balances may have failed
+                    $contactData['status'] = 'accepted';
+                    $output->success("Contact synced, transaction sync may be incomplete", $contactData, "Partial sync");
                 } else {
                     $output->info("Contact request already sent, awaiting response from " . $address, $contactData);
                 }
