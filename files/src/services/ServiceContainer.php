@@ -293,6 +293,21 @@ class ServiceContainer {
     }
 
     /**
+     * Get HeldTransactionRepository instance
+     *
+     * @return HeldTransactionRepository
+     */
+    public function getHeldTransactionRepository(): HeldTransactionRepository {
+        if (!isset($this->repositories['HeldTransactionRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/HeldTransactionRepository.php';
+            $this->repositories['HeldTransactionRepository'] = new HeldTransactionRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['HeldTransactionRepository'];
+    }
+
+    /**
      * Get RateLimiterRepository instance
      *
      * @return RateLimiterRepository
@@ -520,6 +535,24 @@ class ServiceContainer {
             );
         }
         return $this->services['MessageDeliveryService'];
+    }
+
+    /**
+     * Get HeldTransactionService instance
+     *
+     * @return HeldTransactionService
+     */
+    public function getHeldTransactionService(): HeldTransactionService {
+        if (!isset($this->services['HeldTransactionService'])) {
+            require_once __DIR__ . '/HeldTransactionService.php';
+            $this->services['HeldTransactionService'] = new HeldTransactionService(
+                $this->getHeldTransactionRepository(),
+                $this->getTransactionRepository(),
+                $this->getUtilityContainer(),
+                $this->currentUser
+            );
+        }
+        return $this->services['HeldTransactionService'];
     }
 
     /**

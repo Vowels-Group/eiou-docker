@@ -102,6 +102,11 @@ class TransactionService {
     private ?MessageDeliveryService $messageDeliveryService = null;
 
     /**
+     * @var HeldTransactionService|null Held transaction service for pending sync
+     */
+    private ?HeldTransactionService $heldTransactionService = null;
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
@@ -159,6 +164,15 @@ class TransactionService {
      */
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Set the held transaction service (for lazy initialization)
+     *
+     * @param HeldTransactionService $service Held transaction service
+     */
+    public function setHeldTransactionService(HeldTransactionService $service): void {
+        $this->heldTransactionService = $service;
     }
 
     /**
@@ -608,9 +622,24 @@ class TransactionService {
                     } elseif($response && $response['status'] === 'rejected'){
                         // Check if rejection is due to invalid_previous_txid - attempt sync before falling back to P2P
                         if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
-                            output('Transaction rejected due to invalid_previous_txid, attempting sync...', 'SILENT');
+                            output('Transaction rejected due to invalid_previous_txid, holding for sync...', 'SILENT');
 
-                            // Attempt to sync transaction chain with the receiver
+                            // Use HeldTransactionService if available
+                            if ($this->heldTransactionService !== null) {
+                                $holdResult = $this->heldTransactionService->holdTransactionForSync(
+                                    $message,
+                                    $message['receiver_public_key'],
+                                    $response['expected_txid'] ?? null
+                                );
+
+                                if ($holdResult['held']) {
+                                    output('Transaction held pending sync completion', 'SILENT');
+                                    continue; // Transaction will be resumed after sync completes
+                                }
+                            }
+
+                            // Fallback to existing sync behavior if holding failed
+                            output('Attempting immediate sync...', 'SILENT');
                             $syncService = Application::getInstance()->services->getSyncService();
                             $syncResult = $syncService->syncTransactionChain(
                                 $message['receiver_address'],
@@ -728,9 +757,24 @@ class TransactionService {
             } elseif($response && $response['status'] === 'rejected'){
                 // Check if rejection is due to invalid_previous_txid - attempt sync
                 if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
-                    output('P2P transaction rejected due to invalid_previous_txid, attempting sync...', 'SILENT');
+                    output('P2P transaction rejected due to invalid_previous_txid, holding for sync...', 'SILENT');
 
-                    // Attempt to sync transaction chain with the receiver
+                    // Use HeldTransactionService if available
+                    if ($this->heldTransactionService !== null) {
+                        $holdResult = $this->heldTransactionService->holdTransactionForSync(
+                            $message,
+                            $message['receiver_public_key'],
+                            $response['expected_txid'] ?? null
+                        );
+
+                        if ($holdResult['held']) {
+                            output('P2P transaction held pending sync completion', 'SILENT');
+                            return; // Transaction will be resumed after sync completes
+                        }
+                    }
+
+                    // Fallback to existing sync behavior if holding failed
+                    output('Attempting immediate sync...', 'SILENT');
                     $syncService = Application::getInstance()->services->getSyncService();
                     $syncResult = $syncService->syncTransactionChain(
                         $message['receiver_address'],
