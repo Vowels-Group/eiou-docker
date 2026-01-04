@@ -109,7 +109,7 @@ chainTestResult=$(docker exec ${sender} php -r "
 
     // Get receiver pubkey
     \$receiverPubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${receiverAddress}');
-    \$senderPubkey = \$app->utilityServices->getUserContext()->getPublicKey();
+    \$senderPubkey = \$app->getPublicKey();
     \$senderPubkeyHash = hash('sha256', \$senderPubkey);
     \$receiverPubkeyHash = hash('sha256', \$receiverPubkey);
 
@@ -208,7 +208,7 @@ syncExcludeResult=$(docker exec ${sender} php -r "
 
     // Get receiver pubkey
     \$receiverPubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${receiverAddress}');
-    \$senderPubkey = \$app->utilityServices->getUserContext()->getPublicKey();
+    \$senderPubkey = \$app->getPublicKey();
 
     // Get all transactions between parties
     \$transactions = \$transactionRepo->getTransactionsBetweenPubkeys(\$senderPubkey, \$receiverPubkey);
@@ -258,7 +258,7 @@ insertTestResult=$(docker exec ${sender} php -r "
     \$pdo = \$app->services->getPdo();
 
     \$receiverPubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${receiverAddress}');
-    \$senderPubkey = \$app->utilityServices->getUserContext()->getPublicKey();
+    \$senderPubkey = \$app->getPublicKey();
     \$senderPubkeyHash = hash('sha256', \$senderPubkey);
     \$receiverPubkeyHash = hash('sha256', \$receiverPubkey);
 
