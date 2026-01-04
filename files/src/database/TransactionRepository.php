@@ -173,6 +173,10 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Get previous transaction ID between two parties
      *
+     * Excludes expired and cancelled transactions from the chain.
+     * When finding the previous txid for a new transaction, we only
+     * consider active transactions to maintain chain integrity.
+     *
      * @param string $senderPublicKey Sender's public key
      * @param string $receiverPublicKey Receiver's public key
      * @return string|null Previous txid or null
@@ -182,8 +186,9 @@ class TransactionRepository extends AbstractRepository {
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
 
         $query = "SELECT txid FROM {$this->tableName}
-                WHERE (sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash) 
-                    OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash)
+                WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
+                    OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
+                AND status NOT IN ('cancelled', 'rejected')
                 ORDER BY timestamp DESC LIMIT 1";
 
         $stmt = $this->execute($query, [
@@ -198,8 +203,8 @@ class TransactionRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-        return $result ? $result['txid'] : null;        
+
+        return $result ? $result['txid'] : null;
     }
 
 
@@ -1117,9 +1122,12 @@ class TransactionRepository extends AbstractRepository {
         $result = false;
         try{
             $this->beginTransaction();
+            // Find previous txid, excluding cancelled/rejected transactions
+            // This ensures new transactions don't link to orphaned transactions
             $query = "SELECT txid FROM {$this->tableName}
-                    WHERE (sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash) 
-                        OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash)
+                    WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
+                        OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
+                    AND status NOT IN ('cancelled', 'rejected')
                     ORDER BY timestamp DESC LIMIT 1";
 
             $stmt = $this->execute($query, [
@@ -1299,6 +1307,64 @@ class TransactionRepository extends AbstractRepository {
             $this->logError("Failed to retrieve in-progress transactions", $e);
             return [];
         }
+    }
+
+    /**
+     * Update previous_txid references when a transaction is cancelled/expired
+     *
+     * When a transaction is removed from the chain, all transactions that
+     * pointed to it need to be updated to point to its previous_txid instead.
+     *
+     * Example: Chain A1->A2->A3->A4, if A2 is cancelled:
+     * - A3 currently has previous_txid = A2
+     * - A3 should be updated to have previous_txid = A1 (A2's previous_txid)
+     *
+     * @param string $oldTxid The txid being removed from chain
+     * @param string|null $newPreviousTxid The new previous_txid to use (may be null)
+     * @return int Number of rows updated
+     */
+    public function updatePreviousTxidReferences(string $oldTxid, ?string $newPreviousTxid): int {
+        $query = "UPDATE {$this->tableName}
+                  SET previous_txid = :new_previous_txid
+                  WHERE previous_txid = :old_txid";
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':new_previous_txid', $newPreviousTxid, $newPreviousTxid === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+        $stmt->bindValue(':old_txid', $oldTxid, PDO::PARAM_STR);
+
+        try {
+            $stmt->execute();
+            $rowCount = $stmt->rowCount();
+
+            if ($rowCount > 0 && function_exists('output')) {
+                output("Updated {$rowCount} transaction(s) previous_txid from {$oldTxid} to " . ($newPreviousTxid ?? 'NULL'), 'SILENT');
+            }
+
+            return $rowCount;
+        } catch (PDOException $e) {
+            $this->logError("Failed to update previous_txid references", $e);
+            return 0;
+        }
+    }
+
+    /**
+     * Update previous_txid for a specific transaction
+     *
+     * Used by HeldTransactionService to update a held transaction's
+     * previous_txid after sync completes.
+     *
+     * @param string $txid The txid of the transaction to update
+     * @param string|null $newPreviousTxid The new previous_txid value
+     * @return bool True if update was successful
+     */
+    public function updatePreviousTxid(string $txid, ?string $newPreviousTxid): bool {
+        $affectedRows = $this->update(
+            ['previous_txid' => $newPreviousTxid],
+            'txid',
+            $txid
+        );
+
+        return $affectedRows >= 0;
     }
 
     /**
