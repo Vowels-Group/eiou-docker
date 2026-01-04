@@ -612,6 +612,7 @@ class ContactService {
                         $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
                     }
 
+                    // Insert initial balances - will be updated by full sync below
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
                     if (!$this->contactTransactionExists($senderPublicKey)) {
@@ -622,11 +623,19 @@ class ContactService {
                         $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                     }
 
-                    // Sync to confirm mutual acceptance status
-                    if(Application::getInstance()->services->getSyncService()->syncSingleContact($address, 'SILENT')){
+                    // Full sync for re-added contact: sync contact status, transaction chain, and balances
+                    $syncService = Application::getInstance()->services->getSyncService();
+                    $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
+
+                    if ($syncResult['success']) {
                         $contactData['status'] = 'accepted';
                         $contactData['pubkey'] = $senderPublicKey;
-                        $output->success("Contact re-added and synced with " . $address, $contactData, "Contact created successfully");
+                        $contactData['sync'] = [
+                            'transactions_synced' => $syncResult['transactions_synced'],
+                            'balances_synced' => $syncResult['balances_synced'],
+                            'currencies' => $syncResult['currencies']
+                        ];
+                        $output->success("Contact re-added and fully synced with " . $address, $contactData, "Contact created with transaction and balance sync");
                     } else {
                         $contactData['status'] = 'pending';
                         $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
@@ -635,9 +644,9 @@ class ContactService {
                     $output->error("Failed to re-add contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
                 }
             }
-            // Our contact pubkey and adress both exist on their end (Case when we delete the contact and try re-adding it)
+            // Our contact pubkey and address both exist on their end (Case when we delete the contact and try re-adding it)
             elseif($responseData['status'] === 'warning'){
-                // Insert contact and try re-syncing (inquiry about acceptance status)
+                // Insert contact and perform full sync (transactions + balances)
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
 
@@ -646,6 +655,7 @@ class ContactService {
                         $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
                     }
 
+                    // Insert initial balances - will be updated by full sync below
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
                     // Insert contact transaction only if one doesn't already exist
@@ -659,11 +669,21 @@ class ContactService {
                         $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                     }
 
-                    // Resync contact
-                    if(Application::getInstance()->services->getSyncService()->syncSingleContact($address, 'SILENT')){
+                    // Full sync for re-added contact: sync contact status, transaction chain, and balances
+                    // If contact still has transaction chain on their end, resync from original contact transaction
+                    // through all known transactions (verifying signatures) and finally sync balances
+                    $syncService = Application::getInstance()->services->getSyncService();
+                    $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
+
+                    if ($syncResult['success']) {
                         $contactData['status'] = 'accepted';
-                        $contactData['pubkey'] = $responseData['senderPublicKey'];
-                        $output->success("Contact re-added and synced with " . $address, $contactData, "Contact created successfully");
+                        $contactData['pubkey'] = $senderPublicKey;
+                        $contactData['sync'] = [
+                            'transactions_synced' => $syncResult['transactions_synced'],
+                            'balances_synced' => $syncResult['balances_synced'],
+                            'currencies' => $syncResult['currencies']
+                        ];
+                        $output->success("Contact re-added and fully synced with " . $address, $contactData, "Contact created with transaction and balance sync");
                     } else {
                         $contactData['status'] = 'pending';
                         $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
@@ -747,7 +767,20 @@ class ContactService {
                 // (they added us before but we never accepted, then they deleted and re-added)
                 $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
                 if ($existingContact && $existingContact['status'] === 'pending') {
-                    // Contact exists as pending - treat this as a re-confirmation of their request
+                    // Contact exists as pending - check if we have the contact transaction
+                    // If they're re-adding us and we don't have their contact tx, we need to create one
+                    $hasContactTx = $this->transactionRepository->contactTransactionExistsForReceiver(
+                        $senderPublicKeyHash
+                    );
+
+                    if (!$hasContactTx) {
+                        // Create the contact transaction on our side (they already have one on their end)
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress);
+                        // Return 'received' with txid so sender can sync
+                        return $this->contactPayload->buildReceived($senderAddress, null, $txid);
+                    }
+
+                    // Contact exists as pending with contact transaction - treat as re-confirmation
                     // Return 'received' so sender handles it like a new contact (no sync attempt)
                     // Don't include other addresses for pending contacts (privacy)
                     return $this->contactPayload->buildReceived($senderAddress);
@@ -760,10 +793,20 @@ class ContactService {
                 // Check contact status - if pending, treat as re-confirmation with new address
                 $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
                 if ($existingContact && $existingContact['status'] === 'pending') {
-                    // Contact is pending - update their address and return 'received'
-                    // so sender handles it like a new contact request
-                    // Don't include other addresses for pending contacts (privacy)
+                    // Contact is pending - update their address
                     if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
+                        // Check if we have the contact transaction
+                        $hasContactTx = $this->transactionRepository->contactTransactionExistsForReceiver(
+                            $senderPublicKeyHash
+                        );
+
+                        if (!$hasContactTx) {
+                            // Create the contact transaction on our side
+                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress);
+                            return $this->contactPayload->buildReceived($senderAddress, null, $txid);
+                        }
+
+                        // Return 'received' so sender handles it like a new contact request
                         return $this->contactPayload->buildReceived($senderAddress);
                     }
                 }

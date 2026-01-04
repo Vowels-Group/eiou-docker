@@ -208,6 +208,7 @@ cliCommandsTest
 apiEndpointsTest
 syncTest
 transactionChainSyncTest
+contactReaddSyncTest
 seedPhraseTest
 authcodeRestorationTest
 torRapidRestartTest
