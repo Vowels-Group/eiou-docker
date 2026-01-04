@@ -307,6 +307,13 @@ class SyncService {
             if ($syncResult['success']) {
                 $results['synced']++;
                 $results['total_transactions'] += $syncResult['synced_count'];
+
+                // Sync balances immediately after transaction sync for this contact
+                // This ensures balances reflect the newly synced transactions
+                if ($syncResult['synced_count'] > 0) {
+                    $this->syncContactBalance($pubkey);
+                }
+
                 $results['details'][] = [
                     'address' => $address,
                     'status' => 'synced',
