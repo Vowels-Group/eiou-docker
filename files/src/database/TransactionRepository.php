@@ -173,7 +173,7 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Get previous transaction ID between two parties
      *
-     * Excludes expired and cancelled transactions from the chain.
+     * Excludes cancelled and rejected transactions from the chain.
      * When finding the previous txid for a new transaction, we only
      * consider active transactions to maintain chain integrity.
      *
@@ -1355,7 +1355,7 @@ class TransactionRepository extends AbstractRepository {
      *
      * @param string $txid The txid of the transaction to update
      * @param string|null $newPreviousTxid The new previous_txid value
-     * @return bool True if update was successful
+     * @return bool True if a transaction was updated, false if txid not found or error
      */
     public function updatePreviousTxid(string $txid, ?string $newPreviousTxid): bool {
         $affectedRows = $this->update(
@@ -1364,7 +1364,9 @@ class TransactionRepository extends AbstractRepository {
             $txid
         );
 
-        return $affectedRows >= 0;
+        // Returns true only if a row was actually updated
+        // Returns false if txid not found (0 rows) or error (-1)
+        return $affectedRows > 0;
     }
 
     /**

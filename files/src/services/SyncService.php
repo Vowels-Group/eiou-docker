@@ -730,6 +730,11 @@ class SyncService {
             $balancesByCurrency = [];
 
             foreach ($transactions as $transaction) {
+                // Skip cancelled/rejected transactions - they don't affect actual balances
+                if (in_array($transaction['status'], ['cancelled', 'rejected'])) {
+                    continue;
+                }
+
                 $currency = $transaction['currency'];
 
                 // Initialize currency if not exists
@@ -896,6 +901,11 @@ class SyncService {
                 $balancesByCurrency = [];
 
                 foreach ($transactions as $transaction) {
+                    // Skip cancelled/rejected transactions - they don't affect actual balances
+                    if (in_array($transaction['status'], ['cancelled', 'rejected'])) {
+                        continue;
+                    }
+
                     $currency = $transaction['currency'];
 
                     // Initialize currency if not exists
