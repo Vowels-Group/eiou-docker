@@ -30,7 +30,7 @@ class P2pRepository extends AbstractRepository {
      */
     public function isCompletedByHash(string $hash): bool {
         $p2p = $this->getByHash($hash);
-        return $p2p && ($p2p['status'] ?? '') === 'completed';
+        return $p2p && ($p2p['status'] ?? '') === Constants::STATUS_COMPLETED;
     }
  
     /**
@@ -71,7 +71,7 @@ class P2pRepository extends AbstractRepository {
      */
     public function insertP2pRequest(array $request, ?string $destinationAddress = null, ?string $description = null): string {
         $myFeeAmount = $request['feeAmount'] ?? null;
-        $status = $request['status'] ?? 'initial';
+        $status = $request['status'] ?? Constants::STATUS_INITIAL;
 
         $data = [
             'hash' => $request['hash'],
@@ -107,7 +107,7 @@ class P2pRepository extends AbstractRepository {
             ]);
         } else {
             return json_encode([
-                "status" => "rejected",
+                "status" => Constants::STATUS_REJECTED,
                 "message" => "Failed to record p2p"
             ]);
         }
