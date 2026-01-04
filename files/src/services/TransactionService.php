@@ -618,8 +618,13 @@ class TransactionService {
                             );
 
                             if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
-                                // Sync successful - retry the transaction (leave as pending for next processing cycle)
-                                output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced. Retrying...', 'SILENT');
+                                // Sync successful - also sync balances to ensure consistency
+                                output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced. Syncing balances...', 'SILENT');
+
+                                // Sync balances after transaction chain sync
+                                $syncService->syncContactBalance($message['receiver_public_key']);
+
+                                output('Balances synced. Retrying transaction...', 'SILENT');
                                 // Transaction remains pending and will be retried
                                 continue;
                             } else {
@@ -733,8 +738,13 @@ class TransactionService {
                     );
 
                     if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
-                        // Sync successful - retry the transaction (leave status as sent for retry)
-                        output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced. Will retry...', 'SILENT');
+                        // Sync successful - also sync balances to ensure consistency
+                        output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced. Syncing balances...', 'SILENT');
+
+                        // Sync balances after transaction chain sync
+                        $syncService->syncContactBalance($message['receiver_public_key']);
+
+                        output('Balances synced. Will retry transaction...', 'SILENT');
                         // Revert status to pending for retry
                         $this->transactionRepository->updateStatus($memo, 'pending');
                         $this->p2pRepository->updateStatus($memo, 'found');
