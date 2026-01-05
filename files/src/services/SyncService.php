@@ -779,15 +779,9 @@ class SyncService {
             $messageContent['description'] = $tx['description'];
         }
 
-        // endRecipientAddress is ONLY included if present (matches TransactionPayload::build)
-        if (isset($tx['end_recipient_address']) && $tx['end_recipient_address'] !== null) {
-            $messageContent['endRecipientAddress'] = $tx['end_recipient_address'];
-        }
-
-        // initialSenderAddress is ONLY included if present (matches TransactionPayload::build)
-        if (isset($tx['initial_sender_address']) && $tx['initial_sender_address'] !== null) {
-            $messageContent['initialSenderAddress'] = $tx['initial_sender_address'];
-        }
+        // NOTE: endRecipientAddress and initialSenderAddress are NOT included
+        // These are local tracking fields that are NOT part of the signed payload
+        // They are added via updateTrackingFields() after transaction insert
 
         // Nonce is added last by TransportUtilityService::sign()
         $messageContent['nonce'] = (int)$tx['signature_nonce'];

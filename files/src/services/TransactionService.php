@@ -602,9 +602,14 @@ class TransactionService {
                 // If direct transaction - receiver knows both sender and recipient
                 // end_recipient is myself (receiver), initial_sender is the sender
                 $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
-                $request['endRecipientAddress'] = $myAddress;
-                $request['initialSenderAddress'] = $request['senderAddress'];
                 $insertTransactionResponse = $this->transactionRepository->insertTransaction($request,'received');
+
+                // Update tracking fields after insert (these are NOT part of signed payload)
+                $this->transactionRepository->updateTrackingFields(
+                    $request['txid'],
+                    $myAddress,  // endRecipientAddress
+                    $request['senderAddress']  // initialSenderAddress
+                );
             } else {
                 // If p2p type transaction
                 $memo = $request['memo'];
@@ -620,10 +625,15 @@ class TransactionService {
                     // If Transaction is for end-recipient
                     // end_recipient is myself, initial_sender will be updated via inquiry message later
                     $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
-                    $request['endRecipientAddress'] = $myAddress;
-                    // initial_sender_address left NULL - will be set when inquiry message arrives
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'received'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
+
+                    // Update tracking fields after insert (initial_sender set later via inquiry)
+                    $this->transactionRepository->updateTrackingFields(
+                        $request['txid'],
+                        $myAddress,  // endRecipientAddress
+                        null  // initialSenderAddress - will be set when inquiry message arrives
+                    );
                 }
             }
         } catch (PDOException $e) {
@@ -1075,6 +1085,13 @@ class TransactionService {
         $payload = $this->transactionPayload->build($data);
         $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
 
+        // Update tracking fields after insert (these are NOT part of signed payload)
+        $this->transactionRepository->updateTrackingFields(
+            $data['txid'],
+            $data['end_recipient_address'] ?? null,
+            $data['initial_sender_address'] ?? null
+        );
+
         // Build response data
         $txResponse = [
             'status' => Constants::STATUS_SENT,
@@ -1139,6 +1156,13 @@ class TransactionService {
         $payload = $this->transactionPayload->build($data);
         $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
         $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
+
+        // Update tracking fields after insert (these are NOT part of signed payload)
+        $this->transactionRepository->updateTrackingFields(
+            $data['txid'],
+            $data['end_recipient_address'] ?? null,
+            $data['initial_sender_address'] ?? null
+        );
     }
 
     /**

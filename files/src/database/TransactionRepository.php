@@ -1170,9 +1170,10 @@ class TransactionRepository extends AbstractRepository {
                 'signature_nonce' => $request['nonce'] ?? $request['signatureNonce'] ?? null, // nonce from signed message (for verification)
                 'time' => $request['time'] ?? null, // microtime used for P2P/RP2P hash or transaction creation
                 'memo' => $request['memo'],
-                'description' => $request['description'] ?? null,
-                'end_recipient_address' => $request['endRecipientAddress'] ?? null,
-                'initial_sender_address' => $request['initialSenderAddress'] ?? null
+                'description' => $request['description'] ?? null
+                // NOTE: end_recipient_address and initial_sender_address are NOT included here
+                // They are local tracking fields added via updateTrackingFields() after insert
+                // to avoid including them in the signed message (sync partners don't have this info)
             ];
             $result = $this->insert($data);
             $this->commit();
@@ -1880,6 +1881,38 @@ class TransactionRepository extends AbstractRepository {
             'sender_signature' => $signature,
             'signature_nonce' => $nonce
         ], 'txid', $txid);
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Update tracking fields for a transaction after insert
+     *
+     * These fields (end_recipient_address, initial_sender_address) are local tracking
+     * information that should NOT be included in the signed message payload.
+     * They are added after the transaction is inserted to keep them separate from
+     * the data that gets signed and verified during sync.
+     *
+     * @param string $txid Transaction ID
+     * @param string|null $endRecipientAddress Final recipient address (for P2P chains)
+     * @param string|null $initialSenderAddress Original sender address (for P2P chains)
+     * @return bool True on success
+     */
+    public function updateTrackingFields(string $txid, ?string $endRecipientAddress, ?string $initialSenderAddress): bool {
+        $updates = [];
+
+        if ($endRecipientAddress !== null) {
+            $updates['end_recipient_address'] = $endRecipientAddress;
+        }
+
+        if ($initialSenderAddress !== null) {
+            $updates['initial_sender_address'] = $initialSenderAddress;
+        }
+
+        if (empty($updates)) {
+            return true; // Nothing to update
+        }
+
+        $affectedRows = $this->update($updates, 'txid', $txid);
         return $affectedRows >= 0;
     }
 }

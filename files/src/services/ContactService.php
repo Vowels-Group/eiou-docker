@@ -194,14 +194,23 @@ class ContactService {
             'txid' => $txid,
             'time' => $time,
             'memo' => 'contact',
-            'description' => 'Contact request transaction',
-            // Contact transactions are direct - both parties know sender and recipient
-            'endRecipientAddress' => $receiverAddress,
-            'initialSenderAddress' => $myAddress
+            'description' => 'Contact request transaction'
+            // NOTE: endRecipientAddress and initialSenderAddress are NOT included here
+            // They are added via updateTrackingFields() after insert
         ];
 
         // Insert the contact transaction as 'sent' type
         $result = $this->transactionRepository->insertTransaction($transactionData, Constants::TX_TYPE_SENT);
+
+        if ($result !== false) {
+            // Update tracking fields after insert (these are NOT part of signed payload)
+            // Contact transactions are direct - both parties know sender and recipient
+            $this->transactionRepository->updateTrackingFields(
+                $txid,
+                $receiverAddress,  // endRecipientAddress
+                $myAddress  // initialSenderAddress
+            );
+        }
 
         return $result !== false;
     }
@@ -244,17 +253,26 @@ class ContactService {
             'time' => $time,
             'memo' => 'contact',
             'description' => 'Contact request transaction',
-            // Contact transactions are direct - both parties know sender and recipient
-            'endRecipientAddress' => $myAddress,
-            'initialSenderAddress' => $senderAddress,
             // Sender's signature data for future sync verification
             'signature' => $signature,
             'nonce' => $nonce
+            // NOTE: endRecipientAddress and initialSenderAddress are NOT included here
+            // They are added via updateTrackingFields() after insert
         ];
 
         // Insert the contact transaction with 'accepted' status
         // Second parameter is transaction type: 'received' (we are receiving a contact request)
         $result = $this->transactionRepository->insertTransaction($transactionData, Constants::TX_TYPE_RECEIVED);
+
+        if ($result !== false) {
+            // Update tracking fields after insert (these are NOT part of signed payload)
+            // Contact transactions are direct - both parties know sender and recipient
+            $this->transactionRepository->updateTrackingFields(
+                $txid,
+                $myAddress,  // endRecipientAddress
+                $senderAddress  // initialSenderAddress
+            );
+        }
 
         // Return the txid so caller can include it in the response
         return $result !== false ? $txid : null;
