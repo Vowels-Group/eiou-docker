@@ -22,7 +22,7 @@
             <span class="tx-in-progress-count"><?php echo count($inProgressTransactions); ?></span>
         </div>
         <?php foreach ($inProgressTransactions as $ipTx): ?>
-            <div class="tx-in-progress-item" data-txid="<?php echo htmlspecialchars($ipTx['txid']); ?>" data-status="<?php echo htmlspecialchars($ipTx['status']); ?>">
+            <div class="tx-in-progress-item" data-txid="<?php echo htmlspecialchars($ipTx['txid']); ?>" data-status="<?php echo htmlspecialchars($ipTx['status']); ?>" data-phase="<?php echo htmlspecialchars($ipTx['phase'] ?? 'pending'); ?>">
                 <div class="tx-in-progress-info">
                     <div class="tx-in-progress-counterparty">
                         <?php
@@ -37,10 +37,12 @@
                             'pending' => ['label' => 'Pending', 'icon' => 'fa-hourglass-half', 'color' => '#6c757d'],
                             'route_search' => ['label' => 'Searching for route...', 'icon' => 'fa-search', 'color' => '#ffc107'],
                             'route_found' => ['label' => 'Route found', 'icon' => 'fa-route', 'color' => '#17a2b8'],
-                            'sending' => ['label' => 'Sending...', 'icon' => 'fa-paper-plane', 'color' => '#0d6efd']
+                            'sending' => ['label' => 'Sending...', 'icon' => 'fa-paper-plane', 'color' => '#0d6efd'],
+                            'syncing' => ['label' => 'Syncing chain...', 'icon' => 'fa-link', 'color' => '#fd7e14']
                         ];
                         $phase = $ipTx['phase'] ?? 'pending';
                         $phaseInfo = $phaseLabels[$phase] ?? $phaseLabels['pending'];
+                        $isHeld = !empty($ipTx['is_held']);
                         ?>
                         <span class="tx-phase-badge" style="background: <?php echo $phaseInfo['color']; ?>; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.25rem;">
                             <i class="fas <?php echo $phaseInfo['icon']; ?>"></i>
@@ -58,6 +60,11 @@
                         <?php if (!empty($ipTx['fee_amount'])): ?>
                         <div><i class="fas fa-coins"></i> Fee: $<?php echo number_format($ipTx['fee_amount'] / 100, 2); ?> <?php echo $ipTx['currency'] ?? 'USD'; ?></div>
                         <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+                    <?php if ($isHeld): ?>
+                    <div class="tx-syncing-notice" style="font-size: 0.75rem; color: #fd7e14; margin-top: 0.25rem; display: flex; align-items: center; gap: 0.25rem;">
+                        <i class="fas fa-sync-alt fa-spin"></i> Transaction on hold - synchronizing transaction chain with recipient
                     </div>
                     <?php endif; ?>
                 </div>
@@ -145,6 +152,17 @@
 
 <!-- Store transaction data for JavaScript -->
 <script>
+    // Count syncing transactions for toast notification
+    var syncingTransactionCount = <?php
+        $syncingCount = 0;
+        foreach ($inProgressTransactions ?? [] as $ipTx) {
+            if (!empty($ipTx['is_held'])) {
+                $syncingCount++;
+            }
+        }
+        echo $syncingCount;
+    ?>;
+
     var transactionData = <?php echo json_encode(array_map(function($tx) {
         return [
             'txid' => $tx['txid'] ?? '',
@@ -221,10 +239,22 @@
             // Show toast notification about in-progress transactions
             if (typeof showToast === 'function') {
                 var inProgressCount = document.querySelectorAll('.tx-in-progress-item').length;
-                if (inProgressCount > 0) {
+
+                // Show specific toast for syncing transactions
+                if (syncingTransactionCount > 0) {
+                    showToast(
+                        'Chain Synchronization',
+                        syncingTransactionCount + ' transaction' + (syncingTransactionCount > 1 ? 's are' : ' is') + ' on hold while syncing the transaction chain. This ensures accurate records.',
+                        'warning'
+                    );
+                }
+
+                // Show general in-progress toast for other transactions
+                var otherInProgress = inProgressCount - syncingTransactionCount;
+                if (otherInProgress > 0) {
                     showToast(
                         'Transactions In Progress',
-                        inProgressCount + ' transaction' + (inProgressCount > 1 ? 's are' : ' is') + ' being processed. Page will refresh automatically.',
+                        otherInProgress + ' transaction' + (otherInProgress > 1 ? 's are' : ' is') + ' being processed. Page will refresh automatically.',
                         'info'
                     );
                 }

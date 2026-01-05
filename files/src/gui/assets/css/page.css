@@ -1221,6 +1221,29 @@ html {
     animation: spin 2s linear infinite;
 }
 
+/* Syncing Chain Indicator */
+.tx-syncing-notice {
+    background: rgba(253, 126, 20, 0.1);
+    border-radius: 4px;
+    padding: 0.35rem 0.5rem;
+    border-left: 2px solid #fd7e14;
+}
+
+.tx-in-progress-item[data-phase="syncing"] {
+    border-left: 3px solid #fd7e14;
+    background: linear-gradient(135deg, #fff3e6 0%, #ffffff 100%);
+}
+
+/* Syncing phase badge pulse animation */
+.tx-phase-badge[style*="#fd7e14"] i {
+    animation: syncPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes syncPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
 /* Toast Notification System */
 .toast-container {
     position: fixed;
