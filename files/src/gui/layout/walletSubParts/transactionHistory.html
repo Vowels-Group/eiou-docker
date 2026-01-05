@@ -44,7 +44,7 @@
                         $phaseInfo = $phaseLabels[$phase] ?? $phaseLabels['pending'];
                         $isHeld = !empty($ipTx['is_held']);
                         ?>
-                        <span class="tx-phase-badge" style="background: <?php echo $phaseInfo['color']; ?>; color: white; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+                        <span class="tx-phase-badge" style="background: <?php echo $phaseInfo['color']; ?>; color: white;">
                             <i class="fas <?php echo $phaseInfo['icon']; ?>"></i>
                             <?php echo htmlspecialchars($phaseInfo['label']); ?>
                         </span>

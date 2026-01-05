@@ -1230,14 +1230,54 @@ html {
     font-size: 0.75rem;
     color: #fd7e14;
     margin-top: 0.25rem;
+    display: -webkit-box;
+    display: -ms-flexbox;
     display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
     align-items: center;
     gap: 0.25rem;
+}
+
+/* Fallback margin for browsers without gap support (TOR browser compatibility) */
+.tx-syncing-notice > * + * {
+    margin-left: 0.25rem;
+}
+
+@supports (gap: 0.25rem) {
+    .tx-syncing-notice > * + * {
+        margin-left: 0;
+    }
 }
 
 .tx-in-progress-item[data-phase="syncing"] {
     border-left: 3px solid #fd7e14;
     background: linear-gradient(135deg, #fff3e6 0%, #ffffff 100%);
+}
+
+/* Phase badge base styles (TOR browser compatible - no inline gap) */
+.tx-phase-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    display: -webkit-inline-box;
+    display: -ms-inline-flexbox;
+    display: inline-flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Fallback margin for browsers without gap support (TOR browser compatibility) */
+.tx-phase-badge > * + * {
+    margin-left: 0.25rem;
+}
+
+@supports (gap: 0.25rem) {
+    .tx-phase-badge > * + * {
+        margin-left: 0;
+    }
 }
 
 /* Syncing phase badge pulse animation */
@@ -1250,20 +1290,51 @@ html {
     50% { opacity: 0.5; }
 }
 
+/* Respect reduced motion preference (TOR browser accessibility) */
+@media (prefers-reduced-motion: reduce) {
+    .tx-phase-badge[style*="#fd7e14"] i,
+    .tx-syncing-notice i,
+    .tx-refresh-indicator.active,
+    .toast,
+    .fa-spin {
+        animation: none;
+    }
+}
+
 /* Toast Notification System */
 .toast-container {
     position: fixed;
     top: 20px;
     right: 20px;
     z-index: 10000;
+    display: -webkit-box;
+    display: -ms-flexbox;
     display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -ms-flex-direction: column;
     flex-direction: column;
     gap: 10px;
     max-width: 350px;
 }
 
+/* Fallback margin for browsers without gap support (TOR browser compatibility) */
+.toast-container > * + * {
+    margin-top: 10px;
+}
+
+@supports (gap: 10px) {
+    .toast-container > * + * {
+        margin-top: 0;
+    }
+}
+
 .toast {
+    display: -webkit-box;
+    display: -ms-flexbox;
     display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
     align-items: center;
     gap: 0.75rem;
     padding: 1rem 1.25rem;
@@ -1272,6 +1343,17 @@ html {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     animation: toastSlideIn 0.3s ease;
     border-left: 4px solid #0d6efd;
+}
+
+/* Fallback margin for browsers without gap support (TOR browser compatibility) */
+.toast > * + * {
+    margin-left: 0.75rem;
+}
+
+@supports (gap: 0.75rem) {
+    .toast > * + * {
+        margin-left: 0;
+    }
 }
 
 .toast.toast-success {
