@@ -1203,6 +1203,95 @@ function toggleConfigSection(contentId, arrowId) {
     }
 }
 
+// Filter debug log entries based on search input (Tor Browser compatible)
+// Works for both structured entries (.debug-entry) and pre-formatted text (.debug-pre)
+function filterDebugLogs(inputElement, containerId) {
+    var searchTerm = inputElement.value.toLowerCase();
+    var container = document.getElementById(containerId);
+    if (!container) return;
+
+    var noResultsElement = container.querySelector('.debug-no-results');
+    var visibleCount = 0;
+    var totalCount = 0;
+
+    // Check if this is a structured log (debug entries) or pre-formatted text
+    var entries = container.querySelectorAll('.debug-entry');
+
+    if (entries.length > 0) {
+        // Filter structured debug entries
+        totalCount = entries.length;
+        for (var i = 0; i < entries.length; i++) {
+            var entry = entries[i];
+            var text = entry.textContent.toLowerCase();
+
+            if (searchTerm === '' || text.indexOf(searchTerm) !== -1) {
+                entry.classList.remove('hidden');
+                visibleCount++;
+            } else {
+                entry.classList.add('hidden');
+            }
+        }
+    } else {
+        // Filter pre-formatted text (line by line)
+        var preElement = container.querySelector('.debug-pre');
+        if (preElement) {
+            var originalContent = preElement.getAttribute('data-original');
+            if (!originalContent) {
+                // Store original content on first search
+                originalContent = preElement.textContent;
+                preElement.setAttribute('data-original', originalContent);
+            }
+
+            var lines = originalContent.split('\n');
+            totalCount = lines.length;
+            var filteredLines = [];
+
+            for (var j = 0; j < lines.length; j++) {
+                if (searchTerm === '' || lines[j].toLowerCase().indexOf(searchTerm) !== -1) {
+                    filteredLines.push(lines[j]);
+                    visibleCount++;
+                }
+            }
+
+            preElement.textContent = filteredLines.join('\n');
+
+            // Restore original if search is cleared
+            if (searchTerm === '') {
+                preElement.textContent = originalContent;
+                visibleCount = totalCount;
+            }
+        }
+    }
+
+    // Update search info
+    var searchInfo = container.querySelector('.debug-search-info');
+    if (searchInfo) {
+        if (searchTerm === '') {
+            searchInfo.textContent = 'Showing all ' + totalCount + ' entries';
+        } else {
+            searchInfo.textContent = 'Showing ' + visibleCount + ' of ' + totalCount + ' entries matching "' + inputElement.value + '"';
+        }
+    }
+
+    // Show/hide no results message
+    if (noResultsElement) {
+        if (visibleCount === 0 && searchTerm !== '') {
+            noResultsElement.classList.add('visible');
+        } else {
+            noResultsElement.classList.remove('visible');
+        }
+    }
+}
+
+// Clear debug search input and reset filter (Tor Browser compatible)
+function clearDebugSearch(inputId, containerId) {
+    var input = document.getElementById(inputId);
+    if (input) {
+        input.value = '';
+        filterDebugLogs(input, containerId);
+    }
+}
+
 // ============================================================================
 // WALLET INFORMATION FUNCTIONS
 // ============================================================================
