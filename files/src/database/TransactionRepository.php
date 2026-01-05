@@ -204,7 +204,9 @@ class TransactionRepository extends AbstractRepository {
             $params[':exclude_txid'] = $excludeTxid;
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT 1";
+        // Order by time (transaction creation time) for proper chain ordering
+        // Fall back to timestamp for older transactions without time set
+        $query .= " ORDER BY COALESCE(time, 0) DESC, timestamp DESC LIMIT 1";
 
         $stmt = $this->execute($query, $params);
 
@@ -1134,11 +1136,13 @@ class TransactionRepository extends AbstractRepository {
             $this->beginTransaction();
             // Find previous txid, excluding cancelled/rejected transactions
             // This ensures new transactions don't link to orphaned transactions
+            // Order by time (transaction creation time) for proper chain ordering
+            // Fall back to timestamp for older transactions without time set
             $query = "SELECT txid FROM {$this->tableName}
                     WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
                         OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
                     AND status NOT IN ('cancelled', 'rejected')
-                    ORDER BY timestamp DESC LIMIT 1";
+                    ORDER BY COALESCE(time, 0) DESC, timestamp DESC LIMIT 1";
 
             $stmt = $this->execute($query, [
                 ':sender_public_key_hash' => $senderPublicKeyHash,
