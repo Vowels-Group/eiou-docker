@@ -222,7 +222,7 @@ class HeldTransactionService {
             $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
 
             // Get all held transactions for this contact that completed sync
-            $heldTransactions = $this->heldRepository->getHeldTransactionsForContact($contactPubkeyHash, 'completed');
+            $heldTransactions = $this->heldRepository->getHeldTransactionsForContact($contactPubkeyHash, Constants::STATUS_COMPLETED);
 
             if (empty($heldTransactions)) {
                 return $result;
@@ -340,7 +340,7 @@ class HeldTransactionService {
             }
 
             // Update status to pending for reprocessing
-            $updated = $this->transactionRepository->updateStatus($txid, 'pending', true);
+            $updated = $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
 
             if ($updated) {
                 $result['success'] = true;

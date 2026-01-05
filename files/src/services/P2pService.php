@@ -368,7 +368,7 @@ class P2pService {
                 $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
 
                 $this->p2pRepository->insertP2pRequest($request, NULL);
-                $this->p2pRepository->updateStatus($request['hash'], 'queued');
+                $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_QUEUED);
             }
         } catch (PDOException $e) {
             SecureLogger::logException($e, 'ERROR');
@@ -579,8 +579,8 @@ class P2pService {
                     $response = $sendResult['response'];
 
                     // If rejection from sole possible contact then cancel p2p immediately
-                    if($response['status'] === 'rejected' && $contactsToSend === 1){
-                        $this->p2pRepository->updateStatus($p2pHash, 'cancelled');
+                    if($response['status'] === Constants::STATUS_REJECTED && $contactsToSend === 1){
+                        $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
                         $contactsToSend -= 1;
                         continue;
                     }
@@ -610,12 +610,12 @@ class P2pService {
                 // Cancel the message due to no viable contacts to send to (user is dead-end)
                 if($sentMessages === 0){
                     output(outputNoViableRouteP2p($p2pHash,'SILENT'));
-                    $this->p2pRepository->updateStatus($p2pHash, 'cancelled');
+                    $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
                     continue;
                 }
             }
 
-            $this->p2pRepository->updateStatus($p2pHash, 'sent');
+            $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);
         }
         return isset($queuedMessages) ? count($queuedMessages) : 0;
     }
@@ -665,7 +665,7 @@ class P2pService {
         // Privacy: Store description locally but don't include in P2P payload sent to relays
         $description = isset($data[5]) && !empty($data[5]) ? $data[5] : null;
         $this->p2pRepository->insertP2pRequest($p2pPayload, $address, $description);
-        $this->p2pRepository->updateStatus($p2pPayload['hash'], 'queued');
+        $this->p2pRepository->updateStatus($p2pPayload['hash'], Constants::STATUS_QUEUED);
     }
 
     /**
@@ -679,7 +679,7 @@ class P2pService {
         $p2pPayload = $this->p2pPayload->build($this->prepareP2pRequestFromFailedTransactionData($message));
         output(outputInsertingP2pRequest($message['receiver_address']), 'SILENT');
         $this->p2pRepository->insertP2pRequest($p2pPayload, $message['receiver_address']);
-        $this->p2pRepository->updateStatus($p2pPayload['hash'], 'queued');
+        $this->p2pRepository->updateStatus($p2pPayload['hash'], Constants::STATUS_QUEUED);
     }
 
     /**

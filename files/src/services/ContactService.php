@@ -189,7 +189,7 @@ class ContactService {
             'receiverPublicKey' => $receiverPublicKey,
             'amount' => 0,
             'currency' => $currency,
-            'status' => 'sent',
+            'status' => Constants::STATUS_SENT,
             'txid' => $txid,
             'memo' => 'contact',
             'description' => 'Contact request transaction',
@@ -199,7 +199,7 @@ class ContactService {
         ];
 
         // Insert the contact transaction as 'sent' type
-        $result = $this->transactionRepository->insertTransaction($transactionData, 'sent');
+        $result = $this->transactionRepository->insertTransaction($transactionData, Constants::TX_TYPE_SENT);
 
         return $result !== false;
     }
@@ -235,7 +235,7 @@ class ContactService {
             'receiverPublicKey' => $this->currentUser->getPublicKey(),
             'amount' => 0,
             'currency' => $currency,
-            'status' => 'accepted',
+            'status' => Constants::STATUS_ACCEPTED,
             'txid' => $txid,
             'memo' => 'contact',
             'description' => 'Contact request received',
@@ -246,7 +246,7 @@ class ContactService {
 
         // Insert the contact transaction with 'accepted' status
         // Second parameter is transaction type: 'received' (we are receiving a contact request)
-        $result = $this->transactionRepository->insertTransaction($transactionData, 'received');
+        $result = $this->transactionRepository->insertTransaction($transactionData, Constants::TX_TYPE_RECEIVED);
 
         // Return the txid so caller can include it in the response
         return $result !== false ? $txid : null;
@@ -425,11 +425,11 @@ class ContactService {
         ];
 
         // Check if contact is already an accepted contact
-        if($contact['status'] === 'accepted'){
+        if($contact['status'] === Constants::CONTACT_STATUS_ACCEPTED){
             $output->error("Contact " . $address . " already exists ", ErrorCodes::CONTACT_EXISTS, 409, ['contact' => $contactData]);
         }
         // Check if contact was blocked
-        elseif($contact['status'] === 'blocked'){
+        elseif($contact['status'] === Constants::CONTACT_STATUS_BLOCKED){
             // Contact was blocked after user sent contact request
             if($contact['name']){
                 // Unblock contact and add values
@@ -463,7 +463,7 @@ class ContactService {
                 }
             }
         }
-        elseif($contact['status'] === 'pending'){
+        elseif($contact['status'] === Constants::CONTACT_STATUS_PENDING){
             // if pending with name (contact was inserted by user for contact request)
             if($contact['name']){
                 // This contact was already sent a contact request, but has not yet responded to user (try resyncing)
@@ -472,7 +472,7 @@ class ContactService {
                 $syncResult = $syncService->syncReaddedContact($address, $contact['pubkey']);
 
                 if ($syncResult['success'] && $syncResult['contact_synced']) {
-                    $contactData['status'] = 'accepted';
+                    $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
                     $contactData['sync'] = [
                         'transactions_synced' => $syncResult['transactions_synced'],
                         'balances_synced' => $syncResult['balances_synced'],
@@ -481,7 +481,7 @@ class ContactService {
                     $output->success("Contact request already sent, synced successfully with " . $address, $contactData, "Contact synced");
                 } elseif ($syncResult['contact_synced']) {
                     // Contact status synced but transactions/balances may have failed
-                    $contactData['status'] = 'accepted';
+                    $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
                     $output->success("Contact synced, transaction sync may be incomplete", $contactData, "Partial sync");
                 } else {
                     $output->info("Contact request already sent, awaiting response from " . $address, $contactData);
@@ -505,7 +505,7 @@ class ContactService {
                     // Complete the received contact transaction (update status from 'accepted' to 'completed')
                     $this->completeReceivedContactTransaction($contact['pubkey']);
 
-                    $contactData['status'] = 'accepted';
+                    $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
                     $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
                 }
                 else {
@@ -600,7 +600,7 @@ class ContactService {
                         $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
                     }
 
-                    $contactData['status'] = 'pending';
+                    $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
                     $contactData['pubkey'] = $senderPublicKey;
                     $output->success("Contact request sent successfully to " . $address, $contactData, "Contact request sent, awaiting acceptance");
                 } else{
@@ -639,7 +639,7 @@ class ContactService {
                     $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
 
                     if ($syncResult['success']) {
-                        $contactData['status'] = 'accepted';
+                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
                         $contactData['pubkey'] = $senderPublicKey;
                         $contactData['sync'] = [
                             'transactions_synced' => $syncResult['transactions_synced'],
@@ -648,7 +648,7 @@ class ContactService {
                         ];
                         $output->success("Contact re-added and fully synced with " . $address, $contactData, "Contact created with transaction and balance sync");
                     } else {
-                        $contactData['status'] = 'pending';
+                        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
                         $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
                     }
                 } else {
@@ -656,7 +656,7 @@ class ContactService {
                 }
             }
             // Our contact pubkey and address both exist on their end (Case when we delete the contact and try re-adding it)
-            elseif($responseData['status'] === 'warning'){
+            elseif($responseData['status'] === Constants::DELIVERY_WARNING){
                 // Insert contact and perform full sync (transactions + balances)
                 if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
                     $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
@@ -687,7 +687,7 @@ class ContactService {
                     $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
 
                     if ($syncResult['success']) {
-                        $contactData['status'] = 'accepted';
+                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
                         $contactData['pubkey'] = $senderPublicKey;
                         $contactData['sync'] = [
                             'transactions_synced' => $syncResult['transactions_synced'],
@@ -696,7 +696,7 @@ class ContactService {
                         ];
                         $output->success("Contact re-added and fully synced with " . $address, $contactData, "Contact created with transaction and balance sync");
                     } else {
-                        $contactData['status'] = 'pending';
+                        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
                         $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
                     }
                 }
@@ -777,7 +777,7 @@ class ContactService {
                 // When a deleted contact re-adds us, we may have them as 'pending'
                 // (they added us before but we never accepted, then they deleted and re-added)
                 $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
-                if ($existingContact && $existingContact['status'] === 'pending') {
+                if ($existingContact && $existingContact['status'] === Constants::CONTACT_STATUS_PENDING) {
                     // Contact exists as pending - check if we have the contact transaction
                     // If they're re-adding us and we don't have their contact tx, we need to create one
                     $hasContactTx = $this->transactionRepository->contactTransactionExistsForReceiver(
@@ -803,7 +803,7 @@ class ContactService {
                 // Address unknown prior but pubkey exists (known contact, unknown address)
                 // Check contact status - if pending, treat as re-confirmation with new address
                 $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
-                if ($existingContact && $existingContact['status'] === 'pending') {
+                if ($existingContact && $existingContact['status'] === Constants::CONTACT_STATUS_PENDING) {
                     // Contact is pending - update their address
                     if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
                         // Check if we have the contact transaction
@@ -1110,7 +1110,7 @@ class ContactService {
         if ($this->contactRepository->blockContact($transportIndex, $address)) {
             $output->success("Contact blocked successfully", [
                 'address' => $address,
-                'status' => 'blocked'
+                'status' => Constants::CONTACT_STATUS_BLOCKED
             ]);
             return true;
         } else {

@@ -284,7 +284,7 @@ class MessageService {
         $senderAddress = $decodedMessage['senderAddress'];
         $senderPublicKey = $decodedMessage['senderPublicKey'];
 
-        if($status === 'accepted'){
+        if($status === Constants::STATUS_ACCEPTED){
             output(outputContactRequestWasAccepted($senderAddress),'SILENT');
             $this->contactRepository->updateStatus($senderPublicKey, $status);
 
@@ -366,7 +366,7 @@ class MessageService {
         // Handle incoming transaction messages
         $hash = $decodedMessage['hash']; // for direct transaction is equivalent to txid, otherwise equivalent to memo
 
-        if($decodedMessage['status'] === 'completed'){
+        if($decodedMessage['status'] === Constants::STATUS_COMPLETED){
             // check if hash exists for p2p and check if hash exists for transaction
             if($decodedMessage['hashType'] === 'memo'){
                 $p2p = $this->p2pRepository->getByHash($hash);
@@ -395,10 +395,10 @@ class MessageService {
                         if ($sendResult['success'] && $response !== null && isset($response['status'])) {
                             $inquiryStatus = $response['status'];
 
-                            if ($inquiryStatus === 'completed') {
+                            if ($inquiryStatus === Constants::STATUS_COMPLETED) {
                                 // Transaction confirmed completed at end-recipient
-                                $this->p2pRepository->updateStatus($hash, 'completed', true);
-                                $this->transactionRepository->updateStatus($hash, 'completed');
+                                $this->p2pRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
+                                $this->transactionRepository->updateStatus($hash, Constants::STATUS_COMPLETED);
                                 $this->balanceRepository->updateBalanceGivenTransactions($transactions);
                                 output(outputTransactionP2pSentSuccesfully($p2p), 'SILENT');
 
@@ -413,7 +413,7 @@ class MessageService {
                                 // Transaction not found at end-recipient - potential issue
                                 output('Transaction inquiry response: not_found at end-recipient for hash=' . $hash, 'SILENT');
                                 // Do NOT mark as completed - keep current status for investigation
-                            } elseif (in_array($inquiryStatus, ['pending', 'sent', 'accepted'], true)) {
+                            } elseif (in_array($inquiryStatus, [Constants::STATUS_PENDING, Constants::STATUS_SENT, Constants::STATUS_ACCEPTED], true)) {
                                 // Transaction still in progress at end-recipient
                                 output('Transaction inquiry response: status=' . $inquiryStatus . ' at end-recipient for hash=' . $hash, 'SILENT');
                                 // Do NOT mark as completed - transaction not yet finalized
@@ -426,8 +426,8 @@ class MessageService {
                             output('Transaction inquiry to end-recipient failed: ' . ($sendResult['tracking']['error'] ?? 'Unknown error'), 'SILENT');
                         }
                     } else{
-                        $this->p2pRepository->updateStatus($hash,'completed',true);
-                        $this->transactionRepository->updateStatus($hash,'completed');
+                        $this->p2pRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
+                        $this->transactionRepository->updateStatus($hash, Constants::STATUS_COMPLETED);
                         $this->balanceRepository->updateBalanceGivenTransactions($transactions);
 
                         // Mark all P2P delivery records for this hash as completed
@@ -453,7 +453,7 @@ class MessageService {
                 // Singular direct transaction
                 $transaction = $this->transactionRepository->getByTxid($hash);
                 if($transaction){
-                    $this->transactionRepository->updateStatus($hash,'completed',true);
+                    $this->transactionRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
                     $this->balanceRepository->updateBalanceGivenTransactions($transaction);
                     output(outputTransactionDirectSentSuccesfully($decodedMessage),'SILENT');
 
@@ -533,7 +533,7 @@ class MessageService {
                 // Log unexpected sync response
                 output('Received unexpected sync response without pending request', 'SILENT');
                 echo json_encode([
-                    'status' => 'rejected',
+                    'status' => Constants::STATUS_REJECTED,
                     'reason' => 'no_pending_request',
                     'message' => 'No pending sync request for this response'
                 ]);
@@ -541,7 +541,7 @@ class MessageService {
         } else {
             // Unknown sync type
             echo json_encode([
-                'status' => 'rejected',
+                'status' => Constants::STATUS_REJECTED,
                 'reason' => 'unknown_sync_type',
                 'message' => 'Sync type not supported: ' . ($syncType ?? 'null')
             ]);
