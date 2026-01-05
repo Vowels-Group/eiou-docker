@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright 2025 The Vowels Company
 
-# Test NULL previous_txid resync edge case (Issue #362)
+# Test NULL previous_txid resync edge case
 # Verifies that when Contact A has Contact B in contacts but deletes their
 # transactions table, sending a transaction with previous_txid = NULL
 # correctly triggers the resync mechanism because B has existing transactions.
