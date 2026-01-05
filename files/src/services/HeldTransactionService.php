@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';
+require_once __DIR__ . '/../schemas/payloads/TransactionPayload.php';
 
 /**
  * Held Transaction Service
@@ -317,8 +318,8 @@ class HeldTransactionService {
     /**
      * Resume a held transaction for reprocessing
      *
-     * Sets the transaction status back to 'pending' so it will be picked up
-     * by the next processing cycle and re-attempted with the corrected previous_txid.
+     * Re-sends the transaction to the receiver with the corrected previous_txid.
+     * The previous_txid should already be updated in the database by updatePreviousTxid().
      *
      * @param string $txid Transaction ID
      * @return array Result with keys: success (bool), new_previous_txid (string|null), error (string|null)
@@ -331,7 +332,7 @@ class HeldTransactionService {
         ];
 
         try {
-            // Get the transaction to verify it exists
+            // Get the transaction from database (with updated previous_txid)
             $transaction = $this->transactionRepository->getByTxid($txid);
 
             if (!$transaction) {
@@ -339,19 +340,72 @@ class HeldTransactionService {
                 return $result;
             }
 
-            // Update status to pending for reprocessing
-            $updated = $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+            $result['new_previous_txid'] = $transaction['previous_txid'] ?? null;
 
-            if ($updated) {
-                $result['success'] = true;
-                $result['new_previous_txid'] = $transaction['previous_txid'] ?? null;
+            // Build the payload with the updated previous_txid
+            $transactionPayload = new TransactionPayload($this->currentUser, $this->utilityContainer);
+            $transportUtility = $this->utilityContainer->getTransportUtility();
 
-                SecureLogger::info("Transaction resumed for reprocessing", [
-                    'txid' => $txid,
-                    'previous_txid' => $result['new_previous_txid']
-                ]);
+            // Determine if this is a standard or P2P transaction
+            $memo = $transaction['memo'] ?? 'standard';
+
+            if ($memo === 'standard') {
+                $payload = $transactionPayload->buildStandardFromDatabase($transaction);
             } else {
-                $result['error'] = 'Failed to update transaction status';
+                // P2P transaction
+                $payload = $transactionPayload->buildFromDatabase($transaction);
+            }
+
+            // Send the transaction to the receiver
+            $receiverAddress = $transaction['receiver_address'];
+
+            SecureLogger::info("Re-sending held transaction with updated previous_txid", [
+                'txid' => $txid,
+                'previous_txid' => $result['new_previous_txid'],
+                'receiver_address' => $receiverAddress
+            ]);
+
+            $rawResponse = $transportUtility->send($receiverAddress, $payload);
+            $response = json_decode($rawResponse, true);
+
+            // Check response status
+            if ($response !== null && isset($response['status'])) {
+                if ($response['status'] === 'accepted' || $response['status'] === 'completed') {
+                    // Transaction was accepted - update status to sent
+                    $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENT, true);
+                    $result['success'] = true;
+
+                    SecureLogger::info("Held transaction successfully re-sent", [
+                        'txid' => $txid,
+                        'status' => $response['status']
+                    ]);
+                } elseif ($response['status'] === 'rejected') {
+                    // Still rejected - keep in held state for retry
+                    $result['error'] = 'Transaction still rejected: ' . ($response['reason'] ?? 'unknown');
+
+                    SecureLogger::warning("Held transaction still rejected after resync", [
+                        'txid' => $txid,
+                        'reason' => $response['reason'] ?? 'unknown'
+                    ]);
+                } else {
+                    // Unknown status - mark as pending for retry
+                    $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+                    $result['success'] = true;
+
+                    SecureLogger::info("Held transaction re-sent, awaiting confirmation", [
+                        'txid' => $txid,
+                        'response_status' => $response['status']
+                    ]);
+                }
+            } else {
+                // No valid response - network error, keep in pending for retry
+                $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+                $result['error'] = 'No response from receiver';
+
+                SecureLogger::warning("No response when re-sending held transaction", [
+                    'txid' => $txid,
+                    'raw_response' => $rawResponse
+                ]);
             }
 
         } catch (Exception $e) {

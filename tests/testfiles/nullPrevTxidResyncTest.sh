@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright 2025 The Vowels Company
 
 # Test NULL previous_txid resync edge case (Issue #362)
