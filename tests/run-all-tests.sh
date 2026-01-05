@@ -209,6 +209,7 @@ apiEndpointsTest
 syncTest
 transactionChainSyncTest
 transactionChainReorderTest
+resyncPrevTxidGapTest
 heldTransactionTest
 contactReaddSyncTest
 seedPhraseTest
