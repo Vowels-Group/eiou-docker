@@ -120,6 +120,8 @@ class TransactionService {
      * @param SecureLogger $secureLogger SecureLogger
      * @param UserContext $currentUser Current user data
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
+     * @param HeldTransactionService|null $heldTransactionService Optional Held transaction service for pending sync
+     * 
      */
     public function __construct(
         ContactRepository $contactRepository,
@@ -132,7 +134,8 @@ class TransactionService {
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
         UserContext $currentUser,
-        ?MessageDeliveryService $messageDeliveryService = null
+        ?MessageDeliveryService $messageDeliveryService = null,
+        ?HeldTransactionService $heldTransactionService = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->addressRepository = $addressRepository;
@@ -149,6 +152,7 @@ class TransactionService {
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
+        $this->heldTransactionService = $heldTransactionService;
 
         require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
