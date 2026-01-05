@@ -366,6 +366,200 @@ else
     failure=$(( failure + 1 ))
 fi
 
+# ============================================================================
+# Test 8: Integration test - P2P completion sync between real containers
+# ============================================================================
+echo -e "\n[Test 8: Integration - P2P Completion Sync Between Containers]"
+
+# Use first two connected containers for testing
+containersLinkKeys=($(for x in ${!containersLinks[@]}; do echo $x; done | sort))
+testPair="${containersLinkKeys[0]}"
+
+if [[ -z "$testPair" ]]; then
+    echo -e "${YELLOW}Warning: No container links defined, skipping integration test${NC}"
+else
+    containerKeys=(${testPair//,/ })
+    contactA="${containerKeys[0]}"
+    contactB="${containerKeys[1]}"
+
+    # Get addresses from containerAddresses
+    contactAAddress="${containerAddresses[${contactA}]}"
+    contactBAddress="${containerAddresses[${contactB}]}"
+
+    echo -e "\t   Contact A (sender): ${contactA} (${contactAAddress})"
+    echo -e "\t   Contact B (receiver): ${contactB} (${contactBAddress})"
+
+    if [[ -z "$contactAAddress" ]] || [[ -z "$contactBAddress" ]]; then
+        echo -e "${YELLOW}Warning: Container addresses not populated, skipping integration test${NC}"
+    else
+        totaltests=$(( totaltests + 1 ))
+
+        # Ensure contacts exist between containers
+        echo -e "\t   Ensuring contacts exist between containers..."
+        docker exec ${contactA} eiou add ${contactBAddress} ${contactB} 0 0 USD 2>&1 || true
+        docker exec ${contactB} eiou add ${contactAAddress} ${contactA} 0 0 USD 2>&1 || true
+        sleep 2
+
+        integrationHash="integration-sync-hash-$(date +%s)-$(shuf -i 1000-9999 -n 1)"
+        echo -e "\t   Test hash: ${integrationHash:0:30}..."
+
+        # Step 1: Create completed P2P on Contact B (receiver)
+        echo -e "\t   Creating completed P2P on Contact B..."
+        createOnBResult=$(docker exec ${contactB} php -r "
+            require_once('${REL_APPLICATION}');
+
+            \$app = Application::getInstance();
+            \$p2pRepo = \$app->services->getP2pRepository();
+            \$utilContainer = \$app->services->getUtilityContainer();
+            \$timeUtility = \$utilContainer->getTimeUtility();
+
+            // Get Contact A's public key from contact repository
+            \$contactRepo = \$app->services->getContactRepository();
+            \$contactAPubkey = \$contactRepo->getContactPubkey('${MODE}', '${contactAAddress}');
+
+            if (!\$contactAPubkey) {
+                echo 'ERROR: Could not get Contact A pubkey';
+                exit;
+            }
+
+            // Create P2P record marked as completed on Contact B
+            \$currentTime = \$timeUtility->getCurrentMicrotime();
+            \$testData = [
+                'hash' => '${integrationHash}',
+                'salt' => 'integration-test-salt',
+                'time' => \$currentTime - 10000000,
+                'expiration' => \$currentTime + 3600000000,
+                'currency' => 'USD',
+                'amount' => 1000,
+                'requestLevel' => 1,
+                'maxRequestLevel' => 5,
+                'senderPublicKey' => \$contactAPubkey,
+                'senderAddress' => '${contactAAddress}',
+                'signature' => 'test-signature-integration'
+            ];
+            \$p2pRepo->insertP2pRequest(\$testData, null);
+            \$p2pRepo->updateStatus('${integrationHash}', 'completed', true);
+
+            \$p2p = \$p2pRepo->getByHash('${integrationHash}');
+            echo \$p2p['status'] === 'completed' ? 'SUCCESS' : 'FAILED: ' . \$p2p['status'];
+        " 2>/dev/null || echo "ERROR")
+
+        if [[ "$createOnBResult" != "SUCCESS" ]]; then
+            printf "\t   Create P2P on Contact B ${RED}FAILED${NC} (%s)\n" "${createOnBResult}"
+            failure=$(( failure + 1 ))
+        else
+            echo -e "\t   P2P created on Contact B with status: completed"
+
+            # Step 2: Create same P2P on Contact A with status 'sent' and 5-second expiration
+            # Note: Using 'sent' status as it's a valid enum value representing a P2P waiting for completion
+            echo -e "\t   Creating P2P on Contact A with 5-second expiration..."
+            createOnAResult=$(docker exec ${contactA} php -r "
+                require_once('${REL_APPLICATION}');
+
+                \$app = Application::getInstance();
+                \$p2pRepo = \$app->services->getP2pRepository();
+                \$utilContainer = \$app->services->getUtilityContainer();
+                \$timeUtility = \$utilContainer->getTimeUtility();
+
+                // Get Contact B's public key
+                \$contactRepo = \$app->services->getContactRepository();
+                \$contactBPubkey = \$contactRepo->getContactPubkey('${MODE}', '${contactBAddress}');
+
+                if (!\$contactBPubkey) {
+                    echo 'ERROR: Could not get Contact B pubkey';
+                    exit;
+                }
+
+                // Create P2P record with 5-second expiration
+                \$currentTime = \$timeUtility->getCurrentMicrotime();
+                \$expirationTime = \$currentTime + 5000000; // 5 seconds in microseconds
+
+                \$testData = [
+                    'hash' => '${integrationHash}',
+                    'salt' => 'integration-test-salt',
+                    'time' => \$currentTime - 10000000,
+                    'expiration' => \$expirationTime,
+                    'currency' => 'USD',
+                    'amount' => 1000,
+                    'requestLevel' => 1,
+                    'maxRequestLevel' => 5,
+                    'senderPublicKey' => UserContext::getInstance()->getPublicKey(),
+                    'senderAddress' => '${contactBAddress}',
+                    'signature' => 'test-signature-integration'
+                ];
+                \$p2pRepo->insertP2pRequest(\$testData, null);
+                \$p2pRepo->updateStatus('${integrationHash}', 'sent');
+
+                \$p2p = \$p2pRepo->getByHash('${integrationHash}');
+                echo \$p2p['status'] === 'sent' ? 'SUCCESS' : 'FAILED: ' . \$p2p['status'];
+            " 2>/dev/null || echo "ERROR")
+
+            if [[ "$createOnAResult" != "SUCCESS" ]]; then
+                printf "\t   Create P2P on Contact A ${RED}FAILED${NC} (%s)\n" "${createOnAResult}"
+                failure=$(( failure + 1 ))
+            else
+                echo -e "\t   P2P created on Contact A with status: sent"
+                echo -e "\t   Waiting 6 seconds for P2P to expire..."
+                sleep 6
+
+                # Step 3: Trigger cleanup/expiration processing on Contact A
+                echo -e "\t   Triggering expiration processing on Contact A..."
+                syncResult=$(docker exec ${contactA} php -r "
+                    require_once('${REL_APPLICATION}');
+
+                    \$app = Application::getInstance();
+                    \$p2pRepo = \$app->services->getP2pRepository();
+                    \$cleanupService = \$app->services->getCleanupService();
+
+                    // Get the P2P and process expiration
+                    \$p2p = \$p2pRepo->getByHash('${integrationHash}');
+
+                    if (!\$p2p) {
+                        echo 'ERROR: P2P not found';
+                        exit;
+                    }
+
+                    // Call expireMessage which should check with Contact B and sync status
+                    \$cleanupService->expireMessage(\$p2p);
+
+                    // Check the updated status
+                    \$updatedP2p = \$p2pRepo->getByHash('${integrationHash}');
+
+                    if (\$updatedP2p['status'] === 'completed') {
+                        echo 'SUCCESS: P2P synced to completed status';
+                    } else {
+                        echo 'RESULT: Status is ' . \$updatedP2p['status'];
+                    }
+                " 2>/dev/null || echo "ERROR")
+
+                if [[ "$syncResult" == SUCCESS:* ]]; then
+                    printf "\t   Integration test - P2P completion sync ${GREEN}PASSED${NC}\n"
+                    passed=$(( passed + 1 ))
+                else
+                    printf "\t   Integration test - P2P completion sync ${RED}FAILED${NC} (%s)\n" "${syncResult}"
+                    failure=$(( failure + 1 ))
+                fi
+            fi
+        fi
+
+        # Cleanup: Remove test P2P records from both containers
+        echo -e "\t   Cleaning up test P2P records..."
+        docker exec ${contactA} php -r "
+            require_once('${REL_APPLICATION}');
+            \$app = Application::getInstance();
+            \$pdo = \$app->services->getPdo();
+            \$pdo->exec(\"DELETE FROM p2p WHERE hash = '${integrationHash}'\");
+        " 2>/dev/null || true
+
+        docker exec ${contactB} php -r "
+            require_once('${REL_APPLICATION}');
+            \$app = Application::getInstance();
+            \$pdo = \$app->services->getPdo();
+            \$pdo->exec(\"DELETE FROM p2p WHERE hash = '${integrationHash}'\");
+        " 2>/dev/null || true
+    fi
+fi
+
 ##################################################################
 
 succesrate "${totaltests}" "${passed}" "${failure}" "'P2P completion sync'"
