@@ -59,7 +59,7 @@ class MessagePayload extends BasePayload
         $data = [
             'type' => 'message', // message request type
             'typeMessage' => 'contact', // type of message
-            'status' => 'accepted',
+            'status' => Constants::STATUS_ACCEPTED,
             'message' => $myAddress . ' confirms that we are contacts',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -82,8 +82,8 @@ class MessagePayload extends BasePayload
         return json_encode([
             'type' => 'message', // message request type
             'typeMessage' => 'contact', // type of message
-            'status' => 'rejected',
-            'reason' => 'pending',
+            'status' => Constants::STATUS_REJECTED,
+            'reason' => Constants::STATUS_PENDING,
             'message' => $myAddress . ' has not yet accepted your contact request',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -102,7 +102,7 @@ class MessagePayload extends BasePayload
         return json_encode([
             'type' => 'message', // message request type
             'typeMessage' => 'contact', // type of message
-            'status' => 'rejected',
+            'status' => Constants::STATUS_REJECTED,
             'reason' => 'unknown',
             'message' => $myAddress . ' and you are not contacts',
             'senderAddress' => $myAddress,
@@ -123,7 +123,7 @@ class MessagePayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return json_encode([
-            'status' => 'accepted',
+            'status' => Constants::STATUS_ACCEPTED,
             'message' => $myAddress . ' confirms contact acceptance was received and processed',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -143,7 +143,7 @@ class MessagePayload extends BasePayload
         return json_encode([
             'type' => 'message', // message request type
             'typeMessage' => 'transaction', // type of message
-            'status' => 'completed',
+            'status' => Constants::STATUS_COMPLETED,
             'hash' => $hash,
             'message' => 'Transaction with hash ' . print_r($hash, true) . ' was received succesfully by end-recipient',
             'senderAddress' => $myAddress,
@@ -165,7 +165,7 @@ class MessagePayload extends BasePayload
             'type' => 'message', // message request type
             'typeMessage' => 'transaction', // type of message
             'inquiry' => true, // request for information
-            'status' => 'completed',
+            'status' => Constants::STATUS_COMPLETED,
             'hash' => $hash,
             'hashType' => $message['hashType'],
             'message' => $myAddress . ' is requesting information about transaction with memo ' . $hash,
@@ -306,7 +306,7 @@ class MessagePayload extends BasePayload
             'typeMessage' => 'sync',
             'syncType' => 'transaction_chain',
             'inquiry' => false,
-            'status' => 'accepted',
+            'status' => Constants::STATUS_ACCEPTED,
             'transactions' => $transactions,
             'latestTxid' => $latestTxid,
             'transactionCount' => count($transactions),
@@ -354,7 +354,7 @@ class MessagePayload extends BasePayload
             'typeMessage' => 'sync',
             'syncType' => 'transaction_chain',
             'inquiry' => false,
-            'status' => 'rejected',
+            'status' => Constants::STATUS_REJECTED,
             'reason' => $reason,
             'message' => 'Transaction chain sync rejected: ' . $reason,
             'senderAddress' => $myAddress,

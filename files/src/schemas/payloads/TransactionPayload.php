@@ -169,7 +169,7 @@ class TransactionPayload extends BasePayload
         $hashInfo = $this->resolveHashInfo($request);
 
         return json_encode([
-            'status' => 'accepted',
+            'status' => Constants::STATUS_ACCEPTED,
             'txid' => $request['txid'] ?? null,
             'memo' => $request['memo'] ?? null,
             'message' => "{$hashInfo['type']} {$hashInfo['value']} for transaction received by {$userAddress}",
@@ -195,7 +195,7 @@ class TransactionPayload extends BasePayload
             'type' => 'message',
             'typeMessage' => 'transaction',
             'inquiry' => false,
-            'status' => 'completed',
+            'status' => Constants::STATUS_COMPLETED,
             'hash' => $hashInfo['value'],
             'hashType' => $hashInfo['type'],
             'amount' => $this->sanitizeNumber($request['amount'] ?? 0),
@@ -233,7 +233,7 @@ class TransactionPayload extends BasePayload
         $message = $this->buildRejectionMessage($hashInfo, $userAddress, $reason);
 
         return json_encode([
-            'status' => 'rejected',
+            'status' => Constants::STATUS_REJECTED,
             'reason' => $reason,
             'txid' => $request['txid'] ?? null,
             'memo' => $request['memo'] ?? null,

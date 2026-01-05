@@ -67,7 +67,7 @@ class Rp2pPayload extends BasePayload
     {
         $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
         return json_encode([
-            'status' => 'received',
+            'status' => Constants::DELIVERY_RECEIVED,
             'message' => 'hash ' . print_r($request['hash'], true) . ' for RP2P received by ' . print_r($receiver, true),
             'senderAddress' => $receiver,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -88,7 +88,7 @@ class Rp2pPayload extends BasePayload
         $message = $this->buildRejectionMessage($hash, $receiver, $reason);
 
         return json_encode([
-            'status' => 'rejected',
+            'status' => Constants::STATUS_REJECTED,
             'reason' => $reason,
             'message' => $message,
             'senderAddress' => $receiver,

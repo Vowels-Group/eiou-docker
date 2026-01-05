@@ -84,7 +84,7 @@ class P2pPayload extends BasePayload
         $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
 
         return json_encode([
-            'status' => 'received',
+            'status' => Constants::DELIVERY_RECEIVED,
             'message' => "hash {$request['hash']} for P2P received by {$receiver}",
             'senderAddress' => $receiver,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -107,7 +107,7 @@ class P2pPayload extends BasePayload
         $message = $this->buildRejectionMessage($request['hash'], $receiver, $reason);
 
         return json_encode([
-            'status' => 'rejected',
+            'status' => Constants::STATUS_REJECTED,
             'reason' => $reason,
             'message' => $message,
             'senderAddress' => $receiver,
