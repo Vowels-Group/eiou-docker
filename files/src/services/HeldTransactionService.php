@@ -230,9 +230,10 @@ class HeldTransactionService {
 
             foreach ($heldTransactions as $held) {
                 $txid = $held['txid'];
+                $expectedPreviousTxid = $held['expected_previous_txid'] ?? null;
 
                 // Update the previous_txid to the correct value
-                $updated = $this->updatePreviousTxid($txid, $contactPubkey);
+                $updated = $this->updatePreviousTxid($txid, $contactPubkey, $expectedPreviousTxid);
 
                 if ($updated) {
                     // Resume the transaction for reprocessing
@@ -276,22 +277,27 @@ class HeldTransactionService {
     /**
      * Update the previous_txid for a held transaction
      *
-     * Fetches the correct previous_txid from the transaction chain and updates
-     * the transaction record. This is called after sync completes to correct
-     * the chain linkage.
+     * Uses the expected_previous_txid from the rejection response, or falls back
+     * to looking up the correct value from the transaction chain after sync.
      *
      * @param string $txid Transaction ID
      * @param string $contactPubkey Contact's public key
+     * @param string|null $expectedPreviousTxid The expected txid from rejection response
      * @return bool True if updated successfully
      */
-    public function updatePreviousTxid(string $txid, string $contactPubkey): bool {
+    public function updatePreviousTxid(string $txid, string $contactPubkey, ?string $expectedPreviousTxid = null): bool {
         try {
-            // Get the correct previous_txid from transaction chain, excluding the held transaction itself
-            $correctPreviousTxid = $this->transactionRepository->getPreviousTxid(
-                $this->currentUser->getPublicKey(),
-                $contactPubkey,
-                $txid  // Exclude the held transaction from the query
-            );
+            // Use expected_previous_txid from rejection if available, otherwise look up from chain
+            $correctPreviousTxid = $expectedPreviousTxid;
+
+            if ($correctPreviousTxid === null) {
+                // Fallback: get from transaction chain, excluding the held transaction itself
+                $correctPreviousTxid = $this->transactionRepository->getPreviousTxid(
+                    $this->currentUser->getPublicKey(),
+                    $contactPubkey,
+                    $txid
+                );
+            }
 
             // Update the transaction's previous_txid
             $updated = $this->transactionRepository->updatePreviousTxid($txid, $correctPreviousTxid);
@@ -445,6 +451,7 @@ class HeldTransactionService {
                 $result['processed_count']++;
                 $txid = $held['txid'];
                 $contactPubkeyHash = $held['contact_pubkey_hash'];
+                $expectedPreviousTxid = $held['expected_previous_txid'] ?? null;
 
                 // Get contact pubkey from hash (we need to look it up)
                 // For now, we'll get it from the transaction record
@@ -457,7 +464,7 @@ class HeldTransactionService {
                 $contactPubkey = $transaction['receiver_public_key'];
 
                 // Update previous_txid
-                $updated = $this->updatePreviousTxid($txid, $contactPubkey);
+                $updated = $this->updatePreviousTxid($txid, $contactPubkey, $expectedPreviousTxid);
 
                 if ($updated) {
                     // Resume transaction
