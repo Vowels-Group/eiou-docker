@@ -121,6 +121,35 @@ class Constants {
     const ADAPTIVE_POLLING_QUEUE_DIVISOR = 100;
     const ADAPTIVE_POLLING_MIN_FACTOR = 0.1;
 
+    // Transaction/P2P Status values
+    const STATUS_PENDING = 'pending';
+    const STATUS_SENT = 'sent';
+    const STATUS_ACCEPTED = 'accepted';
+    const STATUS_COMPLETED = 'completed';
+    const STATUS_CANCELLED = 'cancelled';
+    const STATUS_REJECTED = 'rejected';
+    const STATUS_EXPIRED = 'expired';
+    const STATUS_PAID = 'paid';
+    const STATUS_FAILED = 'failed';
+    const STATUS_INITIAL = 'initial';
+    const STATUS_QUEUED = 'queued';
+    const STATUS_PROCESSED = 'processed';
+
+    // Transaction direction types
+    const TX_TYPE_SENT = 'sent';
+    const TX_TYPE_RECEIVED = 'received';
+
+    // Contact status values
+    const CONTACT_STATUS_PENDING = 'pending';
+    const CONTACT_STATUS_ACCEPTED = 'accepted';
+    const CONTACT_STATUS_BLOCKED = 'blocked';
+
+    // Message delivery stages
+    const DELIVERY_PENDING = 'pending';
+    const DELIVERY_SENT = 'sent';
+    const DELIVERY_COMPLETED = 'completed';
+    const DELIVERY_FAILED = 'failed';
+
     // UI/Display
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
     const DISPLAY_CURRENCY_DECIMALS = 2;

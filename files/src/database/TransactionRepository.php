@@ -108,7 +108,7 @@ class TransactionRepository extends AbstractRepository {
         $transactions = $this->getByMemo($memo);
         $completed = 0;
         foreach($transactions as $transaction){
-            if($transaction['status'] === 'completed'){
+            if($transaction['status'] === Constants::STATUS_COMPLETED){
                 $completed+=1;
             }
         }
@@ -125,7 +125,7 @@ class TransactionRepository extends AbstractRepository {
         $transactions = $this->getByTxid($txid);
         $completed = 0;
         foreach($transactions as $transaction){
-            if($transaction['status'] === 'completed'){
+            if($transaction['status'] === Constants::STATUS_COMPLETED){
                 $completed+=1;
             }
         }
@@ -472,7 +472,7 @@ class TransactionRepository extends AbstractRepository {
         foreach ($transactions as $tx) {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
-                'type' => 'sent',
+                'type' => Constants::TX_TYPE_SENT,
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['receiver_address']
@@ -515,7 +515,7 @@ class TransactionRepository extends AbstractRepository {
         foreach ($transactions as $tx) {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
-                'type' => 'sent',
+                'type' => Constants::TX_TYPE_SENT,
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['receiver_address']
@@ -576,7 +576,7 @@ class TransactionRepository extends AbstractRepository {
         foreach ($transactions as $tx) {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
-                'type' => 'received',
+                'type' => Constants::TX_TYPE_RECEIVED,
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['sender_address']
@@ -617,7 +617,7 @@ class TransactionRepository extends AbstractRepository {
         foreach ($transactions as $tx) {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
-                'type' => 'received',
+                'type' => Constants::TX_TYPE_RECEIVED,
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['sender_address']
@@ -659,7 +659,7 @@ class TransactionRepository extends AbstractRepository {
         foreach ($transactions as $tx) {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
-                'type' => 'received',
+                'type' => Constants::TX_TYPE_RECEIVED,
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['sender_address']
@@ -701,7 +701,7 @@ class TransactionRepository extends AbstractRepository {
         foreach ($transactions as $tx) {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
-                'type' => 'received',
+                'type' => Constants::TX_TYPE_RECEIVED,
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['sender_address']
@@ -712,7 +712,7 @@ class TransactionRepository extends AbstractRepository {
 
 
 
-    
+
     /**
      * Get transactions sent by user to specific address 
      *
@@ -747,7 +747,7 @@ class TransactionRepository extends AbstractRepository {
         foreach ($transactions as $tx) {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
-                'type' => 'sent',
+                'type' => Constants::TX_TYPE_SENT,
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['receiver_address']
@@ -791,7 +791,7 @@ class TransactionRepository extends AbstractRepository {
         foreach ($transactions as $tx) {
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
-                'type' => 'sent',
+                'type' => Constants::TX_TYPE_SENT,
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' =>  $tx['receiver_address']
@@ -912,7 +912,7 @@ class TransactionRepository extends AbstractRepository {
                 'direction' => $tx['direction'],
                 'status' => $tx['status'],
                 'date' => $tx['timestamp'],
-                'type' => $isSent ? 'sent' : 'received',
+                'type' => $isSent ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED,
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
                 'currency' => $tx['currency'],
                 'counterparty' => $counterpartyDisplay,
@@ -994,7 +994,7 @@ class TransactionRepository extends AbstractRepository {
 
             $formattedTransactions[] = [
                 'date' => $tx['timestamp'],
-                'type' => $isSent ? 'sent' : 'received',
+                'type' => $isSent ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED,
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
                 'currency' => $tx['currency'],
                 'counterparty' => $counterpartyDisplay
@@ -1141,7 +1141,7 @@ class TransactionRepository extends AbstractRepository {
             $data = [
                 'tx_type' => $txType,
                 'type' => $type,
-                'status' => $request['status'] ?? 'pending', // Allow custom status, default to pending
+                'status' => $request['status'] ?? Constants::STATUS_PENDING, // Allow custom status, default to pending
                 'sender_address' => $request['senderAddress'],
                 'sender_public_key' => $request['senderPublicKey'],
                 'sender_public_key_hash' => $senderPublicKeyHash,
@@ -1180,14 +1180,14 @@ class TransactionRepository extends AbstractRepository {
                 }
             }
             return json_encode([
-                "status" => "accepted",
+                "status" => Constants::STATUS_ACCEPTED,
                 "txid" => $request['txid'],
                 "message" => "Transaction recorded successfully"
-            
+
             ]);
         } else {
             return json_encode([
-                "status" => "rejected",
+                "status" => Constants::STATUS_REJECTED,
                 "txid" => $request['txid'],
                 "message" => "Failed to record transaction"
             ]);
@@ -1695,9 +1695,9 @@ class TransactionRepository extends AbstractRepository {
             $formattedTransactions[] = [
                 'txid' => $tx['txid'] ?? '',
                 'tx_type' => $tx['tx_type'] ?? 'standard',
-                'status' => $tx['status'] ?? 'completed',
+                'status' => $tx['status'] ?? Constants::STATUS_COMPLETED,
                 'date' => $tx['timestamp'],
-                'type' => $isSent ? 'sent' : 'received',
+                'type' => $isSent ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED,
                 'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
                 'currency' => $tx['currency'],
                 'sender_address' => $tx['sender_address'] ?? '',

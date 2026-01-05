@@ -38,7 +38,7 @@ class MessageDeliveryRepository extends AbstractRepository {
         string $messageType,
         string $messageId,
         string $recipientAddress,
-        string $stage = 'pending',
+        string $stage = Constants::DELIVERY_PENDING,
         int $maxRetries = 5,
         ?array $payload = null
     ) {
@@ -244,7 +244,7 @@ class MessageDeliveryRepository extends AbstractRepository {
      * @return bool Success status
      */
     public function markFailed(string $messageType, string $messageId, string $reason): bool {
-        return $this->updateStage($messageType, $messageId, 'failed', $reason);
+        return $this->updateStage($messageType, $messageId, Constants::DELIVERY_FAILED, $reason);
     }
 
     /**
@@ -255,7 +255,7 @@ class MessageDeliveryRepository extends AbstractRepository {
      * @return bool Success status
      */
     public function markCompleted(string $messageType, string $messageId): bool {
-        return $this->updateStage($messageType, $messageId, 'completed');
+        return $this->updateStage($messageType, $messageId, Constants::DELIVERY_COMPLETED);
     }
 
     /**
@@ -340,12 +340,14 @@ class MessageDeliveryRepository extends AbstractRepository {
      * @return int Number of updated records
      */
     public function markCompletedByHash(string $messageType, string $hash): int {
+        $completedStage = Constants::DELIVERY_COMPLETED;
+        $failedStage = Constants::DELIVERY_FAILED;
         $query = "UPDATE {$this->tableName}
-                  SET delivery_stage = 'completed',
+                  SET delivery_stage = '{$completedStage}',
                       updated_at = NOW()
                   WHERE message_type = :type
                     AND message_id LIKE :pattern
-                    AND delivery_stage NOT IN ('completed', 'failed')";
+                    AND delivery_stage NOT IN ('{$completedStage}', '{$failedStage}')";
 
         $stmt = $this->pdo->prepare($query);
         $pattern = '%' . $hash . '%';
