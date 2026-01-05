@@ -102,7 +102,7 @@ class CleanupService {
      */
     public function expireMessage($message){
         // Expire the p2p request
-        $this->p2pRepository->updateStatus($message['hash'], 'expired');
+        $this->p2pRepository->updateStatus($message['hash'], Constants::STATUS_EXPIRED);
         output(outputP2pExpired($message),'SILENT');
 
         // Cancel transaction if exists
@@ -112,7 +112,7 @@ class CleanupService {
                 // Reorder the chain before marking as cancelled
                 $this->reorderTransactionChain($transaction['txid']);
             }
-            $this->transactionRepository->updateStatus($message['hash'], 'cancelled');
+            $this->transactionRepository->updateStatus($message['hash'], Constants::STATUS_CANCELLED);
             output(outputTransactionExpired($message),'SILENT');
         }
     }
@@ -136,7 +136,7 @@ class CleanupService {
         $this->reorderTransactionChain($txid);
 
         // Update status to cancelled
-        return $this->transactionRepository->updateStatus($txid, 'cancelled', true);
+        return $this->transactionRepository->updateStatus($txid, Constants::STATUS_CANCELLED, true);
     }
 
     /**

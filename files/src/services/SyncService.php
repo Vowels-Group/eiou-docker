@@ -216,14 +216,14 @@ class SyncService {
         // Sync specific contact based on address
         $transportIndex = $this->transportUtility->determineTransportType($contactAddress);
         $contact = $this->contactRepository->getContactByAddress($transportIndex, $contactAddress); // Get contact from database
-        if($contact['status'] === 'pending'){
+        if($contact['status'] === Constants::CONTACT_STATUS_PENDING){
             output(outputSyncContactDueToPendingStatus($contactAddress),$echo);
             // If the contact is still pending then inquire with contact
             $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
             $syncResponse = json_decode($this->transportUtility->send($contactAddress, $messagePayload),true);
             $status = $syncResponse['status'];
             $reason = $syncResponse['reason'] ?? NULL;
-            if($status === 'accepted'){
+            if($status === Constants::STATUS_ACCEPTED){
                 $senderPublicKey = $syncResponse['senderPublicKey'];
                 $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
                 $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($contactAddress);
@@ -237,18 +237,18 @@ class SyncService {
 
                 output(outputContactSuccesfullySynced($contactAddress),$echo);
                 return true;
-            } elseif($status === 'rejected' && $reason === 'unknown'){
+            } elseif($status === Constants::STATUS_REJECTED && $reason === 'unknown'){
 
                 // If no database existence of contact request on their end, resend contact request
                 $contactPayload = $this->contactPayload->buildCreateRequest($contactAddress);
                 $responseData = json_decode($this->transportUtility->send($contactAddress, $contactPayload), true);
-                if(isset($responseData['status']) && ($responseData['status'] === 'accepted')){
+                if(isset($responseData['status']) && ($responseData['status'] === Constants::STATUS_ACCEPTED)){
                     // Contact received our contact request, needs to be accepted by other user first
                     //   If acceptance is automatic then able to check through following inquiry
                     //   Otherwise would need to inquire again down the line (through sync or otherwise)
                     $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
                     $syncResponse = $this->transportUtility->send($contactAddress, $messagePayload);
-                    if($status === 'accepted'){
+                    if($status === Constants::STATUS_ACCEPTED){
                         $this->contactRepository->updateStatus($transportIndex, $contactAddress, $status);
                         output(outputContactSuccesfullySynced($contactAddress),$echo);
                         return true;
@@ -258,7 +258,7 @@ class SyncService {
             // Contact did not respond immediately
             output(outputContactNoResponseSync(),$echo);
             return false;
-        } elseif($contact['status'] === 'accepted'){
+        } elseif($contact['status'] === Constants::CONTACT_STATUS_ACCEPTED){
             // If contact needs no syncing
             //output(outputContactNoNeedSync($contactAddress),'SILENT');
             return true;
@@ -387,12 +387,12 @@ class SyncService {
                 return $result;
             }
 
-            if ($syncResponse['status'] === 'rejected') {
+            if ($syncResponse['status'] === Constants::STATUS_REJECTED) {
                 $result['error'] = $syncResponse['reason'] ?? 'Sync rejected';
                 return $result;
             }
 
-            if ($syncResponse['status'] !== 'accepted' || !isset($syncResponse['transactions'])) {
+            if ($syncResponse['status'] !== Constants::STATUS_ACCEPTED || !isset($syncResponse['transactions'])) {
                 $result['error'] = 'Unexpected sync response';
                 return $result;
             }
@@ -437,7 +437,7 @@ class SyncService {
                     'previousTxid' => $tx['previous_txid'] ?? null,
                     'memo' => $tx['memo'] ?? 'standard',
                     'description' => $tx['description'] ?? null,
-                    'status' => 'completed',
+                    'status' => Constants::STATUS_COMPLETED,
                     // Include signature data for future verification
                     'signature' => $tx['sender_signature'] ?? null,
                     'nonce' => $tx['signature_nonce'] ?? null
@@ -445,7 +445,7 @@ class SyncService {
 
                 // Determine type based on sender
                 $userAddresses = $this->currentUser->getUserAddresses();
-                $type = in_array($tx['sender_address'], $userAddresses) ? 'sent' : 'received';
+                $type = in_array($tx['sender_address'], $userAddresses) ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED;
 
                 $this->transactionRepository->insertTransaction($insertData, $type);
                 $syncedCount++;

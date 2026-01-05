@@ -610,16 +610,16 @@ class TransactionService {
                 // If you're sending the direct transaction
                 if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
                     $payload = $this->transactionPayload->buildStandardFromDatabase($message);
-                    $this->transactionRepository->updateStatus($txid,'sent',true);
+                    $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENT, true);
 
                     // Send with delivery tracking
                     $sendResult = $this->sendTransactionMessage($message['receiver_address'], $payload, $txid);
                     $response = $sendResult['response'];
                     output(outputTransactionInquiryResponse($response),'SILENT');
 
-                    if($response && $response['status'] === 'accepted'){
-                        $this->transactionRepository->updateStatus($txid,'accepted',true);
-                    } elseif($response && $response['status'] === 'rejected'){
+                    if($response && $response['status'] === Constants::STATUS_ACCEPTED){
+                        $this->transactionRepository->updateStatus($txid, Constants::STATUS_ACCEPTED, true);
+                    } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
                         // Check if rejection is due to invalid_previous_txid - attempt sync before falling back to P2P
                         if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
                             output('Transaction rejected due to invalid_previous_txid, holding for sync...', 'SILENT');
@@ -662,7 +662,7 @@ class TransactionService {
                             }
                         }
 
-                        $this->transactionRepository->updateStatus($txid,'rejected',true);
+                        $this->transactionRepository->updateStatus($txid, Constants::STATUS_REJECTED, true);
                         output(outputIssueTransactionTryP2p($response),'SILENT');
                         // Send P2P request for failed direct transaction using P2pService directly
                         Application::getInstance()->services->getP2pService()->sendP2pRequestFromFailedDirectTransaction($message);
@@ -679,7 +679,7 @@ class TransactionService {
                 }
                 // If you received the direct transaction
                 else{
-                    $this->transactionRepository->updateStatus($txid,'completed',true);
+                    $this->transactionRepository->updateStatus($txid, Constants::STATUS_COMPLETED, true);
                     $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
                     output(outputTransactionAmountReceived($message),'SILENT');
 
@@ -743,8 +743,8 @@ class TransactionService {
 
             // If sending transaction forwards
             $payload = $this->transactionPayload->buildFromDatabase($message);
-            $this->p2pRepository->updateStatus($memo,'paid');
-            $this->transactionRepository->updateStatus($memo,'sent');
+            $this->p2pRepository->updateStatus($memo, Constants::STATUS_PAID);
+            $this->transactionRepository->updateStatus($memo, Constants::STATUS_SENT);
             output(outputSendTransactionOnwards($message),'SILENT');
 
             // Send with delivery tracking
@@ -752,9 +752,9 @@ class TransactionService {
             $sendResult = $this->sendTransactionMessage($message['receiver_address'], $payload, $txid, $isRelay);
             $response = $sendResult['response'];
 
-            if($response && $response['status'] === 'accepted'){
-                $this->transactionRepository->updateStatus($txid,'accepted');
-            } elseif($response && $response['status'] === 'rejected'){
+            if($response && $response['status'] === Constants::STATUS_ACCEPTED){
+                $this->transactionRepository->updateStatus($txid, Constants::STATUS_ACCEPTED);
+            } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
                 // Check if rejection is due to invalid_previous_txid - attempt sync
                 if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
                     output('P2P transaction rejected due to invalid_previous_txid, holding for sync...', 'SILENT');
@@ -790,7 +790,7 @@ class TransactionService {
 
                         output('Balances synced. Will retry transaction...', 'SILENT');
                         // Revert status to pending for retry
-                        $this->transactionRepository->updateStatus($memo, 'pending');
+                        $this->transactionRepository->updateStatus($memo, Constants::STATUS_PENDING);
                         $this->p2pRepository->updateStatus($memo, 'found');
                         return; // Exit to allow retry on next processing cycle
                     } else {
@@ -798,8 +798,8 @@ class TransactionService {
                     }
                 }
 
-                $this->p2pRepository->updateStatus($memo,'cancelled');
-                $this->transactionRepository->updateStatus($memo,'rejected');
+                $this->p2pRepository->updateStatus($memo, Constants::STATUS_CANCELLED);
+                $this->transactionRepository->updateStatus($memo, Constants::STATUS_REJECTED);
             } elseif(!$sendResult['success']) {
                 // Message delivery failed after retries
                 $trackingResult = $sendResult['tracking'] ?? [];
@@ -817,7 +817,7 @@ class TransactionService {
         else{
             // If not end-recipient of transaction
             if(!$this->matchYourselfTransaction($message,$this->transportUtility->resolveUserAddressForTransport($message['sender_address']))) {
-                $this->transactionRepository->updateStatus($memo,'accepted');
+                $this->transactionRepository->updateStatus($memo, Constants::STATUS_ACCEPTED);
                 $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
 
                 // Create new transaction, from received prior transaction, for sending onwards to sender of rp2p
@@ -834,8 +834,8 @@ class TransactionService {
             }
              // If end-recipient of transaction
             else{
-                $this->p2pRepository->updateStatus($memo,'completed',true);
-                $this->transactionRepository->updateStatus($memo,'completed');
+                $this->p2pRepository->updateStatus($memo, Constants::STATUS_COMPLETED, true);
+                $this->transactionRepository->updateStatus($memo, Constants::STATUS_COMPLETED);
                 $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
                 $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
                 output(outputTransactionAmountReceived($message),'SILENT');
@@ -957,10 +957,10 @@ class TransactionService {
         // If receiver's public key is in contacts, prepare a transaction to send directly to them
         $contactService = Application::getInstance()->services->getContactService();
         if ($contactInfo = $contactService->lookupContactInfo($request[2])) {
-            if($contactInfo['status'] === 'accepted'){
+            if($contactInfo['status'] === Constants::CONTACT_STATUS_ACCEPTED){
                 // Contact is accepted
                 $this->handleDirectRoute($request, $contactInfo, $output);
-            }elseif($contactInfo['status'] === 'pending'){
+            }elseif($contactInfo['status'] === Constants::CONTACT_STATUS_PENDING){
                 // Contact is still pending, try a resync otherwise send through p2p if possible
 
                 // Determine Transport Type (fallback on other if needed)
@@ -971,7 +971,7 @@ class TransactionService {
                 } else{
                     $this->handleP2pRoute($request, $output);
                 }
-            } elseif($contactInfo['status'] === 'blocked'){
+            } elseif($contactInfo['status'] === Constants::CONTACT_STATUS_BLOCKED){
                 // Contact is blocked, do not send anything
                 $output->error("Cannot send to blocked contact", 'CONTACT_BLOCKED', 403, $txData);
             }
@@ -997,11 +997,11 @@ class TransactionService {
 
         // Prepare transaction payload from data
         $payload = $this->transactionPayload->build($data);
-        $this->transactionRepository->insertTransaction($payload,'sent');
+        $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
 
         // Build response data
         $txResponse = [
-            'status' => 'sent',
+            'status' => Constants::STATUS_SENT,
             'type' => 'direct',
             'recipient' => $contactInfo['receiverName'] ?? $request[2],
             'recipient_address' => $data['receiverAddress'] ?? null,
@@ -1030,7 +1030,7 @@ class TransactionService {
 
         // Build response data
         $txResponse = [
-            'status' => 'pending',
+            'status' => Constants::STATUS_PENDING,
             'type' => 'p2p',
             'recipient' => $request[2] ?? null,
             'amount' => $request[3] ?? null,
@@ -1061,7 +1061,7 @@ class TransactionService {
 
         // Prepare transaction payload
         $payload = $this->transactionPayload->build($data);
-        $this->transactionRepository->insertTransaction($payload,'sent');
+        $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
         $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
     }
 

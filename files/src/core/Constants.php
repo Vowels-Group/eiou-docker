@@ -149,6 +149,13 @@ class Constants {
     const DELIVERY_SENT = 'sent';
     const DELIVERY_COMPLETED = 'completed';
     const DELIVERY_FAILED = 'failed';
+    const DELIVERY_RECEIVED = 'received';
+    const DELIVERY_INSERTED = 'inserted';
+    const DELIVERY_FORWARDED = 'forwarded';
+    const DELIVERY_ACKNOWLEDGED = 'acknowledged';
+    const DELIVERY_WARNING = 'warning';
+    const DELIVERY_UPDATED = 'updated';
+    const DELIVERY_REJECTED = 'rejected';
 
     // UI/Display
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
