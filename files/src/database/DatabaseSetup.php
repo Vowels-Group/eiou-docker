@@ -168,7 +168,9 @@ function runColumnMigrations(PDO $pdo): array {
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
     $columnsToAdd = [
-        
+        'transactions' => [
+            'time' => 'BIGINT NULL AFTER signature_nonce'
+        ]
     ];
 
     // List of columns to DROP: [tableName => [columnName, ...]]

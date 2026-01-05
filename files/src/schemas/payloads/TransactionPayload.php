@@ -101,17 +101,17 @@ class TransactionPayload extends BasePayload
      */
     public function buildStandardFromDatabase(array $data): array
     {
-        // Note no 'time' component
         $this->ensureRequiredFields($data, [
             'receiver_address', 'receiver_public_key',
             'amount', 'currency', 'txid'
         ]);
-       
+
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiver_address']);
         $memo = 'standard';
 
         return [
-            'type' => 'send', 
+            'type' => 'send',
+            'time' => $data['time'] ?? null, // Include time for receiver to store
             'receiverAddress' => $data['receiver_address'],
             'receiverPublicKey' => $data['receiver_public_key'],
             'amount' => $this->sanitizeNumber($data['amount']),
