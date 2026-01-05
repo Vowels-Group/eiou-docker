@@ -241,9 +241,48 @@ class MessageService {
                 $this->handleContactMessageRequest($request);
             }
         }
+        // Handle P2P status messages
+        elseif($request['typeMessage'] === "p2p"){
+            if(isset($request['inquiry']) && $request['inquiry']){
+                $this->handleP2pStatusInquiryRequest($request);
+            }
+        }
         // Handle Sync messages
         elseif($request['typeMessage'] === "sync"){
             $this->handleSyncMessageRequest($request);
+        }
+    }
+
+    /**
+     * Handle P2P status inquiry request
+     *
+     * Returns the status of a P2P transaction when queried.
+     * Used by expiring P2P nodes to check if the chain was completed.
+     *
+     * @param array $decodedMessage Decoded message data
+     * @return void
+     */
+    private function handleP2pStatusInquiryRequest(array $decodedMessage): void {
+        $hash = $decodedMessage['hash'] ?? null;
+        $senderAddress = $decodedMessage['senderAddress'];
+
+        if (!$hash) {
+            echo json_encode([
+                'status' => Constants::STATUS_REJECTED,
+                'message' => 'Missing P2P hash in inquiry',
+                'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($senderAddress),
+                'senderPublicKey' => $this->currentUser->getPublicKey(),
+            ]);
+            return;
+        }
+
+        // Look up the P2P status
+        $p2p = $this->p2pRepository->getByHash($hash);
+
+        if ($p2p) {
+            echo $this->messagePayload->buildP2pStatusResponse($senderAddress, $hash, $p2p['status']);
+        } else {
+            echo $this->messagePayload->buildP2pStatusResponse($senderAddress, $hash, 'not_found');
         }
     }
 

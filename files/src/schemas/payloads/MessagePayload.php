@@ -361,4 +361,53 @@ class MessagePayload extends BasePayload
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
+
+    /**
+     * Build P2P status inquiry payload
+     *
+     * Sent when checking the completion status of a P2P transaction before expiring.
+     * Used to verify if the P2P chain was completed but the completion message was lost.
+     *
+     * @param string $address The recipient address (P2P sender to query)
+     * @param string $hash The P2P hash to inquire about
+     * @return array The P2P status inquiry payload
+     */
+    public function buildP2pStatusInquiry(string $address, string $hash): array
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return [
+            'type' => 'message',
+            'typeMessage' => 'p2p',
+            'inquiry' => true,
+            'hash' => $hash,
+            'message' => $myAddress . ' is inquiring about P2P status for hash ' . $hash,
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+    }
+
+    /**
+     * Build P2P status response payload
+     *
+     * Returns the P2P status to the inquiring party.
+     *
+     * @param string $address The requester's address
+     * @param string $hash The P2P hash
+     * @param string $status The P2P status (completed, expired, etc.)
+     * @return string JSON-encoded status response payload
+     */
+    public function buildP2pStatusResponse(string $address, string $hash, string $status): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return json_encode([
+            'type' => 'message',
+            'typeMessage' => 'p2p',
+            'inquiry' => false,
+            'hash' => $hash,
+            'status' => $status,
+            'message' => 'P2P status for hash ' . $hash . ' is: ' . $status,
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
 }
