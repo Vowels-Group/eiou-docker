@@ -223,16 +223,17 @@ class TransactionPayload extends BasePayload
      *
      * @param array $request The transaction request data
      * @param string $reason Rejection reason code (duplicate, insufficient_funds, contact_blocked, invalid_previous_txid, etc.)
+     * @param string|null $expectedTxid Optional expected previous txid (included for invalid_previous_txid rejections)
      * @return string JSON encoded rejection payload
      */
-    public function buildRejection(array $request, string $reason = 'duplicate'): string
+    public function buildRejection(array $request, string $reason = 'duplicate', ?string $expectedTxid = null): string
     {
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress'] ?? '');
         $hashInfo = $this->resolveHashInfo($request);
 
         $message = $this->buildRejectionMessage($hashInfo, $userAddress, $reason);
 
-        return json_encode([
+        $response = [
             'status' => Constants::STATUS_REJECTED,
             'reason' => $reason,
             'txid' => $request['txid'] ?? null,
@@ -240,7 +241,14 @@ class TransactionPayload extends BasePayload
             'message' => $message,
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
-        ]);
+        ];
+
+        // Include expected_txid for invalid_previous_txid rejections to help with resync
+        if ($reason === 'invalid_previous_txid' && $expectedTxid !== null) {
+            $response['expected_txid'] = $expectedTxid;
+        }
+
+        return json_encode($response);
     }
 
     /**
