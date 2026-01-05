@@ -211,6 +211,7 @@ transactionChainSyncTest
 transactionChainReorderTest
 resyncPrevTxidGapTest
 heldTransactionTest
+p2pCompletionSyncTest
 contactReaddSyncTest
 seedPhraseTest
 authcodeRestorationTest
