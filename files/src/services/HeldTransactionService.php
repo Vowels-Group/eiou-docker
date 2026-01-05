@@ -303,9 +303,16 @@ class HeldTransactionService {
             $updated = $this->transactionRepository->updatePreviousTxid($txid, $correctPreviousTxid);
 
             if ($updated) {
-                SecureLogger::debug("Updated previous_txid for transaction", [
+                // Verify the update was persisted by re-reading from database
+                $verifyTx = $this->transactionRepository->getByTxid($txid);
+                $verifiedPreviousTxid = $verifyTx['previous_txid'] ?? 'NOT_FOUND';
+
+                SecureLogger::info("Updated previous_txid for held transaction", [
                     'txid' => $txid,
-                    'new_previous_txid' => $correctPreviousTxid
+                    'expected_from_rejection' => $expectedPreviousTxid,
+                    'set_to' => $correctPreviousTxid,
+                    'verified_in_db' => $verifiedPreviousTxid,
+                    'match' => ($verifiedPreviousTxid === $correctPreviousTxid)
                 ]);
                 return true;
             }

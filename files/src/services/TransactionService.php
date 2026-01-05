@@ -631,6 +631,15 @@ class TransactionService {
                 // If you're sending the direct transaction
                 if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
                     $payload = $this->transactionPayload->buildStandardFromDatabase($message);
+
+                    // Log the payload being sent (for debugging held transaction resumes)
+                    SecureLogger::info("Sending standard transaction", [
+                        'txid' => $txid,
+                        'previous_txid_in_db' => $message['previous_txid'] ?? 'NULL',
+                        'previous_txid_in_payload' => $payload['previousTxid'] ?? 'NULL',
+                        'receiver' => $message['receiver_address']
+                    ]);
+
                     $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENT, true);
 
                     // Send with delivery tracking
