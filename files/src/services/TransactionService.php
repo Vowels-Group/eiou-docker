@@ -348,6 +348,15 @@ class TransactionService {
                     $request['senderPublicKey'],
                     $request['receiverPublicKey']
                 );
+
+                // Log the mismatch details for debugging
+                SecureLogger::warning("Rejecting transaction: invalid_previous_txid", [
+                    'txid' => $request['txid'] ?? 'unknown',
+                    'received_previous_txid' => $request['previousTxid'] ?? 'NULL',
+                    'expected_previous_txid' => $expectedTxid ?? 'NULL',
+                    'sender' => $request['senderAddress'] ?? 'unknown'
+                ]);
+
                 echo $this->transactionPayload->buildRejection($request, 'invalid_previous_txid', $expectedTxid);
             }
             return false;
