@@ -286,10 +286,11 @@ class HeldTransactionService {
      */
     public function updatePreviousTxid(string $txid, string $contactPubkey): bool {
         try {
-            // Get the correct previous_txid from transaction chain
+            // Get the correct previous_txid from transaction chain, excluding the held transaction itself
             $correctPreviousTxid = $this->transactionRepository->getPreviousTxid(
                 $this->currentUser->getPublicKey(),
-                $contactPubkey
+                $contactPubkey,
+                $txid  // Exclude the held transaction from the query
             );
 
             // Update the transaction's previous_txid
