@@ -242,13 +242,29 @@ class TransactionService {
                 return false;
             }
 
-            // If a previous transaction exists, verify the previousTxid matches
+            // Get the expected previous txid from our transaction records
             // getPreviousTxid expects public keys (not addresses) to hash and compare
-            if (isset($request['previousTxid']) && $previousTxResult = $this->transactionRepository->getPreviousTxid($request['senderPublicKey'], $request['receiverPublicKey'])) {
-                if ($previousTxResult !== $request['previousTxid']) {
-                    return false;
-                }
+            $expectedPreviousTxid = $this->transactionRepository->getPreviousTxid(
+                $request['senderPublicKey'],
+                $request['receiverPublicKey']
+            );
+
+            // Get the previous txid from the incoming request (may be NULL for first tx or if sender lost data)
+            $receivedPreviousTxid = $request['previousTxid'] ?? null;
+
+            // Both must match exactly:
+            // - NULL === NULL: Valid first transaction between parties
+            // - "txid_abc" === "txid_abc": Valid continuation of chain
+            // - NULL !== "txid_abc": Invalid - sender lost data, needs resync
+            // - "txid_abc" !== "txid_xyz": Invalid - chain mismatch, needs resync
+            if ($expectedPreviousTxid !== $receivedPreviousTxid) {
+                $this->secureLogger->warning("Previous txid mismatch detected", [
+                    'expected' => $expectedPreviousTxid,
+                    'received' => $receivedPreviousTxid
+                ]);
+                return false;
             }
+
             return true;
         } catch (PDOException $e) {
             // Use SecureLogger's exception logging
@@ -327,7 +343,12 @@ class TransactionService {
         // Check if transaction is a valid successor of previous txids
         elseif(!$this->checkPreviousTxid($request)){
             if($echo){
-                echo $this->transactionPayload->buildRejection($request, 'invalid_previous_txid');
+                // Include expected_txid in rejection to help sender resync
+                $expectedTxid = $this->transactionRepository->getPreviousTxid(
+                    $request['senderPublicKey'],
+                    $request['receiverPublicKey']
+                );
+                echo $this->transactionPayload->buildRejection($request, 'invalid_previous_txid', $expectedTxid);
             }
             return false;
         }

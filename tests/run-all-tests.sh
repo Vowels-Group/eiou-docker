@@ -210,6 +210,7 @@ syncTest
 transactionChainSyncTest
 transactionChainReorderTest
 resyncPrevTxidGapTest
+nullPrevTxidResyncTest
 heldTransactionTest
 p2pCompletionSyncTest
 contactReaddSyncTest
