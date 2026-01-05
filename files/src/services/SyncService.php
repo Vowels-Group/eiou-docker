@@ -745,10 +745,17 @@ class SyncService {
             }
         }
 
-        // Reconstruct message in the EXACT order from TransactionPayload::buildStandardFromDatabase
+        // Reconstruct message in the EXACT order from TransactionPayload::build()
         // after TransportUtilityService::sign() removes senderAddress/senderPublicKey
         // IMPORTANT: Field order matters for signature verification!
-        // NOTE: description is ALWAYS included (even if null) to match buildStandardFromDatabase
+        //
+        // Original build() order (before senderAddress/senderPublicKey removal):
+        // type, time, receiverAddress, receiverPublicKey, amount, currency, txid,
+        // previousTxid, memo, senderAddress*, senderPublicKey*, [description],
+        // [endRecipientAddress], [initialSenderAddress]
+        // (* = removed before signing, [] = conditional)
+        //
+        // After signing adds nonce at the end
         $messageContent = [
             'type' => 'send',
         ];
@@ -766,7 +773,21 @@ class SyncService {
         $messageContent['txid'] = $tx['txid'];
         $messageContent['previousTxid'] = $tx['previous_txid'] ?? null;
         $messageContent['memo'] = $tx['memo'] ?? 'standard';
-        $messageContent['description'] = $tx['description'] ?? null;
+
+        // description is ONLY included if it has a non-null value (matches TransactionPayload::build)
+        if (isset($tx['description']) && $tx['description'] !== null) {
+            $messageContent['description'] = $tx['description'];
+        }
+
+        // endRecipientAddress is ONLY included if present (matches TransactionPayload::build)
+        if (isset($tx['end_recipient_address']) && $tx['end_recipient_address'] !== null) {
+            $messageContent['endRecipientAddress'] = $tx['end_recipient_address'];
+        }
+
+        // initialSenderAddress is ONLY included if present (matches TransactionPayload::build)
+        if (isset($tx['initial_sender_address']) && $tx['initial_sender_address'] !== null) {
+            $messageContent['initialSenderAddress'] = $tx['initial_sender_address'];
+        }
 
         // Nonce is added last by TransportUtilityService::sign()
         $messageContent['nonce'] = (int)$tx['signature_nonce'];
