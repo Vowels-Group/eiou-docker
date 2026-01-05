@@ -463,9 +463,27 @@ class TransactionService {
     public function matchYourselfTransaction($request, $address){
         // Check if transaction end recipient is user
         $p2pRequest = $this->p2pRepository->getByHash($request['memo']);
-        if( hash(Constants::HASH_ALGORITHM, $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
+
+        // First check the provided address (most likely match)
+        if (hash(Constants::HASH_ALGORITHM, $address . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
             return true;
         }
+
+        // If primary address didn't match, check all user addresses
+        // This handles cases where message was wrapped/forwarded over different networks
+        // getUserLocaters() returns addresses mapped by type (e.g., ['http' => '...', 'tor' => '...'])
+        $allAddresses = $this->currentUser->getUserLocaters();
+
+        foreach ($allAddresses as $userAddress) {
+            // Skip if this is the same address we already checked
+            if ($userAddress === $address) {
+                continue;
+            }
+            if (hash(Constants::HASH_ALGORITHM, $userAddress . $p2pRequest['salt'] . $p2pRequest['time']) === $request['memo']) {
+                return true;
+            }
+        }
+
         return false;
     }
 
