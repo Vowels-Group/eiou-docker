@@ -370,7 +370,8 @@ class ServiceContainer {
                 $this->getInputValidator(),
                 $this->getLogger(),
                 $this->currentUser,
-                $this->getMessageDeliveryService()
+                $this->getMessageDeliveryService(),
+                $this->getHeldTransactionService() // Set HeldTransactionService for handling invalid_previous_txid rejections
             );
         }
         return $this->services['TransactionService'];

@@ -120,6 +120,8 @@ class TransactionService {
      * @param SecureLogger $secureLogger SecureLogger
      * @param UserContext $currentUser Current user data
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
+     * @param HeldTransactionService|null $heldTransactionService Optional Held transaction service for pending sync
+     * 
      */
     public function __construct(
         ContactRepository $contactRepository,
@@ -132,7 +134,8 @@ class TransactionService {
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
         UserContext $currentUser,
-        ?MessageDeliveryService $messageDeliveryService = null
+        ?MessageDeliveryService $messageDeliveryService = null,
+        ?HeldTransactionService $heldTransactionService = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->addressRepository = $addressRepository;
@@ -149,6 +152,7 @@ class TransactionService {
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
+        $this->heldTransactionService = $heldTransactionService;
 
         require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
@@ -348,6 +352,15 @@ class TransactionService {
                     $request['senderPublicKey'],
                     $request['receiverPublicKey']
                 );
+
+                // Log the mismatch details for debugging
+                SecureLogger::warning("Rejecting transaction: invalid_previous_txid", [
+                    'txid' => $request['txid'] ?? 'unknown',
+                    'received_previous_txid' => $request['previousTxid'] ?? 'NULL',
+                    'expected_previous_txid' => $expectedTxid ?? 'NULL',
+                    'sender' => $request['senderAddress'] ?? 'unknown'
+                ]);
+
                 echo $this->transactionPayload->buildRejection($request, 'invalid_previous_txid', $expectedTxid);
             }
             return false;
@@ -631,6 +644,15 @@ class TransactionService {
                 // If you're sending the direct transaction
                 if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
                     $payload = $this->transactionPayload->buildStandardFromDatabase($message);
+
+                    // Log the payload being sent (for debugging held transaction resumes)
+                    SecureLogger::info("Sending standard transaction", [
+                        'txid' => $txid,
+                        'previous_txid_in_db' => $message['previous_txid'] ?? 'NULL',
+                        'previous_txid_in_payload' => $payload['previousTxid'] ?? 'NULL',
+                        'receiver' => $message['receiver_address']
+                    ]);
+
                     $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENT, true);
 
                     // Send with delivery tracking
