@@ -440,7 +440,8 @@ class SyncService {
                     'status' => Constants::STATUS_COMPLETED,
                     // Include signature data for future verification
                     'signature' => $tx['sender_signature'] ?? null,
-                    'nonce' => $tx['signature_nonce'] ?? null
+                    'nonce' => $tx['signature_nonce'] ?? null,
+                    'time' => $tx['time'] ?? null
                 ];
 
                 // Determine type based on sender
@@ -749,15 +750,22 @@ class SyncService {
         // NOTE: description is ALWAYS included (even if null) to match buildStandardFromDatabase
         $messageContent = [
             'type' => 'send',
-            'receiverAddress' => $tx['receiver_address'],
-            'receiverPublicKey' => $tx['receiver_public_key'],
-            'amount' => (int)$tx['amount'],
-            'currency' => $tx['currency'],
-            'txid' => $tx['txid'],
-            'previousTxid' => $tx['previous_txid'] ?? null,
-            'memo' => $tx['memo'] ?? 'standard',
-            'description' => $tx['description'] ?? null,
         ];
+
+        // Include 'time' if present (added for P2P/RP2P tracking and syncing)
+        // This maintains backward compatibility - older transactions without 'time' are still valid
+        if (isset($tx['time']) && $tx['time'] !== null) {
+            $messageContent['time'] = (int)$tx['time'];
+        }
+
+        $messageContent['receiverAddress'] = $tx['receiver_address'];
+        $messageContent['receiverPublicKey'] = $tx['receiver_public_key'];
+        $messageContent['amount'] = (int)$tx['amount'];
+        $messageContent['currency'] = $tx['currency'];
+        $messageContent['txid'] = $tx['txid'];
+        $messageContent['previousTxid'] = $tx['previous_txid'] ?? null;
+        $messageContent['memo'] = $tx['memo'] ?? 'standard';
+        $messageContent['description'] = $tx['description'] ?? null;
 
         // Nonce is added last by TransportUtilityService::sign()
         $messageContent['nonce'] = (int)$tx['signature_nonce'];

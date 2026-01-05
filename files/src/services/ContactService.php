@@ -178,7 +178,8 @@ class ContactService {
      */
     private function insertContactTransaction(string $receiverPublicKey, string $receiverAddress, string $currency, ?string $txid = null): bool {
         // Use provided txid from receiver, or generate locally as fallback
-        $txid = $txid ?? $this->createContactTxid($receiverPublicKey, $this->timeUtility->getCurrentMicrotime());
+        $time = $this->timeUtility->getCurrentMicrotime();
+        $txid = $txid ?? $this->createContactTxid($receiverPublicKey, $time);
 
         // Build transaction data with status 'sent' (will move to 'completed' upon acceptance)
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($receiverAddress);
@@ -191,6 +192,7 @@ class ContactService {
             'currency' => $currency,
             'status' => Constants::STATUS_SENT,
             'txid' => $txid,
+            'time' => $time,
             'memo' => 'contact',
             'description' => 'Contact request transaction',
             // Contact transactions are direct - both parties know sender and recipient
@@ -237,6 +239,7 @@ class ContactService {
             'currency' => $currency,
             'status' => Constants::STATUS_ACCEPTED,
             'txid' => $txid,
+            'time' => $time,
             'memo' => 'contact',
             'description' => 'Contact request transaction',
             // Contact transactions are direct - both parties know sender and recipient

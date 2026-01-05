@@ -168,6 +168,7 @@ function getTransactionsTableSchema() {
         previous_txid VARCHAR(255),
         sender_signature TEXT,
         signature_nonce BIGINT,
+        time BIGINT NULL,
         memo TEXT,
         description TEXT,
         initial_sender_address VARCHAR(255) DEFAULT NULL,
