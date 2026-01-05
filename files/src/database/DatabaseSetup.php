@@ -178,8 +178,9 @@ function runColumnMigrations(PDO $pdo): array {
     foreach ($columnsToAdd as $tableName => $columns) {
         foreach ($columns as $columnName => $columnDefinition) {
             try {
-                $stmt = $pdo->prepare("SHOW COLUMNS FROM `$tableName` LIKE :column");
-                $stmt->execute([':column' => $columnName]);
+                // Use query() instead of prepare() - SHOW COLUMNS doesn't support placeholders in MariaDB
+                // Column names come from our own code, not user input, so direct interpolation is safe
+                $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
 
                 if ($stmt->rowCount() === 0) {
                     $pdo->exec("ALTER TABLE `$tableName` ADD COLUMN `$columnName` $columnDefinition");
@@ -202,8 +203,8 @@ function runColumnMigrations(PDO $pdo): array {
     foreach ($columnsToDrop as $tableName => $columns) {
         foreach ($columns as $columnName) {
             try {
-                $stmt = $pdo->prepare("SHOW COLUMNS FROM `$tableName` LIKE :column");
-                $stmt->execute([':column' => $columnName]);
+                // Use query() instead of prepare() - SHOW COLUMNS doesn't support placeholders in MariaDB
+                $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
 
                 if ($stmt->rowCount() > 0) {
                     $pdo->exec("ALTER TABLE `$tableName` DROP COLUMN `$columnName`");
