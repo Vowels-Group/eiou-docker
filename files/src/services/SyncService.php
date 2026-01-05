@@ -413,14 +413,14 @@ class SyncService {
                 // message parsing. If signatures are missing, log a warning but allow sync
                 // to maintain backward compatibility. Full signature enforcement is a future enhancement.
                 if (!$this->verifyTransactionSignature($tx)) {
-                    // Log warning but allow sync for now (signature data may not be available
-                    // for older transactions or if message parsing doesn't preserve it)
+                    // Log warning - signature data should be available for all transactions.
+                    // If this warning appears frequently, there may be an issue with signature
+                    // storage during send or signature preservation during message parsing.
                     SecureLogger::warning("Sync transaction missing signature verification", [
                         'txid' => $tx['txid'],
                         'sender' => $tx['sender_address'],
                         'has_signature' => !empty($tx['sender_signature']),
-                        'has_nonce' => !empty($tx['signature_nonce']),
-                        'note' => 'Signature enforcement requires message parsing updates'
+                        'has_nonce' => !empty($tx['signature_nonce'])
                     ]);
                     // Continue with sync - don't block on missing signatures for now
                 }

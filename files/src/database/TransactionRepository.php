@@ -1862,4 +1862,24 @@ class TransactionRepository extends AbstractRepository {
 
         return $stmt->rowCount() > 0;
     }
+
+    /**
+     * Update signature data for a transaction
+     *
+     * Updates the sender_signature and signature_nonce fields for a transaction.
+     * This is used after a transaction is successfully sent to store the signing
+     * data for future verification during sync operations.
+     *
+     * @param string $txid Transaction ID
+     * @param string $signature Base64-encoded signature
+     * @param int $nonce Signature nonce (unix timestamp)
+     * @return bool Success status
+     */
+    public function updateSignatureData(string $txid, string $signature, int $nonce): bool {
+        $affectedRows = $this->update([
+            'sender_signature' => $signature,
+            'signature_nonce' => $nonce
+        ], 'txid', $txid);
+        return $affectedRows >= 0;
+    }
 }
