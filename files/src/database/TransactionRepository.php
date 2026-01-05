@@ -894,7 +894,7 @@ class TransactionRepository extends AbstractRepository {
                   LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
                   LEFT JOIN p2p ON t.memo = p2p.hash
                   WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders))
-                  ORDER BY t.timestamp DESC LIMIT ?";
+                  ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
 
         // Bind parameters - addresses twice for both IN clauses, then limit
         $params = array_merge($userAddresses, $userAddresses, [$limit]);
@@ -981,7 +981,7 @@ class TransactionRepository extends AbstractRepository {
                   LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.tor)
                   LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
                   WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders)) AND t.currency = ?
-                  ORDER BY t.timestamp DESC LIMIT ?";
+                  ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
 
         // Bind parameters - addresses twice for both IN clauses, then currency, then limit
         $params = array_merge($userAddresses, $userAddresses, [$currency, $limit]);
