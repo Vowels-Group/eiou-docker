@@ -124,9 +124,7 @@ function runMigrations(PDO $pdo): array {
     $results = [];
 
     // List of migration tables to create (added after initial release)
-    $migrations = [
-       
-    ];
+    $migrations = [];
 
     foreach ($migrations as $tableName => $schemaFunction) {
         try {
@@ -174,9 +172,7 @@ function runColumnMigrations(PDO $pdo): array {
     ];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
-    $columnsToDrop = [
-        
-    ];
+    $columnsToDrop = [];
 
     // Add new columns
     foreach ($columnsToAdd as $tableName => $columns) {
@@ -227,9 +223,7 @@ function runColumnMigrations(PDO $pdo): array {
     }
 
     // Add missing indexes
-    $indexesToAdd = [
-        
-    ];
+    $indexesToAdd = [];
 
     foreach ($indexesToAdd as $tableName => $indexes) {
         foreach ($indexes as $indexName => $columnName) {
