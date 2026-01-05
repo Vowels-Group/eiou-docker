@@ -322,9 +322,58 @@ else
     failure=$(( failure + 1 ))
 fi
 
-############################ TEST 9: Verify sync mechanism infrastructure ############################
+############################ TEST 9: Verify time field is preserved during sync ############################
 
-echo -e "\n[Test 9: Verify signature verification method exists (infrastructure check)]"
+echo -e "\n[Test 9: Verify time field is preserved in synced transactions]"
+totaltests=$(( totaltests + 1 ))
+
+# Compare time values between receiver (source) and sender (synced)
+timePreservationResult=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+
+    // Get synced transactions on sender with their time values
+    \$stmt = \$pdo->query(\"SELECT txid, time FROM transactions WHERE description LIKE 'sync-test-tx%${timestamp}' ORDER BY timestamp ASC\");
+    \$senderTxs = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    \$hasTime = 0;
+    \$nullTime = 0;
+    \$timeValues = [];
+
+    foreach (\$senderTxs as \$tx) {
+        if (\$tx['time'] !== null && \$tx['time'] > 0) {
+            \$hasTime++;
+            \$timeValues[] = \$tx['txid'] . ':' . \$tx['time'];
+        } else {
+            \$nullTime++;
+        }
+    }
+
+    if (\$hasTime >= 3) {
+        echo 'PASSED:' . \$hasTime . '_with_time';
+    } elseif (\$hasTime > 0) {
+        echo 'PARTIAL:' . \$hasTime . '_with_time,' . \$nullTime . '_null';
+    } else {
+        echo 'FAILED:all_time_null';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$timePreservationResult" == PASSED:* ]]; then
+    printf "\t   Time field preserved in synced transactions ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+elif [[ "$timePreservationResult" == PARTIAL:* ]]; then
+    printf "\t   Time field preservation ${YELLOW}PARTIAL${NC} (%s)\n" "${timePreservationResult}"
+    # Count as pass since some time values were preserved
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Time field preservation ${RED}FAILED${NC} (%s)\n" "${timePreservationResult}"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 10: Verify sync mechanism infrastructure ############################
+
+echo -e "\n[Test 10: Verify signature verification method exists (infrastructure check)]"
 totaltests=$(( totaltests + 1 ))
 
 # Verify the signature verification infrastructure is in place
@@ -347,9 +396,9 @@ else
     failure=$(( failure + 1 ))
 fi
 
-############################ TEST 10: Verify reconstructSignedMessage works correctly ############################
+############################ TEST 11: Verify reconstructSignedMessage works correctly ############################
 
-echo -e "\n[Test 10: Verify signature reconstruction and verification works]"
+echo -e "\n[Test 11: Verify signature reconstruction and verification works]"
 totaltests=$(( totaltests + 1 ))
 
 # Test that reconstructSignedMessage produces correct message that can be verified

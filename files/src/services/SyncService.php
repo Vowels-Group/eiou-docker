@@ -572,6 +572,7 @@ class SyncService {
                     'memo' => $tx['memo'],
                     'description' => $tx['description'] ?? null,
                     'timestamp' => $tx['timestamp'],
+                    'time' => $tx['time'] ?? null,
                     'status' => $tx['status'],
                     // Include signature data for verification
                     'sender_signature' => $tx['sender_signature'] ?? null,
