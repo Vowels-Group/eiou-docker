@@ -820,6 +820,16 @@ class TransactionService {
 
             if($response && $response['status'] === Constants::STATUS_ACCEPTED){
                 $this->transactionRepository->updateStatus($txid, Constants::STATUS_ACCEPTED);
+
+                // Store signature data for future sync verification
+                $signingData = $sendResult['signing_data'] ?? null;
+                if ($signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                    $this->transactionRepository->updateSignatureData(
+                        $txid,
+                        $signingData['signature'],
+                        $signingData['nonce']
+                    );
+                }
             } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
                 // Check if rejection is due to invalid_previous_txid - attempt sync
                 if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
