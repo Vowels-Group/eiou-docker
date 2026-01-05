@@ -1214,3 +1214,36 @@ function showSelectedUserAddress() {
     var address = selectedOption.getAttribute('data-address');
     document.getElementById('user-address-value').textContent = address;
 }
+
+// ============================================================================
+// SYNCING TRANSACTION NOTIFICATION FUNCTIONS
+// ============================================================================
+
+// Show toast notifications for in-progress and syncing transactions
+// Note: syncingTransactionCount is defined inline in transactionHistory.html (PHP-generated)
+function showInProgressToasts() {
+    if (typeof showToast !== 'function') {
+        return;
+    }
+
+    var inProgressCount = document.querySelectorAll('.tx-in-progress-item').length;
+
+    // Show specific toast for syncing transactions (syncingTransactionCount is set by PHP)
+    if (typeof syncingTransactionCount !== 'undefined' && syncingTransactionCount > 0) {
+        showToast(
+            'Chain Synchronization',
+            syncingTransactionCount + ' transaction' + (syncingTransactionCount > 1 ? 's are' : ' is') + ' on hold while syncing the transaction chain. This ensures accurate records.',
+            'warning'
+        );
+    }
+
+    // Show general in-progress toast for other transactions
+    var otherInProgress = inProgressCount - (typeof syncingTransactionCount !== 'undefined' ? syncingTransactionCount : 0);
+    if (otherInProgress > 0) {
+        showToast(
+            'Transactions In Progress',
+            otherInProgress + ' transaction' + (otherInProgress > 1 ? 's are' : ' is') + ' being processed. Page will refresh automatically.',
+            'info'
+        );
+    }
+}
