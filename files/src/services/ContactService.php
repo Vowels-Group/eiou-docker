@@ -219,9 +219,11 @@ class ContactService {
      * @param string $senderPublicKey The public key of the contact who sent the request
      * @param string $senderAddress The address of the contact who sent the request
      * @param string $currency The currency for the transaction
+     * @param string|null $signature The sender's signature from the incoming request
+     * @param int|null $nonce The signature nonce from the incoming request
      * @return string|null The txid on success, null on failure
      */
-    private function insertReceivedContactTransaction(string $senderPublicKey, string $senderAddress, string $currency = 'USD'): ?string {
+    private function insertReceivedContactTransaction(string $senderPublicKey, string $senderAddress, string $currency = 'USD', ?string $signature = null, ?int $nonce = null): ?string {
         // Generate time and txid on receiver side
         $time = $this->timeUtility->getCurrentMicrotime();
 
@@ -244,7 +246,10 @@ class ContactService {
             'description' => 'Contact request transaction',
             // Contact transactions are direct - both parties know sender and recipient
             'endRecipientAddress' => $myAddress,
-            'initialSenderAddress' => $senderAddress
+            'initialSenderAddress' => $senderAddress,
+            // Sender's signature data for future sync verification
+            'signature' => $signature,
+            'nonce' => $nonce
         ];
 
         // Insert the contact transaction with 'accepted' status
@@ -597,6 +602,16 @@ class ContactService {
                     $txid = $responseData['txid'] ?? null;
                     $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
 
+                    // Store signature data for future sync verification
+                    $signingData = $sendResult['signing_data'] ?? null;
+                    if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                        $this->transactionRepository->updateSignatureData(
+                            $txid,
+                            $signingData['signature'],
+                            $signingData['nonce']
+                        );
+                    }
+
                     // Update delivery stage: received -> inserted -> completed (using MessageDeliveryService directly)
                     // Contact request phase is complete (awaiting acceptance is a separate phase)
                     if ($this->messageDeliveryService !== null) {
@@ -767,6 +782,10 @@ class ContactService {
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
         $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($senderAddress);
 
+        // Extract sender's signature data for storing with the contact transaction
+        $signature = $request['signature'] ?? null;
+        $nonce = isset($request['nonce']) ? (int)$request['nonce'] : null;
+
         // Get our own (the responder's) addresses to include in response
         // This allows the requester to store all our known addresses
         $myAddresses = $this->currentUser->getUserLocaters();
@@ -789,7 +808,7 @@ class ContactService {
 
                     if (!$hasContactTx) {
                         // Create the contact transaction on our side (they already have one on their end)
-                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress);
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
                         // Return 'received' with txid so sender can sync
                         return $this->contactPayload->buildReceived($senderAddress, null, $txid);
                     }
@@ -816,7 +835,7 @@ class ContactService {
 
                         if (!$hasContactTx) {
                             // Create the contact transaction on our side
-                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress);
+                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
                             return $this->contactPayload->buildReceived($senderAddress, null, $txid);
                         }
 
@@ -839,7 +858,7 @@ class ContactService {
                 // Insert received contact transaction with status 'accepted' (pending user acceptance)
                 // This creates the contact transaction on the receiver's side
                 // Receiver generates txid and includes it in response for sender to use
-                $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress);
+                $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
                 return $this->contactPayload->buildReceived($senderAddress, null, $txid);
             } else{
                 // Unable to insert contact
