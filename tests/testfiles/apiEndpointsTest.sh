@@ -3,7 +3,6 @@
 
 # Test REST API endpoints for the EIOU API integration
 # Tests API key creation, system status, wallet info, contacts, and error handling
-# Issue #145 - REST API Integration Infrastructure
 
 echo -e "\nTesting REST API endpoints..."
 
@@ -142,7 +141,7 @@ path="/api/v1/system/status"
 body=""
 
 # Create HMAC signature - note: the string to sign uses actual newlines
-# New format: only send the HMAC, never the secret (Issue #266 security fix)
+# New format: only send the HMAC, never the secret
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
     \$message = \"${method}\\n${path}\\n${timestamp}\\n${body}\";

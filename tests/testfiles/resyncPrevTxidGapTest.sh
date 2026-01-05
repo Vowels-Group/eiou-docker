@@ -2,7 +2,7 @@
 # Copyright 2025 The Vowels Company
 
 # Test resync prev-txid gap handling functionality
-# Issue #346 - Potential issue resynch missing prev-txid connection
+# Verifies prev-txid chain gap resolution during sync
 #
 # This test verifies that when syncing transactions, if a transaction in the chain
 # has been cancelled but the chain hasn't been readjusted yet, the sync response

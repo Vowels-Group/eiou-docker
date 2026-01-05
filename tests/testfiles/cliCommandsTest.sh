@@ -3,7 +3,6 @@
 
 # Test CLI commands for correct output in both regular and JSON formats
 # Tests help, info, viewsettings, viewbalances, history, viewcontact, search commands
-# Issue #176 - Expand testsuite to encompass all CLI commands
 
 echo -e "\nTesting CLI commands (regular and JSON output)..."
 

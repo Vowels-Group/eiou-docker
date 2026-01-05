@@ -4,7 +4,6 @@
 # Test held transaction functionality for invalid_previous_txid handling
 # Verifies that transactions are held when receiving invalid_previous_txid rejection,
 # maintains per-contact isolation, and resumes correctly after sync
-# Issue #338 - Feature to hold transactions until resync completes
 
 echo -e "\nTesting held transaction functionality..."
 

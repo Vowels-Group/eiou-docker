@@ -3,7 +3,6 @@
 
 # Test sync functionality from SyncService.php
 # Tests the sync command for contacts, transactions, and balances
-# Issue #207 - Balance sync functionality
 
 echo -e "\nTesting sync functionality..."
 

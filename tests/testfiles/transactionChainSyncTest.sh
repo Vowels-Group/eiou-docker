@@ -4,7 +4,6 @@
 # Test transaction chain sync functionality
 # This test sends real transactions, deletes them from sender's database,
 # then syncs to recover them. Transactions must have valid signatures to sync.
-# Issue #332 - Transaction chain sync for invalid_previous_txid recovery
 
 echo -e "\nTesting transaction chain sync functionality..."
 

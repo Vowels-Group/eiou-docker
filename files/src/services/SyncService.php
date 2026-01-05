@@ -524,7 +524,7 @@ class SyncService {
 
             // Build a map of cancelled/rejected transaction txid -> their previous_txid
             // This allows us to "skip over" cancelled transactions in the chain
-            // Issue #346: When AB2 is cancelled in chain AB1->AB2->AB3->AB4, AB3's previous_txid
+            // When AB2 is cancelled in chain AB1->AB2->AB3->AB4, AB3's previous_txid
             // still points to AB2. We need to update it to point to AB1 during sync.
             $cancelledTxidToPrevious = [];
             foreach ($transactions as $tx) {
@@ -605,10 +605,8 @@ class SyncService {
      *
      * When a transaction in the chain is cancelled (e.g., AB2 in AB1->AB2->AB3),
      * this method follows the chain back to find the first non-cancelled ancestor.
-     * This ensures the synced chain has no gaps.
-     *
-     * Issue #346: Fixes resync missing prev-txid connection when intermediate
-     * transactions have been cancelled but the chain hasn't been readjusted yet.
+     * This ensures the synced chain has no gaps when intermediate transactions
+     * have been cancelled but the chain hasn't been readjusted yet.
      *
      * @param string|null $previousTxid The original previous_txid
      * @param array $cancelledTxidToPrevious Map of cancelled txid => their previous_txid
