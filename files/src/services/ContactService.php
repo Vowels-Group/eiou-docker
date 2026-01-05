@@ -238,7 +238,7 @@ class ContactService {
             'status' => Constants::STATUS_ACCEPTED,
             'txid' => $txid,
             'memo' => 'contact',
-            'description' => 'Contact request received',
+            'description' => 'Contact request transaction',
             // Contact transactions are direct - both parties know sender and recipient
             'endRecipientAddress' => $myAddress,
             'initialSenderAddress' => $senderAddress
