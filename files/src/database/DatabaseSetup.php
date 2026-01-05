@@ -60,7 +60,7 @@ function freshInstall(){
             try {
                 $dbConn->exec(getDebugTableSchema());
                 $dbConn->exec(getContactsTableSchema());
-                $dbConn->exec( getAddressTableSchema());
+                $dbConn->exec(getAddressTableSchema());
                 $dbConn->exec(getBalancesTableSchema());
                 $dbConn->exec(getTransactionsTableSchema());
                 $dbConn->exec(getP2pTableSchema());
@@ -125,7 +125,7 @@ function runMigrations(PDO $pdo): array {
 
     // List of migration tables to create (added after initial release)
     $migrations = [
-        'held_transactions' => 'getHeldTransactionsTableSchema',
+       
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {
