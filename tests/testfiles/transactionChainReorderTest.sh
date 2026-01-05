@@ -116,20 +116,24 @@ chainTestResult=$(docker exec ${sender} php -r "
     // Clean up any existing test transactions
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'chain-reorder-test%'\");
 
+    // Use high time values to ensure test transactions sort above any existing transactions
+    // Time is in microseconds, use values far in the future for testing
+    \$baseTime = 9999999999000000; // Far future time for test isolation
+
     // Create transaction A1
     \$a1Txid = 'chain-test-a1-${timestamp}';
-    \$stmt = \$pdo->prepare(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key, sender_public_key_hash, receiver_address, receiver_public_key, receiver_public_key_hash, amount, currency, previous_txid, memo, description, timestamp) VALUES (?, 'standard', 'sent', 'completed', ?, ?, ?, ?, ?, ?, 100, 'USD', NULL, 'standard', 'chain-reorder-test-a1', NOW())\");
-    \$stmt->execute([\$a1Txid, '${senderAddress}', \$senderPubkey, \$senderPubkeyHash, '${receiverAddress}', \$receiverPubkey, \$receiverPubkeyHash]);
+    \$stmt = \$pdo->prepare(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key, sender_public_key_hash, receiver_address, receiver_public_key, receiver_public_key_hash, amount, currency, previous_txid, memo, description, time, timestamp) VALUES (?, 'standard', 'sent', 'completed', ?, ?, ?, ?, ?, ?, 100, 'USD', NULL, 'standard', 'chain-reorder-test-a1', ?, NOW())\");
+    \$stmt->execute([\$a1Txid, '${senderAddress}', \$senderPubkey, \$senderPubkeyHash, '${receiverAddress}', \$receiverPubkey, \$receiverPubkeyHash, \$baseTime]);
 
     // Create transaction A2 (will be cancelled)
     \$a2Txid = 'chain-test-a2-${timestamp}';
-    \$stmt = \$pdo->prepare(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key, sender_public_key_hash, receiver_address, receiver_public_key, receiver_public_key_hash, amount, currency, previous_txid, memo, description, timestamp) VALUES (?, 'standard', 'sent', 'completed', ?, ?, ?, ?, ?, ?, 200, 'USD', ?, 'standard', 'chain-reorder-test-a2', DATE_ADD(NOW(), INTERVAL 1 SECOND))\");
-    \$stmt->execute([\$a2Txid, '${senderAddress}', \$senderPubkey, \$senderPubkeyHash, '${receiverAddress}', \$receiverPubkey, \$receiverPubkeyHash, \$a1Txid]);
+    \$stmt = \$pdo->prepare(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key, sender_public_key_hash, receiver_address, receiver_public_key, receiver_public_key_hash, amount, currency, previous_txid, memo, description, time, timestamp) VALUES (?, 'standard', 'sent', 'completed', ?, ?, ?, ?, ?, ?, 200, 'USD', ?, 'standard', 'chain-reorder-test-a2', ?, DATE_ADD(NOW(), INTERVAL 1 SECOND))\");
+    \$stmt->execute([\$a2Txid, '${senderAddress}', \$senderPubkey, \$senderPubkeyHash, '${receiverAddress}', \$receiverPubkey, \$receiverPubkeyHash, \$a1Txid, \$baseTime + 1000000]);
 
     // Create transaction A3
     \$a3Txid = 'chain-test-a3-${timestamp}';
-    \$stmt = \$pdo->prepare(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key, sender_public_key_hash, receiver_address, receiver_public_key, receiver_public_key_hash, amount, currency, previous_txid, memo, description, timestamp) VALUES (?, 'standard', 'sent', 'completed', ?, ?, ?, ?, ?, ?, 300, 'USD', ?, 'standard', 'chain-reorder-test-a3', DATE_ADD(NOW(), INTERVAL 2 SECOND))\");
-    \$stmt->execute([\$a3Txid, '${senderAddress}', \$senderPubkey, \$senderPubkeyHash, '${receiverAddress}', \$receiverPubkey, \$receiverPubkeyHash, \$a2Txid]);
+    \$stmt = \$pdo->prepare(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key, sender_public_key_hash, receiver_address, receiver_public_key, receiver_public_key_hash, amount, currency, previous_txid, memo, description, time, timestamp) VALUES (?, 'standard', 'sent', 'completed', ?, ?, ?, ?, ?, ?, 300, 'USD', ?, 'standard', 'chain-reorder-test-a3', ?, DATE_ADD(NOW(), INTERVAL 2 SECOND))\");
+    \$stmt->execute([\$a3Txid, '${senderAddress}', \$senderPubkey, \$senderPubkeyHash, '${receiverAddress}', \$receiverPubkey, \$receiverPubkeyHash, \$a2Txid, \$baseTime + 2000000]);
 
     // Now mark A2 as cancelled
     \$pdo->exec(\"UPDATE transactions SET status = 'cancelled' WHERE txid = '\${a2Txid}'\");
@@ -262,18 +266,19 @@ insertTestResult=$(docker exec ${sender} php -r "
     \$senderPubkeyHash = hash('sha256', \$senderPubkey);
     \$receiverPubkeyHash = hash('sha256', \$receiverPubkey);
 
-    // Create a cancelled transaction as the most recent
+    // Create a cancelled transaction as the most recent (using high time value)
     \$cancelledTxid = 'insert-test-cancelled-${timestamp}';
-    \$stmt = \$pdo->prepare(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key, sender_public_key_hash, receiver_address, receiver_public_key, receiver_public_key_hash, amount, currency, previous_txid, memo, description, timestamp) VALUES (?, 'standard', 'sent', 'cancelled', ?, ?, ?, ?, ?, ?, 500, 'USD', NULL, 'standard', 'insert-test-cancelled', DATE_ADD(NOW(), INTERVAL 10 SECOND))\");
-    \$stmt->execute([\$cancelledTxid, '${senderAddress}', \$senderPubkey, \$senderPubkeyHash, '${receiverAddress}', \$receiverPubkey, \$receiverPubkeyHash]);
+    \$cancelledTime = 9999999999999999; // Very high time value
+    \$stmt = \$pdo->prepare(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key, sender_public_key_hash, receiver_address, receiver_public_key, receiver_public_key_hash, amount, currency, previous_txid, memo, description, time, timestamp) VALUES (?, 'standard', 'sent', 'cancelled', ?, ?, ?, ?, ?, ?, 500, 'USD', NULL, 'standard', 'insert-test-cancelled', ?, DATE_ADD(NOW(), INTERVAL 10 SECOND))\");
+    \$stmt->execute([\$cancelledTxid, '${senderAddress}', \$senderPubkey, \$senderPubkeyHash, '${receiverAddress}', \$receiverPubkey, \$receiverPubkeyHash, \$cancelledTime]);
 
     // The insertTransaction query should exclude this cancelled transaction
-    // Test by running the same query used in insertTransaction
+    // Test by running the same query used in insertTransaction (with time-based ordering)
     \$query = \"SELECT txid FROM transactions
             WHERE ((sender_public_key_hash = ? AND receiver_public_key_hash = ?)
                 OR (sender_public_key_hash = ? AND receiver_public_key_hash = ?))
             AND status NOT IN ('cancelled', 'rejected')
-            ORDER BY timestamp DESC LIMIT 1\";
+            ORDER BY COALESCE(time, 0) DESC, timestamp DESC LIMIT 1\";
 
     \$stmt = \$pdo->prepare(\$query);
     \$stmt->execute([\$senderPubkeyHash, \$receiverPubkeyHash, \$receiverPubkeyHash, \$senderPubkeyHash]);
