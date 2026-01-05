@@ -391,12 +391,24 @@ class P2pService {
         // Check if end recipient of request in contacts
         $senderAddress = $request['sender_address'];
         $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
+
+        // Get all address types dynamically from database schema
+        $addressTypes = $this->transportUtility->getAllAddressTypes();
+        // Move primary transport to front for performance (most likely match)
+        if ($transportIndex && in_array($transportIndex, $addressTypes)) {
+            $addressTypes = array_merge([$transportIndex], array_diff($addressTypes, [$transportIndex]));
+        }
+
         foreach ($contacts as $contact) {
-            $contactHash = hash(Constants::HASH_ALGORITHM, $contact[$transportIndex] . $request['salt'] . $request['time']);
-            // output(outputCalculatedContactHash($contactHash), 'SILENT');
-            if ($contactHash === $request['hash']) {
-                output(outputContactMatched($contactHash), 'SILENT');
-                return $contact;
+            // Check all address types for this contact
+            foreach ($addressTypes as $addrType) {
+                if (!empty($contact[$addrType])) {
+                    $contactHash = hash(Constants::HASH_ALGORITHM, $contact[$addrType] . $request['salt'] . $request['time']);
+                    if ($contactHash === $request['hash']) {
+                        output(outputContactMatched($contactHash), 'SILENT');
+                        return $contact;
+                    }
+                }
             }
         }
         return null;
@@ -409,11 +421,28 @@ class P2pService {
      * @param string $address Address 
      * @return bool True if user corresponds, False otherwise.
      */
-    public function matchYourselfP2P($request,$address){
+    public function matchYourselfP2P($request, $address){
         // Check if p2p end recipient is user
-        if(hash(Constants::HASH_ALGORITHM, $address . $request['salt'] . $request['time']) === $request['hash']){
+        // First check the provided address (most likely match)
+        if (hash(Constants::HASH_ALGORITHM, $address . $request['salt'] . $request['time']) === $request['hash']) {
             return true;
         }
+
+        // If primary address didn't match, check all user addresses
+        // This handles cases where message was wrapped/forwarded over different networks
+        // getUserLocaters() returns addresses mapped by type (e.g., ['http' => '...', 'tor' => '...'])
+        $allAddresses = $this->currentUser->getUserLocaters();
+
+        foreach ($allAddresses as $userAddress) {
+            // Skip if this is the same address we already checked
+            if ($userAddress === $address) {
+                continue;
+            }
+            if (hash(Constants::HASH_ALGORITHM, $userAddress . $request['salt'] . $request['time']) === $request['hash']) {
+                return true;
+            }
+        }
+
         return false;
     }
 
