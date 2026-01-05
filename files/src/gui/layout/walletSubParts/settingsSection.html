@@ -156,10 +156,15 @@
                 </button>
             </form>
         </div>
-        <div class="debug-log-container">
+        <div class="debug-search-container">
+            <input type="text" id="app-logs-search" class="debug-search-input" placeholder="Search app logs..." oninput="filterDebugLogs(this, 'app-logs-entries')">
+        </div>
+        <div id="app-logs-entries" class="debug-log-container">
             <?php if (empty($debugEntries)): ?>
                 <p class="debug-empty">No debug entries found.</p>
             <?php else: ?>
+                <p class="debug-no-results">No entries match your search.</p>
+                <div class="debug-search-info">Showing all <?php echo count($debugEntries); ?> entries</div>
                 <?php foreach ($debugEntries as $entry): ?>
                     <div class="debug-entry debug-level-<?php echo strtolower($entry['level'] ?? 'info'); ?>">
                         <div class="debug-entry-header">
@@ -184,7 +189,10 @@
         <div class="debug-header">
             <span class="debug-count">EIOU Application Log</span>
         </div>
-        <div class="debug-log-container">
+        <div class="debug-search-container">
+            <input type="text" id="eiou-log-search" class="debug-search-input" placeholder="Search EIOU log..." oninput="filterDebugLogs(this, 'eiou-log-entries')">
+        </div>
+        <div id="eiou-log-entries" class="debug-log-container">
             <?php
             $eiouLogPath = '/var/log/eiou/app.log';
             $eiouLogContent = '';
@@ -195,6 +203,8 @@
             <?php if (empty(trim($eiouLogContent))): ?>
                 <p class="debug-empty">No EIOU application log entries or log not accessible.</p>
             <?php else: ?>
+                <p class="debug-no-results">No entries match your search.</p>
+                <div class="debug-search-info"></div>
                 <pre class="debug-pre"><?php echo htmlspecialchars($eiouLogContent); ?></pre>
             <?php endif; ?>
         </div>
@@ -205,7 +215,10 @@
         <div class="debug-header">
             <span class="debug-count">PHP Error Log</span>
         </div>
-        <div class="debug-log-container">
+        <div class="debug-search-container">
+            <input type="text" id="php-logs-search" class="debug-search-input" placeholder="Search PHP logs..." oninput="filterDebugLogs(this, 'php-logs-entries')">
+        </div>
+        <div id="php-logs-entries" class="debug-log-container">
             <?php
             $phpLogPath = '/var/log/php_errors.log';
             $phpLogContent = '';
@@ -218,6 +231,8 @@
             <?php if (empty(trim($phpLogContent))): ?>
                 <p class="debug-empty">No PHP errors logged.</p>
             <?php else: ?>
+                <p class="debug-no-results">No entries match your search.</p>
+                <div class="debug-search-info"></div>
                 <pre class="debug-pre"><?php echo htmlspecialchars($phpLogContent); ?></pre>
             <?php endif; ?>
         </div>
@@ -228,7 +243,10 @@
         <div class="debug-header">
             <span class="debug-count">Apache Error Log</span>
         </div>
-        <div class="debug-log-container">
+        <div class="debug-search-container">
+            <input type="text" id="apache-logs-search" class="debug-search-input" placeholder="Search Apache logs..." oninput="filterDebugLogs(this, 'apache-logs-entries')">
+        </div>
+        <div id="apache-logs-entries" class="debug-log-container">
             <?php
             $apacheLogPath = '/var/log/apache2/error.log';
             $apacheLogContent = '';
@@ -239,6 +257,8 @@
             <?php if (empty(trim($apacheLogContent))): ?>
                 <p class="debug-empty">No Apache errors logged or log not accessible.</p>
             <?php else: ?>
+                <p class="debug-no-results">No entries match your search.</p>
+                <div class="debug-search-info"></div>
                 <pre class="debug-pre"><?php echo htmlspecialchars($apacheLogContent); ?></pre>
             <?php endif; ?>
         </div>
