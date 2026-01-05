@@ -167,6 +167,7 @@ class Constants {
 
     const LOG_FILE_APP = '/var/log/eiou/app.log';
     const LOG_LEVEL = 'INFO';
+    const LOG_MAX_ENTRIES = 100;
 
     /**
      * Get a constant value with optional default
