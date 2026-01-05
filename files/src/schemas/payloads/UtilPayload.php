@@ -41,7 +41,7 @@ class UtilPayload extends BasePayload
         float $fundsOnHold
     ): string {
         return json_encode([
-            'status' => 'rejected',
+            'status' => Constants::STATUS_REJECTED,
             'message' => 'Insufficient balance or credit',
             'credit_limit' =>  $this->currencyUtility->formatCurrency($creditLimit),
             'current_balance' => $this->currencyUtility->formatCurrency($availableFunds),
@@ -63,7 +63,7 @@ class UtilPayload extends BasePayload
         $receivedTxid = $request['previousTxid'] ?? 'none';
 
         return json_encode([
-            'status' => 'rejected',
+            'status' => Constants::STATUS_REJECTED,
             'message' => "Previous transaction ID does not match. Expecting: {$expectedTxid} Received: {$receivedTxid}",
             'expected' => $expectedTxid,
             'received' => $receivedTxid,
@@ -79,7 +79,7 @@ class UtilPayload extends BasePayload
     public static function buildInvalidRequestLevel(array $request): string
     {
         return json_encode([
-            'status' => 'rejected',
+            'status' => Constants::STATUS_REJECTED,
             'message' => 'Invalid request level',
             'request_level' => $request['requestLevel'] ?? null,
             'max_request_level' => $request['maxRequestLevel'] ?? null,
@@ -97,7 +97,7 @@ class UtilPayload extends BasePayload
         $receiver = $this->transportUtility->resolveUserAddressForTransport($message['senderAddress']);
 
         return json_encode([
-            'status' => 'rejected',
+            'status' => Constants::STATUS_REJECTED,
             'message' => "Message rejected due to being from unknown source to receiver {$receiver}",
             'sender_address' => $message['senderAddress'] ?? null,
         ]);

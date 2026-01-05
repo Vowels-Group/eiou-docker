@@ -276,7 +276,7 @@ class ApiController {
 
             if ($cliResponse && $cliResponse['success']) {
                 return $this->successResponse([
-                    'status' => $cliResponse['data']['status'] ?? 'sent',
+                    'status' => $cliResponse['data']['status'] ?? Constants::STATUS_SENT,
                     'message' => $cliResponse['message'] ?? 'Transaction sent successfully',
                     'recipient' => $cliResponse['data']['recipient'] ?? $data['address'],
                     'recipient_address' => $cliResponse['data']['recipient_address'] ?? null,
@@ -379,7 +379,7 @@ class ApiController {
             return $this->permissionDenied('contacts:read');
         }
 
-        $status = $params['status'] ?? 'accepted';
+        $status = $params['status'] ?? Constants::CONTACT_STATUS_ACCEPTED;
         $contactRepo = $this->services->getContactRepository();
         $addressRepo = $this->services->getAddressRepository();
 
@@ -463,7 +463,7 @@ class ApiController {
             if ($cliResponse && $cliResponse['success']) {
                 return $this->successResponse([
                     'message' => $cliResponse['message'] ?? 'Contact request sent successfully',
-                    'status' => $cliResponse['data']['status'] ?? 'pending',
+                    'status' => $cliResponse['data']['status'] ?? Constants::CONTACT_STATUS_PENDING,
                     'address' => $cliResponse['data']['address'] ?? $data['address'],
                     'name' => $cliResponse['data']['name'] ?? $data['name']
                 ], 201);
@@ -698,7 +698,7 @@ class ApiController {
                 return $this->successResponse([
                     'message' => $cliResponse['message'] ?? 'Contact blocked successfully',
                     'address' => $address,
-                    'status' => 'blocked'
+                    'status' => Constants::CONTACT_STATUS_BLOCKED
                 ]);
             } else {
                 $errorMsg = $cliResponse['error']['message'] ?? 'Failed to block contact';
@@ -746,7 +746,7 @@ class ApiController {
                 return $this->successResponse([
                     'message' => $cliResponse['message'] ?? 'Contact unblocked successfully',
                     'address' => $address,
-                    'status' => 'accepted'
+                    'status' => Constants::CONTACT_STATUS_ACCEPTED
                 ]);
             } else {
                 $errorMsg = $cliResponse['error']['message'] ?? 'Failed to unblock contact';
@@ -808,7 +808,7 @@ class ApiController {
         // Get statistics
         $txStats = $transactionRepo->getTransactionsTypeStatistics();
         $contactCount = $contactRepo->countAcceptedContacts();
-        $queuedP2p = $p2pRepo->getCountP2pMessagesWithStatus('queued');
+        $queuedP2p = $p2pRepo->getCountP2pMessagesWithStatus(Constants::STATUS_QUEUED);
 
         $txByType = [];
         foreach ($txStats as $stat) {

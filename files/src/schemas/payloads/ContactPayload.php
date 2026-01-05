@@ -53,7 +53,7 @@ class ContactPayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
-            'status' => 'received',
+            'status' => Constants::DELIVERY_RECEIVED,
             'message' => $myAddress . ' confirms that the contact request has been received',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -83,7 +83,7 @@ class ContactPayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
-            'status' => 'updated',
+            'status' => Constants::DELIVERY_UPDATED,
             'message' => $myAddress . ' confirms that contact address has been updated/added',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -108,7 +108,7 @@ class ContactPayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         $payload = [
-            'status' => 'warning',
+            'status' => Constants::DELIVERY_WARNING,
             'message' => 'Contact already exists',
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -133,7 +133,7 @@ class ContactPayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return json_encode([
-            'status' => 'rejected',
+            'status' => Constants::STATUS_REJECTED,
             'message' => $reason,
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
@@ -150,7 +150,7 @@ class ContactPayload extends BasePayload
     {
         $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
         return [
-            'status' => 'pending',
+            'status' => Constants::STATUS_PENDING,
             'message' => "Contact request to {$address} is pending",
             'senderAddress' => $myAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
