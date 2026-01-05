@@ -17,12 +17,15 @@ require_once __DIR__ . '/AbstractRepository.php';
  * - txid: The transaction ID being held
  * - original_previous_txid: The previous_txid that was rejected
  * - expected_previous_txid: The correct previous_txid (if known)
- * - transaction_type: Type of transaction (standard, contract, etc.)
- * - sync_status: Status of resync (pending, in_progress, completed, failed)
+ * - transaction_type: Type of transaction (standard, p2p)
+ * - hold_reason: Why the transaction was held (invalid_previous_txid, sync_in_progress)
+ * - sync_status: Status of resync (not_started, in_progress, completed, failed)
  * - retry_count: Number of retry attempts
  * - max_retries: Maximum retry attempts before giving up
- * - created_at: When the transaction was first held
- * - updated_at: Last update timestamp
+ * - held_at: When the transaction was first held
+ * - last_sync_attempt: Last sync attempt timestamp
+ * - next_retry_at: When to retry next
+ * - resolved_at: When the sync was resolved
  *
  * Workflow:
  * 1. Transaction receives invalid previous txid rejection
@@ -74,9 +77,8 @@ class HeldTransactionRepository extends AbstractRepository {
             'transaction_type' => $transactionType,
             'sync_status' => 'not_started',
             'retry_count' => 0,
-            'max_retries' => 3,
-            'created_at' => date('Y-m-d H:i:s'),
-            'updated_at' => date('Y-m-d H:i:s')
+            'max_retries' => 3
+            // held_at uses DEFAULT CURRENT_TIMESTAMP
         ];
 
         $result = $this->insert($data);
@@ -116,7 +118,7 @@ class HeldTransactionRepository extends AbstractRepository {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE contact_pubkey_hash = :contact_pubkey_hash
                   AND sync_status = :sync_status
-                  ORDER BY created_at ASC";
+                  ORDER BY held_at ASC";
 
         $stmt = $this->execute($query, [
             ':contact_pubkey_hash' => $contactPubkeyHash,
@@ -159,12 +161,12 @@ class HeldTransactionRepository extends AbstractRepository {
      */
     public function updateSyncStatusForContact(string $contactPubkeyHash, string $status): int {
         $query = "UPDATE {$this->tableName}
-                  SET sync_status = :status, updated_at = :updated_at
+                  SET sync_status = :status, last_sync_attempt = :last_sync_attempt
                   WHERE contact_pubkey_hash = :contact_pubkey_hash";
 
         $stmt = $this->execute($query, [
             ':status' => $status,
-            ':updated_at' => date('Y-m-d H:i:s'),
+            ':last_sync_attempt' => date('Y-m-d H:i:s.u'),
             ':contact_pubkey_hash' => $contactPubkeyHash
         ]);
 
@@ -200,7 +202,7 @@ class HeldTransactionRepository extends AbstractRepository {
     public function getTransactionsToResume(int $limit = 10): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE sync_status = 'completed'
-                  ORDER BY created_at ASC
+                  ORDER BY held_at ASC
                   LIMIT :limit";
 
         $stmt = $this->pdo->prepare($query);
@@ -271,12 +273,12 @@ class HeldTransactionRepository extends AbstractRepository {
      */
     public function markSyncStarted(string $contactPubkeyHash): bool {
         $query = "UPDATE {$this->tableName}
-                  SET sync_status = 'in_progress', updated_at = :updated_at
+                  SET sync_status = 'in_progress', last_sync_attempt = :last_sync_attempt
                   WHERE contact_pubkey_hash = :contact_pubkey_hash
                   AND sync_status = 'not_started'";
 
         $stmt = $this->execute($query, [
-            ':updated_at' => date('Y-m-d H:i:s'),
+            ':last_sync_attempt' => date('Y-m-d H:i:s.u'),
             ':contact_pubkey_hash' => $contactPubkeyHash
         ]);
 
@@ -297,12 +299,12 @@ class HeldTransactionRepository extends AbstractRepository {
      */
     public function markSyncCompleted(string $contactPubkeyHash): bool {
         $query = "UPDATE {$this->tableName}
-                  SET sync_status = 'completed', updated_at = :updated_at
+                  SET sync_status = 'completed', resolved_at = :resolved_at
                   WHERE contact_pubkey_hash = :contact_pubkey_hash
                   AND sync_status = 'in_progress'";
 
         $stmt = $this->execute($query, [
-            ':updated_at' => date('Y-m-d H:i:s'),
+            ':resolved_at' => date('Y-m-d H:i:s.u'),
             ':contact_pubkey_hash' => $contactPubkeyHash
         ]);
 
@@ -323,12 +325,12 @@ class HeldTransactionRepository extends AbstractRepository {
      */
     public function markSyncFailed(string $contactPubkeyHash): bool {
         $query = "UPDATE {$this->tableName}
-                  SET sync_status = 'failed', updated_at = :updated_at
+                  SET sync_status = 'failed', last_sync_attempt = :last_sync_attempt
                   WHERE contact_pubkey_hash = :contact_pubkey_hash
                   AND sync_status = 'in_progress'";
 
         $stmt = $this->execute($query, [
-            ':updated_at' => date('Y-m-d H:i:s'),
+            ':last_sync_attempt' => date('Y-m-d H:i:s.u'),
             ':contact_pubkey_hash' => $contactPubkeyHash
         ]);
 
@@ -347,11 +349,11 @@ class HeldTransactionRepository extends AbstractRepository {
      */
     public function incrementRetry(string $txid): bool {
         $query = "UPDATE {$this->tableName}
-                  SET retry_count = retry_count + 1, updated_at = :updated_at
+                  SET retry_count = retry_count + 1, last_sync_attempt = :last_sync_attempt
                   WHERE txid = :txid";
 
         $stmt = $this->execute($query, [
-            ':updated_at' => date('Y-m-d H:i:s'),
+            ':last_sync_attempt' => date('Y-m-d H:i:s.u'),
             ':txid' => $txid
         ]);
 
@@ -374,7 +376,7 @@ class HeldTransactionRepository extends AbstractRepository {
     public function getExhaustedRetries(int $limit = 10): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE retry_count >= max_retries
-                  ORDER BY created_at ASC
+                  ORDER BY held_at ASC
                   LIMIT :limit";
 
         $stmt = $this->pdo->prepare($query);
@@ -402,7 +404,7 @@ class HeldTransactionRepository extends AbstractRepository {
         $cutoffDate = date('Y-m-d H:i:s', strtotime("-{$days} days"));
 
         $query = "DELETE FROM {$this->tableName}
-                  WHERE updated_at < :cutoff_date
+                  WHERE held_at < :cutoff_date
                   AND sync_status IN ('completed', 'failed')";
 
         $stmt = $this->execute($query, [':cutoff_date' => $cutoffDate]);
