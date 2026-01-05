@@ -150,7 +150,9 @@ class CleanupService {
         // If we already have a completed transaction locally, just update P2P status
         if ($hasCompletedTransaction) {
             $this->p2pRepository->updateStatus($hash, Constants::STATUS_COMPLETED, true);
-            output("P2P {$hash} marked completed: found local completed transaction", 'SILENT');
+            if (function_exists('output')) {
+                output("P2P {$hash} marked completed: found local completed transaction", 'SILENT');
+            }
             SecureLogger::info("P2P completion recovered from local transaction", [
                 'hash' => $hash,
                 'recovery_method' => 'local_check'
@@ -164,7 +166,9 @@ class CleanupService {
         if ($senderStatus === Constants::STATUS_COMPLETED) {
             // Sender has completion - sync the transaction and mark as completed
             $this->syncAndCompleteP2p($message);
-            output("P2P {$hash} marked completed: sender confirmed completion", 'SILENT');
+            if (function_exists('output')) {
+                output("P2P {$hash} marked completed: sender confirmed completion", 'SILENT');
+            }
             SecureLogger::info("P2P completion recovered via sender inquiry", [
                 'hash' => $hash,
                 'sender_address' => $senderAddress,
@@ -175,7 +179,9 @@ class CleanupService {
 
         // Step 3: No completion evidence found - proceed with expiration
         $this->p2pRepository->updateStatus($hash, Constants::STATUS_EXPIRED);
-        output(outputP2pExpired($message), 'SILENT');
+        if (function_exists('output') && function_exists('outputP2pExpired')) {
+            output(outputP2pExpired($message), 'SILENT');
+        }
 
         // Cancel associated transactions if they exist
         if ($transactions) {
@@ -184,7 +190,9 @@ class CleanupService {
                 $this->reorderTransactionChain($transaction['txid']);
             }
             $this->transactionRepository->updateStatus($hash, Constants::STATUS_CANCELLED);
-            output(outputTransactionExpired($message), 'SILENT');
+            if (function_exists('output') && function_exists('outputTransactionExpired')) {
+                output(outputTransactionExpired($message), 'SILENT');
+            }
         }
     }
 
