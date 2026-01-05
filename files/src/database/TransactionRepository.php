@@ -1239,11 +1239,25 @@ class TransactionRepository extends AbstractRepository {
         // Current microtime for expiration check (P2P expiration is stored as microtime * TIME_MICROSECONDS_TO_INT)
         $currentMicrotime = (int)(microtime(true) * Constants::TIME_MICROSECONDS_TO_INT);
 
+        // Check if held_transactions table exists (may not exist in older databases)
+        $heldTableExists = false;
+        try {
+            $checkStmt = $this->pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='held_transactions'");
+            $heldTableExists = ($checkStmt && $checkStmt->fetch() !== false);
+        } catch (PDOException $e) {
+            // Table check failed, assume table doesn't exist
+            $heldTableExists = false;
+        }
+
         // Query combines:
         // 1. Regular in-progress transactions (pending, sent, accepted) where user is sender
         // 2. P2P route requests sent by user (destination_address NOT NULL) that are in route search phase
         //    Note: 'paid' status is excluded as the transaction has moved to regular transaction flow
-        // 3. Held transactions (on hold pending chain sync) - shown with 'syncing' phase
+        // 3. Held transactions (on hold pending chain sync) - shown with 'syncing' phase (if table exists)
+
+        // Build base query for regular transactions
+        $heldExclusion = $heldTableExists ? "AND txid NOT IN (SELECT txid FROM held_transactions)" : "";
+
         $query = "SELECT
                     txid,
                     tx_type,
@@ -1268,7 +1282,11 @@ class TransactionRepository extends AbstractRepository {
                   WHERE status IN ('pending', 'sent', 'accepted')
                     AND sender_address IN ($placeholders)
                     AND tx_type != 'contact'
-                    AND txid NOT IN (SELECT txid FROM held_transactions)
+                    $heldExclusion";
+
+        // Add held transactions query if table exists
+        if ($heldTableExists) {
+            $query .= "
 
                   UNION ALL
 
@@ -1290,7 +1308,11 @@ class TransactionRepository extends AbstractRepository {
                   FROM {$this->tableName} t
                   INNER JOIN held_transactions ht ON t.txid = ht.txid
                   WHERE t.sender_address IN ($placeholders)
-                    AND t.tx_type != 'contact'
+                    AND t.tx_type != 'contact'";
+        }
+
+        // Add P2P query
+        $query .= "
 
                   UNION ALL
 
@@ -1322,9 +1344,15 @@ class TransactionRepository extends AbstractRepository {
                   ORDER BY timestamp DESC
                   LIMIT ?";
 
-        // Build params: user addresses for regular transactions, user addresses for held transactions,
-        // current time for p2p expiration, limit
-        $params = array_merge($userAddresses, $userAddresses, [$currentMicrotime, $limit]);
+        // Build params based on whether held_transactions table exists
+        if ($heldTableExists) {
+            // user addresses for regular transactions, user addresses for held transactions,
+            // current time for p2p expiration, limit
+            $params = array_merge($userAddresses, $userAddresses, [$currentMicrotime, $limit]);
+        } else {
+            // user addresses for regular transactions, current time for p2p expiration, limit
+            $params = array_merge($userAddresses, [$currentMicrotime, $limit]);
+        }
         $stmt = $this->pdo->prepare($query);
 
         try {

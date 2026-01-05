@@ -71,6 +71,7 @@ function freshInstall(){
                 $dbConn->exec(getDeadLetterQueueTableSchema());
                 $dbConn->exec(getDeliveryMetricsTableSchema());
                 $dbConn->exec(getRateLimitsTableSchema());
+                $dbConn->exec(getHeldTransactionsTableSchema());
             } catch (PDOException $tableError) {
                 SecureLogger::error("Table creation failed", [
                     'error' => $tableError->getMessage()
@@ -124,7 +125,7 @@ function runMigrations(PDO $pdo): array {
 
     // List of migration tables to create (added after initial release)
     $migrations = [
-
+        'held_transactions' => 'getHeldTransactionsTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {
