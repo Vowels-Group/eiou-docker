@@ -1227,6 +1227,12 @@ html {
     border-radius: 4px;
     padding: 0.35rem 0.5rem;
     border-left: 2px solid #fd7e14;
+    font-size: 0.75rem;
+    color: #fd7e14;
+    margin-top: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
 }
 
 .tx-in-progress-item[data-phase="syncing"] {
