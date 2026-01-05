@@ -664,18 +664,6 @@ class SyncService {
      * @return bool True if signature is valid, false otherwise
      */
     private function verifyTransactionSignature(array $tx): bool {
-        // Skip signature verification for contact transactions
-        // Contact transactions use ContactPayload::build() which creates a different message
-        // structure ('type' => 'create') that cannot be reconstructed from transaction data.
-        // Contact transactions are amount=0 and just establish the relationship.
-        $memo = $tx['memo'] ?? 'standard';
-        if ($memo === 'contact') {
-            SecureLogger::debug("Skipping signature verification for contact transaction", [
-                'txid' => $tx['txid'] ?? 'unknown'
-            ]);
-            return true; // Trust contact transactions - they're just relationship establishment
-        }
-
         // Both signature and nonce are required for verification
         if (empty($tx['sender_signature']) || empty($tx['signature_nonce'])) {
             // Log missing signature data
@@ -693,9 +681,16 @@ class SyncService {
             return false;
         }
 
-        // Reconstruct the signed message from transaction fields + nonce
-        // The message structure must match how it was originally created
-        $messageContent = $this->reconstructSignedMessage($tx);
+        // Reconstruct the signed message based on transaction type
+        // Contact transactions use ContactPayload::build() -> {'type': 'create', ...}
+        // Regular transactions use TransactionPayload::build() -> {'type': 'send', ...}
+        $memo = $tx['memo'] ?? 'standard';
+        if ($memo === 'contact') {
+            $messageContent = $this->reconstructContactSignedMessage($tx);
+        } else {
+            $messageContent = $this->reconstructSignedMessage($tx);
+        }
+
         if ($messageContent === null) {
             return false;
         }
@@ -797,6 +792,36 @@ class SyncService {
 
         // Nonce is added last by TransportUtilityService::sign()
         $messageContent['nonce'] = (int)$tx['signature_nonce'];
+
+        return json_encode($messageContent);
+    }
+
+    /**
+     * Reconstruct the signed message for a contact transaction
+     *
+     * Contact transactions use ContactPayload::build() which creates:
+     * {'type' => 'create', 'senderAddress' => ..., 'senderPublicKey' => ...}
+     *
+     * After TransportUtilityService::sign() removes senderAddress/senderPublicKey
+     * and adds nonce, the signed message becomes:
+     * {'type': 'create', 'nonce': ...}
+     *
+     * @param array $tx Transaction data including signature_nonce
+     * @return string|null JSON message or null if reconstruction fails
+     */
+    private function reconstructContactSignedMessage(array $tx): ?string {
+        if (!isset($tx['signature_nonce'])) {
+            SecureLogger::debug("Missing nonce for contact message reconstruction", [
+                'txid' => $tx['txid'] ?? 'unknown'
+            ]);
+            return null;
+        }
+
+        // Contact payload after signing is simply: {'type': 'create', 'nonce': ...}
+        $messageContent = [
+            'type' => 'create',
+            'nonce' => (int)$tx['signature_nonce']
+        ];
 
         return json_encode($messageContent);
     }
