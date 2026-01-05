@@ -680,6 +680,16 @@ class TransactionService {
 
                     if($response && $response['status'] === Constants::STATUS_ACCEPTED){
                         $this->transactionRepository->updateStatus($txid, Constants::STATUS_ACCEPTED, true);
+
+                        // Store signature data for future sync verification
+                        $signingData = $sendResult['signing_data'] ?? null;
+                        if ($signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                            $this->transactionRepository->updateSignatureData(
+                                $txid,
+                                $signingData['signature'],
+                                $signingData['nonce']
+                            );
+                        }
                     } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
                         // Check if rejection is due to invalid_previous_txid - attempt sync before falling back to P2P
                         if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
@@ -756,14 +766,9 @@ class TransactionService {
                 $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                     output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
 
-                    // Mark the transaction delivery as completed (using MessageDeliveryService directly)
-                    // Note: message_id format is {txid}-{timestamp}
-                    if ($this->messageDeliveryService !== null) {
-                        $this->messageDeliveryService->markDeliveryCompleted('transaction', $txid . '-' . strtotime($message['created_at'] ?? 'now'));
-                    }
-
                     // Send completion message with delivery tracking
                     // Format: completion-response-{txid}-{timestamp} (responding to direct transaction received)
+                    // Note: The sender's delivery record is marked complete when they receive this completion response
                     $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, 'completion-response-' . $txid);
                 }
             } else{

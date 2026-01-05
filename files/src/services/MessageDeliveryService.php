@@ -251,7 +251,8 @@ class MessageDeliveryService {
             'raw' => $rawResponse,
             'tracking' => $result,
             'messageId' => $messageId,
-            'queued_for_retry' => $isQueuedForRetry
+            'queued_for_retry' => $isQueuedForRetry,
+            'signing_data' => $result['signing_data'] ?? null
         ];
     }
 
@@ -336,8 +337,13 @@ class MessageDeliveryService {
         ]);
 
         try {
-            // Attempt delivery
-            $response = $this->transportUtility->send($recipient, $payload);
+            // Attempt delivery with signing data capture
+            $sendResult = $this->transportUtility->send($recipient, $payload, true);
+            $response = $sendResult['response'];
+            $signingData = [
+                'signature' => $sendResult['signature'],
+                'nonce' => $sendResult['nonce']
+            ];
             $decodedResponse = json_decode($response, true);
 
             // Check for successful response
@@ -355,6 +361,7 @@ class MessageDeliveryService {
                     );
                     $result['attempts'] = 1;
                     $result['async'] = true;
+                    $result['signing_data'] = $signingData;
                     return $result;
                 }
 
@@ -501,8 +508,13 @@ class MessageDeliveryService {
             ]);
 
             try {
-                // Attempt delivery
-                $response = $this->transportUtility->send($recipient, $payload);
+                // Attempt delivery with signing data capture
+                $sendResult = $this->transportUtility->send($recipient, $payload, true);
+                $response = $sendResult['response'];
+                $signingData = [
+                    'signature' => $sendResult['signature'],
+                    'nonce' => $sendResult['nonce']
+                ];
                 $decodedResponse = json_decode($response, true);
 
                 // Check for successful response
@@ -520,6 +532,7 @@ class MessageDeliveryService {
                             $attempt
                         );
                         $result['attempts'] = $attempt + 1;
+                        $result['signing_data'] = $signingData;
                         return $result;
                     }
 

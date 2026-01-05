@@ -213,16 +213,29 @@ class TransportUtilityService
      *
      * @param string $recipient The address of the recipient
      * @param array $payload The payload to send
-     * @return string The response from the recipient
+     * @param bool $returnSigningData If true, returns array with response and signing data
+     * @return string|array The response from the recipient, or array with response and signing data if $returnSigningData is true
     */
-    public function send(string $recipient, array $payload){
-        $signedPayload = json_encode($this->sign($payload)); // Encode the payload as JSON
+    public function send(string $recipient, array $payload, bool $returnSigningData = false){
+        $signingResult = $this->signWithCapture($payload);
+        $signedPayload = json_encode($signingResult['envelope']);
+
         // Determine if tor address, else send by http
         if ($this->isTorAddress($recipient)) {
-            return $this->sendByTor($recipient, $signedPayload);
+            $response = $this->sendByTor($recipient, $signedPayload);
         } else {
-            return $this->sendByHttp($recipient, $signedPayload);
+            $response = $this->sendByHttp($recipient, $signedPayload);
         }
+
+        if ($returnSigningData) {
+            return [
+                'response' => $response,
+                'signature' => $signingResult['signature'],
+                'nonce' => $signingResult['nonce']
+            ];
+        }
+
+        return $response;
     }
 
     /**
@@ -275,16 +288,15 @@ class TransportUtilityService
     }
 
     /**
-     * Sign a payload
+     * Sign a payload and capture the signing data
      *
-     * Creates a clean payload structure where:
-     * - senderAddress, senderPublicKey, signature are at top level (transport metadata)
-     * - message contains only the signed content (no duplication)
+     * Creates a clean payload structure and returns both the envelope
+     * and the signature/nonce used for storage purposes.
      *
      * @param array $payload The payload to sign
-     * @return array|false The signed payload with clean structure, or false on failure
-    */
-    public function sign(array $payload) {
+     * @return array Array with 'envelope', 'signature', and 'nonce' keys, or false on failure
+     */
+    public function signWithCapture(array $payload) {
         // Remove transport metadata from payload content (will be at top level)
         $messageContent = $payload;
         unset($messageContent['senderAddress']);
@@ -292,7 +304,8 @@ class TransportUtilityService
         unset($messageContent['signature']);
 
         // Add nonce for replay protection
-        $messageContent['nonce'] = time();
+        $nonce = time();
+        $messageContent['nonce'] = $nonce;
 
         // JSON encode the message content (no duplication)
         $message = json_encode($messageContent);
@@ -304,14 +317,35 @@ class TransportUtilityService
             return false;
         }
 
+        $base64Signature = base64_encode($signature);
+
         // Build clean payload structure:
         // - Transport metadata at top level
         // - Message content in 'message' field (no duplication)
         return [
-            'senderAddress' => $payload['senderAddress'],
-            'senderPublicKey' => $payload['senderPublicKey'],
-            'message' => $message,
-            'signature' => base64_encode($signature)
+            'envelope' => [
+                'senderAddress' => $payload['senderAddress'],
+                'senderPublicKey' => $payload['senderPublicKey'],
+                'message' => $message,
+                'signature' => $base64Signature
+            ],
+            'signature' => $base64Signature,
+            'nonce' => $nonce
         ];
+    }
+
+    /**
+     * Sign a payload
+     *
+     * Creates a clean payload structure where:
+     * - senderAddress, senderPublicKey, signature are at top level (transport metadata)
+     * - message contains only the signed content (no duplication)
+     *
+     * @param array $payload The payload to sign
+     * @return array|false The signed payload with clean structure, or false on failure
+    */
+    public function sign(array $payload) {
+        $result = $this->signWithCapture($payload);
+        return $result ? $result['envelope'] : false;
     }
 }
