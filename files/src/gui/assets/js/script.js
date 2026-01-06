@@ -1361,14 +1361,6 @@ function fetchDebugReport(callback) {
     xhr.send(formData);
 }
 
-// Download debug report only (no email)
-function downloadDebugReport() {
-    fetchDebugReport(function(jsonData, filename, description) {
-        downloadDebugFile(jsonData, filename);
-        showToast('Success', 'Debug report downloaded: ' + filename, 'success');
-    });
-}
-
 // Open email with debug report (downloads file first, then opens email client)
 function emailDebugReport() {
     fetchDebugReport(function(jsonData, filename, description) {

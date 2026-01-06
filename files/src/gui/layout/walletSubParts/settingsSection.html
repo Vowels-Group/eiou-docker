@@ -432,17 +432,11 @@
             <textarea id="debugDescription" rows="3" placeholder="Describe the issue you're experiencing..." style="width: 100%; padding: 0.8rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 1rem;"></textarea>
         </div>
         <input type="hidden" id="debugCsrfToken" value="<?php echo htmlspecialchars($csrfToken); ?>">
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <button type="button" class="btn btn-secondary" onclick="downloadDebugReport()">
-                <i class="fas fa-download"></i> Download Report
-            </button>
-            <button type="button" class="btn btn-info" onclick="emailDebugReport()">
-                <i class="fas fa-envelope"></i> Email to Support
-            </button>
-        </div>
+        <button type="button" class="btn btn-info" onclick="emailDebugReport()">
+            <i class="fas fa-envelope"></i> Send Debug Report
+        </button>
         <p style="color: #6c757d; font-size: 0.85rem; margin-top: 0.75rem;">
-            <i class="fas fa-info-circle"></i> <strong>Download Report</strong>: Saves the debug file to your computer.<br>
-            <i class="fas fa-info-circle"></i> <strong>Email to Support</strong>: Downloads the file and opens your email client. You must manually attach the downloaded file to the email (browsers cannot attach files automatically for security reasons).
+            <i class="fas fa-info-circle"></i> Downloads the debug file and opens your email client to support@eiou.org. You must manually attach the downloaded file to the email (browsers cannot attach files automatically for security reasons).
         </p>
     </div>
 </div>
