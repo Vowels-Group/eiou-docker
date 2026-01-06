@@ -212,6 +212,7 @@ transactionChainReorderTest
 resyncPrevTxidGapTest
 nullPrevTxidResyncTest
 heldTransactionTest
+multiRoundSyncCycleTest
 p2pCompletionSyncTest
 contactReaddSyncTest
 seedPhraseTest

@@ -112,7 +112,9 @@ class TransactionPayload extends BasePayload
             'txid' => $data['txid'],
             'previousTxid' => $data['previous_txid'] ?? null,
             'memo' => $memo,
-            'description' => $data['description'],
+            // description is ALWAYS included for standard transactions (even if null)
+            // This ensures signature reconstruction matches what was signed
+            'description' => $data['description'] ?? null,
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
