@@ -1134,23 +1134,34 @@ class TransactionRepository extends AbstractRepository {
         $result = false;
         try{
             $this->beginTransaction();
-            // Find previous txid, excluding cancelled/rejected transactions
-            // This ensures new transactions don't link to orphaned transactions
-            // Order by time (transaction creation time) for proper chain ordering
-            // Fall back to timestamp for older transactions without time set
-            $query = "SELECT txid FROM {$this->tableName}
-                    WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
-                        OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
-                    AND status NOT IN ('cancelled', 'rejected')
-                    ORDER BY COALESCE(time, 0) DESC, timestamp DESC LIMIT 1";
 
-            $stmt = $this->execute($query, [
-                ':sender_public_key_hash' => $senderPublicKeyHash,
-                ':receiver_public_key_hash' => $receiverPublicKeyHash,
-                ':second_receiver_public_key_hash' => $receiverPublicKeyHash,
-                ':second_sender_public_key_hash' => $senderPublicKeyHash
-            ]);
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Determine previous_txid:
+            // 1. If explicitly provided in request (e.g., from sync), use that value
+            // 2. Otherwise, look up from database (excluding cancelled/rejected)
+            $previousTxid = null;
+            if (array_key_exists('previousTxid', $request)) {
+                // Use the provided previous_txid (from sync or explicit set)
+                $previousTxid = $request['previousTxid'];
+            } else {
+                // Look up previous txid, excluding cancelled/rejected transactions
+                // This ensures new transactions don't link to orphaned transactions
+                // Order by time (transaction creation time) for proper chain ordering
+                // Fall back to timestamp for older transactions without time set
+                $query = "SELECT txid FROM {$this->tableName}
+                        WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
+                            OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
+                        AND status NOT IN ('cancelled', 'rejected')
+                        ORDER BY COALESCE(time, 0) DESC, timestamp DESC LIMIT 1";
+
+                $stmt = $this->execute($query, [
+                    ':sender_public_key_hash' => $senderPublicKeyHash,
+                    ':receiver_public_key_hash' => $receiverPublicKeyHash,
+                    ':second_receiver_public_key_hash' => $receiverPublicKeyHash,
+                    ':second_sender_public_key_hash' => $senderPublicKeyHash
+                ]);
+                $lookupResult = $stmt->fetch(PDO::FETCH_ASSOC);
+                $previousTxid = $lookupResult ? $lookupResult['txid'] : null;
+            }
 
             $data = [
                 'tx_type' => $txType,
@@ -1165,7 +1176,7 @@ class TransactionRepository extends AbstractRepository {
                 'amount' => $request['amount'],
                 'currency' => $request['currency'],
                 'txid' => $request['txid'],
-                'previous_txid' => $result ? $result['txid'] : null,
+                'previous_txid' => $previousTxid,
                 'sender_signature' => $request['signature'] ?? null, // upon initial inserting a standard transaction in database of original sender it is null
                 'signature_nonce' => $request['nonce'] ?? $request['signatureNonce'] ?? null, // nonce from signed message (for verification)
                 'time' => $request['time'] ?? null, // microtime used for P2P/RP2P hash or transaction creation
