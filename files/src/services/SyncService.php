@@ -714,10 +714,18 @@ class SyncService {
         $messageContent['currency'] = $tx['currency'];
         $messageContent['txid'] = $tx['txid'];
         $messageContent['previousTxid'] = $tx['previous_txid'] ?? null;
-        $messageContent['memo'] = $tx['memo'] ?? 'standard';
+        $memo = $tx['memo'] ?? 'standard';
+        $messageContent['memo'] = $memo;
 
-        // description is ONLY included if it has a non-null value (matches TransactionPayload::build)
-        if (isset($tx['description']) && $tx['description'] !== null) {
+        // For standard transactions, description is ALWAYS included (even if null)
+        // because buildStandardFromDatabase() always includes it in the signed payload.
+        // For P2P transactions (memo != 'standard'), description is only included if non-null
+        // because buildFromDatabase() does not include description at all.
+        if ($memo === 'standard') {
+            // Standard transactions: always include description (matches buildStandardFromDatabase)
+            $messageContent['description'] = $tx['description'] ?? null;
+        } elseif (isset($tx['description']) && $tx['description'] !== null) {
+            // P2P transactions: only include if non-null (matches build() and buildFromDatabase)
             $messageContent['description'] = $tx['description'];
         }
 
