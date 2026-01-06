@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 # Test contact re-add sync functionality
 # This test validates that when a deleted contact is re-added, the system properly:

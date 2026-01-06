@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 require_once __DIR__ . '/BasePayload.php';
 
@@ -47,17 +47,10 @@ class TransactionPayload extends BasePayload
             $payload['description'] = $this->sanitizeString($data['description']);
         }
 
-        // Include address tracking fields if provided (for transaction history)
-        // Accept both snake_case and camelCase input
-        $endRecipient = $data['endRecipientAddress'] ?? $data['end_recipient_address'] ?? null;
-        if ($endRecipient !== null) {
-            $payload['endRecipientAddress'] = $this->sanitizeString($endRecipient);
-        }
-
-        $initialSender = $data['initialSenderAddress'] ?? $data['initial_sender_address'] ?? null;
-        if ($initialSender !== null) {
-            $payload['initialSenderAddress'] = $this->sanitizeString($initialSender);
-        }
+        // NOTE: endRecipientAddress and initialSenderAddress are NOT included in the payload
+        // These are local tracking fields that should NOT be signed. They are added to the
+        // database via updateTrackingFields() after the transaction is inserted.
+        // This prevents sync verification failures since the sync partner doesn't have this info.
 
         return $payload;
     }
@@ -119,7 +112,9 @@ class TransactionPayload extends BasePayload
             'txid' => $data['txid'],
             'previousTxid' => $data['previous_txid'] ?? null,
             'memo' => $memo,
-            'description' => $data['description'],
+            // description is ALWAYS included for standard transactions (even if null)
+            // This ensures signature reconstruction matches what was signed
+            'description' => $data['description'] ?? null,
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];

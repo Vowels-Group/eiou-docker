@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 require_once __DIR__ . '/AbstractRepository.php';
 
@@ -1134,23 +1134,34 @@ class TransactionRepository extends AbstractRepository {
         $result = false;
         try{
             $this->beginTransaction();
-            // Find previous txid, excluding cancelled/rejected transactions
-            // This ensures new transactions don't link to orphaned transactions
-            // Order by time (transaction creation time) for proper chain ordering
-            // Fall back to timestamp for older transactions without time set
-            $query = "SELECT txid FROM {$this->tableName}
-                    WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
-                        OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
-                    AND status NOT IN ('cancelled', 'rejected')
-                    ORDER BY COALESCE(time, 0) DESC, timestamp DESC LIMIT 1";
 
-            $stmt = $this->execute($query, [
-                ':sender_public_key_hash' => $senderPublicKeyHash,
-                ':receiver_public_key_hash' => $receiverPublicKeyHash,
-                ':second_receiver_public_key_hash' => $receiverPublicKeyHash,
-                ':second_sender_public_key_hash' => $senderPublicKeyHash
-            ]);
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Determine previous_txid:
+            // 1. If explicitly provided in request (e.g., from sync), use that value
+            // 2. Otherwise, look up from database (excluding cancelled/rejected)
+            $previousTxid = null;
+            if (array_key_exists('previousTxid', $request)) {
+                // Use the provided previous_txid (from sync or explicit set)
+                $previousTxid = $request['previousTxid'];
+            } else {
+                // Look up previous txid, excluding cancelled/rejected transactions
+                // This ensures new transactions don't link to orphaned transactions
+                // Order by time (transaction creation time) for proper chain ordering
+                // Fall back to timestamp for older transactions without time set
+                $query = "SELECT txid FROM {$this->tableName}
+                        WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
+                            OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
+                        AND status NOT IN ('cancelled', 'rejected')
+                        ORDER BY COALESCE(time, 0) DESC, timestamp DESC LIMIT 1";
+
+                $stmt = $this->execute($query, [
+                    ':sender_public_key_hash' => $senderPublicKeyHash,
+                    ':receiver_public_key_hash' => $receiverPublicKeyHash,
+                    ':second_receiver_public_key_hash' => $receiverPublicKeyHash,
+                    ':second_sender_public_key_hash' => $senderPublicKeyHash
+                ]);
+                $lookupResult = $stmt->fetch(PDO::FETCH_ASSOC);
+                $previousTxid = $lookupResult ? $lookupResult['txid'] : null;
+            }
 
             $data = [
                 'tx_type' => $txType,
@@ -1165,14 +1176,15 @@ class TransactionRepository extends AbstractRepository {
                 'amount' => $request['amount'],
                 'currency' => $request['currency'],
                 'txid' => $request['txid'],
-                'previous_txid' => $result ? $result['txid'] : null,
+                'previous_txid' => $previousTxid,
                 'sender_signature' => $request['signature'] ?? null, // upon initial inserting a standard transaction in database of original sender it is null
                 'signature_nonce' => $request['nonce'] ?? $request['signatureNonce'] ?? null, // nonce from signed message (for verification)
                 'time' => $request['time'] ?? null, // microtime used for P2P/RP2P hash or transaction creation
                 'memo' => $request['memo'],
-                'description' => $request['description'] ?? null,
-                'end_recipient_address' => $request['endRecipientAddress'] ?? null,
-                'initial_sender_address' => $request['initialSenderAddress'] ?? null
+                'description' => $request['description'] ?? null
+                // NOTE: end_recipient_address and initial_sender_address are NOT included here
+                // They are local tracking fields added via updateTrackingFields() after insert
+                // to avoid including them in the signed message (sync partners don't have this info)
             ];
             $result = $this->insert($data);
             $this->commit();
@@ -1861,5 +1873,57 @@ class TransactionRepository extends AbstractRepository {
         ]);
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Update signature data for a transaction
+     *
+     * Updates the sender_signature and signature_nonce fields for a transaction.
+     * This is used after a transaction is successfully sent to store the signing
+     * data for future verification during sync operations.
+     *
+     * @param string $txid Transaction ID
+     * @param string $signature Base64-encoded signature
+     * @param int $nonce Signature nonce (unix timestamp)
+     * @return bool Success status
+     */
+    public function updateSignatureData(string $txid, string $signature, int $nonce): bool {
+        $affectedRows = $this->update([
+            'sender_signature' => $signature,
+            'signature_nonce' => $nonce
+        ], 'txid', $txid);
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Update tracking fields for a transaction after insert
+     *
+     * These fields (end_recipient_address, initial_sender_address) are local tracking
+     * information that should NOT be included in the signed message payload.
+     * They are added after the transaction is inserted to keep them separate from
+     * the data that gets signed and verified during sync.
+     *
+     * @param string $txid Transaction ID
+     * @param string|null $endRecipientAddress Final recipient address (for P2P chains)
+     * @param string|null $initialSenderAddress Original sender address (for P2P chains)
+     * @return bool True on success
+     */
+    public function updateTrackingFields(string $txid, ?string $endRecipientAddress, ?string $initialSenderAddress): bool {
+        $updates = [];
+
+        if ($endRecipientAddress !== null) {
+            $updates['end_recipient_address'] = $endRecipientAddress;
+        }
+
+        if ($initialSenderAddress !== null) {
+            $updates['initial_sender_address'] = $initialSenderAddress;
+        }
+
+        if (empty($updates)) {
+            return true; // Nothing to update
+        }
+
+        $affectedRows = $this->update($updates, 'txid', $txid);
+        return $affectedRows >= 0;
     }
 }

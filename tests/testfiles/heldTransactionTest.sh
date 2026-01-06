@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 # Test held transaction functionality for invalid_previous_txid handling
 # Verifies that transactions are held when receiving invalid_previous_txid rejection,

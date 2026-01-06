@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 # Test sync functionality from SyncService.php
 # Tests the sync command for contacts, transactions, and balances

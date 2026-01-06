@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
@@ -413,14 +413,14 @@ class SyncService {
                 // message parsing. If signatures are missing, log a warning but allow sync
                 // to maintain backward compatibility. Full signature enforcement is a future enhancement.
                 if (!$this->verifyTransactionSignature($tx)) {
-                    // Log warning but allow sync for now (signature data may not be available
-                    // for older transactions or if message parsing doesn't preserve it)
+                    // Log warning - signature data should be available for all transactions.
+                    // If this warning appears frequently, there may be an issue with signature
+                    // storage during send or signature preservation during message parsing.
                     SecureLogger::warning("Sync transaction missing signature verification", [
                         'txid' => $tx['txid'],
                         'sender' => $tx['sender_address'],
                         'has_signature' => !empty($tx['sender_signature']),
-                        'has_nonce' => !empty($tx['signature_nonce']),
-                        'note' => 'Signature enforcement requires message parsing updates'
+                        'has_nonce' => !empty($tx['signature_nonce'])
                     ]);
                     // Continue with sync - don't block on missing signatures for now
                 }
@@ -523,21 +523,10 @@ class SyncService {
                 $senderPublicKey
             );
 
-            // Build a map of cancelled/rejected transaction txid -> their previous_txid
-            // This allows us to "skip over" cancelled transactions in the chain
-            // When AB2 is cancelled in chain AB1->AB2->AB3->AB4, AB3's previous_txid
-            // still points to AB2. We need to update it to point to AB1 during sync.
-            $cancelledTxidToPrevious = [];
-            foreach ($transactions as $tx) {
-                if (in_array($tx['status'], ['cancelled', 'rejected'])) {
-                    $cancelledTxidToPrevious[$tx['txid']] = $tx['previous_txid'];
-                }
-            }
-
             // Filter to only include transactions NEWER than lastKnownTxid if provided
             // Transactions are ordered by timestamp DESC (newest first), so we collect
             // all transactions until we hit the lastKnownTxid
-            // Also exclude cancelled/rejected transactions as they are orphaned from the chain
+            // All transactions are included regardless of status (cancelled/rejected included)
             $filteredTransactions = [];
 
             foreach ($transactions as $tx) {
@@ -546,23 +535,10 @@ class SyncService {
                     break;
                 }
 
-                // Skip cancelled and rejected transactions - they are orphaned from the chain
-                // and should not be synced to maintain chain integrity
-                if (in_array($tx['status'], ['cancelled', 'rejected'])) {
-                    continue;
-                }
-
-                // Fix previous_txid to skip over any cancelled/rejected transactions in the chain
-                // This ensures the synced chain has no gaps pointing to non-existent transactions
-                $correctedPreviousTxid = $this->resolvePreviousTxid(
-                    $tx['previous_txid'],
-                    $cancelledTxidToPrevious
-                );
-
                 // Include necessary fields for security and signature verification
                 $filteredTransactions[] = [
                     'txid' => $tx['txid'],
-                    'previous_txid' => $correctedPreviousTxid,
+                    'previous_txid' => $tx['previous_txid'],
                     'sender_address' => $tx['sender_address'],
                     'sender_public_key' => $tx['sender_public_key'],
                     'receiver_address' => $tx['receiver_address'],
@@ -603,52 +579,6 @@ class SyncService {
     }
 
     /**
-     * Resolve previous_txid by skipping over cancelled/rejected transactions
-     *
-     * When a transaction in the chain is cancelled (e.g., AB2 in AB1->AB2->AB3),
-     * this method follows the chain back to find the first non-cancelled ancestor.
-     * This ensures the synced chain has no gaps when intermediate transactions
-     * have been cancelled but the chain hasn't been readjusted yet.
-     *
-     * @param string|null $previousTxid The original previous_txid
-     * @param array $cancelledTxidToPrevious Map of cancelled txid => their previous_txid
-     * @return string|null The resolved previous_txid (first non-cancelled ancestor)
-     */
-    private function resolvePreviousTxid(?string $previousTxid, array $cancelledTxidToPrevious): ?string {
-        if ($previousTxid === null) {
-            return null;
-        }
-
-        // Follow the chain back until we find a non-cancelled transaction
-        // Use a max iterations guard to prevent infinite loops in case of data corruption
-        $maxIterations = 100;
-        $currentTxid = $previousTxid;
-
-        for ($i = 0; $i < $maxIterations; $i++) {
-            // If current txid is not in the cancelled map, it's a valid ancestor
-            // Note: Use array_key_exists instead of isset because isset returns false for null values
-            if (!array_key_exists($currentTxid, $cancelledTxidToPrevious)) {
-                return $currentTxid;
-            }
-
-            // Move to the cancelled transaction's previous_txid
-            $currentTxid = $cancelledTxidToPrevious[$currentTxid];
-
-            // If we reached the beginning of the chain (null), return null
-            if ($currentTxid === null) {
-                return null;
-            }
-        }
-
-        // If we exceeded max iterations, log a warning and return original
-        SecureLogger::warning("resolvePreviousTxid exceeded max iterations", [
-            'original_previous_txid' => $previousTxid,
-            'last_checked' => $currentTxid
-        ]);
-        return $previousTxid;
-    }
-
-    /**
      * Verify transaction signature
      *
      * Verifies that the transaction was actually signed by the claimed sender.
@@ -681,9 +611,17 @@ class SyncService {
             return false;
         }
 
-        // Reconstruct the signed message from transaction fields + nonce
-        // The message structure must match how it was originally created
-        $messageContent = $this->reconstructSignedMessage($tx);
+        // Reconstruct the signed message based on transaction type
+        // Contact transactions use ContactPayload::build() -> {'type': 'create', ...}
+        // Regular transactions use TransactionPayload::build() -> {'type': 'send', ...}
+        // Note: tx_type is not included in sync response, so we use memo to detect contact transactions
+        $memo = $tx['memo'] ?? null;
+        if ($memo === 'contact') {
+            $messageContent = $this->reconstructContactSignedMessage($tx);
+        } else {
+            $messageContent = $this->reconstructSignedMessage($tx);
+        }
+
         if ($messageContent === null) {
             return false;
         }
@@ -708,7 +646,11 @@ class SyncService {
             SecureLogger::warning("Transaction signature verification failed", [
                 'txid' => $tx['txid'] ?? 'unknown',
                 'sender' => $tx['sender_address'] ?? 'unknown',
-                'verify_result' => $verified
+                'verify_result' => $verified,
+                'memo' => $tx['memo'] ?? 'unknown',
+                'reconstructed_message' => $messageContent,
+                'signature_present' => !empty($tx['sender_signature']),
+                'nonce' => $tx['signature_nonce'] ?? 'unknown'
             ]);
         }
 
@@ -745,10 +687,17 @@ class SyncService {
             }
         }
 
-        // Reconstruct message in the EXACT order from TransactionPayload::buildStandardFromDatabase
+        // Reconstruct message in the EXACT order from TransactionPayload::build()
         // after TransportUtilityService::sign() removes senderAddress/senderPublicKey
         // IMPORTANT: Field order matters for signature verification!
-        // NOTE: description is ALWAYS included (even if null) to match buildStandardFromDatabase
+        //
+        // Original build() order (before senderAddress/senderPublicKey removal):
+        // type, time, receiverAddress, receiverPublicKey, amount, currency, txid,
+        // previousTxid, memo, senderAddress*, senderPublicKey*, [description],
+        // [endRecipientAddress], [initialSenderAddress]
+        // (* = removed before signing, [] = conditional)
+        //
+        // After signing adds nonce at the end
         $messageContent = [
             'type' => 'send',
         ];
@@ -765,11 +714,57 @@ class SyncService {
         $messageContent['currency'] = $tx['currency'];
         $messageContent['txid'] = $tx['txid'];
         $messageContent['previousTxid'] = $tx['previous_txid'] ?? null;
-        $messageContent['memo'] = $tx['memo'] ?? 'standard';
-        $messageContent['description'] = $tx['description'] ?? null;
+        $memo = $tx['memo'] ?? 'standard';
+        $messageContent['memo'] = $memo;
+
+        // For standard transactions, description is ALWAYS included (even if null)
+        // because buildStandardFromDatabase() always includes it in the signed payload.
+        // For P2P transactions (memo != 'standard'), description is only included if non-null
+        // because buildFromDatabase() does not include description at all.
+        if ($memo === 'standard') {
+            // Standard transactions: always include description (matches buildStandardFromDatabase)
+            $messageContent['description'] = $tx['description'] ?? null;
+        } elseif (isset($tx['description']) && $tx['description'] !== null) {
+            // P2P transactions: only include if non-null (matches build() and buildFromDatabase)
+            $messageContent['description'] = $tx['description'];
+        }
+
+        // NOTE: endRecipientAddress and initialSenderAddress are NOT included
+        // These are local tracking fields that are NOT part of the signed payload
+        // They are added via updateTrackingFields() after transaction insert
 
         // Nonce is added last by TransportUtilityService::sign()
         $messageContent['nonce'] = (int)$tx['signature_nonce'];
+
+        return json_encode($messageContent);
+    }
+
+    /**
+     * Reconstruct the signed message for a contact transaction
+     *
+     * Contact transactions use ContactPayload::build() which creates:
+     * {'type' => 'create', 'senderAddress' => ..., 'senderPublicKey' => ...}
+     *
+     * After TransportUtilityService::sign() removes senderAddress/senderPublicKey
+     * and adds nonce, the signed message becomes:
+     * {'type': 'create', 'nonce': ...}
+     *
+     * @param array $tx Transaction data including signature_nonce
+     * @return string|null JSON message or null if reconstruction fails
+     */
+    private function reconstructContactSignedMessage(array $tx): ?string {
+        if (!isset($tx['signature_nonce'])) {
+            SecureLogger::debug("Missing nonce for contact message reconstruction", [
+                'txid' => $tx['txid'] ?? 'unknown'
+            ]);
+            return null;
+        }
+
+        // Contact payload after signing is simply: {'type': 'create', 'nonce': ...}
+        $messageContent = [
+            'type' => 'create',
+            'nonce' => (int)$tx['signature_nonce']
+        ];
 
         return json_encode($messageContent);
     }

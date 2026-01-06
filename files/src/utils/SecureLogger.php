@@ -1,6 +1,6 @@
 <?php
 
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 /**
  * Secure logging wrapper that masks sensitive data
  * Prevents sensitive information from being logged

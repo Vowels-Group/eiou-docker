@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 require_once __DIR__ . '/../utils/InputValidator.php';
 require_once __DIR__ . '/../cli/CliOutputManager.php';
@@ -602,9 +602,14 @@ class TransactionService {
                 // If direct transaction - receiver knows both sender and recipient
                 // end_recipient is myself (receiver), initial_sender is the sender
                 $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
-                $request['endRecipientAddress'] = $myAddress;
-                $request['initialSenderAddress'] = $request['senderAddress'];
                 $insertTransactionResponse = $this->transactionRepository->insertTransaction($request,'received');
+
+                // Update tracking fields after insert (these are NOT part of signed payload)
+                $this->transactionRepository->updateTrackingFields(
+                    $request['txid'],
+                    $myAddress,  // endRecipientAddress
+                    $request['senderAddress']  // initialSenderAddress
+                );
             } else {
                 // If p2p type transaction
                 $memo = $request['memo'];
@@ -620,10 +625,15 @@ class TransactionService {
                     // If Transaction is for end-recipient
                     // end_recipient is myself, initial_sender will be updated via inquiry message later
                     $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
-                    $request['endRecipientAddress'] = $myAddress;
-                    // initial_sender_address left NULL - will be set when inquiry message arrives
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'received'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
+
+                    // Update tracking fields after insert (initial_sender set later via inquiry)
+                    $this->transactionRepository->updateTrackingFields(
+                        $request['txid'],
+                        $myAddress,  // endRecipientAddress
+                        null  // initialSenderAddress - will be set when inquiry message arrives
+                    );
                 }
             }
         } catch (PDOException $e) {
@@ -680,6 +690,16 @@ class TransactionService {
 
                     if($response && $response['status'] === Constants::STATUS_ACCEPTED){
                         $this->transactionRepository->updateStatus($txid, Constants::STATUS_ACCEPTED, true);
+
+                        // Store signature data for future sync verification
+                        $signingData = $sendResult['signing_data'] ?? null;
+                        if ($signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                            $this->transactionRepository->updateSignatureData(
+                                $txid,
+                                $signingData['signature'],
+                                $signingData['nonce']
+                            );
+                        }
                     } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
                         // Check if rejection is due to invalid_previous_txid - attempt sync before falling back to P2P
                         if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
@@ -756,14 +776,9 @@ class TransactionService {
                 $payloadTransactionCompleted = $this->transactionPayload->buildCompleted($message);
                     output(outputSendTransactionCompletionMessageTxid($message),'SILENT');
 
-                    // Mark the transaction delivery as completed (using MessageDeliveryService directly)
-                    // Note: message_id format is {txid}-{timestamp}
-                    if ($this->messageDeliveryService !== null) {
-                        $this->messageDeliveryService->markDeliveryCompleted('transaction', $txid . '-' . strtotime($message['created_at'] ?? 'now'));
-                    }
-
                     // Send completion message with delivery tracking
                     // Format: completion-response-{txid}-{timestamp} (responding to direct transaction received)
+                    // Note: The sender's delivery record is marked complete when they receive this completion response
                     $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, 'completion-response-' . $txid);
                 }
             } else{
@@ -815,6 +830,16 @@ class TransactionService {
 
             if($response && $response['status'] === Constants::STATUS_ACCEPTED){
                 $this->transactionRepository->updateStatus($txid, Constants::STATUS_ACCEPTED);
+
+                // Store signature data for future sync verification
+                $signingData = $sendResult['signing_data'] ?? null;
+                if ($signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                    $this->transactionRepository->updateSignatureData(
+                        $txid,
+                        $signingData['signature'],
+                        $signingData['nonce']
+                    );
+                }
             } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
                 // Check if rejection is due to invalid_previous_txid - attempt sync
                 if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
@@ -1060,6 +1085,13 @@ class TransactionService {
         $payload = $this->transactionPayload->build($data);
         $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
 
+        // Update tracking fields after insert (these are NOT part of signed payload)
+        $this->transactionRepository->updateTrackingFields(
+            $data['txid'],
+            $data['end_recipient_address'] ?? null,
+            $data['initial_sender_address'] ?? null
+        );
+
         // Build response data
         $txResponse = [
             'status' => Constants::STATUS_SENT,
@@ -1124,6 +1156,13 @@ class TransactionService {
         $payload = $this->transactionPayload->build($data);
         $this->transactionRepository->insertTransaction($payload, Constants::TX_TYPE_SENT);
         $this->p2pRepository->updateOutgoingTxid($data['memo'], $data['txid']);
+
+        // Update tracking fields after insert (these are NOT part of signed payload)
+        $this->transactionRepository->updateTrackingFields(
+            $data['txid'],
+            $data['end_recipient_address'] ?? null,
+            $data['initial_sender_address'] ?? null
+        );
     }
 
     /**

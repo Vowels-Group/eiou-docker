@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';
@@ -13,11 +13,12 @@ require_once __DIR__ . '/../core/Constants.php';
  * resume the held transaction with the corrected previous_txid.
  *
  * Flow:
- * 1. Transaction rejected with invalid_previous_txid
+ * 1. Transaction rejected with invalid_previous_txid (receiver tells us expected previous_txid)
  * 2. holdTransactionForSync() stores transaction and initiates sync
- * 3. SyncService completes sync and calls onSyncComplete()
- * 4. processHeldTransactionsAfterSync() updates previous_txid values
- * 5. resumeTransaction() sets status back to pending for reprocessing
+ * 3. SyncService completes sync (including all transactions to maintain chain integrity)
+ * 4. onSyncComplete() triggers processHeldTransactionsAfterSync()
+ * 5. updatePreviousTxid() updates the transaction's previous_txid to the expected value
+ * 6. resumeTransaction() sets status back to pending for reprocessing
  *
  * @package Services
  */
@@ -205,9 +206,12 @@ class HeldTransactionService {
     /**
      * Process held transactions after sync completes
      *
-     * Updates the previous_txid for all held transactions with this contact
-     * by fetching the correct value from the transaction chain, then resumes
-     * the transactions for reprocessing.
+     * Updates the previous_txid for held transactions to the expected value
+     * from the rejection response, then resumes them for reprocessing.
+     *
+     * When a transaction is rejected for invalid_previous_txid, the receiver
+     * tells us what previous_txid it expected. After syncing the chain,
+     * we update the held transaction's previous_txid to match and resume it.
      *
      * @param string $contactPubkey Contact's public key
      * @return array Result with keys: resumed_count (int), failed_count (int)
@@ -232,7 +236,7 @@ class HeldTransactionService {
                 $txid = $held['txid'];
                 $expectedPreviousTxid = $held['expected_previous_txid'] ?? null;
 
-                // Update the previous_txid to the correct value
+                // Update the previous_txid to the expected value from the rejection
                 $updated = $this->updatePreviousTxid($txid, $contactPubkey, $expectedPreviousTxid);
 
                 if ($updated) {
@@ -245,8 +249,10 @@ class HeldTransactionService {
                         // Mark held transaction as resolved (release it)
                         $this->heldRepository->releaseTransaction($txid);
 
-                        SecureLogger::info("Held transaction resumed", [
+                        SecureLogger::info("Held transaction resumed with corrected previous_txid", [
                             'txid' => $txid,
+                            'original_previous_txid' => $held['original_previous_txid'] ?? null,
+                            'expected_previous_txid' => $expectedPreviousTxid,
                             'new_previous_txid' => $resumeResult['new_previous_txid']
                         ]);
                     } else {
@@ -259,7 +265,8 @@ class HeldTransactionService {
                 } else {
                     $result['failed_count']++;
                     SecureLogger::warning("Failed to update previous_txid for held transaction", [
-                        'txid' => $txid
+                        'txid' => $txid,
+                        'expected_previous_txid' => $expectedPreviousTxid
                     ]);
                 }
             }
@@ -279,6 +286,10 @@ class HeldTransactionService {
      *
      * Uses the expected_previous_txid from the rejection response, or falls back
      * to looking up the correct value from the transaction chain after sync.
+     *
+     * When a transaction is rejected for invalid_previous_txid, the receiver
+     * tells us what previous_txid it expected. This method updates the held
+     * transaction's previous_txid to match that expected value.
      *
      * @param string $txid Transaction ID
      * @param string $contactPubkey Contact's public key
@@ -333,7 +344,7 @@ class HeldTransactionService {
      *
      * Sets the transaction status back to 'pending' so it will be picked up
      * by the next processing cycle and re-attempted with the corrected previous_txid.
-     * The previous_txid should already be updated in the database by updatePreviousTxid().
+     * The previous_txid should already be updated by updatePreviousTxid().
      *
      * @param string $txid Transaction ID
      * @return array Result with keys: success (bool), new_previous_txid (string|null), error (string|null)
@@ -436,6 +447,9 @@ class HeldTransactionService {
      * This can be called periodically to handle any transactions that weren't
      * immediately processed after sync completion.
      *
+     * Updates the previous_txid to the expected value from the rejection
+     * response before resuming the transaction.
+     *
      * @param int $limit Maximum number of transactions to process
      * @return array Result with keys: processed_count, resumed_count, failed_count
      */
@@ -460,17 +474,19 @@ class HeldTransactionService {
                 $contactPubkeyHash = $held['contact_pubkey_hash'];
                 $expectedPreviousTxid = $held['expected_previous_txid'] ?? null;
 
-                // Get contact pubkey from hash (we need to look it up)
-                // For now, we'll get it from the transaction record
+                // Get contact pubkey from the transaction record
                 $transaction = $this->transactionRepository->getByTxid($txid);
                 if (!$transaction) {
                     $result['failed_count']++;
+                    SecureLogger::warning("Transaction not found for held transaction", [
+                        'txid' => $txid
+                    ]);
                     continue;
                 }
 
                 $contactPubkey = $transaction['receiver_public_key'];
 
-                // Update previous_txid
+                // Update previous_txid to the expected value from the rejection
                 $updated = $this->updatePreviousTxid($txid, $contactPubkey, $expectedPreviousTxid);
 
                 if ($updated) {
@@ -480,16 +496,31 @@ class HeldTransactionService {
                     if ($resumeResult['success']) {
                         $result['resumed_count']++;
                         $this->heldRepository->releaseTransaction($txid);
+
+                        SecureLogger::info("Held transaction resumed with corrected previous_txid", [
+                            'txid' => $txid,
+                            'original_previous_txid' => $held['original_previous_txid'] ?? null,
+                            'expected_previous_txid' => $expectedPreviousTxid,
+                            'new_previous_txid' => $resumeResult['new_previous_txid']
+                        ]);
                     } else {
                         $result['failed_count']++;
+                        SecureLogger::warning("Failed to resume held transaction", [
+                            'txid' => $txid,
+                            'error' => $resumeResult['error'] ?? 'unknown'
+                        ]);
                     }
                 } else {
                     $result['failed_count']++;
+                    SecureLogger::warning("Failed to update previous_txid for held transaction", [
+                        'txid' => $txid,
+                        'expected_previous_txid' => $expectedPreviousTxid
+                    ]);
                 }
             }
 
             if ($result['resumed_count'] > 0) {
-                SecureLogger::info("Processed held transactions", $result);
+                SecureLogger::info("Processed held transactions batch", $result);
             }
 
         } catch (Exception $e) {

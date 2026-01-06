@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 # Test P2P completion status check before expiring
 # Tests the fix for issue #357 - ensures P2P transactions check completion
