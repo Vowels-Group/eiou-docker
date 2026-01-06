@@ -1361,18 +1361,11 @@ function fetchDebugReport(callback) {
     xhr.send(formData);
 }
 
-// Open email with debug report (downloads file first, then opens email client)
+// Download debug report and show success message
 function emailDebugReport() {
     fetchDebugReport(function(jsonData, filename, description) {
-        // Download the file first
         downloadDebugFile(jsonData, filename);
-
-        // Open mailto link after a short delay to allow download to complete
-        // Using window.open instead of window.location.href to avoid navigation issues
-        setTimeout(function() {
-            openDebugMailto(description, filename);
-            showToast('Success', 'Debug report downloaded. Please attach ' + filename + ' to your email.', 'success');
-        }, 300);
+        showToast('Success', 'Debug report downloaded: ' + filename, 'success');
     });
 }
 
@@ -1400,36 +1393,6 @@ function downloadDebugFile(jsonData, filename) {
     setTimeout(function() {
         URL.revokeObjectURL(downloadLink.href);
     }, 1000);
-}
-
-// Open mailto link with debug report information (Tor Browser compatible)
-// Note: Browsers cannot programmatically attach files to emails for security reasons.
-// The user must manually attach the downloaded file.
-function openDebugMailto(description, filename) {
-    var supportEmail = 'support@eiou.org';
-    var subject = 'EIOU Docker Debug Report';
-    var body = 'Hi EIOU Support Team,\n\n';
-
-    if (description && description.trim() !== '') {
-        body += 'Issue Description:\n' + description + '\n\n';
-    }
-
-    body += 'Debug report file: ' + filename + '\n\n';
-    body += '*** IMPORTANT: Please attach the downloaded JSON file (' + filename + ') to this email before sending. ***\n\n';
-    body += 'The file should be in your Downloads folder.\n\n';
-    body += 'Thank you for your assistance.\n';
-
-    // Encode for mailto URL
-    var mailtoUrl = 'mailto:' + supportEmail +
-        '?subject=' + encodeURIComponent(subject) +
-        '&body=' + encodeURIComponent(body);
-
-    // Use window.open to avoid page navigation issues that cause status 0 errors
-    // Falls back to location.href if popup is blocked
-    var emailWindow = window.open(mailtoUrl, '_self');
-    if (!emailWindow) {
-        window.location.href = mailtoUrl;
-    }
 }
 
 // ============================================================================
