@@ -10,6 +10,7 @@
  */
 
 require_once __DIR__ . '/../../core/Constants.php';
+require_once __DIR__ . '/../../core/SecureLogger.php';
 
 class TransportUtilityService
 {
@@ -309,6 +310,15 @@ class TransportUtilityService
 
         // JSON encode the message content (no duplication)
         $message = json_encode($messageContent);
+
+        // Debug: Log the message being signed for sync verification troubleshooting
+        if (isset($messageContent['type']) && $messageContent['type'] === 'send') {
+            SecureLogger::debug("Signing transaction message", [
+                'txid' => $messageContent['txid'] ?? 'unknown',
+                'signed_message' => $message,
+                'nonce' => $nonce
+            ]);
+        }
 
         // Sign the message
         $signature = '';

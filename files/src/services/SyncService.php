@@ -563,6 +563,9 @@ class SyncService {
                 $filteredTransactions[] = [
                     'txid' => $tx['txid'],
                     'previous_txid' => $correctedPreviousTxid,
+                    // Include original previous_txid for signature verification
+                    // (the corrected one is for chain insertion, original is what was signed)
+                    'original_previous_txid' => $tx['previous_txid'],
                     'sender_address' => $tx['sender_address'],
                     'sender_public_key' => $tx['sender_public_key'],
                     'receiver_address' => $tx['receiver_address'],
@@ -783,7 +786,9 @@ class SyncService {
         $messageContent['amount'] = (int)$tx['amount'];
         $messageContent['currency'] = $tx['currency'];
         $messageContent['txid'] = $tx['txid'];
-        $messageContent['previousTxid'] = $tx['previous_txid'] ?? null;
+        // Use original_previous_txid for signature verification (what was actually signed)
+        // Fall back to previous_txid for backward compatibility with older sync responses
+        $messageContent['previousTxid'] = $tx['original_previous_txid'] ?? $tx['previous_txid'] ?? null;
         $messageContent['memo'] = $tx['memo'] ?? 'standard';
 
         // description is ONLY included if it has a non-null value (matches TransactionPayload::build)
