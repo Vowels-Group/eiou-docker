@@ -523,21 +523,10 @@ class SyncService {
                 $senderPublicKey
             );
 
-            // Build a map of cancelled/rejected transaction txid -> their previous_txid
-            // This allows us to "skip over" cancelled transactions in the chain
-            // When AB2 is cancelled in chain AB1->AB2->AB3->AB4, AB3's previous_txid
-            // still points to AB2. We need to update it to point to AB1 during sync.
-            $cancelledTxidToPrevious = [];
-            foreach ($transactions as $tx) {
-                if (in_array($tx['status'], ['cancelled', 'rejected'])) {
-                    $cancelledTxidToPrevious[$tx['txid']] = $tx['previous_txid'];
-                }
-            }
-
             // Filter to only include transactions NEWER than lastKnownTxid if provided
             // Transactions are ordered by timestamp DESC (newest first), so we collect
             // all transactions until we hit the lastKnownTxid
-            // Also exclude cancelled/rejected transactions as they are orphaned from the chain
+            // All transactions are included regardless of status (cancelled/rejected included)
             $filteredTransactions = [];
 
             foreach ($transactions as $tx) {
@@ -546,26 +535,10 @@ class SyncService {
                     break;
                 }
 
-                // Skip cancelled and rejected transactions - they are orphaned from the chain
-                // and should not be synced to maintain chain integrity
-                if (in_array($tx['status'], ['cancelled', 'rejected'])) {
-                    continue;
-                }
-
-                // Fix previous_txid to skip over any cancelled/rejected transactions in the chain
-                // This ensures the synced chain has no gaps pointing to non-existent transactions
-                $correctedPreviousTxid = $this->resolvePreviousTxid(
-                    $tx['previous_txid'],
-                    $cancelledTxidToPrevious
-                );
-
                 // Include necessary fields for security and signature verification
                 $filteredTransactions[] = [
                     'txid' => $tx['txid'],
-                    'previous_txid' => $correctedPreviousTxid,
-                    // Include original previous_txid for signature verification
-                    // (the corrected one is for chain insertion, original is what was signed)
-                    'original_previous_txid' => $tx['previous_txid'],
+                    'previous_txid' => $tx['previous_txid'],
                     'sender_address' => $tx['sender_address'],
                     'sender_public_key' => $tx['sender_public_key'],
                     'receiver_address' => $tx['receiver_address'],
@@ -603,52 +576,6 @@ class SyncService {
             ]);
             echo $this->messagePayload->buildTransactionSyncRejection($senderAddress, 'internal_error');
         }
-    }
-
-    /**
-     * Resolve previous_txid by skipping over cancelled/rejected transactions
-     *
-     * When a transaction in the chain is cancelled (e.g., AB2 in AB1->AB2->AB3),
-     * this method follows the chain back to find the first non-cancelled ancestor.
-     * This ensures the synced chain has no gaps when intermediate transactions
-     * have been cancelled but the chain hasn't been readjusted yet.
-     *
-     * @param string|null $previousTxid The original previous_txid
-     * @param array $cancelledTxidToPrevious Map of cancelled txid => their previous_txid
-     * @return string|null The resolved previous_txid (first non-cancelled ancestor)
-     */
-    private function resolvePreviousTxid(?string $previousTxid, array $cancelledTxidToPrevious): ?string {
-        if ($previousTxid === null) {
-            return null;
-        }
-
-        // Follow the chain back until we find a non-cancelled transaction
-        // Use a max iterations guard to prevent infinite loops in case of data corruption
-        $maxIterations = 100;
-        $currentTxid = $previousTxid;
-
-        for ($i = 0; $i < $maxIterations; $i++) {
-            // If current txid is not in the cancelled map, it's a valid ancestor
-            // Note: Use array_key_exists instead of isset because isset returns false for null values
-            if (!array_key_exists($currentTxid, $cancelledTxidToPrevious)) {
-                return $currentTxid;
-            }
-
-            // Move to the cancelled transaction's previous_txid
-            $currentTxid = $cancelledTxidToPrevious[$currentTxid];
-
-            // If we reached the beginning of the chain (null), return null
-            if ($currentTxid === null) {
-                return null;
-            }
-        }
-
-        // If we exceeded max iterations, log a warning and return original
-        SecureLogger::warning("resolvePreviousTxid exceeded max iterations", [
-            'original_previous_txid' => $previousTxid,
-            'last_checked' => $currentTxid
-        ]);
-        return $previousTxid;
     }
 
     /**
@@ -786,9 +713,7 @@ class SyncService {
         $messageContent['amount'] = (int)$tx['amount'];
         $messageContent['currency'] = $tx['currency'];
         $messageContent['txid'] = $tx['txid'];
-        // Use original_previous_txid for signature verification (what was actually signed)
-        // Fall back to previous_txid for backward compatibility with older sync responses
-        $messageContent['previousTxid'] = $tx['original_previous_txid'] ?? $tx['previous_txid'] ?? null;
+        $messageContent['previousTxid'] = $tx['previous_txid'] ?? null;
         $messageContent['memo'] = $tx['memo'] ?? 'standard';
 
         // description is ONLY included if it has a non-null value (matches TransactionPayload::build)
