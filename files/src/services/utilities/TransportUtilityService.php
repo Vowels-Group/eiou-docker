@@ -10,7 +10,7 @@
  */
 
 require_once __DIR__ . '/../../core/Constants.php';
-require_once __DIR__ . '/../../core/SecureLogger.php';
+require_once __DIR__ . '/../../utils/SecureLogger.php';
 
 class TransportUtilityService
 {
