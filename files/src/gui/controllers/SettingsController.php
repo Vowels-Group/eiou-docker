@@ -387,8 +387,8 @@ class SettingsController
      */
     public function handleGetDebugReportJson(): void
     {
-        // CSRF Protection
-        $this->session->verifyCSRFToken();
+        // Note: CSRF already verified in walletIndex.html before Functions.php is included
+        // JSON header already set in Functions.php for clean error handling
 
         require_once __DIR__ . '/../../utils/Security.php';
 

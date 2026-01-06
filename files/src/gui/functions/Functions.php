@@ -16,8 +16,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     // Settings actions
-    if (in_array($action, ['updateSettings', 'clearDebugLogs', 'sendDebugReport', 'getDebugReportJson'])) {
+    if (in_array($action, ['updateSettings', 'clearDebugLogs', 'sendDebugReport'])) {
         $settingsController->routeAction();
+    }
+
+    // AJAX-only settings actions (returns JSON, exits immediately)
+    if ($action === 'getDebugReportJson') {
+        // Set JSON header early to ensure clean response
+        header('Content-Type: application/json');
+        try {
+            $settingsController->routeAction();
+        } catch (Exception $e) {
+            echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+        }
+        exit; // Ensure we don't continue to render HTML
     }
 }
 
