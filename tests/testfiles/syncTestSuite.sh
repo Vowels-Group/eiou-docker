@@ -30,7 +30,28 @@ echo "========================================================================"
 echo -e "\n"
 
 # Setup: Get container pair and public keys (shared by all sync tests)
-get_container_pair
+# Get sender and receiver from container links or default to first/last containers
+if [[ -n "${containerLinks}" ]]; then
+    # Parse first link pair
+    firstLink=$(echo "${containerLinks}" | head -1)
+    sender=$(echo "$firstLink" | cut -d':' -f1)
+    receiver=$(echo "$firstLink" | cut -d':' -f2)
+else
+    # Fallback: use first and last containers
+    sender="${containers[0]}"
+    receiver="${containers[${#containers[@]}-1]}"
+fi
+
+# Get addresses from container userconfig
+senderAddress=$(docker exec ${sender} php -r "
+    \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+    echo \$json['torAddress'] ?? '';
+" 2>/dev/null)
+receiverAddress=$(docker exec ${receiver} php -r "
+    \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+    echo \$json['torAddress'] ?? '';
+" 2>/dev/null)
+
 if [[ -z "$sender" ]] || [[ -z "$receiver" ]]; then
     echo -e "${YELLOW}Warning: No container links defined, skipping sync test suite${NC}"
     succesrate "${totaltests}" "${passed}" "${failure}" "'sync test suite'"
@@ -41,17 +62,56 @@ echo -e "[Test Setup]"
 echo -e "\t   Sender: ${sender} (${senderAddress})"
 echo -e "\t   Receiver: ${receiver} (${receiverAddress})"
 
-# Ensure contacts exist
-ensure_contacts "${sender}" "${receiver}" "${senderAddress}" "${receiverAddress}"
+# Ensure contacts exist between sender and receiver
+docker exec ${sender} eiou addcontact ${receiverAddress} 2>&1 > /dev/null || true
+sleep 1
+docker exec ${receiver} eiou addcontact ${senderAddress} 2>&1 > /dev/null || true
+sleep 2
 
-# Get public keys
-receiverPubkeyInfo=$(get_pubkey_info "${sender}" "${MODE}" "${receiverAddress}")
-receiverPubkeyB64=$(parse_pubkey_b64 "$receiverPubkeyInfo")
-receiverPubkeyHash=$(parse_pubkey_hash "$receiverPubkeyInfo")
+# Get public keys directly via PHP
+receiverPubkeyB64=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$contact = \$app->services->getContactRepository()->getContactByAddress('tor', '${receiverAddress}');
+    if (\$contact && isset(\$contact['pubkey'])) {
+        echo base64_encode(\$contact['pubkey']);
+    } else {
+        echo 'ERROR';
+    }
+" 2>/dev/null || echo "ERROR")
 
-senderPubkeyInfo=$(get_pubkey_info "${receiver}" "${MODE}" "${senderAddress}")
-senderPubkeyB64=$(parse_pubkey_b64 "$senderPubkeyInfo")
-senderPubkeyHash=$(parse_pubkey_hash "$senderPubkeyInfo")
+receiverPubkeyHash=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$contact = \$app->services->getContactRepository()->getContactByAddress('tor', '${receiverAddress}');
+    if (\$contact && isset(\$contact['pubkey'])) {
+        echo hash('sha256', \$contact['pubkey']);
+    } else {
+        echo 'ERROR';
+    }
+" 2>/dev/null || echo "ERROR")
+
+senderPubkeyB64=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$contact = \$app->services->getContactRepository()->getContactByAddress('tor', '${senderAddress}');
+    if (\$contact && isset(\$contact['pubkey'])) {
+        echo base64_encode(\$contact['pubkey']);
+    } else {
+        echo 'ERROR';
+    }
+" 2>/dev/null || echo "ERROR")
+
+senderPubkeyHash=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$contact = \$app->services->getContactRepository()->getContactByAddress('tor', '${senderAddress}');
+    if (\$contact && isset(\$contact['pubkey'])) {
+        echo hash('sha256', \$contact['pubkey']);
+    } else {
+        echo 'ERROR';
+    }
+" 2>/dev/null || echo "ERROR")
 
 echo -e "\t   Sender pubkey hash: ${senderPubkeyHash:0:40}..."
 echo -e "\t   Receiver pubkey hash: ${receiverPubkeyHash:0:40}..."
