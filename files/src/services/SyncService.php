@@ -684,8 +684,8 @@ class SyncService {
         // Reconstruct the signed message based on transaction type
         // Contact transactions use ContactPayload::build() -> {'type': 'create', ...}
         // Regular transactions use TransactionPayload::build() -> {'type': 'send', ...}
-        $memo = $tx['memo'] ?? 'standard';
-        if ($memo === 'contact') {
+        $txType = $tx['tx_type'] ?? null;
+        if ($txType === 'contact') {
             $messageContent = $this->reconstructContactSignedMessage($tx);
         } else {
             $messageContent = $this->reconstructSignedMessage($tx);
