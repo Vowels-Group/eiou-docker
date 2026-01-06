@@ -423,21 +423,22 @@
 
     <!-- Send Debug Report -->
     <div class="debug-report-section">
-        <h4><i class="fas fa-envelope"></i> Send Debug Report</h4>
+        <h4><i class="fas fa-bug"></i> Debug Report</h4>
         <p style="color: #6c757d; font-size: 0.9rem;">
-            Send all debug information to developers for troubleshooting assistance.
+            Generate a debug report to help troubleshoot issues. You can download the report or email it to support.
         </p>
-        <form method="POST">
-            <input type="hidden" name="action" value="sendDebugReport">
-            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
-            <div class="form-group" style="margin-bottom: 1rem;">
-                <label for="debugDescription">Issue Description (optional):</label>
-                <textarea id="debugDescription" name="description" rows="3" placeholder="Describe the issue you're experiencing..." style="width: 100%; padding: 0.8rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 1rem;"></textarea>
-            </div>
-            <button type="submit" class="btn btn-info">
-                <i class="fas fa-paper-plane"></i> Send Debug Report
-            </button>
-        </form>
+        <div class="form-group" style="margin-bottom: 1rem;">
+            <label for="debugDescription">Issue Description (optional):</label>
+            <textarea id="debugDescription" rows="3" placeholder="Describe the issue you're experiencing..." style="width: 100%; padding: 0.8rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 1rem;"></textarea>
+        </div>
+        <input type="hidden" id="debugCsrfToken" value="<?php echo htmlspecialchars($csrfToken); ?>">
+        <button type="button" class="btn btn-info" onclick="emailDebugReport()">
+            <i class="fas fa-download"></i> Download Report
+        </button>
+        <p style="color: #6c757d; font-size: 0.85rem; margin-top: 0.75rem;">
+            <i class="fas fa-info-circle"></i> Downloads the debug file. Please email it to
+            <span style="font-family: monospace; background: #17a2b8; color: #fff; padding: 0.2rem 0.5rem; border-radius: 4px; cursor: pointer;" onclick="copyToClipboard('support@eiou.org')" title="Click to copy">support@eiou.org <i class="fas fa-copy" style="font-size: 0.75rem; margin-left: 0.25rem;"></i></span>
+        </p>
     </div>
 </div>
 

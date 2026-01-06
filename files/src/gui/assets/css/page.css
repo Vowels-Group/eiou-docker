@@ -1156,6 +1156,33 @@ html {
     margin-bottom: 1.5rem;
 }
 
+/* In-Progress Transactions List Container - scrollable when >3 items */
+.tx-in-progress-list {
+    max-height: 280px; /* Approximately 3 items height */
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.25rem;
+}
+
+/* Scrollbar styling for in-progress transactions (Webkit browsers) */
+.tx-in-progress-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.tx-in-progress-list::-webkit-scrollbar-track {
+    background: rgba(102, 77, 3, 0.1);
+    border-radius: 3px;
+}
+
+.tx-in-progress-list::-webkit-scrollbar-thumb {
+    background: rgba(102, 77, 3, 0.3);
+    border-radius: 3px;
+}
+
+.tx-in-progress-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(102, 77, 3, 0.5);
+}
+
 .tx-in-progress-header {
     display: flex;
     align-items: center;
@@ -1204,7 +1231,8 @@ html {
 .tx-in-progress-info {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
+    /* Changed from overflow: hidden to visible to ensure sync notice displays properly */
+    overflow: visible;
 }
 
 .tx-in-progress-counterparty .monospace,
@@ -1279,30 +1307,32 @@ html {
     animation: spin 2s linear infinite;
 }
 
-/* Syncing Chain Indicator */
+/* Syncing Chain Indicator - Enhanced visibility */
 .tx-syncing-notice {
-    background: rgba(253, 126, 20, 0.1);
+    background: rgba(253, 126, 20, 0.15);
     border-radius: 4px;
-    padding: 0.35rem 0.5rem;
-    border-left: 2px solid #fd7e14;
-    font-size: 0.75rem;
-    color: #fd7e14;
-    margin-top: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    border-left: 3px solid #fd7e14;
+    font-size: 0.8rem;
+    color: #c45d00;
+    font-weight: 500;
+    margin-top: 0.5rem;
     display: -webkit-box;
     display: -ms-flexbox;
     display: flex;
     -webkit-box-align: center;
     -ms-flex-align: center;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.35rem;
+    box-shadow: 0 1px 3px rgba(253, 126, 20, 0.2);
 }
 
 /* Fallback margin for browsers without gap support (TOR browser compatibility) */
 .tx-syncing-notice > * + * {
-    margin-left: 0.25rem;
+    margin-left: 0.35rem;
 }
 
-@supports (gap: 0.25rem) {
+@supports (gap: 0.35rem) {
     .tx-syncing-notice > * + * {
         margin-left: 0;
     }
@@ -1374,6 +1404,8 @@ html {
     flex-direction: column;
     gap: 10px;
     max-width: 350px;
+    min-width: 280px;
+    pointer-events: auto;
 }
 
 /* Fallback margin for browsers without gap support (TOR browser compatibility) */
@@ -1399,8 +1431,12 @@ html {
     background: white;
     border-radius: 8px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    animation: toastSlideIn 0.3s ease;
+    animation: toastSlideIn 0.3s ease forwards;
     border-left: 4px solid #0d6efd;
+    /* Explicit visibility values for reduced-motion preference compatibility */
+    opacity: 1;
+    transform: translateX(0);
+    position: relative;
 }
 
 /* Fallback margin for browsers without gap support (TOR browser compatibility) */

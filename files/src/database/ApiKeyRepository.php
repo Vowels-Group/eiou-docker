@@ -276,8 +276,8 @@ class ApiKeyRepository extends AbstractRepository {
      * @return bool True if permission is granted
      */
     public static function hasPermission(array $keyPermissions, string $requiredPermission): bool {
-        // Check for wildcard permission
-        if (in_array('*', $keyPermissions) || in_array('admin', $keyPermissions)) {
+        // Check for 'all' permission (or legacy '*' for backwards compatibility)
+        if (in_array('all', $keyPermissions) || in_array('*', $keyPermissions) || in_array('admin', $keyPermissions)) {
             return true;
         }
 

@@ -1292,6 +1292,109 @@ function clearDebugSearch(inputId, containerId) {
     }
 }
 
+// Store last generated debug report for reuse (avoids refetching)
+var lastDebugReport = null;
+var lastDebugFilename = null;
+
+// Fetch debug report data from server (shared by download and email functions)
+function fetchDebugReport(callback) {
+    var descriptionEl = document.getElementById('debugDescription');
+    var csrfTokenEl = document.getElementById('debugCsrfToken');
+    var description = descriptionEl ? descriptionEl.value : '';
+    var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+
+    // Show loading state
+    showToast('Generating Report', 'Collecting debug information...', 'info');
+
+    // Create form data for POST request
+    var formData = new FormData();
+    formData.append('action', 'getDebugReportJson');
+    formData.append('csrf_token', csrfToken);
+    formData.append('description', description);
+
+    // Fetch debug data via AJAX (Tor Browser compatible XMLHttpRequest)
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var jsonData = xhr.responseText;
+                    var parsedData = JSON.parse(jsonData);
+
+                    // Check for error in response
+                    if (parsedData.error) {
+                        showToast('Error', parsedData.error, 'error');
+                        return;
+                    }
+
+                    // Generate filename with current datetime
+                    var now = new Date();
+                    var year = now.getFullYear();
+                    var month = String(now.getMonth() + 1).padStart(2, '0');
+                    var day = String(now.getDate()).padStart(2, '0');
+                    var hours = String(now.getHours()).padStart(2, '0');
+                    var minutes = String(now.getMinutes()).padStart(2, '0');
+                    var seconds = String(now.getSeconds()).padStart(2, '0');
+                    var filename = 'eiou-docker-debug-' + year + '-' + month + '-' + day + '-' + hours + minutes + seconds + '.json';
+
+                    // Store for potential reuse
+                    lastDebugReport = jsonData;
+                    lastDebugFilename = filename;
+
+                    // Call the callback with the data
+                    callback(jsonData, filename, description);
+
+                } catch (e) {
+                    showToast('Error', 'Failed to parse debug report: ' + e.message, 'error');
+                }
+            } else {
+                showToast('Error', 'Failed to fetch debug report. Status: ' + xhr.status, 'error');
+            }
+        }
+    };
+
+    xhr.onerror = function() {
+        showToast('Error', 'Network error while fetching debug report.', 'error');
+    };
+
+    xhr.send(formData);
+}
+
+// Download debug report and show success message
+function emailDebugReport() {
+    fetchDebugReport(function(jsonData, filename, description) {
+        downloadDebugFile(jsonData, filename);
+        showToast('Success', 'Debug report downloaded: ' + filename, 'success');
+    });
+}
+
+// Legacy function name for backwards compatibility
+function sendDebugReport() {
+    emailDebugReport();
+}
+
+// Download debug file (Tor Browser compatible - uses Blob and createObjectURL)
+function downloadDebugFile(jsonData, filename) {
+    // Create blob from JSON data
+    var blob = new Blob([jsonData], { type: 'application/json' });
+
+    // Create download link
+    var downloadLink = document.createElement('a');
+    downloadLink.href = URL.createObjectURL(blob);
+    downloadLink.download = filename;
+
+    // Append to body, click, and remove
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+
+    // Clean up the object URL after a delay
+    setTimeout(function() {
+        URL.revokeObjectURL(downloadLink.href);
+    }, 1000);
+}
+
 // ============================================================================
 // WALLET INFORMATION FUNCTIONS
 // ============================================================================
