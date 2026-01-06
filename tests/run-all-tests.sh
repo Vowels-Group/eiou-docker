@@ -208,6 +208,7 @@ cliCommandsTest
 apiEndpointsTest
 syncTest
 transactionChainSyncTest
+signatureValidationSyncTest
 transactionChainReorderTest
 resyncPrevTxidGapTest
 nullPrevTxidResyncTest
