@@ -16,11 +16,13 @@
 
     <!-- In-Progress Transactions Banner (within section) -->
     <?php if (!empty($inProgressTransactions)): ?>
-    <div class="tx-in-progress-section" id="tx-in-progress-list">
+    <div class="tx-in-progress-section" id="tx-in-progress-section">
         <div class="tx-in-progress-header">
             <i class="fas fa-spinner fa-spin"></i> In-Progress Transactions
             <span class="tx-in-progress-count"><?php echo count($inProgressTransactions); ?></span>
         </div>
+        <!-- Scrollable container for transaction items (scrolls when >3 items) -->
+        <div class="tx-in-progress-list" id="tx-in-progress-list">
         <?php foreach ($inProgressTransactions as $ipTx): ?>
             <div class="tx-in-progress-item" data-txid="<?php echo htmlspecialchars($ipTx['txid']); ?>" data-status="<?php echo htmlspecialchars($ipTx['status']); ?>" data-phase="<?php echo htmlspecialchars($ipTx['phase'] ?? 'pending'); ?>">
                 <div class="tx-in-progress-info">
@@ -73,6 +75,7 @@
                 </div>
             </div>
         <?php endforeach; ?>
+        </div>
     </div>
     <?php endif; ?>
 

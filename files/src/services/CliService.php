@@ -539,7 +539,7 @@ class CliService {
                     'contacts:write' => 'Add, update, delete contacts',
                     'system:read' => 'View system status and metrics',
                     'admin' => 'Full administrative access',
-                    '*' => 'All permissions'
+                    'all' => 'All permissions'
                 ]
             ],
             'shutdown' => [

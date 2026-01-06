@@ -28,7 +28,7 @@ class ApiKeyService {
         'contacts:write',
         'system:read',
         'admin',
-        '*'
+        'all'
     ];
 
     /**
@@ -282,7 +282,7 @@ Create a new API key:
     - contacts:write  Add, update, delete contacts
     - system:read     View system status and metrics
     - admin           Full administrative access
-    - *               All permissions (same as admin)
+    - all             All permissions (same as admin)
 
 List all API keys:
   eiou apikey list
