@@ -684,8 +684,9 @@ class SyncService {
         // Reconstruct the signed message based on transaction type
         // Contact transactions use ContactPayload::build() -> {'type': 'create', ...}
         // Regular transactions use TransactionPayload::build() -> {'type': 'send', ...}
-        $txType = $tx['tx_type'] ?? null;
-        if ($txType === 'contact') {
+        // Note: tx_type is not included in sync response, so we use memo to detect contact transactions
+        $memo = $tx['memo'] ?? null;
+        if ($memo === 'contact') {
             $messageContent = $this->reconstructContactSignedMessage($tx);
         } else {
             $messageContent = $this->reconstructSignedMessage($tx);
@@ -715,7 +716,11 @@ class SyncService {
             SecureLogger::warning("Transaction signature verification failed", [
                 'txid' => $tx['txid'] ?? 'unknown',
                 'sender' => $tx['sender_address'] ?? 'unknown',
-                'verify_result' => $verified
+                'verify_result' => $verified,
+                'memo' => $tx['memo'] ?? 'unknown',
+                'reconstructed_message' => $messageContent,
+                'signature_present' => !empty($tx['sender_signature']),
+                'nonce' => $tx['signature_nonce'] ?? 'unknown'
             ]);
         }
 

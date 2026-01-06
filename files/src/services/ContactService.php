@@ -174,9 +174,9 @@ class ContactService {
      * @param string $receiverAddress The address of the contact
      * @param string $currency The currency for the transaction
      * @param string|null $txid The txid from the receiver's response
-     * @return bool True if transaction was inserted successfully
+     * @return string|null The txid on success, null on failure
      */
-    private function insertContactTransaction(string $receiverPublicKey, string $receiverAddress, string $currency, ?string $txid = null): bool {
+    private function insertContactTransaction(string $receiverPublicKey, string $receiverAddress, string $currency, ?string $txid = null): ?string {
         // Use provided txid from receiver, or generate locally as fallback
         $time = $this->timeUtility->getCurrentMicrotime();
         $txid = $txid ?? $this->createContactTxid($receiverPublicKey, $time);
@@ -210,9 +210,10 @@ class ContactService {
                 $receiverAddress,  // endRecipientAddress
                 $myAddress  // initialSenderAddress
             );
+            return $txid;
         }
 
-        return $result !== false;
+        return null;
     }
 
     /**
@@ -663,7 +664,17 @@ class ContactService {
                     $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
 
                     if (!$this->contactTransactionExists($senderPublicKey)) {
-                        $this->insertContactTransaction($senderPublicKey, $address, $currency);
+                        $txid = $this->insertContactTransaction($senderPublicKey, $address, $currency);
+
+                        // Store signature data for future sync verification
+                        $signingData = $sendResult['signing_data'] ?? null;
+                        if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                            $this->transactionRepository->updateSignatureData(
+                                $txid,
+                                $signingData['signature'],
+                                $signingData['nonce']
+                            );
+                        }
                     }
 
                     if ($this->messageDeliveryService !== null) {
@@ -708,7 +719,17 @@ class ContactService {
                     // Insert contact transaction only if one doesn't already exist
                     // (contact may have been deleted but transaction still exists in history)
                     if (!$this->contactTransactionExists($senderPublicKey)) {
-                        $this->insertContactTransaction($senderPublicKey, $address, $currency);
+                        $txid = $this->insertContactTransaction($senderPublicKey, $address, $currency);
+
+                        // Store signature data for future sync verification
+                        $signingData = $sendResult['signing_data'] ?? null;
+                        if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                            $this->transactionRepository->updateSignatureData(
+                                $txid,
+                                $signingData['signature'],
+                                $signingData['nonce']
+                            );
+                        }
                     }
 
                     // Update delivery stage: warning -> inserted -> completed (using MessageDeliveryService directly)
