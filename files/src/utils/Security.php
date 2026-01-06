@@ -1,6 +1,6 @@
 <?php
 
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 /**
  * Security utility functions for eIOU application
  * Provides output encoding, rate limiting, and security headers

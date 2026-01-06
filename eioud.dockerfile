@@ -1,4 +1,4 @@
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 FROM debian:12-slim
 

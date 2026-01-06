@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 # Test NULL previous_txid resync edge case
 # Verifies that when Contact A has Contact B in contacts but deletes their

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 # Test resync prev-txid gap handling functionality
 # Verifies prev-txid chain gap resolution during sync

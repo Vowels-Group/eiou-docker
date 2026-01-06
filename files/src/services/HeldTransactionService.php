@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';

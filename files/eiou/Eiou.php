@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 // This file is how users interact with eiou
 require_once '/etc/eiou/Functions.php';

@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 /**
  * Return Peer-to-Peer (RP2P) payload builder

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 # Test transaction chain sync functionality
 # This test sends real transactions, deletes them from sender's database,

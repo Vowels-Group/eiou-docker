@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 /**
  * ContactDataBuilder - Builds standardized contact data arrays for the GUI

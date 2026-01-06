@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 # Test contact transaction type functionality
 # Verifies that contact requests are recorded as 'contact' tx_type transactions

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 # Test CLI commands for correct output in both regular and JSON formats
 # Tests help, info, viewsettings, viewbalances, history, viewcontact, search commands

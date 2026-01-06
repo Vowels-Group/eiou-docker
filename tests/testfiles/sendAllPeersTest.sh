@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 The Vowels Company
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 # Test sending transactions to ALL connected peers (not just along defined links)
 # This test sends from each container to all its contacts to verify full mesh capability
