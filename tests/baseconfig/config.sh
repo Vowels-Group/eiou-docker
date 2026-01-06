@@ -203,3 +203,20 @@ remove_container_if_exists() {
 }
 
 #############################################################################
+
+########################## Test Helper Functions ############################
+# Source consolidated test helper functions if available
+# These provide common utilities used across multiple test suites
+# See: tests/testHelpers.sh for the full implementation
+#############################################################################
+
+# Try to source testHelpers.sh from the tests directory
+# This provides functions like: get_container_pair, get_pubkey_info, ensure_contacts,
+# get_tx_count_by_desc, cleanup_transactions, check_method_exists, etc.
+if [ -f "./tests/testHelpers.sh" ]; then
+    . "./tests/testHelpers.sh"
+elif [ -f "../testHelpers.sh" ]; then
+    . "../testHelpers.sh"
+fi
+
+#############################################################################

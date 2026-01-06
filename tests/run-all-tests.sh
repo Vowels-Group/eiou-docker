@@ -190,35 +190,30 @@ printf "\n${GREEN}[Step 3/3]${NC} Running test suite...\n"
 
 # Define test order (excluding hostnameTest/torAddressTest as it's already run)
 # TOR-specific tests are included for both modes but will validate TOR functionality
+#
+# CONSOLIDATED TEST SUITES (Issue #387):
+# - torTestSuite: Replaces torRestartTest, torKeyPermissionsTest, torRapidRestartTest, torAddressTest
+# - syncTestSuite: Replaces syncTest, transactionChainSyncTest, signatureValidationSyncTest,
+#                  multiRoundSyncCycleTest, resyncPrevTxidGapTest, nullPrevTxidResyncTest,
+#                  p2pCompletionSyncTest, contactReaddSyncTest
+# - transactionTestSuite: Replaces transactionHistoryTest, transactionInquiryTest,
+#                         contactTransactionTest, transactionChainReorderTest, heldTransactionTest
 TEST_ORDER="
 sslCertificateTest
-torRestartTest
-torKeyPermissionsTest
+torTestSuite
 addContactsTest
 sendMessageTest
 balanceTest
 sendAllPeersTest
 routingTest
 contactListTest
-transactionHistoryTest
-contactTransactionTest
-transactionInquiryTest
+transactionTestSuite
 messageDeliveryTest
 cliCommandsTest
 apiEndpointsTest
-syncTest
-transactionChainSyncTest
-signatureValidationSyncTest
-transactionChainReorderTest
-resyncPrevTxidGapTest
-nullPrevTxidResyncTest
-heldTransactionTest
-multiRoundSyncCycleTest
-p2pCompletionSyncTest
-contactReaddSyncTest
+syncTestSuite
 seedPhraseTest
 authcodeRestorationTest
-torRapidRestartTest
 "
 
 # Run each test in order
