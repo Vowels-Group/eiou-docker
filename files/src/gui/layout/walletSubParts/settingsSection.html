@@ -432,16 +432,13 @@
             <textarea id="debugDescription" rows="3" placeholder="Describe the issue you're experiencing..." style="width: 100%; padding: 0.8rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 1rem;"></textarea>
         </div>
         <input type="hidden" id="debugCsrfToken" value="<?php echo htmlspecialchars($csrfToken); ?>">
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
-            <button type="button" class="btn btn-info" onclick="emailDebugReport()">
-                <i class="fas fa-download"></i> Download Report
-            </button>
-            <a href="mailto:support@eiou.org?subject=EIOU%20Debug%20Report" class="btn btn-secondary">
-                <i class="fas fa-envelope"></i> Email Support
-            </a>
-        </div>
+        <button type="button" class="btn btn-info" onclick="emailDebugReport()">
+            <i class="fas fa-download"></i> Download Report
+        </button>
         <p style="color: #6c757d; font-size: 0.85rem; margin-top: 0.75rem;">
-            <i class="fas fa-info-circle"></i> Download the debug file, then click "Email Support" to open your email client and attach the file.
+            <i class="fas fa-info-circle"></i> Downloads the debug file. Please email it to
+            <span style="font-family: monospace; background: #2d3748; padding: 0.15rem 0.4rem; border-radius: 3px; cursor: pointer;" onclick="copyToClipboard('support@eiou.org')" title="Click to copy">support@eiou.org <i class="fas fa-copy" style="font-size: 0.75rem; margin-left: 0.25rem;"></i></span>
+            with a description of your issue.
         </p>
     </div>
 </div>
