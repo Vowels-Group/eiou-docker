@@ -15,8 +15,8 @@
 # This consolidation reduces ~3,700 lines to ~1,800 lines (51% reduction)
 ########################################################################
 
-# Source helper functions
-. '../testHelpers.sh' 2>/dev/null || true
+# Helper functions are sourced via config.sh -> testHelpers.sh
+# No need to source again here
 
 testname="syncTestSuite"
 totaltests=0
@@ -224,13 +224,18 @@ echo -e "\n[2.1 Sync Method Verification]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing syncTransactionChain method exists"
 
-methodExists=$(check_method_exists "${sender}" "getSyncService" "syncTransactionChain")
+methodExists=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$service = \$app->services->getSyncService();
+    echo method_exists(\$service, 'syncTransactionChain') ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
 
 if [[ "$methodExists" == "EXISTS" ]]; then
     printf "\t   syncTransactionChain method ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   syncTransactionChain method ${RED}FAILED${NC}\n"
+    printf "\t   syncTransactionChain method ${RED}FAILED${NC} (%s)\n" "$methodExists"
     failure=$(( failure + 1 ))
 fi
 
@@ -238,13 +243,18 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing handleTransactionSyncRequest method exists"
 
-handlerExists=$(check_method_exists "${receiver}" "getSyncService" "handleTransactionSyncRequest")
+handlerExists=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$service = \$app->services->getSyncService();
+    echo method_exists(\$service, 'handleTransactionSyncRequest') ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
 
 if [[ "$handlerExists" == "EXISTS" ]]; then
     printf "\t   handleTransactionSyncRequest method ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   handleTransactionSyncRequest method ${RED}FAILED${NC}\n"
+    printf "\t   handleTransactionSyncRequest method ${RED}FAILED${NC} (%s)\n" "$handlerExists"
     failure=$(( failure + 1 ))
 fi
 
@@ -258,15 +268,27 @@ timestamp=$(date +%s%N)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 3 transactions from sender to receiver"
 
-send_test_tx "${sender}" "${receiverAddress}" "1" "chain-sync-test-tx1-${timestamp}" > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 1 USD "chain-sync-test-tx1-${timestamp}" 2>&1 > /dev/null
 sleep 1
-send_test_tx "${sender}" "${receiverAddress}" "2" "chain-sync-test-tx2-${timestamp}" > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 2 USD "chain-sync-test-tx2-${timestamp}" 2>&1 > /dev/null
 sleep 1
-send_test_tx "${sender}" "${receiverAddress}" "3" "chain-sync-test-tx3-${timestamp}" > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 3 USD "chain-sync-test-tx3-${timestamp}" 2>&1 > /dev/null
 sleep 2
 
-senderTxCount=$(get_tx_count_by_desc "${sender}" "chain-sync-test-tx%${timestamp}")
-receiverTxCount=$(get_tx_count_by_desc "${receiver}" "chain-sync-test-tx%${timestamp}")
+senderTxCount=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+receiverTxCount=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
 
 echo -e "\t   Sender has ${senderTxCount} test transactions"
 echo -e "\t   Receiver has ${receiverTxCount} test transactions"
@@ -283,9 +305,20 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Deleting transactions from sender"
 
-cleanup_transactions "${sender}" "chain-sync-test-tx%${timestamp}" > /dev/null
+docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\");
+" 2>/dev/null
 
-senderTxCountAfterDelete=$(get_tx_count_by_desc "${sender}" "chain-sync-test-tx%${timestamp}")
+senderTxCountAfterDelete=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
 echo -e "\t   Sender now has ${senderTxCountAfterDelete} test transactions"
 
 if [[ "$senderTxCountAfterDelete" == "0" ]]; then
@@ -300,7 +333,20 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Triggering sync to recover transactions"
 
-syncResult=$(trigger_sync "${sender}" "${receiverAddress}" "${receiverPubkeyB64}")
+syncResult=$(docker exec ${sender} php -r "
+    require_once('${REL_FUNCTIONS}');
+    \$app = Application::getInstance();
+    \$syncService = \$app->services->getSyncService();
+    \$receiverPubkey = base64_decode('${receiverPubkeyB64}');
+
+    \$result = \$syncService->syncTransactionChain('${receiverAddress}', \$receiverPubkey);
+
+    if (\$result['success']) {
+        echo 'SYNC_SUCCESS:' . \$result['synced_count'];
+    } else {
+        echo 'SYNC_FAILED:' . (\$result['error'] ?? 'unknown');
+    }
+" 2>/dev/null || echo "ERROR")
 
 if [[ "$syncResult" == SYNC_SUCCESS:* ]]; then
     syncedCount=$(echo "$syncResult" | cut -d':' -f2)
@@ -315,7 +361,13 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Verifying transactions were recovered"
 
-senderTxCountAfterSync=$(get_tx_count_by_desc "${sender}" "chain-sync-test-tx%${timestamp}")
+senderTxCountAfterSync=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
 echo -e "\t   Sender now has ${senderTxCountAfterSync} test transactions after sync"
 
 if [[ "$senderTxCountAfterSync" -ge 3 ]]; then
@@ -327,8 +379,18 @@ else
 fi
 
 # Cleanup
-cleanup_transactions "${sender}" "chain-sync-test-tx%" > /dev/null
-cleanup_transactions "${receiver}" "chain-sync-test-tx%" > /dev/null
+docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'chain-sync-test-tx%'\");
+" 2>/dev/null
+docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'chain-sync-test-tx%'\");
+" 2>/dev/null
 
 ##################### SECTION 3: Signature Validation #####################
 # Tests from signatureValidationSyncTest.sh (simplified version)
@@ -400,16 +462,28 @@ timestamp2=$(date +%s%N)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending initial transactions"
 
-send_test_tx "${sender}" "${receiverAddress}" "1" "cycle-test-1-${timestamp2}" > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 1 USD "cycle-test-1-${timestamp2}" 2>&1 > /dev/null
 sleep 2
-send_test_tx "${sender}" "${receiverAddress}" "2" "cycle-test-2-${timestamp2}" > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 2 USD "cycle-test-2-${timestamp2}" 2>&1 > /dev/null
 sleep 2
 
 docker exec ${receiver} eiou in 2>&1 > /dev/null
 sleep 2
 
-initialCountSender=$(get_tx_count_by_desc "${sender}" "cycle-test%${timestamp2}")
-initialCountReceiver=$(get_tx_count_by_desc "${receiver}" "cycle-test%${timestamp2}")
+initialCountSender=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+initialCountReceiver=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
 
 echo -e "\t   Sender has ${initialCountSender}, Receiver has ${initialCountReceiver}"
 
@@ -426,10 +500,15 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing cycle: delete -> send -> resync"
 
 # Delete from sender
-cleanup_transactions "${sender}" "cycle-test%${timestamp2}" > /dev/null
+docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\");
+" 2>/dev/null
 
 # Send new transaction (triggers resync)
-send_test_tx "${sender}" "${receiverAddress}" "10" "cycle-test-3-${timestamp2}" > /dev/null
+docker exec ${sender} eiou send ${receiverAddress} 10 USD "cycle-test-3-${timestamp2}" 2>&1 > /dev/null
 sleep 2
 docker exec ${sender} eiou out 2>&1 > /dev/null
 sleep 3
@@ -438,7 +517,13 @@ sleep 2
 docker exec ${receiver} eiou in 2>&1 > /dev/null
 sleep 2
 
-countAfterCycle=$(get_tx_count_by_desc "${sender}" "cycle-test%${timestamp2}")
+countAfterCycle=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
 echo -e "\t   Sender has ${countAfterCycle} transactions after cycle"
 
 if [[ "$countAfterCycle" -ge 2 ]]; then
@@ -450,8 +535,18 @@ else
 fi
 
 # Cleanup
-cleanup_transactions "${sender}" "cycle-test%" > /dev/null
-cleanup_transactions "${receiver}" "cycle-test%" > /dev/null
+docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'cycle-test%'\");
+" 2>/dev/null
+docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'cycle-test%'\");
+" 2>/dev/null
 
 ##################### SECTION 5: Edge Cases #####################
 # Simplified tests from resyncPrevTxidGapTest.sh and nullPrevTxidResyncTest.sh

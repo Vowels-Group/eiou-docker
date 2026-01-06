@@ -11,8 +11,8 @@
 # This consolidation reduces ~407 lines to ~200 lines (51% reduction)
 ########################################################################
 
-# Source helper functions
-. '../testHelpers.sh' 2>/dev/null || true
+# Helper functions are sourced via config.sh -> testHelpers.sh
+# No need to source again here
 
 testname="torTestSuite"
 totaltests=0

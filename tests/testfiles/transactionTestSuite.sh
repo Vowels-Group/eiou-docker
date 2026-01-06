@@ -12,8 +12,8 @@
 # This consolidation reduces ~1,766 lines to ~900 lines (49% reduction)
 ################################################################################
 
-# Source helper functions
-. '../testHelpers.sh' 2>/dev/null || true
+# Helper functions are sourced via config.sh -> testHelpers.sh
+# No need to source again here
 
 testname="transactionTestSuite"
 totaltests=0
@@ -81,13 +81,18 @@ echo -e "\n[1.2 Transaction Repository Methods]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getTransactionHistory method"
 
-historyMethodExists=$(check_method_exists "${testContainer}" "getTransactionRepository" "getTransactionHistory")
+historyMethodExists=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$repo = \$app->services->getTransactionRepository();
+    echo method_exists(\$repo, 'getTransactionHistory') ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
 
 if [[ "$historyMethodExists" == "EXISTS" ]]; then
     printf "\t   getTransactionHistory method ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   getTransactionHistory method ${RED}FAILED${NC}\n"
+    printf "\t   getTransactionHistory method ${RED}FAILED${NC} (%s)\n" "$historyMethodExists"
     failure=$(( failure + 1 ))
 fi
 
@@ -95,13 +100,18 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getByTxid method"
 
-byTxidMethodExists=$(check_method_exists "${testContainer}" "getTransactionRepository" "getByTxid")
+byTxidMethodExists=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$repo = \$app->services->getTransactionRepository();
+    echo method_exists(\$repo, 'getByTxid') ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
 
 if [[ "$byTxidMethodExists" == "EXISTS" ]]; then
     printf "\t   getByTxid method ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   getByTxid method ${RED}FAILED${NC}\n"
+    printf "\t   getByTxid method ${RED}FAILED${NC} (%s)\n" "$byTxidMethodExists"
     failure=$(( failure + 1 ))
 fi
 
@@ -109,13 +119,18 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getPreviousTxid method"
 
-prevTxidMethodExists=$(check_method_exists "${testContainer}" "getTransactionRepository" "getPreviousTxid")
+prevTxidMethodExists=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$repo = \$app->services->getTransactionRepository();
+    echo method_exists(\$repo, 'getPreviousTxid') ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
 
 if [[ "$prevTxidMethodExists" == "EXISTS" ]]; then
     printf "\t   getPreviousTxid method ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   getPreviousTxid method ${RED}FAILED${NC}\n"
+    printf "\t   getPreviousTxid method ${RED}FAILED${NC} (%s)\n" "$prevTxidMethodExists"
     failure=$(( failure + 1 ))
 fi
 
