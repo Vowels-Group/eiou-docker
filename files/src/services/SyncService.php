@@ -348,17 +348,33 @@ class SyncService {
      * Called when a transaction is rejected due to invalid_previous_txid.
      * Requests missing transactions from the contact and inserts them locally.
      *
+     * SECURITY: If signature verification fails for any transaction, syncing
+     * is immediately stopped. The failing transaction and all subsequent
+     * transactions are NOT inserted to prevent forged transaction injection.
+     *
      * @param string $contactAddress Contact's address
      * @param string $contactPublicKey Contact's public key
      * @param string|null $expectedTxid The txid the contact expected (from rejection)
-     * @return array Result with success, synced_count, latest_txid, error
+     * @return array Result with:
+     *   - success: bool - Whether sync completed successfully
+     *   - synced_count: int - Number of transactions synced
+     *   - latest_txid: string|null - Latest transaction ID from sync
+     *   - error: string|null - Error message if failed
+     *   - signature_failure: bool - True if stopped due to signature failure
+     *   - failed_txid: string|null - TXID that failed verification
+     *   - failed_sender: string|null - Sender address of failed transaction
+     *   - synced_before_failure: int - Transactions synced before failure
      */
     public function syncTransactionChain(string $contactAddress, string $contactPublicKey, ?string $expectedTxid = null): array {
         $result = [
             'success' => false,
             'synced_count' => 0,
             'latest_txid' => null,
-            'error' => null
+            'error' => null,
+            'signature_failure' => false,
+            'failed_txid' => null,
+            'failed_sender' => null,
+            'synced_before_failure' => 0
         ];
 
         try {
@@ -408,24 +424,57 @@ class SyncService {
                 }
 
                 // Verify transaction signature before inserting
-                // This ensures the sender actually signed this transaction
-                // Note: Signature verification requires signed_message to be preserved during
-                // message parsing. If signatures are missing, log a warning but allow sync
-                // to maintain backward compatibility. Full signature enforcement is a future enhancement.
+                // CRITICAL (Issue #389): If signature verification fails, STOP syncing immediately.
+                // The failing transaction and all subsequent transactions are NOT inserted.
+                // This is a security measure to prevent insertion of forged transactions.
                 if (!$this->verifyTransactionSignature($tx)) {
-                    // Log warning - signature data should be available for all transactions.
-                    // If this warning appears frequently, there may be an issue with signature
-                    // storage during send or signature preservation during message parsing.
-                    SecureLogger::warning("Sync transaction missing signature verification", [
-                        'txid' => $tx['txid'],
-                        'sender' => $tx['sender_address'],
+                    // Log the failure with full details for security audit
+                    SecureLogger::warning("Sync stopped: Transaction signature verification failed", [
+                        'txid' => $tx['txid'] ?? 'unknown',
+                        'sender_address' => $tx['sender_address'] ?? 'unknown',
+                        'sender_public_key_hash' => isset($tx['sender_public_key'])
+                            ? hash(Constants::HASH_ALGORITHM, $tx['sender_public_key'])
+                            : 'unknown',
+                        'receiver_address' => $tx['receiver_address'] ?? 'unknown',
+                        'amount' => $tx['amount'] ?? 'unknown',
+                        'currency' => $tx['currency'] ?? 'unknown',
                         'has_signature' => !empty($tx['sender_signature']),
-                        'has_nonce' => !empty($tx['signature_nonce'])
+                        'has_nonce' => !empty($tx['signature_nonce']),
+                        'synced_before_failure' => $syncedCount,
+                        'contact_address' => $contactAddress
                     ]);
-                    // Continue with sync - don't block on missing signatures for now
+
+                    // Set failure result with details for GUI warning
+                    $result['success'] = false;
+                    $result['synced_count'] = $syncedCount;
+                    $result['signature_failure'] = true;
+                    $result['failed_txid'] = $tx['txid'] ?? null;
+                    $result['failed_sender'] = $tx['sender_address'] ?? null;
+                    $result['synced_before_failure'] = $syncedCount;
+                    $result['error'] = 'Sync stopped: signature verification failed for transaction ' . ($tx['txid'] ?? 'unknown');
+
+                    // Output for CLI visibility
+                    output("SECURITY WARNING: Transaction signature verification failed. Sync stopped. TXID: " . ($tx['txid'] ?? 'unknown'), 'ECHO');
+
+                    // Store warning in session for GUI notification
+                    if (session_status() === PHP_SESSION_ACTIVE) {
+                        if (!isset($_SESSION['sync_warnings'])) {
+                            $_SESSION['sync_warnings'] = [];
+                        }
+                        $_SESSION['sync_warnings'][] = [
+                            'message' => 'Transaction signature verification failed during sync',
+                            'type' => 'warning',
+                            'txid' => $tx['txid'] ?? 'unknown',
+                            'sender' => $tx['sender_address'] ?? 'unknown',
+                            'timestamp' => time()
+                        ];
+                    }
+
+                    // STOP processing - do not insert this or any subsequent transactions
+                    return $result;
                 }
 
-                // Insert the missing transaction
+                // Insert the missing transaction (only reached if signature is valid)
                 $insertData = [
                     'senderAddress' => $tx['sender_address'],
                     'senderPublicKey' => $tx['sender_public_key'],
@@ -455,6 +504,7 @@ class SyncService {
             $result['success'] = true;
             $result['synced_count'] = $syncedCount;
             $result['latest_txid'] = $syncResponse['latestTxid'] ?? null;
+            $result['signature_failure'] = false;
 
             output("Transaction chain sync completed: {$syncedCount} transactions synced", 'SILENT');
 
