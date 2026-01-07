@@ -322,19 +322,18 @@ originalPubKeyRestoreFile=$(docker exec ${testContainer} php -r '
 ' 2>&1)
 
 # Create a new container with RESTORE_FILE (file-based restore)
-# Use double slashes in paths to prevent Git Bash path conversion
+# Note: Docker volume mounts don't need double slashes - only docker exec paths do
 restoreFileContainer="httpRestoreFileTest"
-RESTORE_FILE_PATH="//restore//seed"
 docker run -d --network="${network}" --name "${restoreFileContainer}" \
-    -v "${hostSeedFile}://restore//seed:ro" \
-    -e RESTORE_FILE="${RESTORE_FILE_PATH}" \
-    -v "${restoreFileContainer}-mysql-data://var//lib//mysql" \
-    -v "${restoreFileContainer}-files://etc//eiou//" \
-    -v "${restoreFileContainer}-index://var//www//html" \
-    -v "${restoreFileContainer}-eiou://usr//local//bin//" \
+    -v "${hostSeedFile}:/restore/seed:ro" \
+    -e RESTORE_FILE="/restore/seed" \
+    -v "${restoreFileContainer}-mysql-data:/var/lib/mysql" \
+    -v "${restoreFileContainer}-files:/etc/eiou/" \
+    -v "${restoreFileContainer}-index:/var/www/html" \
+    -v "${restoreFileContainer}-eiou:/usr/local/bin/" \
     eioud > /dev/null 2>&1
 
-sleep 20
+sleep 25
 
 # Extract first 3 words from seedphrase for checking
 firstThreeWordsFile=$(cat "${hostSeedFile}" | awk '{print $1" "$2" "$3}')
@@ -405,17 +404,17 @@ originalPubKeyRestoreEnv=$(docker exec ${testContainer} php -r '
 ' 2>&1)
 
 # Create a new container with RESTORE env var
-# Use double slashes in paths to prevent Git Bash path conversion
+# Note: Docker volume mounts don't need double slashes - only docker exec paths do
 restoreEnvContainer="httpRestoreEnvTest"
 docker run -d --network="${network}" --name "${restoreEnvContainer}" \
     -e RESTORE="${restoreEnvSeedPhrase}" \
-    -v "${restoreEnvContainer}-mysql-data://var//lib//mysql" \
-    -v "${restoreEnvContainer}-files://etc//eiou//" \
-    -v "${restoreEnvContainer}-index://var//www//html" \
-    -v "${restoreEnvContainer}-eiou://usr//local//bin//" \
+    -v "${restoreEnvContainer}-mysql-data:/var/lib/mysql" \
+    -v "${restoreEnvContainer}-files:/etc/eiou/" \
+    -v "${restoreEnvContainer}-index:/var/www/html" \
+    -v "${restoreEnvContainer}-eiou:/usr/local/bin/" \
     eioud > /dev/null 2>&1
 
-sleep 20
+sleep 25
 
 # Get restored public key
 restoredPubKeyRestoreEnv=$(docker exec ${restoreEnvContainer} php -r '
