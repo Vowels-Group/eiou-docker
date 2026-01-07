@@ -304,8 +304,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 9: Testing RESTORE_FILE approach (file-based restore)"
 
 # Create a new container with RESTORE_FILE to test the file-based restore
-# First, get the seedphrase and create a temp file on the host
-hostSeedFile="/tmp/eiou_test_restore_seed_$$"
+# Use current directory for temp file to avoid Git Bash path conversion issues
+hostSeedFile="$(pwd)/eiou_test_restore_seed_$$"
 
 # Get the current seedphrase
 docker exec ${testContainer} php -r '
@@ -315,8 +315,8 @@ docker exec ${testContainer} php -r '
 ' > "${hostSeedFile}" 2>&1
 chmod 600 "${hostSeedFile}"
 
-# Verify seedphrase file was created
-if [ ! -f "${hostSeedFile}" ]; then
+# Verify seedphrase file was created and has content
+if [ ! -f "${hostSeedFile}" ] || [ ! -s "${hostSeedFile}" ]; then
     printf "\t   RESTORE_FILE approach ${RED}FAILED${NC}\n"
     printf "\t   - Could not create seed file at: ${hostSeedFile}\n"
     failure=$(( failure + 1 ))
@@ -329,18 +329,17 @@ originalPubKeyRestoreFile=$(docker exec ${testContainer} php -r '
 ' 2>&1)
 
 # Create a new container with RESTORE_FILE (file-based restore)
-# Note: Docker volume mounts don't need double slashes - only docker exec paths do
 restoreFileContainer="httpRestoreFileTest"
 
 # Clean up any existing container first
 docker rm -f ${restoreFileContainer} > /dev/null 2>&1
 docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-index ${restoreFileContainer}-eiou > /dev/null 2>&1
 
-# Create the container and capture any errors
-# Use double slashes in RESTORE_FILE value to prevent Git Bash path conversion
-createOutput=$(docker run -d --network="${network}" --name "${restoreFileContainer}" \
+# Create the container
+# MSYS_NO_PATHCONV=1 disables Git Bash path conversion for this command
+createOutput=$(MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileContainer}" \
     -v "${hostSeedFile}:/restore/seed:ro" \
-    -e RESTORE_FILE="//restore//seed" \
+    -e RESTORE_FILE="/restore/seed" \
     -v "${restoreFileContainer}-mysql-data:/var/lib/mysql" \
     -v "${restoreFileContainer}-files:/etc/eiou/" \
     -v "${restoreFileContainer}-index:/var/www/html" \
