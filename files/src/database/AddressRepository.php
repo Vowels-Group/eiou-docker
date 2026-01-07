@@ -178,10 +178,10 @@ class AddressRepository extends AbstractRepository {
 
         if (!$stmt) {
             // Fallback to known address types if query fails
-            return ['http', 'tor'];
+            return Constants::VALID_TRANSPORT_INDICES;
         }
 
         $result = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        return $result ?: ['http', 'tor'];
+        return $result ?: Constants::VALID_TRANSPORT_INDICES;
     }
 }

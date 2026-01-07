@@ -125,10 +125,10 @@ class SettingsController
         // Default Transport Mode
         if (isset($_POST['defaultTransportMode'])) {
             $value = strtolower(Security::sanitizeInput($_POST['defaultTransportMode']));
-            if (in_array($value, ['http', 'tor'])) {
+            if (in_array($value, Constants::VALID_TRANSPORT_INDICES)) {
                 $settings['defaultTransportMode'] = $value;
             } else {
-                $errors[] = 'Invalid transport mode: must be http or tor';
+                $errors[] = 'Invalid transport mode: must be in ' . Constants::VALID_TRANSPORT_INDICES;
             }
         }
 
