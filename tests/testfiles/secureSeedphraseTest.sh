@@ -336,7 +336,12 @@ sleep 10
 firstThreeWordsFile=$(cat "${hostSeedFile}" | awk '{print $1" "$2" "$3}')
 
 # Check if seedphrase is in environment (should NOT be with RESTORE_FILE)
-seedInEnv=$(docker exec ${restoreFileContainer} printenv 2>&1 | grep -c "$firstThreeWordsFile" || echo "0")
+# Use grep -q for boolean check, avoiding grep -c output issues
+if docker exec ${restoreFileContainer} printenv 2>&1 | grep -q "$firstThreeWordsFile"; then
+    seedInEnv="1"
+else
+    seedInEnv="0"
+fi
 
 # Get restored public key
 restoredPubKeyRestoreFile=$(docker exec ${restoreFileContainer} php -r '
@@ -345,7 +350,12 @@ restoredPubKeyRestoreFile=$(docker exec ${restoreFileContainer} php -r '
 ' 2>&1)
 
 # Check if seedphrase is in docker logs
-seedInLogs=$(docker logs ${restoreFileContainer} 2>&1 | grep -c "$firstThreeWordsFile" || echo "0")
+# Use grep -q for boolean check, avoiding grep -c output issues
+if docker logs ${restoreFileContainer} 2>&1 | grep -q "$firstThreeWordsFile"; then
+    seedInLogs="1"
+else
+    seedInLogs="0"
+fi
 
 # Clean up the new container
 docker rm -f ${restoreFileContainer} > /dev/null 2>&1
@@ -408,12 +418,14 @@ restoredPubKeyRestoreEnv=$(docker exec ${restoreEnvContainer} php -r '
     echo $json["public"] ?? "ERROR";
 ' 2>&1)
 
-# Check if seedphrase is in docker logs (should NOT be)
-seedInLogsEnv=$(docker logs ${restoreEnvContainer} 2>&1 | grep -c "${restoreEnvSeedPhrase:0:30}" || echo "0")
-
 # Check for 3-word sequence in logs
+# Use grep -q for boolean check, avoiding grep -c output issues
 firstThreeWords=$(echo "$restoreEnvSeedPhrase" | awk '{print $1" "$2" "$3}')
-threeWordInLogs=$(docker logs ${restoreEnvContainer} 2>&1 | grep -c "$firstThreeWords" || echo "0")
+if docker logs ${restoreEnvContainer} 2>&1 | grep -q "$firstThreeWords"; then
+    threeWordInLogs="1"
+else
+    threeWordInLogs="0"
+fi
 
 # Clean up the new container
 docker rm -f ${restoreEnvContainer} > /dev/null 2>&1
