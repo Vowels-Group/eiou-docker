@@ -337,7 +337,7 @@ seedInEnv=$(docker exec ${restoreFileContainer} printenv 2>&1 | grep -c "abandon
 
 # Get restored public key
 restoredPubKeyRestoreFile=$(docker exec ${restoreFileContainer} php -r '
-    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     echo $json["public"] ?? "ERROR";
 ' 2>&1)
 
@@ -401,7 +401,7 @@ sleep 10
 
 # Get restored public key
 restoredPubKeyRestoreEnv=$(docker exec ${restoreEnvContainer} php -r '
-    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     echo $json["public"] ?? "ERROR";
 ' 2>&1)
 
