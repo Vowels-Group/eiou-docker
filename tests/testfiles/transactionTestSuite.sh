@@ -465,7 +465,18 @@ echo -e "\n\t-> Testing HeldTransactionRepository methods"
 heldRepoCheck=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
+
+    // First check if the getter method exists on ServiceContainer
+    if (!method_exists(\$app->services, 'getHeldTransactionRepository')) {
+        echo 'REPO_GETTER_MISSING';
+        exit;
+    }
+
     \$heldRepo = \$app->services->getHeldTransactionRepository();
+    if (\$heldRepo === null) {
+        echo 'REPO_NULL';
+        exit;
+    }
 
     \$requiredMethods = ['insert', 'getByContactHash', 'delete'];
     \$missing = [];
@@ -529,7 +540,18 @@ echo -e "\n\t-> Testing held transaction isolation"
 isolationCheck=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
+
+    // First check if the getter method exists
+    if (!method_exists(\$app->services, 'getHeldTransactionRepository')) {
+        echo 'REPO_GETTER_MISSING';
+        exit;
+    }
+
     \$heldRepo = \$app->services->getHeldTransactionRepository();
+    if (\$heldRepo === null) {
+        echo 'REPO_NULL';
+        exit;
+    }
 
     // Query should not affect regular transactions table
     \$result = \$heldRepo->getByContactHash('nonexistent_hash_' . time());
