@@ -45,6 +45,11 @@ class Constants {
     // API
     const API_ENABLED = true;
     const API_CORS_ALLOWED_ORIGINS = ''; // Comma-separated list of allowed origins. Empty = no CORS headers sent (blocks cross-origin browser requests). '*' = allow all origins (not recommended for production)
+    //  With the current empty default (''):
+    //   - Same-origin GUI: Works fine
+    //   - CLI tools: Works fine
+    //   - Mobile apps: Works fine
+    //   - Browser extensions: BROKEN - will get CORS errors
 
     // Transaction limits
     const TRANSACTION_MAX_AMOUNT = 999999999;
