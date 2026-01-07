@@ -29,9 +29,9 @@ if (!empty($corsOrigins)) {
             header('Vary: Origin');
         }
     }
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: X-API-Key, X-API-Timestamp, X-API-Signature, Content-Type');
 }
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: X-API-Key, X-API-Timestamp, X-API-Signature, Content-Type');
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
