@@ -307,13 +307,15 @@ class ContactService {
     private function sendContactMessage(string $address, array $payload, ?string $messageId = null): array {
         // Use unified sendMessage() from MessageDeliveryService if available
         if ($this->messageDeliveryService !== null) {
-            // Use sync delivery (async=false) for contact messages to ensure reliability
+            // Use async delivery (async=true) for contact messages to prevent blocking
+            // on slow Tor connections. If the first attempt fails, the message is queued
+            // for background retry via the message processor cron job.
             return $this->messageDeliveryService->sendMessage(
                 'contact',
                 $address,
                 $payload,
                 $messageId,
-                false // sync
+                true // async - non-blocking, queues for retry if first attempt fails
             );
         }
 
@@ -767,8 +769,22 @@ class ContactService {
                 return;
             }
         } else{
-            // No valid response - MessageDeliveryService has already exhausted all retries
-            // (retries happen synchronously within sendWithTracking)
+            // No immediate response - check if message was queued for background retry
+            // This is expected behavior for async mode over slow Tor connections
+            if ($sendResult['queued_for_retry'] ?? false) {
+                // Message is being retried in the background by the message processor
+                // Insert contact locally as pending so user can see it in their contact list
+                $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+                $contactData['delivery_status'] = 'queued_for_retry';
+                $output->success(
+                    "Contact request sent to " . $address . ". Awaiting response (message being delivered in background).",
+                    $contactData,
+                    "Contact request sent, delivery in progress"
+                );
+                return;
+            }
+
+            // Message delivery failed completely (not queued for retry)
             // Tracking results are nested inside 'tracking' key from sendContactMessage
             $trackingResult = $sendResult['tracking'] ?? [];
             $attempts = $trackingResult['attempts'] ?? 'unknown';
