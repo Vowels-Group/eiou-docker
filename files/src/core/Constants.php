@@ -50,6 +50,7 @@ class Constants {
     //   - CLI tools: Works fine
     //   - Mobile apps: Works fine
     //   - Browser extensions: BROKEN - will get CORS errors
+    //   - External web applications: BROKEN - will get CORS errors
 
     // Transaction limits
     const TRANSACTION_MAX_AMOUNT = 999999999;
