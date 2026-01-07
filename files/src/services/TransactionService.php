@@ -984,7 +984,7 @@ class TransactionService {
                     'error' => $amountValidation['error']
                 ]);
                 $output->error("Invalid parameter amount: " . $amountValidation['error'], ErrorCodes::INVALID_PARAMS, 400);
-                exit(0);
+                return;
             }
         }
 
@@ -999,7 +999,7 @@ class TransactionService {
                         'error' => $addressValidation['error'] . " / " . $nameValidation['error']
                     ]);
                     $output->error("Invalid Address/name: " . $addressValidation['error'], ErrorCodes::INVALID_RECIPIENT, 400);
-                    exit(0);
+                    return;
                 }
             }
         }
@@ -1013,7 +1013,7 @@ class TransactionService {
                     'error' => $amountValidation['error']
                 ]);
                 $output->error("Invalid amount: " . $amountValidation['error'], ErrorCodes::INVALID_AMOUNT, 400);
-                exit(0);
+                return;
             }
             $request[3] = $amountValidation['value'];
             $txData['amount'] = $request[3];
@@ -1028,7 +1028,7 @@ class TransactionService {
                     'error' => $currencyValidation['error']
                 ]);
                 $output->error("Invalid currency: " . $currencyValidation['error'], ErrorCodes::INVALID_CURRENCY, 400);
-                exit(0);
+                return;
             }
             $request[4] = $currencyValidation['value'];
             $txData['currency'] = $request[4];
@@ -1037,7 +1037,7 @@ class TransactionService {
         // Check if any contacts for eIOU
         if(!$this->addressRepository->getAllAddresses()){
             $output->error("No contacts available for transaction", 'NO_CONTACTS', 400, $txData);
-            exit(0);
+            return;
         }
 
         // If receiver's public key is in contacts, prepare a transaction to send directly to them
