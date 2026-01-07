@@ -214,8 +214,24 @@ statusResponseCheck=$(docker exec ${testContainer} php -r "
     require_once('/etc/eiou/src/schemas/payloads/MessagePayload.php');
 
     \$app = Application::getInstance();
+
+    // Check if core services exist
+    if (!method_exists(\$app->services, 'getCurrentUser')) {
+        echo 'CURRENT_USER_MISSING';
+        exit;
+    }
+    if (!method_exists(\$app->services, 'getUtilityContainer')) {
+        echo 'UTIL_CONTAINER_MISSING';
+        exit;
+    }
+
     \$user = \$app->services->getCurrentUser();
     \$utilContainer = \$app->services->getUtilityContainer();
+
+    if (\$user === null || \$utilContainer === null) {
+        echo 'SERVICES_NULL';
+        exit;
+    }
 
     \$payload = new MessagePayload(\$user, \$utilContainer);
 
@@ -257,8 +273,24 @@ notFoundCheck=$(docker exec ${testContainer} php -r "
     require_once('/etc/eiou/src/schemas/payloads/MessagePayload.php');
 
     \$app = Application::getInstance();
+
+    // Check if core services exist
+    if (!method_exists(\$app->services, 'getCurrentUser')) {
+        echo 'CURRENT_USER_MISSING';
+        exit;
+    }
+    if (!method_exists(\$app->services, 'getUtilityContainer')) {
+        echo 'UTIL_CONTAINER_MISSING';
+        exit;
+    }
+
     \$user = \$app->services->getCurrentUser();
     \$utilContainer = \$app->services->getUtilityContainer();
+
+    if (\$user === null || \$utilContainer === null) {
+        echo 'SERVICES_NULL';
+        exit;
+    }
 
     \$payload = new MessagePayload(\$user, \$utilContainer);
 
