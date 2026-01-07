@@ -210,6 +210,7 @@ cliCommandsTest
 apiEndpointsTest
 syncTestSuite
 seedPhraseTest
+secureSeedphraseTest
 authcodeRestorationTest
 "
 
