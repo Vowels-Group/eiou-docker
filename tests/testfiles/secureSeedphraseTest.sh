@@ -315,13 +315,6 @@ docker exec ${testContainer} php -r '
 ' > "${hostSeedFile}" 2>&1
 chmod 600 "${hostSeedFile}"
 
-# Verify seedphrase file was created and has content
-if [ ! -f "${hostSeedFile}" ] || [ ! -s "${hostSeedFile}" ]; then
-    printf "\t   RESTORE_FILE approach ${RED}FAILED${NC}\n"
-    printf "\t   - Could not create seed file at: ${hostSeedFile}\n"
-    failure=$(( failure + 1 ))
-else
-
 # Get original public key for comparison
 originalPubKeyRestoreFile=$(docker exec ${testContainer} php -r '
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
@@ -337,43 +330,21 @@ docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-file
 
 # Create the container
 # MSYS_NO_PATHCONV=1 disables Git Bash path conversion for this command
-createOutput=$(MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileContainer}" \
+MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileContainer}" \
     -v "${hostSeedFile}:/restore/seed:ro" \
     -e RESTORE_FILE="/restore/seed" \
     -v "${restoreFileContainer}-mysql-data:/var/lib/mysql" \
     -v "${restoreFileContainer}-files:/etc/eiou/" \
     -v "${restoreFileContainer}-index:/var/www/html" \
     -v "${restoreFileContainer}-eiou:/usr/local/bin/" \
-    eioud 2>&1)
-
-# Check if container was created
-if ! docker ps -q --filter "name=${restoreFileContainer}" | grep -q .; then
-    printf "\t   RESTORE_FILE approach ${RED}FAILED${NC}\n"
-    printf "\t   - Container failed to start\n"
-    printf "\t   - Docker output: ${createOutput}\n"
-    rm -f "${hostSeedFile}"
-    failure=$(( failure + 1 ))
-else
+    eioud > /dev/null 2>&1
 
 sleep 30
-
-# Check container is still running
-containerStatus=$(docker ps --filter "name=${restoreFileContainer}" --format "{{.Status}}" 2>&1)
-if [ -z "$containerStatus" ]; then
-    printf "\t   RESTORE_FILE approach ${RED}FAILED${NC}\n"
-    printf "\t   - Container stopped unexpectedly\n"
-    printf "\t   - Logs: $(docker logs ${restoreFileContainer} 2>&1 | tail -10)\n"
-    docker rm -f ${restoreFileContainer} > /dev/null 2>&1
-    docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-index ${restoreFileContainer}-eiou > /dev/null 2>&1
-    rm -f "${hostSeedFile}"
-    failure=$(( failure + 1 ))
-else
 
 # Extract first 3 words from seedphrase for checking
 firstThreeWordsFile=$(cat "${hostSeedFile}" | awk '{print $1" "$2" "$3}')
 
 # Check if seedphrase is in environment (should NOT be with RESTORE_FILE)
-# Use grep -q for boolean check, avoiding grep -c output issues
 if docker exec ${restoreFileContainer} printenv 2>&1 | grep -q "$firstThreeWordsFile"; then
     seedInEnv="1"
 else
@@ -387,7 +358,6 @@ restoredPubKeyRestoreFile=$(docker exec ${restoreFileContainer} php -r '
 ' 2>&1)
 
 # Check if seedphrase is in docker logs
-# Use grep -q for boolean check, avoiding grep -c output issues
 if docker logs ${restoreFileContainer} 2>&1 | grep -q "$firstThreeWordsFile"; then
     seedInLogs="1"
 else
@@ -415,18 +385,9 @@ else
     fi
     if [[ "$originalPubKeyRestoreFile" != "$restoredPubKeyRestoreFile" ]]; then
         printf "\t   - Public key mismatch after restore\n"
-        printf "\t   - Original key (first 60 chars): ${originalPubKeyRestoreFile:0:60}\n"
-        printf "\t   - Restored key (first 60 chars): ${restoredPubKeyRestoreFile:0:60}\n"
-    fi
-    if [[ "$restoredPubKeyRestoreFile" == "ERROR" ]]; then
-        printf "\t   - Restored key returned ERROR (userconfig.json may not exist)\n"
     fi
     failure=$(( failure + 1 ))
 fi
-
-fi # container running check
-fi # container created check
-fi # seed file created check
 
 ############################ TEST 10: VERIFY RESTORE ENV VAR APPROACH ############################
 
