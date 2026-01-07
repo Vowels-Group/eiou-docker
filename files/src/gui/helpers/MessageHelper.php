@@ -374,6 +374,7 @@ class MessageHelper
             'INVALID_RECIPIENT' => 'Invalid recipient address or contact name.',
             'INVALID_PARAMS' => 'Invalid parameters provided. Please check your input.',
             'SELF_CONTACT' => 'You cannot add yourself as a contact.',
+            'SELF_SEND' => 'You cannot send transactions to yourself. Please enter a different recipient address.',
 
             // Contact state errors
             'CONTACT_EXISTS' => 'This contact already exists in your contact list.',

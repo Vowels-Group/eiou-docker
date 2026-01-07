@@ -1005,6 +1005,19 @@ class TransactionService {
                     return;
                 }
             }
+
+            // Check if recipient is one of user's own addresses (self-send prevention)
+            if ($addressValidation['valid']) {
+                $selfSendValidation = $this->inputValidator->validateNotSelfSend($request[2], $this->currentUser);
+                if (!$selfSendValidation['valid']) {
+                    $this->secureLogger->warning("Self-send transaction attempted", [
+                        'recipient' => $request[2],
+                        'error' => $selfSendValidation['error']
+                    ]);
+                    $output->error("Cannot send to yourself: " . $selfSendValidation['error'], ErrorCodes::SELF_SEND, 400);
+                    return;
+                }
+            }
         }
 
         // Validate and sanitize amount if provided

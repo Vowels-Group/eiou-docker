@@ -93,6 +93,7 @@ class ErrorCodes
     public const INVALID_AMOUNT = 'INVALID_AMOUNT';
     public const INVALID_CURRENCY = 'INVALID_CURRENCY';
     public const INVALID_RECIPIENT = 'INVALID_RECIPIENT';
+    public const SELF_SEND = 'SELF_SEND';
 
     // Input validation errors
     public const INVALID_ADDRESS = 'INVALID_ADDRESS';
@@ -176,6 +177,7 @@ class ErrorCodes
             self::MISSING_IDENTIFIER => 400,
             self::MISSING_ADDRESS => 400,
             self::SELF_CONTACT => 400,
+            self::SELF_SEND => 400,
             self::NO_CONTACTS => 400,
             self::INTERACTIVE_NOT_SUPPORTED => 400,
 
@@ -304,6 +306,7 @@ class ErrorCodes
             self::CONTACT_REJECTED => 'Contact Request Rejected',
             self::CONTACT_CREATE_FAILED => 'Contact Creation Failed',
             self::SELF_CONTACT => 'Cannot Add Self as Contact',
+            self::SELF_SEND => 'Cannot Send to Yourself',
             self::ACCEPT_FAILED => 'Accept Failed',
             self::BLOCK_FAILED => 'Block Failed',
             self::UNBLOCK_FAILED => 'Unblock Failed',

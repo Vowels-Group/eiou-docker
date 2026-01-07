@@ -116,6 +116,22 @@ class TransactionController
                 return;
             }
 
+            // Check if recipient is one of user's own addresses (self-send prevention)
+            if ($addressValidation['valid']) {
+                require_once __DIR__ . '/../../core/UserContext.php';
+                $userContext = UserContext::getInstance();
+                $selfSendValidation = InputValidator::validateNotSelfSend($finalRecipient, $userContext);
+                if (!$selfSendValidation['valid']) {
+                    require_once __DIR__ . '/../../utils/SecureLogger.php';
+                    SecureLogger::warning("Self-send transaction attempted", [
+                        'recipient' => $finalRecipient,
+                        'error' => $selfSendValidation['error']
+                    ]);
+                    MessageHelper::redirectMessage('Cannot send to yourself: ' . $selfSendValidation['error'], 'error');
+                    return;
+                }
+            }
+
             // Use sanitized values
             $amount = $amountValidation['value'];
             $currency = $currencyValidation['value'];
