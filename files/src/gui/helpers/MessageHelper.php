@@ -424,7 +424,7 @@ class MessageHelper
             'success' => 'success',
             'accepted' => 'contact-accepted',
             'pending' => 'info',
-            'blocked' => 'warning',
+            'blocked' => 'success',
             'updated' => 'success',
             'unblocked' => 'success',
             'deleted' => 'success',
