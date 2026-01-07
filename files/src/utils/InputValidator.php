@@ -159,12 +159,12 @@ class InputValidator {
     }
 
     /**
-     * Validate address format og hostname
+     * Validate address format or hostname
      *
      * @param string $address Address to validate
      * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null, 'type' => string|null]
      */
-    public static function validateHostname($address){
+    public static function validateHostname($address): array {
         if (!is_string($address) || empty($address)) {
             return ['valid' => false, 'value' => null, 'error' => 'Address cannot be empty', 'type' => null];
         }

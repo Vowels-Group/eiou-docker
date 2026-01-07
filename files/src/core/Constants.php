@@ -44,6 +44,7 @@ class Constants {
 
     // API
     const API_ENABLED = true;
+    const API_CORS_ALLOWED_ORIGINS = ''; // Comma-separated list of allowed origins, empty = none, '*' = all (not recommended)
 
     // Transaction limits
     const TRANSACTION_MAX_AMOUNT = 999999999;
@@ -178,7 +179,7 @@ class Constants {
      * @return mixed
      */
     public static function get($key, $default = null) {
-        $constantName = 'self::' . $key;
+        $constantName = self::class . '::' . $key;
         if (defined($constantName)) {
             return constant($constantName);
         }

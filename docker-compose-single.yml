@@ -15,6 +15,12 @@ services:
       - eioud-index:/var/www/html
       - eioud-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 networks:
   eiou-network-compose:

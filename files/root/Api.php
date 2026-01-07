@@ -2,6 +2,7 @@
 # Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 require_once __DIR__ . '/src/core/ErrorCodes.php';
+require_once __DIR__ . '/src/core/Constants.php';
 
 /**
  * API Entry Point
@@ -15,8 +16,20 @@ require_once __DIR__ . '/src/core/ErrorCodes.php';
 // Set JSON content type
 header('Content-Type: application/json; charset=utf-8');
 
-// Set CORS headers for API access
-header('Access-Control-Allow-Origin: *');
+// Set CORS headers for API access (configurable via Constants)
+$corsOrigins = Constants::API_CORS_ALLOWED_ORIGINS;
+if (!empty($corsOrigins)) {
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if ($corsOrigins === '*') {
+        header('Access-Control-Allow-Origin: *');
+    } else {
+        $allowedOrigins = array_map('trim', explode(',', $corsOrigins));
+        if (in_array($origin, $allowedOrigins, true)) {
+            header('Access-Control-Allow-Origin: ' . $origin);
+            header('Vary: Origin');
+        }
+    }
+}
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: X-API-Key, X-API-Timestamp, X-API-Signature, Content-Type');
 
