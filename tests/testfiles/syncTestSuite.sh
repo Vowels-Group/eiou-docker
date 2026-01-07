@@ -31,11 +31,13 @@ echo -e "\n"
 
 # Setup: Get container pair and public keys (shared by all sync tests)
 # Get sender and receiver from container links or default to first/last containers
-if [[ -n "${containerLinks}" ]]; then
-    # Parse first link pair
-    firstLink=$(echo "${containerLinks}" | head -1)
-    sender=$(echo "$firstLink" | cut -d':' -f1)
-    receiver=$(echo "$firstLink" | cut -d':' -f2)
+if [[ ${#containersLinks[@]} -gt 0 ]]; then
+    # Parse first link pair from associative array keys (format: "httpA,httpB")
+    containersLinkKeys=($(for x in ${!containersLinks[@]}; do echo $x; done | sort))
+    firstLinkKey="${containersLinkKeys[0]}"
+    linkParts=(${firstLinkKey//,/ })
+    sender="${linkParts[0]}"
+    receiver="${linkParts[1]}"
 else
     # Fallback: use first and last containers
     sender="${containers[0]}"
@@ -79,13 +81,45 @@ sleep 1
 docker exec ${receiver} eiou addcontact ${senderAddress} 2>&1 > /dev/null || true
 sleep 2
 
+# Wait for contacts to be accepted (pubkeys only available after acceptance)
+echo -e "\t   Waiting for contacts to be accepted..."
+waitElapsed=0
+while [ $waitElapsed -lt 15 ]; do
+    senderStatus=$(docker exec ${sender} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$status = \$app->services->getContactRepository()->getContactStatus('${MODE}', '${receiverAddress}');
+        echo \$status ?? 'none';
+    " 2>/dev/null || echo "none")
+
+    receiverStatus=$(docker exec ${receiver} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$status = \$app->services->getContactRepository()->getContactStatus('${MODE}', '${senderAddress}');
+        echo \$status ?? 'none';
+    " 2>/dev/null || echo "none")
+
+    if [[ "$senderStatus" == "accepted" ]] && [[ "$receiverStatus" == "accepted" ]]; then
+        echo -e "\t   Contacts accepted (${waitElapsed}s)"
+        break
+    fi
+
+    sleep 1
+    waitElapsed=$((waitElapsed + 1))
+done
+
+if [[ "$senderStatus" != "accepted" ]] || [[ "$receiverStatus" != "accepted" ]]; then
+    echo -e "${YELLOW}\t   Warning: Contacts not fully accepted (sender: ${senderStatus}, receiver: ${receiverStatus})${NC}"
+fi
+
 # Get public keys directly via PHP (use MODE for transport type)
+# Using getContactPubkey which is the standard method used across tests
 receiverPubkeyB64=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('${MODE}', '${receiverAddress}');
-    if (\$contact && isset(\$contact['pubkey'])) {
-        echo base64_encode(\$contact['pubkey']);
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}', '${receiverAddress}');
+    if (\$pubkey) {
+        echo base64_encode(\$pubkey);
     } else {
         echo 'ERROR';
     }
@@ -94,9 +128,9 @@ receiverPubkeyB64=$(docker exec ${sender} php -r "
 receiverPubkeyHash=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('${MODE}', '${receiverAddress}');
-    if (\$contact && isset(\$contact['pubkey'])) {
-        echo hash('sha256', \$contact['pubkey']);
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}', '${receiverAddress}');
+    if (\$pubkey) {
+        echo hash('sha256', \$pubkey);
     } else {
         echo 'ERROR';
     }
@@ -105,9 +139,9 @@ receiverPubkeyHash=$(docker exec ${sender} php -r "
 senderPubkeyB64=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('${MODE}', '${senderAddress}');
-    if (\$contact && isset(\$contact['pubkey'])) {
-        echo base64_encode(\$contact['pubkey']);
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}', '${senderAddress}');
+    if (\$pubkey) {
+        echo base64_encode(\$pubkey);
     } else {
         echo 'ERROR';
     }
@@ -116,9 +150,9 @@ senderPubkeyB64=$(docker exec ${receiver} php -r "
 senderPubkeyHash=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('${MODE}', '${senderAddress}');
-    if (\$contact && isset(\$contact['pubkey'])) {
-        echo hash('sha256', \$contact['pubkey']);
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}', '${senderAddress}');
+    if (\$pubkey) {
+        echo hash('sha256', \$pubkey);
     } else {
         echo 'ERROR';
     }
