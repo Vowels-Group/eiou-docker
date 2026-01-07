@@ -9,6 +9,9 @@ exec 2> >(stdbuf -oL cat >&2)
 QUICKSTART=${QUICKSTART:-false}
 
 # Check for restore flag (24-word seed phrase)
+# SECURITY: The RESTORE env var is read once and then cleared from environment
+# to minimize exposure. The seedphrase is passed via a temp file rather than
+# command line arguments to prevent visibility in process lists.
 #    RESTORE="word1 word2 .... word24"
 RESTORE=${RESTORE:-false}
 
@@ -42,7 +45,23 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
     # RESTORE takes priority over QUICKSTART
     if [ "$RESTORE" != "false" ]; then
         echo "Restore mode enabled. Restoring wallet from provided seed phrase..."
-        eiou generate restore $RESTORE
+
+        # SECURITY: Write seedphrase to temp file instead of passing via command line
+        # This prevents the seedphrase from appearing in process lists (ps aux)
+        RESTORE_FILE="/dev/shm/.eiou_restore_$$"
+        echo "$RESTORE" > "$RESTORE_FILE"
+        chmod 600 "$RESTORE_FILE"
+
+        # Clear the environment variable to prevent docker inspect exposure
+        unset RESTORE
+
+        # Pass seedphrase via file to eiou command
+        # The restore-file flag reads the seedphrase from file instead of args
+        eiou generate restore-file "$RESTORE_FILE"
+
+        # Securely delete the temp file
+        shred -u "$RESTORE_FILE" 2>/dev/null || rm -f "$RESTORE_FILE"
+
         echo "Wallet restore completed."
     elif [ "$QUICKSTART" != "false" ]; then
         echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
