@@ -359,6 +359,12 @@ contactExistsCheck=$(docker exec ${testContainer} php -r "
     \$app = Application::getInstance();
     \$txRepo = \$app->services->getTransactionRepository();
 
+    // First check if method exists
+    if (!method_exists(\$txRepo, 'contactTransactionExistsForReceiver')) {
+        echo 'METHOD_MISSING';
+        exit;
+    }
+
     \$fakeHash = hash('sha256', 'nonexistent_pubkey_' . time());
     \$exists = \$txRepo->contactTransactionExistsForReceiver(\$fakeHash);
 
@@ -416,6 +422,12 @@ prevTxidExclusionCheck=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
     \$txRepo = \$app->services->getTransactionRepository();
+
+    // First check if method exists
+    if (!method_exists(\$txRepo, 'getPreviousTxid')) {
+        echo 'METHOD_MISSING';
+        exit;
+    }
 
     // Verify the method signature handles cancelled exclusion
     \$reflection = new ReflectionMethod(\$txRepo, 'getPreviousTxid');

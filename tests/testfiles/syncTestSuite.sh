@@ -44,25 +44,33 @@ else
     receiver="${containers[${#containers[@]}-1]}"
 fi
 
-# Get addresses from container userconfig based on MODE
-if [[ "$MODE" == "http" ]]; then
-    senderAddress=$(docker exec ${sender} php -r "
-        \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
-        echo \$json['hostname'] ?? '';
-    " 2>/dev/null)
-    receiverAddress=$(docker exec ${receiver} php -r "
-        \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
-        echo \$json['hostname'] ?? '';
-    " 2>/dev/null)
-else
-    senderAddress=$(docker exec ${sender} php -r "
-        \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
-        echo \$json['torAddress'] ?? '';
-    " 2>/dev/null)
-    receiverAddress=$(docker exec ${receiver} php -r "
-        \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
-        echo \$json['torAddress'] ?? '';
-    " 2>/dev/null)
+# Get addresses from containerAddresses array (populated by buildfiles/hostnameTest)
+# This ensures consistency with how other tests look up addresses
+senderAddress="${containerAddresses[${sender}]}"
+receiverAddress="${containerAddresses[${receiver}]}"
+
+# Fallback to userconfig if containerAddresses is empty (shouldn't happen in normal test run)
+if [[ -z "$senderAddress" ]] || [[ -z "$receiverAddress" ]]; then
+    echo -e "${YELLOW}\t   Warning: containerAddresses empty, falling back to userconfig${NC}"
+    if [[ "$MODE" == "http" ]]; then
+        senderAddress=$(docker exec ${sender} php -r "
+            \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+            echo \$json['hostname'] ?? '';
+        " 2>/dev/null)
+        receiverAddress=$(docker exec ${receiver} php -r "
+            \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+            echo \$json['hostname'] ?? '';
+        " 2>/dev/null)
+    else
+        senderAddress=$(docker exec ${sender} php -r "
+            \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+            echo \$json['torAddress'] ?? '';
+        " 2>/dev/null)
+        receiverAddress=$(docker exec ${receiver} php -r "
+            \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+            echo \$json['torAddress'] ?? '';
+        " 2>/dev/null)
+    fi
 fi
 
 if [[ -z "$sender" ]] || [[ -z "$receiver" ]]; then
