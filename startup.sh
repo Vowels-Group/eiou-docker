@@ -49,7 +49,16 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
         # SECURITY: Write seedphrase to temp file instead of passing via command line
         # This prevents the seedphrase from appearing in process lists (ps aux)
         RESTORE_FILE="/dev/shm/.eiou_restore_$$"
+
+        # Write seedphrase to temp file
         echo "$RESTORE" > "$RESTORE_FILE"
+
+        # Verify file was created successfully
+        if [ ! -f "$RESTORE_FILE" ]; then
+            echo "ERROR: Failed to create restore file at $RESTORE_FILE"
+            exit 1
+        fi
+
         chmod 600 "$RESTORE_FILE"
 
         # Clear the environment variable to prevent docker inspect exposure
@@ -57,11 +66,20 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
 
         # Pass seedphrase via file to eiou command
         # The restore-file flag reads the seedphrase from file instead of args
-        eiou generate restore-file "$RESTORE_FILE"
+        RESTORE_RESULT=$(eiou generate restore-file "$RESTORE_FILE" 2>&1)
+        RESTORE_EXIT_CODE=$?
 
         # Securely delete the temp file
         shred -u "$RESTORE_FILE" 2>/dev/null || rm -f "$RESTORE_FILE"
 
+        # Check if restore was successful
+        if [ $RESTORE_EXIT_CODE -ne 0 ]; then
+            echo "ERROR: Wallet restoration failed:"
+            echo "$RESTORE_RESULT"
+            exit 1
+        fi
+
+        echo "$RESTORE_RESULT"
         echo "Wallet restore completed."
     elif [ "$QUICKSTART" != "false" ]; then
         echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
