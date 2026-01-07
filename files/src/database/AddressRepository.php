@@ -23,6 +23,17 @@ class AddressRepository extends AbstractRepository {
     }
 
     /**
+     * Validate transport index to prevent SQL injection
+     * Uses dynamic column detection via getAllAddressTypes()
+     *
+     * @param string $transportIndex Transport index to validate
+     * @return bool True if valid, false otherwise
+     */
+    private function isValidTransportIndex(string $transportIndex): bool {
+        return in_array($transportIndex, $this->getAllAddressTypes(), true);
+    }
+
+    /**
      * Insert a new address
      *
      * @param string $contactPublicKey Contact's public key
@@ -104,8 +115,13 @@ class AddressRepository extends AbstractRepository {
      */
     public function getAllAddresses(?string $transportIndex = null, ?string $exclude = null): array {
         $query = "SELECT * FROM {$this->tableName}";
-        if ($transportIndex && $exclude) { 
-            $query .= "  WHERE {$transportIndex} = :toExclude";
+        if ($transportIndex && $exclude) {
+            // Validate transport index to prevent SQL injection
+            if (!$this->isValidTransportIndex($transportIndex)) {
+                $this->logError("Invalid transport index: $transportIndex", __METHOD__);
+                return [];
+            }
+            $query .= " WHERE {$transportIndex} != :toExclude";
             $stmt = $this->execute($query, [':toExclude' => $exclude]);
         } else {
             $stmt = $this->execute($query);
@@ -126,6 +142,12 @@ class AddressRepository extends AbstractRepository {
      * @return string|null Contact's publice key hash or null
      */
     public function getContactPubkeyHash(string $transportIndex, string $address): ?string {
+        // Validate transport index to prevent SQL injection
+        if (!$this->isValidTransportIndex($transportIndex)) {
+            $this->logError("Invalid transport index: $transportIndex", __METHOD__);
+            return null;
+        }
+
         $query = "SELECT {$this->primaryKey} FROM {$this->tableName}
                     WHERE {$transportIndex} = :address";
 
@@ -156,10 +178,10 @@ class AddressRepository extends AbstractRepository {
 
         if (!$stmt) {
             // Fallback to known address types if query fails
-            return ['http', 'tor'];
+            return Constants::VALID_TRANSPORT_INDICES;
         }
 
         $result = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        return $result ?: ['http', 'tor'];
+        return $result ?: Constants::VALID_TRANSPORT_INDICES;
     }
 }

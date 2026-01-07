@@ -108,8 +108,9 @@ RUN mkdir -p /var/www/html/api && \
 
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini
-RUN touch /var/log/php_errors.log
-RUN chmod 666 /var/log/php_errors.log
+RUN touch /var/log/php_errors.log && \
+    chown www-data:www-data /var/log/php_errors.log && \
+    chmod 640 /var/log/php_errors.log
 
 # Declare volumes for data persistence
 VOLUME ["/var/lib/mysql", "/etc/eiou", "/usr/local/bin/", "/var/www/html/"]

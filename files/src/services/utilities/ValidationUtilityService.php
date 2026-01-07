@@ -79,12 +79,13 @@ class ValidationUtilityService
      */
     public function calculateAvailableFunds(array $request): int
     {
-        $balaceRepository = $this->container->getBalanceRepository();
+        $balanceRepository = $this->container->getBalanceRepository();
         $pubkey = $request['senderPublicKey'] ?? $request['sender_public_key'];
- 
-        $totalSent = $balaceRepository->getContactSentBalance($pubkey,$request['currency']);
-        $totalReceived = $balaceRepository->getContactReceivedBalance($pubkey,$request['currency']);
-        $currentBalance = $totalSent - $totalReceived;
+
+        $totalSent = $balanceRepository->getContactSentBalance($pubkey, $request['currency']);
+        $totalReceived = $balanceRepository->getContactReceivedBalance($pubkey, $request['currency']);
+        // Available funds = what we've received minus what we've sent
+        $currentBalance = $totalReceived - $totalSent;
 
         return $currentBalance;
     }

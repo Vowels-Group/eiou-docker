@@ -125,10 +125,10 @@ class SettingsController
         // Default Transport Mode
         if (isset($_POST['defaultTransportMode'])) {
             $value = strtolower(Security::sanitizeInput($_POST['defaultTransportMode']));
-            if (in_array($value, ['http', 'tor'])) {
+            if (in_array($value, Constants::VALID_TRANSPORT_INDICES)) {
                 $settings['defaultTransportMode'] = $value;
             } else {
-                $errors[] = 'Invalid transport mode: must be http or tor';
+                $errors[] = 'Invalid transport mode: must be in ' . Constants::VALID_TRANSPORT_INDICES;
             }
         }
 
@@ -151,7 +151,7 @@ class SettingsController
             $config = array_merge($config, $settings);
 
             // Write back to file
-            if (file_put_contents($configFile, json_encode($config, true), LOCK_EX) === false) {
+            if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
                 throw new Exception('Failed to write configuration file');
             }
 
@@ -362,13 +362,13 @@ class SettingsController
             $jsonReport = json_encode($report, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE);
             if ($jsonReport === false) {
                 $jsonError = json_last_error_msg();
-                MessageHelper::redirectMessage('Failed to encode debug report: ' . $jsonError, 'danger');
+                MessageHelper::redirectMessage('Failed to encode debug report: ' . $jsonError, 'error');
                 return;
             }
 
             $bytesWritten = file_put_contents($reportPath, $jsonReport);
             if ($bytesWritten === false) {
-                MessageHelper::redirectMessage('Failed to write debug report to file', 'danger');
+                MessageHelper::redirectMessage('Failed to write debug report to file', 'error');
                 return;
             }
 

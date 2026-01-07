@@ -36,8 +36,9 @@ class DebugService {
     public function getContext(){
         $context = [];
 
-        // Add command line arguments
-        if (isset($argv)) {
+        // Add command line arguments (use global $argv for CLI context)
+        global $argv;
+        if (isset($argv) && is_array($argv)) {
             $context['argv'] = $argv;
         }
 
@@ -55,12 +56,17 @@ class DebugService {
             ];
         }
 
-        // Add database connection information
-        if (isset($pdo)) {
-            $context['database'] = [
-                'driver' => $pdo->getAttribute(PDO::ATTR_DRIVER_NAME),
-                'server_version' => $pdo->getAttribute(PDO::ATTR_SERVER_VERSION)
-            ];
+        // Add database connection information from repository
+        try {
+            $pdo = $this->debugRepository->getPdo();
+            if ($pdo !== null) {
+                $context['database'] = [
+                    'driver' => $pdo->getAttribute(PDO::ATTR_DRIVER_NAME),
+                    'server_version' => $pdo->getAttribute(PDO::ATTR_SERVER_VERSION)
+                ];
+            }
+        } catch (Exception $e) {
+            // Ignore database connection errors in debug context
         }
 
         // Add PHP environment details

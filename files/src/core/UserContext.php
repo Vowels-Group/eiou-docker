@@ -228,7 +228,7 @@ class UserContext {
             $errors[] = 'Authentication code is missing';
         }
 
-        if ((null!== $this->getHttpAddress()) && (null!== $this->getTorAddress())) {
+        if ((null === $this->getHttpAddress()) && (null === $this->getTorAddress())) {
             $errors[] = 'No network address configured (Tor or HTTP)';
         }
 
