@@ -42,15 +42,26 @@ else
     receiver="${containers[${#containers[@]}-1]}"
 fi
 
-# Get addresses from container userconfig
-senderAddress=$(docker exec ${sender} php -r "
-    \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
-    echo \$json['torAddress'] ?? '';
-" 2>/dev/null)
-receiverAddress=$(docker exec ${receiver} php -r "
-    \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
-    echo \$json['torAddress'] ?? '';
-" 2>/dev/null)
+# Get addresses from container userconfig based on MODE
+if [[ "$MODE" == "http" ]]; then
+    senderAddress=$(docker exec ${sender} php -r "
+        \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+        echo \$json['hostname'] ?? '';
+    " 2>/dev/null)
+    receiverAddress=$(docker exec ${receiver} php -r "
+        \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+        echo \$json['hostname'] ?? '';
+    " 2>/dev/null)
+else
+    senderAddress=$(docker exec ${sender} php -r "
+        \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+        echo \$json['torAddress'] ?? '';
+    " 2>/dev/null)
+    receiverAddress=$(docker exec ${receiver} php -r "
+        \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+        echo \$json['torAddress'] ?? '';
+    " 2>/dev/null)
+fi
 
 if [[ -z "$sender" ]] || [[ -z "$receiver" ]]; then
     echo -e "${YELLOW}Warning: No container links defined, skipping sync test suite${NC}"
@@ -68,11 +79,11 @@ sleep 1
 docker exec ${receiver} eiou addcontact ${senderAddress} 2>&1 > /dev/null || true
 sleep 2
 
-# Get public keys directly via PHP
+# Get public keys directly via PHP (use MODE for transport type)
 receiverPubkeyB64=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('tor', '${receiverAddress}');
+    \$contact = \$app->services->getContactRepository()->getContactByAddress('${MODE}', '${receiverAddress}');
     if (\$contact && isset(\$contact['pubkey'])) {
         echo base64_encode(\$contact['pubkey']);
     } else {
@@ -83,7 +94,7 @@ receiverPubkeyB64=$(docker exec ${sender} php -r "
 receiverPubkeyHash=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('tor', '${receiverAddress}');
+    \$contact = \$app->services->getContactRepository()->getContactByAddress('${MODE}', '${receiverAddress}');
     if (\$contact && isset(\$contact['pubkey'])) {
         echo hash('sha256', \$contact['pubkey']);
     } else {
@@ -94,7 +105,7 @@ receiverPubkeyHash=$(docker exec ${sender} php -r "
 senderPubkeyB64=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('tor', '${senderAddress}');
+    \$contact = \$app->services->getContactRepository()->getContactByAddress('${MODE}', '${senderAddress}');
     if (\$contact && isset(\$contact['pubkey'])) {
         echo base64_encode(\$contact['pubkey']);
     } else {
@@ -105,7 +116,7 @@ senderPubkeyB64=$(docker exec ${receiver} php -r "
 senderPubkeyHash=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$contact = \$app->services->getContactRepository()->getContactByAddress('tor', '${senderAddress}');
+    \$contact = \$app->services->getContactRepository()->getContactByAddress('${MODE}', '${senderAddress}');
     if (\$contact && isset(\$contact['pubkey'])) {
         echo hash('sha256', \$contact['pubkey']);
     } else {
@@ -116,10 +127,11 @@ senderPubkeyHash=$(docker exec ${receiver} php -r "
 echo -e "\t   Sender pubkey hash: ${senderPubkeyHash:0:40}..."
 echo -e "\t   Receiver pubkey hash: ${receiverPubkeyHash:0:40}..."
 
+# Flag for whether pubkey-dependent tests can run
+PUBKEYS_AVAILABLE=true
 if [[ "$senderPubkeyHash" == "ERROR" ]] || [[ "$receiverPubkeyHash" == "ERROR" ]]; then
-    echo -e "${YELLOW}Warning: Could not retrieve public keys, skipping test${NC}"
-    succesrate "${totaltests}" "${passed}" "${failure}" "'sync test suite'"
-    exit 0
+    echo -e "${YELLOW}Warning: Could not retrieve public keys, some tests will be skipped${NC}"
+    PUBKEYS_AVAILABLE=false
 fi
 
 # Use first container for basic tests
@@ -322,6 +334,11 @@ fi
 
 echo -e "\n[2.2 Transaction Chain Sync Test]"
 
+# This section requires pubkeys to be available
+if [[ "$PUBKEYS_AVAILABLE" != "true" ]]; then
+    echo -e "${YELLOW}\t   Skipping section 2.2 - pubkeys not available${NC}"
+else
+
 timestamp=$(date +%s%N)
 
 # Test: Send 3 real transactions
@@ -451,6 +468,8 @@ docker exec ${receiver} php -r "
     \$pdo = \$app->services->getPdo();
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'chain-sync-test-tx%'\");
 " 2>/dev/null
+
+fi  # End PUBKEYS_AVAILABLE check for section 2.2
 
 ##################### SECTION 3: Signature Validation #####################
 # Tests from signatureValidationSyncTest.sh (simplified version)
