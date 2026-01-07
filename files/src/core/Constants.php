@@ -74,6 +74,7 @@ class Constants {
 
     // Network
     const DEFAULT_TRANSPORT_MODE = 'tor';
+    const VALID_TRANSPORT_INDICES = ['http', 'tor'];
 
     // P2P Network
     const P2P_DEFAULT_MAX_REQUEST_LEVEL = 6;

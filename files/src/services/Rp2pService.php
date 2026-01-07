@@ -275,8 +275,11 @@ class RP2pService {
      * @return float Fee percent of request
     */
     public function feeInformation(array $p2p, array $request): float {
+        if ($p2p['amount'] == 0) {
+            return 0.0;
+        }
         $feeAmount = $request['amount'] - $p2p['amount'];
-        $feePercent = round(($feeAmount / $p2p['amount']) * Constants::FEE_CONVERSION_FACTOR,Constants::FEE_PERCENT_DECIMAL_PRECISION);
+        $feePercent = round(($feeAmount / $p2p['amount']) * Constants::FEE_CONVERSION_FACTOR, Constants::FEE_PERCENT_DECIMAL_PRECISION);
         output(outputFeeInformation($feePercent,$request,$this->currentUser->getMaxFee()), 'SILENT'); // output fee information into the log
         return $feePercent;
     }

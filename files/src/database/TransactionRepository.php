@@ -112,7 +112,7 @@ class TransactionRepository extends AbstractRepository {
                 $completed+=1;
             }
         }
-        return $completed == count($transaction);
+        return $completed === count($transactions);
     }
 
     /**
@@ -129,7 +129,7 @@ class TransactionRepository extends AbstractRepository {
                 $completed+=1;
             }
         }
-        return $completed == count($transaction);
+        return $completed === count($transactions);
     }
 
     /**
