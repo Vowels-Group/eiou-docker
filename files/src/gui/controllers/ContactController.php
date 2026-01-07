@@ -153,16 +153,62 @@ class ContactController
         // CSRF Protection: Verify token before processing
         $this->session->verifyCSRFToken();
 
-        $contactAddress = $_POST['contact_address'] ?? '';
-        $contactName = $_POST['contact_name'] ?? '';
+        // Import validation and security classes
+        require_once __DIR__ . '/../../utils/InputValidator.php';
+        require_once __DIR__ . '/../../utils/Security.php';
+
+        // Sanitize input data
+        $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
+        $contactName = Security::sanitizeInput($_POST['contact_name'] ?? '');
         $contactFee = $_POST['contact_fee'] ?? '';
         $contactCredit = $_POST['contact_credit'] ?? '';
         $contactCurrency = $_POST['contact_currency'] ?? '';
 
-        if (empty($contactAddress) || empty($contactName) || empty($contactFee) || empty($contactCredit) || empty($contactCurrency)) {
+        if (empty($contactAddress) || empty($contactName) || $contactFee === '' || $contactCredit === '' || empty($contactCurrency)) {
             $message = 'All fields are required to accept a contact';
             $messageType = 'error';
         } else {
+            // Validate address
+            $addressValidation = InputValidator::validateAddress($contactAddress);
+            if (!$addressValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
+                return;
+            }
+
+            // Validate contact name
+            $nameValidation = InputValidator::validateContactName($contactName);
+            if (!$nameValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid contact name: ' . $nameValidation['error'], 'error');
+                return;
+            }
+
+            // Validate fee percentage
+            $feeValidation = InputValidator::validateFeePercent($contactFee);
+            if (!$feeValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid fee: ' . $feeValidation['error'], 'error');
+                return;
+            }
+
+            // Validate credit limit
+            $creditValidation = InputValidator::validateCreditLimit($contactCredit);
+            if (!$creditValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid credit limit: ' . $creditValidation['error'], 'error');
+                return;
+            }
+
+            // Validate currency
+            $currencyValidation = InputValidator::validateCurrency($contactCurrency);
+            if (!$currencyValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid currency: ' . $currencyValidation['error'], 'error');
+                return;
+            }
+
+            // Use sanitized and validated values
+            $contactAddress = $addressValidation['value'];
+            $contactName = $nameValidation['value'];
+            $contactFee = $feeValidation['value'];
+            $contactCredit = $creditValidation['value'];
+            $contactCurrency = $currencyValidation['value'];
             // Create argv array with --json flag for structured output
             $argv = ['eiou', 'add', $contactAddress, $contactName, $contactFee, $contactCredit, $contactCurrency, '--json'];
 
@@ -208,12 +254,27 @@ class ContactController
         // CSRF Protection: Verify token before processing
         $this->session->verifyCSRFToken();
 
-        $contactAddress = $_POST['contact_address'] ?? '';
+        // Import validation and security classes
+        require_once __DIR__ . '/../../utils/InputValidator.php';
+        require_once __DIR__ . '/../../utils/Security.php';
+
+        // Sanitize input data
+        $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
 
         if (empty($contactAddress)) {
             $message = 'Contact address is required';
             $messageType = 'error';
         } else {
+            // Validate address
+            $addressValidation = InputValidator::validateAddress($contactAddress);
+            if (!$addressValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
+                return;
+            }
+
+            // Use sanitized and validated value
+            $contactAddress = $addressValidation['value'];
+
             // Create argv with --json flag for structured output
             $argv = ['eiou', 'delete', $contactAddress, '--json'];
 
@@ -259,12 +320,27 @@ class ContactController
         // CSRF Protection: Verify token before processing
         $this->session->verifyCSRFToken();
 
-        $contactAddress = $_POST['contact_address'] ?? '';
+        // Import validation and security classes
+        require_once __DIR__ . '/../../utils/InputValidator.php';
+        require_once __DIR__ . '/../../utils/Security.php';
+
+        // Sanitize input data
+        $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
 
         if (empty($contactAddress)) {
             $message = 'Contact address is required';
             $messageType = 'error';
         } else {
+            // Validate address
+            $addressValidation = InputValidator::validateAddress($contactAddress);
+            if (!$addressValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
+                return;
+            }
+
+            // Use sanitized and validated value
+            $contactAddress = $addressValidation['value'];
+
             // Create argv with --json flag for structured output
             $argv = ['eiou', 'block', $contactAddress, '--json'];
 
@@ -310,12 +386,27 @@ class ContactController
         // CSRF Protection: Verify token before processing
         $this->session->verifyCSRFToken();
 
-        $contactAddress = $_POST['contact_address'] ?? '';
+        // Import validation and security classes
+        require_once __DIR__ . '/../../utils/InputValidator.php';
+        require_once __DIR__ . '/../../utils/Security.php';
+
+        // Sanitize input data
+        $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
 
         if (empty($contactAddress)) {
             $message = 'Contact address is required';
             $messageType = 'error';
         } else {
+            // Validate address
+            $addressValidation = InputValidator::validateAddress($contactAddress);
+            if (!$addressValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
+                return;
+            }
+
+            // Use sanitized and validated value
+            $contactAddress = $addressValidation['value'];
+
             // Create argv with --json flag for structured output
             $argv = ['eiou', 'unblock', $contactAddress, '--json'];
 
@@ -361,16 +452,63 @@ class ContactController
         // CSRF Protection: Verify token before processing
         $this->session->verifyCSRFToken();
 
-        $contactAddress = $_POST['contact_address'] ?? '';
-        $contactName = $_POST['contact_name'] ?? '';
+        // Import validation and security classes
+        require_once __DIR__ . '/../../utils/InputValidator.php';
+        require_once __DIR__ . '/../../utils/Security.php';
+
+        // Sanitize input data
+        $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
+        $contactName = Security::sanitizeInput($_POST['contact_name'] ?? '');
         $contactFee = $_POST['contact_fee'] ?? '';
         $contactCredit = $_POST['contact_credit'] ?? '';
         $contactCurrency = $_POST['contact_currency'] ?? '';
 
-        if (empty($contactAddress) || empty($contactName) || empty($contactFee) || empty($contactCredit) || empty($contactCurrency)) {
+        if (empty($contactAddress) || empty($contactName) || $contactFee === '' || $contactCredit === '' || empty($contactCurrency)) {
             $message = 'All fields are required to edit a contact';
             $messageType = 'error';
         } else {
+            // Validate address
+            $addressValidation = InputValidator::validateAddress($contactAddress);
+            if (!$addressValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid address: ' . $addressValidation['error'], 'error');
+                return;
+            }
+
+            // Validate contact name
+            $nameValidation = InputValidator::validateContactName($contactName);
+            if (!$nameValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid contact name: ' . $nameValidation['error'], 'error');
+                return;
+            }
+
+            // Validate fee percentage
+            $feeValidation = InputValidator::validateFeePercent($contactFee);
+            if (!$feeValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid fee: ' . $feeValidation['error'], 'error');
+                return;
+            }
+
+            // Validate credit limit
+            $creditValidation = InputValidator::validateCreditLimit($contactCredit);
+            if (!$creditValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid credit limit: ' . $creditValidation['error'], 'error');
+                return;
+            }
+
+            // Validate currency
+            $currencyValidation = InputValidator::validateCurrency($contactCurrency);
+            if (!$currencyValidation['valid']) {
+                MessageHelper::redirectMessage('Invalid currency: ' . $currencyValidation['error'], 'error');
+                return;
+            }
+
+            // Use sanitized and validated values
+            $contactAddress = $addressValidation['value'];
+            $contactName = $nameValidation['value'];
+            $contactFee = $feeValidation['value'];
+            $contactCredit = $creditValidation['value'];
+            $contactCurrency = $currencyValidation['value'];
+
             // Create argv array with --json flag for structured output
             $argv = ['eiou', 'update', $contactAddress, 'all', $contactName, $contactFee, $contactCredit, '--json'];
 

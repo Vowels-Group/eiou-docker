@@ -4,8 +4,8 @@
 <?php if (!empty($messageForDisplay)): ?>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        var msgType = '<?php echo addslashes($messageTypeForDisplay); ?>';
-        var msg = '<?php echo addslashes($messageForDisplay); ?>';
+        var msgType = <?php echo json_encode($messageTypeForDisplay); ?>;
+        var msg = <?php echo json_encode($messageForDisplay); ?>;
 
         // Map message types to toast types
         var toastType = 'info';

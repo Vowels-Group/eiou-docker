@@ -189,6 +189,7 @@ class Wallet{
             'minFee' => Constants::TRANSACTION_MINIMUM_FEE,
             'defaultFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT,
             'maxFee' => Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX,
+            'defaultCreditLimit' => Constants::CONTACT_DEFAULT_CREDIT_LIMIT,
             'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,
             'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,
             'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,

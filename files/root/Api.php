@@ -58,11 +58,6 @@ try {
     exit;
 }
 
-// Check if API is enabled
-if (!defined('Constants::API_ENABLED') || Constants::API_ENABLED !== true) {
-    // API is enabled by default if constant is not set
-}
-
 // Load API components
 require_once '/etc/eiou/src/api/ApiController.php';
 require_once '/etc/eiou/src/services/ServiceWrappers.php';
