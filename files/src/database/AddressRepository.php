@@ -12,11 +12,6 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class AddressRepository extends AbstractRepository {
     /**
-     * Valid transport index values (whitelisted column names)
-     */
-    private const VALID_TRANSPORT_INDICES = ['http', 'tor'];
-
-    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection
@@ -29,12 +24,13 @@ class AddressRepository extends AbstractRepository {
 
     /**
      * Validate transport index to prevent SQL injection
+     * Uses dynamic column detection via getAllAddressTypes()
      *
      * @param string $transportIndex Transport index to validate
      * @return bool True if valid, false otherwise
      */
     private function isValidTransportIndex(string $transportIndex): bool {
-        return in_array($transportIndex, self::VALID_TRANSPORT_INDICES, true);
+        return in_array($transportIndex, $this->getAllAddressTypes(), true);
     }
 
     /**
