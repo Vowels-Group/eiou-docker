@@ -200,18 +200,18 @@ originalPubKey=$(docker exec ${testContainer} php -r '
     echo $json["public"] ?? "ERROR";
 ' 2>&1)
 
-# Create a temp file with the seedphrase
-docker exec ${testContainer} sh -c "echo '${currentSeedPhrase}' > /dev/shm/test_restore_seedphrase"
-docker exec ${testContainer} chmod 600 /dev/shm/test_restore_seedphrase
+# Create a temp file with the seedphrase (use double slashes to prevent Git Bash path conversion)
+docker exec ${testContainer} sh -c "echo '${currentSeedPhrase}' > //dev//shm//test_restore_seedphrase"
+docker exec ${testContainer} sh -c "chmod 600 //dev//shm//test_restore_seedphrase"
 
 # Delete the userconfig to test restoration
-docker exec ${testContainer} rm -f ${USERCONFIG}
+docker exec ${testContainer} sh -c "rm -f //etc//eiou//userconfig.json"
 
 # Test restore-file command
-restoreOutput=$(docker exec ${testContainer} eiou generate restore-file /dev/shm/test_restore_seedphrase 2>&1)
+restoreOutput=$(docker exec ${testContainer} sh -c "eiou generate restore-file //dev//shm//test_restore_seedphrase" 2>&1)
 
 # Clean up test file
-docker exec ${testContainer} rm -f /dev/shm/test_restore_seedphrase
+docker exec ${testContainer} sh -c "rm -f //dev//shm//test_restore_seedphrase"
 
 # Verify restoration
 restoredPubKey=$(docker exec ${testContainer} php -r '
@@ -236,9 +236,9 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 7: Testing that restore-file doesn't expose seedphrase in process list"
 
-# Create a temp file with a test seedphrase
-docker exec ${testContainer} sh -c "echo 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about' > /dev/shm/test_ps_seedphrase"
-docker exec ${testContainer} chmod 600 /dev/shm/test_ps_seedphrase
+# Create a temp file with a test seedphrase (use double slashes to prevent Git Bash path conversion)
+docker exec ${testContainer} sh -c "echo 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about' > //dev//shm//test_ps_seedphrase"
+docker exec ${testContainer} sh -c "chmod 600 //dev//shm//test_ps_seedphrase"
 
 # Run restore-file in background and capture process list
 docker exec ${testContainer} sh -c '
@@ -252,7 +252,7 @@ docker exec ${testContainer} sh -c '
 psCheckResult=$(cat /tmp/ps_check_output)
 
 # Clean up
-docker exec ${testContainer} rm -f /dev/shm/test_ps_seedphrase
+docker exec ${testContainer} sh -c "rm -f //dev//shm//test_ps_seedphrase"
 rm -f /tmp/ps_check_output
 
 if [[ -z "$psCheckResult" ]]; then
@@ -322,17 +322,19 @@ originalPubKeyRestoreFile=$(docker exec ${testContainer} php -r '
 ' 2>&1)
 
 # Create a new container with RESTORE_FILE (file-based restore)
+# Use double slashes in paths to prevent Git Bash path conversion
 restoreFileContainer="httpRestoreFileTest"
+RESTORE_FILE_PATH="//restore//seed"
 docker run -d --network="${network}" --name "${restoreFileContainer}" \
-    -v "${hostSeedFile}:/restore/seed:ro" \
-    -e RESTORE_FILE=/restore/seed \
-    -v "${restoreFileContainer}-mysql-data:/var/lib/mysql" \
-    -v "${restoreFileContainer}-files:/etc/eiou/" \
-    -v "${restoreFileContainer}-index:/var/www/html" \
-    -v "${restoreFileContainer}-eiou:/usr/local/bin/" \
+    -v "${hostSeedFile}://restore//seed:ro" \
+    -e RESTORE_FILE="${RESTORE_FILE_PATH}" \
+    -v "${restoreFileContainer}-mysql-data://var//lib//mysql" \
+    -v "${restoreFileContainer}-files://etc//eiou//" \
+    -v "${restoreFileContainer}-index://var//www//html" \
+    -v "${restoreFileContainer}-eiou://usr//local//bin//" \
     eioud > /dev/null 2>&1
 
-sleep 15
+sleep 20
 
 # Extract first 3 words from seedphrase for checking
 firstThreeWordsFile=$(cat "${hostSeedFile}" | awk '{print $1" "$2" "$3}')
@@ -403,16 +405,17 @@ originalPubKeyRestoreEnv=$(docker exec ${testContainer} php -r '
 ' 2>&1)
 
 # Create a new container with RESTORE env var
+# Use double slashes in paths to prevent Git Bash path conversion
 restoreEnvContainer="httpRestoreEnvTest"
 docker run -d --network="${network}" --name "${restoreEnvContainer}" \
     -e RESTORE="${restoreEnvSeedPhrase}" \
-    -v "${restoreEnvContainer}-mysql-data:/var/lib/mysql" \
-    -v "${restoreEnvContainer}-files:/etc/eiou/" \
-    -v "${restoreEnvContainer}-index:/var/www/html" \
-    -v "${restoreEnvContainer}-eiou:/usr/local/bin/" \
+    -v "${restoreEnvContainer}-mysql-data://var//lib//mysql" \
+    -v "${restoreEnvContainer}-files://etc//eiou//" \
+    -v "${restoreEnvContainer}-index://var//www//html" \
+    -v "${restoreEnvContainer}-eiou://usr//local//bin//" \
     eioud > /dev/null 2>&1
 
-sleep 15
+sleep 20
 
 # Get restored public key
 restoredPubKeyRestoreEnv=$(docker exec ${restoreEnvContainer} php -r '
