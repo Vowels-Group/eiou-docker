@@ -6,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $user->has('hostname') ? htmlspecialchars(parse_url($user->getHttpAddress(), PHP_URL_HOST) ?: $user->getHttpAddress()) . ' - ' : ''; ?>₳ Wallet</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="/gui/assets/fontawesome/css/all.min.css" rel="stylesheet">
     <style><?php require_once("/etc/eiou/src/gui/assets/css/page.css");?></style>
     <script><?php require_once("/etc/eiou/src/gui/assets/js/script.js");?></script>
 </head>

@@ -118,7 +118,7 @@ class AddressRepository extends AbstractRepository {
         if ($transportIndex && $exclude) {
             // Validate transport index to prevent SQL injection
             if (!$this->isValidTransportIndex($transportIndex)) {
-                $this->logError("Invalid transport index: $transportIndex", __METHOD__);
+                $this->logError("Invalid transport index: $transportIndex in " . __METHOD__);
                 return [];
             }
             $query .= " WHERE {$transportIndex} != :toExclude";
@@ -144,7 +144,7 @@ class AddressRepository extends AbstractRepository {
     public function getContactPubkeyHash(string $transportIndex, string $address): ?string {
         // Validate transport index to prevent SQL injection
         if (!$this->isValidTransportIndex($transportIndex)) {
-            $this->logError("Invalid transport index: $transportIndex", __METHOD__);
+            $this->logError("Invalid transport index: $transportIndex in " . __METHOD__);
             return null;
         }
 

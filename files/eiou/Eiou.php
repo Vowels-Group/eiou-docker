@@ -103,19 +103,25 @@ elseif($request === "block"){
   // Block Contact
   $debugService->output("Executing block contact request", 'SILENT');
   $contactService = $app->services->getContactService();
-  $contactService->blockContact($cleanArgv[2] ?? null, $output);
+  if (!$contactService->blockContact($cleanArgv[2] ?? null, $output)) {
+    exit(1);
+  }
 }
 elseif($request === "unblock"){
   // Unblock Contact
   $debugService->output("Executing unblock contact request", 'SILENT');
   $contactService = $app->services->getContactService();
-  $contactService->unblockContact($cleanArgv[2] ?? null, $output);
+  if (!$contactService->unblockContact($cleanArgv[2] ?? null, $output)) {
+    exit(1);
+  }
 }
 elseif($request === "delete"){
   // Delete Contact
   $debugService->output("Executing delete contact request", 'SILENT');
   $contactService = $app->services->getContactService();
-  $contactService->deleteContact($cleanArgv[2] ?? null, $output);
+  if (!$contactService->deleteContact($cleanArgv[2] ?? null, $output)) {
+    exit(1);
+  }
 }
 elseif($request === "search"){
   // Search Contacts

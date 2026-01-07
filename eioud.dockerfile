@@ -38,9 +38,15 @@ RUN a2enmod rewrite ssl
 # Create SSL certificate directory
 RUN mkdir -p /etc/apache2/ssl
 
-# Add API endpoint alias to Apache configuration
+# Add API endpoint alias and GUI assets alias to Apache configuration
 # This allows /api/* to be served by the Api.php script
+# This allows /gui/assets/* to serve Font Awesome and other static assets
 RUN echo 'Alias /api /var/www/html/api' >> /etc/apache2/sites-available/000-default.conf && \
+    echo 'Alias /gui/assets /etc/eiou/src/gui/assets' >> /etc/apache2/sites-available/000-default.conf && \
+    echo '<Directory /etc/eiou/src/gui/assets>' >> /etc/apache2/sites-available/000-default.conf && \
+    echo '    Require all granted' >> /etc/apache2/sites-available/000-default.conf && \
+    echo '    Options -Indexes' >> /etc/apache2/sites-available/000-default.conf && \
+    echo '</Directory>' >> /etc/apache2/sites-available/000-default.conf && \
     echo '<Directory /var/www/html>' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    AllowOverride All' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    Options -Indexes +FollowSymLinks' >> /etc/apache2/sites-available/000-default.conf && \
@@ -58,6 +64,11 @@ RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf &
     echo '    SSLCertificateFile /etc/apache2/ssl/server.crt' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    SSLCertificateKeyFile /etc/apache2/ssl/server.key' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    Alias /api /var/www/html/api' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '    Alias /gui/assets /etc/eiou/src/gui/assets' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '    <Directory /etc/eiou/src/gui/assets>' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '        Require all granted' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '        Options -Indexes' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '    </Directory>' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    <Directory /var/www/html>' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        AllowOverride All' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        Options -Indexes +FollowSymLinks' >> /etc/apache2/sites-available/default-ssl.conf && \

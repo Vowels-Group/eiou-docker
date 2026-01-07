@@ -518,6 +518,9 @@ class TransactionService {
 
         // Determine Transport Type (fallback on other if needed)
         $transportIndex = $this->transportUtility->fallbackTransportType($request[2],$contactInfo);
+        if ($transportIndex === null) {
+            throw new \InvalidArgumentException("No viable transport mode found for recipient");
+        }
         // Additional data preparation
         $data['receiverAddress'] = $contactInfo[$transportIndex];
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
@@ -984,7 +987,7 @@ class TransactionService {
                     'error' => $amountValidation['error']
                 ]);
                 $output->error("Invalid parameter amount: " . $amountValidation['error'], ErrorCodes::INVALID_PARAMS, 400);
-                exit(0);
+                return;
             }
         }
 
@@ -999,7 +1002,7 @@ class TransactionService {
                         'error' => $addressValidation['error'] . " / " . $nameValidation['error']
                     ]);
                     $output->error("Invalid Address/name: " . $addressValidation['error'], ErrorCodes::INVALID_RECIPIENT, 400);
-                    exit(0);
+                    return;
                 }
             }
         }
@@ -1013,7 +1016,7 @@ class TransactionService {
                     'error' => $amountValidation['error']
                 ]);
                 $output->error("Invalid amount: " . $amountValidation['error'], ErrorCodes::INVALID_AMOUNT, 400);
-                exit(0);
+                return;
             }
             $request[3] = $amountValidation['value'];
             $txData['amount'] = $request[3];
@@ -1028,7 +1031,7 @@ class TransactionService {
                     'error' => $currencyValidation['error']
                 ]);
                 $output->error("Invalid currency: " . $currencyValidation['error'], ErrorCodes::INVALID_CURRENCY, 400);
-                exit(0);
+                return;
             }
             $request[4] = $currencyValidation['value'];
             $txData['currency'] = $request[4];
@@ -1037,7 +1040,7 @@ class TransactionService {
         // Check if any contacts for eIOU
         if(!$this->addressRepository->getAllAddresses()){
             $output->error("No contacts available for transaction", 'NO_CONTACTS', 400, $txData);
-            exit(0);
+            return;
         }
 
         // If receiver's public key is in contacts, prepare a transaction to send directly to them
@@ -1051,11 +1054,16 @@ class TransactionService {
 
                 // Determine Transport Type (fallback on other if needed)
                 $transportIndex = $this->transportUtility->fallbackTransportType($request[2],$contactInfo);
-                $syncResult = Application::getInstance()->services->getSyncService()->syncSingleContact($contactInfo[$transportIndex],'SILENT');
-                if($syncResult){
-                    $this->handleDirectRoute($request, $contactInfo, $output);
-                } else{
+                if ($transportIndex === null) {
+                    // No viable transport mode found, try P2P
                     $this->handleP2pRoute($request, $output);
+                } else {
+                    $syncResult = Application::getInstance()->services->getSyncService()->syncSingleContact($contactInfo[$transportIndex],'SILENT');
+                    if($syncResult){
+                        $this->handleDirectRoute($request, $contactInfo, $output);
+                    } else{
+                        $this->handleP2pRoute($request, $output);
+                    }
                 }
             } elseif($contactInfo['status'] === Constants::CONTACT_STATUS_BLOCKED){
                 // Contact is blocked, do not send anything
@@ -1078,8 +1086,19 @@ class TransactionService {
     public function handleDirectRoute(array $request, $contactInfo, ?CliOutputManager $output = null): void{
         $output = $output ?? CliOutputManager::getInstance();
 
-        // Data preparation for eIOU
-        $data = $this->prepareStandardTransactionData($request, $contactInfo);
+        try {
+            // Data preparation for eIOU
+            $data = $this->prepareStandardTransactionData($request, $contactInfo);
+        } catch (\InvalidArgumentException $e) {
+            // No viable transport mode found
+            $output->error(
+                "Cannot send transaction: " . $e->getMessage(),
+                ErrorCodes::NO_VIABLE_TRANSPORT,
+                400,
+                ['recipient' => $request[2] ?? null]
+            );
+            return;
+        }
 
         // Prepare transaction payload from data
         $payload = $this->transactionPayload->build($data);
@@ -1118,21 +1137,35 @@ class TransactionService {
     public function handleP2pRoute(array $request, ?CliOutputManager $output = null): void{
         $output = $output ?? CliOutputManager::getInstance();
 
-        // Send P2P request when contact not found using P2pService directly
-        Application::getInstance()->services->getP2pService()->sendP2pRequest($request);
-
-        // Build response data
-        $txResponse = [
-            'status' => Constants::STATUS_PENDING,
-            'type' => 'p2p',
+        // Build transaction data for response
+        $txData = [
             'recipient' => $request[2] ?? null,
             'amount' => $request[3] ?? null,
             'currency' => $request[4] ?? 'USD',
-            'description' => $request[5] ?? null,
-            'message' => 'P2P route discovery initiated'
+            'description' => $request[5] ?? null
         ];
 
-        $output->success("Searching for route via P2P network to " . $request[2], $txResponse, "Searching for route to recipient via P2P network");
+        try {
+            // Send P2P request when contact not found using P2pService directly
+            Application::getInstance()->services->getP2pService()->sendP2pRequest($request);
+
+            // Build response data
+            $txResponse = array_merge($txData, [
+                'status' => Constants::STATUS_PENDING,
+                'type' => 'p2p',
+                'message' => 'P2P route discovery initiated'
+            ]);
+
+            $output->success("Searching for route via P2P network to " . $request[2], $txResponse, "Searching for route to recipient via P2P network");
+        } catch (\InvalidArgumentException $e) {
+            // Contact/address not found - return proper error for GUI
+            $output->error(
+                "Recipient not found: " . ($request[2] ?? 'unknown') . " is not a valid address or existing contact",
+                ErrorCodes::INVALID_RECIPIENT,
+                400,
+                $txData
+            );
+        }
     }
 
     /**

@@ -5,6 +5,46 @@ var OPERATION_TIMEOUT_MS = 15000;
 var operationTimeoutId = null;
 var countdownIntervalId = null;
 
+// Storage availability check for Tor Browser compatibility
+var storageAvailable = (function() {
+    try {
+        var test = '__storage_test__';
+        sessionStorage.setItem(test, test);
+        sessionStorage.removeItem(test);
+        return true;
+    } catch (e) {
+        return false;
+    }
+})();
+
+// Safe storage functions with URL parameter fallback
+function safeStorageSet(key, value) {
+    if (storageAvailable) {
+        try {
+            sessionStorage.setItem(key, value);
+            return true;
+        } catch (e) {}
+    }
+    return false;
+}
+
+function safeStorageGet(key) {
+    if (storageAvailable) {
+        try {
+            return sessionStorage.getItem(key);
+        } catch (e) {}
+    }
+    return null;
+}
+
+function safeStorageRemove(key) {
+    if (storageAvailable) {
+        try {
+            sessionStorage.removeItem(key);
+        } catch (e) {}
+    }
+}
+
     // Simple script to show/hide the floating action button
     // This is minimal JavaScript that should work in Tor Browser
     window.addEventListener('scroll', function() {
@@ -528,9 +568,19 @@ function startOperationTimeout(operationType, timeoutMessage) {
     // Set 15-second timeout to reload page
     operationTimeoutId = setTimeout(function() {
         // Store message only when timeout fires, so it shows after reload
-        sessionStorage.setItem('eiou_pending_operation', operationType);
-        sessionStorage.setItem('eiou_timeout_message', timeoutMessage);
-        window.location.reload();
+        // Try sessionStorage first, fall back to URL parameter
+        var storedOp = safeStorageSet('eiou_pending_operation', operationType);
+        var storedMsg = safeStorageSet('eiou_timeout_message', timeoutMessage);
+
+        if (storedOp && storedMsg) {
+            // Storage worked, simple reload
+            window.location.reload();
+        } else {
+            // Storage failed (Tor Browser), use URL parameter fallback
+            var currentUrl = window.location.href.split('?')[0].split('#')[0];
+            var encodedMsg = encodeURIComponent(timeoutMessage);
+            window.location.href = currentUrl + '?timeout_msg=' + encodedMsg;
+        }
     }, OPERATION_TIMEOUT_MS);
 }
 
@@ -548,16 +598,30 @@ function clearOperationTimeout() {
     if (countdownEl) {
         countdownEl.style.display = 'none';
     }
-    sessionStorage.removeItem('eiou_pending_operation');
-    sessionStorage.removeItem('eiou_timeout_message');
+    safeStorageRemove('eiou_pending_operation');
+    safeStorageRemove('eiou_timeout_message');
 }
 
 function checkForTimeoutToast() {
-    var timeoutMessage = sessionStorage.getItem('eiou_timeout_message');
+    var timeoutMessage = safeStorageGet('eiou_timeout_message');
+
+    // Check URL parameter fallback if storage didn't have the message
+    if (!timeoutMessage) {
+        var urlParams = new URLSearchParams(window.location.search);
+        timeoutMessage = urlParams.get('timeout_msg');
+        if (timeoutMessage) {
+            // Clean up URL by removing the parameter (without reload)
+            var cleanUrl = window.location.href.split('?')[0];
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState({}, document.title, cleanUrl);
+            }
+        }
+    }
+
     if (timeoutMessage) {
         // Clear storage first to prevent showing again on refresh
-        sessionStorage.removeItem('eiou_pending_operation');
-        sessionStorage.removeItem('eiou_timeout_message');
+        safeStorageRemove('eiou_pending_operation');
+        safeStorageRemove('eiou_timeout_message');
 
         // Show the toast after a brief delay to ensure page is ready
         setTimeout(function() {
@@ -681,7 +745,7 @@ function copyToClipboard(text, successMessage) {
     }
 }
 
-// Fallback copy method using execCommand
+// Fallback copy method using execCommand (Tor Browser compatible)
 function fallbackCopyToClipboard(text, successMessage) {
     var tempTextarea = document.createElement('textarea');
     tempTextarea.value = text;
@@ -692,18 +756,77 @@ function fallbackCopyToClipboard(text, successMessage) {
     tempTextarea.focus();
     tempTextarea.select();
 
+    var successful = false;
     try {
-        var successful = document.execCommand('copy');
-        if (successful) {
-            showToast('Success', successMessage, 'success');
-        } else {
-            showToast('Error', 'Failed to copy. Please copy manually.', 'error');
-        }
+        successful = document.execCommand('copy');
     } catch (err) {
-        showToast('Error', 'Failed to copy. Please copy manually.', 'error');
+        // execCommand threw an error
     }
 
     document.body.removeChild(tempTextarea);
+
+    if (successful) {
+        showToast('Success', successMessage, 'success');
+    } else {
+        // Show manual copy modal for Tor Browser compatibility
+        showManualCopyModal(text, successMessage);
+    }
+}
+
+// Manual copy modal for Tor Browser compatibility
+// Shows a visible textarea with the text pre-selected so user can manually copy
+function showManualCopyModal(text, successMessage) {
+    // Create overlay
+    var overlay = document.createElement('div');
+    overlay.id = 'manual-copy-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;';
+
+    // Create modal
+    var modal = document.createElement('div');
+    modal.style.cssText = 'background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+    modal.innerHTML = '<h4 style="margin:0 0 10px 0;color:#333;">Copy to Clipboard</h4>' +
+        '<p style="margin:0 0 10px 0;color:#666;font-size:14px;">Select the text below and press <strong>Ctrl+C</strong> (or <strong>Cmd+C</strong> on Mac) to copy:</p>' +
+        '<textarea id="manual-copy-text" readonly style="width:100%;height:80px;padding:10px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:12px;resize:none;box-sizing:border-box;"></textarea>' +
+        '<div style="margin-top:15px;text-align:right;">' +
+        '<button id="manual-copy-close" style="padding:8px 16px;background:#6c757d;color:#fff;border:none;border-radius:4px;cursor:pointer;">Close</button>' +
+        '</div>';
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    var textArea = document.getElementById('manual-copy-text');
+    textArea.value = text;
+    textArea.focus();
+    textArea.select();
+
+    // Close handlers
+    function closeModal() {
+        if (document.body.contains(overlay)) {
+            document.body.removeChild(overlay);
+        }
+        document.removeEventListener('keydown', escHandler);
+    }
+
+    function escHandler(e) {
+        var isEscape = e.key === 'Escape' || e.keyCode === 27;
+        if (isEscape) {
+            closeModal();
+        }
+    }
+
+    document.getElementById('manual-copy-close').onclick = closeModal;
+    overlay.onclick = function(e) {
+        if (e.target === overlay) {
+            closeModal();
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    // Listen for successful copy - close modal and show success toast
+    textArea.addEventListener('copy', function() {
+        showToast('Success', successMessage, 'success');
+        closeModal();
+    });
 }
 
 // ============================================================================
@@ -948,22 +1071,57 @@ function closeContactModal() {
 function refreshContactModalTransactions() {
     // Store the current contact ID to reopen after refresh
     if (currentContactId) {
-        sessionStorage.setItem('eiou_reopen_contact_id', currentContactId);
-        sessionStorage.setItem('eiou_reopen_contact_tab', 'transactions-tab');
+        // Try sessionStorage first, fall back to URL hash
+        var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
+        var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'transactions-tab');
+
+        if (storedId && storedTab) {
+            // Storage worked, simple reload
+            window.location.reload();
+        } else {
+            // Storage failed (Tor Browser), use URL hash fallback
+            var currentUrl = window.location.href.split('#')[0];
+            window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=transactions';
+            window.location.reload();
+        }
+    } else {
+        window.location.reload();
     }
-    window.location.reload();
 }
 
 // Check if we need to reopen contact modal after refresh (Tor Browser compatible)
 function checkReopenContactModal() {
     try {
-        var reopenContactId = sessionStorage.getItem('eiou_reopen_contact_id');
-        var reopenTab = sessionStorage.getItem('eiou_reopen_contact_tab');
+        var reopenContactId = safeStorageGet('eiou_reopen_contact_id');
+        var reopenTab = safeStorageGet('eiou_reopen_contact_tab');
+
+        // Check URL hash fallback if storage didn't have the values
+        if (!reopenContactId) {
+            var hash = window.location.hash;
+            if (hash && hash.indexOf('reopen_contact=') !== -1) {
+                // Parse hash: #reopen_contact=ID&tab=transactions
+                var hashContent = hash.substring(1); // Remove leading #
+                var params = hashContent.split('&');
+                for (var j = 0; j < params.length; j++) {
+                    var pair = params[j].split('=');
+                    if (pair[0] === 'reopen_contact') {
+                        reopenContactId = decodeURIComponent(pair[1]);
+                    } else if (pair[0] === 'tab') {
+                        reopenTab = pair[1] + '-tab';
+                    }
+                }
+                // Clean up URL by removing the hash (without reload)
+                if (window.history && window.history.replaceState) {
+                    var cleanUrl = window.location.href.split('#')[0];
+                    window.history.replaceState({}, document.title, cleanUrl);
+                }
+            }
+        }
 
         if (reopenContactId) {
             // Clear the stored values first
-            sessionStorage.removeItem('eiou_reopen_contact_id');
-            sessionStorage.removeItem('eiou_reopen_contact_tab');
+            safeStorageRemove('eiou_reopen_contact_id');
+            safeStorageRemove('eiou_reopen_contact_tab');
 
             // Find the contact card with matching contact ID using data attribute
             var contactCards = document.querySelectorAll('.contact-card');
@@ -1315,6 +1473,10 @@ function fetchDebugReport(callback) {
     // Fetch debug data via AJAX (Tor Browser compatible XMLHttpRequest)
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000; // 60 seconds for Tor compatibility
+    xhr.ontimeout = function() {
+        showToast('Error', 'Request timed out. Tor connections can be slow - please try again.', 'error');
+    };
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
             if (xhr.status === 200) {

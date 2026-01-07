@@ -125,8 +125,11 @@ class ContactController
                 $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
-            } catch (\Exception $e) {
-                ob_end_clean();
+            } catch (\Throwable $e) {
+                // Ensure output buffer is cleaned up
+                if (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
                 // Use SecureLogger for exception logging
                 SecureLogger::logException($e, [
                     'controller' => 'ContactController',
@@ -226,8 +229,11 @@ class ContactController
                 $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
-            } catch (\Exception $e) {
-                ob_end_clean();
+            } catch (\Throwable $e) {
+                // Ensure output buffer is cleaned up
+                if (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
                 // Use SecureLogger for exception logging
                 SecureLogger::logException($e, [
                     'controller' => 'ContactController',
@@ -292,8 +298,11 @@ class ContactController
                 $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
-            } catch (\Exception $e) {
-                ob_end_clean();
+            } catch (\Throwable $e) {
+                // Ensure output buffer is cleaned up
+                if (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
                 // Use SecureLogger for exception logging
                 SecureLogger::logException($e, [
                     'controller' => 'ContactController',
@@ -358,8 +367,11 @@ class ContactController
                 $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
-            } catch (\Exception $e) {
-                ob_end_clean();
+            } catch (\Throwable $e) {
+                // Ensure output buffer is cleaned up
+                if (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
                 // Use SecureLogger for exception logging
                 SecureLogger::logException($e, [
                     'controller' => 'ContactController',
@@ -424,8 +436,11 @@ class ContactController
                 $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
-            } catch (\Exception $e) {
-                ob_end_clean();
+            } catch (\Throwable $e) {
+                // Ensure output buffer is cleaned up
+                if (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
                 // Use SecureLogger for exception logging
                 SecureLogger::logException($e, [
                     'controller' => 'ContactController',
@@ -526,8 +541,11 @@ class ContactController
                 $messageInfo = MessageHelper::parseCliJsonOutput($output);
                 $message = $messageInfo['message'];
                 $messageType = $messageInfo['type'];
-            } catch (\Exception $e) {
-                ob_end_clean();
+            } catch (\Throwable $e) {
+                // Ensure output buffer is cleaned up
+                if (ob_get_level() > 0) {
+                    ob_end_clean();
+                }
                 // Use SecureLogger for exception logging
                 SecureLogger::logException($e, [
                     'controller' => 'ContactController',

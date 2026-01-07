@@ -459,7 +459,7 @@ class P2pService {
         // Check if the address of the recipient was supplied
         if (!isset($request[2])) {
             output(outputReceiverAddressNotSet($request), 'SILENT');
-            die;
+            throw new \InvalidArgumentException("Receiver address is not set");
         }
 
         // Validate amount using InputValidator
@@ -685,7 +685,7 @@ class P2pService {
                 }     
             } else{
                 output(outputAdressOrContactIssue($data),'SILENT');
-                die;
+                throw new \InvalidArgumentException("Not an address nor existing contact with name: " . $data[2]);
             }
         }
 
