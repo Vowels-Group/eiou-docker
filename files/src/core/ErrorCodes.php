@@ -95,6 +95,11 @@ class ErrorCodes
     public const INVALID_RECIPIENT = 'INVALID_RECIPIENT';
     public const SELF_SEND = 'SELF_SEND';
 
+    // Transport/Routing errors
+    public const NO_VIABLE_TRANSPORT = 'NO_VIABLE_TRANSPORT';
+    public const NO_VIABLE_ROUTE = 'NO_VIABLE_ROUTE';
+    public const P2P_CANCELLED = 'P2P_CANCELLED';
+
     // Input validation errors
     public const INVALID_ADDRESS = 'INVALID_ADDRESS';
     public const INVALID_NAME = 'INVALID_NAME';
@@ -255,6 +260,9 @@ class ErrorCodes
 
             // 503 Service Unavailable
             self::CONTACT_UNREACHABLE => 503,
+            self::NO_VIABLE_TRANSPORT => 503,
+            self::NO_VIABLE_ROUTE => 503,
+            self::P2P_CANCELLED => 503,
 
             // 504 Gateway Timeout
             self::TIMEOUT => 504,
@@ -363,6 +371,10 @@ class ErrorCodes
             self::FILE_NOT_FOUND => 'File Not Found',
             self::FILE_NOT_READABLE => 'File Not Readable',
             self::INVALID_ARGUMENT => 'Invalid Argument',
+
+            self::NO_VIABLE_TRANSPORT => 'No Viable Transport',
+            self::NO_VIABLE_ROUTE => 'No Viable Route',
+            self::P2P_CANCELLED => 'P2P Route Cancelled',
         ];
 
         return $titles[$code] ?? ucwords(strtolower(str_replace('_', ' ', $code)));
