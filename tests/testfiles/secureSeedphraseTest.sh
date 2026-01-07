@@ -369,6 +369,72 @@ else
     failure=$(( failure + 1 ))
 fi
 
+############################ TEST 10: VERIFY RESTORE ENV VAR APPROACH ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 10: Testing RESTORE env var approach"
+
+# Get the current seedphrase from existing container
+restoreEnvSeedPhrase=$(docker exec ${testContainer} php -r '
+    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    echo KeyEncryption::decrypt($json["mnemonic_encrypted"]);
+' 2>&1)
+
+# Get original public key for comparison
+originalPubKeyRestoreEnv=$(docker exec ${testContainer} php -r '
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    echo $json["public"] ?? "ERROR";
+' 2>&1)
+
+# Create a new container with RESTORE env var
+restoreEnvContainer="httpRestoreEnvTest"
+docker run -d --network="${network}" --name "${restoreEnvContainer}" \
+    -e RESTORE="${restoreEnvSeedPhrase}" \
+    -v "${restoreEnvContainer}-mysql-data:/var/lib/mysql" \
+    -v "${restoreEnvContainer}-files:/etc/eiou/" \
+    -v "${restoreEnvContainer}-index:/var/www/html" \
+    -v "${restoreEnvContainer}-eiou:/usr/local/bin/" \
+    eioud > /dev/null 2>&1
+
+sleep 10
+
+# Get restored public key
+restoredPubKeyRestoreEnv=$(docker exec ${restoreEnvContainer} php -r '
+    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+    echo $json["public"] ?? "ERROR";
+' 2>&1)
+
+# Check if seedphrase is in docker logs (should NOT be)
+seedInLogsEnv=$(docker logs ${restoreEnvContainer} 2>&1 | grep -c "${restoreEnvSeedPhrase:0:30}" || echo "0")
+
+# Check for 3-word sequence in logs
+firstThreeWords=$(echo "$restoreEnvSeedPhrase" | awk '{print $1" "$2" "$3}')
+threeWordInLogs=$(docker logs ${restoreEnvContainer} 2>&1 | grep -c "$firstThreeWords" || echo "0")
+
+# Clean up the new container
+docker rm -f ${restoreEnvContainer} > /dev/null 2>&1
+docker volume rm ${restoreEnvContainer}-mysql-data ${restoreEnvContainer}-files ${restoreEnvContainer}-index ${restoreEnvContainer}-eiou > /dev/null 2>&1
+
+if [[ "$threeWordInLogs" == "0" ]] && [[ "$originalPubKeyRestoreEnv" == "$restoredPubKeyRestoreEnv" ]] && [[ "$restoredPubKeyRestoreEnv" != "ERROR" ]]; then
+    printf "\t   RESTORE env var approach ${GREEN}PASSED${NC}\n"
+    printf "\t   - Seedphrase NOT in docker logs\n"
+    printf "\t   - Public keys match after restore\n"
+    printf "\t   - Note: Seedphrase visible in container env (Docker limitation)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   RESTORE env var approach ${RED}FAILED${NC}\n"
+    if [[ "$threeWordInLogs" != "0" ]]; then
+        printf "\t   - SECURITY: Seedphrase found in logs!\n"
+    fi
+    if [[ "$originalPubKeyRestoreEnv" != "$restoredPubKeyRestoreEnv" ]]; then
+        printf "\t   - Public key mismatch after restore\n"
+        printf "\t   - Original: ${originalPubKeyRestoreEnv:0:50}...\n"
+        printf "\t   - Restored: ${restoredPubKeyRestoreEnv:0:50}...\n"
+    fi
+    failure=$(( failure + 1 ))
+fi
+
 ##################################################################
 
 succesrate "${totaltests}" "${passed}" "${failure}" "'secure seedphrase display'"
