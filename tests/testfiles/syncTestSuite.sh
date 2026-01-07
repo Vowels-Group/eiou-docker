@@ -84,9 +84,10 @@ echo -e "\t   Sender: ${sender} (${senderAddress})"
 echo -e "\t   Receiver: ${receiver} (${receiverAddress})"
 
 # Ensure contacts exist between sender and receiver
-docker exec ${sender} eiou addcontact ${receiverAddress} 2>&1 > /dev/null || true
+# Use same format as addContactsTest: eiou add <address> <name> <fee> <credit> <currency>
+docker exec ${sender} eiou add ${receiverAddress} ${receiver} 0 0 USD 2>&1 > /dev/null || true
 sleep 1
-docker exec ${receiver} eiou addcontact ${senderAddress} 2>&1 > /dev/null || true
+docker exec ${receiver} eiou add ${senderAddress} ${sender} 0 0 USD 2>&1 > /dev/null || true
 sleep 2
 
 # Wait for contacts to be accepted (pubkeys only available after acceptance)

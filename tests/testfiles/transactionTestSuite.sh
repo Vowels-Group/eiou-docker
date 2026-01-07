@@ -522,7 +522,8 @@ heldRepoCheck=$(docker exec ${testContainer} php -r "
         exit;
     }
 
-    \$requiredMethods = ['insert', 'getByContactHash', 'delete'];
+    // Methods based on original heldTransactionTest.sh
+    \$requiredMethods = ['holdTransaction', 'getByTxid', 'releaseTransaction'];
     \$missing = [];
 
     foreach (\$requiredMethods as \$method) {
@@ -598,7 +599,8 @@ isolationCheck=$(docker exec ${testContainer} php -r "
     }
 
     // Query should not affect regular transactions table
-    \$result = \$heldRepo->getByContactHash('nonexistent_hash_' . time());
+    // Use getByTxid with nonexistent txid - should return null/empty
+    \$result = \$heldRepo->getByTxid('nonexistent_txid_' . time());
 
     if (\$result === null || (is_array(\$result) && empty(\$result))) {
         echo 'ISOLATION_OK';
