@@ -206,9 +206,12 @@
                     return;
                 }
 
-                // Use existing check_updates mechanism
-                fetch(window.location.pathname + '?check_updates=1&_=' + Date.now())
+                // Use existing check_updates mechanism with AbortController timeout for Tor compatibility
+                var controller = new AbortController();
+                var timeoutId = setTimeout(function() { controller.abort(); }, 30000); // 30 seconds for Tor
+                fetch(window.location.pathname + '?check_updates=1&_=' + Date.now(), { signal: controller.signal })
                     .then(function(response) {
+                        clearTimeout(timeoutId);
                         // Double-check flag before reload (in case manual refresh started during fetch)
                         if (window.isRefreshing) {
                             return;
@@ -219,6 +222,7 @@
                         }
                     })
                     .catch(function(err) {
+                        clearTimeout(timeoutId);
                         console.log('Auto-refresh check failed:', err);
                     });
             }, AUTO_REFRESH_DELAY);
