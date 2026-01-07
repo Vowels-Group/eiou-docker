@@ -332,8 +332,11 @@ docker run -d --network="${network}" --name "${restoreFileContainer}" \
 
 sleep 10
 
+# Extract first 3 words from seedphrase for checking
+firstThreeWordsFile=$(cat "${hostSeedFile}" | awk '{print $1" "$2" "$3}')
+
 # Check if seedphrase is in environment (should NOT be with RESTORE_FILE)
-seedInEnv=$(docker exec ${restoreFileContainer} printenv 2>&1 | grep -c "abandon\|tribe\|gloom\|legal" || echo "0")
+seedInEnv=$(docker exec ${restoreFileContainer} printenv 2>&1 | grep -c "$firstThreeWordsFile" || echo "0")
 
 # Get restored public key
 restoredPubKeyRestoreFile=$(docker exec ${restoreFileContainer} php -r '
@@ -342,7 +345,7 @@ restoredPubKeyRestoreFile=$(docker exec ${restoreFileContainer} php -r '
 ' 2>&1)
 
 # Check if seedphrase is in docker logs
-seedInLogs=$(docker logs ${restoreFileContainer} 2>&1 | grep -c "abandon\|tribe\|gloom\|legal" || echo "0")
+seedInLogs=$(docker logs ${restoreFileContainer} 2>&1 | grep -c "$firstThreeWordsFile" || echo "0")
 
 # Clean up the new container
 docker rm -f ${restoreFileContainer} > /dev/null 2>&1
