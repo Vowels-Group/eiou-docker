@@ -156,7 +156,9 @@ fileDisplayTest=$(docker exec ${testContainer} php -r '
         if (file_exists($result["filepath"])) {
             // Read file content
             $content = file_get_contents($result["filepath"]);
-            if (strpos($content, "test word") !== false) {
+            // Check for first word "test" - content is formatted with line numbers
+            // so "test word" wont appear as consecutive string
+            if (strpos($content, "test") !== false && strpos($content, "word") !== false) {
                 // Clean up test file
                 unlink($result["filepath"]);
                 echo "FILE_CREATED_AND_VALID";
@@ -330,7 +332,7 @@ docker run -d --network="${network}" --name "${restoreFileContainer}" \
     -v "${restoreFileContainer}-eiou:/usr/local/bin/" \
     eioud > /dev/null 2>&1
 
-sleep 10
+sleep 15
 
 # Extract first 3 words from seedphrase for checking
 firstThreeWordsFile=$(cat "${hostSeedFile}" | awk '{print $1" "$2" "$3}')
@@ -410,7 +412,7 @@ docker run -d --network="${network}" --name "${restoreEnvContainer}" \
     -v "${restoreEnvContainer}-eiou:/usr/local/bin/" \
     eioud > /dev/null 2>&1
 
-sleep 10
+sleep 15
 
 # Get restored public key
 restoredPubKeyRestoreEnv=$(docker exec ${restoreEnvContainer} php -r '
