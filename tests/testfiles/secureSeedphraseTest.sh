@@ -337,9 +337,10 @@ docker rm -f ${restoreFileContainer} > /dev/null 2>&1
 docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-index ${restoreFileContainer}-eiou > /dev/null 2>&1
 
 # Create the container and capture any errors
+# Use double slashes in RESTORE_FILE value to prevent Git Bash path conversion
 createOutput=$(docker run -d --network="${network}" --name "${restoreFileContainer}" \
     -v "${hostSeedFile}:/restore/seed:ro" \
-    -e RESTORE_FILE="/restore/seed" \
+    -e RESTORE_FILE="//restore//seed" \
     -v "${restoreFileContainer}-mysql-data:/var/lib/mysql" \
     -v "${restoreFileContainer}-files:/etc/eiou/" \
     -v "${restoreFileContainer}-index:/var/www/html" \
