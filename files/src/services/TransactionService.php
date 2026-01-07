@@ -1118,21 +1118,35 @@ class TransactionService {
     public function handleP2pRoute(array $request, ?CliOutputManager $output = null): void{
         $output = $output ?? CliOutputManager::getInstance();
 
-        // Send P2P request when contact not found using P2pService directly
-        Application::getInstance()->services->getP2pService()->sendP2pRequest($request);
-
-        // Build response data
-        $txResponse = [
-            'status' => Constants::STATUS_PENDING,
-            'type' => 'p2p',
+        // Build transaction data for response
+        $txData = [
             'recipient' => $request[2] ?? null,
             'amount' => $request[3] ?? null,
             'currency' => $request[4] ?? 'USD',
-            'description' => $request[5] ?? null,
-            'message' => 'P2P route discovery initiated'
+            'description' => $request[5] ?? null
         ];
 
-        $output->success("Searching for route via P2P network to " . $request[2], $txResponse, "Searching for route to recipient via P2P network");
+        try {
+            // Send P2P request when contact not found using P2pService directly
+            Application::getInstance()->services->getP2pService()->sendP2pRequest($request);
+
+            // Build response data
+            $txResponse = array_merge($txData, [
+                'status' => Constants::STATUS_PENDING,
+                'type' => 'p2p',
+                'message' => 'P2P route discovery initiated'
+            ]);
+
+            $output->success("Searching for route via P2P network to " . $request[2], $txResponse, "Searching for route to recipient via P2P network");
+        } catch (\InvalidArgumentException $e) {
+            // Contact/address not found - return proper error for GUI
+            $output->error(
+                "Recipient not found: " . ($request[2] ?? 'unknown') . " is not a valid address or existing contact",
+                ErrorCodes::INVALID_RECIPIENT,
+                400,
+                $txData
+            );
+        }
     }
 
     /**
