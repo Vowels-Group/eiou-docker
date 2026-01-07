@@ -115,10 +115,10 @@ class TransportUtilityService
             $transportIndex = array_shift($transportModes);
             if(isset($contactInfo[$transportIndex])){
                 return $transportIndex;
-            } 
+            }
         }
-        output(outputNoViableTransportMode());
-        exit(1);
+        output(outputNoViableTransportMode(), 'SILENT');
+        return null;
     }
 
     /**
@@ -134,11 +134,11 @@ class TransportUtilityService
                 $transportIndex = array_shift($transportModes);
                 if(isset($contactInfo[$transportIndex])){
                     return $contactInfo[$transportIndex];
-                } 
+                }
             }
-        }      
-        output(outputNoViableTransportAddress());
-        exit(1);
+        }
+        output(outputNoViableTransportAddress(), 'SILENT');
+        return null;
     }
 
     /**

@@ -1153,7 +1153,7 @@ class ContactService {
 
         if ($addressOrName === null) {
             $output->error("Address or name is required", ErrorCodes::MISSING_IDENTIFIER, 400);
-            exit(1);
+            return false;
         }
 
         // Check if it's a HTTP or Tor address
@@ -1165,7 +1165,7 @@ class ContactService {
                     'error' => $addressValidation['error']
                 ]);
                 $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
-                exit(1);
+                return false;
             }
             $address = $addressValidation['value'];
             $transportIndex = $this->transportUtility->determineTransportType($address);
@@ -1174,12 +1174,12 @@ class ContactService {
             $contact = $this->contactRepository->lookupByName($addressOrName);
             if (!$contact) {
                 $output->error("Contact not found with name: " . $addressOrName, ErrorCodes::CONTACT_NOT_FOUND, 404);
-                exit(1);
+                return false;
             }
             $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
                 $output->error("Contact has no valid address", ErrorCodes::NO_ADDRESS, 500);
-                exit(1);
+                return false;
             }
             $transportIndex = $this->transportUtility->determineTransportType($address);
         }
@@ -1208,7 +1208,7 @@ class ContactService {
 
         if ($addressOrName === null) {
             $output->error("Address or name is required", ErrorCodes::MISSING_IDENTIFIER, 400);
-            exit(1);
+            return false;
         }
 
         // Check if it's a HTTP or Tor address
@@ -1220,7 +1220,7 @@ class ContactService {
                     'error' => $addressValidation['error']
                 ]);
                 $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
-                exit(1);
+                return false;
             }
             $address = $addressValidation['value'];
         } else {
@@ -1228,12 +1228,12 @@ class ContactService {
             $contact = $this->contactRepository->lookupByName($addressOrName);
             if (!$contact) {
                 $output->error("Contact not found with name: " . $addressOrName, ErrorCodes::CONTACT_NOT_FOUND, 404);
-                exit(1);
+                return false;
             }
             $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
                 $output->error("Contact has no valid address", ErrorCodes::NO_ADDRESS, 500);
-                exit(1);
+                return false;
             }
         }
 
@@ -1263,7 +1263,7 @@ class ContactService {
 
         if ($addressOrName === null) {
             $output->error("Address or name is required", ErrorCodes::MISSING_IDENTIFIER, 400);
-            exit(1);
+            return false;
         }
 
         // Check if it's a HTTP or Tor address
@@ -1275,7 +1275,7 @@ class ContactService {
                     'error' => $addressValidation['error']
                 ]);
                 $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
-                exit(1);
+                return false;
             }
             $address = $addressValidation['value'];
         } else {
@@ -1283,12 +1283,12 @@ class ContactService {
             $contact = $this->contactRepository->lookupByName($addressOrName);
             if (!$contact) {
                 $output->error("Contact not found with name: " . $addressOrName, ErrorCodes::CONTACT_NOT_FOUND, 404);
-                exit(1);
+                return false;
             }
             $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
                 $output->error("Contact has no valid address", ErrorCodes::NO_ADDRESS, 500);
-                exit(1);
+                return false;
             }
         }
 

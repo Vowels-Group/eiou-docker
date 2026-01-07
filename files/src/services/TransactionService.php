@@ -518,6 +518,9 @@ class TransactionService {
 
         // Determine Transport Type (fallback on other if needed)
         $transportIndex = $this->transportUtility->fallbackTransportType($request[2],$contactInfo);
+        if ($transportIndex === null) {
+            throw new \InvalidArgumentException("No viable transport mode found for recipient");
+        }
         // Additional data preparation
         $data['receiverAddress'] = $contactInfo[$transportIndex];
         $data['receiverPublicKey'] = $contactInfo['receiverPublicKey'];
@@ -1051,11 +1054,16 @@ class TransactionService {
 
                 // Determine Transport Type (fallback on other if needed)
                 $transportIndex = $this->transportUtility->fallbackTransportType($request[2],$contactInfo);
-                $syncResult = Application::getInstance()->services->getSyncService()->syncSingleContact($contactInfo[$transportIndex],'SILENT');
-                if($syncResult){
-                    $this->handleDirectRoute($request, $contactInfo, $output);
-                } else{
+                if ($transportIndex === null) {
+                    // No viable transport mode found, try P2P
                     $this->handleP2pRoute($request, $output);
+                } else {
+                    $syncResult = Application::getInstance()->services->getSyncService()->syncSingleContact($contactInfo[$transportIndex],'SILENT');
+                    if($syncResult){
+                        $this->handleDirectRoute($request, $contactInfo, $output);
+                    } else{
+                        $this->handleP2pRoute($request, $output);
+                    }
                 }
             } elseif($contactInfo['status'] === Constants::CONTACT_STATUS_BLOCKED){
                 // Contact is blocked, do not send anything
@@ -1078,8 +1086,19 @@ class TransactionService {
     public function handleDirectRoute(array $request, $contactInfo, ?CliOutputManager $output = null): void{
         $output = $output ?? CliOutputManager::getInstance();
 
-        // Data preparation for eIOU
-        $data = $this->prepareStandardTransactionData($request, $contactInfo);
+        try {
+            // Data preparation for eIOU
+            $data = $this->prepareStandardTransactionData($request, $contactInfo);
+        } catch (\InvalidArgumentException $e) {
+            // No viable transport mode found
+            $output->error(
+                "Cannot send transaction: " . $e->getMessage(),
+                ErrorCodes::NO_VIABLE_TRANSPORT,
+                400,
+                ['recipient' => $request[2] ?? null]
+            );
+            return;
+        }
 
         // Prepare transaction payload from data
         $payload = $this->transactionPayload->build($data);
