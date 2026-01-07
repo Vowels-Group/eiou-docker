@@ -402,6 +402,31 @@ class InputValidator {
     }
 
     /**
+     * Validate that an address is not one of the user's own addresses
+     *
+     * @param string $address Address to validate
+     * @param UserContext $userContext User context for checking own addresses
+     * @return array ['valid' => bool, 'error' => string|null]
+     */
+    public static function validateNotSelfSend(string $address, UserContext $userContext): array {
+        if (empty($address)) {
+            return ['valid' => true, 'error' => null];
+        }
+
+        $address = trim($address);
+
+        // Check if the address is one of the user's own addresses
+        if ($userContext->isMyAddress($address)) {
+            return [
+                'valid' => false,
+                'error' => 'Cannot send transactions to yourself'
+            ];
+        }
+
+        return ['valid' => true, 'error' => null];
+    }
+
+    /**
      * Validate complete transaction request
      *
      * @param array $request Transaction request data
