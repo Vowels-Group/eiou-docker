@@ -296,6 +296,79 @@ else
     failure=$(( failure + 1 ))
 fi
 
+############################ TEST 9: VERIFY RESTORE_FILE APPROACH ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 9: Testing RESTORE_FILE approach (file-based restore)"
+
+# Create a new container with RESTORE_FILE to test the file-based restore
+# First, get the seedphrase and create a temp file on the host
+hostSeedFile="/tmp/eiou_test_restore_seed_$$"
+
+# Get the current seedphrase
+docker exec ${testContainer} php -r '
+    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    echo KeyEncryption::decrypt($json["mnemonic_encrypted"]);
+' > "${hostSeedFile}" 2>&1
+chmod 600 "${hostSeedFile}"
+
+# Get original public key for comparison
+originalPubKeyRestoreFile=$(docker exec ${testContainer} php -r '
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    echo $json["public"] ?? "ERROR";
+' 2>&1)
+
+# Create a new container with RESTORE_FILE (file-based restore)
+restoreFileContainer="httpRestoreFileTest"
+docker run -d --network="${network}" --name "${restoreFileContainer}" \
+    -v "${hostSeedFile}:/restore/seed:ro" \
+    -e RESTORE_FILE=/restore/seed \
+    -v "${restoreFileContainer}-mysql-data:/var/lib/mysql" \
+    -v "${restoreFileContainer}-files:/etc/eiou/" \
+    -v "${restoreFileContainer}-index:/var/www/html" \
+    -v "${restoreFileContainer}-eiou:/usr/local/bin/" \
+    eioud > /dev/null 2>&1
+
+sleep 10
+
+# Check if seedphrase is in environment (should NOT be with RESTORE_FILE)
+seedInEnv=$(docker exec ${restoreFileContainer} printenv 2>&1 | grep -c "abandon\|tribe\|gloom\|legal" || echo "0")
+
+# Get restored public key
+restoredPubKeyRestoreFile=$(docker exec ${restoreFileContainer} php -r '
+    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+    echo $json["public"] ?? "ERROR";
+' 2>&1)
+
+# Check if seedphrase is in docker logs
+seedInLogs=$(docker logs ${restoreFileContainer} 2>&1 | grep -c "abandon\|tribe\|gloom\|legal" || echo "0")
+
+# Clean up the new container
+docker rm -f ${restoreFileContainer} > /dev/null 2>&1
+docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-index ${restoreFileContainer}-eiou > /dev/null 2>&1
+rm -f "${hostSeedFile}"
+
+if [[ "$seedInEnv" == "0" ]] && [[ "$seedInLogs" == "0" ]] && [[ "$originalPubKeyRestoreFile" == "$restoredPubKeyRestoreFile" ]] && [[ "$restoredPubKeyRestoreFile" != "ERROR" ]]; then
+    printf "\t   RESTORE_FILE approach ${GREEN}PASSED${NC}\n"
+    printf "\t   - Seedphrase NOT in environment\n"
+    printf "\t   - Seedphrase NOT in logs\n"
+    printf "\t   - Public keys match after restore\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   RESTORE_FILE approach ${RED}FAILED${NC}\n"
+    if [[ "$seedInEnv" != "0" ]]; then
+        printf "\t   - SECURITY: Seedphrase found in environment!\n"
+    fi
+    if [[ "$seedInLogs" != "0" ]]; then
+        printf "\t   - SECURITY: Seedphrase found in logs!\n"
+    fi
+    if [[ "$originalPubKeyRestoreFile" != "$restoredPubKeyRestoreFile" ]]; then
+        printf "\t   - Public key mismatch after restore\n"
+    fi
+    failure=$(( failure + 1 ))
+fi
+
 ##################################################################
 
 succesrate "${totaltests}" "${passed}" "${failure}" "'secure seedphrase display'"

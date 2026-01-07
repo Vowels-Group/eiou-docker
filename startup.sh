@@ -9,10 +9,19 @@ exec 2> >(stdbuf -oL cat >&2)
 QUICKSTART=${QUICKSTART:-false}
 
 # Check for restore flag (24-word seed phrase)
-# SECURITY: The RESTORE env var is read once and then cleared from environment
-# to minimize exposure. The seedphrase is passed via a temp file rather than
-# command line arguments to prevent visibility in process lists.
-#    RESTORE="word1 word2 .... word24"
+# Two methods are available for wallet restoration:
+#
+# Method 1 - RESTORE_FILE (RECOMMENDED - Most Secure):
+#   Mount a file containing the seedphrase and provide the path:
+#   docker run -v /host/path/seedphrase.txt:/restore/seed:ro -e RESTORE_FILE=/restore/seed ...
+#   Benefits: Seedphrase never appears in container environment or docker inspect
+#
+# Method 2 - RESTORE (Convenient but less secure):
+#   Pass seedphrase directly via environment variable:
+#   docker run -e RESTORE="word1 word2 ... word24" ...
+#   Note: Seedphrase visible in docker inspect and container environment
+#
+RESTORE_FILE=${RESTORE_FILE:-false}
 RESTORE=${RESTORE:-false}
 
 # Generate self-signed SSL certificate if it doesn't exist
@@ -42,35 +51,73 @@ done
 
 # Check if userconfig.json was already made and if so if user keys exist, if not build config
 if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;') ]]; then
-    # RESTORE takes priority over QUICKSTART
-    if [ "$RESTORE" != "false" ]; then
-        echo "Restore mode enabled. Restoring wallet from provided seed phrase..."
+    # RESTORE_FILE takes priority over RESTORE, which takes priority over QUICKSTART
+    if [ "$RESTORE_FILE" != "false" ]; then
+        # Method 1: File-based restore (most secure)
+        # The seedphrase is read from a mounted file, never exposed in environment
+        echo "Restore mode enabled (file-based). Restoring wallet from mounted file..."
 
-        # SECURITY: Write seedphrase to temp file instead of passing via command line
-        # This prevents the seedphrase from appearing in process lists (ps aux)
-        RESTORE_FILE="/dev/shm/.eiou_restore_$$"
-
-        # Write seedphrase to temp file
-        echo "$RESTORE" > "$RESTORE_FILE"
-
-        # Verify file was created successfully
+        # Verify the file exists
         if [ ! -f "$RESTORE_FILE" ]; then
-            echo "ERROR: Failed to create restore file at $RESTORE_FILE"
+            echo "ERROR: Seed phrase file not found at $RESTORE_FILE"
+            echo "Ensure the file is mounted correctly, e.g.:"
+            echo "  docker run -v /host/path/seed.txt:/restore/seed:ro -e RESTORE_FILE=/restore/seed ..."
             exit 1
         fi
 
-        chmod 600 "$RESTORE_FILE"
+        # Verify file is readable
+        if [ ! -r "$RESTORE_FILE" ]; then
+            echo "ERROR: Cannot read seed phrase file at $RESTORE_FILE"
+            exit 1
+        fi
 
-        # Clear the environment variable to prevent docker inspect exposure
+        # Pass file directly to eiou command
+        RESTORE_RESULT=$(eiou generate restore-file "$RESTORE_FILE" 2>&1)
+        RESTORE_EXIT_CODE=$?
+
+        # Check if restore was successful
+        if [ $RESTORE_EXIT_CODE -ne 0 ]; then
+            echo "ERROR: Wallet restoration failed:"
+            echo "$RESTORE_RESULT"
+            exit 1
+        fi
+
+        echo "$RESTORE_RESULT"
+        echo "Wallet restore completed."
+        echo "NOTE: You can now safely unmount and delete the seed phrase file from the host."
+
+    elif [ "$RESTORE" != "false" ]; then
+        # Method 2: Environment variable restore (convenient but less secure)
+        # Warning: Seedphrase remains visible in docker inspect and container env
+        echo "Restore mode enabled (env var). Restoring wallet from environment variable..."
+        echo "WARNING: Seedphrase remains visible in container environment. For production,"
+        echo "         consider using RESTORE_FILE with a mounted file instead."
+
+        # SECURITY: Write seedphrase to temp file instead of passing via command line
+        # This prevents the seedphrase from appearing in process lists (ps aux)
+        RESTORE_TEMP_FILE="/dev/shm/.eiou_restore_$$"
+
+        # Write seedphrase to temp file
+        echo "$RESTORE" > "$RESTORE_TEMP_FILE"
+
+        # Verify file was created successfully
+        if [ ! -f "$RESTORE_TEMP_FILE" ]; then
+            echo "ERROR: Failed to create restore file at $RESTORE_TEMP_FILE"
+            exit 1
+        fi
+
+        chmod 600 "$RESTORE_TEMP_FILE"
+
+        # Clear the local environment variable (note: doesn't affect container's env)
         unset RESTORE
 
         # Pass seedphrase via file to eiou command
         # The restore-file flag reads the seedphrase from file instead of args
-        RESTORE_RESULT=$(eiou generate restore-file "$RESTORE_FILE" 2>&1)
+        RESTORE_RESULT=$(eiou generate restore-file "$RESTORE_TEMP_FILE" 2>&1)
         RESTORE_EXIT_CODE=$?
 
         # Securely delete the temp file
-        shred -u "$RESTORE_FILE" 2>/dev/null || rm -f "$RESTORE_FILE"
+        shred -u "$RESTORE_TEMP_FILE" 2>/dev/null || rm -f "$RESTORE_TEMP_FILE"
 
         # Check if restore was successful
         if [ $RESTORE_EXIT_CODE -ne 0 ]; then

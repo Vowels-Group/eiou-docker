@@ -232,6 +232,7 @@ done
 
 remove_container_if_exists $restoreContainer
 remove_container_if_exists $authcodeRestoreContainer
+remove_container_if_exists "httpRestoreFileTest"
 printf "================================================================\n"
 
 # Final summary
