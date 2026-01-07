@@ -203,3 +203,18 @@ remove_container_if_exists() {
 }
 
 #############################################################################
+
+########################## Test Helper Functions ############################
+# Source consolidated test helper functions
+# These provide common utilities used across multiple test suites
+#############################################################################
+
+# Source testHelpers.sh from baseconfig directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/testHelpers.sh" ]; then
+    . "${SCRIPT_DIR}/testHelpers.sh"
+elif [ -f "./tests/baseconfig/testHelpers.sh" ]; then
+    . "./tests/baseconfig/testHelpers.sh"
+fi
+
+#############################################################################
