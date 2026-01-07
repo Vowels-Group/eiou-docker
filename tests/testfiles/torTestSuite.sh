@@ -24,6 +24,9 @@ HS_DIR="/var/lib/tor/hidden_service"
 HS_HOSTNAME_FILE="${HS_DIR}/hostname"
 HS_FILES="hs_ed25519_secret_key hs_ed25519_public_key hostname"
 
+# Local array for TOR addresses (avoid overwriting MODE-specific containerAddresses)
+declare -A torContainerAddresses
+
 echo -e "\n"
 echo "========================================================================"
 echo "                    TOR TEST SUITE"
@@ -49,7 +52,8 @@ for container in "${containers[@]}"; do
 
     if [[ ! -z "${torAddress}" ]] && [[ "${torAddress}" =~ \.onion$ ]]; then
         printf "\t   TOR address for %s ${GREEN}PASSED${NC} (%s)\n" ${container} ${torAddress}
-        containerAddresses[$container]=$torAddress
+        # Store TOR addresses in separate array to avoid overwriting MODE-specific containerAddresses
+        torContainerAddresses[$container]=$torAddress
         passed=$(( passed + 1 ))
     else
         printf "\t   TOR address for %s ${RED}FAILED${NC} (empty or invalid)\n" ${container}
@@ -270,8 +274,12 @@ else
                     failure=$(( failure + 1 ))
                 else
                     # Verify key file integrity
-                    secretKeySize=$(docker exec $testContainer stat -c '%s' "${HS_DIR}/hs_ed25519_secret_key" 2>/dev/null)
-                    publicKeySize=$(docker exec $testContainer stat -c '%s' "${HS_DIR}/hs_ed25519_public_key" 2>/dev/null)
+                    secretKeySize=$(docker exec $testContainer stat -c '%s' "${HS_DIR}/hs_ed25519_secret_key" 2>/dev/null || echo "0")
+                    publicKeySize=$(docker exec $testContainer stat -c '%s' "${HS_DIR}/hs_ed25519_public_key" 2>/dev/null || echo "0")
+
+                    # Default to 0 if empty
+                    secretKeySize=${secretKeySize:-0}
+                    publicKeySize=${publicKeySize:-0}
 
                     if [ "$secretKeySize" -lt 50 ] || [ "$secretKeySize" -gt 200 ]; then
                         printf "\t   Rapid restart for %s ${RED}FAILED${NC} - Secret key size abnormal: ${secretKeySize} bytes\n" ${testContainer}
