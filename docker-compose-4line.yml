@@ -15,6 +15,12 @@ services:
       - alice-index:/var/www/html
       - alice-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   bob:
     build:
@@ -31,6 +37,12 @@ services:
       - bob-index:/var/www/html
       - bob-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   carol:
     build:
@@ -47,6 +59,12 @@ services:
       - carol-index:/var/www/html
       - carol-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   daniel:
     build:
@@ -63,6 +81,12 @@ services:
       - daniel-index:/var/www/html
       - daniel-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 networks:
   eiou-network-compose:

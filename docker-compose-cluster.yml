@@ -298,7 +298,7 @@ volumes:
   cluster-a22-eiou:
     name: cluster-a22-eiou
 
-  cluster-a31-cluster-a31-mysql-data:
+  cluster-a31-mysql-data:
     name: cluster-a31-mysql-data
   cluster-a31-files:
     name: cluster-a31-files

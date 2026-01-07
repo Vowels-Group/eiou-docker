@@ -13,13 +13,14 @@ RUN apt-get update && apt-get install -y \
     php-curl \
     php-mbstring \
     php-mysql \
-    tor 
+    tor \
+    && rm -rf /var/lib/apt/lists/*
 
 # Edit /etc/tor/torrc
-RUN chmod o+w /etc/tor/torrc
-RUN echo "HiddenServiceDir /var/lib/tor/hidden_service/" >> /etc/tor/torrc
-RUN echo "HiddenServicePort 80 127.0.0.1:80" >> /etc/tor/torrc
-RUN chmod o-w /etc/tor/torrc
+RUN chmod o+w /etc/tor/torrc && \
+    echo "HiddenServiceDir /var/lib/tor/hidden_service/" >> /etc/tor/torrc && \
+    echo "HiddenServicePort 80 127.0.0.1:80" >> /etc/tor/torrc && \
+    chmod o-w /etc/tor/torrc
 
 # Expose HTTP and HTTPS ports
 EXPOSE 80
@@ -89,11 +90,11 @@ COPY files/root/ /etc/eiou/
 # Copy src folder to /etc/eiou/src
 COPY files/src/ /etc/eiou/src/
 
-RUN chown www-data:www-data /etc/eiou/SecurityInit.php
-RUN chown www-data:www-data /etc/eiou/Functions.php
-RUN chown www-data:www-data /etc/eiou/P2pMessages.php
-RUN chown www-data:www-data /etc/eiou/TransactionMessages.php
-RUN chown www-data:www-data /etc/eiou/CleanupMessages.php
+RUN chown www-data:www-data /etc/eiou/SecurityInit.php \
+    /etc/eiou/Functions.php \
+    /etc/eiou/P2pMessages.php \
+    /etc/eiou/TransactionMessages.php \
+    /etc/eiou/CleanupMessages.php
 
 # Set _directories_ in the /etc/eiou/ directory to 755
 RUN find /etc/eiou/ -type d -exec chmod 755 "{}" \;
