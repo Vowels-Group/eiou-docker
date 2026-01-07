@@ -183,7 +183,7 @@ class P2pRepository extends AbstractRepository {
         }
 
         $result = $stmt->fetchColumn();
-        return (int) $result ?? 0;
+        return (int) ($result ?? 0);
     }
 
     /**

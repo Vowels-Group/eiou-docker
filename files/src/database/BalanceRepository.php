@@ -269,10 +269,13 @@ class BalanceRepository extends AbstractRepository {
      * @param string $currency currency
      * @return bool Success/Failure of balance update
      */
-    public function updateBalance(string $pubkey, string $direction, int $amount, string $currency): bool{
+    public function updateBalance(string $pubkey, string $direction, int $amount, string $currency): bool {
+        if (!in_array($direction, ['sent', 'received'], true)) {
+            return false;
+        }
         $query = "UPDATE {$this->tableName} SET {$direction} = {$direction} + :amount WHERE {$this->primaryKey} = :pubkey_hash AND currency = :currency";
-        $stmt = $this->execute($query, [':amount' => $amount,':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $pubkey),':currency' => $currency]);    
-        if(!$stmt){
+        $stmt = $this->execute($query, [':amount' => $amount, ':pubkey_hash' => hash(Constants::HASH_ALGORITHM, $pubkey), ':currency' => $currency]);
+        if (!$stmt) {
             return false;
         }
         return true;
@@ -286,7 +289,7 @@ class BalanceRepository extends AbstractRepository {
      * @param string $currency currency
      * @return bool Success/Failure of balance update
      */
-    public function updateBothDirectionBalance(array $amounts, string $contactPubkeyHash, string $currency){
+    public function updateBothDirectionBalance(array $amounts, string $contactPubkeyHash, string $currency): bool {
         $query = "UPDATE balances SET received = :received, sent = :sent
                 WHERE pubkey_hash = :pubkey_hash AND currency = :currency";
         $stmt = $this->execute($query, [
@@ -306,11 +309,13 @@ class BalanceRepository extends AbstractRepository {
      * Update contact balance(s) on transaction completion
      *
      * @param array $transactions Transaction Data
-    * @return bool Success/Failure of balance(s) update
+     * @return bool Success/Failure of balance(s) update
      */
-    public function updateBalanceGivenTransactions($transactions): bool{
+    public function updateBalanceGivenTransactions(array $transactions): bool {
         $userAddresses = $this->currentUser->getUserAddresses();
         $amountTransactions = count($transactions);
+        $updateSender = false;
+        $updateReceiver = false;
 
         foreach($transactions as $transaction){
             // Contact Request Transaction (amount=0, no balance change)
@@ -343,9 +348,9 @@ class BalanceRepository extends AbstractRepository {
                 }
             }
         }
-        if($amountTransactions == 2 && $updateReceiver && $updateSender){
+        if($amountTransactions === 2 && $updateReceiver && $updateSender){
             return true;
-        } elseif($amountTransactions == 1 && ((isset($updateReceiver) && $updateReceiver) ||  (isset($updateSender) && $updateSender))){
+        } elseif($amountTransactions === 1 && ($updateReceiver || $updateSender)){
             return true;
         }
         return false;

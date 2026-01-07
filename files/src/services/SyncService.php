@@ -424,7 +424,7 @@ class SyncService {
                 }
 
                 // Verify transaction signature before inserting
-                // CRITICAL (Issue #389): If signature verification fails, STOP syncing immediately.
+                // CRITICAL: If signature verification fails, STOP syncing immediately.
                 // The failing transaction and all subsequent transactions are NOT inserted.
                 // This is a security measure to prevent insertion of forged transactions.
                 if (!$this->verifyTransactionSignature($tx)) {
