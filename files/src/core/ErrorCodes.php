@@ -105,11 +105,16 @@ class ErrorCodes
     public const INVALID_PERMISSION = 'INVALID_PERMISSION';
     public const INVALID_SETTING = 'INVALID_SETTING';
     public const INVALID_SYNC_TYPE = 'INVALID_SYNC_TYPE';
+    public const INVALID_ARGUMENT = 'INVALID_ARGUMENT';
     public const MISSING_ARGUMENT = 'MISSING_ARGUMENT';
     public const MISSING_PARAMS = 'MISSING_PARAMS';
     public const MISSING_IDENTIFIER = 'MISSING_IDENTIFIER';
     public const MISSING_ADDRESS = 'MISSING_ADDRESS';
     public const NO_ADDRESS = 'NO_ADDRESS';
+
+    // File errors
+    public const FILE_NOT_FOUND = 'FILE_NOT_FOUND';
+    public const FILE_NOT_READABLE = 'FILE_NOT_READABLE';
 
     // API Key errors
     public const API_KEY_NOT_FOUND = 'API_KEY_NOT_FOUND';
@@ -180,6 +185,7 @@ class ErrorCodes
             self::SELF_SEND => 400,
             self::NO_CONTACTS => 400,
             self::INTERACTIVE_NOT_SUPPORTED => 400,
+            self::INVALID_ARGUMENT => 400,
 
             // 401 Unauthorized
             self::AUTHENTICATION_ERROR => 401,
@@ -208,12 +214,16 @@ class ErrorCodes
             self::CONTACT_REJECTED => 403,
             self::INSUFFICIENT_FUNDS => 403,
 
+            // 403 Forbidden
+            self::FILE_NOT_READABLE => 403,
+
             // 404 Not Found
             self::NOT_FOUND => 404,
             self::WALLET_NOT_FOUND => 404,
             self::CONTACT_NOT_FOUND => 404,
             self::API_KEY_NOT_FOUND => 404,
             self::COMMAND_NOT_FOUND => 404,
+            self::FILE_NOT_FOUND => 404,
 
             // 409 Conflict
             self::WALLET_EXISTS => 409,
@@ -349,6 +359,10 @@ class ErrorCodes
 
             self::CONNECTION_FAILED => 'Connection Failed',
             self::NETWORK_ERROR => 'Network Error',
+
+            self::FILE_NOT_FOUND => 'File Not Found',
+            self::FILE_NOT_READABLE => 'File Not Readable',
+            self::INVALID_ARGUMENT => 'Invalid Argument',
         ];
 
         return $titles[$code] ?? ucwords(strtolower(str_replace('_', ' ', $code)));

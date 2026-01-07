@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/ErrorCodes.php';
+require_once __DIR__ . '/../utils/SecureSeedphraseDisplay.php';
 
 class Wallet{
     /**
@@ -18,6 +19,12 @@ class Wallet{
         // Check for restore command
         if (isset($argv[2]) && strtolower($argv[2]) === 'restore') {
             self::restoreWallet($argv, $output);
+            return;
+        }
+
+        // Check for restore-file command (reads seedphrase from file for security)
+        if (isset($argv[2]) && strtolower($argv[2]) === 'restore-file') {
+            self::restoreWalletFromFile($argv, $output);
             return;
         }
 
@@ -258,38 +265,133 @@ class Wallet{
     }
 
     /**
-     * Display seed phrase to user with formatting
+     * Restore wallet from seed phrase stored in a file
+     *
+     * SECURITY: This method reads the seedphrase from a file instead of
+     * command line arguments. This prevents the seedphrase from appearing
+     * in process listings (ps aux) and shell history.
+     *
+     * Usage: eiou generate restore-file /path/to/seedphrase/file
+     *
+     * @param array $argv Command line arguments
+     * @param CliOutputManager|null $output Optional output manager for JSON support
+     * @return void
+     */
+    public static function restoreWalletFromFile(array $argv, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        // Get file path from arguments
+        if (!isset($argv[3])) {
+            $output->error(
+                "File path required. Usage: eiou generate restore-file <filepath>",
+                ErrorCodes::INVALID_ARGUMENT,
+                400,
+                ['hint' => 'Provide the path to a file containing the 24-word seed phrase']
+            );
+            return;
+        }
+
+        $filepath = $argv[3];
+
+        // Validate file exists and is readable
+        if (!file_exists($filepath)) {
+            $output->error(
+                "Seed phrase file not found: $filepath",
+                ErrorCodes::FILE_NOT_FOUND,
+                404
+            );
+            return;
+        }
+
+        if (!is_readable($filepath)) {
+            $output->error(
+                "Cannot read seed phrase file: $filepath",
+                ErrorCodes::FILE_NOT_READABLE,
+                403
+            );
+            return;
+        }
+
+        // Read seedphrase from file
+        $mnemonic = trim(file_get_contents($filepath));
+
+        if (empty($mnemonic)) {
+            $output->error(
+                "Seed phrase file is empty",
+                ErrorCodes::INVALID_SEED_PHRASE,
+                400
+            );
+            return;
+        }
+
+        // Build argv array for restoreWallet with the seedphrase words
+        $words = preg_split('/\s+/', $mnemonic);
+        $restoreArgv = array_merge(
+            [$argv[0], 'generate', 'restore'],
+            $words
+        );
+
+        // Call the standard restore method
+        self::restoreWallet($restoreArgv, $output);
+    }
+
+    /**
+     * Display seed phrase to user securely
+     *
+     * SECURITY: This method uses SecureSeedphraseDisplay to prevent the
+     * seedphrase from being captured in Docker logs. Two methods are used:
+     *
+     * 1. TTY mode (preferred): Writes directly to /dev/tty which bypasses
+     *    Docker's stdout/stderr capture entirely.
+     *
+     * 2. Secure file mode (fallback): Writes to /dev/shm (memory-only tmpfs)
+     *    with automatic deletion. Instructions are logged but NOT the phrase.
      *
      * @param string $mnemonic The seed phrase
      * @param CliOutputManager $output Output manager
      * @return void
      */
     private static function displaySeedPhrase(string $mnemonic, CliOutputManager $output): void {
-        // Table uses 65 characters total width:
-        // ║ (1) + space (1) + content (61) + space (1) + ║ (1) = 65
-        $contentWidth = 61;
-        $formatted = BIP39::formatMnemonic($mnemonic, $contentWidth);
+        // In JSON mode, we need special handling
+        // DO NOT include the seedphrase in JSON output that goes to stdout
+        // Instead, use the secure display mechanism
+        if ($output->isJsonMode()) {
+            // For JSON mode in non-interactive contexts, use secure file
+            $result = SecureSeedphraseDisplay::display($mnemonic, false);
 
-        // In JSON mode, the seed phrase is already in walletData
-        // In text mode, we display it formatted
-        if (!$output->isJsonMode()) {
-            echo "\n";
-            echo "╔═══════════════════════════════════════════════════════════════╗\n";
-            echo "║ IMPORTANT: WRITE DOWN YOUR SEED PHRASE AND STORE SAFELY       ║\n";
-            echo "╠═══════════════════════════════════════════════════════════════╣\n";
-            echo "║ This is the ONLY way to restore your wallet if lost.          ║\n";
-            echo "║ Never share it. Never store it digitally.                     ║\n";
-            echo "╠═══════════════════════════════════════════════════════════════╣\n";
+            if ($result['method'] === 'file' && isset($result['instructions'])) {
+                // Output instructions as a separate info line to stderr to avoid log capture
+                // The actual seedphrase is in the secure file, not in the JSON response
+                $instructionText = implode("\n", $result['instructions']);
+                fwrite(STDERR, "\n" . $instructionText . "\n\n");
+            }
+            return;
+        }
 
-            $lines = explode("\n", $formatted);
-            foreach ($lines as $line) {
-                // Ensure each line is exactly contentWidth characters
-                $padded = str_pad($line, $contentWidth);
-                echo "║ " . $padded . " ║\n";
+        // Text mode: use secure display
+        $result = SecureSeedphraseDisplay::display($mnemonic, true);
+
+        // If file method was used, output the retrieval instructions
+        // (these are safe to log as they don't contain the seedphrase)
+        if ($result['method'] === 'file') {
+            if (isset($result['warning'])) {
+                echo "\nWARNING: " . $result['warning'] . "\n";
             }
 
-            echo "╚═══════════════════════════════════════════════════════════════╝\n";
+            echo "\n";
+            echo "════════════════════════════════════════════════════════════════\n";
+            echo " SEEDPHRASE STORED SECURELY\n";
+            echo "════════════════════════════════════════════════════════════════\n";
+
+            if (isset($result['instructions'])) {
+                foreach ($result['instructions'] as $line) {
+                    echo " $line\n";
+                }
+            }
+
+            echo "════════════════════════════════════════════════════════════════\n";
             echo "\n";
         }
+        // If TTY method was used, the display is already complete
     }
 }

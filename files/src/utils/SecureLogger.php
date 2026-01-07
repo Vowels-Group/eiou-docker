@@ -20,6 +20,14 @@ class SecureLogger {
         '/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/' => '***EMAIL***',
         '/\b(?:\d{4}[\s\-]?){3}\d{4}\b/' => '***CREDIT_CARD***',
         '/\b\d{3}-\d{2}-\d{4}\b/' => '***SSN***',
+        // BIP39 mnemonic/seedphrase patterns
+        '/mnemonic["\']?\s*[:=]\s*["\']?[^"\',\n]+/i' => 'mnemonic=***MASKED_SEEDPHRASE***',
+        '/seed[_\s]?phrase["\']?\s*[:=]\s*["\']?[^"\',\n]+/i' => 'seed_phrase=***MASKED_SEEDPHRASE***',
+        '/seedphrase["\']?\s*[:=]\s*["\']?[^"\',\n]+/i' => 'seedphrase=***MASKED_SEEDPHRASE***',
+        // Pattern for 12 or 24 word sequences (BIP39 mnemonics)
+        // Matches sequences of lowercase words that could be BIP39 phrases
+        '/\b([a-z]{3,8}\s+){11}[a-z]{3,8}\b/i' => '***MASKED_12_WORD_PHRASE***',
+        '/\b([a-z]{3,8}\s+){23}[a-z]{3,8}\b/i' => '***MASKED_24_WORD_PHRASE***',
     ];
 
     private static $logFile = null;
@@ -116,7 +124,7 @@ class SecureLogger {
      * @return array Masked context
      */
     private static function maskContext($context) {
-        $sensitiveKeys = ['password', 'passwd', 'pwd', 'secret', 'token', 'key', 'auth', 'private', 'credential'];
+        $sensitiveKeys = ['password', 'passwd', 'pwd', 'secret', 'token', 'key', 'auth', 'private', 'credential', 'mnemonic', 'seed', 'seedphrase', 'seed_phrase'];
 
         array_walk_recursive($context, function(&$value, $key) use ($sensitiveKeys) {
             $lowerKey = strtolower($key);

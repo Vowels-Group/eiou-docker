@@ -493,14 +493,16 @@ class CliService {
             ],
             'generate' => [
                 'description' => 'Generate a new wallet or restore from seed phrase',
-                'usage' => 'generate [restore <24 words>] [hostname]',
+                'usage' => 'generate [restore <24 words>] [restore-file <filepath>] [hostname]',
                 'arguments' => [
                     'restore' => ['type' => 'optional', 'description' => 'Restore wallet from BIP39 seed phrase (24 words)'],
+                    'restore-file' => ['type' => 'optional', 'description' => 'Restore wallet from seed phrase stored in file (more secure)'],
                     'hostname' => ['type' => 'optional', 'description' => 'HTTP/S hostname for the wallet']
                 ],
                 'examples' => [
                     'generate' => 'Create new wallet with seed phrase',
-                    'generate restore word1 word2 ... word24' => 'Restore from 24-word seed'
+                    'generate restore word1 word2 ... word24' => 'Restore from 24-word seed',
+                    'generate restore-file /path/to/seedphrase' => 'Restore from seed phrase file (avoids process list exposure)'
                 ]
             ],
             'sync' => [
