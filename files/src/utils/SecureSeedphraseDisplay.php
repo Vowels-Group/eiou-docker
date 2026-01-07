@@ -252,7 +252,12 @@ class SecureSeedphraseDisplay
      * Schedule file deletion after TTL
      *
      * Uses nohup to ensure deletion survives PHP process exit.
-     * Also registers shutdown function as backup.
+     * The background shell process will delete the file after the TTL expires.
+     *
+     * NOTE: We intentionally do NOT use register_shutdown_function here because
+     * that would delete the file immediately when PHP exits (which happens right
+     * after wallet generation), defeating the purpose of giving the user time
+     * to retrieve the seedphrase.
      *
      * @param string $filepath Path to file
      * @param int $seconds Delay before deletion
@@ -263,15 +268,8 @@ class SecureSeedphraseDisplay
 
         // Use nohup for deletion that survives PHP exit
         // The & runs it in background, nohup prevents SIGHUP from killing it
+        // The file will be deleted after $seconds delay
         exec("nohup sh -c 'sleep $seconds && rm -f $escaped' > /dev/null 2>&1 &");
-
-        // Also register shutdown function as backup (for normal PHP exit)
-        register_shutdown_function(function() use ($filepath) {
-            // Only delete if file still exists (might have been manually deleted)
-            if (file_exists($filepath)) {
-                @unlink($filepath);
-            }
-        });
     }
 
     /**
