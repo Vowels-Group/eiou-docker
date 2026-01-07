@@ -549,32 +549,42 @@ fi
 
 echo -e "\n[5.3 Held Transaction Service Integration]"
 
-# Test: Verify TransactionService handles held transactions
+# Test: Verify HeldTransactionService exists (separate service from TransactionService)
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Testing TransactionService held transaction handling"
+echo -e "\n\t-> Testing HeldTransactionService exists"
 
 heldServiceCheck=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$txService = \$app->services->getTransactionService();
-    \$reflection = new ReflectionClass(\$txService);
 
-    // Check for methods related to held transaction handling
-    \$hasProcessHeld = \$reflection->hasMethod('processHeldTransactions');
-    \$hasHoldMethod = \$reflection->hasMethod('holdTransaction') || \$reflection->hasMethod('createHeldTransaction');
+    // Check if the getter method exists on ServiceContainer
+    if (!method_exists(\$app->services, 'getHeldTransactionService')) {
+        echo 'SERVICE_GETTER_MISSING';
+        exit;
+    }
 
-    if (\$hasProcessHeld || \$hasHoldMethod) {
-        echo 'HELD_HANDLING_EXISTS';
-    } else {
-        echo 'HELD_HANDLING_MISSING';
+    try {
+        \$service = \$app->services->getHeldTransactionService();
+        if (\$service !== null) {
+            // Check for holdTransactionForSync method
+            if (method_exists(\$service, 'holdTransactionForSync')) {
+                echo 'HELD_SERVICE_EXISTS';
+            } else {
+                echo 'HOLD_METHOD_MISSING';
+            }
+        } else {
+            echo 'SERVICE_NULL';
+        }
+    } catch (Exception \$e) {
+        echo 'SERVICE_ERROR:' . \$e->getMessage();
     }
 " 2>/dev/null || echo "ERROR")
 
-if [[ "$heldServiceCheck" == "HELD_HANDLING_EXISTS" ]]; then
-    printf "\t   TransactionService held handling ${GREEN}PASSED${NC}\n"
+if [[ "$heldServiceCheck" == "HELD_SERVICE_EXISTS" ]]; then
+    printf "\t   HeldTransactionService ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   TransactionService held handling ${RED}FAILED${NC}\n"
+    printf "\t   HeldTransactionService ${RED}FAILED${NC} (%s)\n" "${heldServiceCheck}"
     failure=$(( failure + 1 ))
 fi
 
