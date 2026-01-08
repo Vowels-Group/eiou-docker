@@ -244,22 +244,45 @@ class TransportUtilityService
      *
      * @param string $recipient The address of the recipient
      * @param string $signedPayload The JSON encoded signed payload to send
-     * @return string The response from the recipient
+     * @return string The response from the recipient, or JSON error on failure
     */
     public function sendByHttp (string $recipient, string $signedPayload): string {
         // Send payload through HTTP
         $ch = curl_init();
-        
+
         // Determine the protocol based on the recipient format
         $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'http://';
 
         curl_setopt($ch, CURLOPT_URL, $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
         curl_setopt($ch, CURLOPT_POST, true);
         $response = curl_exec($ch);
+
+        // Check for curl errors and log them
+        if ($response === false) {
+            $curlError = curl_error($ch);
+            $curlErrno = curl_errno($ch);
+            curl_close($ch);
+
+            // Log the error for debugging
+            SecureLogger::warning("HTTP request failed", [
+                'recipient' => $recipient,
+                'curl_error' => $curlError,
+                'curl_errno' => $curlErrno
+            ]);
+
+            // Return a structured error response that can be parsed
+            return json_encode([
+                'status' => 'error',
+                'message' => 'HTTP request failed: ' . $curlError,
+                'error_code' => $curlErrno
+            ]);
+        }
+
         curl_close($ch);
         // Return the response from the recipient
         return $response;
@@ -270,19 +293,42 @@ class TransportUtilityService
      *
      * @param string $recipient The address of the recipient
      * @param string $signedPayload The JSON encoded signed payload to send
-     * @return string The response from the recipient
+     * @return string The response from the recipient, or JSON error on failure
     */
     public function sendByTor (string $recipient, string $signedPayload): string {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, "http://$recipient/eiou?payload=" . urlencode($signedPayload));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($ch, CURLOPT_PROXY, "127.0.0.1:9050");
         curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
         curl_setopt($ch, CURLOPT_POST, true);
         $response = curl_exec($ch);
+
+        // Check for curl errors and log them
+        if ($response === false) {
+            $curlError = curl_error($ch);
+            $curlErrno = curl_errno($ch);
+            curl_close($ch);
+
+            // Log the error for debugging
+            SecureLogger::warning("TOR request failed", [
+                'recipient' => $recipient,
+                'curl_error' => $curlError,
+                'curl_errno' => $curlErrno
+            ]);
+
+            // Return a structured error response that can be parsed
+            return json_encode([
+                'status' => 'error',
+                'message' => 'TOR request failed: ' . $curlError,
+                'error_code' => $curlErrno
+            ]);
+        }
+
         curl_close($ch);
         // Return the response from the recipient
         return $response;

@@ -206,6 +206,7 @@ routingTest
 contactListTest
 transactionTestSuite
 messageDeliveryTest
+curlErrorHandlingTest
 cliCommandsTest
 apiEndpointsTest
 syncTestSuite
