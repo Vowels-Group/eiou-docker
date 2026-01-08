@@ -1454,21 +1454,41 @@ class TransactionRepository extends AbstractRepository {
      *
      * When a transaction is re-signed after losing a chain conflict, the sender
      * re-sends it with a new previous_txid and new signature. This method updates
-     * the existing transaction record with the new values.
+     * the existing transaction record with the new values and updates the timestamp
+     * to reflect when the re-signing occurred.
      *
      * @param string $txid Transaction ID
      * @param string|null $newPreviousTxid New previous_txid (pointing to the winner)
      * @param string $newSignature New signature
      * @param int $newNonce New signature nonce
+     * @param bool $updateTimestamp Whether to update the timestamp (default: true)
      * @return bool True if update was successful
      */
-    public function updateChainConflictResolution(string $txid, ?string $newPreviousTxid, string $newSignature, int $newNonce): bool {
+    public function updateChainConflictResolution(string $txid, ?string $newPreviousTxid, string $newSignature, int $newNonce, bool $updateTimestamp = true): bool {
+        $data = [
+            'previous_txid' => $newPreviousTxid,
+            'sender_signature' => $newSignature,
+            'signature_nonce' => $newNonce
+        ];
+
+        if ($updateTimestamp) {
+            $data['timestamp'] = date('Y-m-d H:i:s.u');
+        }
+
+        $affectedRows = $this->update($data, 'txid', $txid);
+
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Update timestamp for a transaction
+     *
+     * @param string $txid Transaction ID
+     * @return bool True if update was successful
+     */
+    public function updateTimestamp(string $txid): bool {
         $affectedRows = $this->update(
-            [
-                'previous_txid' => $newPreviousTxid,
-                'sender_signature' => $newSignature,
-                'signature_nonce' => $newNonce
-            ],
+            ['timestamp' => date('Y-m-d H:i:s.u')],
             'txid',
             $txid
         );

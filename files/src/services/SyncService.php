@@ -707,6 +707,9 @@ class SyncService {
      * we need to update its previous_txid to point to the winner and
      * re-sign it (since we have the private key for our own transactions).
      *
+     * After successful re-signing, any held transaction record is released
+     * to prevent HeldTransactionService from overwriting our correct previous_txid.
+     *
      * @param array $localTx The local transaction data from database
      * @param string $newPreviousTxid The winner's txid to point to
      * @return bool True if re-signing was successful
@@ -765,6 +768,15 @@ class SyncService {
                 return false;
             }
 
+            // Update the timestamp to reflect when the re-signing occurred
+            $timestampUpdated = $this->transactionRepository->updateTimestamp($localTx['txid']);
+            if (!$timestampUpdated) {
+                SecureLogger::warning("Failed to update timestamp for re-signed transaction", [
+                    'txid' => $localTx['txid']
+                ]);
+                // Don't return false - this is not critical
+            }
+
             // Set status to PENDING so the transaction gets re-sent to the contact
             // This mirrors the HeldTransactionService approach: after re-signing,
             // processPendingTransactions() will pick up the transaction and send it
@@ -781,12 +793,18 @@ class SyncService {
                 // Don't return false - signature was updated, status is secondary
             }
 
+            // Release any held transaction record to prevent HeldTransactionService
+            // from overwriting our correct previous_txid with the stale expected_previous_txid
+            // from the original rejection
+            $this->releaseHeldTransaction($localTx['txid']);
+
             SecureLogger::info("Successfully re-signed local transaction after chain conflict", [
                 'txid' => $localTx['txid'],
                 'old_previous_txid' => $localTx['previous_txid'] ?? 'null',
                 'new_previous_txid' => $newPreviousTxid,
                 'new_nonce' => $signResult['nonce'],
-                'status_set_to_pending' => $statusUpdated
+                'status_set_to_pending' => $statusUpdated,
+                'timestamp_updated' => $timestampUpdated
             ]);
 
             return true;
@@ -795,6 +813,50 @@ class SyncService {
             SecureLogger::logException($e, [
                 'method' => 'resignLocalTransaction',
                 'txid' => $localTx['txid']
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Release a held transaction record
+     *
+     * After chain conflict resolution re-signs a transaction correctly,
+     * we need to release any held transaction record to prevent
+     * HeldTransactionService from overwriting our correct previous_txid.
+     *
+     * @param string $txid Transaction ID
+     * @return bool True if released or not found, false on error
+     */
+    private function releaseHeldTransaction(string $txid): bool {
+        try {
+            require_once __DIR__ . '/../database/HeldTransactionRepository.php';
+            $heldRepository = new HeldTransactionRepository();
+
+            // Check if transaction is held
+            if (!$heldRepository->isTransactionHeld($txid)) {
+                return true; // Not held, nothing to release
+            }
+
+            // Release it to prevent HeldTransactionService from overwriting
+            $released = $heldRepository->releaseTransaction($txid);
+
+            if ($released) {
+                SecureLogger::info("Released held transaction after chain conflict resolution", [
+                    'txid' => $txid
+                ]);
+            } else {
+                SecureLogger::warning("Failed to release held transaction", [
+                    'txid' => $txid
+                ]);
+            }
+
+            return $released;
+
+        } catch (Exception $e) {
+            SecureLogger::logException($e, [
+                'method' => 'releaseHeldTransaction',
+                'txid' => $txid
             ]);
             return false;
         }
