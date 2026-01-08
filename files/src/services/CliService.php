@@ -472,7 +472,7 @@ class CliService {
                 ]
             ],
             'help' => [
-                'description' => 'Display help information',
+                'description' => 'Display detailed help information',
                 'usage' => 'help ([command])',
                 'arguments' => [
                     'command' => ['type' => 'optional', 'description' => 'Specific command to get help for']
@@ -525,6 +525,45 @@ class CliService {
                     'action' => ['type' => 'required', 'description' => 'Action: create, list, delete, disable, enable, help'],
                     'args' => ['type' => 'optional', 'description' => 'Arguments for the action']
                 ],
+                'actions' => [
+                    'create' => [
+                        'usage' => 'apikey create <name> [permissions]',
+                        'description' => 'Create a new API key',
+                        'arguments' => [
+                            'name' => ['type' => 'required', 'description' => 'Name for the API key'],
+                            'permissions' => ['type' => 'optional', 'description' => 'Comma-separated permissions (default: wallet:read,contacts:read)']
+                        ]
+                    ],
+                    'list' => [
+                        'usage' => 'apikey list',
+                        'description' => 'List all API keys'
+                    ],
+                    'delete' => [
+                        'usage' => 'apikey delete <key_id>',
+                        'description' => 'Delete an API key permanently',
+                        'arguments' => [
+                            'key_id' => ['type' => 'required', 'description' => 'ID of the key to delete']
+                        ]
+                    ],
+                    'disable' => [
+                        'usage' => 'apikey disable <key_id>',
+                        'description' => 'Disable an API key (can be re-enabled)',
+                        'arguments' => [
+                            'key_id' => ['type' => 'required', 'description' => 'ID of the key to disable']
+                        ]
+                    ],
+                    'enable' => [
+                        'usage' => 'apikey enable <key_id>',
+                        'description' => 'Enable a disabled API key',
+                        'arguments' => [
+                            'key_id' => ['type' => 'required', 'description' => 'ID of the key to enable']
+                        ]
+                    ],
+                    'help' => [
+                        'usage' => 'apikey help',
+                        'description' => 'Show detailed API key help'
+                    ]
+                ],
                 'examples' => [
                     'apikey help' => 'Show detailed API key help',
                     'apikey create "My App"' => 'Create new API key with default permissions',
@@ -541,7 +580,24 @@ class CliService {
                     'contacts:write' => 'Add, update, delete contacts',
                     'system:read' => 'View system status and metrics',
                     'admin' => 'Full administrative access',
-                    'all' => 'All permissions'
+                    'all' => 'All permissions (same as admin)'
+                ],
+                'api_usage' => [
+                    'base_url' => 'http://your-node/api/v1/...',
+                    'required_headers' => [
+                        'X-API-Key' => '<key_id>',
+                        'X-API-Timestamp' => '<unix_timestamp>',
+                        'X-API-Signature' => '<hmac>'
+                    ],
+                    'signature_format' => 'HMAC-SHA256(secret, METHOD + "\\n" + PATH + "\\n" + TIMESTAMP + "\\n" + BODY)',
+                    'example_endpoints' => [
+                        'GET /api/v1/wallet/balance' => 'Get wallet balances',
+                        'POST /api/v1/wallet/send' => 'Send transaction',
+                        'GET /api/v1/wallet/transactions' => 'Transaction history',
+                        'GET /api/v1/contacts' => 'List contacts',
+                        'POST /api/v1/contacts' => 'Add contact',
+                        'GET /api/v1/system/status' => 'System status'
+                    ]
                 ]
             ],
             'shutdown' => [
@@ -568,6 +624,11 @@ class CliService {
                 echo "Command:\n";
                 if (isset($commands[$specificCommand])) {
                     echo "\t" . $commands[$specificCommand]['usage'] . " - " . $commands[$specificCommand]['description'] . "\n";
+
+                    // Show detailed help for apikey command
+                    if ($specificCommand === 'apikey') {
+                        $this->showApiKeyDetailedHelp();
+                    }
                 } else {
                     echo "\tcommand does not exist.\n";
                 }
@@ -578,6 +639,72 @@ class CliService {
                 }
             }
         }
+    }
+
+    /**
+     * Display detailed help for API key management commands
+     */
+    private function showApiKeyDetailedHelp(): void {
+        $help = <<<HELP
+
+API Key Management Commands
+===========================
+
+Create a new API key:
+  eiou apikey create <name> [permissions]
+
+  Example:
+    eiou apikey create "My Application" wallet:read,contacts:read
+
+  Available permissions:
+    - wallet:read     Read wallet balance and transactions
+    - wallet:send     Send transactions
+    - contacts:read   List and view contacts
+    - contacts:write  Add, update, delete contacts
+    - system:read     View system status and metrics
+    - admin           Full administrative access
+    - all             All permissions (same as admin)
+
+List all API keys:
+  eiou apikey list
+
+Delete an API key (permanent):
+  eiou apikey delete <key_id>
+
+Disable an API key (can be re-enabled):
+  eiou apikey disable <key_id>
+
+Enable a disabled API key:
+  eiou apikey enable <key_id>
+
+API Usage
+=========
+
+Once you have an API key, make requests to:
+  http://your-node/api/v1/...
+
+Required headers for each request:
+  X-API-Key: <key_id>
+  X-API-Timestamp: <unix_timestamp>
+  X-API-Signature: <hmac>
+
+The HMAC signature is calculated as:
+  HMAC-SHA256(secret, METHOD + "\\n" + PATH + "\\n" + TIMESTAMP + "\\n" + BODY)
+
+IMPORTANT: Never send the secret in requests - only the computed HMAC signature.
+The server retrieves and decrypts your secret to verify the signature.
+
+Example endpoints:
+  GET  /api/v1/wallet/balance      - Get wallet balances
+  POST /api/v1/wallet/send         - Send transaction
+  GET  /api/v1/wallet/transactions - Transaction history
+  GET  /api/v1/contacts            - List contacts
+  POST /api/v1/contacts            - Add contact
+  GET  /api/v1/system/status       - System status
+
+HELP;
+
+        echo $help;
     }
 
     /**
