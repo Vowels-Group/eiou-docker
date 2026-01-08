@@ -1314,7 +1314,7 @@ if [[ "$baseTxid" != "NOT_FOUND" ]] && [[ "$baseTxid" != "ERROR" ]]; then
         require_once('${REL_FUNCTIONS}');
         \$app = Application::getInstance();
         \$pdo = \$app->services->getPdo();
-        \$userContext = \$app->services->getUserContext();
+        \$userContext = \$app->services->getCurrentUser();
         \$transactionRepo = \$app->services->getTransactionRepository();
 
         // Get sender and receiver pubkeys
