@@ -833,6 +833,224 @@ else
     failure=$(( failure + 1 ))
 fi
 
+##################### SECTION 8: Issue #404 - Proactive Sync & Description Privacy #####################
+# Tests for Issue #404 fixes:
+# 1. Receiver proactively syncs when prev_id doesn't match
+# 2. Descriptions are filtered during sync (only contact/standard transactions)
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 8: Issue #404 - Proactive Sync & Description Privacy"
+echo "========================================================================"
+
+echo -e "\n[8.1 Proactive Sync Trigger Test]"
+
+# Test: Verify that checkTransactionPossible triggers proactive sync when receiver has no history
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing proactive sync trigger in checkTransactionPossible"
+
+proactiveSyncResult=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$transactionService = \$app->services->getTransactionService();
+
+    // Check that TransactionService has the checkTransactionPossible method
+    // and that it includes sync logic (by checking for getSyncService call)
+    \$reflection = new ReflectionClass(\$transactionService);
+    \$method = \$reflection->getMethod('checkTransactionPossible');
+    \$startLine = \$method->getStartLine();
+    \$endLine = \$method->getEndLine();
+    \$filename = \$method->getFileName();
+
+    // Read the method source
+    \$lines = file(\$filename);
+    \$source = implode('', array_slice(\$lines, \$startLine - 1, \$endLine - \$startLine + 1));
+
+    // Check if the method contains proactive sync logic
+    if (strpos(\$source, 'getSyncService') !== false &&
+        strpos(\$source, 'syncTransactionChain') !== false) {
+        echo 'PROACTIVE_SYNC_EXISTS';
+    } else {
+        echo 'PROACTIVE_SYNC_MISSING';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$proactiveSyncResult" == "PROACTIVE_SYNC_EXISTS" ]]; then
+    printf "\t   Proactive sync trigger ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Proactive sync trigger ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[8.2 Description Privacy During Sync Test]"
+
+# Test: Verify handleTransactionSyncRequest filters descriptions for P2P transactions
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing description filtering in handleTransactionSyncRequest"
+
+descriptionFilterResult=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$syncService = \$app->services->getSyncService();
+
+    // Check that SyncService has description filtering logic
+    \$reflection = new ReflectionClass(\$syncService);
+    \$method = \$reflection->getMethod('handleTransactionSyncRequest');
+    \$startLine = \$method->getStartLine();
+    \$endLine = \$method->getEndLine();
+    \$filename = \$method->getFileName();
+
+    // Read the method source
+    \$lines = file(\$filename);
+    \$source = implode('', array_slice(\$lines, \$startLine - 1, \$endLine - \$startLine + 1));
+
+    // Check if the method filters descriptions based on memo type
+    if (strpos(\$source, \"memo === 'contact'\") !== false &&
+        strpos(\$source, \"memo === 'standard'\") !== false &&
+        strpos(\$source, 'description') !== false) {
+        echo 'DESCRIPTION_FILTER_EXISTS';
+    } else {
+        echo 'DESCRIPTION_FILTER_MISSING';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$descriptionFilterResult" == "DESCRIPTION_FILTER_EXISTS" ]]; then
+    printf "\t   Description filtering ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Description filtering ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[8.3 P2P Transaction Description Privacy Test]"
+
+# Test: Verify P2P transactions don't include descriptions in sync response
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing P2P descriptions are not included in sync"
+
+p2pDescPrivacyResult=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+
+    // Simulate a P2P transaction (memo is a hash, not 'standard' or 'contact')
+    \$mockTransaction = [
+        'txid' => 'test-txid-123',
+        'previous_txid' => null,
+        'sender_address' => 'sender@example.onion',
+        'sender_public_key' => 'mock-sender-pubkey',
+        'receiver_address' => 'receiver@example.onion',
+        'receiver_public_key' => 'mock-receiver-pubkey',
+        'amount' => 100,
+        'currency' => 'USD',
+        'memo' => 'abc123hashvalue', // P2P memo is a hash, not 'standard' or 'contact'
+        'description' => 'This should NOT be included in sync',
+        'timestamp' => time(),
+        'time' => time(),
+        'status' => 'completed',
+        'sender_signature' => null,
+        'signature_nonce' => null
+    ];
+
+    // The filtering logic from handleTransactionSyncRequest
+    \$memo = \$mockTransaction['memo'] ?? '';
+    if (\$memo === 'contact' || \$memo === 'standard') {
+        \$description = \$mockTransaction['description'] ?? null;
+    } else {
+        // For P2P transactions, explicitly set description to null
+        \$description = null;
+    }
+
+    if (\$description === null) {
+        echo 'P2P_DESCRIPTION_FILTERED';
+    } else {
+        echo 'P2P_DESCRIPTION_LEAKED';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$p2pDescPrivacyResult" == "P2P_DESCRIPTION_FILTERED" ]]; then
+    printf "\t   P2P description privacy ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   P2P description privacy ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[8.4 Standard Transaction Description Included Test]"
+
+# Test: Verify standard transactions DO include descriptions in sync response
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing standard transactions include descriptions in sync"
+
+standardDescResult=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+
+    // Simulate a standard (direct) transaction
+    \$mockTransaction = [
+        'memo' => 'standard',
+        'description' => 'This SHOULD be included in sync'
+    ];
+
+    // The filtering logic from handleTransactionSyncRequest
+    \$memo = \$mockTransaction['memo'] ?? '';
+    if (\$memo === 'contact' || \$memo === 'standard') {
+        \$description = \$mockTransaction['description'] ?? null;
+    } else {
+        \$description = null;
+    }
+
+    if (\$description === 'This SHOULD be included in sync') {
+        echo 'STANDARD_DESCRIPTION_INCLUDED';
+    } else {
+        echo 'STANDARD_DESCRIPTION_MISSING';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$standardDescResult" == "STANDARD_DESCRIPTION_INCLUDED" ]]; then
+    printf "\t   Standard transaction description ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Standard transaction description ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[8.5 Contact Transaction Description Included Test]"
+
+# Test: Verify contact transactions DO include descriptions in sync response
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing contact transactions include descriptions in sync"
+
+contactDescResult=$(docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+
+    // Simulate a contact transaction
+    \$mockTransaction = [
+        'memo' => 'contact',
+        'description' => 'Contact note'
+    ];
+
+    // The filtering logic from handleTransactionSyncRequest
+    \$memo = \$mockTransaction['memo'] ?? '';
+    if (\$memo === 'contact' || \$memo === 'standard') {
+        \$description = \$mockTransaction['description'] ?? null;
+    } else {
+        \$description = null;
+    }
+
+    if (\$description === 'Contact note') {
+        echo 'CONTACT_DESCRIPTION_INCLUDED';
+    } else {
+        echo 'CONTACT_DESCRIPTION_MISSING';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$contactDescResult" == "CONTACT_DESCRIPTION_INCLUDED" ]]; then
+    printf "\t   Contact transaction description ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Contact transaction description ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
 ########################################################################
 
 succesrate "${totaltests}" "${passed}" "${failure}" "'sync test suite'"

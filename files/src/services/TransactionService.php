@@ -346,21 +346,89 @@ class TransactionService {
         }
         // Check if transaction is a valid successor of previous txids
         elseif(!$this->checkPreviousTxid($request)){
-            if($echo){
-                // Include expected_txid in rejection to help sender resync
-                $expectedTxid = $this->transactionRepository->getPreviousTxid(
-                    $request['senderPublicKey'],
-                    $request['receiverPublicKey']
-                );
+            // Include expected_txid in rejection to help sender resync
+            $expectedTxid = $this->transactionRepository->getPreviousTxid(
+                $request['senderPublicKey'],
+                $request['receiverPublicKey']
+            );
+            $receivedPreviousTxid = $request['previousTxid'] ?? null;
 
-                // Log the mismatch details for debugging
-                SecureLogger::warning("Rejecting transaction: invalid_previous_txid", [
-                    'txid' => $request['txid'] ?? 'unknown',
-                    'received_previous_txid' => $request['previousTxid'] ?? 'NULL',
-                    'expected_previous_txid' => $expectedTxid ?? 'NULL',
-                    'sender' => $request['senderAddress'] ?? 'unknown'
+            // Log the mismatch details for debugging
+            SecureLogger::warning("Rejecting transaction: invalid_previous_txid", [
+                'txid' => $request['txid'] ?? 'unknown',
+                'received_previous_txid' => $receivedPreviousTxid ?? 'NULL',
+                'expected_previous_txid' => $expectedTxid ?? 'NULL',
+                'sender' => $request['senderAddress'] ?? 'unknown'
+            ]);
+
+            // If we (receiver) have no record of the previous txid that the sender claims exists,
+            // this means we may have lost data and should proactively sync with the sender.
+            // This handles the case where Contact B lost all transactions and Contact A sends
+            // a transaction with a prev_id that Contact B doesn't have.
+            if ($expectedTxid === null && $receivedPreviousTxid !== null) {
+                SecureLogger::info("Receiver has no transaction history with sender but sender has prev_id - triggering proactive sync", [
+                    'sender' => $request['senderAddress'] ?? 'unknown',
+                    'received_previous_txid' => $receivedPreviousTxid
                 ]);
 
+                // Proactively sync with the sender to recover missing transactions
+                try {
+                    $syncService = Application::getInstance()->services->getSyncService();
+                    $syncResult = $syncService->syncTransactionChain(
+                        $request['senderAddress'],
+                        $request['senderPublicKey']
+                    );
+
+                    if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
+                        SecureLogger::info("Proactive sync successful, retrying transaction validation", [
+                            'synced_count' => $syncResult['synced_count']
+                        ]);
+
+                        // Also sync balances after recovering transactions
+                        $syncService->syncContactBalance($request['senderPublicKey']);
+
+                        // Re-check the previous txid after sync
+                        if ($this->checkPreviousTxid($request)) {
+                            // Sync fixed the chain issue, now run remaining validations
+                            // Check funds
+                            if (!$this->checkAvailableFundsTransaction($request)) {
+                                if ($echo) {
+                                    echo $this->transactionPayload->buildRejection($request, 'insufficient_funds');
+                                }
+                                return false;
+                            }
+
+                            // Check for duplicate
+                            $memo = $request['memo'];
+                            if ($memo === "standard") {
+                                $exists = $this->transactionRepository->transactionExistsTxid($request['txid']);
+                            } else {
+                                $exists = $this->transactionRepository->transactionExistsMemo($memo);
+                            }
+                            if ($exists) {
+                                if ($echo) {
+                                    echo $this->transactionPayload->buildRejection($request, 'duplicate');
+                                }
+                                return false;
+                            }
+
+                            // All checks passed after sync - accept and process
+                            if ($echo) {
+                                echo $this->transactionPayload->buildAcceptance($request);
+                            }
+                            $this->processTransaction($request);
+                            return true;
+                        }
+                    }
+                } catch (Exception $e) {
+                    SecureLogger::logException($e, [
+                        'method' => 'checkTransactionPossible',
+                        'context' => 'proactive_sync_attempt'
+                    ]);
+                }
+            }
+
+            if($echo){
                 echo $this->transactionPayload->buildRejection($request, 'invalid_previous_txid', $expectedTxid);
             }
             return false;
