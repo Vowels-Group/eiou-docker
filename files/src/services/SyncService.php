@@ -1094,10 +1094,17 @@ class SyncService {
             'type' => 'send',
         ];
 
-        // Include 'time' if present (added for P2P/RP2P tracking and syncing)
-        // This maintains backward compatibility - older transactions without 'time' are still valid
+        // Include 'time' field - ALWAYS include to match how buildStandardFromDatabase() builds the payload
+        // buildStandardFromDatabase() uses: 'time' => $data['time'] ?? null
+        // This means 'time' is ALWAYS present in the signed message (even if null)
+        // We must include it in reconstruction to match the original signed message
+        // Note: For standard transactions, time should always be present since prepareStandardTransactionData sets it
+        // For P2P transactions, time comes from the request
         if (isset($tx['time']) && $tx['time'] !== null) {
             $messageContent['time'] = (int)$tx['time'];
+        } else {
+            // Include null time to match buildStandardFromDatabase() behavior
+            $messageContent['time'] = null;
         }
 
         $messageContent['receiverAddress'] = $tx['receiver_address'];
