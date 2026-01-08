@@ -195,6 +195,7 @@ printf "\n${GREEN}[Step 3/3]${NC} Running test suite...\n"
 # - torTestSuite: TOR address, service, permissions, and restart tests
 # - syncTestSuite: Transaction chain sync, signature validation, and contact sync tests
 # - transactionTestSuite: Transaction recording, inquiry, contact, and held transaction tests
+# - seedphraseTestSuite: Seed phrase restore, secure display, and authcode restoration tests
 TEST_ORDER="
 sslCertificateTest
 torTestSuite
@@ -210,9 +211,7 @@ curlErrorHandlingTest
 cliCommandsTest
 apiEndpointsTest
 syncTestSuite
-seedPhraseTest
-secureSeedphraseTest
-authcodeRestorationTest
+seedphraseTestSuite
 "
 
 # Run each test in order
