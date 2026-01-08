@@ -1,23 +1,92 @@
-# mysql commands 
+# mysql commands
 
 # start mysql and enter db
 mysql -u root
 use eiou
 
-# Debug
-SELECT id, timestamp, level, message, file, line FROM debug;
+# ============================================================
+# DEBUG TABLE
+# ============================================================
+# Full debug log with context
+SELECT id, timestamp, level, message, context, file, line, trace FROM debug;
+
+# Quick message view
 SELECT message FROM debug;
 
-# Contacts output without a public key
-SELECT id, http, tor, name, fee_percent, credit_limit, currency FROM contacts;
+# ============================================================
+# CONTACTS TABLE
+# ============================================================
+# Full contacts info (excludes pubkey, pubkey_hash)
+SELECT id, contact_id, name, status, currency, fee_percent, credit_limit, created_at FROM contacts;
 
-# Transactions output
-SELECT id, tx_type, sender_address, receiver_address, amount, currency, timestamp, txid, previous_txid, memo FROM transactions;
+# ============================================================
+# ADDRESSES TABLE
+# ============================================================
+# Network addresses (excludes pubkey_hash)
+SELECT id, http, tor FROM addresses;
 
-# p2p requests output without keys or signatures
-SELECT id, hash, time, currency, amount, my_fee_amount, request_level, max_request_level, sender_address, destination_address, incoming_txid, status FROM p2p;
+# ============================================================
+# BALANCES TABLE
+# ============================================================
+# Account balances (excludes pubkey_hash)
+SELECT id, received, sent, currency FROM balances;
 
-# rp2p requests output without keys or signatures
-SELECT id, hash, time, currency, amount, sender_address FROM rp2p;
+# ============================================================
+# TRANSACTIONS TABLE
+# ============================================================
+# Full transactions (excludes pubkey, pubkey_hash, signatures, nonce)
+SELECT id, tx_type, type, status, sender_address, receiver_address, initial_sender_address, end_recipient_address, amount, currency, timestamp, time, txid, previous_txid, memo, description FROM transactions;
 
-SELECT id, hash, sender_address FROM rp2p;
+# ============================================================
+# P2P TABLE
+# ============================================================
+# Peer-to-peer requests (excludes pubkey, signatures, salt)
+SELECT id, hash, time, expiration, currency, amount, my_fee_amount, destination_address, request_level, max_request_level, sender_address, description, status, created_at, incoming_txid, outgoing_txid, completed_at FROM p2p;
+
+# ============================================================
+# RP2P TABLE
+# ============================================================
+# Responses to p2p requests (excludes pubkey, signatures)
+SELECT id, hash, time, amount, currency, sender_address, created_at FROM rp2p;
+
+# ============================================================
+# API_KEYS TABLE
+# ============================================================
+# API keys for external access (excludes encrypted_secret)
+SELECT id, key_id, name, permissions, rate_limit_per_minute, enabled, created_at, last_used_at, expires_at FROM api_keys;
+
+# ============================================================
+# API_REQUEST_LOG TABLE
+# ============================================================
+# API request audit trail
+SELECT id, key_id, endpoint, method, ip_address, request_timestamp, response_code, response_time_ms FROM api_request_log;
+
+# ============================================================
+# MESSAGE_DELIVERY TABLE
+# ============================================================
+# Message delivery tracking (excludes payload)
+SELECT id, message_type, message_id, recipient_address, delivery_stage, retry_count, max_retries, next_retry_at, last_error, last_response, created_at, updated_at FROM message_delivery;
+
+# ============================================================
+# DEAD_LETTER_QUEUE TABLE
+# ============================================================
+# Failed messages for manual review (excludes payload)
+SELECT id, message_type, message_id, recipient_address, retry_count, last_retry_at, failure_reason, status, created_at, resolved_at FROM dead_letter_queue;
+
+# ============================================================
+# DELIVERY_METRICS TABLE
+# ============================================================
+# Message delivery statistics
+SELECT id, period_start, period_end, message_type, total_sent, total_delivered, total_failed, avg_delivery_time_ms, avg_retry_count, created_at FROM delivery_metrics;
+
+# ============================================================
+# RATE_LIMITS TABLE
+# ============================================================
+# Rate limiting for abuse prevention
+SELECT id, identifier, action, attempts, first_attempt, last_attempt, blocked_until FROM rate_limits;
+
+# ============================================================
+# HELD_TRANSACTIONS TABLE
+# ============================================================
+# Transactions pending resync completion (excludes pubkey_hash fields)
+SELECT id, contact_pubkey_hash, txid, original_previous_txid, expected_previous_txid, transaction_type, hold_reason, sync_status, retry_count, max_retries, held_at, last_sync_attempt, next_retry_at, resolved_at FROM held_transactions;
