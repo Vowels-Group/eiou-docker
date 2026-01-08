@@ -223,7 +223,7 @@ while true; do
         http=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["hostname"])){echo $json["hostname"];}')
         tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
         pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
-        authcode=$(php -r 'require_once("/etc/eiou/src/core/UserContext.php"); echo UserContext::getInstance()->getAuthCode();')
+        # Note: authcode is retrieved securely in the display section below to avoid logging
         break
     else
         if $first; then
@@ -296,7 +296,7 @@ fi
 echo -e "\t Tor address: $tor"
 readable="${pubkey//$'\n'/$'\n\t\t'}"
 echo -e "\t Public Key: \n\t\t $readable"
-echo -e "\t Authentication Code: $authcode"
+echo -e "\t Authentication Code: (stored securely with seedphrase - see above)"
 
 
 # Start p2p message processing in background

@@ -115,8 +115,8 @@ class Wallet{
         // Verify and set file permissions
         chmod('/etc/eiou/userconfig.json', 0600);
 
-        // Display seed phrase prominently with warning BEFORE the success message
-        self::displaySeedPhrase($mnemonic, $output);
+        // Display seed phrase and authcode prominently with warning BEFORE the success message
+        self::displaySeedPhrase($mnemonic, $output, $authCode);
 
         $output->success("Wallet generated successfully", $walletData, "New wallet created with secure key storage");
 
@@ -313,9 +313,9 @@ class Wallet{
         }
 
         // Read seedphrase from file
-        $mnemonic = trim(file_get_contents($filepath));
+        $fileContent = trim(file_get_contents($filepath));
 
-        if (empty($mnemonic)) {
+        if (empty($fileContent)) {
             $output->error(
                 "Seed phrase file is empty",
                 ErrorCodes::INVALID_SEED_PHRASE,
@@ -324,8 +324,24 @@ class Wallet{
             return;
         }
 
+        // Extract seed phrase words from file content
+        // This handles multiple formats:
+        // 1. Plain 24 words separated by spaces/newlines
+        // 2. Numbered format (e.g., "1. word  2. word ...")
+        // 3. Full secure file with headers and authcode section
+        $words = self::extractSeedWordsFromContent($fileContent);
+
+        if (count($words) !== 24) {
+            $output->error(
+                "Invalid seed phrase: expected 24 words, found " . count($words),
+                ErrorCodes::INVALID_SEED_PHRASE,
+                400,
+                ['hint' => 'Ensure the file contains a valid 24-word BIP39 seed phrase']
+            );
+            return;
+        }
+
         // Build argv array for restoreWallet with the seedphrase words
-        $words = preg_split('/\s+/', $mnemonic);
         $restoreArgv = array_merge(
             [$argv[0], 'generate', 'restore'],
             $words
@@ -333,6 +349,83 @@ class Wallet{
 
         // Call the standard restore method
         self::restoreWallet($restoreArgv, $output);
+    }
+
+    /**
+     * Extract BIP39 seed words from file content
+     *
+     * Handles multiple input formats:
+     * - Plain 24 words separated by spaces/newlines
+     * - Numbered format (e.g., "1. word  2. word ...")
+     * - Full secure file output with headers and authcode section
+     *
+     * @param string $content File content
+     * @return array Array of extracted BIP39 words
+     */
+    private static function extractSeedWordsFromContent(string $content): array {
+        require_once __DIR__ . '/../security/BIP39.php';
+
+        // Get the BIP39 wordlist for validation
+        $wordlist = BIP39::getWordlist();
+        $wordlistLower = array_map('strtolower', $wordlist);
+
+        // Strategy 1: Try to extract numbered words first (e.g., "1. word", "12. word")
+        // This is the most reliable for formatted secure files
+        $numberedWords = [];
+        if (preg_match_all('/\b(\d{1,2})\.\s*([a-z]+)\b/i', $content, $matches, PREG_SET_ORDER)) {
+            // Sort by number to ensure correct order
+            usort($matches, function($a, $b) {
+                return intval($a[1]) - intval($b[1]);
+            });
+
+            foreach ($matches as $match) {
+                $num = intval($match[1]);
+                $word = strtolower($match[2]);
+
+                // Only accept words numbered 1-24
+                if ($num >= 1 && $num <= 24 && in_array($word, $wordlistLower)) {
+                    $index = array_search($word, $wordlistLower);
+                    $numberedWords[$num] = $wordlist[$index];
+                }
+            }
+
+            // If we found exactly 24 numbered words (1-24), use them
+            if (count($numberedWords) === 24) {
+                ksort($numberedWords);
+                return array_values($numberedWords);
+            }
+        }
+
+        // Strategy 2: Fall back to extracting plain words (for simple "word1 word2 ... word24" format)
+        // Split content by any whitespace
+        $tokens = preg_split('/\s+/', $content);
+
+        // Extract only valid BIP39 words
+        $seedWords = [];
+        foreach ($tokens as $token) {
+            // Clean the token (remove any leading/trailing punctuation)
+            $cleaned = preg_replace('/^[^a-z]+|[^a-z]+$/i', '', $token);
+            $cleaned = strtolower(trim($cleaned));
+
+            // Skip empty tokens or very short tokens
+            if (empty($cleaned) || strlen($cleaned) < 3) {
+                continue;
+            }
+
+            // Check if it's a valid BIP39 word
+            if (in_array($cleaned, $wordlistLower)) {
+                // Find the original case from wordlist
+                $index = array_search($cleaned, $wordlistLower);
+                $seedWords[] = $wordlist[$index];
+
+                // Stop after finding 24 words
+                if (count($seedWords) >= 24) {
+                    break;
+                }
+            }
+        }
+
+        return $seedWords;
     }
 
     /**
@@ -349,15 +442,16 @@ class Wallet{
      *
      * @param string $mnemonic The seed phrase
      * @param CliOutputManager $output Output manager
+     * @param string|null $authCode Optional authentication code to display
      * @return void
      */
-    private static function displaySeedPhrase(string $mnemonic, CliOutputManager $output): void {
+    private static function displaySeedPhrase(string $mnemonic, CliOutputManager $output, ?string $authCode = null): void {
         // In JSON mode, we need special handling
         // DO NOT include the seedphrase in JSON output that goes to stdout
         // Instead, use the secure display mechanism
         if ($output->isJsonMode()) {
             // For JSON mode in non-interactive contexts, use secure file
-            $result = SecureSeedphraseDisplay::display($mnemonic, false);
+            $result = SecureSeedphraseDisplay::display($mnemonic, false, $authCode);
 
             if ($result['method'] === 'file' && isset($result['instructions'])) {
                 // Output instructions as a separate info line to stderr to avoid log capture
@@ -369,10 +463,10 @@ class Wallet{
         }
 
         // Text mode: use secure display
-        $result = SecureSeedphraseDisplay::display($mnemonic, true);
+        $result = SecureSeedphraseDisplay::display($mnemonic, true, $authCode);
 
         // If file method was used, output the retrieval instructions
-        // (these are safe to log as they don't contain the seedphrase)
+        // (these are safe to log as they don't contain the seedphrase or authcode)
         if ($result['method'] === 'file') {
             if (isset($result['warning'])) {
                 echo "\nWARNING: " . $result['warning'] . "\n";
@@ -380,7 +474,11 @@ class Wallet{
 
             echo "\n";
             echo "════════════════════════════════════════════════════════════════\n";
-            echo " SEEDPHRASE STORED SECURELY\n";
+            if ($authCode !== null) {
+                echo " SEEDPHRASE & AUTHCODE STORED SECURELY\n";
+            } else {
+                echo " SEEDPHRASE STORED SECURELY\n";
+            }
             echo "════════════════════════════════════════════════════════════════\n";
 
             if (isset($result['instructions'])) {
