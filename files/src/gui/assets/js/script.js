@@ -1601,3 +1601,30 @@ function showInProgressToasts() {
         );
     }
 }
+
+// ============================================================================
+// DEAD LETTER QUEUE NOTIFICATION FUNCTIONS
+// ============================================================================
+
+// Show toast notifications for messages newly added to the Dead Letter Queue (Tor Browser compatible)
+// Note: dlqNotifications is defined inline in notifications.html (PHP-generated)
+function showDlqToasts() {
+    if (typeof showToast !== 'function') {
+        return;
+    }
+
+    // dlqNotifications is set by PHP with array of {type, title, message} objects
+    if (typeof dlqNotifications === 'undefined' || !dlqNotifications || dlqNotifications.length === 0) {
+        return;
+    }
+
+    for (var i = 0; i < dlqNotifications.length; i++) {
+        var notification = dlqNotifications[i];
+        showToast(notification.title, notification.message, 'warning');
+    }
+}
+
+// Initialize DLQ toasts on page load (Tor Browser compatible)
+document.addEventListener('DOMContentLoaded', function() {
+    showDlqToasts();
+});
