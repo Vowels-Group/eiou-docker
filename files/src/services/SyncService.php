@@ -765,11 +765,28 @@ class SyncService {
                 return false;
             }
 
+            // Set status to PENDING so the transaction gets re-sent to the contact
+            // This mirrors the HeldTransactionService approach: after re-signing,
+            // processPendingTransactions() will pick up the transaction and send it
+            $statusUpdated = $this->transactionRepository->updateStatus(
+                $localTx['txid'],
+                Constants::STATUS_PENDING,
+                true  // isTxid = true
+            );
+
+            if (!$statusUpdated) {
+                SecureLogger::warning("Failed to set status to pending for re-signed transaction", [
+                    'txid' => $localTx['txid']
+                ]);
+                // Don't return false - signature was updated, status is secondary
+            }
+
             SecureLogger::info("Successfully re-signed local transaction after chain conflict", [
                 'txid' => $localTx['txid'],
                 'old_previous_txid' => $localTx['previous_txid'] ?? 'null',
                 'new_previous_txid' => $newPreviousTxid,
-                'new_nonce' => $signResult['nonce']
+                'new_nonce' => $signResult['nonce'],
+                'status_set_to_pending' => $statusUpdated
             ]);
 
             return true;
@@ -954,6 +971,20 @@ class SyncService {
         }
 
         return $verified === 1;
+    }
+
+    /**
+     * Public wrapper for transaction signature verification
+     *
+     * Used by TransactionService to verify signatures during chain conflict resolution.
+     * When a duplicate transaction is received with a different previous_txid, we need
+     * to verify the new signature before accepting the update.
+     *
+     * @param array $tx Transaction data with sender_signature and signature_nonce
+     * @return bool True if signature is valid, false otherwise
+     */
+    public function verifyTransactionSignaturePublic(array $tx): bool {
+        return $this->verifyTransactionSignature($tx);
     }
 
     /**

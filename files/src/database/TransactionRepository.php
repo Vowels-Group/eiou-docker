@@ -1450,6 +1450,33 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Update transaction for chain conflict resolution
+     *
+     * When a transaction is re-signed after losing a chain conflict, the sender
+     * re-sends it with a new previous_txid and new signature. This method updates
+     * the existing transaction record with the new values.
+     *
+     * @param string $txid Transaction ID
+     * @param string|null $newPreviousTxid New previous_txid (pointing to the winner)
+     * @param string $newSignature New signature
+     * @param int $newNonce New signature nonce
+     * @return bool True if update was successful
+     */
+    public function updateChainConflictResolution(string $txid, ?string $newPreviousTxid, string $newSignature, int $newNonce): bool {
+        $affectedRows = $this->update(
+            [
+                'previous_txid' => $newPreviousTxid,
+                'sender_signature' => $newSignature,
+                'signature_nonce' => $newNonce
+            ],
+            'txid',
+            $txid
+        );
+
+        return $affectedRows >= 0;
+    }
+
+    /**
      * Update transaction status
      *
      * @param string $identifier Transaction memo or txid
