@@ -1876,6 +1876,65 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Get transaction by previous_txid
+     *
+     * Finds transactions that have a specific previous_txid, used for detecting
+     * chain conflicts during sync (two transactions claiming the same prev_txid).
+     *
+     * @param string $previousTxid The previous_txid to search for
+     * @return array|null Array of transactions or null if none found
+     */
+    public function getByPreviousTxid(string $previousTxid): ?array {
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE previous_txid = :previous_txid
+                  AND status NOT IN ('cancelled', 'rejected')
+                  ORDER BY COALESCE(time, 0) DESC, timestamp DESC";
+        $stmt = $this->execute($query, [':previous_txid' => $previousTxid]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
+     * Check if a transaction exists with a specific previous_txid between two parties
+     *
+     * Used to detect chain forks during sync operations.
+     *
+     * @param string $previousTxid The previous_txid to check
+     * @param string $pubkeyHash1 First party's pubkey hash
+     * @param string $pubkeyHash2 Second party's pubkey hash
+     * @return array|null Transaction data if found, null otherwise
+     */
+    public function getLocalTransactionByPreviousTxid(string $previousTxid, string $pubkeyHash1, string $pubkeyHash2): ?array {
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE previous_txid = :previous_txid
+                  AND ((sender_public_key_hash = :pubkey_hash1 AND receiver_public_key_hash = :pubkey_hash2)
+                       OR (sender_public_key_hash = :pubkey_hash3 AND receiver_public_key_hash = :pubkey_hash4))
+                  AND status NOT IN ('cancelled', 'rejected')
+                  ORDER BY COALESCE(time, 0) DESC, timestamp DESC
+                  LIMIT 1";
+
+        $stmt = $this->execute($query, [
+            ':previous_txid' => $previousTxid,
+            ':pubkey_hash1' => $pubkeyHash1,
+            ':pubkey_hash2' => $pubkeyHash2,
+            ':pubkey_hash3' => $pubkeyHash2,
+            ':pubkey_hash4' => $pubkeyHash1
+        ]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    }
+
+    /**
      * Update signature data for a transaction
      *
      * Updates the sender_signature and signature_nonce fields for a transaction.

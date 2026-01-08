@@ -352,6 +352,12 @@ class SyncService {
      * is immediately stopped. The failing transaction and all subsequent
      * transactions are NOT inserted to prevent forged transaction injection.
      *
+     * CHAIN CONFLICT RESOLUTION: When both parties create transactions simultaneously
+     * with the same previous_txid (chain fork), deterministic ordering is used:
+     * - The transaction with the lexicographically lower txid "wins"
+     * - The "losing" transaction updates its previous_txid to point to the winner
+     * - This ensures both parties converge to the same chain order
+     *
      * @param string $contactAddress Contact's address
      * @param string $contactPublicKey Contact's public key
      * @param string|null $expectedTxid The txid the contact expected (from rejection)
@@ -364,6 +370,7 @@ class SyncService {
      *   - failed_txid: string|null - TXID that failed verification
      *   - failed_sender: string|null - Sender address of failed transaction
      *   - synced_before_failure: int - Transactions synced before failure
+     *   - conflicts_resolved: int - Number of chain conflicts resolved
      */
     public function syncTransactionChain(string $contactAddress, string $contactPublicKey, ?string $expectedTxid = null): array {
         $result = [
@@ -374,7 +381,8 @@ class SyncService {
             'signature_failure' => false,
             'failed_txid' => null,
             'failed_sender' => null,
-            'synced_before_failure' => 0
+            'synced_before_failure' => 0,
+            'conflicts_resolved' => 0
         ];
 
         try {
@@ -416,11 +424,53 @@ class SyncService {
             // Process the received transactions
             $transactions = $syncResponse['transactions'];
             $syncedCount = 0;
+            $conflictsResolved = 0;
+
+            // Get pubkey hashes for conflict detection
+            $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+            $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
 
             foreach ($transactions as $tx) {
                 // Check if transaction already exists
                 if ($this->transactionRepository->transactionExistsTxid($tx['txid'])) {
                     continue;
+                }
+
+                // Check for chain conflict: do we have a different transaction with the same previous_txid?
+                $remotePreviousTxid = $tx['previous_txid'] ?? null;
+                if ($remotePreviousTxid !== null) {
+                    $localConflict = $this->transactionRepository->getLocalTransactionByPreviousTxid(
+                        $remotePreviousTxid,
+                        $userPubkeyHash,
+                        $contactPubkeyHash
+                    );
+
+                    if ($localConflict !== null && $localConflict['txid'] !== $tx['txid']) {
+                        // Chain conflict detected! Two transactions claim the same previous_txid
+                        $conflictResult = $this->resolveChainConflict($localConflict, $tx);
+
+                        if ($conflictResult['resolved']) {
+                            $conflictsResolved++;
+                            output("Chain conflict resolved: local={$localConflict['txid']}, remote={$tx['txid']}, winner={$conflictResult['winner']}", 'SILENT');
+
+                            // If remote transaction won, update the previous_txid of the incoming transaction
+                            // to point correctly (it already does, so no change needed for the remote tx)
+                            // If local transaction won, update the remote transaction's previous_txid
+                            // before inserting (to point to the local winner)
+                            if ($conflictResult['winner'] === 'local') {
+                                // Remote transaction loses - update its previous_txid to point to local winner
+                                $tx['previous_txid'] = $localConflict['txid'];
+                            }
+                            // If remote won, we need to update our local transaction to point to remote
+                            // This is done after we insert the remote transaction
+                        } else {
+                            SecureLogger::warning("Failed to resolve chain conflict", [
+                                'local_txid' => $localConflict['txid'],
+                                'remote_txid' => $tx['txid'],
+                                'previous_txid' => $remotePreviousTxid
+                            ]);
+                        }
+                    }
                 }
 
                 // Verify transaction signature before inserting
@@ -452,6 +502,7 @@ class SyncService {
                     $result['failed_sender'] = $tx['sender_address'] ?? null;
                     $result['synced_before_failure'] = $syncedCount;
                     $result['error'] = 'Sync stopped: signature verification failed for transaction ' . ($tx['txid'] ?? 'unknown');
+                    $result['conflicts_resolved'] = $conflictsResolved;
 
                     // Output for CLI visibility
                     output("SECURITY WARNING: Transaction signature verification failed. Sync stopped. TXID: " . ($tx['txid'] ?? 'unknown'), 'ECHO');
@@ -499,14 +550,35 @@ class SyncService {
 
                 $this->transactionRepository->insertTransaction($insertData, $type);
                 $syncedCount++;
+
+                // After inserting, check if we need to update local transactions that lost conflict
+                // If remote transaction won the conflict, update our local loser to point to remote winner
+                if ($remotePreviousTxid !== null) {
+                    $localConflict = $this->transactionRepository->getLocalTransactionByPreviousTxid(
+                        $remotePreviousTxid,
+                        $userPubkeyHash,
+                        $contactPubkeyHash
+                    );
+                    // Re-check: if local tx still points to same prev_txid and remote tx won
+                    if ($localConflict !== null && $localConflict['txid'] !== $tx['txid']) {
+                        // Determine winner again
+                        if (strcmp($tx['txid'], $localConflict['txid']) < 0) {
+                            // Remote transaction has lower txid, it wins
+                            // Update local transaction to point to remote as its new previous
+                            $this->transactionRepository->updatePreviousTxid($localConflict['txid'], $tx['txid']);
+                            output("Updated local transaction {$localConflict['txid']} to chain after {$tx['txid']}", 'SILENT');
+                        }
+                    }
+                }
             }
 
             $result['success'] = true;
             $result['synced_count'] = $syncedCount;
             $result['latest_txid'] = $syncResponse['latestTxid'] ?? null;
             $result['signature_failure'] = false;
+            $result['conflicts_resolved'] = $conflictsResolved;
 
-            output("Transaction chain sync completed: {$syncedCount} transactions synced", 'SILENT');
+            output("Transaction chain sync completed: {$syncedCount} transactions synced, {$conflictsResolved} conflicts resolved", 'SILENT');
 
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
@@ -542,6 +614,73 @@ class SyncService {
                 'error' => $e->getMessage()
             ]);
         }
+
+        return $result;
+    }
+
+    /**
+     * Resolve a chain conflict between two transactions claiming the same previous_txid
+     *
+     * When both parties create transactions simultaneously that reference the same
+     * previous transaction, we need a deterministic way to decide ordering.
+     *
+     * Resolution algorithm:
+     * 1. Compare txids lexicographically (string comparison)
+     * 2. The transaction with the LOWER txid "wins" and keeps its previous_txid
+     * 3. The "losing" transaction must update its previous_txid to point to the winner
+     *
+     * This ensures both parties will independently arrive at the same chain order
+     * without requiring additional communication.
+     *
+     * @param array $localTx The local transaction data
+     * @param array $remoteTx The remote transaction data
+     * @return array Result with:
+     *   - resolved: bool - Whether conflict was resolved
+     *   - winner: string - 'local' or 'remote' indicating which transaction won
+     *   - loser_txid: string - The txid of the losing transaction
+     *   - winner_txid: string - The txid of the winning transaction
+     */
+    private function resolveChainConflict(array $localTx, array $remoteTx): array {
+        $result = [
+            'resolved' => false,
+            'winner' => null,
+            'loser_txid' => null,
+            'winner_txid' => null
+        ];
+
+        $localTxid = $localTx['txid'];
+        $remoteTxid = $remoteTx['txid'];
+
+        // Lexicographic comparison: lower txid wins
+        $comparison = strcmp($localTxid, $remoteTxid);
+
+        if ($comparison < 0) {
+            // Local transaction has lower txid - it wins
+            $result['winner'] = 'local';
+            $result['winner_txid'] = $localTxid;
+            $result['loser_txid'] = $remoteTxid;
+        } elseif ($comparison > 0) {
+            // Remote transaction has lower txid - it wins
+            $result['winner'] = 'remote';
+            $result['winner_txid'] = $remoteTxid;
+            $result['loser_txid'] = $localTxid;
+        } else {
+            // Txids are identical - this shouldn't happen with proper txid generation
+            // but if it does, we can't resolve the conflict
+            SecureLogger::error("Chain conflict with identical txids - cannot resolve", [
+                'txid' => $localTxid
+            ]);
+            return $result;
+        }
+
+        $result['resolved'] = true;
+
+        SecureLogger::info("Chain conflict resolved deterministically", [
+            'local_txid' => $localTxid,
+            'remote_txid' => $remoteTxid,
+            'winner' => $result['winner'],
+            'shared_previous_txid' => $localTx['previous_txid'] ?? 'null'
+        ]);
 
         return $result;
     }
