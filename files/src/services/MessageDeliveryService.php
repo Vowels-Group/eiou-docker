@@ -383,8 +383,13 @@ class MessageDeliveryService {
                     ];
                 }
 
-                // Unknown status - mark for background retry
-                $lastError = 'Unknown response status: ' . ($status ?? 'null');
+                // Transport error - mark for retry with specific error message
+                if ($status === 'error') {
+                    $lastError = $decodedResponse['message'] ?? 'Transport error';
+                } else {
+                    // Unknown status - mark for background retry
+                    $lastError = 'Unknown response status: ' . ($status ?? 'null');
+                }
             } else {
                 // No response - mark for background retry
                 $lastError = 'No response received from recipient';
@@ -553,8 +558,13 @@ class MessageDeliveryService {
                         ];
                     }
 
-                    // Unknown status - treat as failure, may retry
-                    $lastError = 'Unknown response status: ' . ($status ?? 'null');
+                    // Transport error - extract specific error message for retry
+                    if ($status === 'error') {
+                        $lastError = $decodedResponse['message'] ?? 'Transport error';
+                    } else {
+                        // Unknown status - treat as failure, may retry
+                        $lastError = 'Unknown response status: ' . ($status ?? 'null');
+                    }
                 } else {
                     // No response or empty response
                     $lastError = 'No response received from recipient';
