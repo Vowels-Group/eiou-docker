@@ -42,6 +42,11 @@ class Constants {
     const APP_VERSION = '0.0.1';
     const APP_DEBUG = true;
 
+    // Rate limiting
+    // WARNING: RATE_LIMIT_ENABLED should always be true in production.
+    // Only set to false for debugging during development.
+    const RATE_LIMIT_ENABLED = true;
+
     // API
     const API_ENABLED = true;
     const API_CORS_ALLOWED_ORIGINS = ''; // Comma-separated list of allowed origins. Empty = no CORS headers sent (blocks cross-origin browser requests). '*' = allow all origins (not recommended for production)

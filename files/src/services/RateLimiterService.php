@@ -11,6 +11,7 @@
  */
 
 require_once __DIR__ . '/../core/ErrorCodes.php';
+require_once __DIR__ . '/../core/Constants.php';
 
 class RateLimiterService {
     private RateLimiterRepository $repository;
@@ -35,6 +36,15 @@ class RateLimiterService {
      * @return array ['allowed' => bool, 'remaining' => int, 'reset_at' => timestamp]
      */
     public function checkLimit(string $identifier, string $action, int $maxAttempts = 10, int $windowSeconds = 60, int $blockSeconds = 300): array {
+        // If rate limiting is disabled, always allow
+        if (!Constants::RATE_LIMIT_ENABLED) {
+            return [
+                'allowed' => true,
+                'remaining' => $maxAttempts,
+                'reset_at' => time() + $windowSeconds
+            ];
+        }
+
         // Clean up old entries
         $this->repository->cleanup($windowSeconds);
 
@@ -125,6 +135,11 @@ class RateLimiterService {
      * @return bool True if allowed, sends HTTP 429 and returns false if blocked
      */
     public function enforce(string $action, array $limits = ['max' => 10, 'window' => 60, 'block' => 300]): bool {
+        // If rate limiting is disabled, skip all rate limit checks
+        if (!Constants::RATE_LIMIT_ENABLED) {
+            return true;
+        }
+
         $ip = self::getClientIp();
         $result = $this->checkLimit($ip, $action, $limits['max'], $limits['window'], $limits['block']);
 
