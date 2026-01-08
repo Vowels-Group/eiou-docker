@@ -4,7 +4,7 @@
 /**
  * Secure Seedphrase Display
  *
- * Displays seedphrases securely without persisting them in Docker logs.
+ * Displays seedphrases and authentication codes securely without persisting them in Docker logs.
  *
  * Security Design:
  * - Primary: TTY output bypasses Docker's stdout/stderr capture
@@ -26,28 +26,29 @@ class SecureSeedphraseDisplay
     private const FILE_TTL = 300; // 5 minutes
 
     /** @var string Prefix for temp files */
-    private const FILE_PREFIX = 'eiou_seedphrase_';
+    private const FILE_PREFIX = 'eiou_wallet_info_';
 
     /**
-     * Display a seedphrase securely
+     * Display a seedphrase and optionally an authcode securely
      *
      * Attempts TTY display first (not logged by Docker), falls back to
      * secure temp file if no TTY is available.
      *
      * @param string $seedphrase The 24-word mnemonic to display
      * @param bool $waitForAcknowledgment Whether to wait for user to press Enter (TTY only)
+     * @param string|null $authcode Optional authentication code to display alongside seedphrase
      * @return array Result with method used and any instructions
      */
-    public static function display(string $seedphrase, bool $waitForAcknowledgment = true): array
+    public static function display(string $seedphrase, bool $waitForAcknowledgment = true, ?string $authcode = null): array
     {
         // Try TTY first (most secure - not logged by Docker)
-        $ttyResult = self::displayViaTTY($seedphrase, $waitForAcknowledgment);
+        $ttyResult = self::displayViaTTY($seedphrase, $waitForAcknowledgment, $authcode);
         if ($ttyResult['success']) {
             return $ttyResult;
         }
 
         // Fallback to secure temp file
-        return self::displayViaSecureFile($seedphrase);
+        return self::displayViaSecureFile($seedphrase, $authcode);
     }
 
     /**
@@ -58,9 +59,10 @@ class SecureSeedphraseDisplay
      *
      * @param string $seedphrase The seedphrase to display
      * @param bool $waitForAcknowledgment Whether to wait for Enter key
+     * @param string|null $authcode Optional authentication code to display
      * @return array Result array
      */
-    private static function displayViaTTY(string $seedphrase, bool $waitForAcknowledgment): array
+    private static function displayViaTTY(string $seedphrase, bool $waitForAcknowledgment, ?string $authcode = null): array
     {
         // Check if we have a TTY
         if (!function_exists('posix_isatty') || !posix_isatty(STDOUT)) {
@@ -100,11 +102,23 @@ class SecureSeedphraseDisplay
             fwrite($tty, "║ " . $padded . " ║\n");
         }
 
+        // Display authcode if provided
+        if ($authcode !== null) {
+            fwrite($tty, "╠═══════════════════════════════════════════════════════════════╣\n");
+            fwrite($tty, "║                                                               ║\n");
+            fwrite($tty, "\033[1;36m"); // Bold cyan
+            $authcodeLine = "Authentication Code: " . $authcode;
+            $padded = str_pad($authcodeLine, 61);
+            fwrite($tty, "║ " . $padded . " ║\n");
+            fwrite($tty, "\033[0m"); // Reset
+            fwrite($tty, "║                                                               ║\n");
+        }
+
         fwrite($tty, "╚═══════════════════════════════════════════════════════════════╝\n");
         fwrite($tty, "\n");
 
         if ($waitForAcknowledgment) {
-            fwrite($tty, "\033[1mPress ENTER after you have securely saved this phrase...\033[0m");
+            fwrite($tty, "\033[1mPress ENTER after you have securely saved this information...\033[0m");
             fclose($tty);
 
             // Wait for acknowledgment via stdin
@@ -118,7 +132,7 @@ class SecureSeedphraseDisplay
             $tty = @fopen('/dev/tty', 'w');
             if ($tty) {
                 fwrite($tty, "\033[2J\033[H"); // Clear screen
-                fwrite($tty, "Seed phrase display cleared for security.\n\n");
+                fwrite($tty, "Secure information display cleared for security.\n\n");
                 fclose($tty);
             }
         } else {
@@ -128,7 +142,7 @@ class SecureSeedphraseDisplay
         return [
             'success' => true,
             'method' => 'tty',
-            'message' => 'Seedphrase displayed securely via TTY (not logged)'
+            'message' => 'Seedphrase and authcode displayed securely via TTY (not logged)'
         ];
     }
 
@@ -139,9 +153,10 @@ class SecureSeedphraseDisplay
      * The file path is logged but NOT the contents.
      *
      * @param string $seedphrase The seedphrase to store
+     * @param string|null $authcode Optional authentication code to include
      * @return array Result with instructions for retrieval
      */
-    private static function displayViaSecureFile(string $seedphrase): array
+    private static function displayViaSecureFile(string $seedphrase, ?string $authcode = null): array
     {
         // Verify tmpfs is available
         $dir = self::TEMP_DIR;
@@ -165,9 +180,18 @@ class SecureSeedphraseDisplay
         $content .= " Never share it. Never store it digitally.\n";
         $content .= "═══════════════════════════════════════════════════════════════\n\n";
         $content .= $formatted . "\n\n";
+
+        // Include authcode if provided
+        if ($authcode !== null) {
+            $content .= "═══════════════════════════════════════════════════════════════\n";
+            $content .= "                    AUTHENTICATION CODE\n";
+            $content .= "═══════════════════════════════════════════════════════════════\n\n";
+            $content .= "  " . $authcode . "\n\n";
+        }
+
         $content .= "═══════════════════════════════════════════════════════════════\n";
         $content .= " This file will be automatically deleted in " . self::FILE_TTL . " seconds.\n";
-        $content .= " Delete it immediately after saving the phrase: rm $filename\n";
+        $content .= " Delete it immediately after saving: rm $filename\n";
         $content .= "═══════════════════════════════════════════════════════════════\n";
 
         // Write with restrictive permissions
@@ -193,13 +217,13 @@ class SecureSeedphraseDisplay
         $containerName = gethostname() ?: '<container>';
 
         $instructions = [
-            "Your seedphrase has been stored securely in a temporary file.",
+            "Your seedphrase" . ($authcode !== null ? " and authentication code have" : " has") . " been stored securely in a temporary file.",
             "",
             "To view it, run:",
             "  docker exec $containerName cat $filename",
             "",
             "The file will be automatically deleted in " . self::FILE_TTL . " seconds.",
-            "For security, view and delete it immediately after saving the phrase.",
+            "For security, view and delete it immediately after saving.",
             "",
             "To delete manually:",
             "  docker exec $containerName rm $filename"
@@ -208,7 +232,7 @@ class SecureSeedphraseDisplay
         return [
             'success' => true,
             'method' => 'file',
-            'message' => 'Seedphrase stored in secure temp file',
+            'message' => 'Seedphrase' . ($authcode !== null ? ' and authcode' : '') . ' stored in secure temp file',
             'instructions' => $instructions,
             'filepath' => $filename,
             'ttl' => self::FILE_TTL,
