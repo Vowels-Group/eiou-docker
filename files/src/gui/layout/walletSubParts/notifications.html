@@ -113,3 +113,40 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <?php endif; ?>
+
+<!-- Dead Letter Queue notification data (consumed by showDlqToasts in script.js) -->
+<?php if (!empty($newlyAddedToDlq)): ?>
+<script>
+var dlqNotifications = [
+<?php
+    $dlqNotificationItems = [];
+    foreach ($newlyAddedToDlq as $dlqItem) {
+        $msgType = $dlqItem['message_type'] ?? 'message';
+        switch ($msgType) {
+            case 'contact':
+                $title = 'Contact Request Failed';
+                $message = 'A contact request could not be delivered after multiple attempts.';
+                break;
+            case 'transaction':
+                $title = 'Transaction Message Failed';
+                $message = 'A transaction message could not be delivered after multiple attempts.';
+                break;
+            case 'p2p':
+                $title = 'P2P Message Failed';
+                $message = 'A P2P routed message could not be delivered after multiple attempts.';
+                break;
+            case 'rp2p':
+                $title = 'Relay Message Failed';
+                $message = 'A relay message could not be delivered after multiple attempts.';
+                break;
+            default:
+                $title = 'Message Delivery Failed';
+                $message = 'A message could not be delivered after multiple attempts.';
+        }
+        $dlqNotificationItems[] = json_encode(['type' => $msgType, 'title' => $title, 'message' => $message]);
+    }
+    echo implode(",\n    ", $dlqNotificationItems);
+?>
+];
+</script>
+<?php endif; ?>

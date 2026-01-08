@@ -89,6 +89,30 @@ $blockedContacts = $transactionService->contactBalanceConversion($contactService
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
 
+// Dead Letter Queue - track newly added items for notification
+$newlyAddedToDlq = [];
+try {
+    $dlqRepository = $serviceContainer->getDeadLetterQueueRepository();
+    $currentDlqItems = $dlqRepository->getPendingItems(50);
+
+    // Get previously known DLQ item IDs from session
+    $prevDlqIds = $_SESSION['known_dlq_ids'] ?? [];
+
+    // Find items that are new (not previously seen)
+    $currentDlqIds = array_column($currentDlqItems, 'id');
+    foreach ($currentDlqItems as $item) {
+        if (!in_array($item['id'], $prevDlqIds)) {
+            $newlyAddedToDlq[] = $item;
+        }
+    }
+
+    // Update session with current DLQ IDs
+    $_SESSION['known_dlq_ids'] = $currentDlqIds;
+} catch (Exception $e) {
+    // Silently fail - DLQ notification is non-critical
+    $newlyAddedToDlq = [];
+}
+
 // Initialize ContactDataBuilder helper
 require_once __DIR__ . '/../helpers/ContactDataBuilder.php';
 $contactDataBuilder = new ContactDataBuilder($addressTypes);
