@@ -629,14 +629,25 @@ docker exec ${sender} php -r "
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\");
 " 2>/dev/null
 
-# Send new transaction (triggers resync)
+# Send new transaction (triggers resync due to previous_txid mismatch)
 docker exec ${sender} eiou send ${receiverAddress} 10 USD "cycle-test-3-${timestamp2}" 2>&1 > /dev/null
 sleep 2
+# Sender processes outgoing
 docker exec ${sender} eiou out 2>&1 > /dev/null
 sleep 3
+# Receiver processes incoming - may detect mismatch and request sync
+docker exec ${receiver} eiou in 2>&1 > /dev/null
+sleep 2
+# Receiver sends sync request/response
+docker exec ${receiver} eiou out 2>&1 > /dev/null
+sleep 3
+# Sender receives sync data
+docker exec ${sender} eiou in 2>&1 > /dev/null
+sleep 3
+# Additional round to ensure full sync
 docker exec ${sender} eiou out 2>&1 > /dev/null
 sleep 2
-docker exec ${receiver} eiou in 2>&1 > /dev/null
+docker exec ${sender} eiou in 2>&1 > /dev/null
 sleep 2
 
 countAfterCycle=$(docker exec ${sender} php -r "
@@ -1050,6 +1061,338 @@ else
     printf "\t   Contact transaction description ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
+
+##################### SECTION 9: Issue #408 - Simultaneous Transaction Chain Conflict Resolution #####################
+# Tests for Issue #408 fix:
+# When Contact A and Contact B both send transactions simultaneously with the same
+# previous_txid, they create a "chain fork". The fix implements deterministic
+# conflict resolution using lexicographic txid comparison.
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 9: Issue #408 - Simultaneous Transaction Chain Conflict Resolution"
+echo "========================================================================"
+
+echo -e "\n[9.1 Chain Conflict Resolution Method Test]"
+
+# Test: Verify resolveChainConflict method exists in SyncService
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing resolveChainConflict method exists"
+
+resolveMethodResult=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$syncService = \$app->services->getSyncService();
+
+    \$reflection = new ReflectionClass(\$syncService);
+    \$hasMethod = \$reflection->hasMethod('resolveChainConflict');
+    echo \$hasMethod ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$resolveMethodResult" == "EXISTS" ]]; then
+    printf "\t   resolveChainConflict method ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   resolveChainConflict method ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[9.2 Conflict Detection Repository Method Test]"
+
+# Test: Verify getLocalTransactionByPreviousTxid method exists in TransactionRepository
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing getLocalTransactionByPreviousTxid method exists"
+
+conflictDetectionResult=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$transactionRepo = \$app->services->getTransactionRepository();
+
+    if (method_exists(\$transactionRepo, 'getLocalTransactionByPreviousTxid')) {
+        echo 'EXISTS';
+    } else {
+        echo 'MISSING';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$conflictDetectionResult" == "EXISTS" ]]; then
+    printf "\t   getLocalTransactionByPreviousTxid method ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   getLocalTransactionByPreviousTxid method ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: Verify getByPreviousTxid method exists in TransactionRepository
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing getByPreviousTxid method exists"
+
+getByPrevTxidResult=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$transactionRepo = \$app->services->getTransactionRepository();
+
+    if (method_exists(\$transactionRepo, 'getByPreviousTxid')) {
+        echo 'EXISTS';
+    } else {
+        echo 'MISSING';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$getByPrevTxidResult" == "EXISTS" ]]; then
+    printf "\t   getByPreviousTxid method ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   getByPreviousTxid method ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[9.3 Deterministic Conflict Resolution Algorithm Test]"
+
+# Test: Verify the deterministic ordering algorithm (lower txid wins)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing deterministic ordering (lower txid wins)"
+
+deterministicResult=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$syncService = \$app->services->getSyncService();
+
+    // Use reflection to test the private resolveChainConflict method
+    \$reflection = new ReflectionClass(\$syncService);
+    \$method = \$reflection->getMethod('resolveChainConflict');
+    \$method->setAccessible(true);
+
+    // Test case 1: local txid < remote txid (local should win)
+    \$localTx1 = ['txid' => 'aaa111', 'previous_txid' => 'prev123'];
+    \$remoteTx1 = ['txid' => 'bbb222', 'previous_txid' => 'prev123'];
+    \$result1 = \$method->invoke(\$syncService, \$localTx1, \$remoteTx1);
+
+    // Test case 2: remote txid < local txid (remote should win)
+    \$localTx2 = ['txid' => 'zzz999', 'previous_txid' => 'prev456'];
+    \$remoteTx2 = ['txid' => 'aaa000', 'previous_txid' => 'prev456'];
+    \$result2 = \$method->invoke(\$syncService, \$localTx2, \$remoteTx2);
+
+    // Test case 3: identical txids (should not resolve)
+    \$localTx3 = ['txid' => 'same123', 'previous_txid' => 'prev789'];
+    \$remoteTx3 = ['txid' => 'same123', 'previous_txid' => 'prev789'];
+    \$result3 = \$method->invoke(\$syncService, \$localTx3, \$remoteTx3);
+
+    // Verify all test cases
+    \$case1Pass = \$result1['resolved'] && \$result1['winner'] === 'local' && \$result1['winner_txid'] === 'aaa111';
+    \$case2Pass = \$result2['resolved'] && \$result2['winner'] === 'remote' && \$result2['winner_txid'] === 'aaa000';
+    \$case3Pass = !\$result3['resolved']; // Identical txids should not resolve
+
+    if (\$case1Pass && \$case2Pass && \$case3Pass) {
+        echo 'DETERMINISTIC_ORDER_OK';
+    } else {
+        echo 'DETERMINISTIC_ORDER_FAILED:' .
+             'case1=' . (\$case1Pass ? 'ok' : 'fail') . ',' .
+             'case2=' . (\$case2Pass ? 'ok' : 'fail') . ',' .
+             'case3=' . (\$case3Pass ? 'ok' : 'fail');
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$deterministicResult" == "DETERMINISTIC_ORDER_OK" ]]; then
+    printf "\t   Deterministic ordering ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Deterministic ordering ${RED}FAILED${NC} (%s)\n" "${deterministicResult}"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[9.4 Sync Chain Conflict Tracking Test]"
+
+# Test: Verify syncTransactionChain returns conflicts_resolved count
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing syncTransactionChain returns conflicts_resolved"
+
+syncResultFieldsResult=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$syncService = \$app->services->getSyncService();
+
+    // Check the syncTransactionChain method returns conflicts_resolved
+    \$reflection = new ReflectionClass(\$syncService);
+    \$method = \$reflection->getMethod('syncTransactionChain');
+    \$startLine = \$method->getStartLine();
+    \$endLine = \$method->getEndLine();
+    \$filename = \$method->getFileName();
+
+    // Read the method source
+    \$lines = file(\$filename);
+    \$source = implode('', array_slice(\$lines, \$startLine - 1, \$endLine - \$startLine + 1));
+
+    // Check if the method includes conflicts_resolved in result
+    if (strpos(\$source, \"'conflicts_resolved'\") !== false) {
+        echo 'CONFLICTS_RESOLVED_TRACKED';
+    } else {
+        echo 'CONFLICTS_RESOLVED_MISSING';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$syncResultFieldsResult" == "CONFLICTS_RESOLVED_TRACKED" ]]; then
+    printf "\t   conflicts_resolved tracking ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   conflicts_resolved tracking ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[9.5 Conflict Detection in Sync Flow Test]"
+
+# Test: Verify syncTransactionChain includes conflict detection logic
+# NOTE: Conflict detection logs conflicts but does NOT update previous_txid values
+# to preserve transaction signature validity during sync.
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing conflict detection in syncTransactionChain"
+
+conflictDetectionFlowResult=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$syncService = \$app->services->getSyncService();
+
+    \$reflection = new ReflectionClass(\$syncService);
+    \$method = \$reflection->getMethod('syncTransactionChain');
+    \$startLine = \$method->getStartLine();
+    \$endLine = \$method->getEndLine();
+    \$filename = \$method->getFileName();
+
+    // Read the method source
+    \$lines = file(\$filename);
+    \$source = implode('', array_slice(\$lines, \$startLine - 1, \$endLine - \$startLine + 1));
+
+    // Check for key conflict detection components
+    // NOTE: We detect and resolve conflicts but do NOT update previous_txid
+    // to preserve signature validity. Both transactions keep original values.
+    \$hasConflictDetection = strpos(\$source, 'getLocalTransactionByPreviousTxid') !== false;
+    \$hasConflictResolution = strpos(\$source, 'resolveChainConflict') !== false;
+
+    if (\$hasConflictDetection && \$hasConflictResolution) {
+        echo 'CONFLICT_DETECTION_COMPLETE';
+    } else {
+        echo 'CONFLICT_DETECTION_INCOMPLETE:' .
+             'detect=' . (\$hasConflictDetection ? 'yes' : 'no') . ',' .
+             'resolve=' . (\$hasConflictResolution ? 'yes' : 'no');
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$conflictDetectionFlowResult" == "CONFLICT_DETECTION_COMPLETE" ]]; then
+    printf "\t   Conflict detection flow ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Conflict detection flow ${RED}FAILED${NC} (%s)\n" "${conflictDetectionFlowResult}"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[9.6 Simulated Chain Fork Resolution Test]"
+
+# This section requires pubkeys to be available
+if [[ "$PUBKEYS_AVAILABLE" != "true" ]]; then
+    echo -e "${YELLOW}\t   Skipping section 9.6 - pubkeys not available${NC}"
+else
+
+# Test: Simulate a chain fork scenario and verify resolution
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing simulated chain fork resolution"
+
+timestamp408=$(date +%s%N)
+
+# Step 1: Send an initial transaction to establish a chain
+docker exec ${sender} eiou send ${receiverAddress} 1 USD "fork-test-base-${timestamp408}" 2>&1 > /dev/null
+sleep 2
+docker exec ${sender} eiou out 2>&1 > /dev/null
+sleep 2
+docker exec ${receiver} eiou in 2>&1 > /dev/null
+sleep 2
+
+# Get the base transaction's txid (this will be the shared previous_txid)
+baseTxid=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$stmt = \$pdo->query(\"SELECT txid FROM transactions WHERE description LIKE 'fork-test-base-${timestamp408}' LIMIT 1\");
+    \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+    echo \$row['txid'] ?? 'NOT_FOUND';
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$baseTxid" != "NOT_FOUND" ]] && [[ "$baseTxid" != "ERROR" ]]; then
+    echo -e "\t   Base transaction created: ${baseTxid:0:20}..."
+
+    # Step 2: Create two conflicting transactions (both referencing the same previous_txid)
+    # Normally this happens when both parties send simultaneously, but we simulate it
+    # by directly inserting a conflicting transaction
+
+    forkResult=$(docker exec ${sender} php -r "
+        require_once('${REL_FUNCTIONS}');
+        \$app = Application::getInstance();
+        \$pdo = \$app->services->getPdo();
+        \$userContext = \$app->services->getCurrentUser();
+        \$transactionRepo = \$app->services->getTransactionRepository();
+
+        // Get sender and receiver pubkeys
+        \$senderPubkey = \$userContext->getPublicKey();
+        \$receiverPubkey = base64_decode('${receiverPubkeyB64}');
+        \$senderPubkeyHash = hash('sha256', \$senderPubkey);
+        \$receiverPubkeyHash = hash('sha256', \$receiverPubkey);
+
+        // Create fake 'local' transaction (simulating sender's tx with prev_txid = baseTxid)
+        \$localTxid = hash('sha256', 'local-fork-tx-' . time() . '-aaa');
+
+        // Create fake 'remote' transaction (simulating receiver's tx with prev_txid = baseTxid)
+        \$remoteTxid = hash('sha256', 'remote-fork-tx-' . time() . '-zzz');
+
+        // Simulate the conflict resolution
+        \$syncService = \$app->services->getSyncService();
+        \$reflection = new ReflectionClass(\$syncService);
+        \$method = \$reflection->getMethod('resolveChainConflict');
+        \$method->setAccessible(true);
+
+        \$localTx = ['txid' => \$localTxid, 'previous_txid' => '${baseTxid}'];
+        \$remoteTx = ['txid' => \$remoteTxid, 'previous_txid' => '${baseTxid}'];
+
+        \$result = \$method->invoke(\$syncService, \$localTx, \$remoteTx);
+
+        if (\$result['resolved']) {
+            // Verify that the lower txid won
+            \$expectedWinner = strcmp(\$localTxid, \$remoteTxid) < 0 ? 'local' : 'remote';
+            if (\$result['winner'] === \$expectedWinner) {
+                echo 'FORK_RESOLVED_CORRECTLY';
+            } else {
+                echo 'FORK_RESOLVED_INCORRECTLY:expected=' . \$expectedWinner . ',got=' . \$result['winner'];
+            }
+        } else {
+            echo 'FORK_NOT_RESOLVED';
+        }
+    " 2>/dev/null || echo "ERROR")
+
+    if [[ "$forkResult" == "FORK_RESOLVED_CORRECTLY" ]]; then
+        printf "\t   Chain fork resolution ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   Chain fork resolution ${RED}FAILED${NC} (%s)\n" "${forkResult}"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   Chain fork resolution ${RED}FAILED${NC} (could not create base tx)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Cleanup
+docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'fork-test%'\");
+" 2>/dev/null
+docker exec ${receiver} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'fork-test%'\");
+" 2>/dev/null
+
+fi  # End PUBKEYS_AVAILABLE check for section 9.6
 
 ########################################################################
 

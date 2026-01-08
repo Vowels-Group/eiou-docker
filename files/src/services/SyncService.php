@@ -352,6 +352,12 @@ class SyncService {
      * is immediately stopped. The failing transaction and all subsequent
      * transactions are NOT inserted to prevent forged transaction injection.
      *
+     * CHAIN CONFLICT RESOLUTION: When both parties create transactions simultaneously
+     * with the same previous_txid (chain fork), deterministic ordering is used:
+     * - The transaction with the lexicographically lower txid "wins"
+     * - The "losing" transaction updates its previous_txid to point to the winner
+     * - This ensures both parties converge to the same chain order
+     *
      * @param string $contactAddress Contact's address
      * @param string $contactPublicKey Contact's public key
      * @param string|null $expectedTxid The txid the contact expected (from rejection)
@@ -364,6 +370,7 @@ class SyncService {
      *   - failed_txid: string|null - TXID that failed verification
      *   - failed_sender: string|null - Sender address of failed transaction
      *   - synced_before_failure: int - Transactions synced before failure
+     *   - conflicts_resolved: int - Number of chain conflicts resolved
      */
     public function syncTransactionChain(string $contactAddress, string $contactPublicKey, ?string $expectedTxid = null): array {
         $result = [
@@ -374,7 +381,8 @@ class SyncService {
             'signature_failure' => false,
             'failed_txid' => null,
             'failed_sender' => null,
-            'synced_before_failure' => 0
+            'synced_before_failure' => 0,
+            'conflicts_resolved' => 0
         ];
 
         try {
@@ -416,6 +424,11 @@ class SyncService {
             // Process the received transactions
             $transactions = $syncResponse['transactions'];
             $syncedCount = 0;
+            $conflictsResolved = 0;
+
+            // Get pubkey hashes for conflict detection
+            $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+            $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
 
             foreach ($transactions as $tx) {
                 // Check if transaction already exists
@@ -423,7 +436,62 @@ class SyncService {
                     continue;
                 }
 
+                // Check for chain conflict: do we have a different transaction with the same previous_txid?
+                // When both parties create transactions simultaneously, they may reference the same
+                // previous_txid. We resolve this deterministically using lexicographic txid comparison.
+                $remotePreviousTxid = $tx['previous_txid'] ?? null;
+                $skipInsert = false;
+                $localLoserToResign = null;  // Track local transaction that needs re-signing
+
+                if ($remotePreviousTxid !== null) {
+                    $localConflict = $this->transactionRepository->getLocalTransactionByPreviousTxid(
+                        $remotePreviousTxid,
+                        $userPubkeyHash,
+                        $contactPubkeyHash
+                    );
+
+                    if ($localConflict !== null && $localConflict['txid'] !== $tx['txid']) {
+                        // Chain conflict detected! Two transactions claim the same previous_txid
+                        $conflictResult = $this->resolveChainConflict($localConflict, $tx);
+
+                        if ($conflictResult['resolved']) {
+                            $conflictsResolved++;
+
+                            if ($conflictResult['winner'] === 'remote') {
+                                // Remote transaction wins - we need to re-sign our local loser
+                                // First insert the remote winner, then update our local loser
+                                output("Chain conflict: remote wins. Will re-sign local transaction {$localConflict['txid']}", 'SILENT');
+                                $localLoserToResign = $localConflict;  // Save for re-signing after insert
+                            } else {
+                                // Local transaction wins - skip inserting the remote loser
+                                // The remote party will sync with us, get our winner, and re-sign their loser
+                                output("Chain conflict: local wins. Skipping remote transaction {$tx['txid']} (needs re-signing by sender)", 'SILENT');
+                                $skipInsert = true;
+
+                                SecureLogger::info("Skipping remote losing transaction during sync", [
+                                    'remote_txid' => $tx['txid'],
+                                    'local_winner_txid' => $localConflict['txid'],
+                                    'shared_previous_txid' => $remotePreviousTxid,
+                                    'reason' => 'Remote transaction has wrong previous_txid, sender must re-sign'
+                                ]);
+                            }
+                        } else {
+                            SecureLogger::warning("Failed to resolve chain conflict", [
+                                'local_txid' => $localConflict['txid'],
+                                'remote_txid' => $tx['txid'],
+                                'previous_txid' => $remotePreviousTxid
+                            ]);
+                        }
+                    }
+                }
+
+                // Skip this transaction if it lost the conflict (will be re-sent after re-signing)
+                if ($skipInsert) {
+                    continue;
+                }
+
                 // Verify transaction signature before inserting
+                // CRITICAL: Verify with ORIGINAL previous_txid since that's what was signed
                 // CRITICAL: If signature verification fails, STOP syncing immediately.
                 // The failing transaction and all subsequent transactions are NOT inserted.
                 // This is a security measure to prevent insertion of forged transactions.
@@ -452,6 +520,7 @@ class SyncService {
                     $result['failed_sender'] = $tx['sender_address'] ?? null;
                     $result['synced_before_failure'] = $syncedCount;
                     $result['error'] = 'Sync stopped: signature verification failed for transaction ' . ($tx['txid'] ?? 'unknown');
+                    $result['conflicts_resolved'] = $conflictsResolved;
 
                     // Output for CLI visibility
                     output("SECURITY WARNING: Transaction signature verification failed. Sync stopped. TXID: " . ($tx['txid'] ?? 'unknown'), 'ECHO');
@@ -475,6 +544,10 @@ class SyncService {
                 }
 
                 // Insert the missing transaction (only reached if signature is valid)
+                // IMPORTANT: Always insert with ORIGINAL previous_txid to preserve signature validity.
+                // When there's a chain conflict (two transactions with same previous_txid),
+                // both are stored with their original values. Chain ordering is handled at query
+                // time using lexicographic txid comparison - lower txid comes first in the chain.
                 $insertData = [
                     'senderAddress' => $tx['sender_address'],
                     'senderPublicKey' => $tx['sender_public_key'],
@@ -483,7 +556,7 @@ class SyncService {
                     'amount' => $tx['amount'],
                     'currency' => $tx['currency'],
                     'txid' => $tx['txid'],
-                    'previousTxid' => $tx['previous_txid'] ?? null,
+                    'previousTxid' => $tx['previous_txid'] ?? null,  // Keep original for signature validity
                     'memo' => $tx['memo'] ?? 'standard',
                     'description' => $tx['description'] ?? null,
                     'status' => Constants::STATUS_COMPLETED,
@@ -499,14 +572,28 @@ class SyncService {
 
                 $this->transactionRepository->insertTransaction($insertData, $type);
                 $syncedCount++;
+
+                // If remote won a chain conflict, re-sign our local loser to point to the winner
+                if ($localLoserToResign !== null) {
+                    $resigned = $this->resignLocalTransaction($localLoserToResign, $tx['txid']);
+                    if ($resigned) {
+                        output("Re-signed local transaction {$localLoserToResign['txid']} to chain after {$tx['txid']}", 'SILENT');
+                    } else {
+                        SecureLogger::warning("Failed to re-sign local transaction after conflict resolution", [
+                            'local_txid' => $localLoserToResign['txid'],
+                            'winner_txid' => $tx['txid']
+                        ]);
+                    }
+                }
             }
 
             $result['success'] = true;
             $result['synced_count'] = $syncedCount;
             $result['latest_txid'] = $syncResponse['latestTxid'] ?? null;
             $result['signature_failure'] = false;
+            $result['conflicts_resolved'] = $conflictsResolved;
 
-            output("Transaction chain sync completed: {$syncedCount} transactions synced", 'SILENT');
+            output("Transaction chain sync completed: {$syncedCount} transactions synced, {$conflictsResolved} conflicts resolved", 'SILENT');
 
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
@@ -544,6 +631,235 @@ class SyncService {
         }
 
         return $result;
+    }
+
+    /**
+     * Resolve a chain conflict between two transactions claiming the same previous_txid
+     *
+     * When both parties create transactions simultaneously that reference the same
+     * previous transaction, we need a deterministic way to decide ordering.
+     *
+     * Resolution algorithm:
+     * 1. Compare txids lexicographically (string comparison)
+     * 2. The transaction with the LOWER txid "wins" and keeps its previous_txid
+     * 3. The "losing" transaction must update its previous_txid to point to the winner
+     *
+     * This ensures both parties will independently arrive at the same chain order
+     * without requiring additional communication.
+     *
+     * @param array $localTx The local transaction data
+     * @param array $remoteTx The remote transaction data
+     * @return array Result with:
+     *   - resolved: bool - Whether conflict was resolved
+     *   - winner: string - 'local' or 'remote' indicating which transaction won
+     *   - loser_txid: string - The txid of the losing transaction
+     *   - winner_txid: string - The txid of the winning transaction
+     */
+    private function resolveChainConflict(array $localTx, array $remoteTx): array {
+        $result = [
+            'resolved' => false,
+            'winner' => null,
+            'loser_txid' => null,
+            'winner_txid' => null
+        ];
+
+        $localTxid = $localTx['txid'];
+        $remoteTxid = $remoteTx['txid'];
+
+        // Lexicographic comparison: lower txid wins
+        $comparison = strcmp($localTxid, $remoteTxid);
+
+        if ($comparison < 0) {
+            // Local transaction has lower txid - it wins
+            $result['winner'] = 'local';
+            $result['winner_txid'] = $localTxid;
+            $result['loser_txid'] = $remoteTxid;
+        } elseif ($comparison > 0) {
+            // Remote transaction has lower txid - it wins
+            $result['winner'] = 'remote';
+            $result['winner_txid'] = $remoteTxid;
+            $result['loser_txid'] = $localTxid;
+        } else {
+            // Txids are identical - this shouldn't happen with proper txid generation
+            // but if it does, we can't resolve the conflict
+            SecureLogger::error("Chain conflict with identical txids - cannot resolve", [
+                'txid' => $localTxid
+            ]);
+            return $result;
+        }
+
+        $result['resolved'] = true;
+
+        SecureLogger::info("Chain conflict resolved deterministically", [
+            'local_txid' => $localTxid,
+            'remote_txid' => $remoteTxid,
+            'winner' => $result['winner'],
+            'shared_previous_txid' => $localTx['previous_txid'] ?? 'null'
+        ]);
+
+        return $result;
+    }
+
+    /**
+     * Re-sign a local transaction with a new previous_txid
+     *
+     * When a chain conflict is resolved and our local transaction loses,
+     * we need to update its previous_txid to point to the winner and
+     * re-sign it (since we have the private key for our own transactions).
+     *
+     * After successful re-signing, any held transaction record is released
+     * to prevent HeldTransactionService from overwriting our correct previous_txid.
+     *
+     * @param array $localTx The local transaction data from database
+     * @param string $newPreviousTxid The winner's txid to point to
+     * @return bool True if re-signing was successful
+     */
+    private function resignLocalTransaction(array $localTx, string $newPreviousTxid): bool {
+        try {
+            // Update the local transaction's previous_txid in database first
+            $updated = $this->transactionRepository->updatePreviousTxid($localTx['txid'], $newPreviousTxid);
+
+            if (!$updated) {
+                SecureLogger::warning("Failed to update previous_txid for local transaction", [
+                    'txid' => $localTx['txid'],
+                    'new_previous_txid' => $newPreviousTxid
+                ]);
+                return false;
+            }
+
+            // Get the updated transaction from database
+            $updatedTx = $this->transactionRepository->getByTxid($localTx['txid']);
+            if (!$updatedTx) {
+                SecureLogger::warning("Could not retrieve updated transaction for re-signing", [
+                    'txid' => $localTx['txid']
+                ]);
+                return false;
+            }
+
+            // Build the payload for signing based on memo type
+            $memo = $updatedTx['memo'] ?? 'standard';
+            if ($memo === 'standard') {
+                $payload = $this->transactionPayload->buildStandardFromDatabase($updatedTx);
+            } else {
+                $payload = $this->transactionPayload->buildFromDatabase($updatedTx);
+            }
+
+            // Re-sign the transaction
+            $signResult = $this->transportUtility->signWithCapture($payload);
+
+            if (!$signResult) {
+                SecureLogger::warning("Failed to re-sign local transaction", [
+                    'txid' => $localTx['txid']
+                ]);
+                return false;
+            }
+
+            // Update the transaction with new signature and nonce
+            $signatureUpdated = $this->transactionRepository->updateSignatureData(
+                $localTx['txid'],
+                $signResult['signature'],
+                $signResult['nonce']
+            );
+
+            if (!$signatureUpdated) {
+                SecureLogger::warning("Failed to update signature for local transaction", [
+                    'txid' => $localTx['txid']
+                ]);
+                return false;
+            }
+
+            // Update the timestamp to reflect when the re-signing occurred
+            $timestampUpdated = $this->transactionRepository->updateTimestamp($localTx['txid']);
+            if (!$timestampUpdated) {
+                SecureLogger::warning("Failed to update timestamp for re-signed transaction", [
+                    'txid' => $localTx['txid']
+                ]);
+                // Don't return false - this is not critical
+            }
+
+            // Set status to PENDING so the transaction gets re-sent to the contact
+            // This mirrors the HeldTransactionService approach: after re-signing,
+            // processPendingTransactions() will pick up the transaction and send it
+            $statusUpdated = $this->transactionRepository->updateStatus(
+                $localTx['txid'],
+                Constants::STATUS_PENDING,
+                true  // isTxid = true
+            );
+
+            if (!$statusUpdated) {
+                SecureLogger::warning("Failed to set status to pending for re-signed transaction", [
+                    'txid' => $localTx['txid']
+                ]);
+                // Don't return false - signature was updated, status is secondary
+            }
+
+            // Release any held transaction record to prevent HeldTransactionService
+            // from overwriting our correct previous_txid with the stale expected_previous_txid
+            // from the original rejection
+            $this->releaseHeldTransaction($localTx['txid']);
+
+            SecureLogger::info("Successfully re-signed local transaction after chain conflict", [
+                'txid' => $localTx['txid'],
+                'old_previous_txid' => $localTx['previous_txid'] ?? 'null',
+                'new_previous_txid' => $newPreviousTxid,
+                'new_nonce' => $signResult['nonce'],
+                'status_set_to_pending' => $statusUpdated,
+                'timestamp_updated' => $timestampUpdated
+            ]);
+
+            return true;
+
+        } catch (Exception $e) {
+            SecureLogger::logException($e, [
+                'method' => 'resignLocalTransaction',
+                'txid' => $localTx['txid']
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Release a held transaction record
+     *
+     * After chain conflict resolution re-signs a transaction correctly,
+     * we need to release any held transaction record to prevent
+     * HeldTransactionService from overwriting our correct previous_txid.
+     *
+     * @param string $txid Transaction ID
+     * @return bool True if released or not found, false on error
+     */
+    private function releaseHeldTransaction(string $txid): bool {
+        try {
+            require_once __DIR__ . '/../database/HeldTransactionRepository.php';
+            $heldRepository = new HeldTransactionRepository();
+
+            // Check if transaction is held
+            if (!$heldRepository->isTransactionHeld($txid)) {
+                return true; // Not held, nothing to release
+            }
+
+            // Release it to prevent HeldTransactionService from overwriting
+            $released = $heldRepository->releaseTransaction($txid);
+
+            if ($released) {
+                SecureLogger::info("Released held transaction after chain conflict resolution", [
+                    'txid' => $txid
+                ]);
+            } else {
+                SecureLogger::warning("Failed to release held transaction", [
+                    'txid' => $txid
+                ]);
+            }
+
+            return $released;
+
+        } catch (Exception $e) {
+            SecureLogger::logException($e, [
+                'method' => 'releaseHeldTransaction',
+                'txid' => $txid
+            ]);
+            return false;
+        }
     }
 
     /**
@@ -720,6 +1036,20 @@ class SyncService {
     }
 
     /**
+     * Public wrapper for transaction signature verification
+     *
+     * Used by TransactionService to verify signatures during chain conflict resolution.
+     * When a duplicate transaction is received with a different previous_txid, we need
+     * to verify the new signature before accepting the update.
+     *
+     * @param array $tx Transaction data with sender_signature and signature_nonce
+     * @return bool True if signature is valid, false otherwise
+     */
+    public function verifyTransactionSignaturePublic(array $tx): bool {
+        return $this->verifyTransactionSignature($tx);
+    }
+
+    /**
      * Reconstruct the signed message from transaction data + nonce
      *
      * Rebuilds the original JSON message that was signed by the sender.
@@ -764,10 +1094,17 @@ class SyncService {
             'type' => 'send',
         ];
 
-        // Include 'time' if present (added for P2P/RP2P tracking and syncing)
-        // This maintains backward compatibility - older transactions without 'time' are still valid
+        // Include 'time' field - ALWAYS include to match how buildStandardFromDatabase() builds the payload
+        // buildStandardFromDatabase() uses: 'time' => $data['time'] ?? null
+        // This means 'time' is ALWAYS present in the signed message (even if null)
+        // We must include it in reconstruction to match the original signed message
+        // Note: For standard transactions, time should always be present since prepareStandardTransactionData sets it
+        // For P2P transactions, time comes from the request
         if (isset($tx['time']) && $tx['time'] !== null) {
             $messageContent['time'] = (int)$tx['time'];
+        } else {
+            // Include null time to match buildStandardFromDatabase() behavior
+            $messageContent['time'] = null;
         }
 
         $messageContent['receiverAddress'] = $tx['receiver_address'];

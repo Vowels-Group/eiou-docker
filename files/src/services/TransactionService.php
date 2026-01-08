@@ -451,7 +451,73 @@ class TransactionService {
                 $exists = $this->transactionRepository->transactionExistsMemo($memo);
             }
             if($exists){
-                // if transaction already exists
+                // Transaction with this txid already exists - check if this is a chain conflict resolution update
+                // When both parties send transactions simultaneously with the same previous_txid,
+                // the loser re-signs their transaction with the new previous_txid pointing to the winner.
+                // We need to accept this update if the signature is valid.
+                if ($memo === "standard") {
+                    $existingTx = $this->transactionRepository->getByTxid($request['txid']);
+                    $newPreviousTxid = $request['previousTxid'] ?? null;
+                    $existingPreviousTxid = $existingTx['previous_txid'] ?? null;
+
+                    // If previous_txid is different, this might be a chain conflict resolution
+                    if ($existingTx && $newPreviousTxid !== $existingPreviousTxid) {
+                        SecureLogger::info("Received transaction with different previous_txid - checking for chain conflict resolution", [
+                            'txid' => $request['txid'],
+                            'existing_previous_txid' => $existingPreviousTxid,
+                            'new_previous_txid' => $newPreviousTxid
+                        ]);
+
+                        // Verify the new signature is valid
+                        $syncService = Application::getInstance()->services->getSyncService();
+                        $txForVerification = [
+                            'txid' => $request['txid'],
+                            'previous_txid' => $newPreviousTxid,
+                            'sender_address' => $request['senderAddress'],
+                            'sender_public_key' => $request['senderPublicKey'],
+                            'receiver_address' => $request['receiverAddress'],
+                            'receiver_public_key' => $request['receiverPublicKey'],
+                            'amount' => $request['amount'],
+                            'currency' => $request['currency'],
+                            'memo' => $request['memo'],
+                            'description' => $request['description'] ?? null,
+                            'time' => $request['time'] ?? null,
+                            'sender_signature' => $request['senderSignature'] ?? null,
+                            'signature_nonce' => $request['signatureNonce'] ?? null
+                        ];
+
+                        if ($syncService->verifyTransactionSignaturePublic($txForVerification)) {
+                            // Valid signature - update the existing transaction
+                            $updated = $this->transactionRepository->updateChainConflictResolution(
+                                $request['txid'],
+                                $newPreviousTxid,
+                                $request['senderSignature'],
+                                $request['signatureNonce']
+                            );
+
+                            if ($updated) {
+                                SecureLogger::info("Chain conflict resolution update accepted", [
+                                    'txid' => $request['txid'],
+                                    'old_previous_txid' => $existingPreviousTxid,
+                                    'new_previous_txid' => $newPreviousTxid
+                                ]);
+
+                                if ($echo) {
+                                    echo $this->transactionPayload->buildAcceptance($request);
+                                }
+                                // Return false to prevent processTransaction from being called
+                                // The transaction has already been updated in the database
+                                return false;
+                            }
+                        } else {
+                            SecureLogger::warning("Chain conflict resolution rejected - invalid signature", [
+                                'txid' => $request['txid']
+                            ]);
+                        }
+                    }
+                }
+
+                // Regular duplicate - reject
                 if($echo){
                     echo $this->transactionPayload->buildRejection($request, 'duplicate');
                 }
