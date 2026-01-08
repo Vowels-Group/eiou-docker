@@ -5,6 +5,143 @@
 exec 1> >(stdbuf -oL cat)
 exec 2> >(stdbuf -oL cat >&2)
 
+# Graceful shutdown configuration
+SHUTDOWN_TIMEOUT=30  # Maximum seconds to wait for processes to terminate
+SHUTDOWN_IN_PROGRESS=false
+
+# Store background process PIDs
+P2P_PID=""
+TRANSACTION_PID=""
+CLEANUP_PID=""
+
+# Graceful shutdown handler
+graceful_shutdown() {
+    # Prevent duplicate shutdown handling
+    if [ "$SHUTDOWN_IN_PROGRESS" = true ]; then
+        return
+    fi
+    SHUTDOWN_IN_PROGRESS=true
+
+    # Stop watchdog first to prevent it from restarting processes during shutdown
+    if [ -n "$WATCHDOG_PID" ] && kill -0 "$WATCHDOG_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping watchdog (PID: $WATCHDOG_PID)"
+        kill "$WATCHDOG_PID" 2>/dev/null
+        wait "$WATCHDOG_PID" 2>/dev/null || true
+    fi
+
+    echo ""
+    echo "=========================================="
+    echo "Graceful shutdown initiated..."
+    echo "=========================================="
+
+    SHUTDOWN_START=$(date +%s)
+
+    # Step 1: Signal PHP processors to stop (they handle SIGTERM gracefully)
+    echo "[Shutdown] Stopping PHP message processors..."
+
+    # Send SIGTERM to PHP processes if they exist
+    local pids_to_wait=""
+
+    if [ -n "$P2P_PID" ] && kill -0 "$P2P_PID" 2>/dev/null; then
+        echo "[Shutdown] Sending SIGTERM to P2P processor (PID: $P2P_PID)"
+        kill -TERM "$P2P_PID" 2>/dev/null
+        pids_to_wait="$pids_to_wait $P2P_PID"
+    fi
+
+    if [ -n "$TRANSACTION_PID" ] && kill -0 "$TRANSACTION_PID" 2>/dev/null; then
+        echo "[Shutdown] Sending SIGTERM to Transaction processor (PID: $TRANSACTION_PID)"
+        kill -TERM "$TRANSACTION_PID" 2>/dev/null
+        pids_to_wait="$pids_to_wait $TRANSACTION_PID"
+    fi
+
+    if [ -n "$CLEANUP_PID" ] && kill -0 "$CLEANUP_PID" 2>/dev/null; then
+        echo "[Shutdown] Sending SIGTERM to Cleanup processor (PID: $CLEANUP_PID)"
+        kill -TERM "$CLEANUP_PID" 2>/dev/null
+        pids_to_wait="$pids_to_wait $CLEANUP_PID"
+    fi
+
+    # Also check for any PHP processors by their lockfiles
+    for lockfile in /tmp/p2pmessages_lock.pid /tmp/transactionmessages_lock.pid /tmp/cleanupmessages_lock.pid; do
+        if [ -f "$lockfile" ]; then
+            local pid=$(cat "$lockfile" 2>/dev/null)
+            if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                echo "[Shutdown] Found additional processor from lockfile (PID: $pid)"
+                kill -TERM "$pid" 2>/dev/null
+                pids_to_wait="$pids_to_wait $pid"
+            fi
+        fi
+    done
+
+    # Step 2: Wait for PHP processes to finish their current tasks
+    if [ -n "$pids_to_wait" ]; then
+        echo "[Shutdown] Waiting for PHP processors to complete current tasks (timeout: ${SHUTDOWN_TIMEOUT}s)..."
+        local wait_start=$(date +%s)
+        local all_stopped=false
+
+        while [ $(($(date +%s) - wait_start)) -lt $SHUTDOWN_TIMEOUT ]; do
+            all_stopped=true
+            for pid in $pids_to_wait; do
+                if kill -0 "$pid" 2>/dev/null; then
+                    all_stopped=false
+                    break
+                fi
+            done
+
+            if [ "$all_stopped" = true ]; then
+                echo "[Shutdown] All PHP processors stopped gracefully"
+                break
+            fi
+            sleep 1
+        done
+
+        # Force kill any remaining processes
+        if [ "$all_stopped" = false ]; then
+            echo "[Shutdown] Timeout reached. Force killing remaining processes..."
+            for pid in $pids_to_wait; do
+                if kill -0 "$pid" 2>/dev/null; then
+                    echo "[Shutdown] Force killing PID: $pid"
+                    kill -9 "$pid" 2>/dev/null
+                fi
+            done
+        fi
+    else
+        echo "[Shutdown] No PHP processors were running"
+    fi
+
+    # Step 3: Stop services in reverse order of startup
+    echo "[Shutdown] Stopping services in reverse order..."
+
+    echo "[Shutdown] Stopping Apache..."
+    service apache2 stop 2>/dev/null || true
+
+    echo "[Shutdown] Stopping MariaDB..."
+    service mariadb stop 2>/dev/null || true
+
+    echo "[Shutdown] Stopping Tor..."
+    service tor stop 2>/dev/null || true
+
+    echo "[Shutdown] Stopping Cron..."
+    service cron stop 2>/dev/null || true
+
+    # Step 4: Clean up lockfiles
+    echo "[Shutdown] Cleaning up lockfiles..."
+    rm -f /tmp/p2pmessages_lock.pid 2>/dev/null
+    rm -f /tmp/transactionmessages_lock.pid 2>/dev/null
+    rm -f /tmp/cleanupmessages_lock.pid 2>/dev/null
+
+    SHUTDOWN_END=$(date +%s)
+    SHUTDOWN_DURATION=$((SHUTDOWN_END - SHUTDOWN_START))
+
+    echo "=========================================="
+    echo "Graceful shutdown completed in ${SHUTDOWN_DURATION}s"
+    echo "=========================================="
+
+    exit 0
+}
+
+# Register signal handlers for graceful shutdown
+trap graceful_shutdown SIGTERM SIGINT SIGHUP
+
 # Check for quickstart flag
 QUICKSTART=${QUICKSTART:-false}
 
@@ -143,13 +280,12 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
     echo "Restarting Tor to load new hidden service keys..."
 
     # Configuration for Tor restart
-    # WSL2 environments have slower I/O; use EIOU_HS_TIMEOUT env var to override
     TOR_RESTART_MAX_ATTEMPTS=3
     TOR_RESTART_ATTEMPT=0
     TOR_RESTART_SUCCESS=false
     HS_DIR="/var/lib/tor/hidden_service"
     HS_HOSTNAME_FILE="${HS_DIR}/hostname"
-    HS_MAX_WAIT=${EIOU_HS_TIMEOUT:-60}  # Maximum seconds to wait for hidden service
+    HS_MAX_WAIT=30  # Maximum seconds to wait for hidden service
 
     # Ensure correct permissions on hidden service directory before restart
     # This fixes potential permission issues from PHP-based key generation
@@ -224,7 +360,7 @@ while true; do
         http=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["hostname"])){echo $json["hostname"];}')
         tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
         pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
-        # Note: authcode is retrieved securely in the display section below to avoid logging
+        authcode=$(php -r 'require_once("/etc/eiou/src/core/UserContext.php"); echo UserContext::getInstance()->getAuthCode();')
         break
     else
         if $first; then
@@ -238,8 +374,7 @@ done
 
 # Wait for Tor to be ready and connected
 echo "Waiting for Tor to establish connection with container..."
-# WSL2 environments have slower network; use EIOU_TOR_TIMEOUT env var to override
-TOR_MAX_WAIT=${EIOU_TOR_TIMEOUT:-120}  # Maximum wait time in seconds
+TOR_MAX_WAIT=60  # Maximum wait time in seconds
 TOR_START_TIME=$(date +%s)
 TOR_TEST_URL="${tor}"
 TOR_FIRST_ATTEMPT=true
@@ -298,7 +433,7 @@ fi
 echo -e "\t Tor address: $tor"
 readable="${pubkey//$'\n'/$'\n\t\t'}"
 echo -e "\t Public Key: \n\t\t $readable"
-echo -e "\t Authentication Code: (stored securely with seedphrase - see above)"
+echo -e "\t Authentication Code: $authcode"
 
 
 # Start p2p message processing in background
@@ -388,5 +523,17 @@ watchdog &
 WATCHDOG_PID=$!
 echo "Watchdog started (PID: $WATCHDOG_PID)"
 
-# Keep container running
-tail -f /dev/null
+echo ""
+echo "=========================================="
+echo "EIOU Node started successfully!"
+echo "All processors running. Ready for graceful shutdown on SIGTERM/SIGINT."
+echo "=========================================="
+
+# Keep container running with a wait loop that can be interrupted by signals
+# Using 'wait' allows the trap to be processed immediately when signal is received
+while true; do
+    # Wait for any background process, or sleep if none
+    # The sleep allows the trap to be processed
+    sleep 1 &
+    wait $! 2>/dev/null || true
+done

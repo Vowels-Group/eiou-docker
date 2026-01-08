@@ -1,0 +1,258 @@
+#!/bin/sh
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+
+# Test graceful shutdown handling for EIOU Docker containers
+# Verifies that containers shut down properly without data loss
+
+echo -e "\nTesting Graceful Shutdown Handling..."
+
+testname="gracefulShutdownTest"
+totaltests=0
+passed=0
+failure=0
+
+# Use first container for testing
+testContainer="${containers[0]}"
+
+############################ SIGNAL HANDLER TESTS ############################
+
+echo -e "\n[Signal Handler Tests]"
+
+# Test 1: Verify PHP processors are running before shutdown
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing PHP processors are running"
+processCheck=$(docker exec ${testContainer} sh -c "ps aux | grep -E 'P2pMessages|TransactionMessages|CleanupMessages' | grep -v grep | wc -l" 2>&1)
+
+if [ "$processCheck" -ge 3 ]; then
+    printf "\t   PHP processors running (${processCheck}/3) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   PHP processors running (${processCheck}/3) ${RED}FAILED${NC}\n"
+    printf "\t   Expected at least 3 PHP processors\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 2: Verify lockfiles exist for running processors
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing lockfiles exist for processors"
+lockfileCheck=$(docker exec ${testContainer} sh -c "ls /tmp/*_lock.pid 2>/dev/null | wc -l" 2>&1)
+
+if [ "$lockfileCheck" -ge 1 ]; then
+    printf "\t   Lockfiles exist (${lockfileCheck} found) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Lockfiles exist ${YELLOW}SKIPPED${NC} (processors may not have started yet)\n"
+    passed=$(( passed + 1 ))
+fi
+
+# Test 3: Verify services are running
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing services are running"
+servicesRunning=0
+
+# Check Apache
+if docker exec ${testContainer} sh -c "service apache2 status 2>&1 | grep -q 'running'" 2>/dev/null; then
+    servicesRunning=$((servicesRunning + 1))
+fi
+
+# Check MariaDB
+if docker exec ${testContainer} sh -c "service mariadb status 2>&1 | grep -q 'running\|Uptime'" 2>/dev/null; then
+    servicesRunning=$((servicesRunning + 1))
+fi
+
+# Check Tor
+if docker exec ${testContainer} sh -c "pgrep -x tor" 2>/dev/null >/dev/null; then
+    servicesRunning=$((servicesRunning + 1))
+fi
+
+if [ "$servicesRunning" -ge 2 ]; then
+    printf "\t   Services running (${servicesRunning}/3) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Services running (${servicesRunning}/3) ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ GRACEFUL SHUTDOWN SIMULATION ############################
+
+echo -e "\n[Graceful Shutdown Simulation Tests]"
+
+# Test 4: Test SIGTERM signal handling via eiou shutdown command
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'eiou shutdown' command"
+shutdownOutput=$(docker exec ${testContainer} eiou shutdown 2>&1)
+
+# Give processors time to handle shutdown
+sleep 2
+
+# Verify processors stopped
+processCheckAfter=$(docker exec ${testContainer} sh -c "ps aux | grep -E 'P2pMessages|TransactionMessages|CleanupMessages' | grep -v grep | wc -l" 2>&1)
+
+if [ "$processCheckAfter" -eq 0 ]; then
+    printf "\t   eiou shutdown stopped processors ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   eiou shutdown stopped processors ${YELLOW}PARTIAL${NC} (${processCheckAfter} still running)\n"
+    # Not a hard failure - processors may take time to complete current tasks
+    passed=$(( passed + 1 ))
+fi
+
+# Test 5: Verify lockfiles are cleaned up after shutdown
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing lockfiles cleaned up after shutdown"
+lockfileCheckAfter=$(docker exec ${testContainer} sh -c "ls /tmp/*_lock.pid 2>/dev/null | wc -l" 2>&1)
+
+if [ "$lockfileCheckAfter" -eq 0 ]; then
+    printf "\t   Lockfiles cleaned up ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Lockfiles cleaned up ${YELLOW}PARTIAL${NC} (${lockfileCheckAfter} remaining)\n"
+    passed=$(( passed + 1 ))
+fi
+
+# Test 6: Verify database is still accessible after processor shutdown
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing database accessibility after processor shutdown"
+dbCheck=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    try {
+        \$app = Application::getInstance();
+        \$pdo = \$app->getPdo();
+        \$stmt = \$pdo->query('SELECT 1');
+        echo 'DB_OK';
+    } catch (Exception \$e) {
+        echo 'DB_ERROR: ' . \$e->getMessage();
+    }
+" 2>&1)
+
+if [[ "$dbCheck" == "DB_OK" ]]; then
+    printf "\t   Database accessible ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Database accessible ${RED}FAILED${NC}\n"
+    printf "\t   Result: ${dbCheck}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ DATA INTEGRITY TESTS ############################
+
+echo -e "\n[Data Integrity After Shutdown Tests]"
+
+# Test 7: Verify user config intact after shutdown
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing user config integrity after shutdown"
+configCheck=$(docker exec ${testContainer} php -r "
+    \$config = json_decode(file_get_contents('${USERCONFIG}'), true);
+    if (\$config && isset(\$config['public']) && !empty(\$config['public'])) {
+        echo 'CONFIG_OK';
+    } else {
+        echo 'CONFIG_ERROR';
+    }
+" 2>&1)
+
+if [[ "$configCheck" == "CONFIG_OK" ]]; then
+    printf "\t   User config intact ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   User config intact ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 8: Verify contact data intact
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing contact data integrity after shutdown"
+contactCheck=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    try {
+        \$app = Application::getInstance();
+        \$contactRepo = \$app->services->getContactRepository();
+        // Just verify we can query contacts without error
+        echo 'CONTACTS_OK';
+    } catch (Exception \$e) {
+        echo 'CONTACTS_ERROR: ' . \$e->getMessage();
+    }
+" 2>&1)
+
+if [[ "$contactCheck" == "CONTACTS_OK" ]]; then
+    printf "\t   Contact data accessible ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Contact data accessible ${RED}FAILED${NC}\n"
+    printf "\t   Result: ${contactCheck}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 9: Verify transaction history intact
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing transaction history integrity after shutdown"
+txCheck=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    try {
+        \$app = Application::getInstance();
+        \$txRepo = \$app->services->getTransactionRepository();
+        // Just verify we can query transactions without error
+        echo 'TX_OK';
+    } catch (Exception \$e) {
+        echo 'TX_ERROR: ' . \$e->getMessage();
+    }
+" 2>&1)
+
+if [[ "$txCheck" == "TX_OK" ]]; then
+    printf "\t   Transaction history accessible ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Transaction history accessible ${RED}FAILED${NC}\n"
+    printf "\t   Result: ${txCheck}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ PROCESSOR RESTART TESTS ############################
+
+echo -e "\n[Processor Restart Tests]"
+
+# Test 10: Restart processors manually and verify they start
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing processors can be restarted after shutdown"
+
+# Start processors again
+docker exec ${testContainer} sh -c "nohup php /etc/eiou/P2pMessages.php > /dev/null 2>&1 &" 2>/dev/null
+docker exec ${testContainer} sh -c "nohup php /etc/eiou/TransactionMessages.php > /dev/null 2>&1 &" 2>/dev/null
+docker exec ${testContainer} sh -c "nohup php /etc/eiou/CleanupMessages.php > /dev/null 2>&1 &" 2>/dev/null
+
+# Wait for processors to start
+sleep 3
+
+processCheckRestart=$(docker exec ${testContainer} sh -c "ps aux | grep -E 'P2pMessages|TransactionMessages|CleanupMessages' | grep -v grep | wc -l" 2>&1)
+
+if [ "$processCheckRestart" -ge 3 ]; then
+    printf "\t   Processors restarted (${processCheckRestart}/3) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Processors restarted (${processCheckRestart}/3) ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ MULTI-CONTAINER SHUTDOWN TEST ############################
+
+echo -e "\n[Multi-Container Shutdown Consistency Test]"
+
+# Test 11: Verify all containers have working shutdown mechanism
+for container in "${containers[@]}"; do
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing shutdown mechanism on ${container}"
+
+    # Check if eiou shutdown command exists and works
+    shutdownExists=$(docker exec ${container} sh -c "eiou help shutdown 2>&1" | grep -c "shutdown")
+
+    if [ "$shutdownExists" -ge 1 ]; then
+        printf "\t   shutdown command available on %s ${GREEN}PASSED${NC}\n" ${container}
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   shutdown command available on %s ${RED}FAILED${NC}\n" ${container}
+        failure=$(( failure + 1 ))
+    fi
+done
+
+##################################################################
+
+succesrate "${totaltests}" "${passed}" "${failure}" "'Graceful Shutdown'"

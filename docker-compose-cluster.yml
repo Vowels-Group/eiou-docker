@@ -22,6 +22,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   # Level 1 nodes
   cluster-a1:
@@ -45,6 +46,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a2:
     build:
@@ -67,6 +69,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a3:
     build:
@@ -89,6 +92,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a4:
     build:
@@ -111,6 +115,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   # Level 2 nodes
   cluster-a11:
@@ -134,6 +139,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a12:
     build:
@@ -156,6 +162,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a21:
     build:
@@ -178,6 +185,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a22:
     build:
@@ -200,6 +208,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a31:
     build:
@@ -222,6 +231,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a32:
     build:
@@ -244,6 +254,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a41:
     build:
@@ -266,6 +277,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a42:
     build:
@@ -288,6 +300,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
 networks:
   eiou-network-compose:

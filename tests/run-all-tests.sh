@@ -212,7 +212,9 @@ curlErrorHandlingTest
 cliCommandsTest
 apiEndpointsTest
 syncTestSuite
+gracefulShutdownTest
 seedphraseTestSuite
+processorLockfileTest
 "
 
 # Run each test in order
