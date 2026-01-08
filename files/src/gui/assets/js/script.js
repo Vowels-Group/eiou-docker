@@ -1461,8 +1461,8 @@ function fetchDebugReport(callback) {
     var description = descriptionEl ? descriptionEl.value : '';
     var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
 
-    // Show loading state
-    showToast('Generating Report', 'Collecting debug information...', 'info');
+    // Show loading state (full reports include complete logs and may take longer over Tor)
+    showToast('Generating Report', 'Collecting full debug logs. This may take a moment over Tor...', 'info');
 
     // Create form data for POST request
     var formData = new FormData();
@@ -1471,11 +1471,12 @@ function fetchDebugReport(callback) {
     formData.append('description', description);
 
     // Fetch debug data via AJAX (Tor Browser compatible XMLHttpRequest)
+    // Note: Full debug reports can be several MB, requiring longer timeout over Tor
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
-    xhr.timeout = 60000; // 60 seconds for Tor compatibility
+    xhr.timeout = 180000; // 3 minutes for full debug report download over Tor
     xhr.ontimeout = function() {
-        showToast('Error', 'Request timed out. Tor connections can be slow - please try again.', 'error');
+        showToast('Error', 'Request timed out. Full debug reports can be large - please try again or check your Tor connection.', 'error');
     };
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
