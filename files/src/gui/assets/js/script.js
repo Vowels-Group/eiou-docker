@@ -1454,29 +1454,42 @@ function clearDebugSearch(inputId, containerId) {
 var lastDebugReport = null;
 var lastDebugFilename = null;
 
-// Fetch debug report data from server (shared by download and email functions)
-function fetchDebugReport(callback) {
+// Fetch debug report data from server (shared by download functions)
+// reportMode: 'full' for complete logs, 'limited' for GUI-displayed data
+function fetchDebugReport(callback, reportMode) {
+    reportMode = reportMode || 'full';
+    var isFullReport = (reportMode === 'full');
+
     var descriptionEl = document.getElementById('debugDescription');
     var csrfTokenEl = document.getElementById('debugCsrfToken');
     var description = descriptionEl ? descriptionEl.value : '';
     var csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
 
-    // Show loading state (full reports include complete logs and may take longer over Tor)
-    showToast('Generating Report', 'Collecting full debug logs. This may take a moment over Tor...', 'info');
+    // Show loading state based on report type
+    if (isFullReport) {
+        showToast('Generating Full Report', 'Collecting complete debug logs. This may take a moment over Tor...', 'info');
+    } else {
+        showToast('Generating Limited Report', 'Collecting recent debug logs...', 'info');
+    }
 
     // Create form data for POST request
     var formData = new FormData();
     formData.append('action', 'getDebugReportJson');
     formData.append('csrf_token', csrfToken);
     formData.append('description', description);
+    formData.append('report_mode', reportMode);
 
     // Fetch debug data via AJAX (Tor Browser compatible XMLHttpRequest)
-    // Note: Full debug reports can be several MB, requiring longer timeout over Tor
+    // Full reports need longer timeout; limited reports are faster
     var xhr = new XMLHttpRequest();
     xhr.open('POST', window.location.pathname, true);
-    xhr.timeout = 180000; // 3 minutes for full debug report download over Tor
+    xhr.timeout = isFullReport ? 180000 : 60000; // 3 minutes for full, 1 minute for limited
     xhr.ontimeout = function() {
-        showToast('Error', 'Request timed out. Full debug reports can be large - please try again or check your Tor connection.', 'error');
+        if (isFullReport) {
+            showToast('Error', 'Request timed out. Full debug reports can be large - please try again or check your Tor connection.', 'error');
+        } else {
+            showToast('Error', 'Request timed out. Please try again.', 'error');
+        }
     };
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
@@ -1524,17 +1537,33 @@ function fetchDebugReport(callback) {
     xhr.send(formData);
 }
 
-// Download debug report and show success message
-function emailDebugReport() {
+// Download full debug report (complete logs)
+function downloadFullDebugReport() {
     fetchDebugReport(function(jsonData, filename, description) {
-        downloadDebugFile(jsonData, filename);
-        showToast('Success', 'Debug report downloaded: ' + filename, 'success');
-    });
+        // Add '-full' suffix to filename
+        var fullFilename = filename.replace('.json', '-full.json');
+        downloadDebugFile(jsonData, fullFilename);
+        showToast('Success', 'Full debug report downloaded: ' + fullFilename, 'success');
+    }, 'full');
 }
 
-// Legacy function name for backwards compatibility
+// Download limited debug report (same as GUI display)
+function downloadLimitedDebugReport() {
+    fetchDebugReport(function(jsonData, filename, description) {
+        // Add '-limited' suffix to filename
+        var limitedFilename = filename.replace('.json', '-limited.json');
+        downloadDebugFile(jsonData, limitedFilename);
+        showToast('Success', 'Limited debug report downloaded: ' + limitedFilename, 'success');
+    }, 'limited');
+}
+
+// Legacy function names for backwards compatibility
+function emailDebugReport() {
+    downloadFullDebugReport();
+}
+
 function sendDebugReport() {
-    emailDebugReport();
+    downloadFullDebugReport();
 }
 
 // Download debug file (Tor Browser compatible - uses Blob and createObjectURL)
