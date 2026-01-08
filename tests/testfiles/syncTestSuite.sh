@@ -629,14 +629,25 @@ docker exec ${sender} php -r "
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\");
 " 2>/dev/null
 
-# Send new transaction (triggers resync)
+# Send new transaction (triggers resync due to previous_txid mismatch)
 docker exec ${sender} eiou send ${receiverAddress} 10 USD "cycle-test-3-${timestamp2}" 2>&1 > /dev/null
 sleep 2
+# Sender processes outgoing
 docker exec ${sender} eiou out 2>&1 > /dev/null
 sleep 3
+# Receiver processes incoming - may detect mismatch and request sync
+docker exec ${receiver} eiou in 2>&1 > /dev/null
+sleep 2
+# Receiver sends sync request/response
+docker exec ${receiver} eiou out 2>&1 > /dev/null
+sleep 3
+# Sender receives sync data
+docker exec ${sender} eiou in 2>&1 > /dev/null
+sleep 3
+# Additional round to ensure full sync
 docker exec ${sender} eiou out 2>&1 > /dev/null
 sleep 2
-docker exec ${receiver} eiou in 2>&1 > /dev/null
+docker exec ${sender} eiou in 2>&1 > /dev/null
 sleep 2
 
 countAfterCycle=$(docker exec ${sender} php -r "
