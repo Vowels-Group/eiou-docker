@@ -116,6 +116,31 @@ class DebugRepository extends AbstractRepository {
     }
 
     /**
+     * Get all debug entries (for debug report downloads)
+     * Unlike getRecentDebugEntries, this retrieves all entries without limit
+     *
+     * @param int $maxEntries Maximum entries to prevent memory issues (default 10000)
+     * @return array
+     */
+    public function getAllDebugEntries(int $maxEntries = 10000): array {
+        if (!$this->getPdo()) {
+            return [];
+        }
+
+        $query = "SELECT * FROM {$this->tableName} ORDER BY timestamp DESC LIMIT :limit";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':limit', $maxEntries, PDO::PARAM_INT);
+
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to fetch all debug entries: ", $e);
+            return [];
+        }
+    }
+
+    /**
      * Get debug entry count
      *
      * @return int
