@@ -505,7 +505,9 @@ class TransactionService {
                                 if ($echo) {
                                     echo $this->transactionPayload->buildAcceptance($request);
                                 }
-                                return true;
+                                // Return false to prevent processTransaction from being called
+                                // The transaction has already been updated in the database
+                                return false;
                             }
                         } else {
                             SecureLogger::warning("Chain conflict resolution rejected - invalid signature", [
