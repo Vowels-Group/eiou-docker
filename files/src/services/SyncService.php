@@ -437,7 +437,11 @@ class SyncService {
                 }
 
                 // Check for chain conflict: do we have a different transaction with the same previous_txid?
+                // When detected, we log it but do NOT modify any previous_txid values.
+                // Both transactions remain with their original previous_txid to preserve signatures.
+                // Chain ordering is determined by lexicographic txid comparison at query time.
                 $remotePreviousTxid = $tx['previous_txid'] ?? null;
+
                 if ($remotePreviousTxid !== null) {
                     $localConflict = $this->transactionRepository->getLocalTransactionByPreviousTxid(
                         $remotePreviousTxid,
@@ -447,22 +451,15 @@ class SyncService {
 
                     if ($localConflict !== null && $localConflict['txid'] !== $tx['txid']) {
                         // Chain conflict detected! Two transactions claim the same previous_txid
+                        // This happens when both parties create transactions simultaneously
                         $conflictResult = $this->resolveChainConflict($localConflict, $tx);
 
                         if ($conflictResult['resolved']) {
                             $conflictsResolved++;
-                            output("Chain conflict resolved: local={$localConflict['txid']}, remote={$tx['txid']}, winner={$conflictResult['winner']}", 'SILENT');
-
-                            // If remote transaction won, update the previous_txid of the incoming transaction
-                            // to point correctly (it already does, so no change needed for the remote tx)
-                            // If local transaction won, update the remote transaction's previous_txid
-                            // before inserting (to point to the local winner)
-                            if ($conflictResult['winner'] === 'local') {
-                                // Remote transaction loses - update its previous_txid to point to local winner
-                                $tx['previous_txid'] = $localConflict['txid'];
-                            }
-                            // If remote won, we need to update our local transaction to point to remote
-                            // This is done after we insert the remote transaction
+                            output("Chain conflict detected and logged: local={$localConflict['txid']}, remote={$tx['txid']}, winner={$conflictResult['winner']}", 'SILENT');
+                            // NOTE: We do NOT modify previous_txid values.
+                            // Both transactions keep their original values for signature validity.
+                            // The winner/loser information is for logging only.
                         } else {
                             SecureLogger::warning("Failed to resolve chain conflict", [
                                 'local_txid' => $localConflict['txid'],
@@ -474,6 +471,7 @@ class SyncService {
                 }
 
                 // Verify transaction signature before inserting
+                // CRITICAL: Verify with ORIGINAL previous_txid since that's what was signed
                 // CRITICAL: If signature verification fails, STOP syncing immediately.
                 // The failing transaction and all subsequent transactions are NOT inserted.
                 // This is a security measure to prevent insertion of forged transactions.
@@ -526,6 +524,10 @@ class SyncService {
                 }
 
                 // Insert the missing transaction (only reached if signature is valid)
+                // IMPORTANT: Always insert with ORIGINAL previous_txid to preserve signature validity.
+                // When there's a chain conflict (two transactions with same previous_txid),
+                // both are stored with their original values. Chain ordering is handled at query
+                // time using lexicographic txid comparison - lower txid comes first in the chain.
                 $insertData = [
                     'senderAddress' => $tx['sender_address'],
                     'senderPublicKey' => $tx['sender_public_key'],
@@ -534,7 +536,7 @@ class SyncService {
                     'amount' => $tx['amount'],
                     'currency' => $tx['currency'],
                     'txid' => $tx['txid'],
-                    'previousTxid' => $tx['previous_txid'] ?? null,
+                    'previousTxid' => $tx['previous_txid'] ?? null,  // Keep original for signature validity
                     'memo' => $tx['memo'] ?? 'standard',
                     'description' => $tx['description'] ?? null,
                     'status' => Constants::STATUS_COMPLETED,
@@ -551,25 +553,11 @@ class SyncService {
                 $this->transactionRepository->insertTransaction($insertData, $type);
                 $syncedCount++;
 
-                // After inserting, check if we need to update local transactions that lost conflict
-                // If remote transaction won the conflict, update our local loser to point to remote winner
-                if ($remotePreviousTxid !== null) {
-                    $localConflict = $this->transactionRepository->getLocalTransactionByPreviousTxid(
-                        $remotePreviousTxid,
-                        $userPubkeyHash,
-                        $contactPubkeyHash
-                    );
-                    // Re-check: if local tx still points to same prev_txid and remote tx won
-                    if ($localConflict !== null && $localConflict['txid'] !== $tx['txid']) {
-                        // Determine winner again
-                        if (strcmp($tx['txid'], $localConflict['txid']) < 0) {
-                            // Remote transaction has lower txid, it wins
-                            // Update local transaction to point to remote as its new previous
-                            $this->transactionRepository->updatePreviousTxid($localConflict['txid'], $tx['txid']);
-                            output("Updated local transaction {$localConflict['txid']} to chain after {$tx['txid']}", 'SILENT');
-                        }
-                    }
-                }
+                // NOTE: We intentionally do NOT modify any previous_txid values after insert.
+                // Modifying previous_txid would break signature verification when syncing to
+                // other nodes. When a chain conflict occurs (two transactions with same
+                // previous_txid), both transactions remain with their original values.
+                // Chain ordering is determined by lexicographic txid comparison at query time.
             }
 
             $result['success'] = true;

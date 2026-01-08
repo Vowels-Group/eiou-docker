@@ -1242,6 +1242,8 @@ fi
 echo -e "\n[9.5 Conflict Detection in Sync Flow Test]"
 
 # Test: Verify syncTransactionChain includes conflict detection logic
+# NOTE: Conflict detection logs conflicts but does NOT update previous_txid values
+# to preserve transaction signature validity during sync.
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing conflict detection in syncTransactionChain"
 
@@ -1261,17 +1263,17 @@ conflictDetectionFlowResult=$(docker exec ${sender} php -r "
     \$source = implode('', array_slice(\$lines, \$startLine - 1, \$endLine - \$startLine + 1));
 
     // Check for key conflict detection components
+    // NOTE: We detect and resolve conflicts but do NOT update previous_txid
+    // to preserve signature validity. Both transactions keep original values.
     \$hasConflictDetection = strpos(\$source, 'getLocalTransactionByPreviousTxid') !== false;
     \$hasConflictResolution = strpos(\$source, 'resolveChainConflict') !== false;
-    \$hasLocalUpdate = strpos(\$source, 'updatePreviousTxid') !== false;
 
-    if (\$hasConflictDetection && \$hasConflictResolution && \$hasLocalUpdate) {
+    if (\$hasConflictDetection && \$hasConflictResolution) {
         echo 'CONFLICT_DETECTION_COMPLETE';
     } else {
         echo 'CONFLICT_DETECTION_INCOMPLETE:' .
              'detect=' . (\$hasConflictDetection ? 'yes' : 'no') . ',' .
-             'resolve=' . (\$hasConflictResolution ? 'yes' : 'no') . ',' .
-             'update=' . (\$hasLocalUpdate ? 'yes' : 'no');
+             'resolve=' . (\$hasConflictResolution ? 'yes' : 'no');
     }
 " 2>/dev/null || echo "ERROR")
 
