@@ -380,8 +380,47 @@ class SettingsController
     }
 
     /**
+     * Read full log file contents with size limit
+     * Returns entire file content up to maxSize bytes
+     *
+     * @param string $filePath Path to log file
+     * @param int $maxSize Maximum bytes to read (default 5MB)
+     * @return string File contents or empty string if not readable
+     */
+    private function readFullLogFile(string $filePath, int $maxSize = 5242880): string {
+        if (!file_exists($filePath) || !is_readable($filePath)) {
+            return '';
+        }
+
+        $fileSize = filesize($filePath);
+        if ($fileSize === 0) {
+            return '';
+        }
+
+        // If file is within size limit, read entire file
+        if ($fileSize <= $maxSize) {
+            return file_get_contents($filePath) ?: '';
+        }
+
+        // File exceeds limit - read the last maxSize bytes (most recent logs)
+        $content = file_get_contents($filePath, false, null, $fileSize - $maxSize, $maxSize);
+        if ($content === false) {
+            return '';
+        }
+
+        // Find first newline to start at a complete line
+        $firstNewline = strpos($content, "\n");
+        if ($firstNewline !== false && $firstNewline < 1000) {
+            $content = substr($content, $firstNewline + 1);
+        }
+
+        return "[TRUNCATED - Showing last " . round($maxSize / 1024 / 1024, 1) . "MB of " . round($fileSize / 1024 / 1024, 1) . "MB]\n\n" . $content;
+    }
+
+    /**
      * Handle get debug report JSON action (AJAX)
      * Returns JSON debug data for client-side download
+     * Supports both full logs (default) and limited logs (same as GUI display)
      *
      * @return void
      */
@@ -393,12 +432,22 @@ class SettingsController
         require_once __DIR__ . '/../../utils/Security.php';
 
         $description = Security::sanitizeInput($_POST['description'] ?? '');
+        // Check if limited mode requested (same data as GUI display)
+        $reportMode = Security::sanitizeInput($_POST['report_mode'] ?? 'full');
+        $isFullReport = ($reportMode !== 'limited');
 
         try {
-            // Collect all debug information
+            // Collect debug information based on mode
             require_once __DIR__ . '/../../database/DebugRepository.php';
             $debugRepo = new DebugRepository();
-            $debugEntries = $debugRepo->getRecentDebugEntries(100);
+
+            if ($isFullReport) {
+                // Full mode: get complete debug history
+                $debugEntries = $debugRepo->getAllDebugEntries();
+            } else {
+                // Limited mode: same as GUI display (100 entries)
+                $debugEntries = $debugRepo->getRecentDebugEntries(100);
+            }
 
             // Collect system info
             $systemInfo = [
@@ -494,38 +543,51 @@ class SettingsController
                 }
             }
 
-            // Collect PHP error log (last 50 lines)
+            // Collect log files based on report mode
             $phpLogContent = '';
             $phpLogPaths = ['/var/log/php_errors.log', '/var/log/eiou/eiou-php-error.log'];
-            foreach ($phpLogPaths as $logPath) {
-                if (file_exists($logPath) && is_readable($logPath)) {
-                    $phpLogContent = shell_exec("tail -50 " . escapeshellarg($logPath));
-                    break;
+
+            if ($isFullReport) {
+                // Full mode: read entire log files (up to 5MB each)
+                foreach ($phpLogPaths as $logPath) {
+                    $content = $this->readFullLogFile($logPath);
+                    if (!empty($content)) {
+                        $phpLogContent = $content;
+                        break;
+                    }
+                }
+                $apacheLogContent = $this->readFullLogFile('/var/log/apache2/error.log');
+                $eiouLogContent = $this->readFullLogFile('/var/log/eiou/app.log');
+            } else {
+                // Limited mode: same as GUI display (last 50 lines)
+                foreach ($phpLogPaths as $logPath) {
+                    if (file_exists($logPath) && is_readable($logPath)) {
+                        $phpLogContent = shell_exec("tail -50 " . escapeshellarg($logPath));
+                        break;
+                    }
+                }
+                $apacheLogPath = '/var/log/apache2/error.log';
+                $apacheLogContent = '';
+                if (file_exists($apacheLogPath) && is_readable($apacheLogPath)) {
+                    $apacheLogContent = shell_exec("tail -50 " . escapeshellarg($apacheLogPath));
+                }
+                $eiouLogPath = '/var/log/eiou/app.log';
+                $eiouLogContent = '';
+                if (file_exists($eiouLogPath) && is_readable($eiouLogPath)) {
+                    $eiouLogContent = shell_exec("tail -50 " . escapeshellarg($eiouLogPath));
                 }
             }
 
-            // Collect Apache error log (last 50 lines)
-            $apacheLogContent = '';
-            $apacheLogPath = '/var/log/apache2/error.log';
-            if (file_exists($apacheLogPath) && is_readable($apacheLogPath)) {
-                $apacheLogContent = shell_exec("tail -50 " . escapeshellarg($apacheLogPath));
-            }
-
-            // Collect EIOU app log (last 50 lines)
-            $eiouLogContent = '';
-            $eiouLogPath = '/var/log/eiou/app.log';
-            if (file_exists($eiouLogPath) && is_readable($eiouLogPath)) {
-                $eiouLogContent = shell_exec("tail -50 " . escapeshellarg($eiouLogPath));
-            }
-
-            // Build report
+            // Build report with metadata about log completeness
             $report = [
                 'description' => $description,
                 'system_info' => $systemInfo,
                 'debug_entries' => $debugEntries,
+                'debug_entries_count' => count($debugEntries),
                 'php_errors' => $phpLogContent,
                 'apache_errors' => $apacheLogContent,
-                'eiou_app_log' => $eiouLogContent
+                'eiou_app_log' => $eiouLogContent,
+                'report_type' => $isFullReport ? 'full' : 'limited'
             ];
 
             // Sanitize log content to ensure valid UTF-8

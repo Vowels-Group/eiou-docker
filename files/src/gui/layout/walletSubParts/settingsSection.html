@@ -425,18 +425,25 @@
     <div class="debug-report-section">
         <h4><i class="fas fa-bug"></i> Debug Report</h4>
         <p style="color: #6c757d; font-size: 0.9rem;">
-            Generate a debug report to help troubleshoot issues. You can download the report or email it to support.
+            Generate a debug report to help troubleshoot issues. Choose between a quick limited report or a full comprehensive report.
         </p>
         <div class="form-group" style="margin-bottom: 1rem;">
             <label for="debugDescription">Issue Description (optional):</label>
             <textarea id="debugDescription" rows="3" placeholder="Describe the issue you're experiencing..." style="width: 100%; padding: 0.8rem; border: 1px solid #ced4da; border-radius: 4px; font-size: 1rem;"></textarea>
         </div>
         <input type="hidden" id="debugCsrfToken" value="<?php echo htmlspecialchars($csrfToken); ?>">
-        <button type="button" class="btn btn-info" onclick="emailDebugReport()">
-            <i class="fas fa-download"></i> Download Report
-        </button>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary" onclick="downloadLimitedDebugReport()" title="Quick download - same data shown in GUI above">
+                <i class="fas fa-download"></i> Limited Report
+            </button>
+            <button type="button" class="btn btn-info" onclick="downloadFullDebugReport()" title="Complete logs - may take longer over Tor">
+                <i class="fas fa-file-archive"></i> Full Report
+            </button>
+        </div>
         <p style="color: #6c757d; font-size: 0.85rem; margin-top: 0.75rem;">
-            <i class="fas fa-info-circle"></i> Downloads the debug file. Please email it to
+            <i class="fas fa-info-circle"></i> <strong>Limited:</strong> Quick download with recent logs (same as displayed above).<br>
+            <i class="fas fa-info-circle"></i> <strong>Full:</strong> Complete log history for thorough debugging (larger file, slower over Tor).<br>
+            Please email the report to
             <span style="font-family: monospace; background: #17a2b8; color: #fff; padding: 0.2rem 0.5rem; border-radius: 4px; cursor: pointer;" onclick="copyToClipboard('dockersupport@eiou.org')" title="Click to copy">dockersupport@eiou.org <i class="fas fa-copy" style="font-size: 0.75rem; margin-left: 0.25rem;"></i></span>
         </p>
     </div>
