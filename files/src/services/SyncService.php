@@ -586,7 +586,7 @@ class SyncService {
                 }
 
                 // Include necessary fields for security and signature verification
-                $filteredTransactions[] = [
+                $txData = [
                     'txid' => $tx['txid'],
                     'previous_txid' => $tx['previous_txid'],
                     'sender_address' => $tx['sender_address'],
@@ -596,7 +596,6 @@ class SyncService {
                     'amount' => $tx['amount'],
                     'currency' => $tx['currency'],
                     'memo' => $tx['memo'],
-                    'description' => $tx['description'] ?? null,
                     'timestamp' => $tx['timestamp'],
                     'time' => $tx['time'] ?? null,
                     'status' => $tx['status'],
@@ -604,6 +603,19 @@ class SyncService {
                     'sender_signature' => $tx['sender_signature'] ?? null,
                     'signature_nonce' => $tx['signature_nonce'] ?? null
                 ];
+
+                // Privacy: Only include description for contact or standard (direct) transactions
+                // P2P transactions (memo is a hash) should NOT have descriptions shared during sync
+                // as the description is only meant for the end recipient, not intermediaries
+                $memo = $tx['memo'] ?? '';
+                if ($memo === 'contact' || $memo === 'standard') {
+                    $txData['description'] = $tx['description'] ?? null;
+                } else {
+                    // For P2P transactions, explicitly set description to null
+                    $txData['description'] = null;
+                }
+
+                $filteredTransactions[] = $txData;
             }
 
             // Get latest txid from non-cancelled transactions
