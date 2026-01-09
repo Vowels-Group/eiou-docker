@@ -29,6 +29,16 @@ failure=0
 testContainer="${containers[0]}"
 
 ################################################################################
+#                    PREREQUISITE VALIDATION
+################################################################################
+
+# Use shared validation function from testHelpers.sh
+if ! validate_test_prerequisites "seedphraseTestSuite"; then
+    succesrate "0" "0" "0" "'seedphrase test suite'"
+    return 1
+fi
+
+################################################################################
 #                    PART 1: SEED PHRASE RESTORE TEST
 ################################################################################
 
@@ -88,9 +98,16 @@ if [[ "$originalTorAddress" != "ERROR_NO_TOR_ADDRESS" ]] && [[ -n "$originalTorA
         passed=$(( passed + 1 ))
     fi
 else
-    printf "\t   Original Tor address retrieval ${RED}FAILED${NC}\n"
-    printf "\t   Could not retrieve original Tor address\n"
-    failure=$(( failure + 1 ))
+    # In HTTP mode, Tor address may not be set - this is expected behavior
+    if [[ "$TOR_AVAILABLE" == "false" ]]; then
+        printf "\t   Original Tor address not available (HTTP mode) ${YELLOW}SKIPPED${NC}\n"
+        passed=$(( passed + 1 ))
+        originalTorAddress=""
+    else
+        printf "\t   Original Tor address retrieval ${RED}FAILED${NC}\n"
+        printf "\t   Could not retrieve original Tor address\n"
+        failure=$(( failure + 1 ))
+    fi
 fi
 
 ############################ VERIFY ORIGINAL TOR KEY FILES ############################
@@ -98,32 +115,9 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 1.3: Verifying original Tor hidden service key files exist"
 
-# Check for Tor hidden service files
-torSecretKeyExists=$(docker exec ${testContainer} test -f ${TOR_SECRET_KEY} && echo "EXISTS" || echo "NOT_FOUND")
-torPublicKeyExists=$(docker exec ${testContainer} test -f ${TOR_PUBLIC_KEY} && echo "EXISTS" || echo "NOT_FOUND")
-torHostnameExists=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "EXISTS" || echo "NOT_FOUND")
-
-if [[ "$torSecretKeyExists" == "EXISTS" ]] && [[ "$torPublicKeyExists" == "EXISTS" ]] && [[ "$torHostnameExists" == "EXISTS" ]]; then
-    # Verify file sizes are correct
-    secretKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_SECRET_KEY} 2>/dev/null)
-    publicKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_PUBLIC_KEY} 2>/dev/null)
-
-    # Secret key should be 96 bytes (32-byte header + 64-byte key)
-    # Public key should be 64 bytes (32-byte header + 32-byte key)
-    if [[ "$secretKeySize" -eq 96 ]] && [[ "$publicKeySize" -eq 64 ]]; then
-        printf "\t   Tor hidden service key files verified ${GREEN}PASSED${NC}\n"
-        printf "\t   Secret key: ${secretKeySize} bytes, Public key: ${publicKeySize} bytes\n"
-        passed=$(( passed + 1 ))
-    else
-        printf "\t   Tor key files exist but have unexpected sizes ${YELLOW}WARNING${NC}\n"
-        printf "\t   Secret key: ${secretKeySize} bytes (expected 96), Public key: ${publicKeySize} bytes (expected 64)\n"
-        passed=$(( passed + 1 ))
-    fi
-else
-    printf "\t   Tor hidden service key files ${RED}FAILED${NC}\n"
-    printf "\t   Secret: ${torSecretKeyExists}, Public: ${torPublicKeyExists}, Hostname: ${torHostnameExists}\n"
-    failure=$(( failure + 1 ))
-fi
+# Use shared function to verify Tor key files
+torKeyResult=$(verify_tor_key_files "${testContainer}")
+handle_tor_key_result "$torKeyResult" "Tor hidden service key files" "${testContainer}"
 
 ############################ DECRYPT MNEMONIC ############################
 
@@ -304,51 +298,36 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 1.10: Verifying restored Tor hidden service key files"
 
-# Check that Tor files were regenerated
-restoredTorSecretKeyExists=$(docker exec ${testContainer} test -f ${TOR_SECRET_KEY} && echo "EXISTS" || echo "NOT_FOUND")
-restoredTorPublicKeyExists=$(docker exec ${testContainer} test -f ${TOR_PUBLIC_KEY} && echo "EXISTS" || echo "NOT_FOUND")
-restoredTorHostnameExists=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "EXISTS" || echo "NOT_FOUND")
-
-if [[ "$restoredTorSecretKeyExists" == "EXISTS" ]] && [[ "$restoredTorPublicKeyExists" == "EXISTS" ]] && [[ "$restoredTorHostnameExists" == "EXISTS" ]]; then
-    # Verify file sizes are correct
-    restoredSecretKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_SECRET_KEY} 2>/dev/null)
-    restoredPublicKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_PUBLIC_KEY} 2>/dev/null)
-
-    if [[ "$restoredSecretKeySize" -eq 96 ]] && [[ "$restoredPublicKeySize" -eq 64 ]]; then
-        printf "\t   Restored Tor key files verified ${GREEN}PASSED${NC}\n"
-        printf "\t   Secret key: ${restoredSecretKeySize} bytes, Public key: ${restoredPublicKeySize} bytes\n"
-        passed=$(( passed + 1 ))
-    else
-        printf "\t   Restored Tor key files have unexpected sizes ${RED}FAILED${NC}\n"
-        printf "\t   Secret key: ${restoredSecretKeySize} bytes (expected 96), Public key: ${restoredPublicKeySize} bytes (expected 64)\n"
-        failure=$(( failure + 1 ))
-    fi
-else
-    printf "\t   Restored Tor key files ${RED}FAILED${NC} - files not regenerated\n"
-    printf "\t   Secret: ${restoredTorSecretKeyExists}, Public: ${restoredTorPublicKeyExists}, Hostname: ${restoredTorHostnameExists}\n"
-    failure=$(( failure + 1 ))
-fi
+# Use shared function to verify Tor key files
+restoredTorKeyResult=$(verify_tor_key_files "${testContainer}")
+handle_tor_key_result "$restoredTorKeyResult" "Restored Tor key files" "${testContainer}"
 
 ############################ COMPARE TOR ADDRESSES ############################
 
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 1.11: Comparing original and restored Tor addresses"
 
-echo -e "\n\t   ============================================"
-echo -e "\t   TOR ADDRESS COMPARISON RESULTS"
-echo -e "\t   ============================================"
-echo -e "\t   BEFORE: ${originalTorAddress}"
-echo -e "\t   AFTER:  ${restoredTorAddress}"
-echo -e "\t   ============================================\n"
-
-if [[ "$originalTorAddress" == "$restoredTorAddress" ]]; then
-    printf "\t   ${GREEN}TOR ADDRESSES MATCH - Deterministic Tor derivation working correctly!${NC}\n"
-    printf "\t   Tor address comparison ${GREEN}PASSED${NC}\n"
+# Skip Tor address comparison if Tor is not available
+if [[ "$TOR_AVAILABLE" == "false" ]]; then
+    printf "\t   Tor address comparison not applicable (HTTP mode) ${YELLOW}SKIPPED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   ${RED}TOR ADDRESSES DO NOT MATCH - Deterministic Tor derivation broken!${NC}\n"
-    printf "\t   Tor address comparison ${RED}FAILED${NC}\n"
-    failure=$(( failure + 1 ))
+    echo -e "\n\t   ============================================"
+    echo -e "\t   TOR ADDRESS COMPARISON RESULTS"
+    echo -e "\t   ============================================"
+    echo -e "\t   BEFORE: ${originalTorAddress}"
+    echo -e "\t   AFTER:  ${restoredTorAddress}"
+    echo -e "\t   ============================================\n"
+
+    if [[ "$originalTorAddress" == "$restoredTorAddress" ]]; then
+        printf "\t   ${GREEN}TOR ADDRESSES MATCH - Deterministic Tor derivation working correctly!${NC}\n"
+        printf "\t   Tor address comparison ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   ${RED}TOR ADDRESSES DO NOT MATCH - Deterministic Tor derivation broken!${NC}\n"
+        printf "\t   Tor address comparison ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
 fi
 
 ############################ RESTORE FROM SEED PHRASE NEW CONTAINER ############################
@@ -451,28 +430,34 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 1.16: Comparing all Tor addresses (original, restored, new container)"
 
-echo -e "\n\t   ============================================"
-echo -e "\t   FULL TOR ADDRESS COMPARISON"
-echo -e "\t   ============================================"
-echo -e "\t   ORIGINAL:      ${originalTorAddress}"
-echo -e "\t   RESTORED:      ${restoredTorAddress}"
-echo -e "\t   NEW CONTAINER: ${restoredTorAddressContainer}"
-echo -e "\t   ============================================\n"
-
-if [[ "$originalTorAddress" == "$restoredTorAddress" && "$originalTorAddress" == "$restoredTorAddressContainer" ]]; then
-    printf "\t   ${GREEN}ALL TOR ADDRESSES MATCH - Deterministic Tor derivation working correctly!${NC}\n"
-    printf "\t   Full Tor address comparison ${GREEN}PASSED${NC}\n"
+# Skip Tor address comparison if Tor is not available
+if [[ "$TOR_AVAILABLE" == "false" ]]; then
+    printf "\t   Full Tor address comparison not applicable (HTTP mode) ${YELLOW}SKIPPED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   ${RED}TOR ADDRESSES DO NOT MATCH - Deterministic Tor derivation broken!${NC}\n"
-    if [[ "$originalTorAddress" != "$restoredTorAddress" ]]; then
-        printf "\t   Original != Restored\n"
+    echo -e "\n\t   ============================================"
+    echo -e "\t   FULL TOR ADDRESS COMPARISON"
+    echo -e "\t   ============================================"
+    echo -e "\t   ORIGINAL:      ${originalTorAddress}"
+    echo -e "\t   RESTORED:      ${restoredTorAddress}"
+    echo -e "\t   NEW CONTAINER: ${restoredTorAddressContainer}"
+    echo -e "\t   ============================================\n"
+
+    if [[ "$originalTorAddress" == "$restoredTorAddress" && "$originalTorAddress" == "$restoredTorAddressContainer" ]]; then
+        printf "\t   ${GREEN}ALL TOR ADDRESSES MATCH - Deterministic Tor derivation working correctly!${NC}\n"
+        printf "\t   Full Tor address comparison ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   ${RED}TOR ADDRESSES DO NOT MATCH - Deterministic Tor derivation broken!${NC}\n"
+        if [[ "$originalTorAddress" != "$restoredTorAddress" ]]; then
+            printf "\t   Original != Restored\n"
+        fi
+        if [[ "$originalTorAddress" != "$restoredTorAddressContainer" ]]; then
+            printf "\t   Original != New Container\n"
+        fi
+        printf "\t   Full Tor address comparison ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
     fi
-    if [[ "$originalTorAddress" != "$restoredTorAddressContainer" ]]; then
-        printf "\t   Original != New Container\n"
-    fi
-    printf "\t   Full Tor address comparison ${RED}FAILED${NC}\n"
-    failure=$(( failure + 1 ))
 fi
 
 ############################ VERIFY WALLET CONFIG INTACT ############################
