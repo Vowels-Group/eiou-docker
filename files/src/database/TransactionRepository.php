@@ -2032,4 +2032,202 @@ class TransactionRepository extends AbstractRepository {
         $affectedRows = $this->update($updates, 'txid', $txid);
         return $affectedRows >= 0;
     }
+
+    /**
+     * Verify local chain integrity for a contact pair
+     *
+     * Checks that the transaction chain between two parties has no gaps.
+     * A gap exists when a transaction references a previous_txid that doesn't exist locally.
+     *
+     * Issue #426: This is used for sender-side chain verification before creating
+     * new transactions. If gaps are detected, a sync should be triggered before sending.
+     *
+     * @param string $userPublicKey User's public key
+     * @param string $contactPublicKey Contact's public key
+     * @return array Result with:
+     *   - valid: bool - Whether chain is complete
+     *   - has_transactions: bool - Whether any transactions exist
+     *   - transaction_count: int - Total transaction count
+     *   - gaps: array - List of missing previous_txid values
+     *   - broken_txids: array - Transactions with missing previous_txid
+     */
+    public function verifyChainIntegrity(string $userPublicKey, string $contactPublicKey): array {
+        $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
+
+        $result = [
+            'valid' => true,
+            'has_transactions' => false,
+            'transaction_count' => 0,
+            'gaps' => [],
+            'broken_txids' => []
+        ];
+
+        // Get all transactions between the two parties (excluding cancelled/rejected)
+        $query = "SELECT txid, previous_txid, status FROM {$this->tableName}
+                  WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
+                         OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))
+                  AND status NOT IN ('cancelled', 'rejected')
+                  ORDER BY COALESCE(time, 0) ASC, timestamp ASC";
+
+        $stmt = $this->execute($query, [
+            ':user_hash' => $userPubkeyHash,
+            ':contact_hash' => $contactPubkeyHash,
+            ':contact_hash2' => $contactPubkeyHash,
+            ':user_hash2' => $userPubkeyHash
+        ]);
+
+        if (!$stmt) {
+            return $result;
+        }
+
+        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $result['transaction_count'] = count($transactions);
+        $result['has_transactions'] = count($transactions) > 0;
+
+        if (count($transactions) === 0) {
+            return $result;
+        }
+
+        // Build a set of all txids for quick lookup
+        $txidSet = [];
+        foreach ($transactions as $tx) {
+            $txidSet[$tx['txid']] = true;
+        }
+
+        // Check each transaction's previous_txid exists (except first transaction which has null)
+        foreach ($transactions as $tx) {
+            $prevTxid = $tx['previous_txid'];
+
+            // Skip if previous_txid is null (first transaction in chain)
+            if ($prevTxid === null) {
+                continue;
+            }
+
+            // Check if previous_txid exists in our local chain
+            if (!isset($txidSet[$prevTxid])) {
+                $result['valid'] = false;
+                $result['gaps'][] = $prevTxid;
+                $result['broken_txids'][] = $tx['txid'];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get the full transaction chain between two parties for sync
+     *
+     * Returns all active transactions ordered from oldest to newest.
+     * Used for bidirectional sync negotiation (Issue #428).
+     *
+     * @param string $userPublicKey User's public key
+     * @param string $contactPublicKey Contact's public key
+     * @param string|null $afterTxid Only return transactions after this txid
+     * @return array List of transactions
+     */
+    public function getTransactionChain(string $userPublicKey, string $contactPublicKey, ?string $afterTxid = null): array {
+        $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
+
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
+                         OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))
+                  AND status NOT IN ('cancelled', 'rejected')";
+
+        $params = [
+            ':user_hash' => $userPubkeyHash,
+            ':contact_hash' => $contactPubkeyHash,
+            ':contact_hash2' => $contactPubkeyHash,
+            ':user_hash2' => $userPubkeyHash
+        ];
+
+        // If afterTxid specified, only get newer transactions
+        if ($afterTxid !== null) {
+            $query .= " AND (time, timestamp) > (
+                SELECT COALESCE(time, 0), timestamp FROM {$this->tableName} WHERE txid = :after_txid
+            )";
+            $params[':after_txid'] = $afterTxid;
+        }
+
+        $query .= " ORDER BY COALESCE(time, 0) ASC, timestamp ASC";
+
+        $stmt = $this->execute($query, $params);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get chain state summary for sync negotiation
+     *
+     * Returns a summary of the local chain state for bidirectional sync (Issue #428).
+     *
+     * @param string $userPublicKey User's public key
+     * @param string $contactPublicKey Contact's public key
+     * @return array Chain state summary
+     */
+    public function getChainStateSummary(string $userPublicKey, string $contactPublicKey): array {
+        $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $userPublicKey);
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
+
+        // Get count and oldest/newest txids
+        $query = "SELECT
+                    COUNT(*) as transaction_count,
+                    MIN(txid) as oldest_txid,
+                    MAX(txid) as newest_txid
+                  FROM {$this->tableName}
+                  WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
+                         OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))
+                  AND status NOT IN ('cancelled', 'rejected')";
+
+        $stmt = $this->execute($query, [
+            ':user_hash' => $userPubkeyHash,
+            ':contact_hash' => $contactPubkeyHash,
+            ':contact_hash2' => $contactPubkeyHash,
+            ':user_hash2' => $userPubkeyHash
+        ]);
+
+        if (!$stmt) {
+            return [
+                'transaction_count' => 0,
+                'oldest_txid' => null,
+                'newest_txid' => null,
+                'txid_list' => []
+            ];
+        }
+
+        $summary = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Get list of all txids for comparison
+        $txidQuery = "SELECT txid FROM {$this->tableName}
+                      WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
+                             OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))
+                      AND status NOT IN ('cancelled', 'rejected')
+                      ORDER BY COALESCE(time, 0) ASC, timestamp ASC";
+
+        $txidStmt = $this->execute($txidQuery, [
+            ':user_hash' => $userPubkeyHash,
+            ':contact_hash' => $contactPubkeyHash,
+            ':contact_hash2' => $contactPubkeyHash,
+            ':user_hash2' => $userPubkeyHash
+        ]);
+
+        $txidList = [];
+        if ($txidStmt) {
+            while ($row = $txidStmt->fetch(PDO::FETCH_ASSOC)) {
+                $txidList[] = $row['txid'];
+            }
+        }
+
+        return [
+            'transaction_count' => (int)$summary['transaction_count'],
+            'oldest_txid' => $summary['oldest_txid'],
+            'newest_txid' => $summary['newest_txid'],
+            'txid_list' => $txidList
+        ];
+    }
 }

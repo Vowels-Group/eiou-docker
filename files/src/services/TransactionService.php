@@ -180,6 +180,156 @@ class TransactionService {
     }
 
     /**
+     * @var SyncService|null Sync service for chain verification
+     */
+    private ?SyncService $syncService = null;
+
+    /**
+     * Set the sync service (for lazy initialization)
+     *
+     * @param SyncService $service Sync service
+     */
+    public function setSyncService(SyncService $service): void {
+        $this->syncService = $service;
+    }
+
+    /**
+     * @var array Per-contact send locks to serialize simultaneous sends (Issue #427)
+     */
+    private static array $contactSendLocks = [];
+
+    /**
+     * Acquire a lock for sending to a specific contact
+     *
+     * Issue #427: Prevents race conditions when sending multiple transactions
+     * simultaneously to the same contact. Uses file-based locking for persistence
+     * across request boundaries.
+     *
+     * @param string $contactPubkeyHash Hash of contact's public key
+     * @param int $timeout Maximum time to wait for lock (seconds)
+     * @return bool True if lock acquired, false if timeout
+     */
+    private function acquireContactSendLock(string $contactPubkeyHash, int $timeout = 30): bool {
+        $lockFile = sys_get_temp_dir() . '/eiou_send_lock_' . $contactPubkeyHash . '.lock';
+        $lockHandle = fopen($lockFile, 'c');
+
+        if (!$lockHandle) {
+            $this->secureLogger->warning("Failed to create lock file", [
+                'contact_hash' => substr($contactPubkeyHash, 0, 16),
+                'lock_file' => $lockFile
+            ]);
+            return false;
+        }
+
+        $startTime = time();
+        while (!flock($lockHandle, LOCK_EX | LOCK_NB)) {
+            if (time() - $startTime >= $timeout) {
+                fclose($lockHandle);
+                $this->secureLogger->warning("Timeout acquiring send lock", [
+                    'contact_hash' => substr($contactPubkeyHash, 0, 16),
+                    'timeout' => $timeout
+                ]);
+                return false;
+            }
+            usleep(100000); // Wait 100ms before retrying
+        }
+
+        // Store the handle for later release
+        self::$contactSendLocks[$contactPubkeyHash] = $lockHandle;
+        return true;
+    }
+
+    /**
+     * Release a contact send lock
+     *
+     * @param string $contactPubkeyHash Hash of contact's public key
+     */
+    private function releaseContactSendLock(string $contactPubkeyHash): void {
+        if (isset(self::$contactSendLocks[$contactPubkeyHash])) {
+            $lockHandle = self::$contactSendLocks[$contactPubkeyHash];
+            flock($lockHandle, LOCK_UN);
+            fclose($lockHandle);
+            unset(self::$contactSendLocks[$contactPubkeyHash]);
+        }
+    }
+
+    /**
+     * Verify sender's local chain integrity and sync if needed
+     *
+     * Issue #426: Before creating a new transaction, verify that the local
+     * transaction chain with the contact is complete. If gaps are detected,
+     * trigger a sync to repair the chain before sending.
+     *
+     * @param string $contactAddress Contact's address
+     * @param string $contactPublicKey Contact's public key
+     * @return array Result with:
+     *   - success: bool - Whether chain is ready for new transaction
+     *   - synced: bool - Whether a sync was performed
+     *   - error: string|null - Error message if failed
+     */
+    public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey): array {
+        $result = [
+            'success' => true,
+            'synced' => false,
+            'error' => null
+        ];
+
+        // Verify local chain integrity
+        $chainStatus = $this->transactionRepository->verifyChainIntegrity(
+            $this->currentUser->getPublicKey(),
+            $contactPublicKey
+        );
+
+        // If chain is valid or empty, we're good to go
+        if ($chainStatus['valid']) {
+            return $result;
+        }
+
+        // Chain has gaps - need to sync
+        output("Chain integrity check failed: " . count($chainStatus['gaps']) . " missing transactions. Triggering sync...", 'SILENT');
+
+        $this->secureLogger->info("Sender-side chain verification detected gaps, triggering sync", [
+            'contact_address' => $contactAddress,
+            'gap_count' => count($chainStatus['gaps']),
+            'transaction_count' => $chainStatus['transaction_count']
+        ]);
+
+        // Try to sync if sync service is available
+        if ($this->syncService === null) {
+            // Attempt to get sync service from Application if not set
+            try {
+                $app = Application::getInstance();
+                $this->syncService = $app->services->getSyncService();
+            } catch (\Exception $e) {
+                $result['success'] = false;
+                $result['error'] = 'Sync service not available to repair chain';
+                return $result;
+            }
+        }
+
+        // Perform sync to repair chain
+        $syncResult = $this->syncService->syncTransactionChain($contactAddress, $contactPublicKey);
+        $result['synced'] = true;
+
+        if (!$syncResult['success']) {
+            // Sync failed - check if chain is now valid anyway
+            $recheckStatus = $this->transactionRepository->verifyChainIntegrity(
+                $this->currentUser->getPublicKey(),
+                $contactPublicKey
+            );
+
+            if (!$recheckStatus['valid']) {
+                $result['success'] = false;
+                $result['error'] = 'Failed to repair transaction chain: ' . ($syncResult['error'] ?? 'unknown error');
+                return $result;
+            }
+        }
+
+        output("Chain sync completed. Chain is now valid.", 'SILENT');
+        return $result;
+    }
+
+    /**
      * Send a transaction message with optional delivery tracking
      *
      * Uses MessageDeliveryService.sendMessage() when available for reliable delivery
@@ -1225,6 +1375,9 @@ class TransactionService {
     /**
      * Send Direct eIOU
      *
+     * Issue #426: Verifies sender-side chain integrity before sending.
+     * Issue #427: Uses per-contact locking to serialize simultaneous sends.
+     *
      * @param array $request Request data
      * @param array $contactInfo Contact information
      * @param CliOutputManager|null $output Optional output manager for JSON support
@@ -1233,7 +1386,40 @@ class TransactionService {
     public function handleDirectRoute(array $request, $contactInfo, ?CliOutputManager $output = null): void{
         $output = $output ?? CliOutputManager::getInstance();
 
+        // Issue #427: Acquire per-contact lock to serialize simultaneous sends
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactInfo['receiverPublicKey']);
+        if (!$this->acquireContactSendLock($contactPubkeyHash)) {
+            $output->error(
+                "Cannot send transaction: Another transaction to this contact is in progress",
+                ErrorCodes::TRANSACTION_IN_PROGRESS ?? 'TRANSACTION_IN_PROGRESS',
+                429,
+                ['recipient' => $request[2] ?? null]
+            );
+            return;
+        }
+
         try {
+            // Determine transport type for chain verification
+            $transportIndex = $this->transportUtility->fallbackTransportType($request[2] ?? '', $contactInfo);
+            $contactAddress = $transportIndex !== null ? ($contactInfo[$transportIndex] ?? null) : null;
+
+            // Issue #426: Verify sender-side chain integrity before creating transaction
+            if ($contactAddress !== null && isset($contactInfo['receiverPublicKey'])) {
+                $chainVerification = $this->verifySenderChainAndSync($contactAddress, $contactInfo['receiverPublicKey']);
+                if (!$chainVerification['success']) {
+                    $output->error(
+                        "Cannot send transaction: " . ($chainVerification['error'] ?? 'Chain verification failed'),
+                        ErrorCodes::CHAIN_INTEGRITY_FAILED ?? 'CHAIN_INTEGRITY_FAILED',
+                        500,
+                        ['recipient' => $request[2] ?? null, 'synced' => $chainVerification['synced']]
+                    );
+                    return;
+                }
+                if ($chainVerification['synced']) {
+                    output("Chain was repaired via sync before sending", 'SILENT');
+                }
+            }
+
             // Data preparation for eIOU
             $data = $this->prepareStandardTransactionData($request, $contactInfo);
         } catch (\InvalidArgumentException $e) {
@@ -1245,6 +1431,9 @@ class TransactionService {
                 ['recipient' => $request[2] ?? null]
             );
             return;
+        } finally {
+            // Issue #427: Always release lock after operation completes
+            $this->releaseContactSendLock($contactPubkeyHash);
         }
 
         // Prepare transaction payload from data

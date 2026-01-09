@@ -410,4 +410,80 @@ class MessagePayload extends BasePayload
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
+
+    /**
+     * Build sync negotiation request payload
+     *
+     * Issue #428: Request bidirectional sync by sharing our txid list.
+     * The recipient will compare and return transactions we're missing.
+     *
+     * @param string $address The recipient's address
+     * @param string $recipientPublicKey The recipient's public key
+     * @param array $txidList Our local list of transaction IDs
+     * @return array The sync negotiation request payload
+     */
+    public function buildSyncNegotiationRequest(string $address, string $recipientPublicKey, array $txidList): array
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return [
+            'type' => 'message',
+            'typeMessage' => 'sync_negotiation',
+            'inquiry' => true,
+            'txid_list' => $txidList,
+            'message' => 'Bidirectional sync negotiation request',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+    }
+
+    /**
+     * Build sync negotiation response payload
+     *
+     * Issue #428: Respond to sync negotiation with our txid list
+     * and any transactions the requester is missing.
+     *
+     * @param string $address The requester's address
+     * @param array $txidList Our local list of transaction IDs
+     * @param array $transactions Transactions the requester is missing
+     * @return string JSON-encoded sync negotiation response payload
+     */
+    public function buildSyncNegotiationResponse(string $address, array $txidList, array $transactions): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return json_encode([
+            'type' => 'message',
+            'typeMessage' => 'sync_negotiation',
+            'inquiry' => false,
+            'status' => Constants::STATUS_ACCEPTED,
+            'txid_list' => $txidList,
+            'transactions' => $transactions,
+            'message' => 'Bidirectional sync negotiation response',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
+
+    /**
+     * Build sync negotiation rejection payload
+     *
+     * Issue #428: Reject sync negotiation request.
+     *
+     * @param string $address The requester's address
+     * @param string $reason The rejection reason
+     * @return string JSON-encoded rejection payload
+     */
+    public function buildSyncNegotiationRejection(string $address, string $reason): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return json_encode([
+            'type' => 'message',
+            'typeMessage' => 'sync_negotiation',
+            'inquiry' => false,
+            'status' => Constants::STATUS_REJECTED,
+            'reason' => $reason,
+            'message' => 'Sync negotiation rejected: ' . $reason,
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
+    }
 }
