@@ -32,42 +32,11 @@ testContainer="${containers[0]}"
 #                    PREREQUISITE VALIDATION
 ################################################################################
 
-# Validate that containers array is defined and non-empty
-if [[ -z "${containers[0]}" ]]; then
-    echo -e "${RED}ERROR: containers array is not defined or empty${NC}"
-    echo -e "${YELLOW}This test suite must be run after sourcing a build file (e.g., http4.sh)${NC}"
-    echo -e "${YELLOW}Example: . ./buildfiles/http4.sh && . ./testfiles/seedphraseTestSuite.sh${NC}"
+# Use shared validation function from testHelpers.sh
+if ! validate_test_prerequisites "seedphraseTestSuite"; then
     succesrate "0" "0" "0" "'seedphrase test suite'"
     return 1
 fi
-
-# Validate testContainer is set
-if [[ -z "${testContainer}" ]]; then
-    echo -e "${RED}ERROR: testContainer is not set${NC}"
-    succesrate "0" "0" "0" "'seedphrase test suite'"
-    return 1
-fi
-
-# Validate network is defined
-if [[ -z "${network}" ]]; then
-    echo -e "${RED}ERROR: network variable is not defined${NC}"
-    succesrate "0" "0" "0" "'seedphrase test suite'"
-    return 1
-fi
-
-# Verify the test container exists and is running
-if ! docker ps --format '{{.Names}}' | grep -q "^${testContainer}$"; then
-    echo -e "${RED}ERROR: Container '${testContainer}' is not running${NC}"
-    echo -e "${YELLOW}Available containers:${NC}"
-    docker ps --format '{{.Names}}' | sed 's/^/  - /'
-    succesrate "0" "0" "0" "'seedphrase test suite'"
-    return 1
-fi
-
-echo -e "${GREEN}Validation passed: Using container '${testContainer}' on network '${network}'${NC}\n"
-
-# Detect if Tor hidden service files exist (indicates Tor mode or HTTP with Tor enabled)
-TOR_AVAILABLE=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "true" || echo "false")
 
 ################################################################################
 #                    PART 1: SEED PHRASE RESTORE TEST

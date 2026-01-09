@@ -6,6 +6,59 @@
 # This library reduces code duplication by extracting common patterns
 ###################################################################################
 
+# ==================== Test Prerequisites Validation ====================
+
+# Validate prerequisites before running a test suite
+# Sets global variables: TOR_AVAILABLE, TOR_REQUIRED
+# Usage: validate_test_prerequisites <test_suite_name>
+# Returns: 0 on success, 1 on validation failure
+validate_test_prerequisites() {
+    local suite_name="${1:-test suite}"
+
+    # Validate that containers array is defined and non-empty
+    if [[ -z "${containers[0]}" ]]; then
+        echo -e "${RED}ERROR: containers array is not defined or empty${NC}"
+        echo -e "${YELLOW}This test suite must be run after sourcing a build file (e.g., http4.sh)${NC}"
+        echo -e "${YELLOW}Example: . ./buildfiles/http4.sh && . ./testfiles/${suite_name}.sh${NC}"
+        return 1
+    fi
+
+    # Validate network is defined
+    if [[ -z "${network}" ]]; then
+        echo -e "${RED}ERROR: network variable is not defined${NC}"
+        return 1
+    fi
+
+    # Verify the first container exists and is running
+    local testContainer="${containers[0]}"
+    if ! docker ps --format '{{.Names}}' | grep -q "^${testContainer}$"; then
+        echo -e "${RED}ERROR: Container '${testContainer}' is not running${NC}"
+        echo -e "${YELLOW}Available containers:${NC}"
+        docker ps --format '{{.Names}}' | sed 's/^/  - /'
+        return 1
+    fi
+
+    echo -e "${GREEN}Validation passed: Testing ${#containers[@]} containers on network '${network}'${NC}\n"
+
+    # Detect if Tor hidden service is available by checking if hostname file exists
+    TOR_AVAILABLE=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "true" || echo "false")
+
+    # Determine if we should fail on Tor unavailability
+    # In TOR mode (MODE="tor"), Tor must be available - failures are real failures
+    # In HTTP mode (MODE="http"), Tor is optional - skip with warning if unavailable
+    if [[ "$MODE" == "tor" ]]; then
+        TOR_REQUIRED="true"
+    else
+        TOR_REQUIRED="false"
+    fi
+
+    # Export for use in test suites
+    export TOR_AVAILABLE
+    export TOR_REQUIRED
+
+    return 0
+}
+
 # ==================== Container Selection ====================
 
 # Get first container pair for testing
