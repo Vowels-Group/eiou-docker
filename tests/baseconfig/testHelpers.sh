@@ -244,6 +244,82 @@ check_socks_listening() {
     docker exec $container sh -c 'ss -tlnp 2>/dev/null | grep 9050 || netstat -tlnp 2>/dev/null | grep 9050'
 }
 
+# Verify Tor hidden service key files exist and have correct sizes
+# Usage: verify_tor_key_files <container>
+# Returns: status string - "PASSED|secret_size|public_size", "SKIPPED", "WARNING|secret_size|public_size", "FAILED|details"
+# Uses global: TOR_AVAILABLE, TOR_REQUIRED, TOR_SECRET_KEY, TOR_PUBLIC_KEY, TOR_HOSTNAME
+verify_tor_key_files() {
+    local container="$1"
+
+    # Skip if Tor is not available and not required
+    if [[ "$TOR_AVAILABLE" == "false" ]] && [[ "$TOR_REQUIRED" != "true" ]]; then
+        echo "SKIPPED"
+        return 0
+    fi
+
+    # Check for Tor hidden service files
+    local secretKeyExists=$(docker exec ${container} test -f ${TOR_SECRET_KEY} && echo "EXISTS" || echo "NOT_FOUND")
+    local publicKeyExists=$(docker exec ${container} test -f ${TOR_PUBLIC_KEY} && echo "EXISTS" || echo "NOT_FOUND")
+    local hostnameExists=$(docker exec ${container} test -f ${TOR_HOSTNAME} && echo "EXISTS" || echo "NOT_FOUND")
+
+    if [[ "$secretKeyExists" == "EXISTS" ]] && [[ "$publicKeyExists" == "EXISTS" ]] && [[ "$hostnameExists" == "EXISTS" ]]; then
+        # Verify file sizes are correct
+        local secretKeySize=$(docker exec ${container} stat -c '%s' ${TOR_SECRET_KEY} 2>/dev/null)
+        local publicKeySize=$(docker exec ${container} stat -c '%s' ${TOR_PUBLIC_KEY} 2>/dev/null)
+
+        # Secret key should be 96 bytes (32-byte header + 64-byte key)
+        # Public key should be 64 bytes (32-byte header + 32-byte key)
+        if [[ "$secretKeySize" -eq 96 ]] && [[ "$publicKeySize" -eq 64 ]]; then
+            echo "PASSED|${secretKeySize}|${publicKeySize}"
+            return 0
+        else
+            echo "WARNING|${secretKeySize}|${publicKeySize}"
+            return 0
+        fi
+    else
+        echo "FAILED|Secret:${secretKeyExists}|Public:${publicKeyExists}|Hostname:${hostnameExists}"
+        return 1
+    fi
+}
+
+# Handle Tor key file verification result and print appropriate message
+# Usage: handle_tor_key_result <result> <label> <container>
+# Updates global: passed, failure
+handle_tor_key_result() {
+    local result="$1"
+    local label="$2"
+    local container="$3"
+
+    local status=$(echo "$result" | cut -d'|' -f1)
+
+    case "$status" in
+        "SKIPPED")
+            printf "\t   %s for %s ${YELLOW}SKIPPED${NC} (HTTP mode)\n" "$label" "$container"
+            passed=$(( passed + 1 ))
+            ;;
+        "PASSED")
+            local secretSize=$(echo "$result" | cut -d'|' -f2)
+            local publicSize=$(echo "$result" | cut -d'|' -f3)
+            printf "\t   %s verified ${GREEN}PASSED${NC}\n" "$label"
+            printf "\t   Secret key: ${secretSize} bytes, Public key: ${publicSize} bytes\n"
+            passed=$(( passed + 1 ))
+            ;;
+        "WARNING")
+            local secretSize=$(echo "$result" | cut -d'|' -f2)
+            local publicSize=$(echo "$result" | cut -d'|' -f3)
+            printf "\t   %s have unexpected sizes ${YELLOW}WARNING${NC}\n" "$label"
+            printf "\t   Secret key: ${secretSize} bytes (expected 96), Public key: ${publicSize} bytes (expected 64)\n"
+            passed=$(( passed + 1 ))
+            ;;
+        "FAILED")
+            local details=$(echo "$result" | cut -d'|' -f2-)
+            printf "\t   %s ${RED}FAILED${NC}\n" "$label"
+            printf "\t   ${details}\n"
+            failure=$(( failure + 1 ))
+            ;;
+    esac
+}
+
 # ==================== Chain Verification ====================
 
 # Get transaction chain info for debugging

@@ -115,38 +115,9 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 1.3: Verifying original Tor hidden service key files exist"
 
-# Skip Tor key file verification if Tor is not available
-if [[ "$TOR_AVAILABLE" == "false" ]]; then
-    printf "\t   Tor hidden service files not available (HTTP mode) ${YELLOW}SKIPPED${NC}\n"
-    passed=$(( passed + 1 ))
-else
-    # Check for Tor hidden service files
-    torSecretKeyExists=$(docker exec ${testContainer} test -f ${TOR_SECRET_KEY} && echo "EXISTS" || echo "NOT_FOUND")
-    torPublicKeyExists=$(docker exec ${testContainer} test -f ${TOR_PUBLIC_KEY} && echo "EXISTS" || echo "NOT_FOUND")
-    torHostnameExists=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "EXISTS" || echo "NOT_FOUND")
-
-    if [[ "$torSecretKeyExists" == "EXISTS" ]] && [[ "$torPublicKeyExists" == "EXISTS" ]] && [[ "$torHostnameExists" == "EXISTS" ]]; then
-        # Verify file sizes are correct
-        secretKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_SECRET_KEY} 2>/dev/null)
-        publicKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_PUBLIC_KEY} 2>/dev/null)
-
-        # Secret key should be 96 bytes (32-byte header + 64-byte key)
-        # Public key should be 64 bytes (32-byte header + 32-byte key)
-        if [[ "$secretKeySize" -eq 96 ]] && [[ "$publicKeySize" -eq 64 ]]; then
-            printf "\t   Tor hidden service key files verified ${GREEN}PASSED${NC}\n"
-            printf "\t   Secret key: ${secretKeySize} bytes, Public key: ${publicKeySize} bytes\n"
-            passed=$(( passed + 1 ))
-        else
-            printf "\t   Tor key files exist but have unexpected sizes ${YELLOW}WARNING${NC}\n"
-            printf "\t   Secret key: ${secretKeySize} bytes (expected 96), Public key: ${publicKeySize} bytes (expected 64)\n"
-            passed=$(( passed + 1 ))
-        fi
-    else
-        printf "\t   Tor hidden service key files ${RED}FAILED${NC}\n"
-        printf "\t   Secret: ${torSecretKeyExists}, Public: ${torPublicKeyExists}, Hostname: ${torHostnameExists}\n"
-        failure=$(( failure + 1 ))
-    fi
-fi
+# Use shared function to verify Tor key files
+torKeyResult=$(verify_tor_key_files "${testContainer}")
+handle_tor_key_result "$torKeyResult" "Tor hidden service key files" "${testContainer}"
 
 ############################ DECRYPT MNEMONIC ############################
 
@@ -327,36 +298,9 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 1.10: Verifying restored Tor hidden service key files"
 
-# Skip Tor key file verification if Tor is not available
-if [[ "$TOR_AVAILABLE" == "false" ]]; then
-    printf "\t   Tor hidden service files not available (HTTP mode) ${YELLOW}SKIPPED${NC}\n"
-    passed=$(( passed + 1 ))
-else
-    # Check that Tor files were regenerated
-    restoredTorSecretKeyExists=$(docker exec ${testContainer} test -f ${TOR_SECRET_KEY} && echo "EXISTS" || echo "NOT_FOUND")
-    restoredTorPublicKeyExists=$(docker exec ${testContainer} test -f ${TOR_PUBLIC_KEY} && echo "EXISTS" || echo "NOT_FOUND")
-    restoredTorHostnameExists=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "EXISTS" || echo "NOT_FOUND")
-
-    if [[ "$restoredTorSecretKeyExists" == "EXISTS" ]] && [[ "$restoredTorPublicKeyExists" == "EXISTS" ]] && [[ "$restoredTorHostnameExists" == "EXISTS" ]]; then
-        # Verify file sizes are correct
-        restoredSecretKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_SECRET_KEY} 2>/dev/null)
-        restoredPublicKeySize=$(docker exec ${testContainer} stat -c '%s' ${TOR_PUBLIC_KEY} 2>/dev/null)
-
-        if [[ "$restoredSecretKeySize" -eq 96 ]] && [[ "$restoredPublicKeySize" -eq 64 ]]; then
-            printf "\t   Restored Tor key files verified ${GREEN}PASSED${NC}\n"
-            printf "\t   Secret key: ${restoredSecretKeySize} bytes, Public key: ${restoredPublicKeySize} bytes\n"
-            passed=$(( passed + 1 ))
-        else
-            printf "\t   Restored Tor key files have unexpected sizes ${RED}FAILED${NC}\n"
-            printf "\t   Secret key: ${restoredSecretKeySize} bytes (expected 96), Public key: ${restoredPublicKeySize} bytes (expected 64)\n"
-            failure=$(( failure + 1 ))
-        fi
-    else
-        printf "\t   Restored Tor key files ${RED}FAILED${NC} - files not regenerated\n"
-        printf "\t   Secret: ${restoredTorSecretKeyExists}, Public: ${restoredTorPublicKeyExists}, Hostname: ${restoredTorHostnameExists}\n"
-        failure=$(( failure + 1 ))
-    fi
-fi
+# Use shared function to verify Tor key files
+restoredTorKeyResult=$(verify_tor_key_files "${testContainer}")
+handle_tor_key_result "$restoredTorKeyResult" "Restored Tor key files" "${testContainer}"
 
 ############################ COMPARE TOR ADDRESSES ############################
 
