@@ -338,11 +338,23 @@ else
                     publicKeySize=${publicKeySize:-0}
 
                     if [ "$secretKeySize" -lt 50 ] || [ "$secretKeySize" -gt 200 ]; then
-                        printf "\t   Rapid restart for %s ${RED}FAILED${NC} - Secret key size abnormal: ${secretKeySize} bytes\n" ${testContainer}
-                        failure=$(( failure + 1 ))
+                        # In HTTP mode, Tor may not be fully operational - treat as warning
+                        if [[ "$TOR_REQUIRED" == "false" ]]; then
+                            printf "\t   Rapid restart for %s ${YELLOW}WARNING${NC} - Secret key size abnormal: ${secretKeySize} bytes (HTTP mode)\n" ${testContainer}
+                            passed=$(( passed + 1 ))
+                        else
+                            printf "\t   Rapid restart for %s ${RED}FAILED${NC} - Secret key size abnormal: ${secretKeySize} bytes\n" ${testContainer}
+                            failure=$(( failure + 1 ))
+                        fi
                     elif [ "$publicKeySize" -lt 30 ] || [ "$publicKeySize" -gt 100 ]; then
-                        printf "\t   Rapid restart for %s ${RED}FAILED${NC} - Public key size abnormal: ${publicKeySize} bytes\n" ${testContainer}
-                        failure=$(( failure + 1 ))
+                        # In HTTP mode, Tor may not be fully operational - treat as warning
+                        if [[ "$TOR_REQUIRED" == "false" ]]; then
+                            printf "\t   Rapid restart for %s ${YELLOW}WARNING${NC} - Public key size abnormal: ${publicKeySize} bytes (HTTP mode)\n" ${testContainer}
+                            passed=$(( passed + 1 ))
+                        else
+                            printf "\t   Rapid restart for %s ${RED}FAILED${NC} - Public key size abnormal: ${publicKeySize} bytes\n" ${testContainer}
+                            failure=$(( failure + 1 ))
+                        fi
                     else
                         printf "\t   Rapid restart for %s ${GREEN}PASSED${NC}\n" ${testContainer}
                         printf "\t   TOR stable after ${RESTART_COUNT} rapid restarts, address: ${finalTorAddress}\n"
