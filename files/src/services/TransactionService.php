@@ -988,8 +988,47 @@ class TransactionService {
                             );
                         }
                     } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
-                        // Check if rejection is due to invalid_previous_txid - attempt sync before falling back to P2P
+                        // Check if rejection is due to invalid_previous_txid - attempt inline retry first
                         if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
+                            $expectedTxid = $response['expected_txid'] ?? null;
+
+                            // Fast path: If receiver provides expected_txid, try immediate re-sign and retry
+                            // This handles simultaneous sends efficiently without needing sync
+                            if ($expectedTxid !== null) {
+                                output('Transaction rejected due to invalid_previous_txid, attempting inline retry...', 'SILENT');
+
+                                // Update previous_txid to the expected value
+                                $updatedPrevTxid = $this->transactionRepository->updatePreviousTxid($txid, $expectedTxid);
+
+                                if ($updatedPrevTxid) {
+                                    // Re-fetch the updated transaction
+                                    $updatedMessage = $this->transactionRepository->getByTxid($txid);
+                                    if ($updatedMessage) {
+                                        // Re-build the payload with new previous_txid
+                                        $newPayload = $this->transactionPayload->buildStandardFromDatabase($updatedMessage);
+
+                                        // Re-sign the transaction
+                                        $transportUtility = $this->utilityContainer->getTransportUtility();
+                                        $signResult = $transportUtility->signWithCapture($newPayload);
+
+                                        if ($signResult && isset($signResult['signature']) && isset($signResult['nonce'])) {
+                                            // Update signature in database
+                                            $this->transactionRepository->updateSignatureData(
+                                                $txid,
+                                                $signResult['signature'],
+                                                $signResult['nonce']
+                                            );
+
+                                            output('Transaction re-signed with corrected previous_txid, will retry...', 'SILENT');
+                                            // Keep status as pending - will be retried on next cycle
+                                            continue;
+                                        }
+                                    }
+                                }
+                                output('Inline retry failed, falling back to hold/sync...', 'SILENT');
+                            }
+
+                            // Fallback to hold/sync flow if inline retry didn't work
                             output('Transaction rejected due to invalid_previous_txid, holding for sync...', 'SILENT');
 
                             // Use HeldTransactionService if available
@@ -997,7 +1036,7 @@ class TransactionService {
                                 $holdResult = $this->heldTransactionService->holdTransactionForSync(
                                     $message,
                                     $message['receiver_public_key'],
-                                    $response['expected_txid'] ?? null
+                                    $expectedTxid
                                 );
 
                                 if ($holdResult['held']) {
@@ -1128,8 +1167,49 @@ class TransactionService {
                     );
                 }
             } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
-                // Check if rejection is due to invalid_previous_txid - attempt sync
+                // Check if rejection is due to invalid_previous_txid - attempt inline retry first
                 if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
+                    $expectedTxid = $response['expected_txid'] ?? null;
+
+                    // Fast path: If receiver provides expected_txid, try immediate re-sign and retry
+                    // This handles simultaneous sends efficiently without needing sync
+                    if ($expectedTxid !== null) {
+                        output('P2P transaction rejected due to invalid_previous_txid, attempting inline retry...', 'SILENT');
+
+                        // Update previous_txid to the expected value
+                        $updatedPrevTxid = $this->transactionRepository->updatePreviousTxid($txid, $expectedTxid);
+
+                        if ($updatedPrevTxid) {
+                            // Re-fetch the updated transaction
+                            $updatedMessage = $this->transactionRepository->getByTxid($txid);
+                            if ($updatedMessage) {
+                                // Re-build the payload with new previous_txid (use buildFromDatabase for P2P)
+                                $newPayload = $this->transactionPayload->buildFromDatabase($updatedMessage);
+
+                                // Re-sign the transaction
+                                $transportUtility = $this->utilityContainer->getTransportUtility();
+                                $signResult = $transportUtility->signWithCapture($newPayload);
+
+                                if ($signResult && isset($signResult['signature']) && isset($signResult['nonce'])) {
+                                    // Update signature in database
+                                    $this->transactionRepository->updateSignatureData(
+                                        $txid,
+                                        $signResult['signature'],
+                                        $signResult['nonce']
+                                    );
+
+                                    output('P2P transaction re-signed with corrected previous_txid, will retry...', 'SILENT');
+                                    // Revert status to pending for retry
+                                    $this->transactionRepository->updateStatus($memo, Constants::STATUS_PENDING);
+                                    $this->p2pRepository->updateStatus($memo, 'found');
+                                    return; // Exit to allow retry on next processing cycle
+                                }
+                            }
+                        }
+                        output('Inline retry failed, falling back to hold/sync...', 'SILENT');
+                    }
+
+                    // Fallback to hold/sync flow if inline retry didn't work
                     output('P2P transaction rejected due to invalid_previous_txid, holding for sync...', 'SILENT');
 
                     // Use HeldTransactionService if available
@@ -1137,7 +1217,7 @@ class TransactionService {
                         $holdResult = $this->heldTransactionService->holdTransactionForSync(
                             $message,
                             $message['receiver_public_key'],
-                            $response['expected_txid'] ?? null
+                            $expectedTxid
                         );
 
                         if ($holdResult['held']) {
