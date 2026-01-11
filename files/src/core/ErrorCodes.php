@@ -94,6 +94,7 @@ class ErrorCodes
     public const INVALID_CURRENCY = 'INVALID_CURRENCY';
     public const INVALID_RECIPIENT = 'INVALID_RECIPIENT';
     public const SELF_SEND = 'SELF_SEND';
+    public const CHAIN_INTEGRITY_FAILED = 'CHAIN_INTEGRITY_FAILED';
 
     // Transport/Routing errors
     public const NO_VIABLE_TRANSPORT = 'NO_VIABLE_TRANSPORT';
@@ -241,6 +242,7 @@ class ErrorCodes
             self::INTERNAL_ERROR => 500,
             self::GENERAL_ERROR => 500,
             self::TRANSACTION_FAILED => 500,
+            self::CHAIN_INTEGRITY_FAILED => 500,
             self::CONTACT_CREATE_FAILED => 500,
             self::ACCEPT_FAILED => 500,
             self::BLOCK_FAILED => 500,
@@ -340,6 +342,7 @@ class ErrorCodes
             self::INVALID_AMOUNT => 'Invalid Amount',
             self::INVALID_CURRENCY => 'Invalid Currency',
             self::INVALID_RECIPIENT => 'Invalid Recipient',
+            self::CHAIN_INTEGRITY_FAILED => 'Chain Integrity Failed',
 
             self::INVALID_ADDRESS => 'Invalid Address',
             self::INVALID_NAME => 'Invalid Name',

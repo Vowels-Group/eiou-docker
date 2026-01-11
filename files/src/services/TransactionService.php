@@ -1489,7 +1489,7 @@ class TransactionService {
                 if (!$chainVerification['success']) {
                     $output->error(
                         "Cannot send transaction: " . ($chainVerification['error'] ?? 'Chain verification failed'),
-                        ErrorCodes::CHAIN_INTEGRITY_FAILED ?? 'CHAIN_INTEGRITY_FAILED',
+                        ErrorCodes::CHAIN_INTEGRITY_FAILED,
                         500,
                         ['recipient' => $request[2] ?? null, 'synced' => $chainVerification['synced']]
                     );
