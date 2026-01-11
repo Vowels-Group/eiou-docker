@@ -89,6 +89,7 @@ class ErrorCodes
 
     // Transaction errors
     public const TRANSACTION_FAILED = 'TRANSACTION_FAILED';
+    public const TRANSACTION_IN_PROGRESS = 'TRANSACTION_IN_PROGRESS';
     public const INSUFFICIENT_FUNDS = 'INSUFFICIENT_FUNDS';
     public const INVALID_AMOUNT = 'INVALID_AMOUNT';
     public const INVALID_CURRENCY = 'INVALID_CURRENCY';
@@ -237,6 +238,7 @@ class ErrorCodes
 
             // 429 Too Many Requests
             self::RATE_LIMIT_EXCEEDED => 429,
+            self::TRANSACTION_IN_PROGRESS => 429,
 
             // 500 Internal Server Error
             self::INTERNAL_ERROR => 500,
@@ -338,6 +340,7 @@ class ErrorCodes
             self::CONTACT_UNREACHABLE => 'Contact Unreachable',
 
             self::TRANSACTION_FAILED => 'Transaction Failed',
+            self::TRANSACTION_IN_PROGRESS => 'Transaction In Progress',
             self::INSUFFICIENT_FUNDS => 'Insufficient Funds',
             self::INVALID_AMOUNT => 'Invalid Amount',
             self::INVALID_CURRENCY => 'Invalid Currency',
