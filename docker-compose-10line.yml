@@ -15,6 +15,12 @@ services:
       - node-a-index:/var/www/html
       - node-a-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   node-b:
     build:
@@ -31,6 +37,12 @@ services:
       - node-b-index:/var/www/html
       - node-b-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   node-c:
     build:
@@ -47,6 +59,12 @@ services:
       - node-c-index:/var/www/html
       - node-c-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   node-d:
     build:
@@ -63,6 +81,12 @@ services:
       - node-d-index:/var/www/html
       - node-d-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   node-e:
     build:
@@ -79,6 +103,12 @@ services:
       - node-e-index:/var/www/html
       - node-e-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   node-f:
     build:
@@ -95,6 +125,12 @@ services:
       - node-f-index:/var/www/html
       - node-f-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   node-g:
     build:
@@ -111,6 +147,12 @@ services:
       - node-g-index:/var/www/html
       - node-g-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   node-h:
     build:
@@ -127,6 +169,12 @@ services:
       - node-h-index:/var/www/html
       - node-h-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   node-i:
     build:
@@ -143,6 +191,12 @@ services:
       - node-i-index:/var/www/html
       - node-i-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   node-j:
     build:
@@ -159,6 +213,12 @@ services:
       - node-j-index:/var/www/html
       - node-j-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
 networks:
   eiou-network-compose:

@@ -16,6 +16,12 @@ services:
       - cluster-a-index:/var/www/html
       - cluster-a-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   # Level 1 nodes
   cluster-a1:
@@ -33,6 +39,12 @@ services:
       - cluster-a1-index:/var/www/html
       - cluster-a1-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   cluster-a2:
     build:
@@ -49,6 +61,12 @@ services:
       - cluster-a2-index:/var/www/html
       - cluster-a2-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   cluster-a3:
     build:
@@ -65,6 +83,12 @@ services:
       - cluster-a3-index:/var/www/html
       - cluster-a3-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   cluster-a4:
     build:
@@ -81,6 +105,12 @@ services:
       - cluster-a4-index:/var/www/html
       - cluster-a4-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   # Level 2 nodes
   cluster-a11:
@@ -98,6 +128,12 @@ services:
       - cluster-a11-index:/var/www/html
       - cluster-a11-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   cluster-a12:
     build:
@@ -114,6 +150,12 @@ services:
       - cluster-a12-index:/var/www/html
       - cluster-a12-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   cluster-a21:
     build:
@@ -130,6 +172,12 @@ services:
       - cluster-a21-index:/var/www/html
       - cluster-a21-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   cluster-a22:
     build:
@@ -146,6 +194,12 @@ services:
       - cluster-a22-index:/var/www/html
       - cluster-a22-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   cluster-a31:
     build:
@@ -162,6 +216,12 @@ services:
       - cluster-a31-index:/var/www/html
       - cluster-a31-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   cluster-a32:
     build:
@@ -178,6 +238,12 @@ services:
       - cluster-a32-index:/var/www/html
       - cluster-a32-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   cluster-a41:
     build:
@@ -194,6 +260,12 @@ services:
       - cluster-a41-index:/var/www/html
       - cluster-a41-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   cluster-a42:
     build:
@@ -210,6 +282,12 @@ services:
       - cluster-a42-index:/var/www/html
       - cluster-a42-eiou:/usr/local/bin/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
 networks:
   eiou-network-compose:
