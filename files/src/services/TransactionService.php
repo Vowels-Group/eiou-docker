@@ -464,7 +464,8 @@ class TransactionService {
             $requestedAmount = $request['amount'];
 
             if (($availableFunds + $creditLimit) < $requestedAmount) {
-                echo $this->utilPayload->buildInsufficientBalance($availableFunds, $requestedAmount, $creditLimit, 0, $request['currency']);
+                // Note: Do NOT echo here - the caller (checkTransactionPossible) handles the response
+                // Echoing here would cause duplicate JSON output breaking response parsing
                 return false;
             }
             return true;
