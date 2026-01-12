@@ -350,6 +350,13 @@ class TransportUtilityService
         unset($messageContent['senderPublicKey']);
         unset($messageContent['signature']);
 
+        // Remove description from signed content - it's private metadata not part of signature
+        // Description is stored separately and not included in sync verification
+        // This ensures P2P privacy (intermediaries don't see description) and consistent
+        // signature verification during chain sync recovery
+        $description = $messageContent['description'] ?? null;
+        unset($messageContent['description']);
+
         // Add nonce for replay protection
         $nonce = time();
         $messageContent['nonce'] = $nonce;
@@ -378,15 +385,24 @@ class TransportUtilityService
         // Build clean payload structure:
         // - Transport metadata at top level
         // - Message content in 'message' field (no duplication)
+        // - Description added separately (not part of signature)
+        $envelope = [
+            'senderAddress' => $payload['senderAddress'],
+            'senderPublicKey' => $payload['senderPublicKey'],
+            'message' => $message,
+            'signature' => $base64Signature
+        ];
+
+        // Add description to envelope if present (not part of signed message)
+        if ($description !== null) {
+            $envelope['description'] = $description;
+        }
+
         return [
-            'envelope' => [
-                'senderAddress' => $payload['senderAddress'],
-                'senderPublicKey' => $payload['senderPublicKey'],
-                'message' => $message,
-                'signature' => $base64Signature
-            ],
+            'envelope' => $envelope,
             'signature' => $base64Signature,
-            'nonce' => $nonce
+            'nonce' => $nonce,
+            'description' => $description
         ];
     }
 

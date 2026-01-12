@@ -1124,13 +1124,9 @@ class SyncService {
         $memo = $tx['memo'] ?? 'standard';
         $messageContent['memo'] = $memo;
 
-        // Description handling must match TransactionPayload::build() which ONLY includes
-        // description when it's non-null. buildStandardFromDatabase() always includes it,
-        // but the ORIGINAL signature is created using build(), not buildStandardFromDatabase().
-        // For both standard and P2P transactions, only include description if non-null.
-        if (isset($tx['description']) && $tx['description'] !== null && $tx['description'] !== '') {
-            $messageContent['description'] = $tx['description'];
-        }
+        // NOTE: Description is NOT included in the signed message
+        // It's transmitted separately in the envelope for privacy (P2P intermediaries don't see it)
+        // and stored separately in the database
 
         // NOTE: endRecipientAddress and initialSenderAddress are NOT included
         // These are local tracking fields that are NOT part of the signed payload
