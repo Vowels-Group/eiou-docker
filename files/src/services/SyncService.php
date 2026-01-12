@@ -1021,6 +1021,7 @@ class SyncService {
         );
 
         if ($verified !== 1) {
+            // Enhanced debug logging for signature verification failures
             SecureLogger::warning("Transaction signature verification failed", [
                 'txid' => $tx['txid'] ?? 'unknown',
                 'sender' => $tx['sender_address'] ?? 'unknown',
@@ -1028,7 +1029,14 @@ class SyncService {
                 'memo' => $tx['memo'] ?? 'unknown',
                 'reconstructed_message' => $messageContent,
                 'signature_present' => !empty($tx['sender_signature']),
-                'nonce' => $tx['signature_nonce'] ?? 'unknown'
+                'nonce' => $tx['signature_nonce'] ?? 'unknown',
+                'tx_time' => $tx['time'] ?? 'NULL',
+                'tx_time_type' => gettype($tx['time'] ?? null),
+                'tx_amount' => $tx['amount'] ?? 'NULL',
+                'tx_amount_type' => gettype($tx['amount'] ?? null),
+                'tx_description' => $tx['description'] ?? 'NULL',
+                'signature_first_20' => substr($tx['sender_signature'] ?? '', 0, 20) . '...',
+                'public_key_first_50' => substr($tx['sender_public_key'] ?? '', 0, 50) . '...'
             ]);
         }
 
