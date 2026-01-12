@@ -1116,15 +1116,11 @@ class SyncService {
         $memo = $tx['memo'] ?? 'standard';
         $messageContent['memo'] = $memo;
 
-        // For standard transactions, description is ALWAYS included (even if null)
-        // because buildStandardFromDatabase() always includes it in the signed payload.
-        // For P2P transactions (memo != 'standard'), description is only included if non-null
-        // because buildFromDatabase() does not include description at all.
-        if ($memo === 'standard') {
-            // Standard transactions: always include description (matches buildStandardFromDatabase)
-            $messageContent['description'] = $tx['description'] ?? null;
-        } elseif (isset($tx['description']) && $tx['description'] !== null) {
-            // P2P transactions: only include if non-null (matches build() and buildFromDatabase)
+        // Description handling must match TransactionPayload::build() which ONLY includes
+        // description when it's non-null. buildStandardFromDatabase() always includes it,
+        // but the ORIGINAL signature is created using build(), not buildStandardFromDatabase().
+        // For both standard and P2P transactions, only include description if non-null.
+        if (isset($tx['description']) && $tx['description'] !== null && $tx['description'] !== '') {
             $messageContent['description'] = $tx['description'];
         }
 

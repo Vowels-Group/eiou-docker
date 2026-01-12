@@ -211,7 +211,15 @@ class TransactionService {
      */
     private function acquireContactSendLock(string $contactPubkeyHash, int $timeout = 30): bool {
         $lockFile = sys_get_temp_dir() . '/eiou_send_lock_' . $contactPubkeyHash . '.lock';
-        $lockHandle = fopen($lockFile, 'c');
+
+        // Try to open existing file or create new one
+        $lockHandle = @fopen($lockFile, 'c');
+
+        // If file exists but we can't open it (permission issue), try to delete and recreate
+        if (!$lockHandle && file_exists($lockFile)) {
+            @unlink($lockFile);
+            $lockHandle = @fopen($lockFile, 'c');
+        }
 
         if (!$lockHandle) {
             $this->secureLogger->warning("Failed to create lock file", [
@@ -220,6 +228,9 @@ class TransactionService {
             ]);
             return false;
         }
+
+        // Make the lock file world-writable so both CLI (root) and Apache (www-data) can use it
+        @chmod($lockFile, 0666);
 
         $startTime = time();
         while (!flock($lockHandle, LOCK_EX | LOCK_NB)) {

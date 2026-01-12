@@ -102,7 +102,7 @@ class TransactionPayload extends BasePayload
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiver_address']);
         $memo = 'standard';
 
-        return [
+        $payload = [
             'type' => 'send',
             'time' => $data['time'] ?? null, // Include time for receiver to store
             'receiverAddress' => $data['receiver_address'],
@@ -112,12 +112,17 @@ class TransactionPayload extends BasePayload
             'txid' => $data['txid'],
             'previousTxid' => $data['previous_txid'] ?? null,
             'memo' => $memo,
-            // description is ALWAYS included for standard transactions (even if null)
-            // This ensures signature reconstruction matches what was signed
-            'description' => $data['description'] ?? null,
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ];
+
+        // Include description ONLY if non-null (matches build() behavior)
+        // This ensures consistent signature handling across initial send and resend
+        if (isset($data['description']) && $data['description'] !== null && $data['description'] !== '') {
+            $payload['description'] = $this->sanitizeString($data['description']);
+        }
+
+        return $payload;
     }
 
     /**
