@@ -161,17 +161,158 @@ QUICKSTART=${QUICKSTART:-false}
 RESTORE_FILE=${RESTORE_FILE:-false}
 RESTORE=${RESTORE:-false}
 
-# Generate self-signed SSL certificate if it doesn't exist
-if [ ! -f /etc/apache2/ssl/server.crt ]; then
-    echo "Generating self-signed SSL certificate..."
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout /etc/apache2/ssl/server.key \
-        -out /etc/apache2/ssl/server.crt \
-        -subj "/C=XX/ST=State/L=City/O=EIOU/OU=Node/CN=localhost" \
-        2>/dev/null
+# =============================================================================
+# SSL CERTIFICATE GENERATION
+# =============================================================================
+# Environment Variables:
+#   SSL_DOMAIN      - Primary domain for certificate CN (default: QUICKSTART value or localhost)
+#   SSL_EXTRA_SANS  - Additional SANs in format "DNS:name,IP:addr" (comma-separated)
+#
+# External Certificate Support:
+#   Mount certificates at /ssl-certs/ with files: server.crt, server.key, ca-chain.crt (optional)
+#
+# CA-Signed Certificate Support:
+#   Mount CA at /ssl-ca/ with files: ca.crt, ca.key
+#
+# Priority: 1. External certs (/ssl-certs/) 2. CA-signed (/ssl-ca/) 3. Auto-generated
+# =============================================================================
+
+# Check for externally provided certificates (Let's Encrypt, corporate CA, etc.)
+if [ -f /ssl-certs/server.crt ] && [ -f /ssl-certs/server.key ]; then
+    echo "Installing externally provided SSL certificates..."
+
+    cp /ssl-certs/server.crt /etc/apache2/ssl/server.crt
+    cp /ssl-certs/server.key /etc/apache2/ssl/server.key
     chmod 600 /etc/apache2/ssl/server.key
     chmod 644 /etc/apache2/ssl/server.crt
-    echo "SSL certificate generated successfully."
+
+    # Handle certificate chain if provided (for Let's Encrypt fullchain, etc.)
+    if [ -f /ssl-certs/ca-chain.crt ]; then
+        cp /ssl-certs/ca-chain.crt /etc/apache2/ssl/ca-chain.crt
+        chmod 644 /etc/apache2/ssl/ca-chain.crt
+        echo "  Certificate chain installed."
+    fi
+
+    echo "External SSL certificates installed successfully."
+
+# Generate certificate (self-signed or CA-signed) if none exists
+elif [ ! -f /etc/apache2/ssl/server.crt ]; then
+    echo "Generating SSL certificate..."
+
+    # Determine primary CN
+    # Priority: SSL_DOMAIN env var > QUICKSTART hostname > localhost
+    SSL_DOMAIN=${SSL_DOMAIN:-${QUICKSTART:-localhost}}
+    if [ "$SSL_DOMAIN" = "false" ]; then
+        SSL_DOMAIN="localhost"
+    fi
+
+    # Build Subject Alternative Names list
+    SAN_LIST="DNS:localhost,DNS:$SSL_DOMAIN"
+
+    # Add container hostname if different from SSL_DOMAIN
+    CONTAINER_HOSTNAME=$(hostname 2>/dev/null || echo "")
+    if [ -n "$CONTAINER_HOSTNAME" ] && [ "$CONTAINER_HOSTNAME" != "$SSL_DOMAIN" ] && [ "$CONTAINER_HOSTNAME" != "localhost" ]; then
+        SAN_LIST="$SAN_LIST,DNS:$CONTAINER_HOSTNAME"
+    fi
+
+    # Auto-detect all container IP addresses and add as SANs
+    DETECTED_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || echo "")
+    for IP in $DETECTED_IPS; do
+        if [ "$IP" != "127.0.0.1" ]; then
+            SAN_LIST="$SAN_LIST,IP:$IP"
+        fi
+    done
+
+    # Always include loopback for local testing
+    SAN_LIST="$SAN_LIST,IP:127.0.0.1"
+
+    # Add user-specified extra SANs
+    # Example: SSL_EXTRA_SANS="DNS:node1.example.com,DNS:node1.local,IP:10.0.0.50"
+    if [ -n "$SSL_EXTRA_SANS" ]; then
+        SAN_LIST="$SAN_LIST,$SSL_EXTRA_SANS"
+    fi
+
+    echo "  CN: $SSL_DOMAIN"
+    echo "  SANs: $SAN_LIST"
+
+    # Create OpenSSL configuration with SANs
+    # Modern browsers require SANs - CN alone is deprecated
+    cat > /tmp/openssl-san.cnf << SSLEOF
+[req]
+default_bits = 2048
+prompt = no
+default_md = sha256
+distinguished_name = dn
+req_extensions = req_ext
+x509_extensions = v3_ext
+
+[dn]
+C = XX
+ST = State
+L = City
+O = EIOU
+OU = Node
+CN = $SSL_DOMAIN
+
+[req_ext]
+subjectAltName = $SAN_LIST
+
+[v3_ext]
+subjectAltName = $SAN_LIST
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+SSLEOF
+
+    # Check if CA is mounted for CA-signed certificate generation
+    if [ -f /ssl-ca/ca.crt ] && [ -f /ssl-ca/ca.key ]; then
+        echo "  Generating CA-signed certificate..."
+
+        # Generate private key and CSR
+        openssl req -new -nodes -newkey rsa:2048 \
+            -keyout /etc/apache2/ssl/server.key \
+            -out /tmp/server.csr \
+            -config /tmp/openssl-san.cnf \
+            2>/dev/null
+
+        # Sign with CA (browsers will trust this if CA is in their trust store)
+        openssl x509 -req -in /tmp/server.csr \
+            -CA /ssl-ca/ca.crt \
+            -CAkey /ssl-ca/ca.key \
+            -CAcreateserial \
+            -out /etc/apache2/ssl/server.crt \
+            -days 365 \
+            -sha256 \
+            -extfile /tmp/openssl-san.cnf \
+            -extensions v3_ext \
+            2>/dev/null
+
+        # Copy CA cert for client verification
+        cp /ssl-ca/ca.crt /etc/apache2/ssl/ca.crt
+        chmod 644 /etc/apache2/ssl/ca.crt
+
+        rm -f /tmp/server.csr
+        echo "  CA-signed certificate generated successfully."
+    else
+        # Generate self-signed certificate
+        echo "  Generating self-signed certificate..."
+
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /etc/apache2/ssl/server.key \
+            -out /etc/apache2/ssl/server.crt \
+            -config /tmp/openssl-san.cnf \
+            2>/dev/null
+
+        echo "  Self-signed certificate generated successfully."
+        echo "  Note: Browsers will show warnings for self-signed certificates."
+        echo "  For trusted certificates, mount a CA at /ssl-ca/ or external certs at /ssl-certs/"
+    fi
+
+    rm -f /tmp/openssl-san.cnf
+    chmod 600 /etc/apache2/ssl/server.key
+    chmod 644 /etc/apache2/ssl/server.crt
+else
+    echo "Existing SSL certificate found, skipping generation."
 fi
 
 # Start services

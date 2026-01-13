@@ -12,6 +12,12 @@ services:
       - "443:443"
     environment:
       - QUICKSTART=alice
+      # SSL Configuration (optional):
+      # - SSL_DOMAIN=alice.example.com     # Override certificate CN
+      # - SSL_EXTRA_SANS=DNS:alice.local   # Additional SANs
+    # For CA-signed certificates across all nodes, uncomment:
+    # volumes (add to existing):
+    #   - ./ssl-ca:/ssl-ca:ro
     volumes:
       - alice-mysql-data:/var/lib/mysql
       - alice-files:/etc/eiou/
