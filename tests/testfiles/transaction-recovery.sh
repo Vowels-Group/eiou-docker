@@ -1,14 +1,19 @@
 #!/bin/bash
 # Copyright 2025 Adrien Hubert (adrien@eiou.org)
 #
-# Transaction Recovery Test
+# Transaction Recovery Test Suite
 # Tests the atomic transaction claiming and recovery mechanisms
 #
-# Test scenarios:
-# 1. Verify SENDING status is added to database schema
-# 2. Verify transactions can be atomically claimed
-# 3. Verify stuck transactions are recovered on startup
-# 4. Verify transactions exceeding max retries are marked for review
+# This script runs two types of tests:
+# Part 1: Static checks (file existence, method definitions)
+# Part 2: Functional tests (actual database operations, crash simulation)
+#
+# Test scenarios covered:
+# - Atomic claiming prevents duplicate processing
+# - Crash recovery resets stuck transactions
+# - Max retry exceeded marks for manual review
+# - Concurrent claim attempts are rejected
+# - Full transaction flow: pending → sending → sent
 
 # Initialize test counters
 totaltests=0
@@ -16,6 +21,9 @@ passed=0
 failure=0
 
 printf "Starting Transaction Recovery Tests...\n"
+printf "\n================================================================\n"
+printf "  PART 1: Static Verification Tests\n"
+printf "================================================================\n"
 
 # Test 1: Verify SENDING status exists in Constants
 printf "\n[Test 1] Checking SENDING status in Constants.php...\n"
@@ -153,18 +161,78 @@ else
     failure=$((failure + 1))
 fi
 
-# Print summary
+# Print Part 1 summary
 printf "\n"
 printf "================================================================\n"
-printf "Transaction Recovery Test Results\n"
+printf "Part 1 Results: Static Verification\n"
 printf "================================================================\n"
 printf "Total:  %d tests\n" "$totaltests"
 printf "${GREEN}Passed: %d${NC}\n" "$passed"
 printf "${RED}Failed: %d${NC}\n" "$failure"
 printf "================================================================\n"
 
+# Store Part 1 results
+PART1_TOTAL=$totaltests
+PART1_PASSED=$passed
+PART1_FAILED=$failure
+
+# ============================================================================
+# PART 2: Functional Tests (Database Operations)
+# ============================================================================
+
+printf "\n================================================================\n"
+printf "  PART 2: Functional Tests (Database Operations)\n"
+printf "================================================================\n"
+printf "Running transaction flow scenarios with actual database...\n"
+
+# Check if the functional test file exists
+FUNCTIONAL_TEST="/etc/eiou/tests/testfiles/transaction-recovery-functional.php"
+if [ ! -f "$FUNCTIONAL_TEST" ]; then
+    # Try alternate location (when copied to container)
+    FUNCTIONAL_TEST="/tmp/transaction-recovery-functional.php"
+fi
+
+if [ -f "$FUNCTIONAL_TEST" ]; then
+    # Run the PHP functional tests
+    php "$FUNCTIONAL_TEST"
+    FUNCTIONAL_EXIT_CODE=$?
+
+    if [ $FUNCTIONAL_EXIT_CODE -eq 0 ]; then
+        printf "\n${GREEN}${TICK} All functional tests passed${NC}\n"
+    else
+        printf "\n${RED}${CROSS} Some functional tests failed${NC}\n"
+        failure=$((failure + 1))
+    fi
+else
+    printf "${YELLOW}Warning: Functional test file not found, skipping Part 2${NC}\n"
+    printf "Expected at: $FUNCTIONAL_TEST\n"
+fi
+
+# ============================================================================
+# FINAL SUMMARY
+# ============================================================================
+
+printf "\n"
+printf "================================================================\n"
+printf "  FINAL SUMMARY: Transaction Recovery Test Suite\n"
+printf "================================================================\n"
+printf "Part 1 (Static):     %d passed, %d failed\n" "$PART1_PASSED" "$PART1_FAILED"
+if [ -f "$FUNCTIONAL_TEST" ]; then
+    if [ $FUNCTIONAL_EXIT_CODE -eq 0 ]; then
+        printf "Part 2 (Functional): ${GREEN}ALL PASSED${NC}\n"
+    else
+        printf "Part 2 (Functional): ${RED}SOME FAILED${NC}\n"
+    fi
+else
+    printf "Part 2 (Functional): ${YELLOW}SKIPPED${NC}\n"
+fi
+printf "================================================================\n"
+
 # Return appropriate exit code
 if [ "$failure" -gt 0 ]; then
+    exit 1
+fi
+if [ -n "$FUNCTIONAL_EXIT_CODE" ] && [ "$FUNCTIONAL_EXIT_CODE" -ne 0 ]; then
     exit 1
 fi
 exit 0
