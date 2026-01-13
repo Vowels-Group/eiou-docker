@@ -2,6 +2,7 @@
 # Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
 require_once __DIR__ . '/AbstractRepository.php';
+require_once __DIR__ . '/../utils/SecureLogger.php';
 
 /**
  * HeldTransactionRepository
@@ -226,6 +227,39 @@ class HeldTransactionRepository extends AbstractRepository {
      * @return bool True on success, false on failure
      */
     public function releaseTransaction(string $txid): bool {
+        $result = $this->delete('txid', $txid);
+        return $result > 0;
+    }
+
+    /**
+     * Mark a held transaction as failed and release it
+     *
+     * Called when a held transaction cannot be processed (resign failed, resume failed, etc.)
+     * This prevents infinite retry loops by removing the transaction from the held queue.
+     *
+     * @param string $txid Transaction ID to mark as failed
+     * @param string $reason Reason for failure (for logging)
+     * @return bool True on success, false on failure
+     */
+    public function markAsFailed(string $txid, string $reason): bool {
+        // Update sync_status to 'failed' before deleting for audit trail
+        $query = "UPDATE {$this->tableName}
+                  SET sync_status = 'failed',
+                      resolved_at = :resolved_at
+                  WHERE txid = :txid";
+
+        $stmt = $this->execute($query, [
+            ':txid' => $txid,
+            ':resolved_at' => date('Y-m-d H:i:s')
+        ]);
+
+        // Log the failure reason
+        SecureLogger::warning("Held transaction marked as failed and released", [
+            'txid' => $txid,
+            'reason' => $reason
+        ]);
+
+        // Delete the record to prevent future retry attempts
         $result = $this->delete('txid', $txid);
         return $result > 0;
     }

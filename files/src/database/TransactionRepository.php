@@ -1958,12 +1958,14 @@ class TransactionRepository extends AbstractRepository {
      * @return array|null Transaction data if found, null otherwise
      */
     public function getLocalTransactionByPreviousTxid(string $previousTxid, string $pubkeyHash1, string $pubkeyHash2): ?array {
+        // NOTE: Do NOT filter by status here - chain conflict detection requires ALL transactions
+        // to be included, even cancelled/rejected ones. The chain must be complete for proper
+        // conflict resolution during sync operations.
         $query = "SELECT * FROM {$this->tableName}
                   WHERE previous_txid = :previous_txid
                   AND ((sender_public_key_hash = :pubkey_hash1 AND receiver_public_key_hash = :pubkey_hash2)
                        OR (sender_public_key_hash = :pubkey_hash3 AND receiver_public_key_hash = :pubkey_hash4))
-                  AND status NOT IN ('cancelled', 'rejected')
-                  ORDER BY COALESCE(time, 0) DESC, timestamp DESC
+                  ORDER BY timestamp DESC
                   LIMIT 1";
 
         $stmt = $this->execute($query, [
@@ -2176,14 +2178,16 @@ class TransactionRepository extends AbstractRepository {
         $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
 
         // Get count and oldest/newest txids
+        // NOTE: Do NOT filter by status - chain state summary must include ALL transactions
+        // for accurate sync comparison. Excluding cancelled/rejected transactions causes
+        // sync to think data exists when it doesn't.
         $query = "SELECT
                     COUNT(*) as transaction_count,
                     MIN(txid) as oldest_txid,
                     MAX(txid) as newest_txid
                   FROM {$this->tableName}
                   WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
-                         OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))
-                  AND status NOT IN ('cancelled', 'rejected')";
+                         OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))";
 
         $stmt = $this->execute($query, [
             ':user_hash' => $userPubkeyHash,
@@ -2204,11 +2208,11 @@ class TransactionRepository extends AbstractRepository {
         $summary = $stmt->fetch(PDO::FETCH_ASSOC);
 
         // Get list of all txids for comparison
+        // NOTE: Do NOT filter by status - must match the count query above
         $txidQuery = "SELECT txid FROM {$this->tableName}
                       WHERE ((sender_public_key_hash = :user_hash AND receiver_public_key_hash = :contact_hash)
                              OR (sender_public_key_hash = :contact_hash2 AND receiver_public_key_hash = :user_hash2))
-                      AND status NOT IN ('cancelled', 'rejected')
-                      ORDER BY COALESCE(time, 0) ASC, timestamp ASC";
+                      ORDER BY timestamp ASC";
 
         $txidStmt = $this->execute($txidQuery, [
             ':user_hash' => $userPubkeyHash,

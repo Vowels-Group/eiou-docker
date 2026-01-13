@@ -523,14 +523,37 @@ class TransactionService {
                 'sender' => $request['senderAddress'] ?? 'unknown'
             ]);
 
-            // If we (receiver) have no record of the previous txid that the sender claims exists,
-            // this means we may have lost data and should proactively sync with the sender.
-            // This handles the case where Contact B lost all transactions and Contact A sends
-            // a transaction with a prev_id that Contact B doesn't have.
+            // Proactive sync: If we (receiver) have a chain mismatch with the sender,
+            // we may have lost data and should proactively sync with the sender.
+            // This handles multiple scenarios:
+            // 1. Receiver has no transactions (expectedTxid === null) but sender has prev_id
+            // 2. Receiver has some transactions but is missing the most recent ones
+            // 3. Receiver has a gap in the chain (missing middle transactions)
+            //
+            // In all cases where the chains don't match, attempt sync to recover.
+            $shouldSync = false;
+            $syncReason = '';
+
             if ($expectedTxid === null && $receivedPreviousTxid !== null) {
-                SecureLogger::info("Receiver has no transaction history with sender but sender has prev_id - triggering proactive sync", [
+                // Case 1: Receiver has no transaction history with sender
+                $shouldSync = true;
+                $syncReason = 'receiver_has_no_history';
+            } elseif ($expectedTxid !== null && $receivedPreviousTxid !== null && $expectedTxid !== $receivedPreviousTxid) {
+                // Case 2/3: Receiver has different chain state than sender
+                // Check if the received_previous_txid exists locally - if not, we're missing transactions
+                $receivedPrevTxExists = $this->transactionRepository->transactionExistsTxid($receivedPreviousTxid);
+                if (!$receivedPrevTxExists) {
+                    $shouldSync = true;
+                    $syncReason = 'receiver_missing_transactions';
+                }
+            }
+
+            if ($shouldSync) {
+                SecureLogger::info("Chain mismatch detected - triggering proactive sync", [
                     'sender' => $request['senderAddress'] ?? 'unknown',
-                    'received_previous_txid' => $receivedPreviousTxid
+                    'received_previous_txid' => $receivedPreviousTxid,
+                    'expected_previous_txid' => $expectedTxid,
+                    'sync_reason' => $syncReason
                 ]);
 
                 // Proactively sync with the sender to recover missing transactions
@@ -543,7 +566,8 @@ class TransactionService {
 
                     if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
                         SecureLogger::info("Proactive sync successful, retrying transaction validation", [
-                            'synced_count' => $syncResult['synced_count']
+                            'synced_count' => $syncResult['synced_count'],
+                            'sync_reason' => $syncReason
                         ]);
 
                         // Also sync balances after recovering transactions

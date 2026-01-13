@@ -275,6 +275,9 @@ class HeldTransactionService {
                             'txid' => $txid,
                             'expected_previous_txid' => $expectedPreviousTxid
                         ]);
+                        // Release the held transaction to prevent infinite retry loops
+                        // Mark as failed but don't leave it stuck
+                        $this->heldRepository->markAsFailed($txid, 'resign_failed');
                         continue;
                     }
 
@@ -299,6 +302,8 @@ class HeldTransactionService {
                             'txid' => $txid,
                             'error' => $resumeResult['error']
                         ]);
+                        // Release the held transaction to prevent infinite retry loops
+                        $this->heldRepository->markAsFailed($txid, 'resume_failed: ' . ($resumeResult['error'] ?? 'unknown'));
                     }
                 } else {
                     $result['failed_count']++;
@@ -306,6 +311,8 @@ class HeldTransactionService {
                         'txid' => $txid,
                         'expected_previous_txid' => $expectedPreviousTxid
                     ]);
+                    // Release the held transaction to prevent infinite retry loops
+                    $this->heldRepository->markAsFailed($txid, 'update_previous_txid_failed');
                 }
             }
 

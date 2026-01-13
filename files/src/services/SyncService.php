@@ -492,12 +492,12 @@ class SyncService {
 
                 // Verify transaction signature before inserting
                 // CRITICAL: Verify with ORIGINAL previous_txid since that's what was signed
-                // CRITICAL: If signature verification fails, STOP syncing immediately.
-                // The failing transaction and all subsequent transactions are NOT inserted.
-                // This is a security measure to prevent insertion of forged transactions.
+                // NOTE: For sync recovery, we continue processing even if some transactions fail
+                // verification. This allows partial recovery of valid transactions while
+                // logging invalid ones for investigation.
                 if (!$this->verifyTransactionSignature($tx)) {
                     // Log the failure with full details for security audit
-                    SecureLogger::warning("Sync stopped: Transaction signature verification failed", [
+                    SecureLogger::warning("Sync: Transaction signature verification failed - skipping", [
                         'txid' => $tx['txid'] ?? 'unknown',
                         'sender_address' => $tx['sender_address'] ?? 'unknown',
                         'sender_public_key_hash' => isset($tx['sender_public_key'])
@@ -508,22 +508,18 @@ class SyncService {
                         'currency' => $tx['currency'] ?? 'unknown',
                         'has_signature' => !empty($tx['sender_signature']),
                         'has_nonce' => !empty($tx['signature_nonce']),
-                        'synced_before_failure' => $syncedCount,
+                        'synced_so_far' => $syncedCount,
                         'contact_address' => $contactAddress
                     ]);
 
-                    // Set failure result with details for GUI warning
-                    $result['success'] = false;
-                    $result['synced_count'] = $syncedCount;
-                    $result['signature_failure'] = true;
-                    $result['failed_txid'] = $tx['txid'] ?? null;
-                    $result['failed_sender'] = $tx['sender_address'] ?? null;
-                    $result['synced_before_failure'] = $syncedCount;
-                    $result['error'] = 'Sync stopped: signature verification failed for transaction ' . ($tx['txid'] ?? 'unknown');
-                    $result['conflicts_resolved'] = $conflictsResolved;
-
-                    // Output for CLI visibility
-                    output("SECURITY WARNING: Transaction signature verification failed. Sync stopped. TXID: " . ($tx['txid'] ?? 'unknown'), 'ECHO');
+                    // Track signature failures but continue processing
+                    if (!isset($result['signature_failures'])) {
+                        $result['signature_failures'] = [];
+                    }
+                    $result['signature_failures'][] = [
+                        'txid' => $tx['txid'] ?? 'unknown',
+                        'sender' => $tx['sender_address'] ?? 'unknown'
+                    ];
 
                     // Store warning in session for GUI notification
                     if (session_status() === PHP_SESSION_ACTIVE) {
@@ -539,8 +535,9 @@ class SyncService {
                         ];
                     }
 
-                    // STOP processing - do not insert this or any subsequent transactions
-                    return $result;
+                    // CONTINUE processing - skip this transaction but process remaining ones
+                    // This allows partial sync recovery instead of complete failure
+                    continue;
                 }
 
                 // Insert the missing transaction (only reached if signature is valid)
