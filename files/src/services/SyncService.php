@@ -728,13 +728,15 @@ class SyncService {
             }
 
             // Get the updated transaction from database
-            $updatedTx = $this->transactionRepository->getByTxid($localTx['txid']);
-            if (!$updatedTx) {
+            $updatedTxResult = $this->transactionRepository->getByTxid($localTx['txid']);
+            if (!$updatedTxResult || empty($updatedTxResult)) {
                 SecureLogger::warning("Could not retrieve updated transaction for re-signing", [
                     'txid' => $localTx['txid']
                 ]);
                 return false;
             }
+            // Unwrap array - getByTxid() returns array of transactions
+            $updatedTx = $updatedTxResult[0];
 
             // Build the payload for signing based on memo type
             $memo = $updatedTx['memo'] ?? 'standard';

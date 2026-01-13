@@ -301,7 +301,7 @@ class HeldTransactionRepository extends AbstractRepository {
         $query = "UPDATE {$this->tableName}
                   SET sync_status = 'completed', resolved_at = :resolved_at
                   WHERE contact_pubkey_hash = :contact_pubkey_hash
-                  AND sync_status = 'in_progress'";
+                  AND sync_status IN ('in_progress', 'not_started')";
 
         $stmt = $this->execute($query, [
             ':resolved_at' => date('Y-m-d H:i:s.u'),

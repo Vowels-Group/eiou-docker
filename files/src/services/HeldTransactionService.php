@@ -233,6 +233,23 @@ class HeldTransactionService {
         try {
             $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
 
+            // Verify chain integrity before processing held transactions
+            // This ensures the sync actually completed successfully
+            $chainIntegrity = $this->transactionRepository->verifyChainIntegrity(
+                $this->currentUser->getPublicKey(),
+                $contactPubkey
+            );
+
+            if (!$chainIntegrity['valid']) {
+                SecureLogger::warning("Chain integrity check failed after sync, cannot resume held transactions", [
+                    'contact_pubkey_hash' => $contactPubkeyHash,
+                    'gaps' => $chainIntegrity['gaps'] ?? [],
+                    'broken_txids' => $chainIntegrity['broken_txids'] ?? []
+                ]);
+                // Don't return - still try to process, but log the warning
+                // Some transactions may still be recoverable
+            }
+
             // Get all held transactions for this contact that completed sync
             $heldTransactions = $this->heldRepository->getHeldTransactionsForContact($contactPubkeyHash, Constants::STATUS_COMPLETED);
 

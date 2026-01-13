@@ -1628,9 +1628,10 @@ class TransactionRepository extends AbstractRepository {
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $pubkey2);
 
         $query = "SELECT * FROM {$this->tableName}
-                  WHERE (sender_public_key_hash = :sender_pubkey_hash1 AND receiver_public_key_hash = :receiver_pubkey_hash1)
-                     OR (sender_public_key_hash = :receiver_pubkey_hash2 AND receiver_public_key_hash = :sender_pubkey_hash2)
-                  ORDER BY timestamp DESC";
+                  WHERE ((sender_public_key_hash = :sender_pubkey_hash1 AND receiver_public_key_hash = :receiver_pubkey_hash1)
+                     OR (sender_public_key_hash = :receiver_pubkey_hash2 AND receiver_public_key_hash = :sender_pubkey_hash2))
+                     AND status NOT IN ('cancelled', 'rejected')
+                  ORDER BY COALESCE(time, 0) DESC, timestamp DESC";
 
         if ($limit > 0) {
             $query .= " LIMIT :limit";
