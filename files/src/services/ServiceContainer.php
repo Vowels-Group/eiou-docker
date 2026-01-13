@@ -558,6 +558,21 @@ class ServiceContainer {
     }
 
     /**
+     * Get TransactionRecoveryService instance
+     *
+     * @return TransactionRecoveryService
+     */
+    public function getTransactionRecoveryService(): TransactionRecoveryService {
+        if (!isset($this->services['TransactionRecoveryService'])) {
+            require_once __DIR__ . '/TransactionRecoveryService.php';
+            $this->services['TransactionRecoveryService'] = new TransactionRecoveryService(
+                $this->getTransactionRepository()
+            );
+        }
+        return $this->services['TransactionRecoveryService'];
+    }
+
+    /**
      * Get CliService instance
      *
      * @return CliService
