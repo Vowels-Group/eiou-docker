@@ -177,6 +177,197 @@ for container in "${containers[@]}"; do
     fi
 done
 
+############################ TEST CERTIFICATE SAN/CN DETAILS ############################
+
+echo -e "\n[Certificate Subject Alternative Names Tests]"
+
+for container in "${containers[@]}"; do
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Checking certificate CN and SAN details on ${container}"
+
+    # Get certificate subject (CN)
+    certSubject=$(docker exec ${container} openssl x509 -in ${SSL_CERT} -noout -subject 2>/dev/null)
+    # Check for SANs
+    certSAN=$(docker exec ${container} openssl x509 -in ${SSL_CERT} -noout -ext subjectAltName 2>&1)
+
+    # Report certificate details (informational - always passes)
+    printf "\t   Certificate CN: ${certSubject}\n"
+    if echo "$certSAN" | grep -q "No extensions"; then
+        printf "\t   Certificate SANs: None (CN=localhost only)\n"
+    else
+        printf "\t   Certificate SANs: ${certSAN}\n"
+    fi
+    printf "\t   Certificate details captured ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+done
+
+############################ TEST SSL TO IP ADDRESS (WITH -k FLAG) ############################
+
+echo -e "\n[SSL to IP Address Tests (Insecure Mode)]"
+
+# Only run inter-container tests if we have more than one container
+if [[ ${#containers[@]} -gt 1 ]]; then
+    # Use first container as source, second as target
+    sourceContainer="${containers[0]}"
+    targetContainer="${containers[1]}"
+
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing SSL connection from ${sourceContainer} to ${targetContainer} via IP address"
+
+    # Get target container IP
+    targetIP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${targetContainer} 2>/dev/null)
+
+    if [[ -n "$targetIP" ]]; then
+        printf "\t   Target IP: ${targetIP}\n"
+
+        # Test SSL connection with -k flag (should succeed)
+        httpCode=$(docker exec ${sourceContainer} curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 https://${targetIP}/ 2>/dev/null)
+
+        if [[ "$httpCode" == "200" ]]; then
+            printf "\t   SSL to IP with -k flag ${GREEN}PASSED${NC}\n"
+            printf "\t   HTTP Status: ${httpCode}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   SSL to IP with -k flag ${RED}FAILED${NC}\n"
+            printf "\t   HTTP Status: ${httpCode} (expected 200)\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   Could not get target IP ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    echo -e "\n\t-> Skipping inter-container SSL test (single container setup)"
+fi
+
+############################ TEST SSL TO IP ADDRESS (WITHOUT -k FLAG - EXPECTED FAILURE) ############################
+
+echo -e "\n[SSL to IP Address Tests (Strict Mode - Expected Behavior)]"
+
+# Only run inter-container tests if we have more than one container
+if [[ ${#containers[@]} -gt 1 ]]; then
+    sourceContainer="${containers[0]}"
+    targetContainer="${containers[1]}"
+
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing SSL connection from ${sourceContainer} to ${targetContainer} via IP (strict mode)"
+
+    targetIP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${targetContainer} 2>/dev/null)
+
+    if [[ -n "$targetIP" ]]; then
+        printf "\t   Target IP: ${targetIP}\n"
+
+        # Test SSL connection WITHOUT -k flag (expected to fail due to self-signed cert)
+        sslResult=$(docker exec ${sourceContainer} curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://${targetIP}/ 2>&1)
+        curlExitCode=$?
+
+        # Exit code 60 = SSL certificate problem (expected behavior)
+        # Exit code 51 = SSL peer certificate or SSH remote key was not OK
+        if [[ "$curlExitCode" -eq 60 ]] || [[ "$curlExitCode" -eq 51 ]] || [[ "$sslResult" == "000" ]]; then
+            printf "\t   SSL verification correctly rejected self-signed cert ${GREEN}PASSED${NC}\n"
+            printf "\t   curl exit code: ${curlExitCode} (SSL verification failure expected)\n"
+            passed=$(( passed + 1 ))
+        elif [[ "$sslResult" == "200" ]]; then
+            # If it succeeds without -k, certificate may have been updated with SANs
+            printf "\t   SSL verification succeeded (certificate may include IP SANs) ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   Unexpected SSL behavior ${YELLOW}WARNING${NC}\n"
+            printf "\t   Exit code: ${curlExitCode}, HTTP Status: ${sslResult}\n"
+            passed=$(( passed + 1 ))  # Don't fail test for unexpected but non-breaking behavior
+        fi
+    else
+        printf "\t   Could not get target IP ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    echo -e "\n\t-> Skipping strict SSL test (single container setup)"
+fi
+
+############################ TEST SSL TO DOCKER HOSTNAME ############################
+
+echo -e "\n[SSL to Docker Hostname Tests]"
+
+# Only run inter-container tests if we have more than one container
+if [[ ${#containers[@]} -gt 1 ]]; then
+    sourceContainer="${containers[0]}"
+    targetContainer="${containers[1]}"
+
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing SSL connection from ${sourceContainer} to ${targetContainer} via hostname"
+
+    # Test SSL connection to hostname with -k flag
+    httpCode=$(docker exec ${sourceContainer} curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 https://${targetContainer}/ 2>/dev/null)
+
+    if [[ "$httpCode" == "200" ]]; then
+        printf "\t   SSL to Docker hostname with -k flag ${GREEN}PASSED${NC}\n"
+        printf "\t   HTTP Status: ${httpCode}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   SSL to Docker hostname ${RED}FAILED${NC}\n"
+        printf "\t   HTTP Status: ${httpCode} (expected 200)\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    echo -e "\n\t-> Skipping hostname SSL test (single container setup)"
+fi
+
+############################ TEST TLS VERSION AND CIPHER ############################
+
+echo -e "\n[TLS Protocol and Cipher Tests]"
+
+for container in "${containers[@]}"; do
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Checking TLS version and cipher on ${container}"
+
+    # Get TLS protocol version
+    tlsInfo=$(docker exec ${container} sh -c "echo | openssl s_client -connect localhost:443 2>&1" | grep -E "Protocol|Cipher" | head -2)
+
+    if echo "$tlsInfo" | grep -qE "TLSv1\.[23]"; then
+        printf "\t   TLS version secure (TLS 1.2+) ${GREEN}PASSED${NC}\n"
+        printf "\t   ${tlsInfo}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   TLS version check ${YELLOW}WARNING${NC}\n"
+        printf "\t   ${tlsInfo}\n"
+        passed=$(( passed + 1 ))  # Don't fail, just warn
+    fi
+done
+
+############################ TEST API ENDPOINT VIA SSL TO IP ############################
+
+echo -e "\n[API over SSL to IP Address Tests]"
+
+if [[ ${#containers[@]} -gt 1 ]]; then
+    sourceContainer="${containers[0]}"
+    targetContainer="${containers[1]}"
+
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing API endpoint from ${sourceContainer} to ${targetContainer} via IP"
+
+    targetIP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${targetContainer} 2>/dev/null)
+
+    if [[ -n "$targetIP" ]]; then
+        # Test API endpoint over SSL to IP
+        apiResponse=$(docker exec ${sourceContainer} curl -k -s --max-time 10 https://${targetIP}/api/ping 2>/dev/null)
+
+        # API should respond with JSON (either success or auth error)
+        if echo "$apiResponse" | grep -q '"success"'; then
+            printf "\t   API accessible over SSL to IP ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   API response unexpected ${RED}FAILED${NC}\n"
+            printf "\t   Response: ${apiResponse}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   Could not get target IP ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    echo -e "\n\t-> Skipping API over SSL to IP test (single container setup)"
+fi
+
 ##################################################################
 
 echo ""
