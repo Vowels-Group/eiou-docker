@@ -160,6 +160,17 @@ class CliService {
             } elseif(strtolower($argv[2]) === 'defaulttransportmode'){
                 $key = 'defaultTransportMode';
                 $value = strtolower($argv[3]);
+            } elseif(strtolower($argv[2]) === 'autorefreshenabled'){
+                $key = 'autoRefreshEnabled';
+                $inputValue = strtolower($argv[3]);
+                if ($inputValue === 'true' || $inputValue === '1' || $inputValue === 'on' || $inputValue === 'yes') {
+                    $value = true;
+                } elseif ($inputValue === 'false' || $inputValue === '0' || $inputValue === 'off' || $inputValue === 'no') {
+                    $value = false;
+                } else {
+                    $output->validationError('autoRefreshEnabled', 'Value must be true/false, on/off, yes/no, or 1/0');
+                    return;
+                }
             } elseif(strtolower($argv[2]) === 'hostname'){
                 $key = 'hostname';
                 $validation = InputValidator::validateHostname($argv[3]);
@@ -194,6 +205,7 @@ class CliService {
             echo "\t8. Maximum lines of balance/transaction output\n";
             echo "\t9. Default transport type\n";
             echo "\t10. Hostname\n";
+            echo "\t11. Auto-refresh transactions\n";
             echo "\t0. Cancel\n";
 
             // Read user input
@@ -311,6 +323,20 @@ class CliService {
                     $value = $validation['value'];
                     break;
 
+                case '11':
+                    echo "Enable auto-refresh for pending transactions? (yes/no): ";
+                    $key = 'autoRefreshEnabled';
+                    $inputValue = strtolower(trim(fgets(STDIN)));
+                    if ($inputValue === 'yes' || $inputValue === 'y' || $inputValue === 'true' || $inputValue === '1' || $inputValue === 'on') {
+                        $value = true;
+                    } elseif ($inputValue === 'no' || $inputValue === 'n' || $inputValue === 'false' || $inputValue === '0' || $inputValue === 'off') {
+                        $value = false;
+                    } else {
+                        echo "Error: Please enter yes or no\n";
+                        return;
+                    }
+                    break;
+
                 case '0':
                     echo "Setting change cancelled.\n";
                     return;
@@ -362,7 +388,8 @@ class CliService {
             'max_p2p_level' => $this->currentUser->getMaxP2pLevel(),
             'p2p_expiration_seconds' => $this->currentUser->getP2pExpirationTime(),
             'max_output_lines' => $this->currentUser->getMaxOutput(),
-            'default_transport_mode' => $this->currentUser->getDefaultTransportMode()
+            'default_transport_mode' => $this->currentUser->getDefaultTransportMode(),
+            'auto_refresh_enabled' => $this->currentUser->getAutoRefreshEnabled()
         ];
 
         if ($output->isJsonMode()) {
@@ -378,6 +405,7 @@ class CliService {
             echo "\tDefault peer to peer Expiration: " .  $settings['p2p_expiration_seconds'] . " seconds\n";
             echo "\tDefault maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
             echo "\tDefault transport mode: " . $settings['default_transport_mode'] . "\n";
+            echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
         }
     }
 
