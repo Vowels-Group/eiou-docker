@@ -303,15 +303,90 @@ echo -e "\t Authentication Code: (stored securely with seedphrase - see above)"
 
 # Start p2p message processing in background
 nohup php /etc/eiou/P2pMessages.php > /dev/null 2>&1 &
-echo "P2p message processing started successfully (PID: $!)"
+P2P_PID=$!
+echo "P2p message processing started successfully (PID: $P2P_PID)"
 
 # Start transaction message processing in background
 nohup php /etc/eiou/TransactionMessages.php > /dev/null 2>&1 &
-echo "Transaction message processing started successfully (PID: $!)"
+TRANSACTION_PID=$!
+echo "Transaction message processing started successfully (PID: $TRANSACTION_PID)"
 
 # Start cleanup message processing in background
 nohup php /etc/eiou/CleanupMessages.php > /dev/null 2>&1 &
-echo "Cleanup processing started successfully (PID: $!)"
+CLEANUP_PID=$!
+echo "Cleanup processing started successfully (PID: $CLEANUP_PID)"
+
+# Watchdog function to monitor and restart processors if they die
+watchdog() {
+    local WATCHDOG_INTERVAL=30       # Check every 30 seconds
+    local RESTART_COOLDOWN=60        # Minimum seconds between restarts of same processor
+    local MAX_RESTARTS=10            # Maximum restarts before giving up
+
+    # Track restart counts and last restart times
+    local P2P_RESTARTS=0
+    local TRANSACTION_RESTARTS=0
+    local CLEANUP_RESTARTS=0
+    local P2P_LAST_RESTART=0
+    local TRANSACTION_LAST_RESTART=0
+    local CLEANUP_LAST_RESTART=0
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watchdog started - monitoring processor PIDs"
+
+    while true; do
+        sleep $WATCHDOG_INTERVAL
+        local CURRENT_TIME=$(date +%s)
+
+        # Check P2pMessages processor
+        if ! kill -0 $P2P_PID 2>/dev/null; then
+            local TIME_SINCE_RESTART=$((CURRENT_TIME - P2P_LAST_RESTART))
+            if [ $P2P_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                P2P_RESTARTS=$((P2P_RESTARTS + 1))
+                P2P_LAST_RESTART=$CURRENT_TIME
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages died (was PID $P2P_PID), restarting (attempt $P2P_RESTARTS/$MAX_RESTARTS)..."
+                nohup php /etc/eiou/P2pMessages.php > /dev/null 2>&1 &
+                P2P_PID=$!
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages restarted (new PID: $P2P_PID)"
+            elif [ $P2P_RESTARTS -ge $MAX_RESTARTS ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+            fi
+        fi
+
+        # Check TransactionMessages processor
+        if ! kill -0 $TRANSACTION_PID 2>/dev/null; then
+            local TIME_SINCE_RESTART=$((CURRENT_TIME - TRANSACTION_LAST_RESTART))
+            if [ $TRANSACTION_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                TRANSACTION_RESTARTS=$((TRANSACTION_RESTARTS + 1))
+                TRANSACTION_LAST_RESTART=$CURRENT_TIME
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages died (was PID $TRANSACTION_PID), restarting (attempt $TRANSACTION_RESTARTS/$MAX_RESTARTS)..."
+                nohup php /etc/eiou/TransactionMessages.php > /dev/null 2>&1 &
+                TRANSACTION_PID=$!
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages restarted (new PID: $TRANSACTION_PID)"
+            elif [ $TRANSACTION_RESTARTS -ge $MAX_RESTARTS ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+            fi
+        fi
+
+        # Check CleanupMessages processor
+        if ! kill -0 $CLEANUP_PID 2>/dev/null; then
+            local TIME_SINCE_RESTART=$((CURRENT_TIME - CLEANUP_LAST_RESTART))
+            if [ $CLEANUP_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                CLEANUP_RESTARTS=$((CLEANUP_RESTARTS + 1))
+                CLEANUP_LAST_RESTART=$CURRENT_TIME
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages died (was PID $CLEANUP_PID), restarting (attempt $CLEANUP_RESTARTS/$MAX_RESTARTS)..."
+                nohup php /etc/eiou/CleanupMessages.php > /dev/null 2>&1 &
+                CLEANUP_PID=$!
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages restarted (new PID: $CLEANUP_PID)"
+            elif [ $CLEANUP_RESTARTS -ge $MAX_RESTARTS ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+            fi
+        fi
+    done
+}
+
+# Start watchdog in background
+watchdog &
+WATCHDOG_PID=$!
+echo "Watchdog started (PID: $WATCHDOG_PID)"
 
 # Keep container running
 tail -f /dev/null
