@@ -793,11 +793,21 @@ class TransactionService {
     /**
      * Process pending transactions
      *
+     * Uses atomic claiming to prevent duplicate processing:
+     * 1. Atomically claim transaction (PENDING -> SENDING)
+     * 2. If claim fails, skip (another process is handling it)
+     * 3. Send the transaction
+     * 4. Update status based on result (SENDING -> SENT/ACCEPTED/REJECTED)
+     *
+     * If process crashes while SENDING, TransactionRecoveryService will
+     * recover the transaction on next startup.
+     *
      * @return int Number of processed transactions
      */
     public function processPendingTransactions(): int {
         // Process pending transactions in database
         $pendingMessages = $this->transactionRepository->getPendingTransactions();
+        $processedCount = 0;
 
         // Process each pending message
         foreach ($pendingMessages as $message) {
@@ -808,20 +818,33 @@ class TransactionService {
             if($memo === 'standard'){
                 // If you're sending the direct transaction
                 if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
+
+                    // ATOMIC CLAIM: Prevent duplicate processing by claiming the transaction
+                    // This atomically changes status from PENDING to SENDING
+                    // If another process already claimed it, claimPendingTransaction returns false
+                    if (!$this->transactionRepository->claimPendingTransaction($txid)) {
+                        SecureLogger::info("Transaction already claimed by another process, skipping", [
+                            'txid' => $txid
+                        ]);
+                        continue; // Skip - another process is handling this
+                    }
+
                     $payload = $this->transactionPayload->buildStandardFromDatabase($message);
 
                     // Log the payload being sent (for debugging held transaction resumes)
-                    SecureLogger::info("Sending standard transaction", [
+                    SecureLogger::info("Sending standard transaction (claimed)", [
                         'txid' => $txid,
                         'previous_txid_in_db' => $message['previous_txid'] ?? 'NULL',
                         'previous_txid_in_payload' => $payload['previousTxid'] ?? 'NULL',
                         'receiver' => $message['receiver_address']
                     ]);
 
-                    $this->transactionRepository->updateStatus($txid, Constants::STATUS_SENT, true);
-
-                    // Send with delivery tracking
+                    // Transaction is now in SENDING status - actually send it
+                    // If we crash here, TransactionRecoveryService will handle recovery
                     $sendResult = $this->sendTransactionMessage($message['receiver_address'], $payload, $txid);
+
+                    // Mark as sent (SENDING -> SENT) after successful send attempt
+                    $this->transactionRepository->markAsSent($txid);
                     $response = $sendResult['response'];
                     output(outputTransactionInquiryResponse($response),'SILENT');
 
@@ -918,25 +941,41 @@ class TransactionService {
                     // Note: The sender's delivery record is marked complete when they receive this completion response
                     $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, 'completion-response-' . $txid);
                 }
+                $processedCount++;
             } else{
-                // If p2p transaction
-                $this->processP2pTransaction($message, $memo, $txid);
+                // If p2p transaction - also needs atomic claiming
+                if ($this->processP2pTransaction($message, $memo, $txid)) {
+                    $processedCount++;
+                }
             }
         }
 
-        return isset($pendingMessages) ? count($pendingMessages) : 0;
+        return $processedCount;
     }
 
     /**
      * Process P2P transaction
      *
+     * Uses atomic claiming to prevent duplicate processing for outgoing transactions.
+     *
      * @param array $message Transaction message
      * @param string $memo Transaction memo
      * @param string $txid Transaction ID
+     * @return bool True if transaction was processed, false if skipped
      */
-    private function processP2pTransaction(array $message, string $memo, string $txid): void {
+    private function processP2pTransaction(array $message, string $memo, string $txid): bool {
         // If you're sending the transaction
         if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
+
+            // ATOMIC CLAIM: Prevent duplicate processing
+            if (!$this->transactionRepository->claimPendingTransaction($txid)) {
+                SecureLogger::info("P2P transaction already claimed by another process, skipping", [
+                    'txid' => $txid,
+                    'memo' => $memo
+                ]);
+                return false; // Skip - another process is handling this
+            }
+
             $rp2p = $this->rp2pRepository->getByHash($memo);
             $message['time'] = $rp2p['time'];
 
@@ -957,12 +996,14 @@ class TransactionService {
             // If sending transaction forwards
             $payload = $this->transactionPayload->buildFromDatabase($message);
             $this->p2pRepository->updateStatus($memo, Constants::STATUS_PAID);
-            $this->transactionRepository->updateStatus($memo, Constants::STATUS_SENT);
             output(outputSendTransactionOnwards($message),'SILENT');
 
             // Send with delivery tracking
             // Use relay- prefix for forwarded transactions, send- for original sends
             $sendResult = $this->sendTransactionMessage($message['receiver_address'], $payload, $txid, $isRelay);
+
+            // Mark as sent after send attempt (SENDING -> SENT)
+            $this->transactionRepository->markAsSent($txid);
             $response = $sendResult['response'];
 
             if($response && $response['status'] === Constants::STATUS_ACCEPTED){
@@ -992,7 +1033,7 @@ class TransactionService {
 
                         if ($holdResult['held']) {
                             output('P2P transaction held pending sync completion', 'SILENT');
-                            return; // Transaction will be resumed after sync completes
+                            return true; // Transaction was processed (held for sync)
                         }
                     }
 
@@ -1015,7 +1056,7 @@ class TransactionService {
                         // Revert status to pending for retry
                         $this->transactionRepository->updateStatus($memo, Constants::STATUS_PENDING);
                         $this->p2pRepository->updateStatus($memo, 'found');
-                        return; // Exit to allow retry on next processing cycle
+                        return true; // Transaction was processed (will retry after sync)
                     } else {
                         output('Sync failed or no transactions to sync', 'SILENT');
                     }
@@ -1035,6 +1076,7 @@ class TransactionService {
                 ]);
             }
             output(outputTransactionResponse($response),'SILENT');
+            return true; // Transaction was processed (sent)
         }
          // If receiving transaction
         else{
@@ -1085,7 +1127,9 @@ class TransactionService {
                 // Format: completion-response-{txid}-{timestamp} (P2P end-recipient responding with completion)
                 $this->sendTransactionMessage($message['sender_address'], $payloadTransactionCompleted, 'completion-response-' . $txid);
             }
+            return true; // Transaction was processed (received)
         }
+        return false; // Should not reach here
     }
 
     /**
