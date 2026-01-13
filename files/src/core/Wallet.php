@@ -42,7 +42,8 @@ class Wallet{
             'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,              // Default maximum level for Peer to Peer propagation
             'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,           // Default expiration time for Peer to Peer requests in seconds
             'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,             // Maximum lines of output for multi-line output
-            'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE             // Default way to send messages (fallback in case uncertain)
+            'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE,            // Default way to send messages (fallback in case uncertain)
+            'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED                 // Auto-refresh for pending transactions (default: off)
         ]);
         file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);
         chown('/etc/eiou/defaultconfig.json', 'www-data');
@@ -200,7 +201,8 @@ class Wallet{
             'maxP2pLevel' => Constants::P2P_DEFAULT_MAX_REQUEST_LEVEL,
             'p2pExpiration' => Constants::P2P_DEFAULT_EXPIRATION_SECONDS,
             'maxOutput' => Constants::DISPLAY_DEFAULT_OUTPUT_LINES_MAX,
-            'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE
+            'defaultTransportMode' => Constants::DEFAULT_TRANSPORT_MODE,
+            'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED
         ]);
         file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);
         chown('/etc/eiou/defaultconfig.json', 'www-data');

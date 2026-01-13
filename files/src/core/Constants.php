@@ -180,6 +180,7 @@ class Constants {
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
     const DISPLAY_CURRENCY_DECIMALS = 2;
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
+    const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
 
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/';
