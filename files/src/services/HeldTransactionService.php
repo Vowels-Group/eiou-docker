@@ -150,7 +150,7 @@ class HeldTransactionService {
             }
 
             // Update sync status to in_progress
-            $this->heldRepository->markSyncStarted($contactPubkeyHash);
+            $started = $this->heldRepository->markSyncStarted($contactPubkeyHash);
 
             // Initiate sync through SyncService
             $syncService = Application::getInstance()->services->getSyncService();
@@ -530,7 +530,7 @@ class HeldTransactionService {
 
             if ($success) {
                 // Update sync status to completed
-                $this->heldRepository->markSyncCompleted($contactPubkeyHash);
+                $completed = $this->heldRepository->markSyncCompleted($contactPubkeyHash);
 
                 SecureLogger::info("Sync completed, processing held transactions", [
                     'contact_hash' => $contactPubkeyHash,

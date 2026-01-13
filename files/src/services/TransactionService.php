@@ -642,7 +642,11 @@ class TransactionService {
                 // the loser re-signs their transaction with the new previous_txid pointing to the winner.
                 // We need to accept this update if the signature is valid.
                 if ($memo === "standard") {
-                    $existingTx = $this->transactionRepository->getByTxid($request['txid']);
+                    $existingTxData = $this->transactionRepository->getByTxid($request['txid']);
+                    // getByTxid returns an array of transactions - extract first element
+                    $existingTx = is_array($existingTxData) && isset($existingTxData[0])
+                        ? $existingTxData[0]
+                        : $existingTxData;
                     $newPreviousTxid = $request['previousTxid'] ?? null;
                     $existingPreviousTxid = $existingTx['previous_txid'] ?? null;
 
@@ -984,6 +988,10 @@ class TransactionService {
     public function processPendingTransactions(): int {
         // Process pending transactions in database
         $pendingMessages = $this->transactionRepository->getPendingTransactions();
+        error_log("PENDING_PROCESS: Found " . count($pendingMessages) . " pending transactions");
+        foreach ($pendingMessages as $idx => $pm) {
+            error_log("PENDING_PROCESS: [{$idx}] txid=" . ($pm['txid'] ?? 'N/A') . " prev_txid=" . ($pm['previous_txid'] ?? 'NULL') . " status=" . ($pm['status'] ?? 'N/A'));
+        }
 
         // Process each pending message
         foreach ($pendingMessages as $message) {
@@ -1032,16 +1040,25 @@ class TransactionService {
                             // This handles simultaneous sends efficiently without needing sync
                             if ($expectedTxid !== null) {
                                 output('Transaction rejected due to invalid_previous_txid, attempting inline retry...', 'SILENT');
+                                error_log("INLINE_RETRY: Starting for txid={$txid}, expected_txid={$expectedTxid}");
 
                                 // Update previous_txid to the expected value
                                 $updatedPrevTxid = $this->transactionRepository->updatePreviousTxid($txid, $expectedTxid);
+                                error_log("INLINE_RETRY: updatePreviousTxid result=" . ($updatedPrevTxid ? "true" : "false"));
 
                                 if ($updatedPrevTxid) {
                                     // Re-fetch the updated transaction
-                                    $updatedMessage = $this->transactionRepository->getByTxid($txid);
+                                    $updatedMessageData = $this->transactionRepository->getByTxid($txid);
+                                    error_log("INLINE_RETRY: getByTxid returned " . (is_array($updatedMessageData) ? count($updatedMessageData) . " rows" : "non-array"));
+                                    // getByTxid returns an array of transactions - extract first element
+                                    $updatedMessage = is_array($updatedMessageData) && isset($updatedMessageData[0])
+                                        ? $updatedMessageData[0]
+                                        : $updatedMessageData;
                                     if ($updatedMessage) {
+                                        error_log("INLINE_RETRY: updated previous_txid in DB=" . ($updatedMessage['previous_txid'] ?? 'NULL'));
                                         // Re-build the payload with new previous_txid
                                         $newPayload = $this->transactionPayload->buildStandardFromDatabase($updatedMessage);
+                                        error_log("INLINE_RETRY: payload previousTxid=" . ($newPayload['previousTxid'] ?? 'NULL'));
 
                                         // Re-sign the transaction
                                         $transportUtility = $this->utilityContainer->getTransportUtility();
@@ -1055,11 +1072,21 @@ class TransactionService {
                                                 $signResult['nonce']
                                             );
 
+                                            // Reset status to pending so it will be picked up on next cycle
+                                            // Status was set to 'sent' before the send attempt at line 1011
+                                            $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+
+                                            error_log("INLINE_RETRY: SUCCESS - status reset to pending for txid={$txid}");
                                             output('Transaction re-signed with corrected previous_txid, will retry...', 'SILENT');
-                                            // Keep status as pending - will be retried on next cycle
                                             continue;
+                                        } else {
+                                            error_log("INLINE_RETRY: signWithCapture failed");
                                         }
+                                    } else {
+                                        error_log("INLINE_RETRY: updatedMessage is null/empty");
                                     }
+                                } else {
+                                    error_log("INLINE_RETRY: updatePreviousTxid returned false");
                                 }
                                 output('Inline retry failed, falling back to hold/sync...', 'SILENT');
                             }
@@ -1105,6 +1132,7 @@ class TransactionService {
                             }
                         }
 
+                        error_log("REJECTION_FALLBACK: Setting status to rejected for txid={$txid}, reason=" . ($response['reason'] ?? 'unknown'));
                         $this->transactionRepository->updateStatus($txid, Constants::STATUS_REJECTED, true);
                         output(outputIssueTransactionTryP2p($response),'SILENT');
                         // Send P2P request for failed direct transaction using P2pService directly
@@ -1217,7 +1245,11 @@ class TransactionService {
 
                         if ($updatedPrevTxid) {
                             // Re-fetch the updated transaction
-                            $updatedMessage = $this->transactionRepository->getByTxid($txid);
+                            $updatedMessageData = $this->transactionRepository->getByTxid($txid);
+                            // getByTxid returns an array of transactions - extract first element
+                            $updatedMessage = is_array($updatedMessageData) && isset($updatedMessageData[0])
+                                ? $updatedMessageData[0]
+                                : $updatedMessageData;
                             if ($updatedMessage) {
                                 // Re-build the payload with new previous_txid (use buildFromDatabase for P2P)
                                 $newPayload = $this->transactionPayload->buildFromDatabase($updatedMessage);
