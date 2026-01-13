@@ -1,0 +1,46 @@
+# create the network (only need to do this once per docker installation)
+docker network create -d bridge demo-net
+
+# Remove any existing containers
+powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+
+# Build base image
+docker build -f eioud.dockerfile -t eioud .
+
+# Start containers
+docker run -d  --network=demo-net --name http0 -e QUICKSTART=http0 eioud
+docker run -d  --network=demo-net --name http1 -e QUICKSTART=http1 eioud
+docker run -d  --network=demo-net --name http2 -e QUICKSTART=http2 eioud
+docker run -d  --network=demo-net --name http3 -e QUICKSTART=http3 eioud
+sleep 5
+
+# add contacts
+docker exec http0 eiou add http://http1 http1 0.1 1000 USD
+docker exec http1 eiou add http://http0 http0 0.1 1000 USD
+docker exec http1 eiou add http://http2 http2 0.1 1000 USD
+docker exec http2 eiou add http://http1 http1 0.1 1000 USD
+docker exec http2 eiou add http://http3 http3 0.1 1000 USD
+docker exec http3 eiou add http://http2 http2 0.1 1000 USD
+
+# direct transaction
+docker exec http0 eiou send http://http1 15 USD
+
+# p2p transaction
+docker exec http0 eiou send http://http3 12 USD
+docker exec http0 eiou send http://http2 10 USD
+docker exec http0 eiou send http://http3 12 USD
+docker exec http0 eiou send http://http2 10 USD
+docker exec http0 eiou send http://http3 12 USD
+docker exec http0 eiou send http://http2 10 USD
+docker exec http0 eiou send http://http3 12 USD
+docker exec http0 eiou send http://http2 10 USD
+docker exec http0 eiou send http://http3 12 USD
+docker exec http0 eiou send http://http2 10 USD
+docker exec http0 eiou send http://http3 12 USD
+docker exec http0 eiou send http://http2 10 USD
+docker exec http0 eiou send http://http3 12 USD
+docker exec http0 eiou send http://http2 10 USD
+docker exec http0 eiou send http://http3 12 USD
+docker exec http0 eiou send http://http2 10 USD
+docker exec http0 eiou send http://http3 12 USD
+docker exec http0 eiou send http://http2 10 USD

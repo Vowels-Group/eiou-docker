@@ -1,0 +1,56 @@
+# create the network (only need to do this once per docker)
+docker network create -d bridge demo-net
+
+# Remove any existing containers
+powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+
+# Build base image
+docker build -f eioud.dockerfile -t eioud .
+
+# Start containers
+docker run -d  --network=demo-net --name httpsA -e QUICKSTART=httpsA eioud
+docker run -d  --network=demo-net --name httpsB -e QUICKSTART=httpsB eioud
+docker run -d  --network=demo-net --name httpsC -e QUICKSTART=httpsC eioud
+docker run -d  --network=demo-net --name httpsD -e QUICKSTART=httpsD eioud
+docker run -d  --network=demo-net --name httpsE -e QUICKSTART=httpsE eioud
+docker run -d  --network=demo-net --name httpsF -e QUICKSTART=httpsF eioud
+docker run -d  --network=demo-net --name httpsG -e QUICKSTART=httpsG eioud
+docker run -d  --network=demo-net --name httpsH -e QUICKSTART=httpsH eioud
+docker run -d  --network=demo-net --name httpsI -e QUICKSTART=httpsI eioud
+docker run -d  --network=demo-net --name httpsJ -e QUICKSTART=httpsJ eioud
+sleep 5
+
+# add contacts
+docker exec httpsA eiou add https://httpsB httpsB 0.1 1000 USD
+docker exec httpsB eiou add https://httpsA httpsA 0.1 1000 USD
+docker exec httpsB eiou add https://httpsC httpsC 0.1 1000 USD
+docker exec httpsC eiou add https://httpsB httpsB 0.1 1000 USD
+docker exec httpsC eiou add https://httpsD httpsD 0.1 1000 USD
+docker exec httpsD eiou add https://httpsC httpsC 0.1 1000 USD
+docker exec httpsD eiou add https://httpsE httpsE 0.1 1000 USD
+docker exec httpsE eiou add https://httpsD httpsD 0.1 1000 USD
+docker exec httpsE eiou add https://httpsF httpsF 0.1 1000 USD
+docker exec httpsF eiou add https://httpsE httpsE 0.1 1000 USD
+docker exec httpsF eiou add https://httpsG httpsG 0.1 1000 USD
+docker exec httpsG eiou add https://httpsF httpsF 0.1 1000 USD
+docker exec httpsG eiou add https://httpsH httpsH 0.1 1000 USD
+docker exec httpsH eiou add https://httpsG httpsG 0.1 1000 USD
+docker exec httpsH eiou add https://httpsI httpsI 0.1 1000 USD
+docker exec httpsI eiou add https://httpsH httpsH 0.1 1000 USD
+docker exec httpsI eiou add https://httpsJ httpsJ 0.1 1000 USD
+docker exec httpsJ eiou add https://httpsI httpsI 0.1 1000 USD
+
+# direct transaction
+docker exec httpsA eiou send https://httpsB 100 USD
+
+# p2p transaction
+docker exec httpsA eiou send https://httpsC 50 USD
+docker exec httpsA eiou send https://httpsD 40 USD
+docker exec httpsA eiou send https://httpsE 22 USD
+docker exec httpsA eiou send https://httpsF 65 USD
+docker exec httpsA eiou send https://httpsG 83 USD
+docker exec httpsA eiou send https://httpsH 41 USD
+
+# Note the following p2p transactions will expire due to exceeding max-default hops of 6
+docker exec httpsA eiou send https://httpsI 6 USD
+docker exec httpsA eiou send https://httpsJ 13 USD

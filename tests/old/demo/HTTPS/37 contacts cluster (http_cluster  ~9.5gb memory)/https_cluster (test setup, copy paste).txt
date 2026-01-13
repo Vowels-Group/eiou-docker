@@ -1,0 +1,172 @@
+# create the network (only need to do this once per docker installation)
+docker network create -d bridge demo-net
+
+# Remove any existing containers
+powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+
+# Build base image
+docker build -f eioud.dockerfile -t eioud .
+
+# Start containers
+docker run -d --network=demo-net --name A0 -e QUICKSTART=A0 eioud
+docker run -d --network=demo-net --name A1 -e QUICKSTART=A1 eioud
+docker run -d --network=demo-net --name A11 -e QUICKSTART=A11 eioud
+docker run -d --network=demo-net --name A111 -e QUICKSTART=A111 eioud
+docker run -d --network=demo-net --name A112 -e QUICKSTART=A112 eioud
+docker run -d --network=demo-net --name A113 -e QUICKSTART=A113 eioud
+docker run -d --network=demo-net --name A12 -e QUICKSTART=A12 eioud
+docker run -d --network=demo-net --name A121 -e QUICKSTART=A121 eioud
+docker run -d --network=demo-net --name A122 -e QUICKSTART=A122 eioud
+docker run -d --network=demo-net --name A123 -e QUICKSTART=A123 eioud
+docker run -d --network=demo-net --name A2 -e QUICKSTART=A2 eioud
+docker run -d --network=demo-net --name A21 -e QUICKSTART=A21 eioud
+docker run -d --network=demo-net --name A211 -e QUICKSTART=A211 eioud
+docker run -d --network=demo-net --name A212 -e QUICKSTART=A212 eioud
+docker run -d --network=demo-net --name A213 -e QUICKSTART=A213 eioud
+docker run -d --network=demo-net --name A22 -e QUICKSTART=A22 eioud
+docker run -d --network=demo-net --name A221 -e QUICKSTART=A221 eioud
+docker run -d --network=demo-net --name A222 -e QUICKSTART=A222 eioud
+docker run -d --network=demo-net --name A223 -e QUICKSTART=A223 eioud
+docker run -d --network=demo-net --name A3 -e QUICKSTART=A3 eioud
+docker run -d --network=demo-net --name A31 -e QUICKSTART=A31 eioud
+docker run -d --network=demo-net --name A311 -e QUICKSTART=A311 eioud
+docker run -d --network=demo-net --name A312 -e QUICKSTART=A312 eioud
+docker run -d --network=demo-net --name A313 -e QUICKSTART=A313 eioud
+docker run -d --network=demo-net --name A32 -e QUICKSTART=A32 eioud
+docker run -d --network=demo-net --name A321 -e QUICKSTART=A321 eioud
+docker run -d --network=demo-net --name A322 -e QUICKSTART=A322 eioud
+docker run -d --network=demo-net --name A323 -e QUICKSTART=A323 eioud
+docker run -d --network=demo-net --name A4 -e QUICKSTART=A4 eioud
+docker run -d --network=demo-net --name A41 -e QUICKSTART=A41 eioud
+docker run -d --network=demo-net --name A411 -e QUICKSTART=A411 eioud
+docker run -d --network=demo-net --name A412 -e QUICKSTART=A412 eioud
+docker run -d --network=demo-net --name A413 -e QUICKSTART=A413 eioud
+docker run -d --network=demo-net --name A42 -e QUICKSTART=A42 eioud
+docker run -d --network=demo-net --name A421 -e QUICKSTART=A421 eioud
+docker run -d --network=demo-net --name A422 -e QUICKSTART=A422 eioud
+docker run -d --network=demo-net --name A423 -e QUICKSTART=A423 eioud
+sleep 5
+
+# Add friends (NOTE that names are NOT arbitrary)
+docker exec A0 eiou add https://A1 A1 0.1 1000 USD
+docker exec A1 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A2 A2 0.1 1000 USD
+docker exec A2 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A3 A3 0.1 1000 USD
+docker exec A3 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A4 A4 0.1 1000 USD
+docker exec A4 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A321 A321 0.1 1000 USD
+docker exec A321 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A322 A322 0.1 1000 USD
+docker exec A322 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A323 A323 0.1 1000 USD
+docker exec A323 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A411 A411 0.1 1000 USD
+docker exec A411 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A412 A412 0.1 1000 USD
+docker exec A412 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A413 A413 0.1 1000 USD
+docker exec A413 eiou add https://A0 A0 0.1 1000 USD
+docker exec A1 eiou add https://A11 A11 0.1 1000 USD
+docker exec A11 eiou add https://A1 A1 0.1 1000 USD
+docker exec A1 eiou add https://A12 A12 0.1 1000 USD
+docker exec A12 eiou add https://A1 A1 0.1 1000 USD
+docker exec A11 eiou add https://A111 A111 0.1 1000 USD
+docker exec A111 eiou add https://A11 A11 0.1 1000 USD
+docker exec A11 eiou add https://A112 A112 0.1 1000 USD
+docker exec A112 eiou add https://A11 A11 0.1 1000 USD
+docker exec A11 eiou add https://A113 A113 0.1 1000 USD
+docker exec A113 eiou add https://A11 A11 0.1 1000 USD
+docker exec A111 eiou add https://A421 A421 0.1 1000 USD
+docker exec A421 eiou add https://A111 A111 0.1 1000 USD
+docker exec A111 eiou add https://A422 A422 0.1 1000 USD
+docker exec A422 eiou add https://A111 A111 0.1 1000 USD
+docker exec A111 eiou add https://A112 A112 0.1 1000 USD
+docker exec A112 eiou add https://A111 A111 0.1 1000 USD
+docker exec A112 eiou add https://A113 A113 0.1 1000 USD
+docker exec A113 eiou add https://A112 A112 0.1 1000 USD
+docker exec A112 eiou add https://A421 A421 0.1 1000 USD
+docker exec A421 eiou add https://A112 A112 0.1 1000 USD
+docker exec A112 eiou add https://A422 A422 0.1 1000 USD
+docker exec A422 eiou add https://A112 A112 0.1 1000 USD
+docker exec A112 eiou add https://A423 A423 0.1 1000 USD
+docker exec A423 eiou add https://A112 A112 0.1 1000 USD
+docker exec A113 eiou add https://A421 A421 0.1 1000 USD
+docker exec A421 eiou add https://A113 A113 0.1 1000 USD
+docker exec A113 eiou add https://A422 A422 0.1 1000 USD
+docker exec A422 eiou add https://A113 A113 0.1 1000 USD
+docker exec A113 eiou add https://A423 A423 0.1 1000 USD
+docker exec A423 eiou add https://A113 A113 0.1 1000 USD
+docker exec A12 eiou add https://A121 A121 0.1 1000 USD
+docker exec A121 eiou add https://A12 A12 0.1 1000 USD
+docker exec A12 eiou add https://A122 A122 0.1 1000 USD
+docker exec A122 eiou add https://A12 A12 0.1 1000 USD
+docker exec A12 eiou add https://A123 A123 0.1 1000 USD
+docker exec A123 eiou add https://A12 A12 0.1 1000 USD
+docker exec A12 eiou add https://A21 A21 0.1 1000 USD
+docker exec A21 eiou add https://A12 A12 0.1 1000 USD
+docker exec A2 eiou add https://A21 A21 0.1 1000 USD
+docker exec A21 eiou add https://A2 A2 0.1 1000 USD
+docker exec A2 eiou add https://A22 A22 0.1 1000 USD
+docker exec A22 eiou add https://A2 A2 0.1 1000 USD
+docker exec A21 eiou add https://A211 A211 0.1 1000 USD
+docker exec A211 eiou add https://A21 A21 0.1 1000 USD
+docker exec A21 eiou add https://A212 A212 0.1 1000 USD
+docker exec A212 eiou add https://A21 A21 0.1 1000 USD
+docker exec A21 eiou add https://A213 A213 0.1 1000 USD
+docker exec A213 eiou add https://A21 A21 0.1 1000 USD
+docker exec A22 eiou add https://A221 A221 0.1 1000 USD
+docker exec A221 eiou add https://A22 A22 0.1 1000 USD
+docker exec A22 eiou add https://A222 A222 0.1 1000 USD
+docker exec A222 eiou add https://A22 A22 0.1 1000 USD
+docker exec A22 eiou add https://A223 A223 0.1 1000 USD
+docker exec A223 eiou add https://A22 A22 0.1 1000 USD
+docker exec A221 eiou add https://A313 A313 0.1 1000 USD
+docker exec A313 eiou add https://A221 A221 0.1 1000 USD
+docker exec A222 eiou add https://A312 A312 0.1 1000 USD
+docker exec A312 eiou add https://A222 A222 0.1 1000 USD
+docker exec A223 eiou add https://A311 A311 0.1 1000 USD
+docker exec A311 eiou add https://A223 A223 0.1 1000 USD
+docker exec A3 eiou add https://A31 A31 0.1 1000 USD
+docker exec A31 eiou add https://A3 A3 0.1 1000 USD
+docker exec A3 eiou add https://A32 A32 0.1 1000 USD
+docker exec A32 eiou add https://A3 A3 0.1 1000 USD
+docker exec A31 eiou add https://A311 A311 0.1 1000 USD
+docker exec A311 eiou add https://A31 A31 0.1 1000 USD
+docker exec A31 eiou add https://A312 A312 0.1 1000 USD
+docker exec A312 eiou add https://A31 A31 0.1 1000 USD
+docker exec A31 eiou add https://A313 A313 0.1 1000 USD
+docker exec A313 eiou add https://A31 A31 0.1 1000 USD
+docker exec A32 eiou add https://A321 A321 0.1 1000 USD
+docker exec A321 eiou add https://A32 A32 0.1 1000 USD
+docker exec A32 eiou add https://A322 A322 0.1 1000 USD
+docker exec A322 eiou add https://A32 A32 0.1 1000 USD
+docker exec A32 eiou add https://A323 A323 0.1 1000 USD
+docker exec A323 eiou add https://A32 A32 0.1 1000 USD
+docker exec A4 eiou add https://A41 A41 0.1 1000 USD
+docker exec A41 eiou add https://A4 A4 0.1 1000 USD
+docker exec A4 eiou add https://A42 A42 0.1 1000 USD
+docker exec A42 eiou add https://A4 A4 0.1 1000 USD
+docker exec A41 eiou add https://A411 A411 0.1 1000 USD
+docker exec A411 eiou add https://A41 A41 0.1 1000 USD
+docker exec A41 eiou add https://A412 A412 0.1 1000 USD
+docker exec A412 eiou add https://A41 A41 0.1 1000 USD
+docker exec A41 eiou add https://A413 A413 0.1 1000 USD
+docker exec A413 eiou add https://A41 A41 0.1 1000 USD
+docker exec A42 eiou add https://A421 A421 0.1 1000 USD
+docker exec A421 eiou add https://A42 A42 0.1 1000 USD
+docker exec A42 eiou add https://A422 A422 0.1 1000 USD
+docker exec A422 eiou add https://A42 A42 0.1 1000 USD
+docker exec A42 eiou add https://A423 A423 0.1 1000 USD
+docker exec A423 eiou add https://A42 A42 0.1 1000 USD
+
+
+# direct transaction
+docker exec A0 eiou send https://A1 100 USD
+
+# p2p transaction
+docker exec A0 eiou send https://A313 50 USD
+docker exec A0 eiou send https://A422 40 USD
+docker exec A0 eiou send https://A113 22 USD
+docker exec A0 eiou send https://A41 65 USD

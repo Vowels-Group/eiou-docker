@@ -1,0 +1,23 @@
+# create the network (only need to do this once per docker installation)
+docker network create -d bridge demo-net
+
+# Remove any existing containers
+powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+
+# Build base image
+docker build -f eioud.dockerfile -t eioud .
+
+# Start containers
+docker run -d  --network=demo-net --name https0 -e QUICKSTART=https0 eioud
+docker run -d  --network=demo-net --name https1 -e QUICKSTART=https1 eioud
+docker run -d  --network=demo-net --name https2 -e QUICKSTART=https2 eioud
+docker run -d  --network=demo-net --name https3 -e QUICKSTART=https3 eioud
+sleep 5
+
+# add contacts
+docker exec https0 eiou add https://https1 https1 0.1 1000 USD
+docker exec https1 eiou add https://https0 https0 0.1 1000 USD
+docker exec https1 eiou add https://https2 https2 0.1 1000 USD
+docker exec https2 eiou add https://https1 https1 0.1 1000 USD
+docker exec https2 eiou add https://https3 https3 0.1 1000 USD
+docker exec https3 eiou add https://https2 https2 0.1 1000 USD

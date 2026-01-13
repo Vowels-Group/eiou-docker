@@ -1,0 +1,50 @@
+# Create the network (only need to do this once per docker installation)
+docker network create -d bridge demo-net
+
+# Remove any existing containers
+powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+
+# Build base image
+docker build -f eioud.dockerfile -t eioud .
+
+# Start containers
+docker run -d --network=demo-net --name A0 -e QUICKSTART=A0 eioud
+docker run -d --network=demo-net --name A1 -e QUICKSTART=A1 eioud
+docker run -d --network=demo-net --name A11 -e QUICKSTART=A11 eioud
+docker run -d --network=demo-net --name A12 -e QUICKSTART=A12 eioud
+docker run -d --network=demo-net --name A2 -e QUICKSTART=A2 eioud
+docker run -d --network=demo-net --name A21 -e QUICKSTART=A21 eioud
+docker run -d --network=demo-net --name A22 -e QUICKSTART=A22 eioud
+docker run -d --network=demo-net --name A3 -e QUICKSTART=A3 eioud
+docker run -d --network=demo-net --name A31 -e QUICKSTART=A31 eioud
+docker run -d --network=demo-net --name A32 -e QUICKSTART=A32 eioud
+docker run -d --network=demo-net --name A4 -e QUICKSTART=A4 eioud
+docker run -d --network=demo-net --name A41 -e QUICKSTART=A41 eioud
+docker run -d --network=demo-net --name A42 -e QUICKSTART=A42 eioud
+sleep 5
+
+# Add friends (NOTE that names are NOT arbitrary)
+docker exec A0 eiou add https://A1 A1 0.1 1000 USD
+docker exec A1 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A2 A2 0.1 1000 USD
+docker exec A2 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A3 A3 0.1 1000 USD
+docker exec A3 eiou add https://A0 A0 0.1 1000 USD
+docker exec A0 eiou add https://A4 A4 0.1 1000 USD
+docker exec A4 eiou add https://A0 A0 0.1 1000 USD
+docker exec A1 eiou add https://A11 A11 0.1 1000 USD
+docker exec A11 eiou add https://A1 A1 0.1 1000 USD
+docker exec A1 eiou add https://A12 A12 0.1 1000 USD
+docker exec A12 eiou add https://A1 A1 0.1 1000 USD
+docker exec A2 eiou add https://A21 A21 0.1 1000 USD
+docker exec A21 eiou add https://A2 A2 0.1 1000 USD
+docker exec A2 eiou add https://A22 A22 0.1 1000 USD
+docker exec A22 eiou add https://A2 A2 0.1 1000 USD
+docker exec A3 eiou add https://A31 A31 0.1 1000 USD
+docker exec A31 eiou add https://A3 A3 0.1 1000 USD
+docker exec A3 eiou add https://A32 A32 0.1 1000 USD
+docker exec A32 eiou add https://A3 A3 0.1 1000 USD
+docker exec A4 eiou add https://A41 A41 0.1 1000 USD
+docker exec A41 eiou add https://A4 A4 0.1 1000 USD
+docker exec A4 eiou add https://A42 A42 0.1 1000 USD
+docker exec A42 eiou add https://A4 A4 0.1 1000 USD
