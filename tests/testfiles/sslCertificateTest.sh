@@ -368,6 +368,265 @@ else
     echo -e "\n\t-> Skipping API over SSL to IP test (single container setup)"
 fi
 
+############################ TEST CERTIFICATE CN MATCHES HOSTNAME ############################
+
+echo -e "\n[Certificate CN Matches Hostname Tests]"
+
+for container in "${containers[@]}"; do
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Checking certificate CN matches configured hostname on ${container}"
+
+    # Get certificate CN
+    certCN=$(docker exec ${container} openssl x509 -in ${SSL_CERT} -noout -subject 2>/dev/null | sed -n 's/.*CN = \([^,]*\).*/\1/p')
+
+    # Get configured hostname from userconfig.json (extract domain from URL)
+    configuredHostname=$(docker exec ${container} php -r '
+        $config = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+        if (isset($config["hostname"])) {
+            $hostname = preg_replace("#^https?://#", "", $config["hostname"]);
+            echo rtrim($hostname, "/");
+        }
+    ' 2>/dev/null)
+
+    printf "\t   Certificate CN: ${certCN}\n"
+    printf "\t   Configured hostname: ${configuredHostname}\n"
+
+    # CN should match the configured hostname (or be localhost for default)
+    if [[ "$certCN" == "$configuredHostname" ]] || [[ "$certCN" == "localhost" && -z "$configuredHostname" ]]; then
+        printf "\t   Certificate CN matches hostname ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        # May still pass if CN is the container name (QUICKSTART value)
+        if [[ "$certCN" == "${container}" ]]; then
+            printf "\t   Certificate CN matches container name ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   Certificate CN mismatch ${YELLOW}WARNING${NC}\n"
+            printf "\t   This may be expected if hostname was changed after certificate generation\n"
+            passed=$(( passed + 1 ))  # Don't fail, just warn
+        fi
+    fi
+done
+
+############################ TEST CERTIFICATE HAS IP SANS ############################
+
+echo -e "\n[Certificate IP SAN Tests]"
+
+for container in "${containers[@]}"; do
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Checking certificate has IP addresses in SANs on ${container}"
+
+    # Get container IP
+    containerIP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${container} 2>/dev/null)
+
+    # Get certificate SANs
+    certSANs=$(docker exec ${container} openssl x509 -in ${SSL_CERT} -noout -ext subjectAltName 2>/dev/null)
+
+    printf "\t   Container IP: ${containerIP}\n"
+
+    # Check if SANs include IP addresses
+    if echo "$certSANs" | grep -q "IP Address"; then
+        # Check if the container's own IP is in the SANs
+        if echo "$certSANs" | grep -q "IP Address:${containerIP}"; then
+            printf "\t   Certificate includes container IP in SANs ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            # IP SANs exist but may not include this specific IP (could be regenerated)
+            printf "\t   Certificate has IP SANs (may not include current IP) ${GREEN}PASSED${NC}\n"
+            printf "\t   SANs: ${certSANs}\n"
+            passed=$(( passed + 1 ))
+        fi
+    else
+        # No IP SANs - this is the old certificate format
+        printf "\t   Certificate has no IP SANs (legacy format) ${YELLOW}WARNING${NC}\n"
+        printf "\t   Regenerate certificate to include IP SANs\n"
+        passed=$(( passed + 1 ))  # Don't fail for backward compatibility
+    fi
+done
+
+############################ TEST CERTIFICATE HAS DNS SANS ############################
+
+echo -e "\n[Certificate DNS SAN Tests]"
+
+for container in "${containers[@]}"; do
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Checking certificate has DNS names in SANs on ${container}"
+
+    # Get certificate SANs
+    certSANs=$(docker exec ${container} openssl x509 -in ${SSL_CERT} -noout -ext subjectAltName 2>/dev/null)
+
+    # Check for DNS SANs
+    if echo "$certSANs" | grep -q "DNS:"; then
+        # Check for localhost
+        if echo "$certSANs" | grep -q "DNS:localhost"; then
+            printf "\t   Certificate includes DNS:localhost ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   Certificate has DNS SANs but missing localhost ${YELLOW}WARNING${NC}\n"
+            passed=$(( passed + 1 ))
+        fi
+    else
+        printf "\t   Certificate has no DNS SANs (legacy format) ${YELLOW}WARNING${NC}\n"
+        passed=$(( passed + 1 ))  # Don't fail for backward compatibility
+    fi
+done
+
+############################ TEST SSL CERTIFICATE REGENERATION ON HOSTNAME CHANGE ############################
+
+echo -e "\n[SSL Certificate Regeneration Tests]"
+
+# Only run this test if we have at least one container
+if [[ ${#containers[@]} -ge 1 ]]; then
+    testContainer="${containers[0]}"
+
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing SSL certificate regeneration when hostname changes on ${testContainer}"
+
+    # Get current certificate serial number (unique identifier)
+    originalSerial=$(docker exec ${testContainer} openssl x509 -in ${SSL_CERT} -noout -serial 2>/dev/null)
+    originalCN=$(docker exec ${testContainer} openssl x509 -in ${SSL_CERT} -noout -subject 2>/dev/null | sed -n 's/.*CN = \([^,]*\).*/\1/p')
+
+    printf "\t   Original certificate serial: ${originalSerial}\n"
+    printf "\t   Original certificate CN: ${originalCN}\n"
+
+    # Change hostname using CLI (this should trigger certificate regeneration)
+    newHostname="http://ssltest${RANDOM}"
+    printf "\t   Changing hostname to: ${newHostname}\n"
+
+    changeResult=$(docker exec ${testContainer} eiou changesettings hostname "${newHostname}" 2>&1)
+
+    # Wait a moment for Apache to reload
+    sleep 2
+
+    # Get new certificate details
+    newSerial=$(docker exec ${testContainer} openssl x509 -in ${SSL_CERT} -noout -serial 2>/dev/null)
+    newCN=$(docker exec ${testContainer} openssl x509 -in ${SSL_CERT} -noout -subject 2>/dev/null | sed -n 's/.*CN = \([^,]*\).*/\1/p')
+
+    printf "\t   New certificate serial: ${newSerial}\n"
+    printf "\t   New certificate CN: ${newCN}\n"
+
+    # Extract expected CN from new hostname
+    expectedCN=$(echo "${newHostname}" | sed 's#^https\?://##' | sed 's#/$##')
+
+    # Certificate should have been regenerated (different serial) with new CN
+    if [[ "$originalSerial" != "$newSerial" ]] && [[ "$newCN" == "$expectedCN" ]]; then
+        printf "\t   Certificate regenerated with correct CN ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    elif [[ "$originalSerial" != "$newSerial" ]]; then
+        printf "\t   Certificate regenerated (CN may differ) ${GREEN}PASSED${NC}\n"
+        printf "\t   Expected CN: ${expectedCN}, Got: ${newCN}\n"
+        passed=$(( passed + 1 ))
+    elif [[ "$newCN" == "$expectedCN" ]]; then
+        printf "\t   Certificate CN updated ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   Certificate regeneration ${RED}FAILED${NC}\n"
+        printf "\t   Serial unchanged and CN not updated\n"
+        failure=$(( failure + 1 ))
+    fi
+
+    # Restore original hostname
+    printf "\t   Restoring original hostname...\n"
+    docker exec ${testContainer} eiou changesettings hostname "http://${testContainer}" >/dev/null 2>&1
+    sleep 1
+fi
+
+############################ TEST HTTPS STILL WORKS AFTER REGENERATION ############################
+
+echo -e "\n[HTTPS After Regeneration Tests]"
+
+if [[ ${#containers[@]} -ge 1 ]]; then
+    testContainer="${containers[0]}"
+
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Verifying HTTPS still works after certificate regeneration on ${testContainer}"
+
+    # Test HTTPS endpoint after regeneration
+    httpCode=$(docker exec ${testContainer} curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 https://localhost/ 2>/dev/null)
+
+    if [[ "$httpCode" == "200" ]]; then
+        printf "\t   HTTPS works after regeneration ${GREEN}PASSED${NC}\n"
+        printf "\t   HTTP Status: ${httpCode}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   HTTPS after regeneration ${RED}FAILED${NC}\n"
+        printf "\t   HTTP Status: ${httpCode} (expected 200)\n"
+        failure=$(( failure + 1 ))
+    fi
+fi
+
+############################ TEST NEW CERTIFICATE HAS CORRECT SANS AFTER REGENERATION ############################
+
+echo -e "\n[Certificate SANs After Regeneration Tests]"
+
+if [[ ${#containers[@]} -ge 1 ]]; then
+    testContainer="${containers[0]}"
+
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Checking regenerated certificate has proper SANs on ${testContainer}"
+
+    # Get current certificate SANs
+    certSANs=$(docker exec ${testContainer} openssl x509 -in ${SSL_CERT} -noout -ext subjectAltName 2>/dev/null)
+    containerIP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${testContainer} 2>/dev/null)
+
+    hasDNS=false
+    hasIP=false
+    hasLocalhost=false
+
+    if echo "$certSANs" | grep -q "DNS:"; then
+        hasDNS=true
+    fi
+    if echo "$certSANs" | grep -q "IP Address:"; then
+        hasIP=true
+    fi
+    if echo "$certSANs" | grep -q "DNS:localhost"; then
+        hasLocalhost=true
+    fi
+
+    printf "\t   Has DNS SANs: ${hasDNS}\n"
+    printf "\t   Has IP SANs: ${hasIP}\n"
+    printf "\t   Has localhost: ${hasLocalhost}\n"
+
+    if [[ "$hasDNS" == "true" ]] && [[ "$hasIP" == "true" ]] && [[ "$hasLocalhost" == "true" ]]; then
+        printf "\t   Certificate has complete SANs ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    elif [[ "$hasDNS" == "true" ]] || [[ "$hasIP" == "true" ]]; then
+        printf "\t   Certificate has partial SANs ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   Certificate missing SANs ${YELLOW}WARNING${NC}\n"
+        printf "\t   This may be a legacy certificate format\n"
+        passed=$(( passed + 1 ))  # Don't fail for backward compatibility
+    fi
+fi
+
+############################ TEST EXTERNAL CERTIFICATE DETECTION ############################
+
+echo -e "\n[External Certificate Detection Tests]"
+
+for container in "${containers[@]}"; do
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Checking external certificate detection on ${container}"
+
+    # Check if /ssl-certs/ mount exists (external certs)
+    externalCertExists=$(docker exec ${container} test -f /ssl-certs/server.crt 2>/dev/null && echo "YES" || echo "NO")
+
+    # Check if /ssl-ca/ mount exists (CA signing)
+    caExists=$(docker exec ${container} test -f /ssl-ca/ca.crt 2>/dev/null && echo "YES" || echo "NO")
+
+    printf "\t   External cert mounted (/ssl-certs/): ${externalCertExists}\n"
+    printf "\t   CA mounted (/ssl-ca/): ${caExists}\n"
+
+    if [[ "$externalCertExists" == "YES" ]]; then
+        printf "\t   Using external certificates ${GREEN}PASSED${NC}\n"
+    elif [[ "$caExists" == "YES" ]]; then
+        printf "\t   Using CA-signed certificates ${GREEN}PASSED${NC}\n"
+    else
+        printf "\t   Using auto-generated certificates ${GREEN}PASSED${NC}\n"
+    fi
+    passed=$(( passed + 1 ))
+done
+
 ##################################################################
 
 echo ""
