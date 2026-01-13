@@ -1627,10 +1627,12 @@ class TransactionRepository extends AbstractRepository {
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $pubkey1);
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $pubkey2);
 
+        // NOTE: Do NOT filter by status here - sync needs ALL transactions including
+        // cancelled/rejected to preserve chain integrity. Status filtering is only done
+        // in getPreviousTxid() to prevent new transactions from linking to orphaned ones.
         $query = "SELECT * FROM {$this->tableName}
                   WHERE ((sender_public_key_hash = :sender_pubkey_hash1 AND receiver_public_key_hash = :receiver_pubkey_hash1)
                      OR (sender_public_key_hash = :receiver_pubkey_hash2 AND receiver_public_key_hash = :sender_pubkey_hash2))
-                     AND status NOT IN ('cancelled', 'rejected')
                   ORDER BY COALESCE(time, 0) DESC, timestamp DESC";
 
         if ($limit > 0) {
