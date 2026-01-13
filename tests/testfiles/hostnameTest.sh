@@ -9,7 +9,7 @@ passed=0
 failure=0
 
 for container in "${containers[@]}"; do
-    containerAddress="http://"$container
+    containerAddress="https://"$container
     # Get Http addresses if exists
     containerAddresses[$container]=$(docker exec $container php -r '
         $json = json_decode(file_get_contents("'"${USERCONFIG}"'"),true);

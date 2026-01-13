@@ -408,7 +408,8 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
         echo "Wallet restore completed."
     elif [ "$QUICKSTART" != "false" ]; then
         echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
-        eiou generate http://$QUICKSTART
+        # Use HTTPS for secure P2P communication (SSL certificates are auto-generated)
+        eiou generate https://$QUICKSTART
         echo "Generate command completed."
     else
         # Run automatically without hostname (only tor)

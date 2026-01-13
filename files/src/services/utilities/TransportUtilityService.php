@@ -247,19 +247,40 @@ class TransportUtilityService
      * @return string The response from the recipient, or JSON error on failure
     */
     public function sendByHttp (string $recipient, string $signedPayload): string {
-        // Send payload through HTTP
+        // Send payload through HTTP(S)
         $ch = curl_init();
 
         // Determine the protocol based on the recipient format
-        $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'http://';
+        // Default to https:// for secure P2P communication
+        $protocol = preg_match('/^https?:\/\//', $recipient) ? '' : 'https://';
 
-        curl_setopt($ch, CURLOPT_URL, $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload));
+        $url = $protocol . $recipient . "/eiou?payload=" . urlencode($signedPayload);
+        curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
         curl_setopt($ch, CURLOPT_POST, true);
+
+        // SSL options for HTTPS connections
+        // For self-signed certificates in mesh networks, we disable strict verification
+        // but still use encrypted transport. For production with CA-signed certs,
+        // set P2P_SSL_VERIFY=true environment variable.
+        if (preg_match('/^https:\/\//', $url) || preg_match('/^https:\/\//', $protocol . $recipient)) {
+            $verifySsl = getenv('P2P_SSL_VERIFY') === 'true';
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verifySsl);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verifySsl ? 2 : 0);
+
+            // If a CA certificate is provided, use it for verification
+            $caCertPath = getenv('P2P_CA_CERT');
+            if ($caCertPath && file_exists($caCertPath)) {
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+                curl_setopt($ch, CURLOPT_CAINFO, $caCertPath);
+            }
+        }
+
         $response = curl_exec($ch);
 
         // Check for curl errors and log them
