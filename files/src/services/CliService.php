@@ -331,6 +331,12 @@ class CliService {
         $config_content[$key] = $value;
         file_put_contents('/etc/eiou/'. $configFile, json_encode($config_content,true), LOCK_EX);
 
+        // Regenerate SSL certificate when hostname changes
+        // The certificate CN and SANs need to match the new hostname
+        if ($key == 'hostname') {
+            $this->regenerateSslCertificate($value, $output);
+        }
+
         $output->success('Setting updated successfully.', [
             'setting' => $key,
             'value' => $value,
@@ -1103,6 +1109,143 @@ HELP;
                 $effectiveLimit = $countResults;
             }
             echo "Displaying " . $effectiveLimit .  " out of " . $countResults . " total transactions.\n";
+        }
+    }
+
+    /**
+     * Regenerate SSL certificate when hostname changes
+     *
+     * This method removes the existing SSL certificate and triggers regeneration
+     * with the new hostname as CN and in the SANs. The certificate is regenerated
+     * on the next Apache restart or can be done immediately.
+     *
+     * @param string $newHostname The new hostname to use for the certificate
+     * @param CliOutputManager|null $output Optional output manager for status messages
+     */
+    private function regenerateSslCertificate(string $newHostname, ?CliOutputManager $output = null): void
+    {
+        $output = $output ?? CliOutputManager::getInstance();
+        $sslCertPath = '/etc/apache2/ssl/server.crt';
+        $sslKeyPath = '/etc/apache2/ssl/server.key';
+
+        // Check if we're using externally provided certificates (don't regenerate those)
+        if (file_exists('/ssl-certs/server.crt')) {
+            if (!$output->isJsonMode()) {
+                echo "Note: Using externally provided SSL certificate - not regenerating.\n";
+            }
+            return;
+        }
+
+        // Remove existing certificate to trigger regeneration
+        if (file_exists($sslCertPath)) {
+            unlink($sslCertPath);
+        }
+        if (file_exists($sslKeyPath)) {
+            unlink($sslKeyPath);
+        }
+
+        // Extract domain from hostname URL (e.g., "http://alice" -> "alice")
+        $domain = preg_replace('#^https?://#', '', $newHostname);
+        $domain = rtrim($domain, '/');
+
+        // Build SAN list with auto-detected IPs
+        $sanList = "DNS:localhost,DNS:{$domain}";
+
+        // Add container hostname if different
+        $containerHostname = gethostname();
+        if ($containerHostname && $containerHostname !== $domain && $containerHostname !== 'localhost') {
+            $sanList .= ",DNS:{$containerHostname}";
+        }
+
+        // Auto-detect container IP addresses
+        $ipOutput = shell_exec('hostname -I 2>/dev/null');
+        if ($ipOutput) {
+            $ips = preg_split('/\s+/', trim($ipOutput));
+            foreach ($ips as $ip) {
+                if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && $ip !== '127.0.0.1') {
+                    $sanList .= ",IP:{$ip}";
+                }
+            }
+        }
+        $sanList .= ",IP:127.0.0.1";
+
+        // Add extra SANs from environment if set
+        $extraSans = getenv('SSL_EXTRA_SANS');
+        if ($extraSans) {
+            $sanList .= ",{$extraSans}";
+        }
+
+        // Create OpenSSL config with SANs
+        $opensslConfig = "[req]
+default_bits = 2048
+prompt = no
+default_md = sha256
+distinguished_name = dn
+req_extensions = req_ext
+x509_extensions = v3_ext
+
+[dn]
+C = XX
+ST = State
+L = City
+O = EIOU
+OU = Node
+CN = {$domain}
+
+[req_ext]
+subjectAltName = {$sanList}
+
+[v3_ext]
+subjectAltName = {$sanList}
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+";
+
+        $configPath = '/tmp/openssl-san.cnf';
+        file_put_contents($configPath, $opensslConfig);
+
+        // Check if CA is available for CA-signed certificate
+        if (file_exists('/ssl-ca/ca.crt') && file_exists('/ssl-ca/ca.key')) {
+            // Generate CA-signed certificate
+            $csrPath = '/tmp/server.csr';
+
+            // Generate key and CSR
+            shell_exec("openssl req -new -nodes -newkey rsa:2048 -keyout {$sslKeyPath} -out {$csrPath} -config {$configPath} 2>/dev/null");
+
+            // Sign with CA
+            shell_exec("openssl x509 -req -in {$csrPath} -CA /ssl-ca/ca.crt -CAkey /ssl-ca/ca.key -CAcreateserial -out {$sslCertPath} -days 365 -sha256 -extfile {$configPath} -extensions v3_ext 2>/dev/null");
+
+            @unlink($csrPath);
+
+            if (!$output->isJsonMode()) {
+                echo "SSL certificate regenerated (CA-signed) for hostname: {$domain}\n";
+            }
+        } else {
+            // Generate self-signed certificate
+            shell_exec("openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout {$sslKeyPath} -out {$sslCertPath} -config {$configPath} 2>/dev/null");
+
+            if (!$output->isJsonMode()) {
+                echo "SSL certificate regenerated (self-signed) for hostname: {$domain}\n";
+                echo "Note: Browsers will show warnings for self-signed certificates.\n";
+            }
+        }
+
+        @unlink($configPath);
+
+        // Set proper permissions
+        if (file_exists($sslKeyPath)) {
+            chmod($sslKeyPath, 0600);
+        }
+        if (file_exists($sslCertPath)) {
+            chmod($sslCertPath, 0644);
+        }
+
+        // Reload Apache to use new certificate
+        shell_exec('apache2ctl graceful 2>/dev/null');
+
+        if (!$output->isJsonMode()) {
+            echo "Apache reloaded to use new certificate.\n";
         }
     }
 }
