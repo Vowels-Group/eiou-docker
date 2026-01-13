@@ -213,6 +213,7 @@ cliCommandsTest
 apiEndpointsTest
 syncTestSuite
 gracefulShutdownTest
+transactionRecoveryTest
 seedphraseTestSuite
 processorLockfileTest
 "
