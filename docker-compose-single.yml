@@ -12,6 +12,14 @@ services:
       - "443:443"
     environment:
       - QUICKSTART=eioud
+      # SSL Configuration (optional):
+      # - SSL_DOMAIN=node.example.com       # Override certificate CN
+      # - SSL_EXTRA_SANS=DNS:alt.local,IP:10.0.0.1  # Additional SANs
+    # For external certificates (Let's Encrypt, etc.), uncomment:
+    # volumes:
+    #   - /path/to/certs:/ssl-certs:ro     # Mount server.crt, server.key
+    # For CA-signed certificates, uncomment:
+    #   - ./ssl-ca:/ssl-ca:ro              # Mount ca.crt, ca.key
     volumes:
       - eioud-mysql-data:/var/lib/mysql
       - eioud-files:/etc/eiou/
