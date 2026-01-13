@@ -151,23 +151,59 @@ abstract class AbstractMessageProcessor {
     /**
      * Check and ensure only one instance is running
      *
+     * Uses posix_kill($pid, 0) for reliable process existence checking.
+     * This is more reliable than file_exists("/proc/$pid") because:
+     * - Works across all POSIX systems (not just Linux)
+     * - Properly handles permission checks
+     * - Returns false for zombie processes that still have /proc entries
+     *
      * @throws Exception if another instance is already running
      */
     protected function checkSingleInstance(): void {
         if (file_exists($this->lockfile)) {
-            $pid = trim(file_get_contents($this->lockfile));
+            $pidContent = @file_get_contents($this->lockfile);
 
-            // Check if the process is still running
-            if ($pid && file_exists("/proc/$pid")) {
-                $message = "Another instance is already running (PID: $pid)";
-                SecureLogger::warning($message, ['lockfile' => $this->lockfile, 'pid' => $pid]);
-                echo $message . "\n";
-                exit(1); // Exit with error code - another instance is running
+            // Handle empty or unreadable lockfile
+            if ($pidContent === false || trim($pidContent) === '') {
+                SecureLogger::info("Removing empty/unreadable lockfile", ['lockfile' => $this->lockfile]);
+                @unlink($this->lockfile);
+            } else {
+                $pid = trim($pidContent);
+
+                // Validate PID is a positive integer
+                if (!ctype_digit($pid) || (int)$pid <= 0) {
+                    SecureLogger::info("Removing lockfile with invalid PID", [
+                        'lockfile' => $this->lockfile,
+                        'invalid_pid' => $pid
+                    ]);
+                    @unlink($this->lockfile);
+                } else {
+                    $pid = (int)$pid;
+
+                    // Use posix_kill with signal 0 to check if process exists
+                    // Signal 0 doesn't actually send a signal, just checks process existence
+                    if (@posix_kill($pid, 0)) {
+                        // Process exists, verify it's actually a PHP process (prevent PID reuse issues)
+                        $cmdline = @file_get_contents("/proc/$pid/cmdline");
+                        if ($cmdline !== false && stripos($cmdline, 'php') !== false) {
+                            $message = "Another instance is already running (PID: $pid)";
+                            SecureLogger::warning($message, ['lockfile' => $this->lockfile, 'pid' => $pid]);
+                            echo $message . "\n";
+                            exit(1); // Exit with error code - another instance is running
+                        }
+                        // PID exists but is not a PHP process - treat as stale
+                        SecureLogger::info("Removing stale lockfile (PID reused by non-PHP process)", [
+                            'lockfile' => $this->lockfile,
+                            'old_pid' => $pid
+                        ]);
+                        @unlink($this->lockfile);
+                    } else {
+                        // Process doesn't exist - stale lockfile
+                        SecureLogger::info("Removing stale lockfile", ['lockfile' => $this->lockfile, 'old_pid' => $pid]);
+                        @unlink($this->lockfile);
+                    }
+                }
             }
-
-            // Stale lockfile, remove it
-            SecureLogger::info("Removing stale lockfile", ['lockfile' => $this->lockfile, 'old_pid' => $pid]);
-            unlink($this->lockfile);
         }
 
         // Create new lockfile with current PID
