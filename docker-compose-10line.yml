@@ -7,6 +7,9 @@ services:
     container_name: node-a
     networks:
       - eiou-network-compose
+    ports:
+      - "80:80"
+      - "443:443"
     environment:
       - QUICKSTART=node-a
     volumes:

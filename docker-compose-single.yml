@@ -7,6 +7,9 @@ services:
     container_name: eioud-single
     networks:
       - eiou-network-compose
+    ports:
+      - "80:80"
+      - "443:443"
     environment:
       - QUICKSTART=eioud
     volumes:
