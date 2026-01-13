@@ -206,9 +206,8 @@ class TransactionRepository extends AbstractRepository {
             $params[':exclude_txid'] = $excludeTxid;
         }
 
-        // Order by time (transaction creation time) for proper chain ordering
-        // Fall back to timestamp for older transactions without time set
-        $query .= " ORDER BY COALESCE(time, 0) DESC, timestamp DESC LIMIT 1";
+        // Order by timestamp (database insertion time) for chain ordering
+        $query .= " ORDER BY timestamp DESC LIMIT 1";
 
         $stmt = $this->execute($query, $params);
 
@@ -1147,12 +1146,11 @@ class TransactionRepository extends AbstractRepository {
             } else {
                 // Look up previous txid - include ALL transactions for chain integrity
                 // Chain must include cancelled/rejected transactions for proper linking
-                // Order by time (transaction creation time) for proper chain ordering
-                // Fall back to timestamp for older transactions without time set
+                // Order by timestamp (database insertion time) for chain ordering
                 $query = "SELECT txid FROM {$this->tableName}
                         WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
                             OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
-                        ORDER BY COALESCE(time, 0) DESC, timestamp DESC LIMIT 1";
+                        ORDER BY timestamp DESC LIMIT 1";
 
                 $stmt = $this->execute($query, [
                     ':sender_public_key_hash' => $senderPublicKeyHash,
@@ -1629,12 +1627,11 @@ class TransactionRepository extends AbstractRepository {
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $pubkey2);
 
         // NOTE: Do NOT filter by status here - sync needs ALL transactions including
-        // cancelled/rejected to preserve chain integrity. Status filtering is only done
-        // in getPreviousTxid() to prevent new transactions from linking to orphaned ones.
+        // cancelled/rejected to preserve chain integrity for proper linking.
         $query = "SELECT * FROM {$this->tableName}
                   WHERE ((sender_public_key_hash = :sender_pubkey_hash1 AND receiver_public_key_hash = :receiver_pubkey_hash1)
                      OR (sender_public_key_hash = :receiver_pubkey_hash2 AND receiver_public_key_hash = :sender_pubkey_hash2))
-                  ORDER BY COALESCE(time, 0) DESC, timestamp DESC";
+                  ORDER BY timestamp DESC";
 
         if ($limit > 0) {
             $query .= " LIMIT :limit";
