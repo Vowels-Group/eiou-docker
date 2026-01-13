@@ -186,10 +186,12 @@ class TransactionRepository extends AbstractRepository {
         $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
 
+        // NOTE: Do NOT filter by status here - chain integrity requires ALL transactions
+        // to be included, even cancelled/rejected ones. The previous_txid must point to
+        // the actual last transaction in the chain for proper linking and sync.
         $query = "SELECT txid FROM {$this->tableName}
                 WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
-                    OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
-                AND status NOT IN ('cancelled', 'rejected')";
+                    OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))";
 
         $params = [
             ':sender_public_key_hash' => $senderPublicKeyHash,
@@ -1143,14 +1145,13 @@ class TransactionRepository extends AbstractRepository {
                 // Use the provided previous_txid (from sync or explicit set)
                 $previousTxid = $request['previousTxid'];
             } else {
-                // Look up previous txid, excluding cancelled/rejected transactions
-                // This ensures new transactions don't link to orphaned transactions
+                // Look up previous txid - include ALL transactions for chain integrity
+                // Chain must include cancelled/rejected transactions for proper linking
                 // Order by time (transaction creation time) for proper chain ordering
                 // Fall back to timestamp for older transactions without time set
                 $query = "SELECT txid FROM {$this->tableName}
                         WHERE ((sender_public_key_hash = :sender_public_key_hash AND receiver_public_key_hash = :receiver_public_key_hash)
                             OR (sender_public_key_hash = :second_receiver_public_key_hash AND receiver_public_key_hash = :second_sender_public_key_hash))
-                        AND status NOT IN ('cancelled', 'rejected')
                         ORDER BY COALESCE(time, 0) DESC, timestamp DESC LIMIT 1";
 
                 $stmt = $this->execute($query, [
