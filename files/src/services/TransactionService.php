@@ -477,6 +477,7 @@ class TransactionService {
             if (($availableFunds + $creditLimit) < $requestedAmount) {
                 // Note: Do NOT echo here - the caller (checkTransactionPossible) handles the response
                 // Echoing here would cause duplicate JSON output breaking response parsing
+                error_log("BALANCE_CHECK_FAILED: availableFunds={$availableFunds} creditLimit={$creditLimit} requestedAmount={$requestedAmount} total=" . ($availableFunds + $creditLimit));
                 return false;
             }
             return true;
@@ -1074,11 +1075,20 @@ class TransactionService {
 
                                             // Reset status to pending so it will be picked up on next cycle
                                             // Status was set to 'sent' before the send attempt at line 1011
-                                            $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+                                            $updateResult = $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
 
-                                            error_log("INLINE_RETRY: SUCCESS - status reset to pending for txid={$txid}");
-                                            output('Transaction re-signed with corrected previous_txid, will retry...', 'SILENT');
-                                            continue;
+                                            // Verify the status was actually updated
+                                            $verifyData = $this->transactionRepository->getByTxid($txid);
+                                            $verifyTx = is_array($verifyData) && isset($verifyData[0]) ? $verifyData[0] : $verifyData;
+                                            $actualStatus = $verifyTx['status'] ?? 'UNKNOWN';
+
+                                            error_log("INLINE_RETRY: SUCCESS - updateStatus returned=" . ($updateResult ? "true" : "false") . " actualStatus={$actualStatus} txid={$txid}");
+                                            output('Transaction re-signed with corrected previous_txid, will retry on next cycle...', 'SILENT');
+                                            // CRITICAL: Use break instead of continue to stop processing this batch
+                                            // Dependent transactions in this batch have stale previous_txid references
+                                            // that point to the unfixed version of this transaction. The next processing
+                                            // cycle will pick up all transactions with correct chain references.
+                                            break;
                                         } else {
                                             error_log("INLINE_RETRY: signWithCapture failed");
                                         }
