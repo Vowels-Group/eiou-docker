@@ -427,7 +427,8 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
     TOR_RESTART_SUCCESS=false
     HS_DIR="/var/lib/tor/hidden_service"
     HS_HOSTNAME_FILE="${HS_DIR}/hostname"
-    HS_MAX_WAIT=30  # Maximum seconds to wait for hidden service
+    # WSL2 environments have slower I/O; use EIOU_HS_TIMEOUT env var to override
+    HS_MAX_WAIT=${EIOU_HS_TIMEOUT:-60}  # Maximum seconds to wait for hidden service
 
     # Ensure correct permissions on hidden service directory before restart
     # This fixes potential permission issues from PHP-based key generation
@@ -516,7 +517,8 @@ done
 
 # Wait for Tor to be ready and connected
 echo "Waiting for Tor to establish connection with container..."
-TOR_MAX_WAIT=60  # Maximum wait time in seconds
+# WSL2 environments have slower network; use EIOU_TOR_TIMEOUT env var to override
+TOR_MAX_WAIT=${EIOU_TOR_TIMEOUT:-120}  # Maximum wait time in seconds
 TOR_START_TIME=$(date +%s)
 TOR_TEST_URL="${tor}"
 TOR_FIRST_ATTEMPT=true
