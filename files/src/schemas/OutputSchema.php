@@ -352,3 +352,75 @@ function outputDeadLetterQueueRetry($dlqId, $messageType, $messageId){
 function outputDeadLetterQueueResolved($dlqId, $messageType, $messageId){
     return "[DLQ] Resolved: dlq_id=" . $dlqId . ", type=" . $messageType . ", message_id=" . $messageId . "\n";
 }
+
+// ============================================================================
+// SYNC SERVICE OUTPUT FUNCTIONS
+// ============================================================================
+
+function outputSyncChainIntegrityFailed($gapCount){
+    return "[Sync] Chain integrity check failed: " . $gapCount . " missing transactions. Triggering sync...\n";
+}
+
+function outputSyncChainRepaired(){
+    return "[Sync] Chain sync completed. Chain is now valid.\n";
+}
+
+function outputSyncChainRepairedBeforeSend(){
+    return "[Sync] Chain was repaired via sync before sending.\n";
+}
+
+function outputSyncTransactionsSynced($count){
+    return "[Sync] Synced " . $count . " missing transactions.\n";
+}
+
+function outputSyncInlineRetryAttempt(){
+    return "[Sync] Transaction rejected due to invalid_previous_txid, attempting inline retry...\n";
+}
+
+function outputSyncInlineRetrySuccess(){
+    return "[Sync] Transaction re-signed with corrected previous_txid, will retry on next cycle...\n";
+}
+
+function outputSyncInlineRetryFailed(){
+    return "[Sync] Inline retry failed, falling back to hold/sync...\n";
+}
+
+function outputSyncHoldingForSync(){
+    return "[Sync] Transaction rejected due to invalid_previous_txid, holding for sync...\n";
+}
+
+function outputSyncHeld(){
+    return "[Sync] Transaction held pending sync completion.\n";
+}
+
+function outputSyncFallbackP2p(){
+    return "[Sync] Sync failed or no transactions to sync, falling back to P2P.\n";
+}
+
+function outputSyncP2pInlineRetryAttempt(){
+    return "[Sync] P2P transaction rejected due to invalid_previous_txid, attempting inline retry...\n";
+}
+
+function outputSyncP2pInlineRetrySuccess(){
+    return "[Sync] P2P transaction re-signed with corrected previous_txid, will retry...\n";
+}
+
+function outputSyncP2pHoldingForSync(){
+    return "[Sync] P2P transaction rejected due to invalid_previous_txid, holding for sync...\n";
+}
+
+function outputSyncLocalChainState($count){
+    return "[Sync] Local chain state: " . $count . " transactions.\n";
+}
+
+function outputSyncBidirectionalFallback(){
+    return "[Sync] Remote doesn't support bidirectional sync, falling back to standard sync.\n";
+}
+
+function outputSyncBidirectionalMissing($localMissing, $remoteMissing){
+    return "[Sync] Bidirectional sync: we're missing " . $localMissing . ", they're missing " . $remoteMissing . " transactions.\n";
+}
+
+function outputSyncBidirectionalCompleted($received, $sent){
+    return "[Sync] Bidirectional sync completed: received " . $received . ", sent " . $sent . " transactions.\n";
+}

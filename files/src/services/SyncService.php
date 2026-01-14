@@ -1426,7 +1426,7 @@ class SyncService {
     /**
      * Perform bidirectional sync negotiation with a contact
      *
-     * Issue #428: When both parties may have incomplete chains, this method
+     * When both parties may have incomplete chains, this method
      * exchanges chain state summaries and allows both parties to share missing
      * transactions with each other.
      *
@@ -1461,7 +1461,7 @@ class SyncService {
                 $contactPublicKey
             );
 
-            output("Local chain state: " . $localState['transaction_count'] . " transactions", 'SILENT');
+            output(outputSyncLocalChainState($localState['transaction_count']), 'SILENT');
 
             // Step 2: Request remote chain state via sync negotiation request
             $negotiationRequest = $this->messagePayload->buildSyncNegotiationRequest(
@@ -1477,7 +1477,7 @@ class SyncService {
 
             if (!$negotiationResponse || $negotiationResponse['status'] !== Constants::STATUS_ACCEPTED) {
                 // Fallback to standard sync if remote doesn't support bidirectional
-                output("Remote doesn't support bidirectional sync, falling back to standard sync", 'SILENT');
+                output(outputSyncBidirectionalFallback(), 'SILENT');
                 $standardSyncResult = $this->syncTransactionChain($contactAddress, $contactPublicKey);
                 $result['success'] = $standardSyncResult['success'];
                 $result['received_count'] = $standardSyncResult['synced_count'];
@@ -1511,8 +1511,7 @@ class SyncService {
             $result['local_missing'] = $localMissing;
             $result['remote_missing'] = $remoteMissing;
 
-            output("Bidirectional sync: we're missing " . count($localMissing) .
-                   ", they're missing " . count($remoteMissing) . " transactions", 'SILENT');
+            output(outputSyncBidirectionalMissing(count($localMissing), count($remoteMissing)), 'SILENT');
 
             // Step 4: Process transactions we received (that we were missing)
             $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
@@ -1552,8 +1551,7 @@ class SyncService {
             // Sync balances after transaction sync
             $this->syncContactBalance($contactPublicKey);
 
-            output("Bidirectional sync completed: received " . $result['received_count'] .
-                   ", remote missing " . $result['sent_count'] . " transactions", 'SILENT');
+            output(outputSyncBidirectionalCompleted($result['received_count'], $result['sent_count']), 'SILENT');
 
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
@@ -1569,7 +1567,7 @@ class SyncService {
     /**
      * Handle incoming sync negotiation request
      *
-     * Issue #428: Responds to bidirectional sync negotiation requests.
+     * Responds to bidirectional sync negotiation requests.
      * Compares local chain state with requester's list and returns
      * both our txid list and any transactions the requester is missing.
      *
