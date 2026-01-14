@@ -86,7 +86,7 @@ docker-compose -f docker-compose-4line.yml restart alice
 ## Network Topologies (conceptuals)
 
 ### Pre-made test topologies 
-Under [tests/old/demo](https://github.com/eiou-org/eiou-docker/tree/main/tests/old/demo) are two folders containing pre-made topologies for both HTTP and TOR. These topologies come with an overview image depicting the topology and several files, either in .txt format (for easy copy-pasting) and/or .sh format for running through bash.
+Under [tests/old/demo](https://github.com/eiou-org/eiou-docker/tree/main/tests/old/demo) are three folders containing pre-made topologies for HTTP, HTTPS, and TOR. These topologies come with an overview image depicting the topology and several files, either in .txt format (for easy copy-pasting) and/or .sh format for running through bash.
 
 Below are all the .sh files listed for easy access, note the two versions of each file. The 'basic setup' and 'basic test setup', the former sets up the topology as described in the image in the folder. The later does the same as the former but also runs a few functions, like sending some transactions and checking contact information.
 
@@ -103,6 +103,21 @@ Below are all the .sh files listed for easy access, note the two versions of eac
 | [Small Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/http_small_cluster%20(shell%20test%20script).sh)| 13 | ~3.5GB | 13-node cluster topology |
 | [HTTP Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/http_cluster%20(basic%20setup%2C%20shell%20script).sh) | 37 | ~9.5GB | 37-node cluster topology |
 | [HTTP Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTP/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/http_cluster%20(shell%20test%20script).sh)| 37 | ~9.5GB | 37-node cluster topology |
+
+
+#### HTTPS
+| Configuration | Nodes | Memory Usage | Description |
+|---------------|-------|--------------|-------------|
+| [https4 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/4%20contacts%20line%20(http4%20~1.1gb%20memory)/https4%20(basic%20setup%2C%20shell%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [https4 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/4%20contacts%20line%20(http4%20~1.1gb%20memory)/https4%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [demo4 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(basic%20setup%2C%20shell%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [demo4 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/4%20contacts%2C%20Alice%20Bob%20Carol%20Daniel%20(~1.1gb%20memory)/demo%204%20(shell%20test%20script).sh) | 4 | ~1.1GB | Basic 4-node line topology |
+| [https10 basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/10%20contacts%20line%20(http10%20~2.8gb%20memory)/https10%20(basic%20setup%2C%20shell%20script).sh) | 10 | ~2.8GB | Extended 10-node line topology |
+| [https10 basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/10%20contacts%20line%20(http10%20~2.8gb%20memory)/https10%20(shell%20test%20script).sh) | 10 | ~2.8GB | Extended 10-node line topology |
+| [HTTPS Small Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/https_small_cluster%20(basic%20setup%2C%20shell%20script).sh) | 13 | ~3.5GB | 13-node cluster topology |
+| [HTTPS Small Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/13%20contacts%20cluster%20(http_small_cluster%20~3.5gb%20memory)/https_small_cluster%20(shell%20test%20script).sh) | 13 | ~3.5GB | 13-node cluster topology |
+| [HTTPS Cluster basic setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/https_cluster%20(basic%20setup%2C%20shell%20script).sh) | 37 | ~9.5GB | 37-node cluster topology |
+| [HTTPS Cluster basic test setup](https://github.com/eiou-org/eiou-docker/blob/main/tests/old/demo/HTTPS/37%20contacts%20cluster%20(http_cluster%20%20~9.5gb%20memory)/https_cluster%20(shell%20test%20script).sh) | 37 | ~9.5GB | 37-node cluster topology |
 
 
 #### TOR

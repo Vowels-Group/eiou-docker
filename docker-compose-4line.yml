@@ -7,14 +7,27 @@ services:
     container_name: alice
     networks:
       - eiou-network-compose
+    ports:
+      - "80:80"
+      - "443:443"
     environment:
       - QUICKSTART=alice
+      # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
+      # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
+      # - EIOU_TOR_TIMEOUT=120              # Tor connection wait (default: 120s)
+      # SSL Configuration (optional):
+      # - SSL_DOMAIN=alice.example.com     # Override certificate CN
+      # - SSL_EXTRA_SANS=DNS:alice.local   # Additional SANs
+    # For CA-signed certificates across all nodes, uncomment:
+    # volumes (add to existing):
+    #   - ./ssl-ca:/ssl-ca:ro
     volumes:
       - alice-mysql-data:/var/lib/mysql
       - alice-files:/etc/eiou/
       - alice-index:/var/www/html
       - alice-eiou:/usr/local/bin/
     restart: unless-stopped
+    stop_grace_period: 45s
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
@@ -37,6 +50,7 @@ services:
       - bob-index:/var/www/html
       - bob-eiou:/usr/local/bin/
     restart: unless-stopped
+    stop_grace_period: 45s
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
@@ -59,6 +73,7 @@ services:
       - carol-index:/var/www/html
       - carol-eiou:/usr/local/bin/
     restart: unless-stopped
+    stop_grace_period: 45s
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
@@ -81,6 +96,7 @@ services:
       - daniel-index:/var/www/html
       - daniel-eiou:/usr/local/bin/
     restart: unless-stopped
+    stop_grace_period: 45s
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s

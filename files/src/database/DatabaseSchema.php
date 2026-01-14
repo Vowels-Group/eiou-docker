@@ -143,17 +143,19 @@ function getTransactionsTableSchema() {
             'contact'    /* Contact request transaction (amount=0, first transaction to establish contact) */
         ) DEFAULT 'standard',
         type ENUM(
-            'received',  /* Transaction was received by user */ 
-            'sent',      /* Transaction was sent by user */ 
-            'relay'      /* Transaction was a relay, user is intermediary */ 
+            'received',  /* Transaction was received by user */
+            'sent',      /* Transaction was sent by user */
+            'relay'      /* Transaction was a relay, user is intermediary */
         ) DEFAULT 'sent',
         status ENUM(
-            'pending',   /* Transaction has been created */ 
-            'sent',      /* Transaction has been sent onwards*/ 
+            'pending',   /* Transaction has been created */
+            'sending',   /* Transaction claimed for processing, prevents duplicates */
+            'sent',      /* Transaction has been sent onwards*/
             'accepted',  /* Transaction has been accepted by peer */
             'rejected',  /* Transaction has been rejected by peer */
             'cancelled', /* Transaction has not been received by peer in time */
-            'completed'  /* Transaction has been accepted by final recipient */
+            'completed', /* Transaction has been accepted by final recipient */
+            'failed'     /* Transaction failed after max recovery attempts, needs manual review */
         ) DEFAULT 'pending',
         sender_address VARCHAR(255) NOT NULL,
         sender_public_key TEXT NOT NULL,
@@ -173,6 +175,9 @@ function getTransactionsTableSchema() {
         description TEXT,
         initial_sender_address VARCHAR(255) DEFAULT NULL,
         end_recipient_address VARCHAR(255) DEFAULT NULL,
+        sending_started_at DATETIME(6) DEFAULT NULL,  /* When processing started, for recovery timeout detection */
+        recovery_count INT DEFAULT 0,                  /* Number of times this transaction has been recovered */
+        needs_manual_review TINYINT(1) DEFAULT 0,      /* Flag for transactions needing manual intervention */
         INDEX idx_transactions_receiver_public_key_hash (receiver_public_key_hash),
         INDEX idx_transactions_sender_public_key_hash (sender_public_key_hash),
         INDEX idx_transactions_sender_receiver (sender_public_key_hash, receiver_public_key_hash),
@@ -184,7 +189,8 @@ function getTransactionsTableSchema() {
         INDEX idx_transactions_previous_txid (previous_txid),
         INDEX idx_transactions_memo (memo(255)),
         INDEX idx_transactions_initial_sender (initial_sender_address),
-        INDEX idx_transactions_end_recipient (end_recipient_address)
+        INDEX idx_transactions_end_recipient (end_recipient_address),
+        INDEX idx_transactions_sending_recovery (status, sending_started_at)  /* For finding stuck transactions */
     )";
 }
 

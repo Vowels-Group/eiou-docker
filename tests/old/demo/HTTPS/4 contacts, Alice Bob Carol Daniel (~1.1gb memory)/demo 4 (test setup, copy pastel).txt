@@ -1,0 +1,30 @@
+# create the network (only need to do this once per docker installation)
+docker network create -d bridge demo-net
+
+# Remove any existing containers
+powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+
+# Build base image
+docker build -f eioud.dockerfile -t eioud .
+
+# Start containers
+docker run -d  --network=demo-net --name Alice -e QUICKSTART=Alice eioud
+docker run -d  --network=demo-net --name Bob -e QUICKSTART=Bob eioud
+docker run -d  --network=demo-net --name Carol -e QUICKSTART=Carol eioud
+docker run -d  --network=demo-net --name Daniel -e QUICKSTART=Daniel eioud
+sleep 5
+
+# add contacts
+docker exec Alice eiou add https://Bob Bob 0.1 1000 USD
+docker exec Bob eiou add https://Alice Alice 0.1 1000 USD
+docker exec Bob eiou add https://Carol Carol 0.1 1000 USD
+docker exec Carol eiou add https://Bob Bob 0.1 1000 USD
+docker exec Carol eiou add https://Daniel Daniel 0.1 1000 USD
+docker exec Daniel eiou add https://Carol Carol 0.1 1000 USD
+
+# direct transaction
+docker exec Alice eiou send https://Bob 100 USD
+docker exec Alice eiou send Bob 40 USD
+
+# p2p transaction
+docker exec Alice eiou send https://Carol 60 USD

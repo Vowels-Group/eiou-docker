@@ -394,6 +394,15 @@ class UserContext {
     }
 
     /**
+     * Get auto-refresh enabled status for transaction history
+     *
+     * @return bool
+     */
+    public function getAutoRefreshEnabled(): bool {
+        return (bool) ($this->get('autoRefreshEnabled') ?? Constants::AUTO_REFRESH_ENABLED);
+    }
+
+    /**
      * Get all user data as array
      *
      * @return array

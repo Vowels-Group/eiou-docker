@@ -89,6 +89,9 @@ class Application {
             // Get ServiceContainer instance
             $this->loadserviceContainer();
             $this->loadUtilityServiceContainer();
+
+            // Run transaction recovery to handle any stuck transactions from previous crashes
+            $this->runTransactionRecovery();
         }
     }
 
@@ -154,6 +157,52 @@ class Application {
                 ]);
             }
             // Don't throw - migrations failing shouldn't prevent app startup
+        }
+    }
+
+    /**
+     * Run transaction recovery to handle stuck transactions from previous crashes
+     *
+     * This method recovers transactions that were in 'sending' status when the
+     * process crashed. It resets them to 'pending' for retry or marks them for
+     * manual review if they've exceeded max retry attempts.
+     */
+    private function runTransactionRecovery(): void {
+        if (!isset($this->services)) {
+            return;
+        }
+
+        try {
+            $recoveryService = $this->services->getTransactionRecoveryService();
+            $results = $recoveryService->recoverStuckTransactions();
+
+            // Log recovery results
+            if ($results['recovered'] > 0 || $results['needs_review'] > 0) {
+                if ($this->secureLoggerLoaded()) {
+                    $this->getLogger()->info("Transaction recovery completed on startup", [
+                        'recovered' => $results['recovered'],
+                        'needs_review' => $results['needs_review'],
+                        'errors' => $results['errors']
+                    ]);
+                }
+
+                // Output to console for visibility during startup
+                if (function_exists('output')) {
+                    if ($results['recovered'] > 0) {
+                        output("[Recovery] Recovered {$results['recovered']} stuck transactions", 'INFO');
+                    }
+                    if ($results['needs_review'] > 0) {
+                        output("[Recovery] {$results['needs_review']} transactions need manual review", 'WARNING');
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            if ($this->secureLoggerLoaded()) {
+                $this->getLogger()->warning("Transaction recovery failed on startup", [
+                    'error' => $e->getMessage()
+                ]);
+            }
+            // Don't throw - recovery failing shouldn't prevent app startup
         }
     }
 

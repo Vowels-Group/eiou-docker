@@ -7,8 +7,14 @@ services:
     container_name: node-a
     networks:
       - eiou-network-compose
+    ports:
+      - "80:80"
+      - "443:443"
     environment:
       - QUICKSTART=node-a
+      # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
+      # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
+      # - EIOU_TOR_TIMEOUT=120              # Tor connection wait (default: 120s)
     volumes:
       - node-a-mysql-data:/var/lib/mysql
       - node-a-files:/etc/eiou/
@@ -21,6 +27,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   node-b:
     build:
@@ -43,6 +50,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   node-c:
     build:
@@ -65,6 +73,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   node-d:
     build:
@@ -87,6 +96,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   node-e:
     build:
@@ -109,6 +119,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   node-f:
     build:
@@ -131,6 +142,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   node-g:
     build:
@@ -153,6 +165,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   node-h:
     build:
@@ -175,6 +188,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   node-i:
     build:
@@ -197,6 +211,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   node-j:
     build:
@@ -219,6 +234,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
 networks:
   eiou-network-compose:

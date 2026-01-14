@@ -81,6 +81,11 @@ class Constants {
     const CLEANUP_IDLE_INTERVAL_MS = 10000;
     const CLEANUP_ADAPTIVE_POLLING = true;
 
+    // Transaction Recovery configuration
+    const RECOVERY_SENDING_TIMEOUT_SECONDS = 120; // Transactions stuck in 'sending' for this long are recovered
+    const RECOVERY_MAX_RETRY_COUNT = 3; // Max times a transaction can be recovered before manual review
+    const RECOVERY_LOCK_TIMEOUT_SECONDS = 300; // Lock timeout for processor exclusive access
+
     // Crypto/Security
     const HASH_ALGORITHM = 'sha256'; // Do not change
 
@@ -136,6 +141,7 @@ class Constants {
 
     // Transaction/P2P Status values
     const STATUS_PENDING = 'pending';
+    const STATUS_SENDING = 'sending'; // Claimed for processing, prevents duplicates
     const STATUS_SENT = 'sent';
     const STATUS_ACCEPTED = 'accepted';
     const STATUS_COMPLETED = 'completed';
@@ -174,6 +180,7 @@ class Constants {
     const DISPLAY_DATE_FORMAT = 'Y-m-d H:i:s.u';
     const DISPLAY_CURRENCY_DECIMALS = 2;
     const DISPLAY_DEFAULT_OUTPUT_LINES_MAX = 5;
+    const AUTO_REFRESH_ENABLED = false; // Default OFF - user must enable in settings
 
     // File paths (relative to project root)
     const PATH_CONFIG_DIR = '/etc/eiou/';

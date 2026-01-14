@@ -167,7 +167,10 @@ function runColumnMigrations(PDO $pdo): array {
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
     $columnsToAdd = [
         'transactions' => [
-            'time' => 'BIGINT NULL AFTER signature_nonce'
+            'time' => 'BIGINT NULL AFTER signature_nonce',
+            'sending_started_at' => 'DATETIME(6) DEFAULT NULL AFTER end_recipient_address',
+            'recovery_count' => 'INT DEFAULT 0 AFTER sending_started_at',
+            'needs_manual_review' => 'TINYINT(1) DEFAULT 0 AFTER recovery_count'
         ]
     ];
 
@@ -223,16 +226,58 @@ function runColumnMigrations(PDO $pdo): array {
         }
     }
 
+    // Update ENUM columns to add new values
+    $enumUpdates = [
+        'transactions' => [
+            'status' => "ENUM('pending', 'sending', 'sent', 'accepted', 'rejected', 'cancelled', 'completed', 'failed') DEFAULT 'pending'"
+        ]
+    ];
+
+    foreach ($enumUpdates as $tableName => $columns) {
+        foreach ($columns as $columnName => $newEnumDef) {
+            try {
+                // Check current ENUM values
+                $stmt = $pdo->query("SHOW COLUMNS FROM `$tableName` LIKE '$columnName'");
+                $columnInfo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($columnInfo) {
+                    $currentType = $columnInfo['Type'];
+                    // Check if 'sending' is already in the enum
+                    if (strpos($currentType, "'sending'") === false) {
+                        $pdo->exec("ALTER TABLE `$tableName` MODIFY COLUMN `$columnName` $newEnumDef");
+                        $results["{$tableName}.{$columnName}_enum"] = 'updated';
+                    } else {
+                        $results["{$tableName}.{$columnName}_enum"] = 'already_updated';
+                    }
+                }
+            } catch (PDOException $e) {
+                $results["{$tableName}.{$columnName}_enum"] = 'error: ' . $e->getMessage();
+                if (class_exists('SecureLogger')) {
+                    SecureLogger::error("ENUM update failed for {$tableName}.{$columnName}", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+        }
+    }
+
     // Add missing indexes
-    $indexesToAdd = [];
+    $indexesToAdd = [
+        'transactions' => [
+            'idx_transactions_sending_recovery' => 'status, sending_started_at'
+        ]
+    ];
 
     foreach ($indexesToAdd as $tableName => $indexes) {
-        foreach ($indexes as $indexName => $columnName) {
+        foreach ($indexes as $indexName => $columnSpec) {
             try {
                 // Check if index exists
                 $stmt = $pdo->query("SHOW INDEX FROM `$tableName` WHERE Key_name = '$indexName'");
                 if ($stmt->rowCount() === 0) {
-                    $pdo->exec("ALTER TABLE `$tableName` ADD INDEX `$indexName` (`$columnName`)");
+                    // Handle composite indexes (columns separated by comma)
+                    $columns = array_map('trim', explode(',', $columnSpec));
+                    $columnList = '`' . implode('`, `', $columns) . '`';
+                    $pdo->exec("ALTER TABLE `$tableName` ADD INDEX `$indexName` ($columnList)");
                     $results["{$tableName}.{$indexName}"] = 'index_created';
                 } else {
                     $results["{$tableName}.{$indexName}"] = 'index_exists';

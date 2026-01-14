@@ -1245,6 +1245,214 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
+     * Atomically claim a pending transaction for processing
+     *
+     * This method uses an atomic UPDATE with WHERE clause to change status
+     * from 'pending' to 'sending'. Only succeeds if the transaction is still
+     * in 'pending' status, preventing duplicate processing by multiple workers.
+     *
+     * The sending_started_at timestamp is set to track how long the transaction
+     * has been in 'sending' status for recovery purposes.
+     *
+     * @param string $txid Transaction ID to claim
+     * @return bool True if claim was successful, false if already claimed or not found
+     */
+    public function claimPendingTransaction(string $txid): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET status = :new_status,
+                      sending_started_at = :started_at
+                  WHERE txid = :txid
+                  AND status = :current_status";
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':new_status', Constants::STATUS_SENDING);
+        $stmt->bindValue(':started_at', date('Y-m-d H:i:s'));
+        $stmt->bindValue(':txid', $txid);
+        $stmt->bindValue(':current_status', Constants::STATUS_PENDING);
+
+        try {
+            $stmt->execute();
+            $claimed = $stmt->rowCount() > 0;
+
+            if ($claimed && function_exists('output')) {
+                output("Transaction {$txid} claimed for processing (pending -> sending)", 'SILENT');
+            }
+
+            return $claimed;
+        } catch (PDOException $e) {
+            $this->logError("Failed to claim pending transaction", $e);
+            return false;
+        }
+    }
+
+    /**
+     * Get transactions stuck in 'sending' status that need recovery
+     *
+     * Returns transactions that have been in 'sending' status longer than
+     * the configured timeout, indicating the processor may have crashed
+     * while processing them.
+     *
+     * @param int $timeoutSeconds Timeout in seconds (default from Constants)
+     * @return array Array of stuck transactions
+     */
+    public function getStuckSendingTransactions(int $timeoutSeconds = 0): array {
+        if ($timeoutSeconds <= 0) {
+            $timeoutSeconds = Constants::RECOVERY_SENDING_TIMEOUT_SECONDS;
+        }
+
+        $cutoffTime = date('Y-m-d H:i:s', time() - $timeoutSeconds);
+
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE status = :status
+                  AND sending_started_at IS NOT NULL
+                  AND sending_started_at < :cutoff_time
+                  ORDER BY sending_started_at ASC";
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':status', Constants::STATUS_SENDING);
+        $stmt->bindValue(':cutoff_time', $cutoffTime);
+
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve stuck sending transactions", $e);
+            return [];
+        }
+    }
+
+    /**
+     * Recover a stuck transaction by resetting it to pending
+     *
+     * Increments the recovery_count and resets status to 'pending' for retry.
+     * If recovery_count exceeds max retries, marks transaction for manual review.
+     *
+     * @param string $txid Transaction ID to recover
+     * @param int $maxRetries Maximum recovery attempts before manual review
+     * @return array Result with 'recovered' (bool), 'needs_review' (bool), 'recovery_count' (int)
+     */
+    public function recoverStuckTransaction(string $txid, int $maxRetries = 0): array {
+        if ($maxRetries <= 0) {
+            $maxRetries = Constants::RECOVERY_MAX_RETRY_COUNT;
+        }
+
+        // First, get current recovery count
+        $query = "SELECT recovery_count FROM {$this->tableName} WHERE txid = :txid";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':txid', $txid);
+        $stmt->execute();
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$result) {
+            return ['recovered' => false, 'needs_review' => false, 'recovery_count' => 0];
+        }
+
+        $currentCount = (int)($result['recovery_count'] ?? 0);
+        $newCount = $currentCount + 1;
+
+        if ($newCount > $maxRetries) {
+            // Mark for manual review
+            $updateQuery = "UPDATE {$this->tableName}
+                           SET status = :status,
+                               recovery_count = :count,
+                               sending_started_at = NULL,
+                               needs_manual_review = 1
+                           WHERE txid = :txid";
+
+            $updateStmt = $this->pdo->prepare($updateQuery);
+            $updateStmt->bindValue(':status', Constants::STATUS_FAILED);
+            $updateStmt->bindValue(':count', $newCount);
+            $updateStmt->bindValue(':txid', $txid);
+            $updateStmt->execute();
+
+            SecureLogger::warning("Transaction exceeded max recovery attempts, marked for manual review", [
+                'txid' => $txid,
+                'recovery_count' => $newCount,
+                'max_retries' => $maxRetries
+            ]);
+
+            return ['recovered' => false, 'needs_review' => true, 'recovery_count' => $newCount];
+        }
+
+        // Reset to pending for retry
+        $updateQuery = "UPDATE {$this->tableName}
+                       SET status = :status,
+                           recovery_count = :count,
+                           sending_started_at = NULL
+                       WHERE txid = :txid
+                       AND status = :current_status";
+
+        $updateStmt = $this->pdo->prepare($updateQuery);
+        $updateStmt->bindValue(':status', Constants::STATUS_PENDING);
+        $updateStmt->bindValue(':count', $newCount);
+        $updateStmt->bindValue(':txid', $txid);
+        $updateStmt->bindValue(':current_status', Constants::STATUS_SENDING);
+        $updateStmt->execute();
+
+        $recovered = $updateStmt->rowCount() > 0;
+
+        if ($recovered) {
+            SecureLogger::info("Transaction recovered from stuck sending state", [
+                'txid' => $txid,
+                'recovery_count' => $newCount
+            ]);
+        }
+
+        return ['recovered' => $recovered, 'needs_review' => false, 'recovery_count' => $newCount];
+    }
+
+    /**
+     * Get transactions marked for manual review
+     *
+     * @return array Array of transactions needing manual review
+     */
+    public function getTransactionsNeedingReview(): array {
+        $query = "SELECT * FROM {$this->tableName}
+                  WHERE needs_manual_review = 1
+                  ORDER BY timestamp ASC";
+
+        $stmt = $this->pdo->prepare($query);
+
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve transactions needing review", $e);
+            return [];
+        }
+    }
+
+    /**
+     * Mark transaction as successfully sent (sending -> sent)
+     *
+     * Atomically updates status from 'sending' to 'sent', clearing the
+     * sending_started_at timestamp.
+     *
+     * @param string $txid Transaction ID
+     * @return bool True if update was successful
+     */
+    public function markAsSent(string $txid): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET status = :new_status,
+                      sending_started_at = NULL
+                  WHERE txid = :txid
+                  AND status = :current_status";
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':new_status', Constants::STATUS_SENT);
+        $stmt->bindValue(':txid', $txid);
+        $stmt->bindValue(':current_status', Constants::STATUS_SENDING);
+
+        try {
+            $stmt->execute();
+            return $stmt->rowCount() > 0;
+        } catch (PDOException $e) {
+            $this->logError("Failed to mark transaction as sent", $e);
+            return false;
+        }
+    }
+
+    /**
      * Get transactions that are in progress (not completed/rejected/cancelled)
      * Returns transactions with status: pending, sent, accepted (but not yet confirmed)
      * Also includes P2P route discovery requests sent by user that are not expired

@@ -192,11 +192,13 @@
 
     // Auto-refresh for in-progress transactions
     var hasInProgressTx = <?php echo !empty($inProgressTransactions) ? 'true' : 'false'; ?>;
+    var autoRefreshEnabled = <?php echo $user->getAutoRefreshEnabled() ? 'true' : 'false'; ?>;
     var autoRefreshInterval = null;
     var AUTO_REFRESH_DELAY = 15000; // 15 seconds
 
     function startAutoRefresh() {
-        if (hasInProgressTx && !autoRefreshInterval) {
+        // Only start auto-refresh if enabled in settings AND there are in-progress transactions
+        if (hasInProgressTx && autoRefreshEnabled && !autoRefreshInterval) {
             var indicator = document.getElementById('tx-auto-refresh-status');
             if (indicator) indicator.classList.add('active');
 

@@ -132,6 +132,10 @@ class SettingsController
             }
         }
 
+        // Auto-Refresh Enabled (boolean toggle, default: false/off)
+        // Checkbox only posts value when checked, so we need to handle both cases
+        $settings['autoRefreshEnabled'] = isset($_POST['autoRefreshEnabled']) && $_POST['autoRefreshEnabled'] === '1';
+
         // Check for errors
         if (!empty($errors)) {
             MessageHelper::redirectMessage(implode('; ', $errors), 'error');

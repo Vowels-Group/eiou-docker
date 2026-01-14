@@ -5,6 +5,143 @@
 exec 1> >(stdbuf -oL cat)
 exec 2> >(stdbuf -oL cat >&2)
 
+# Graceful shutdown configuration
+SHUTDOWN_TIMEOUT=30  # Maximum seconds to wait for processes to terminate
+SHUTDOWN_IN_PROGRESS=false
+
+# Store background process PIDs
+P2P_PID=""
+TRANSACTION_PID=""
+CLEANUP_PID=""
+
+# Graceful shutdown handler
+graceful_shutdown() {
+    # Prevent duplicate shutdown handling
+    if [ "$SHUTDOWN_IN_PROGRESS" = true ]; then
+        return
+    fi
+    SHUTDOWN_IN_PROGRESS=true
+
+    # Stop watchdog first to prevent it from restarting processes during shutdown
+    if [ -n "$WATCHDOG_PID" ] && kill -0 "$WATCHDOG_PID" 2>/dev/null; then
+        echo "[Shutdown] Stopping watchdog (PID: $WATCHDOG_PID)"
+        kill "$WATCHDOG_PID" 2>/dev/null
+        wait "$WATCHDOG_PID" 2>/dev/null || true
+    fi
+
+    echo ""
+    echo "=========================================="
+    echo "Graceful shutdown initiated..."
+    echo "=========================================="
+
+    SHUTDOWN_START=$(date +%s)
+
+    # Step 1: Signal PHP processors to stop (they handle SIGTERM gracefully)
+    echo "[Shutdown] Stopping PHP message processors..."
+
+    # Send SIGTERM to PHP processes if they exist
+    local pids_to_wait=""
+
+    if [ -n "$P2P_PID" ] && kill -0 "$P2P_PID" 2>/dev/null; then
+        echo "[Shutdown] Sending SIGTERM to P2P processor (PID: $P2P_PID)"
+        kill -TERM "$P2P_PID" 2>/dev/null
+        pids_to_wait="$pids_to_wait $P2P_PID"
+    fi
+
+    if [ -n "$TRANSACTION_PID" ] && kill -0 "$TRANSACTION_PID" 2>/dev/null; then
+        echo "[Shutdown] Sending SIGTERM to Transaction processor (PID: $TRANSACTION_PID)"
+        kill -TERM "$TRANSACTION_PID" 2>/dev/null
+        pids_to_wait="$pids_to_wait $TRANSACTION_PID"
+    fi
+
+    if [ -n "$CLEANUP_PID" ] && kill -0 "$CLEANUP_PID" 2>/dev/null; then
+        echo "[Shutdown] Sending SIGTERM to Cleanup processor (PID: $CLEANUP_PID)"
+        kill -TERM "$CLEANUP_PID" 2>/dev/null
+        pids_to_wait="$pids_to_wait $CLEANUP_PID"
+    fi
+
+    # Also check for any PHP processors by their lockfiles
+    for lockfile in /tmp/p2pmessages_lock.pid /tmp/transactionmessages_lock.pid /tmp/cleanupmessages_lock.pid; do
+        if [ -f "$lockfile" ]; then
+            local pid=$(cat "$lockfile" 2>/dev/null)
+            if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                echo "[Shutdown] Found additional processor from lockfile (PID: $pid)"
+                kill -TERM "$pid" 2>/dev/null
+                pids_to_wait="$pids_to_wait $pid"
+            fi
+        fi
+    done
+
+    # Step 2: Wait for PHP processes to finish their current tasks
+    if [ -n "$pids_to_wait" ]; then
+        echo "[Shutdown] Waiting for PHP processors to complete current tasks (timeout: ${SHUTDOWN_TIMEOUT}s)..."
+        local wait_start=$(date +%s)
+        local all_stopped=false
+
+        while [ $(($(date +%s) - wait_start)) -lt $SHUTDOWN_TIMEOUT ]; do
+            all_stopped=true
+            for pid in $pids_to_wait; do
+                if kill -0 "$pid" 2>/dev/null; then
+                    all_stopped=false
+                    break
+                fi
+            done
+
+            if [ "$all_stopped" = true ]; then
+                echo "[Shutdown] All PHP processors stopped gracefully"
+                break
+            fi
+            sleep 1
+        done
+
+        # Force kill any remaining processes
+        if [ "$all_stopped" = false ]; then
+            echo "[Shutdown] Timeout reached. Force killing remaining processes..."
+            for pid in $pids_to_wait; do
+                if kill -0 "$pid" 2>/dev/null; then
+                    echo "[Shutdown] Force killing PID: $pid"
+                    kill -9 "$pid" 2>/dev/null
+                fi
+            done
+        fi
+    else
+        echo "[Shutdown] No PHP processors were running"
+    fi
+
+    # Step 3: Stop services in reverse order of startup
+    echo "[Shutdown] Stopping services in reverse order..."
+
+    echo "[Shutdown] Stopping Apache..."
+    service apache2 stop 2>/dev/null || true
+
+    echo "[Shutdown] Stopping MariaDB..."
+    service mariadb stop 2>/dev/null || true
+
+    echo "[Shutdown] Stopping Tor..."
+    service tor stop 2>/dev/null || true
+
+    echo "[Shutdown] Stopping Cron..."
+    service cron stop 2>/dev/null || true
+
+    # Step 4: Clean up lockfiles
+    echo "[Shutdown] Cleaning up lockfiles..."
+    rm -f /tmp/p2pmessages_lock.pid 2>/dev/null
+    rm -f /tmp/transactionmessages_lock.pid 2>/dev/null
+    rm -f /tmp/cleanupmessages_lock.pid 2>/dev/null
+
+    SHUTDOWN_END=$(date +%s)
+    SHUTDOWN_DURATION=$((SHUTDOWN_END - SHUTDOWN_START))
+
+    echo "=========================================="
+    echo "Graceful shutdown completed in ${SHUTDOWN_DURATION}s"
+    echo "=========================================="
+
+    exit 0
+}
+
+# Register signal handlers for graceful shutdown
+trap graceful_shutdown SIGTERM SIGINT SIGHUP
+
 # Check for quickstart flag
 QUICKSTART=${QUICKSTART:-false}
 
@@ -24,17 +161,158 @@ QUICKSTART=${QUICKSTART:-false}
 RESTORE_FILE=${RESTORE_FILE:-false}
 RESTORE=${RESTORE:-false}
 
-# Generate self-signed SSL certificate if it doesn't exist
-if [ ! -f /etc/apache2/ssl/server.crt ]; then
-    echo "Generating self-signed SSL certificate..."
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout /etc/apache2/ssl/server.key \
-        -out /etc/apache2/ssl/server.crt \
-        -subj "/C=XX/ST=State/L=City/O=EIOU/OU=Node/CN=localhost" \
-        2>/dev/null
+# =============================================================================
+# SSL CERTIFICATE GENERATION
+# =============================================================================
+# Environment Variables:
+#   SSL_DOMAIN      - Primary domain for certificate CN (default: QUICKSTART value or localhost)
+#   SSL_EXTRA_SANS  - Additional SANs in format "DNS:name,IP:addr" (comma-separated)
+#
+# External Certificate Support:
+#   Mount certificates at /ssl-certs/ with files: server.crt, server.key, ca-chain.crt (optional)
+#
+# CA-Signed Certificate Support:
+#   Mount CA at /ssl-ca/ with files: ca.crt, ca.key
+#
+# Priority: 1. External certs (/ssl-certs/) 2. CA-signed (/ssl-ca/) 3. Auto-generated
+# =============================================================================
+
+# Check for externally provided certificates (Let's Encrypt, corporate CA, etc.)
+if [ -f /ssl-certs/server.crt ] && [ -f /ssl-certs/server.key ]; then
+    echo "Installing externally provided SSL certificates..."
+
+    cp /ssl-certs/server.crt /etc/apache2/ssl/server.crt
+    cp /ssl-certs/server.key /etc/apache2/ssl/server.key
     chmod 600 /etc/apache2/ssl/server.key
     chmod 644 /etc/apache2/ssl/server.crt
-    echo "SSL certificate generated successfully."
+
+    # Handle certificate chain if provided (for Let's Encrypt fullchain, etc.)
+    if [ -f /ssl-certs/ca-chain.crt ]; then
+        cp /ssl-certs/ca-chain.crt /etc/apache2/ssl/ca-chain.crt
+        chmod 644 /etc/apache2/ssl/ca-chain.crt
+        echo "  Certificate chain installed."
+    fi
+
+    echo "External SSL certificates installed successfully."
+
+# Generate certificate (self-signed or CA-signed) if none exists
+elif [ ! -f /etc/apache2/ssl/server.crt ]; then
+    echo "Generating SSL certificate..."
+
+    # Determine primary CN
+    # Priority: SSL_DOMAIN env var > QUICKSTART hostname > localhost
+    SSL_DOMAIN=${SSL_DOMAIN:-${QUICKSTART:-localhost}}
+    if [ "$SSL_DOMAIN" = "false" ]; then
+        SSL_DOMAIN="localhost"
+    fi
+
+    # Build Subject Alternative Names list
+    SAN_LIST="DNS:localhost,DNS:$SSL_DOMAIN"
+
+    # Add container hostname if different from SSL_DOMAIN
+    CONTAINER_HOSTNAME=$(hostname 2>/dev/null || echo "")
+    if [ -n "$CONTAINER_HOSTNAME" ] && [ "$CONTAINER_HOSTNAME" != "$SSL_DOMAIN" ] && [ "$CONTAINER_HOSTNAME" != "localhost" ]; then
+        SAN_LIST="$SAN_LIST,DNS:$CONTAINER_HOSTNAME"
+    fi
+
+    # Auto-detect all container IP addresses and add as SANs
+    DETECTED_IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || echo "")
+    for IP in $DETECTED_IPS; do
+        if [ "$IP" != "127.0.0.1" ]; then
+            SAN_LIST="$SAN_LIST,IP:$IP"
+        fi
+    done
+
+    # Always include loopback for local testing
+    SAN_LIST="$SAN_LIST,IP:127.0.0.1"
+
+    # Add user-specified extra SANs
+    # Example: SSL_EXTRA_SANS="DNS:node1.example.com,DNS:node1.local,IP:10.0.0.50"
+    if [ -n "$SSL_EXTRA_SANS" ]; then
+        SAN_LIST="$SAN_LIST,$SSL_EXTRA_SANS"
+    fi
+
+    echo "  CN: $SSL_DOMAIN"
+    echo "  SANs: $SAN_LIST"
+
+    # Create OpenSSL configuration with SANs
+    # Modern browsers require SANs - CN alone is deprecated
+    cat > /tmp/openssl-san.cnf << SSLEOF
+[req]
+default_bits = 2048
+prompt = no
+default_md = sha256
+distinguished_name = dn
+req_extensions = req_ext
+x509_extensions = v3_ext
+
+[dn]
+C = XX
+ST = State
+L = City
+O = EIOU
+OU = Node
+CN = $SSL_DOMAIN
+
+[req_ext]
+subjectAltName = $SAN_LIST
+
+[v3_ext]
+subjectAltName = $SAN_LIST
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+SSLEOF
+
+    # Check if CA is mounted for CA-signed certificate generation
+    if [ -f /ssl-ca/ca.crt ] && [ -f /ssl-ca/ca.key ]; then
+        echo "  Generating CA-signed certificate..."
+
+        # Generate private key and CSR
+        openssl req -new -nodes -newkey rsa:2048 \
+            -keyout /etc/apache2/ssl/server.key \
+            -out /tmp/server.csr \
+            -config /tmp/openssl-san.cnf \
+            2>/dev/null
+
+        # Sign with CA (browsers will trust this if CA is in their trust store)
+        openssl x509 -req -in /tmp/server.csr \
+            -CA /ssl-ca/ca.crt \
+            -CAkey /ssl-ca/ca.key \
+            -CAcreateserial \
+            -out /etc/apache2/ssl/server.crt \
+            -days 365 \
+            -sha256 \
+            -extfile /tmp/openssl-san.cnf \
+            -extensions v3_ext \
+            2>/dev/null
+
+        # Copy CA cert for client verification
+        cp /ssl-ca/ca.crt /etc/apache2/ssl/ca.crt
+        chmod 644 /etc/apache2/ssl/ca.crt
+
+        rm -f /tmp/server.csr
+        echo "  CA-signed certificate generated successfully."
+    else
+        # Generate self-signed certificate
+        echo "  Generating self-signed certificate..."
+
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /etc/apache2/ssl/server.key \
+            -out /etc/apache2/ssl/server.crt \
+            -config /tmp/openssl-san.cnf \
+            2>/dev/null
+
+        echo "  Self-signed certificate generated successfully."
+        echo "  Note: Browsers will show warnings for self-signed certificates."
+        echo "  For trusted certificates, mount a CA at /ssl-ca/ or external certs at /ssl-certs/"
+    fi
+
+    rm -f /tmp/openssl-san.cnf
+    chmod 600 /etc/apache2/ssl/server.key
+    chmod 644 /etc/apache2/ssl/server.crt
+else
+    echo "Existing SSL certificate found, skipping generation."
 fi
 
 # Start services
@@ -130,7 +408,8 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
         echo "Wallet restore completed."
     elif [ "$QUICKSTART" != "false" ]; then
         echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
-        eiou generate http://$QUICKSTART
+        # Use HTTPS for secure P2P communication (SSL certificates are auto-generated)
+        eiou generate https://$QUICKSTART
         echo "Generate command completed."
     else
         # Run automatically without hostname (only tor)
@@ -143,12 +422,12 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
     echo "Restarting Tor to load new hidden service keys..."
 
     # Configuration for Tor restart
-    # WSL2 environments have slower I/O; use EIOU_HS_TIMEOUT env var to override
     TOR_RESTART_MAX_ATTEMPTS=3
     TOR_RESTART_ATTEMPT=0
     TOR_RESTART_SUCCESS=false
     HS_DIR="/var/lib/tor/hidden_service"
     HS_HOSTNAME_FILE="${HS_DIR}/hostname"
+    # WSL2 environments have slower I/O; use EIOU_HS_TIMEOUT env var to override
     HS_MAX_WAIT=${EIOU_HS_TIMEOUT:-60}  # Maximum seconds to wait for hidden service
 
     # Ensure correct permissions on hidden service directory before restart
@@ -224,7 +503,7 @@ while true; do
         http=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["hostname"])){echo $json["hostname"];}')
         tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
         pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
-        # Note: authcode is retrieved securely in the display section below to avoid logging
+        authcode=$(php -r 'require_once("/etc/eiou/src/core/UserContext.php"); echo UserContext::getInstance()->getAuthCode();')
         break
     else
         if $first; then
@@ -298,20 +577,107 @@ fi
 echo -e "\t Tor address: $tor"
 readable="${pubkey//$'\n'/$'\n\t\t'}"
 echo -e "\t Public Key: \n\t\t $readable"
-echo -e "\t Authentication Code: (stored securely with seedphrase - see above)"
+echo -e "\t Authentication Code: $authcode"
 
 
 # Start p2p message processing in background
 nohup php /etc/eiou/P2pMessages.php > /dev/null 2>&1 &
-echo "P2p message processing started successfully (PID: $!)"
+P2P_PID=$!
+echo "P2p message processing started successfully (PID: $P2P_PID)"
 
 # Start transaction message processing in background
 nohup php /etc/eiou/TransactionMessages.php > /dev/null 2>&1 &
-echo "Transaction message processing started successfully (PID: $!)"
+TRANSACTION_PID=$!
+echo "Transaction message processing started successfully (PID: $TRANSACTION_PID)"
 
 # Start cleanup message processing in background
 nohup php /etc/eiou/CleanupMessages.php > /dev/null 2>&1 &
-echo "Cleanup processing started successfully (PID: $!)"
+CLEANUP_PID=$!
+echo "Cleanup processing started successfully (PID: $CLEANUP_PID)"
 
-# Keep container running
-tail -f /dev/null
+# Watchdog function to monitor and restart processors if they die
+watchdog() {
+    local WATCHDOG_INTERVAL=30       # Check every 30 seconds
+    local RESTART_COOLDOWN=60        # Minimum seconds between restarts of same processor
+    local MAX_RESTARTS=10            # Maximum restarts before giving up
+
+    # Track restart counts and last restart times
+    local P2P_RESTARTS=0
+    local TRANSACTION_RESTARTS=0
+    local CLEANUP_RESTARTS=0
+    local P2P_LAST_RESTART=0
+    local TRANSACTION_LAST_RESTART=0
+    local CLEANUP_LAST_RESTART=0
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watchdog started - monitoring processor PIDs"
+
+    while true; do
+        sleep $WATCHDOG_INTERVAL
+        local CURRENT_TIME=$(date +%s)
+
+        # Check P2pMessages processor
+        if ! kill -0 $P2P_PID 2>/dev/null; then
+            local TIME_SINCE_RESTART=$((CURRENT_TIME - P2P_LAST_RESTART))
+            if [ $P2P_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                P2P_RESTARTS=$((P2P_RESTARTS + 1))
+                P2P_LAST_RESTART=$CURRENT_TIME
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages died (was PID $P2P_PID), restarting (attempt $P2P_RESTARTS/$MAX_RESTARTS)..."
+                nohup php /etc/eiou/P2pMessages.php > /dev/null 2>&1 &
+                P2P_PID=$!
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages restarted (new PID: $P2P_PID)"
+            elif [ $P2P_RESTARTS -ge $MAX_RESTARTS ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+            fi
+        fi
+
+        # Check TransactionMessages processor
+        if ! kill -0 $TRANSACTION_PID 2>/dev/null; then
+            local TIME_SINCE_RESTART=$((CURRENT_TIME - TRANSACTION_LAST_RESTART))
+            if [ $TRANSACTION_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                TRANSACTION_RESTARTS=$((TRANSACTION_RESTARTS + 1))
+                TRANSACTION_LAST_RESTART=$CURRENT_TIME
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages died (was PID $TRANSACTION_PID), restarting (attempt $TRANSACTION_RESTARTS/$MAX_RESTARTS)..."
+                nohup php /etc/eiou/TransactionMessages.php > /dev/null 2>&1 &
+                TRANSACTION_PID=$!
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages restarted (new PID: $TRANSACTION_PID)"
+            elif [ $TRANSACTION_RESTARTS -ge $MAX_RESTARTS ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+            fi
+        fi
+
+        # Check CleanupMessages processor
+        if ! kill -0 $CLEANUP_PID 2>/dev/null; then
+            local TIME_SINCE_RESTART=$((CURRENT_TIME - CLEANUP_LAST_RESTART))
+            if [ $CLEANUP_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                CLEANUP_RESTARTS=$((CLEANUP_RESTARTS + 1))
+                CLEANUP_LAST_RESTART=$CURRENT_TIME
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages died (was PID $CLEANUP_PID), restarting (attempt $CLEANUP_RESTARTS/$MAX_RESTARTS)..."
+                nohup php /etc/eiou/CleanupMessages.php > /dev/null 2>&1 &
+                CLEANUP_PID=$!
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages restarted (new PID: $CLEANUP_PID)"
+            elif [ $CLEANUP_RESTARTS -ge $MAX_RESTARTS ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+            fi
+        fi
+    done
+}
+
+# Start watchdog in background
+watchdog &
+WATCHDOG_PID=$!
+echo "Watchdog started (PID: $WATCHDOG_PID)"
+
+echo ""
+echo "=========================================="
+echo "EIOU Node started successfully!"
+echo "All processors running. Ready for graceful shutdown on SIGTERM/SIGINT."
+echo "=========================================="
+
+# Keep container running with a wait loop that can be interrupted by signals
+# Using 'wait' allows the trap to be processed immediately when signal is received
+while true; do
+    # Wait for any background process, or sleep if none
+    # The sleep allows the trap to be processed
+    sleep 1 &
+    wait $! 2>/dev/null || true
+done

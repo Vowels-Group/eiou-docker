@@ -8,8 +8,14 @@ services:
     container_name: cluster-a
     networks:
       - eiou-network-compose
+    ports:
+      - "80:80"
+      - "443:443"
     environment:
       - QUICKSTART=cluster-a
+      # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
+      # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
+      # - EIOU_TOR_TIMEOUT=120              # Tor connection wait (default: 120s)
     volumes:
       - cluster-a-mysql-data:/var/lib/mysql
       - cluster-a-files:/etc/eiou/
@@ -22,6 +28,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   # Level 1 nodes
   cluster-a1:
@@ -45,6 +52,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a2:
     build:
@@ -67,6 +75,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a3:
     build:
@@ -89,6 +98,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a4:
     build:
@@ -111,6 +121,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   # Level 2 nodes
   cluster-a11:
@@ -134,6 +145,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a12:
     build:
@@ -156,6 +168,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a21:
     build:
@@ -178,6 +191,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a22:
     build:
@@ -200,6 +214,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a31:
     build:
@@ -222,6 +237,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a32:
     build:
@@ -244,6 +260,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a41:
     build:
@@ -266,6 +283,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
   cluster-a42:
     build:
@@ -288,6 +306,7 @@ services:
       timeout: 20s
       retries: 5
       start_period: 120s
+    stop_grace_period: 45s
 
 networks:
   eiou-network-compose:
