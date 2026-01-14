@@ -173,8 +173,12 @@ elseif($request === "sync"){
   $syncService = $app->services->getSyncService();
   $syncService->sync($cleanArgv, $output);
 }
-// Message queue processing commands for testing
+// Message queue processing commands for testing (requires EIOU_TEST_MODE=true)
 elseif($request === "out"){
+  if (getenv('EIOU_TEST_MODE') !== 'true') {
+    $output->error("Command not available", [], "This command is only available in test mode");
+    exit(1);
+  }
   // Process outgoing message queue (pending transactions)
   $debugService->output("Processing outgoing message queue", 'SILENT');
   $transactionService = $app->services->getTransactionService();
@@ -185,6 +189,10 @@ elseif($request === "out"){
   ], "Outgoing queue processing complete");
 }
 elseif($request === "in"){
+  if (getenv('EIOU_TEST_MODE') !== 'true') {
+    $output->error("Command not available", [], "This command is only available in test mode");
+    exit(1);
+  }
   // Process incoming/held transactions
   $debugService->output("Processing incoming message queue", 'SILENT');
 

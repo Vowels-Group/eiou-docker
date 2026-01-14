@@ -85,9 +85,10 @@ echo -e "\t   Receiver: ${receiver} (${receiverAddress})"
 
 # Ensure contacts exist between sender and receiver
 # Use same format as addContactsTest: eiou add <address> <name> <fee> <credit> <currency>
-docker exec ${sender} eiou add ${receiverAddress} ${receiver} 0 0 USD 2>&1 > /dev/null || true
+# Credit must be > 0 to allow transactions (1000 matches http4 topology default)
+docker exec ${sender} eiou add ${receiverAddress} ${receiver} 0.1 1000 USD 2>&1 > /dev/null || true
 sleep 1
-docker exec ${receiver} eiou add ${senderAddress} ${sender} 0 0 USD 2>&1 > /dev/null || true
+docker exec ${receiver} eiou add ${senderAddress} ${sender} 0.1 1000 USD 2>&1 > /dev/null || true
 sleep 2
 
 # Wait for contacts to be accepted (pubkeys only available after acceptance)
@@ -97,14 +98,14 @@ while [ $waitElapsed -lt 15 ]; do
     senderStatus=$(docker exec ${sender} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
-        \$status = \$app->services->getContactRepository()->getContactStatus('${MODE}', '${receiverAddress}');
+        \$status = \$app->services->getContactRepository()->getContactStatus('http', '${receiverAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
 
     receiverStatus=$(docker exec ${receiver} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
-        \$status = \$app->services->getContactRepository()->getContactStatus('${MODE}', '${senderAddress}');
+        \$status = \$app->services->getContactRepository()->getContactStatus('http', '${senderAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
 
@@ -126,7 +127,7 @@ fi
 receiverPubkeyB64=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}', '${receiverAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${receiverAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -137,7 +138,7 @@ receiverPubkeyB64=$(docker exec ${sender} php -r "
 receiverPubkeyHash=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}', '${receiverAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${receiverAddress}');
     if (\$pubkey) {
         echo hash('sha256', \$pubkey);
     } else {
@@ -148,7 +149,7 @@ receiverPubkeyHash=$(docker exec ${sender} php -r "
 senderPubkeyB64=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}', '${senderAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${senderAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -159,7 +160,7 @@ senderPubkeyB64=$(docker exec ${receiver} php -r "
 senderPubkeyHash=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}', '${senderAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${senderAddress}');
     if (\$pubkey) {
         echo hash('sha256', \$pubkey);
     } else {
@@ -395,6 +396,12 @@ sleep 1
 docker exec ${sender} eiou send ${receiverAddress} 3 USD "chain-sync-test-tx3-${timestamp}" 2>&1 > /dev/null
 sleep 2
 
+# Process messages: sender sends outgoing, receiver receives incoming
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
+sleep 2
+docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
+sleep 2
+
 senderTxCount=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
@@ -589,7 +596,10 @@ sleep 2
 docker exec ${sender} eiou send ${receiverAddress} 2 USD "cycle-test-2-${timestamp2}" 2>&1 > /dev/null
 sleep 2
 
-docker exec ${receiver} eiou in 2>&1 > /dev/null
+# Process messages: sender sends outgoing, receiver receives incoming
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
+sleep 2
+docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
 sleep 2
 
 initialCountSender=$(docker exec ${sender} php -r "
@@ -633,21 +643,21 @@ docker exec ${sender} php -r "
 docker exec ${sender} eiou send ${receiverAddress} 10 USD "cycle-test-3-${timestamp2}" 2>&1 > /dev/null
 sleep 2
 # Sender processes outgoing
-docker exec ${sender} eiou out 2>&1 > /dev/null
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
 sleep 3
 # Receiver processes incoming - may detect mismatch and request sync
-docker exec ${receiver} eiou in 2>&1 > /dev/null
+docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
 sleep 2
 # Receiver sends sync request/response
-docker exec ${receiver} eiou out 2>&1 > /dev/null
+docker exec -e EIOU_TEST_MODE=true ${receiver} eiou out 2>&1 > /dev/null
 sleep 3
 # Sender receives sync data
-docker exec ${sender} eiou in 2>&1 > /dev/null
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou in 2>&1 > /dev/null
 sleep 3
 # Additional round to ensure full sync
-docker exec ${sender} eiou out 2>&1 > /dev/null
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
 sleep 2
-docker exec ${sender} eiou in 2>&1 > /dev/null
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou in 2>&1 > /dev/null
 sleep 2
 
 countAfterCycle=$(docker exec ${sender} php -r "
@@ -1301,9 +1311,9 @@ timestamp408=$(date +%s%N)
 # Step 1: Send an initial transaction to establish a chain
 docker exec ${sender} eiou send ${receiverAddress} 1 USD "fork-test-base-${timestamp408}" 2>&1 > /dev/null
 sleep 2
-docker exec ${sender} eiou out 2>&1 > /dev/null
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
 sleep 2
-docker exec ${receiver} eiou in 2>&1 > /dev/null
+docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
 sleep 2
 
 # Get the base transaction's txid (this will be the shared previous_txid)
@@ -1474,9 +1484,9 @@ setup_ab_chain() {
     sleep 2
 
     # Process transactions
-    docker exec ${contactA} eiou out 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${contactA} eiou out 2>&1 > /dev/null
     sleep 2
-    docker exec ${contactB} eiou in 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${contactB} eiou in 2>&1 > /dev/null
     sleep 2
 }
 
@@ -1492,9 +1502,9 @@ setup_cb_chain() {
     docker exec ${contactC} eiou send ${addressB} 3 USD "CB3-${ts}" 2>&1 > /dev/null
     sleep 2
 
-    docker exec ${contactC} eiou out 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${contactC} eiou out 2>&1 > /dev/null
     sleep 2
-    docker exec ${contactB} eiou in 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${contactB} eiou in 2>&1 > /dev/null
     sleep 2
 }
 
@@ -1555,7 +1565,11 @@ get_tx_count() {
     " 2>/dev/null || echo "0"
 }
 
-# Helper to send multiple transactions quickly (for queue testing)
+# Helper to send multiple transactions sequentially
+# NOTE: Transactions MUST be sent sequentially to maintain chain integrity.
+# Each transaction references the previous one via previous_txid. Parallel sends
+# cause a race condition where multiple transactions get the same previous_txid,
+# creating a broken chain that the receiver will reject.
 send_multiple_transactions() {
     local sender="$1"
     local receiver_addr="$2"
@@ -1565,9 +1579,9 @@ send_multiple_transactions() {
     local count="$6"
 
     for i in $(seq $start_num $((start_num + count - 1))); do
-        docker exec ${sender} eiou send ${receiver_addr} 1 USD "${prefix}${i}-${ts}" 2>&1 > /dev/null &
+        docker exec ${sender} eiou send ${receiver_addr} 1 USD "${prefix}${i}-${ts}" 2>&1 > /dev/null
+        sleep 0.5  # Allow transaction to be committed before next one
     done
-    wait
 }
 
 # Helper to verify chain integrity after sync
@@ -1586,14 +1600,14 @@ verify_sync_success() {
 
 # Helper to process message queues on all containers
 process_all_queues() {
-    docker exec ${contactA} eiou out 2>&1 > /dev/null &
-    docker exec ${contactB} eiou out 2>&1 > /dev/null &
-    docker exec ${contactC} eiou out 2>&1 > /dev/null &
+    docker exec -e EIOU_TEST_MODE=true ${contactA} eiou out 2>&1 > /dev/null &
+    docker exec -e EIOU_TEST_MODE=true ${contactB} eiou out 2>&1 > /dev/null &
+    docker exec -e EIOU_TEST_MODE=true ${contactC} eiou out 2>&1 > /dev/null &
     wait
     sleep 2
-    docker exec ${contactA} eiou in 2>&1 > /dev/null &
-    docker exec ${contactB} eiou in 2>&1 > /dev/null &
-    docker exec ${contactC} eiou in 2>&1 > /dev/null &
+    docker exec -e EIOU_TEST_MODE=true ${contactA} eiou in 2>&1 > /dev/null &
+    docker exec -e EIOU_TEST_MODE=true ${contactB} eiou in 2>&1 > /dev/null &
+    docker exec -e EIOU_TEST_MODE=true ${contactC} eiou in 2>&1 > /dev/null &
     wait
     sleep 2
 }
