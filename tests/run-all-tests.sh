@@ -3,8 +3,23 @@
 
 # Automated test runner for EIOU Docker test suite
 # Runs all tests in correct dependency order without user interaction
-# Usage: ./run-all-tests.sh [build_name]
-# Example: ./run-all-tests.sh http4
+#
+# Usage: ./run-all-tests.sh <build_name> [mode]
+#
+# Arguments:
+#   build_name  - The topology to test (http4, http10, http13)
+#   mode        - Transport mode: http, https, or tor (default: http)
+#
+# Examples:
+#   ./run-all-tests.sh http4           # Run with default mode (http)
+#   ./run-all-tests.sh http4 https     # Run with HTTPS mode
+#   ./run-all-tests.sh http4 http      # Run with HTTP mode
+#   ./run-all-tests.sh http4 tor       # Run with TOR mode
+#
+# Mode descriptions:
+#   http  - Test containers with http:// addresses
+#   https - Test containers with https:// addresses (SSL enabled)
+#   tor   - Test containers with .onion addresses (Tor network)
 #
 # Environment Variables (for WSL2/slow environments):
 #   EIOU_INIT_TIMEOUT  - Container initialization wait in seconds (default: 90)
@@ -28,6 +43,19 @@ if [ $# -eq 1 ]; then
     MODE="http"
 else
     MODE="$2"
+fi
+
+# Validate MODE is one of the allowed values
+VALID_MODES="http https tor"
+if ! echo "$VALID_MODES" | grep -qw "$MODE"; then
+    printf "${RED}Error: Invalid mode '${MODE}'${NC}\n"
+    echo "Available modes: http, https, tor"
+    echo ""
+    echo "Mode descriptions:"
+    echo "  http  - Test containers with http:// addresses"
+    echo "  https - Test containers with https:// addresses (SSL enabled)"
+    echo "  tor   - Test containers with .onion addresses (Tor network)"
+    exit 1
 fi
 
 # Verify build file exists

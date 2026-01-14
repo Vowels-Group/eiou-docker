@@ -19,7 +19,7 @@ while [ $wait_elapsed -lt 10 ]; do
     # Check if at least one contact is accepted
     first_key="${containersLinkKeys[0]}"
     first_keys=(${first_key//,/ })
-    transportCheck=$(determineTransport ${containerAddresses[${first_keys[1]}]})
+    transportCheck=$(getPhpTransportType ${containerAddresses[${first_keys[1]}]})
     statusCheck=$(docker exec ${first_keys[0]} php -r "
         require_once('${REL_APPLICATION}');
         echo Application::getInstance()->services->getContactRepository()->getContactStatus(
@@ -47,7 +47,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     containerKeys=(${containersLinkKey//,/ }) 
     
     # httpA -> httpB (i.e forwards and the next LinkKey should be httpB -> httpA (i.e backwards))
-    transportType1=$(determineTransport ${containerAddresses[${containerKeys[1]}]})
+    transportType1=$(getPhpTransportType ${containerAddresses[${containerKeys[1]}]})
     statusContact1=$(docker exec ${containerKeys[0]} php -r "
         require_once('${REL_APPLICATION}');
         echo Application::getInstance()->services->getContactRepository()->getContactStatus(
