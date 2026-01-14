@@ -5,6 +5,9 @@
 # Runs all tests in correct dependency order without user interaction
 # Usage: ./run-all-tests.sh [build_name]
 # Example: ./run-all-tests.sh http4
+#
+# Environment Variables (for WSL2/slow environments):
+#   EIOU_INIT_TIMEOUT  - Container initialization wait in seconds (default: 90)
 
 set -e  # Exit on error
 
