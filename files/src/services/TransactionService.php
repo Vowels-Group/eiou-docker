@@ -1084,6 +1084,20 @@ class TransactionService {
 
                                             error_log("INLINE_RETRY: SUCCESS - updateStatus returned=" . ($updateResult ? "true" : "false") . " actualStatus={$actualStatus} txid={$txid}");
                                             output('Transaction re-signed with corrected previous_txid, will retry on next cycle...', 'SILENT');
+
+                                            // Also trigger sync to recover missing transactions that expected_txid references
+                                            // This ensures local chain is complete, not just the outgoing pointer
+                                            error_log("INLINE_RETRY: Triggering sync to recover missing transactions");
+                                            $syncService = Application::getInstance()->services->getSyncService();
+                                            $syncResult = $syncService->syncTransactionChain(
+                                                $message['receiver_address'],
+                                                $message['receiver_public_key']
+                                            );
+                                            if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
+                                                error_log("INLINE_RETRY: Synced {$syncResult['synced_count']} missing transactions");
+                                                output("Synced {$syncResult['synced_count']} missing transactions", 'SILENT');
+                                            }
+
                                             // CRITICAL: Use break instead of continue to stop processing this batch
                                             // Dependent transactions in this batch have stale previous_txid references
                                             // that point to the unfixed version of this transaction. The next processing
