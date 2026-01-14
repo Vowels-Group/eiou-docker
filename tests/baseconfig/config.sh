@@ -60,11 +60,48 @@ function succesrate(){
 
 function determineTransport(){
     local address="$1"
-    if [[ ${address} =~ ^https?:\/\/ ]]; then
+    if [[ ${address} =~ ^https:\/\/ ]]; then
+        echo 'https'
+    elif [[ ${address} =~ ^http:\/\/ ]]; then
         echo 'http'
-
     elif [[ ${address} =~ \.onion$ ]]; then
         echo 'tor'
+    fi
+}
+
+# Check if address uses HTTP-based transport (either http or https)
+# Useful for backward compatibility where both protocols share similar handling
+function isHttpTransport(){
+    local address="$1"
+    local transport=$(determineTransport "$address")
+    if [[ "$transport" == "http" || "$transport" == "https" ]]; then
+        echo 'true'
+    else
+        echo 'false'
+    fi
+}
+
+# Get the expected protocol prefix based on MODE variable
+# Returns: "http://", "https://", or "" (for tor)
+function getExpectedProtocol(){
+    case "${MODE:-http}" in
+        http)  echo "http://"  ;;
+        https) echo "https://" ;;
+        tor)   echo ""         ;;
+        *)     echo "http://"  ;;  # Default fallback
+    esac
+}
+
+# Get PHP-compatible transport type from address
+# PHP's determineTransportType returns 'http' for both http:// and https://
+# Use this when passing transport type to PHP functions
+function getPhpTransportType(){
+    local address="$1"
+    local transport=$(determineTransport "$address")
+    if [[ "$transport" == "https" ]]; then
+        echo 'http'  # PHP expects 'http' for both protocols
+    else
+        echo "$transport"
     fi
 }
 
@@ -161,7 +198,7 @@ function wait_for_contact(){
     local timeout="${3:-10}"
     local elapsed=0
 
-    transportCheck=$(determineTransport ${address})
+    transportCheck=$(getPhpTransportType ${address})
     while [ $elapsed -lt $timeout ]; do
         local contact_exists=$(docker exec $container php -r "
             require_once('${REL_APPLICATION}');

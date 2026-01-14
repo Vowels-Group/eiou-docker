@@ -3,8 +3,23 @@
 
 # Automated test runner for EIOU Docker test suite
 # Runs all tests in correct dependency order without user interaction
-# Usage: ./run-all-tests.sh [build_name]
-# Example: ./run-all-tests.sh http4
+#
+# Usage: ./run-all-tests.sh <build_name> [mode]
+#
+# Arguments:
+#   build_name  - The topology to test (http4, http10, http13)
+#   mode        - Transport mode: http, https, or tor (default: http)
+#
+# Examples:
+#   ./run-all-tests.sh http4           # Run with default mode (http)
+#   ./run-all-tests.sh http4 https     # Run with HTTPS mode
+#   ./run-all-tests.sh http4 http      # Run with HTTP mode
+#   ./run-all-tests.sh http4 tor       # Run with TOR mode
+#
+# Mode descriptions:
+#   http  - Test containers with http:// addresses
+#   https - Test containers with https:// addresses (SSL enabled)
+#   tor   - Test containers with .onion addresses (Tor network)
 #
 # Environment Variables (for WSL2/slow environments):
 #   EIOU_INIT_TIMEOUT  - Container initialization wait in seconds (default: 90)
@@ -18,7 +33,7 @@ set -e  # Exit on error
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <build_name> <mode>"
     echo "Available builds: http4, http10, http13"
-    echo "Available modes: tor, http"
+    echo "Available modes: tor, http, https"
     exit 1
 fi
 
@@ -28,6 +43,19 @@ if [ $# -eq 1 ]; then
     MODE="http"
 else
     MODE="$2"
+fi
+
+# Validate MODE is one of the allowed values
+VALID_MODES="http https tor"
+if ! echo "$VALID_MODES" | grep -qw "$MODE"; then
+    printf "${RED}Error: Invalid mode '${MODE}'${NC}\n"
+    echo "Available modes: http, https, tor"
+    echo ""
+    echo "Mode descriptions:"
+    echo "  http  - Test containers with http:// addresses"
+    echo "  https - Test containers with https:// addresses (SSL enabled)"
+    echo "  tor   - Test containers with .onion addresses (Tor network)"
+    exit 1
 fi
 
 # Verify build file exists
@@ -132,7 +160,7 @@ for container in $CONTAINER_LIST; do
         fi
 
         # Verify if userconfig.json exists, it's valid JSON and has required fields
-        if [ "$MODE" == 'http' ]; then
+        if [ "$MODE" == 'http' ] || [ "$MODE" == 'https' ]; then
             httpAddress=$(docker exec "$container" php -r '
                 if (file_exists("/etc/eiou/userconfig.json")) {
                     $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
@@ -141,8 +169,18 @@ for container in $CONTAINER_LIST; do
                     }
                 }')
             if [[ ! -z ${httpAddress} ]]; then
-                printf "${GREEN}Ready${NC}\n"
-                break
+                # Validate protocol matches MODE for explicit protocol modes
+                if [ "$MODE" == 'https' ] && [[ ${httpAddress} == https://* ]]; then
+                    printf "${GREEN}Ready (HTTPS)${NC}\n"
+                    break
+                elif [ "$MODE" == 'http' ] && [[ ${httpAddress} == http://* ]]; then
+                    printf "${GREEN}Ready (HTTP)${NC}\n"
+                    break
+                elif [ "$MODE" == 'http' ]; then
+                    # For backward compatibility: http mode accepts https:// addresses
+                    printf "${GREEN}Ready${NC}\n"
+                    break
+                fi
             fi
         elif [ "$MODE" == 'tor' ]; then
             torAddress=$(docker exec "$container" php -r '
@@ -181,9 +219,9 @@ done
 printf "${GREEN}${CHECK} All containers initialized successfully${NC}\n"
 sleep 2  # Additional buffer time for message processors
 
-# Step 2: Run prerequisite test (hostnameTest (HTTP) or torAddressTest (TOR))
+# Step 2: Run prerequisite test (hostnameTest (HTTP/HTTPS) or torAddressTest (TOR))
 printf "\n${GREEN}[Step 2/3]${NC} Running prerequisite test...\n"
-if [ "$MODE" == 'http' ]; then 
+if [ "$MODE" == 'http' ] || [ "$MODE" == 'https' ]; then
     run_test "hostnameTest" "./tests/testfiles/hostnameTest.sh" "true"
 elif [ "$MODE" == 'tor' ]; then
     run_test "torAddressTest" "./tests/testfiles/torAddressTest.sh" "true"
