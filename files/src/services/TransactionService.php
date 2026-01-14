@@ -1307,7 +1307,7 @@ class TransactionService {
                                     // Revert status to pending for retry
                                     $this->transactionRepository->updateStatus($memo, Constants::STATUS_PENDING);
                                     $this->p2pRepository->updateStatus($memo, 'found');
-                                    return; // Exit to allow retry on next processing cycle
+                                    return true; // Exit to allow retry on next processing cycle
                                 }
                             }
                         }
@@ -1327,7 +1327,7 @@ class TransactionService {
 
                         if ($holdResult['held']) {
                             output(outputSyncHeld(), 'SILENT');
-                            return; // Transaction will be resumed after sync completes
+                            return true; // Transaction will be resumed after sync completes
                         }
                     }
 
