@@ -84,8 +84,9 @@ class ValidationUtilityService
 
         $totalSent = $balanceRepository->getContactSentBalance($pubkey, $request['currency']);
         $totalReceived = $balanceRepository->getContactReceivedBalance($pubkey, $request['currency']);
-        // Available funds = what we've received minus what we've sent
-        $currentBalance = $totalReceived - $totalSent;
+        // Contact's available funds = what we've sent to them (they received) minus what they've sent to us (we received)
+        // In the balances table: 'sent' is what WE sent TO contact, 'received' is what WE received FROM contact
+        $currentBalance = $totalSent - $totalReceived;
 
         return $currentBalance;
     }

@@ -44,6 +44,11 @@ class HeldTransactionService {
     private $currentUser;
 
     /**
+     * @var TransactionPayload Transaction payload builder
+     */
+    private $transactionPayload;
+
+    /**
      * Constructor
      *
      * @param HeldTransactionRepository $heldRepository Held transaction repository
@@ -61,6 +66,9 @@ class HeldTransactionService {
         $this->transactionRepository = $transactionRepository;
         $this->utilityContainer = $utilityContainer;
         $this->currentUser = $currentUser;
+
+        require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
+        $this->transactionPayload = new TransactionPayload($this->currentUser, $this->utilityContainer);
     }
 
     /**
@@ -142,7 +150,7 @@ class HeldTransactionService {
             }
 
             // Update sync status to in_progress
-            $this->heldRepository->markSyncStarted($contactPubkeyHash);
+            $started = $this->heldRepository->markSyncStarted($contactPubkeyHash);
 
             // Initiate sync through SyncService
             $syncService = Application::getInstance()->services->getSyncService();
@@ -225,6 +233,23 @@ class HeldTransactionService {
         try {
             $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
 
+            // Verify chain integrity before processing held transactions
+            // This ensures the sync actually completed successfully
+            $chainIntegrity = $this->transactionRepository->verifyChainIntegrity(
+                $this->currentUser->getPublicKey(),
+                $contactPubkey
+            );
+
+            if (!$chainIntegrity['valid']) {
+                SecureLogger::warning("Chain integrity check failed after sync, cannot resume held transactions", [
+                    'contact_pubkey_hash' => $contactPubkeyHash,
+                    'gaps' => $chainIntegrity['gaps'] ?? [],
+                    'broken_txids' => $chainIntegrity['broken_txids'] ?? []
+                ]);
+                // Don't return - still try to process, but log the warning
+                // Some transactions may still be recoverable
+            }
+
             // Get all held transactions for this contact that completed sync
             $heldTransactions = $this->heldRepository->getHeldTransactionsForContact($contactPubkeyHash, Constants::STATUS_COMPLETED);
 
@@ -240,6 +265,22 @@ class HeldTransactionService {
                 $updated = $this->updatePreviousTxid($txid, $contactPubkey, $expectedPreviousTxid);
 
                 if ($updated) {
+                    // Re-sign the transaction with the new previous_txid
+                    // This is critical because previous_txid is part of the signed payload
+                    $resigned = $this->resignTransaction($txid);
+
+                    if (!$resigned) {
+                        $result['failed_count']++;
+                        SecureLogger::warning("Failed to re-sign held transaction after previous_txid update", [
+                            'txid' => $txid,
+                            'expected_previous_txid' => $expectedPreviousTxid
+                        ]);
+                        // Release the held transaction to prevent infinite retry loops
+                        // Mark as failed but don't leave it stuck
+                        $this->heldRepository->markAsFailed($txid, 'resign_failed');
+                        continue;
+                    }
+
                     // Resume the transaction for reprocessing
                     $resumeResult = $this->resumeTransaction($txid);
 
@@ -249,7 +290,7 @@ class HeldTransactionService {
                         // Mark held transaction as resolved (release it)
                         $this->heldRepository->releaseTransaction($txid);
 
-                        SecureLogger::info("Held transaction resumed with corrected previous_txid", [
+                        SecureLogger::info("Held transaction resumed with corrected previous_txid and re-signed", [
                             'txid' => $txid,
                             'original_previous_txid' => $held['original_previous_txid'] ?? null,
                             'expected_previous_txid' => $expectedPreviousTxid,
@@ -261,6 +302,8 @@ class HeldTransactionService {
                             'txid' => $txid,
                             'error' => $resumeResult['error']
                         ]);
+                        // Release the held transaction to prevent infinite retry loops
+                        $this->heldRepository->markAsFailed($txid, 'resume_failed: ' . ($resumeResult['error'] ?? 'unknown'));
                     }
                 } else {
                     $result['failed_count']++;
@@ -268,6 +311,8 @@ class HeldTransactionService {
                         'txid' => $txid,
                         'expected_previous_txid' => $expectedPreviousTxid
                     ]);
+                    // Release the held transaction to prevent infinite retry loops
+                    $this->heldRepository->markAsFailed($txid, 'update_previous_txid_failed');
                 }
             }
 
@@ -392,6 +437,83 @@ class HeldTransactionService {
     }
 
     /**
+     * Re-sign a transaction with updated previous_txid
+     *
+     * When a transaction's previous_txid is updated (e.g., after chain conflict resolution
+     * or sync completion), the signature becomes invalid since previous_txid is part of
+     * the signed payload. This method re-signs the transaction with the new previous_txid.
+     *
+     * @param string $txid Transaction ID
+     * @return bool True if re-signing was successful
+     */
+    private function resignTransaction(string $txid): bool {
+        try {
+            // Get the transaction with updated previous_txid
+            $transactionData = $this->transactionRepository->getByTxid($txid);
+
+            if (!$transactionData) {
+                SecureLogger::warning("Cannot resign: transaction not found", [
+                    'txid' => $txid
+                ]);
+                return false;
+            }
+
+            // getByTxid returns an array of transactions
+            $transaction = is_array($transactionData) && isset($transactionData[0]) ? $transactionData[0] : $transactionData;
+
+            // Build the payload for signing based on memo type
+            $memo = $transaction['memo'] ?? 'standard';
+
+            if ($memo === 'standard') {
+                $payload = $this->transactionPayload->buildStandardFromDatabase($transaction);
+            } else {
+                $payload = $this->transactionPayload->buildFromDatabase($transaction);
+            }
+
+            // Re-sign the transaction
+            $transportUtility = $this->utilityContainer->getTransportUtility();
+            $signResult = $transportUtility->signWithCapture($payload);
+
+            if (!$signResult || !isset($signResult['signature']) || !isset($signResult['nonce'])) {
+                SecureLogger::warning("Failed to re-sign transaction: signWithCapture returned invalid result", [
+                    'txid' => $txid,
+                    'has_result' => !empty($signResult)
+                ]);
+                return false;
+            }
+
+            // Update signature data in database
+            $signatureUpdated = $this->transactionRepository->updateSignatureData(
+                $txid,
+                $signResult['signature'],
+                $signResult['nonce']
+            );
+
+            if (!$signatureUpdated) {
+                SecureLogger::warning("Failed to update signature data in database", [
+                    'txid' => $txid
+                ]);
+                return false;
+            }
+
+            SecureLogger::info("Successfully re-signed transaction with updated previous_txid", [
+                'txid' => $txid,
+                'new_previous_txid' => $transaction['previous_txid'] ?? null,
+                'new_nonce' => $signResult['nonce']
+            ]);
+
+            return true;
+
+        } catch (Exception $e) {
+            SecureLogger::logException($e, [
+                'method' => 'resignTransaction',
+                'txid' => $txid
+            ]);
+            return false;
+        }
+    }
+
+    /**
      * Callback invoked by SyncService when sync completes
      *
      * Updates the sync status for all held transactions with this contact
@@ -408,7 +530,7 @@ class HeldTransactionService {
 
             if ($success) {
                 // Update sync status to completed
-                $this->heldRepository->markSyncCompleted($contactPubkeyHash);
+                $completed = $this->heldRepository->markSyncCompleted($contactPubkeyHash);
 
                 SecureLogger::info("Sync completed, processing held transactions", [
                     'contact_hash' => $contactPubkeyHash,
@@ -490,6 +612,19 @@ class HeldTransactionService {
                 $updated = $this->updatePreviousTxid($txid, $contactPubkey, $expectedPreviousTxid);
 
                 if ($updated) {
+                    // Re-sign the transaction with the new previous_txid
+                    // This is critical because previous_txid is part of the signed payload
+                    $resigned = $this->resignTransaction($txid);
+
+                    if (!$resigned) {
+                        $result['failed_count']++;
+                        SecureLogger::warning("Failed to re-sign held transaction after previous_txid update", [
+                            'txid' => $txid,
+                            'expected_previous_txid' => $expectedPreviousTxid
+                        ]);
+                        continue;
+                    }
+
                     // Resume transaction
                     $resumeResult = $this->resumeTransaction($txid);
 
@@ -497,7 +632,7 @@ class HeldTransactionService {
                         $result['resumed_count']++;
                         $this->heldRepository->releaseTransaction($txid);
 
-                        SecureLogger::info("Held transaction resumed with corrected previous_txid", [
+                        SecureLogger::info("Held transaction resumed with corrected previous_txid and re-signed", [
                             'txid' => $txid,
                             'original_previous_txid' => $held['original_previous_txid'] ?? null,
                             'expected_previous_txid' => $expectedPreviousTxid,

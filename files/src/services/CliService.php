@@ -552,6 +552,16 @@ class CliService {
                     'sync balances' => 'Recalculate balances from transaction history'
                 ]
             ],
+            'out' => [
+                'description' => 'Process outgoing message queue (pending transactions)',
+                'usage' => 'out',
+                'arguments' => []
+            ],
+            'in' => [
+                'description' => 'Process incoming/held transactions',
+                'usage' => 'in',
+                'arguments' => []
+            ],
             'apikey' => [
                 'description' => 'Manage API keys for external API access',
                 'usage' => 'apikey [action] ([args...])',

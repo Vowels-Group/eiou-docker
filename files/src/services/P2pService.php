@@ -237,7 +237,8 @@ class P2pService {
                 $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
 
                 if (($availableFunds + $creditLimit) < ($requestedAmount + $fundsOnHold)) {
-                    echo $this->utilPayload->buildInsufficientBalance($availableFunds, $requestedAmount, $creditLimit, $fundsOnHold);
+                    // Note: Do NOT echo here - the caller (checkP2pPossible) handles the response
+                    // Echoing here would cause duplicate JSON output breaking response parsing
                     return false;
                 }
             }

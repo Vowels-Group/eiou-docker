@@ -180,6 +180,167 @@ class TransactionService {
     }
 
     /**
+     * @var SyncService|null Sync service for chain verification
+     */
+    private ?SyncService $syncService = null;
+
+    /**
+     * Set the sync service (for lazy initialization)
+     *
+     * @param SyncService $service Sync service
+     */
+    public function setSyncService(SyncService $service): void {
+        $this->syncService = $service;
+    }
+
+    /**
+     * @var array Per-contact send locks to serialize simultaneous sends
+     */
+    private static array $contactSendLocks = [];
+
+    /**
+     * Acquire a lock for sending to a specific contact
+     *
+     * Prevents race conditions when sending multiple transactions
+     * simultaneously to the same contact. Uses file-based locking for persistence
+     * across request boundaries.
+     *
+     * @param string $contactPubkeyHash Hash of contact's public key
+     * @param int $timeout Maximum time to wait for lock (seconds)
+     * @return bool True if lock acquired, false if timeout
+     */
+    private function acquireContactSendLock(string $contactPubkeyHash, int $timeout = 30): bool {
+        $lockFile = sys_get_temp_dir() . '/eiou_send_lock_' . $contactPubkeyHash . '.lock';
+
+        // Try to open existing file or create new one
+        $lockHandle = @fopen($lockFile, 'c');
+
+        // If file exists but we can't open it (permission issue), try to delete and recreate
+        if (!$lockHandle && file_exists($lockFile)) {
+            @unlink($lockFile);
+            $lockHandle = @fopen($lockFile, 'c');
+        }
+
+        if (!$lockHandle) {
+            $this->secureLogger->warning("Failed to create lock file", [
+                'contact_hash' => substr($contactPubkeyHash, 0, 16),
+                'lock_file' => $lockFile
+            ]);
+            return false;
+        }
+
+        // Make the lock file world-writable so both CLI (root) and Apache (www-data) can use it
+        @chmod($lockFile, 0666);
+
+        $startTime = time();
+        while (!flock($lockHandle, LOCK_EX | LOCK_NB)) {
+            if (time() - $startTime >= $timeout) {
+                fclose($lockHandle);
+                $this->secureLogger->warning("Timeout acquiring send lock", [
+                    'contact_hash' => substr($contactPubkeyHash, 0, 16),
+                    'timeout' => $timeout
+                ]);
+                return false;
+            }
+            usleep(100000); // Wait 100ms before retrying
+        }
+
+        // Store the handle for later release
+        self::$contactSendLocks[$contactPubkeyHash] = $lockHandle;
+        return true;
+    }
+
+    /**
+     * Release a contact send lock
+     *
+     * @param string $contactPubkeyHash Hash of contact's public key
+     */
+    private function releaseContactSendLock(string $contactPubkeyHash): void {
+        if (isset(self::$contactSendLocks[$contactPubkeyHash])) {
+            $lockHandle = self::$contactSendLocks[$contactPubkeyHash];
+            flock($lockHandle, LOCK_UN);
+            fclose($lockHandle);
+            unset(self::$contactSendLocks[$contactPubkeyHash]);
+        }
+    }
+
+    /**
+     * Verify sender's local chain integrity and sync if needed
+     *
+     * Before creating a new transaction, verify that the local
+     * transaction chain with the contact is complete. If gaps are detected,
+     * trigger a sync to repair the chain before sending.
+     *
+     * @param string $contactAddress Contact's address
+     * @param string $contactPublicKey Contact's public key
+     * @return array Result with:
+     *   - success: bool - Whether chain is ready for new transaction
+     *   - synced: bool - Whether a sync was performed
+     *   - error: string|null - Error message if failed
+     */
+    public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey): array {
+        $result = [
+            'success' => true,
+            'synced' => false,
+            'error' => null
+        ];
+
+        // Verify local chain integrity
+        $chainStatus = $this->transactionRepository->verifyChainIntegrity(
+            $this->currentUser->getPublicKey(),
+            $contactPublicKey
+        );
+
+        // If chain is valid or empty, we're good to go
+        if ($chainStatus['valid']) {
+            return $result;
+        }
+
+        // Chain has gaps - need to sync
+        output(outputSyncChainIntegrityFailed(count($chainStatus['gaps'])), 'SILENT');
+
+        $this->secureLogger->info("Sender-side chain verification detected gaps, triggering sync", [
+            'contact_address' => $contactAddress,
+            'gap_count' => count($chainStatus['gaps']),
+            'transaction_count' => $chainStatus['transaction_count']
+        ]);
+
+        // Try to sync if sync service is available
+        if ($this->syncService === null) {
+            // Attempt to get sync service from Application if not set
+            try {
+                $app = Application::getInstance();
+                $this->syncService = $app->services->getSyncService();
+            } catch (\Exception $e) {
+                $result['success'] = false;
+                $result['error'] = 'Sync service not available to repair chain';
+                return $result;
+            }
+        }
+
+        // Perform sync to repair chain
+        $syncResult = $this->syncService->syncTransactionChain($contactAddress, $contactPublicKey);
+        $result['synced'] = true;
+
+        if (!$syncResult['success']) {
+            // Sync failed - check if chain is now valid anyway
+            $recheckStatus = $this->transactionRepository->verifyChainIntegrity(
+                $this->currentUser->getPublicKey(),
+                $contactPublicKey
+            );
+
+            if (!$recheckStatus['valid']) {
+                $result['success'] = false;
+                $result['error'] = 'Failed to repair transaction chain: ' . ($syncResult['error'] ?? 'unknown error');
+                return $result;
+            }
+        }
+
+        output(outputSyncChainRepaired(), 'SILENT');
+        return $result;
+    }
+
+    /**
      * Send a transaction message with optional delivery tracking
      *
      * Uses MessageDeliveryService.sendMessage() when available for reliable delivery
@@ -314,7 +475,8 @@ class TransactionService {
             $requestedAmount = $request['amount'];
 
             if (($availableFunds + $creditLimit) < $requestedAmount) {
-                echo $this->utilPayload->buildInsufficientBalance($availableFunds, $requestedAmount, $creditLimit, 0, $request['currency']);
+                // Note: Do NOT echo here - the caller (checkTransactionPossible) handles the response
+                // Echoing here would cause duplicate JSON output breaking response parsing
                 return false;
             }
             return true;
@@ -361,14 +523,37 @@ class TransactionService {
                 'sender' => $request['senderAddress'] ?? 'unknown'
             ]);
 
-            // If we (receiver) have no record of the previous txid that the sender claims exists,
-            // this means we may have lost data and should proactively sync with the sender.
-            // This handles the case where Contact B lost all transactions and Contact A sends
-            // a transaction with a prev_id that Contact B doesn't have.
+            // Proactive sync: If we (receiver) have a chain mismatch with the sender,
+            // we may have lost data and should proactively sync with the sender.
+            // This handles multiple scenarios:
+            // 1. Receiver has no transactions (expectedTxid === null) but sender has prev_id
+            // 2. Receiver has some transactions but is missing the most recent ones
+            // 3. Receiver has a gap in the chain (missing middle transactions)
+            //
+            // In all cases where the chains don't match, attempt sync to recover.
+            $shouldSync = false;
+            $syncReason = '';
+
             if ($expectedTxid === null && $receivedPreviousTxid !== null) {
-                SecureLogger::info("Receiver has no transaction history with sender but sender has prev_id - triggering proactive sync", [
+                // Case 1: Receiver has no transaction history with sender
+                $shouldSync = true;
+                $syncReason = 'receiver_has_no_history';
+            } elseif ($expectedTxid !== null && $receivedPreviousTxid !== null && $expectedTxid !== $receivedPreviousTxid) {
+                // Case 2/3: Receiver has different chain state than sender
+                // Check if the received_previous_txid exists locally - if not, we're missing transactions
+                $receivedPrevTxExists = $this->transactionRepository->transactionExistsTxid($receivedPreviousTxid);
+                if (!$receivedPrevTxExists) {
+                    $shouldSync = true;
+                    $syncReason = 'receiver_missing_transactions';
+                }
+            }
+
+            if ($shouldSync) {
+                SecureLogger::info("Chain mismatch detected - triggering proactive sync", [
                     'sender' => $request['senderAddress'] ?? 'unknown',
-                    'received_previous_txid' => $receivedPreviousTxid
+                    'received_previous_txid' => $receivedPreviousTxid,
+                    'expected_previous_txid' => $expectedTxid,
+                    'sync_reason' => $syncReason
                 ]);
 
                 // Proactively sync with the sender to recover missing transactions
@@ -381,7 +566,8 @@ class TransactionService {
 
                     if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
                         SecureLogger::info("Proactive sync successful, retrying transaction validation", [
-                            'synced_count' => $syncResult['synced_count']
+                            'synced_count' => $syncResult['synced_count'],
+                            'sync_reason' => $syncReason
                         ]);
 
                         // Also sync balances after recovering transactions
@@ -456,7 +642,11 @@ class TransactionService {
                 // the loser re-signs their transaction with the new previous_txid pointing to the winner.
                 // We need to accept this update if the signature is valid.
                 if ($memo === "standard") {
-                    $existingTx = $this->transactionRepository->getByTxid($request['txid']);
+                    $existingTxData = $this->transactionRepository->getByTxid($request['txid']);
+                    // getByTxid returns an array of transactions - extract first element
+                    $existingTx = is_array($existingTxData) && isset($existingTxData[0])
+                        ? $existingTxData[0]
+                        : $existingTxData;
                     $newPreviousTxid = $request['previousTxid'] ?? null;
                     $existingPreviousTxid = $existingTx['previous_txid'] ?? null;
 
@@ -861,20 +1051,79 @@ class TransactionService {
                             );
                         }
                     } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
-                        // Check if rejection is due to invalid_previous_txid - attempt sync before falling back to P2P
+                        // Check if rejection is due to invalid_previous_txid - attempt inline retry first
                         if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
-                            output('Transaction rejected due to invalid_previous_txid, holding for sync...', 'SILENT');
+                            $expectedTxid = $response['expected_txid'] ?? null;
+
+                            // Fast path: If receiver provides expected_txid, try immediate re-sign and retry
+                            // This handles simultaneous sends efficiently without needing sync
+                            if ($expectedTxid !== null) {
+                                output(outputSyncInlineRetryAttempt(), 'SILENT');
+
+                                // Update previous_txid to the expected value
+                                $updatedPrevTxid = $this->transactionRepository->updatePreviousTxid($txid, $expectedTxid);
+
+                                if ($updatedPrevTxid) {
+                                    // Re-fetch the updated transaction
+                                    $updatedMessageData = $this->transactionRepository->getByTxid($txid);
+                                    // getByTxid returns an array of transactions - extract first element
+                                    $updatedMessage = is_array($updatedMessageData) && isset($updatedMessageData[0])
+                                        ? $updatedMessageData[0]
+                                        : $updatedMessageData;
+                                    if ($updatedMessage) {
+                                        // Re-build the payload with new previous_txid
+                                        $newPayload = $this->transactionPayload->buildStandardFromDatabase($updatedMessage);
+
+                                        // Re-sign the transaction
+                                        $transportUtility = $this->utilityContainer->getTransportUtility();
+                                        $signResult = $transportUtility->signWithCapture($newPayload);
+
+                                        if ($signResult && isset($signResult['signature']) && isset($signResult['nonce'])) {
+                                            // Update signature in database
+                                            $this->transactionRepository->updateSignatureData(
+                                                $txid,
+                                                $signResult['signature'],
+                                                $signResult['nonce']
+                                            );
+
+                                            // Reset status to pending so it will be picked up on next cycle
+                                            $this->transactionRepository->updateStatus($txid, Constants::STATUS_PENDING, true);
+
+                                            output(outputSyncInlineRetrySuccess(), 'SILENT');
+
+                                            // Also trigger sync to recover missing transactions that expected_txid references
+                                            // This ensures local chain is complete, not just the outgoing pointer
+                                            $syncService = Application::getInstance()->services->getSyncService();
+                                            $syncResult = $syncService->syncTransactionChain(
+                                                $message['receiver_address'],
+                                                $message['receiver_public_key']
+                                            );
+                                            if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
+                                                output(outputSyncTransactionsSynced($syncResult['synced_count']), 'SILENT');
+                                            }
+
+                                            // Use break to stop processing this batch - dependent transactions
+                                            // have stale previous_txid references. Next cycle will process correctly.
+                                            break;
+                                        }
+                                    }
+                                }
+                                output(outputSyncInlineRetryFailed(), 'SILENT');
+                            }
+
+                            // Fallback to hold/sync flow if inline retry didn't work
+                            output(outputSyncHoldingForSync(), 'SILENT');
 
                             // Use HeldTransactionService if available
                             if ($this->heldTransactionService !== null) {
                                 $holdResult = $this->heldTransactionService->holdTransactionForSync(
                                     $message,
                                     $message['receiver_public_key'],
-                                    $response['expected_txid'] ?? null
+                                    $expectedTxid
                                 );
 
                                 if ($holdResult['held']) {
-                                    output('Transaction held pending sync completion', 'SILENT');
+                                    output(outputSyncHeld(), 'SILENT');
                                     continue; // Transaction will be resumed after sync completes
                                 }
                             }
@@ -899,7 +1148,7 @@ class TransactionService {
                                 continue;
                             } else {
                                 // Sync failed or no transactions to sync - fall back to P2P
-                                output('Sync failed or no transactions to sync, falling back to P2P', 'SILENT');
+                                output(outputSyncFallbackP2p(), 'SILENT');
                             }
                         }
 
@@ -1019,21 +1268,66 @@ class TransactionService {
                     );
                 }
             } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
-                // Check if rejection is due to invalid_previous_txid - attempt sync
+                // Check if rejection is due to invalid_previous_txid - attempt inline retry first
                 if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
-                    output('P2P transaction rejected due to invalid_previous_txid, holding for sync...', 'SILENT');
+                    $expectedTxid = $response['expected_txid'] ?? null;
+
+                    // Fast path: If receiver provides expected_txid, try immediate re-sign and retry
+                    // This handles simultaneous sends efficiently without needing sync
+                    if ($expectedTxid !== null) {
+                        output(outputSyncP2pInlineRetryAttempt(), 'SILENT');
+
+                        // Update previous_txid to the expected value
+                        $updatedPrevTxid = $this->transactionRepository->updatePreviousTxid($txid, $expectedTxid);
+
+                        if ($updatedPrevTxid) {
+                            // Re-fetch the updated transaction
+                            $updatedMessageData = $this->transactionRepository->getByTxid($txid);
+                            // getByTxid returns an array of transactions - extract first element
+                            $updatedMessage = is_array($updatedMessageData) && isset($updatedMessageData[0])
+                                ? $updatedMessageData[0]
+                                : $updatedMessageData;
+                            if ($updatedMessage) {
+                                // Re-build the payload with new previous_txid (use buildFromDatabase for P2P)
+                                $newPayload = $this->transactionPayload->buildFromDatabase($updatedMessage);
+
+                                // Re-sign the transaction
+                                $transportUtility = $this->utilityContainer->getTransportUtility();
+                                $signResult = $transportUtility->signWithCapture($newPayload);
+
+                                if ($signResult && isset($signResult['signature']) && isset($signResult['nonce'])) {
+                                    // Update signature in database
+                                    $this->transactionRepository->updateSignatureData(
+                                        $txid,
+                                        $signResult['signature'],
+                                        $signResult['nonce']
+                                    );
+
+                                    output(outputSyncP2pInlineRetrySuccess(), 'SILENT');
+                                    // Revert status to pending for retry
+                                    $this->transactionRepository->updateStatus($memo, Constants::STATUS_PENDING);
+                                    $this->p2pRepository->updateStatus($memo, 'found');
+                                    return; // Exit to allow retry on next processing cycle
+                                }
+                            }
+                        }
+                        output(outputSyncInlineRetryFailed(), 'SILENT');
+                    }
+
+                    // Fallback to hold/sync flow if inline retry didn't work
+                    output(outputSyncP2pHoldingForSync(), 'SILENT');
 
                     // Use HeldTransactionService if available
                     if ($this->heldTransactionService !== null) {
                         $holdResult = $this->heldTransactionService->holdTransactionForSync(
                             $message,
                             $message['receiver_public_key'],
-                            $response['expected_txid'] ?? null
+                            $expectedTxid
                         );
 
                         if ($holdResult['held']) {
-                            output('P2P transaction held pending sync completion', 'SILENT');
-                            return true; // Transaction was processed (held for sync)
+                            output(outputSyncHeld(), 'SILENT');
+                            return; // Transaction will be resumed after sync completes
                         }
                     }
 
@@ -1269,6 +1563,9 @@ class TransactionService {
     /**
      * Send Direct eIOU
      *
+     * Verifies sender-side chain integrity before sending.
+     * Uses per-contact locking to serialize simultaneous sends.
+     *
      * @param array $request Request data
      * @param array $contactInfo Contact information
      * @param CliOutputManager|null $output Optional output manager for JSON support
@@ -1277,7 +1574,40 @@ class TransactionService {
     public function handleDirectRoute(array $request, $contactInfo, ?CliOutputManager $output = null): void{
         $output = $output ?? CliOutputManager::getInstance();
 
+        // Acquire per-contact lock to serialize simultaneous sends
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactInfo['receiverPublicKey']);
+        if (!$this->acquireContactSendLock($contactPubkeyHash)) {
+            $output->error(
+                "Cannot send transaction: Another transaction to this contact is in progress",
+                ErrorCodes::TRANSACTION_IN_PROGRESS ?? 'TRANSACTION_IN_PROGRESS',
+                429,
+                ['recipient' => $request[2] ?? null]
+            );
+            return;
+        }
+
         try {
+            // Determine transport type for chain verification
+            $transportIndex = $this->transportUtility->fallbackTransportType($request[2] ?? '', $contactInfo);
+            $contactAddress = $transportIndex !== null ? ($contactInfo[$transportIndex] ?? null) : null;
+
+            // Verify sender-side chain integrity before creating transaction
+            if ($contactAddress !== null && isset($contactInfo['receiverPublicKey'])) {
+                $chainVerification = $this->verifySenderChainAndSync($contactAddress, $contactInfo['receiverPublicKey']);
+                if (!$chainVerification['success']) {
+                    $output->error(
+                        "Cannot send transaction: " . ($chainVerification['error'] ?? 'Chain verification failed'),
+                        ErrorCodes::CHAIN_INTEGRITY_FAILED,
+                        500,
+                        ['recipient' => $request[2] ?? null, 'synced' => $chainVerification['synced']]
+                    );
+                    return;
+                }
+                if ($chainVerification['synced']) {
+                    output(outputSyncChainRepairedBeforeSend(), 'SILENT');
+                }
+            }
+
             // Data preparation for eIOU
             $data = $this->prepareStandardTransactionData($request, $contactInfo);
         } catch (\InvalidArgumentException $e) {
@@ -1289,6 +1619,9 @@ class TransactionService {
                 ['recipient' => $request[2] ?? null]
             );
             return;
+        } finally {
+            // Always release lock after operation completes
+            $this->releaseContactSendLock($contactPubkeyHash);
         }
 
         // Prepare transaction payload from data

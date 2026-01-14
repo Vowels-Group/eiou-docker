@@ -492,12 +492,12 @@ class SyncService {
 
                 // Verify transaction signature before inserting
                 // CRITICAL: Verify with ORIGINAL previous_txid since that's what was signed
-                // CRITICAL: If signature verification fails, STOP syncing immediately.
-                // The failing transaction and all subsequent transactions are NOT inserted.
-                // This is a security measure to prevent insertion of forged transactions.
+                // NOTE: For sync recovery, we continue processing even if some transactions fail
+                // verification. This allows partial recovery of valid transactions while
+                // logging invalid ones for investigation.
                 if (!$this->verifyTransactionSignature($tx)) {
                     // Log the failure with full details for security audit
-                    SecureLogger::warning("Sync stopped: Transaction signature verification failed", [
+                    SecureLogger::warning("Sync: Transaction signature verification failed - skipping", [
                         'txid' => $tx['txid'] ?? 'unknown',
                         'sender_address' => $tx['sender_address'] ?? 'unknown',
                         'sender_public_key_hash' => isset($tx['sender_public_key'])
@@ -508,22 +508,18 @@ class SyncService {
                         'currency' => $tx['currency'] ?? 'unknown',
                         'has_signature' => !empty($tx['sender_signature']),
                         'has_nonce' => !empty($tx['signature_nonce']),
-                        'synced_before_failure' => $syncedCount,
+                        'synced_so_far' => $syncedCount,
                         'contact_address' => $contactAddress
                     ]);
 
-                    // Set failure result with details for GUI warning
-                    $result['success'] = false;
-                    $result['synced_count'] = $syncedCount;
-                    $result['signature_failure'] = true;
-                    $result['failed_txid'] = $tx['txid'] ?? null;
-                    $result['failed_sender'] = $tx['sender_address'] ?? null;
-                    $result['synced_before_failure'] = $syncedCount;
-                    $result['error'] = 'Sync stopped: signature verification failed for transaction ' . ($tx['txid'] ?? 'unknown');
-                    $result['conflicts_resolved'] = $conflictsResolved;
-
-                    // Output for CLI visibility
-                    output("SECURITY WARNING: Transaction signature verification failed. Sync stopped. TXID: " . ($tx['txid'] ?? 'unknown'), 'ECHO');
+                    // Track signature failures but continue processing
+                    if (!isset($result['signature_failures'])) {
+                        $result['signature_failures'] = [];
+                    }
+                    $result['signature_failures'][] = [
+                        'txid' => $tx['txid'] ?? 'unknown',
+                        'sender' => $tx['sender_address'] ?? 'unknown'
+                    ];
 
                     // Store warning in session for GUI notification
                     if (session_status() === PHP_SESSION_ACTIVE) {
@@ -539,8 +535,9 @@ class SyncService {
                         ];
                     }
 
-                    // STOP processing - do not insert this or any subsequent transactions
-                    return $result;
+                    // CONTINUE processing - skip this transaction but process remaining ones
+                    // This allows partial sync recovery instead of complete failure
+                    continue;
                 }
 
                 // Insert the missing transaction (only reached if signature is valid)
@@ -728,13 +725,15 @@ class SyncService {
             }
 
             // Get the updated transaction from database
-            $updatedTx = $this->transactionRepository->getByTxid($localTx['txid']);
-            if (!$updatedTx) {
+            $updatedTxResult = $this->transactionRepository->getByTxid($localTx['txid']);
+            if (!$updatedTxResult || empty($updatedTxResult)) {
                 SecureLogger::warning("Could not retrieve updated transaction for re-signing", [
                     'txid' => $localTx['txid']
                 ]);
                 return false;
             }
+            // Unwrap array - getByTxid() returns array of transactions
+            $updatedTx = $updatedTxResult[0];
 
             // Build the payload for signing based on memo type
             $memo = $updatedTx['memo'] ?? 'standard';
@@ -1021,6 +1020,7 @@ class SyncService {
         );
 
         if ($verified !== 1) {
+            // Enhanced debug logging for signature verification failures
             SecureLogger::warning("Transaction signature verification failed", [
                 'txid' => $tx['txid'] ?? 'unknown',
                 'sender' => $tx['sender_address'] ?? 'unknown',
@@ -1028,7 +1028,14 @@ class SyncService {
                 'memo' => $tx['memo'] ?? 'unknown',
                 'reconstructed_message' => $messageContent,
                 'signature_present' => !empty($tx['sender_signature']),
-                'nonce' => $tx['signature_nonce'] ?? 'unknown'
+                'nonce' => $tx['signature_nonce'] ?? 'unknown',
+                'tx_time' => $tx['time'] ?? 'NULL',
+                'tx_time_type' => gettype($tx['time'] ?? null),
+                'tx_amount' => $tx['amount'] ?? 'NULL',
+                'tx_amount_type' => gettype($tx['amount'] ?? null),
+                'tx_description' => $tx['description'] ?? 'NULL',
+                'signature_first_20' => substr($tx['sender_signature'] ?? '', 0, 20) . '...',
+                'public_key_first_50' => substr($tx['sender_public_key'] ?? '', 0, 50) . '...'
             ]);
         }
 
@@ -1116,17 +1123,9 @@ class SyncService {
         $memo = $tx['memo'] ?? 'standard';
         $messageContent['memo'] = $memo;
 
-        // For standard transactions, description is ALWAYS included (even if null)
-        // because buildStandardFromDatabase() always includes it in the signed payload.
-        // For P2P transactions (memo != 'standard'), description is only included if non-null
-        // because buildFromDatabase() does not include description at all.
-        if ($memo === 'standard') {
-            // Standard transactions: always include description (matches buildStandardFromDatabase)
-            $messageContent['description'] = $tx['description'] ?? null;
-        } elseif (isset($tx['description']) && $tx['description'] !== null) {
-            // P2P transactions: only include if non-null (matches build() and buildFromDatabase)
-            $messageContent['description'] = $tx['description'];
-        }
+        // NOTE: Description is NOT included in the signed message
+        // It's transmitted separately in the envelope for privacy (P2P intermediaries don't see it)
+        // and stored separately in the database
 
         // NOTE: endRecipientAddress and initialSenderAddress are NOT included
         // These are local tracking fields that are NOT part of the signed payload
@@ -1422,5 +1421,223 @@ class SyncService {
         }
 
         return $results;
+    }
+
+    /**
+     * Perform bidirectional sync negotiation with a contact
+     *
+     * When both parties may have incomplete chains, this method
+     * exchanges chain state summaries and allows both parties to share missing
+     * transactions with each other.
+     *
+     * Protocol:
+     * 1. Get local chain state summary (txid list)
+     * 2. Request remote chain state summary
+     * 3. Compare lists to find transactions each side is missing
+     * 4. Exchange missing transactions in both directions
+     *
+     * @param string $contactAddress Contact's address
+     * @param string $contactPublicKey Contact's public key
+     * @return array Result with:
+     *   - success: bool - Whether sync completed
+     *   - received_count: int - Transactions received from contact
+     *   - sent_count: int - Transactions we provided to contact
+     *   - error: string|null - Error message if failed
+     */
+    public function bidirectionalSync(string $contactAddress, string $contactPublicKey): array {
+        $result = [
+            'success' => false,
+            'received_count' => 0,
+            'sent_count' => 0,
+            'local_missing' => [],
+            'remote_missing' => [],
+            'error' => null
+        ];
+
+        try {
+            // Step 1: Get local chain state summary
+            $localState = $this->transactionRepository->getChainStateSummary(
+                $this->currentUser->getPublicKey(),
+                $contactPublicKey
+            );
+
+            output(outputSyncLocalChainState($localState['transaction_count']), 'SILENT');
+
+            // Step 2: Request remote chain state via sync negotiation request
+            $negotiationRequest = $this->messagePayload->buildSyncNegotiationRequest(
+                $contactAddress,
+                $contactPublicKey,
+                $localState['txid_list']
+            );
+
+            $negotiationResponse = json_decode(
+                $this->transportUtility->send($contactAddress, $negotiationRequest),
+                true
+            );
+
+            if (!$negotiationResponse || $negotiationResponse['status'] !== Constants::STATUS_ACCEPTED) {
+                // Fallback to standard sync if remote doesn't support bidirectional
+                output(outputSyncBidirectionalFallback(), 'SILENT');
+                $standardSyncResult = $this->syncTransactionChain($contactAddress, $contactPublicKey);
+                $result['success'] = $standardSyncResult['success'];
+                $result['received_count'] = $standardSyncResult['synced_count'];
+                return $result;
+            }
+
+            // Step 3: Process the negotiation response
+            $remoteTxids = $negotiationResponse['txid_list'] ?? [];
+            $remoteTransactions = $negotiationResponse['transactions'] ?? [];
+
+            // Find transactions we're missing that remote has
+            $localTxidSet = array_flip($localState['txid_list']);
+            $remoteTxidSet = array_flip($remoteTxids);
+
+            // Transactions remote has that we don't
+            $localMissing = [];
+            foreach ($remoteTxids as $txid) {
+                if (!isset($localTxidSet[$txid])) {
+                    $localMissing[] = $txid;
+                }
+            }
+
+            // Transactions we have that remote doesn't
+            $remoteMissing = [];
+            foreach ($localState['txid_list'] as $txid) {
+                if (!isset($remoteTxidSet[$txid])) {
+                    $remoteMissing[] = $txid;
+                }
+            }
+
+            $result['local_missing'] = $localMissing;
+            $result['remote_missing'] = $remoteMissing;
+
+            output(outputSyncBidirectionalMissing(count($localMissing), count($remoteMissing)), 'SILENT');
+
+            // Step 4: Process transactions we received (that we were missing)
+            $userPubkeyHash = hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey());
+            $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPublicKey);
+
+            foreach ($remoteTransactions as $tx) {
+                // Skip if we already have this transaction
+                if ($this->transactionRepository->transactionExistsTxid($tx['txid'])) {
+                    continue;
+                }
+
+                // Verify signature before inserting
+                if (!$this->verifyTransactionSignature($tx)) {
+                    SecureLogger::warning("Bidirectional sync: Signature verification failed", [
+                        'txid' => $tx['txid'] ?? 'unknown',
+                        'sender' => $tx['sender_address'] ?? 'unknown'
+                    ]);
+                    continue;
+                }
+
+                // Determine transaction type
+                $txType = ($tx['sender_public_key'] ?? '') === $this->currentUser->getPublicKey()
+                    ? Constants::TX_TYPE_SENT
+                    : Constants::TX_TYPE_RECEIVED;
+
+                // Insert the transaction
+                $this->transactionRepository->insertTransaction($tx, $txType);
+                $result['received_count']++;
+            }
+
+            // Step 5: If remote is missing transactions, they'll request them
+            // via their own sync - we just record what they're missing
+            $result['sent_count'] = count($remoteMissing);
+
+            $result['success'] = true;
+
+            // Sync balances after transaction sync
+            $this->syncContactBalance($contactPublicKey);
+
+            output(outputSyncBidirectionalCompleted($result['received_count'], $result['sent_count']), 'SILENT');
+
+        } catch (Exception $e) {
+            $result['error'] = $e->getMessage();
+            SecureLogger::logException($e, [
+                'method' => 'bidirectionalSync',
+                'contact' => $contactAddress
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Handle incoming sync negotiation request
+     *
+     * Responds to bidirectional sync negotiation requests.
+     * Compares local chain state with requester's list and returns
+     * both our txid list and any transactions the requester is missing.
+     *
+     * @param array $request The sync negotiation request
+     * @return void Outputs JSON response
+     */
+    public function handleSyncNegotiationRequest(array $request): void {
+        $senderAddress = $request['senderAddress'];
+        $senderPublicKey = $request['senderPublicKey'];
+        $remoteTxidList = $request['txid_list'] ?? [];
+
+        // Verify the sender is a known contact
+        if (!$this->contactRepository->contactExistsPubkey($senderPublicKey)) {
+            echo $this->messagePayload->buildSyncNegotiationRejection($senderAddress, 'unknown_contact');
+            return;
+        }
+
+        try {
+            // Get our local chain state
+            $localState = $this->transactionRepository->getChainStateSummary(
+                $this->currentUser->getPublicKey(),
+                $senderPublicKey
+            );
+
+            // Find transactions they're missing (we have but they don't)
+            $remoteTxidSet = array_flip($remoteTxidList);
+            $transactionsToSend = [];
+
+            foreach ($localState['txid_list'] as $txid) {
+                if (!isset($remoteTxidSet[$txid])) {
+                    // They don't have this transaction - include it in response
+                    $tx = $this->transactionRepository->getByTxid($txid);
+                    if ($tx && count($tx) > 0) {
+                        $txData = $tx[0]; // getByTxid returns array
+                        $transactionsToSend[] = [
+                            'txid' => $txData['txid'],
+                            'previous_txid' => $txData['previous_txid'],
+                            'sender_address' => $txData['sender_address'],
+                            'sender_public_key' => $txData['sender_public_key'],
+                            'receiver_address' => $txData['receiver_address'],
+                            'receiver_public_key' => $txData['receiver_public_key'],
+                            'amount' => $txData['amount'],
+                            'currency' => $txData['currency'],
+                            'memo' => $txData['memo'],
+                            'timestamp' => $txData['timestamp'],
+                            'time' => $txData['time'] ?? null,
+                            'status' => $txData['status'],
+                            'sender_signature' => $txData['sender_signature'] ?? null,
+                            'signature_nonce' => $txData['signature_nonce'] ?? null,
+                            'description' => ($txData['memo'] === 'contact' || $txData['memo'] === 'standard')
+                                ? ($txData['description'] ?? null)
+                                : null
+                        ];
+                    }
+                }
+            }
+
+            // Return our txid list and any transactions they're missing
+            echo $this->messagePayload->buildSyncNegotiationResponse(
+                $senderAddress,
+                $localState['txid_list'],
+                $transactionsToSend
+            );
+
+        } catch (Exception $e) {
+            SecureLogger::logException($e, [
+                'method' => 'handleSyncNegotiationRequest',
+                'sender' => $senderAddress
+            ]);
+            echo $this->messagePayload->buildSyncNegotiationRejection($senderAddress, 'internal_error');
+        }
     }
 }

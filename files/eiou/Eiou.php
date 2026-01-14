@@ -172,7 +172,40 @@ elseif($request === "sync"){
   $debugService->output("Executing sync request", 'SILENT');
   $syncService = $app->services->getSyncService();
   $syncService->sync($cleanArgv, $output);
-} elseif($request === "generate"){
+}
+// Message queue processing commands for testing (requires EIOU_TEST_MODE=true)
+elseif($request === "out"){
+  if (getenv('EIOU_TEST_MODE') !== 'true') {
+    $output->error("Command not available", [], "This command is only available in test mode");
+    exit(1);
+  }
+  // Process outgoing message queue (pending transactions)
+  $debugService->output("Processing outgoing message queue", 'SILENT');
+  $transactionService = $app->services->getTransactionService();
+  $txCount = $transactionService->processPendingTransactions();
+
+  $output->success("Processed outgoing queue", [
+    'transactions_processed' => $txCount
+  ], "Outgoing queue processing complete");
+}
+elseif($request === "in"){
+  if (getenv('EIOU_TEST_MODE') !== 'true') {
+    $output->error("Command not available", [], "This command is only available in test mode");
+    exit(1);
+  }
+  // Process incoming/held transactions
+  $debugService->output("Processing incoming message queue", 'SILENT');
+
+  // Process any held transactions that may have completed sync
+  $heldService = $app->services->getHeldTransactionService();
+  $result = ['processed_count' => 0, 'resumed_count' => 0, 'failed_count' => 0];
+  if ($heldService !== null) {
+    $result = $heldService->processHeldTransactions();
+  }
+
+  $output->success("Processed incoming queue", $result, "Incoming queue processing complete");
+}
+elseif($request === "generate"){
   // Handle for Wallet request after wallet has been created
   $output->walletExists();
 }
