@@ -1508,6 +1508,38 @@ addressA="${containerAddresses[${contactA}]}"
 addressB="${containerAddresses[${contactB}]}"
 addressC="${containerAddresses[${contactC}]}"
 
+# Fallback to userconfig if containerAddresses is empty (consistent with earlier sections)
+if [[ -z "$addressA" ]] || [[ -z "$addressB" ]] || [[ -z "$addressC" ]]; then
+    echo -e "${YELLOW}\t   Warning: containerAddresses empty for Section 10, falling back to userconfig${NC}"
+    if [[ "$MODE" == "http" ]] || [[ "$MODE" == "https" ]]; then
+        addressA=$(docker exec ${contactA} php -r "
+            \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+            echo \$json['hostname'] ?? '';
+        " 2>/dev/null)
+        addressB=$(docker exec ${contactB} php -r "
+            \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+            echo \$json['hostname'] ?? '';
+        " 2>/dev/null)
+        addressC=$(docker exec ${contactC} php -r "
+            \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+            echo \$json['hostname'] ?? '';
+        " 2>/dev/null)
+    else
+        addressA=$(docker exec ${contactA} php -r "
+            \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+            echo \$json['torAddress'] ?? '';
+        " 2>/dev/null)
+        addressB=$(docker exec ${contactB} php -r "
+            \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+            echo \$json['torAddress'] ?? '';
+        " 2>/dev/null)
+        addressC=$(docker exec ${contactC} php -r "
+            \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+            echo \$json['torAddress'] ?? '';
+        " 2>/dev/null)
+    fi
+fi
+
 echo -e "\n[Test Setup for Issue #423]"
 echo -e "\t   Contact A: ${contactA} (${addressA})"
 echo -e "\t   Contact B: ${contactB} (${addressB})"
