@@ -186,8 +186,21 @@ class MessageService {
      * @return bool True if valid source
      */
     public function checkMessageValidity(array $decodedMessage): bool {
+        $senderPublicKey = $decodedMessage['senderPublicKey'] ?? null;
+        $senderAddress = $decodedMessage['senderAddress'] ?? null;
+        $typeMessage = $decodedMessage['typeMessage'] ?? 'unknown';
+
+        // Validate senderPublicKey is present
+        if ($senderPublicKey === null) {
+            SecureLogger::warning("Message validity check failed: missing senderPublicKey", [
+                'sender_address' => $senderAddress,
+                'type_message' => $typeMessage
+            ]);
+            return false;
+        }
+
         // Check if message is from a valid source
-        if($this->contactRepository->contactExistsPubkey($decodedMessage['senderPublicKey'])){
+        if($this->contactRepository->contactExistsPubkey($senderPublicKey)){
             // The source is a contact
             return true;
         } elseif(isset($decodedMessage['hash'])){
@@ -196,7 +209,7 @@ class MessageService {
 
             if($p2p){
                 // Check if source is original sender for any messages related to transactions
-                if($hash === hash(Constants::HASH_ALGORITHM, $this->transportUtility->resolveUserAddressForTransport($decodedMessage['senderAddress']) . $p2p['salt'] . $p2p['time'])){
+                if($hash === hash(Constants::HASH_ALGORITHM, $this->transportUtility->resolveUserAddressForTransport($senderAddress) . $p2p['salt'] . $p2p['time'])){
                     return true;
                 }
                 return false;
@@ -204,7 +217,13 @@ class MessageService {
             // Potential Spam (hash is unknown)
             return false;
         }
-        // Not a contact nor able to match source
+
+        // Not a contact nor able to match source - log for debugging contact acceptance issues
+        SecureLogger::info("Message validity check failed: sender not in contacts", [
+            'sender_address' => $senderAddress,
+            'sender_public_key_hash' => substr(hash('sha256', $senderPublicKey), 0, 16),
+            'type_message' => $typeMessage
+        ]);
         return false;
     }
 
@@ -319,13 +338,39 @@ class MessageService {
      */
     private function handleContactMessageRequest(array $decodedMessage): void {
         // Handle contact request status update messages
-        $status = $decodedMessage['status'];
-        $senderAddress = $decodedMessage['senderAddress'];
-        $senderPublicKey = $decodedMessage['senderPublicKey'];
+        $status = $decodedMessage['status'] ?? null;
+        $senderAddress = $decodedMessage['senderAddress'] ?? null;
+        $senderPublicKey = $decodedMessage['senderPublicKey'] ?? null;
+
+        // Validate required fields
+        if ($senderPublicKey === null) {
+            SecureLogger::warning("Contact message missing senderPublicKey", [
+                'sender_address' => $senderAddress,
+                'status' => $status
+            ]);
+            echo json_encode([
+                'status' => Constants::STATUS_REJECTED,
+                'message' => 'Missing sender public key'
+            ]);
+            return;
+        }
 
         if($status === Constants::STATUS_ACCEPTED){
             output(outputContactRequestWasAccepted($senderAddress),'SILENT');
-            $this->contactRepository->updateStatus($senderPublicKey, $status);
+
+            // Update contact status to accepted and verify it succeeded
+            $updateResult = $this->contactRepository->updateStatus($senderPublicKey, $status);
+
+            if (!$updateResult) {
+                SecureLogger::warning("Failed to update contact status to accepted", [
+                    'sender_address' => $senderAddress,
+                    'sender_public_key_hash' => substr(hash('sha256', $senderPublicKey), 0, 16)
+                ]);
+            } else {
+                SecureLogger::info("Contact status updated to accepted", [
+                    'sender_address' => $senderAddress
+                ]);
+            }
 
             // Complete the contact transaction (update status from 'sent' to 'completed')
             $this->transactionRepository->completeContactTransaction($senderPublicKey);
@@ -333,6 +378,20 @@ class MessageService {
             // Return acknowledgment for delivery tracking
             // This confirms the acceptance message was received and processed
             echo $this->messagePayload->buildContactAcceptanceAcknowledgment($senderAddress);
+        } else {
+            // Log unexpected status for debugging
+            SecureLogger::info("Received contact message with non-accepted status", [
+                'status' => $status,
+                'sender_address' => $senderAddress
+            ]);
+
+            // Return acknowledgment with the received status
+            echo json_encode([
+                'status' => Constants::STATUS_RECEIVED,
+                'message' => 'Contact message received',
+                'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($senderAddress),
+                'senderPublicKey' => $this->currentUser->getPublicKey()
+            ]);
         }
     }
 
