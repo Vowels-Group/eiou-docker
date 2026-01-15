@@ -43,10 +43,12 @@ if ! validate_test_prerequisites "torTestSuite"; then
     return 1
 fi
 
-# If Tor is not available and we're in HTTP mode, show warning
-if [[ "$TOR_AVAILABLE" == "false" ]] && [[ "$TOR_REQUIRED" == "false" ]]; then
-    echo -e "${YELLOW}NOTE: Tor hidden service not available (running in HTTP mode)${NC}"
-    echo -e "${YELLOW}Tor tests will be skipped. Run with MODE=tor for full Tor testing.${NC}\n"
+# If Tor is not available, show warning (but tests will still try to run what's available)
+if [[ "$TOR_AVAILABLE" == "false" ]]; then
+    echo -e "${YELLOW}NOTE: Tor hidden service not available${NC}"
+    echo -e "${YELLOW}Some Tor tests may be skipped. Run with MODE=tor for full Tor testing.${NC}\n"
+else
+    echo -e "${GREEN}TOR hidden service is available - running full TOR test suite${NC}\n"
 fi
 
 ##################### SECTION 1: TOR Address Verification #####################
@@ -72,9 +74,9 @@ for container in "${containers[@]}"; do
         torContainerAddresses[$container]=$torAddress
         passed=$(( passed + 1 ))
     else
-        # In HTTP mode, Tor address may not be configured - this is expected
-        if [[ "$TOR_REQUIRED" == "false" ]]; then
-            printf "\t   TOR address for %s ${YELLOW}SKIPPED${NC} (not configured in HTTP mode)\n" ${container}
+        # Skip only if TOR is not available AND not required (HTTP mode without TOR)
+        if [[ "$TOR_AVAILABLE" == "false" ]] && [[ "$TOR_REQUIRED" == "false" ]]; then
+            printf "\t   TOR address for %s ${YELLOW}SKIPPED${NC} (TOR not available in HTTP mode)\n" ${container}
             passed=$(( passed + 1 ))
         else
             printf "\t   TOR address for %s ${RED}FAILED${NC} (empty or invalid)\n" ${container}
@@ -96,9 +98,9 @@ for container in "${containers[@]}"; do
     # Test 2.1: Verify TOR service is running
     torStatus=$(docker exec $container service tor status 2>&1)
     if ! echo "$torStatus" | grep -q "running"; then
-        # In HTTP mode, TOR service may not be running - this is expected
-        if [[ "$TOR_REQUIRED" == "false" ]]; then
-            printf "\t   TOR service for %s ${YELLOW}SKIPPED${NC} - TOR service not running (HTTP mode)\n" ${container}
+        # Skip only if TOR is not available AND not required
+        if [[ "$TOR_AVAILABLE" == "false" ]] && [[ "$TOR_REQUIRED" == "false" ]]; then
+            printf "\t   TOR service for %s ${YELLOW}SKIPPED${NC} - TOR service not running (TOR not available)\n" ${container}
             passed=$(( passed + 1 ))
             continue
         else
@@ -111,9 +113,9 @@ for container in "${containers[@]}"; do
     # Test 2.2: Verify SOCKS proxy is listening on port 9050
     socksListening=$(docker exec $container sh -c 'ss -tlnp 2>/dev/null | grep 9050 || netstat -tlnp 2>/dev/null | grep 9050')
     if [ -z "$socksListening" ]; then
-        # In HTTP mode, SOCKS proxy may not be listening - this is expected
-        if [[ "$TOR_REQUIRED" == "false" ]]; then
-            printf "\t   TOR service for %s ${YELLOW}SKIPPED${NC} - SOCKS proxy not listening (HTTP mode)\n" ${container}
+        # Skip only if TOR is not available AND not required
+        if [[ "$TOR_AVAILABLE" == "false" ]] && [[ "$TOR_REQUIRED" == "false" ]]; then
+            printf "\t   TOR service for %s ${YELLOW}SKIPPED${NC} - SOCKS proxy not listening (TOR not available)\n" ${container}
             passed=$(( passed + 1 ))
             continue
         else
@@ -126,9 +128,9 @@ for container in "${containers[@]}"; do
     # Test 2.3: Verify hidden service hostname file exists and is non-empty
     hostnameFileContent=$(docker exec $container cat "${HS_HOSTNAME_FILE}" 2>/dev/null | tr -d '\n')
     if [ -z "$hostnameFileContent" ]; then
-        # In HTTP mode, hidden service may not exist - this is expected
-        if [[ "$TOR_REQUIRED" == "false" ]]; then
-            printf "\t   TOR service for %s ${YELLOW}SKIPPED${NC} - Hidden service not configured (HTTP mode)\n" ${container}
+        # Skip only if TOR is not available AND not required
+        if [[ "$TOR_AVAILABLE" == "false" ]] && [[ "$TOR_REQUIRED" == "false" ]]; then
+            printf "\t   TOR service for %s ${YELLOW}SKIPPED${NC} - Hidden service not configured (TOR not available)\n" ${container}
             passed=$(( passed + 1 ))
             continue
         else
@@ -185,9 +187,9 @@ for container in "${containers[@]}"; do
     # Test 3.1: Verify hidden service directory exists
     dirExists=$(docker exec $container test -d "$HS_DIR" && echo "yes" || echo "no")
     if [ "$dirExists" != "yes" ]; then
-        # In HTTP mode, hidden service directory may not exist - this is expected
-        if [[ "$TOR_REQUIRED" == "false" ]]; then
-            printf "\t   Key permissions for %s ${YELLOW}SKIPPED${NC} - Hidden service directory not present (HTTP mode)\n" ${container}
+        # Skip only if TOR is not available AND not required
+        if [[ "$TOR_AVAILABLE" == "false" ]] && [[ "$TOR_REQUIRED" == "false" ]]; then
+            printf "\t   Key permissions for %s ${YELLOW}SKIPPED${NC} - Hidden service directory not present (TOR not available)\n" ${container}
             passed=$(( passed + 1 ))
             continue
         else
@@ -273,9 +275,9 @@ else
     ')
 
     if [ -z "$originalTorAddress" ]; then
-        # In HTTP mode, TOR address may not be configured - skip the test
-        if [[ "$TOR_REQUIRED" == "false" ]]; then
-            printf "\t   Rapid restart for %s ${YELLOW}SKIPPED${NC} - TOR not configured (HTTP mode)\n" ${testContainer}
+        # Skip only if TOR is not available AND not required
+        if [[ "$TOR_AVAILABLE" == "false" ]] && [[ "$TOR_REQUIRED" == "false" ]]; then
+            printf "\t   Rapid restart for %s ${YELLOW}SKIPPED${NC} - TOR not configured (TOR not available)\n" ${testContainer}
             passed=$(( passed + 1 ))
         else
             printf "\t   Rapid restart for %s ${RED}FAILED${NC} - Could not get original TOR address\n" ${testContainer}
@@ -338,18 +340,18 @@ else
                     publicKeySize=${publicKeySize:-0}
 
                     if [ "$secretKeySize" -lt 50 ] || [ "$secretKeySize" -gt 200 ]; then
-                        # In HTTP mode, Tor may not be fully operational - treat as warning
+                        # Treat as warning only if TOR is not the primary mode
                         if [[ "$TOR_REQUIRED" == "false" ]]; then
-                            printf "\t   Rapid restart for %s ${YELLOW}WARNING${NC} - Secret key size abnormal: ${secretKeySize} bytes (HTTP mode)\n" ${testContainer}
+                            printf "\t   Rapid restart for %s ${YELLOW}WARNING${NC} - Secret key size abnormal: ${secretKeySize} bytes\n" ${testContainer}
                             passed=$(( passed + 1 ))
                         else
                             printf "\t   Rapid restart for %s ${RED}FAILED${NC} - Secret key size abnormal: ${secretKeySize} bytes\n" ${testContainer}
                             failure=$(( failure + 1 ))
                         fi
                     elif [ "$publicKeySize" -lt 30 ] || [ "$publicKeySize" -gt 100 ]; then
-                        # In HTTP mode, Tor may not be fully operational - treat as warning
+                        # Treat as warning only if TOR is not the primary mode
                         if [[ "$TOR_REQUIRED" == "false" ]]; then
-                            printf "\t   Rapid restart for %s ${YELLOW}WARNING${NC} - Public key size abnormal: ${publicKeySize} bytes (HTTP mode)\n" ${testContainer}
+                            printf "\t   Rapid restart for %s ${YELLOW}WARNING${NC} - Public key size abnormal: ${publicKeySize} bytes\n" ${testContainer}
                             passed=$(( passed + 1 ))
                         else
                             printf "\t   Rapid restart for %s ${RED}FAILED${NC} - Public key size abnormal: ${publicKeySize} bytes\n" ${testContainer}

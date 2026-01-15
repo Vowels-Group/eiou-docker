@@ -83,12 +83,12 @@ for routingPair in "${!routingTests[@]}"; do
             fi
         done
 
-        # Retry if no relay fees detected - process queues and wait more
+        # Retry if no relay fees detected - process queues and wait more (using same timeout as initial wait)
         if [[ $relayFeesDetected -eq 0 ]]; then
-            echo -e "\t   No relay fees detected, retrying with queue processing..."
+            echo -e "\t   No relay fees detected, retrying with queue processing (timeout: 20s)..."
             all_containers="${containers[*]}"
             process_routing_queues "$all_containers"
-            sleep 5
+            sleep 20
 
             # Re-check relay fees after retry
             for relay in "${intermediates[@]}"; do
@@ -193,12 +193,12 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
 
         stateIncreased=$(awk "BEGIN {print ($finalState > $initialState) ? 1 : 0}")
 
-        # Retry if delivery not detected - process queues and wait more
+        # Retry if delivery not detected - process queues and wait more (using same timeout as initial wait)
         if [[ "$stateIncreased" -eq 0 ]]; then
-            echo -e "\t   Delivery not detected, retrying with queue processing..."
+            echo -e "\t   Delivery not detected, retrying with queue processing (timeout: 30s)..."
             all_containers="${containers[*]}"
             process_routing_queues "$all_containers"
-            sleep 5
+            sleep 30
 
             # Re-check delivery after retry
             finalState=$(docker exec ${lastContainer} php -r "
