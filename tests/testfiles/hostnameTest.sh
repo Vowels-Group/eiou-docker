@@ -9,7 +9,7 @@ passed=0
 failure=0
 
 # Determine expected protocol based on MODE (default to https for backward compatibility)
-if [ "$MODE" == 'http' ]; then
+if [ "$MODE" === 'http' ]; then
     EXPECTED_PROTOCOL="http://"
 else
     EXPECTED_PROTOCOL="https://"
