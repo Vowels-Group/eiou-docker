@@ -167,7 +167,11 @@ check_logs_for_message() {
     local container="$1"
     local pattern="$2"
     local since="${3:-60}"
-    docker logs --since "${since}s" ${container} 2>&1 | grep -c "${pattern}" || echo "0"
+    # grep -c outputs count (even 0), but exits with code 1 when no matches
+    # Capture output in variable to avoid || echo adding duplicate "0"
+    local count
+    count=$(docker logs --since "${since}s" ${container} 2>&1 | grep -c "${pattern}" 2>/dev/null)
+    echo "${count:-0}"
 }
 
 ################################################################################
