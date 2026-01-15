@@ -545,6 +545,12 @@ class TransactionService {
                 if (!$receivedPrevTxExists) {
                     $shouldSync = true;
                     $syncReason = 'receiver_missing_transactions';
+                } else {
+                    // Case 4: Chain fork detected - received_previous_txid exists but isn't our chain head
+                    // This happens during simultaneous sends when both parties create transactions
+                    // on top of the same base transaction. We need to sync and resolve the fork.
+                    $shouldSync = true;
+                    $syncReason = 'chain_fork_detected';
                 }
             }
 

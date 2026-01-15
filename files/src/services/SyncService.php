@@ -440,7 +440,6 @@ class SyncService {
                 // When both parties create transactions simultaneously, they may reference the same
                 // previous_txid. We resolve this deterministically using lexicographic txid comparison.
                 $remotePreviousTxid = $tx['previous_txid'] ?? null;
-                $skipInsert = false;
                 $localLoserToResign = null;  // Track local transaction that needs re-signing
 
                 if ($remotePreviousTxid !== null) {
@@ -463,17 +462,20 @@ class SyncService {
                                 output("Chain conflict: remote wins. Will re-sign local transaction {$localConflict['txid']}", 'SILENT');
                                 $localLoserToResign = $localConflict;  // Save for re-signing after insert
                             } else {
-                                // Local transaction wins - skip inserting the remote loser
-                                // The remote party will sync with us, get our winner, and re-sign their loser
-                                output("Chain conflict: local wins. Skipping remote transaction {$tx['txid']} (needs re-signing by sender)", 'SILENT');
-                                $skipInsert = true;
+                                // Local transaction wins - but we still insert the remote transaction
+                                // Both transactions have valid signatures with their original previous_txid.
+                                // Chain ordering is determined at query time using lexicographic txid comparison.
+                                // The remote sender will need to re-sign their transaction to point to ours,
+                                // but for now we accept it so the transactions are not lost.
+                                output("Chain conflict: local wins. Inserting remote transaction {$tx['txid']} with original previous_txid", 'SILENT');
 
-                                SecureLogger::info("Skipping remote losing transaction during sync", [
+                                SecureLogger::info("Inserting remote transaction that lost chain conflict", [
                                     'remote_txid' => $tx['txid'],
                                     'local_winner_txid' => $localConflict['txid'],
                                     'shared_previous_txid' => $remotePreviousTxid,
-                                    'reason' => 'Remote transaction has wrong previous_txid, sender must re-sign'
+                                    'note' => 'Both transactions stored with original previous_txid, ordering by lexicographic txid'
                                 ]);
+                                // Don't skip - insert the transaction even though it lost the conflict
                             }
                         } else {
                             SecureLogger::warning("Failed to resolve chain conflict", [
@@ -483,11 +485,6 @@ class SyncService {
                             ]);
                         }
                     }
-                }
-
-                // Skip this transaction if it lost the conflict (will be re-sent after re-signing)
-                if ($skipInsert) {
-                    continue;
                 }
 
                 // Verify transaction signature before inserting
