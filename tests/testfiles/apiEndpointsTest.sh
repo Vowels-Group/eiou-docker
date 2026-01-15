@@ -27,6 +27,19 @@ echo -e "\t   Test container: ${testContainer}"
 echo -e "\t   Real contact: ${realContactContainer} (${realContactAddress})"
 echo -e "\t   Mode: ${MODE}"
 
+# Determine local API base URL based on MODE
+# In HTTPS mode, use https://localhost; in HTTP mode, use http://localhost
+# This ensures API tests use the correct protocol matching the container's configuration
+LOCAL_API_BASE="$(getExpectedProtocol)localhost"
+echo -e "\t   API Base: ${LOCAL_API_BASE}"
+
+# Set curl SSL flag for HTTPS mode (accept self-signed certificates)
+if [[ "$MODE" == "https" ]]; then
+    CURL_SSL_FLAG="-k"
+else
+    CURL_SSL_FLAG=""
+fi
+
 # Helper function to display API request details
 display_api_request() {
     local container="$1"
@@ -148,12 +161,12 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-statusResponse=$(docker exec ${testContainer} curl -s \
+statusResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/system/status" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/system/status" 2>&1)
 
 if [[ "$statusResponse" =~ '"success"' ]] && [[ "$statusResponse" =~ 'true' ]] && [[ "$statusResponse" =~ '"status"' ]]; then
     printf "\t   GET /api/v1/system/status ${GREEN}PASSED${NC}\n"
@@ -180,12 +193,12 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-infoResponse=$(docker exec ${testContainer} curl -s \
+infoResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/wallet/info" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/wallet/info" 2>&1)
 
 if [[ "$infoResponse" =~ '"success"' ]] && [[ "$infoResponse" =~ 'true' ]] && [[ "$infoResponse" =~ '"public_key_hash"' ]]; then
     printf "\t   GET /api/v1/wallet/info ${GREEN}PASSED${NC}\n"
@@ -212,12 +225,12 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-balanceResponse=$(docker exec ${testContainer} curl -s \
+balanceResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/wallet/balance" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/wallet/balance" 2>&1)
 
 if [[ "$balanceResponse" =~ '"success"' ]] && [[ "$balanceResponse" =~ 'true' ]] && [[ "$balanceResponse" =~ '"balances"' ]]; then
     printf "\t   GET /api/v1/wallet/balance ${GREEN}PASSED${NC}\n"
@@ -244,12 +257,12 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-contactsResponse=$(docker exec ${testContainer} curl -s \
+contactsResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/contacts" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/contacts" 2>&1)
 
 if [[ "$contactsResponse" =~ '"success"' ]] && [[ "$contactsResponse" =~ 'true' ]] && [[ "$contactsResponse" =~ '"contacts"' ]]; then
     printf "\t   GET /api/v1/contacts ${GREEN}PASSED${NC}\n"
@@ -276,12 +289,12 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-transactionsResponse=$(docker exec ${testContainer} curl -s \
+transactionsResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/wallet/transactions" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/wallet/transactions" 2>&1)
 
 if [[ "$transactionsResponse" =~ '"success"' ]] && [[ "$transactionsResponse" =~ 'true' ]] && [[ "$transactionsResponse" =~ '"transactions"' ]]; then
     printf "\t   GET /api/v1/wallet/transactions ${GREEN}PASSED${NC}\n"
@@ -308,12 +321,12 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-metricsResponse=$(docker exec ${testContainer} curl -s \
+metricsResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/system/metrics" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/system/metrics" 2>&1)
 
 if [[ "$metricsResponse" =~ '"success"' ]] && [[ "$metricsResponse" =~ 'true' ]] && [[ "$metricsResponse" =~ '"transactions"' ]]; then
     printf "\t   GET /api/v1/system/metrics ${GREEN}PASSED${NC}\n"
@@ -331,9 +344,9 @@ totaltests=$(( totaltests + 1 ))
 
 echo -e "\n\t-> Testing unauthorized access (no API key)"
 
-unauthorizedResponse=$(docker exec ${testContainer} curl -s \
+unauthorizedResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/system/status" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/system/status" 2>&1)
 
 if [[ "$unauthorizedResponse" =~ '"success"' ]] && [[ "$unauthorizedResponse" =~ 'false' ]]; then
     printf "\t   Unauthorized request handling ${GREEN}PASSED${NC}\n"
@@ -360,12 +373,12 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-invalidResponse=$(docker exec ${testContainer} curl -s \
+invalidResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/invalid/path" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/invalid/path" 2>&1)
 
 if [[ "$invalidResponse" =~ '"success"' ]] && [[ "$invalidResponse" =~ 'false' ]] && [[ "$invalidResponse" =~ '"error"' ]]; then
     printf "\t   Invalid path handling ${GREEN}PASSED${NC}\n"
@@ -615,14 +628,14 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-sendResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
+sendResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
     -X POST \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
     -d "${sendBody}" \
-    "http://localhost/api/v1/wallet/send" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/wallet/send" 2>&1)
 
 sendResponseCode=$(echo "$sendResponseFull" | tail -1)
 sendResponse=$(echo "$sendResponseFull" | sed '$d')
@@ -660,14 +673,14 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-createContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
+createContactResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
     -X POST \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
     -d "${contactBody}" \
-    "http://localhost/api/v1/contacts" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/contacts" 2>&1)
 
 createContactCode=$(echo "$createContactResponseFull" | tail -1)
 createContactResponse=$(echo "$createContactResponseFull" | sed '$d')
@@ -704,12 +717,12 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-getContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
+getContactResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/contacts/${realContactNameForGet}" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/contacts/${realContactNameForGet}" 2>&1)
 
 getContactCode=$(echo "$getContactResponseFull" | tail -1)
 getContactResponse=$(echo "$getContactResponseFull" | sed '$d')
@@ -747,13 +760,13 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-deleteContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
+deleteContactResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
     -X DELETE \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/contacts/${testDeleteAddress}" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/contacts/${testDeleteAddress}" 2>&1)
 
 deleteContactCode=$(echo "$deleteContactResponseFull" | tail -1)
 deleteContactResponse=$(echo "$deleteContactResponseFull" | sed '$d')
@@ -790,13 +803,13 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-blockContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
+blockContactResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
     -X POST \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/contacts/block/${blockAddress}" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/contacts/block/${blockAddress}" 2>&1)
 
 blockContactCode=$(echo "$blockContactResponseFull" | tail -1)
 blockContactResponse=$(echo "$blockContactResponseFull" | sed '$d')
@@ -833,13 +846,13 @@ signature=$(docker exec ${testContainer} php -r "
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
-unblockContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
+unblockContactResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
     -X POST \
     -H "X-API-Key: ${apiKeyId}" \
     -H "X-API-Timestamp: ${timestamp}" \
     -H "X-API-Signature: ${signature}" \
     -H "Content-Type: application/json" \
-    "http://localhost/api/v1/contacts/unblock/${unblockAddress}" 2>&1)
+    "${LOCAL_API_BASE}/api/v1/contacts/unblock/${unblockAddress}" 2>&1)
 
 unblockContactCode=$(echo "$unblockContactResponseFull" | tail -1)
 unblockContactResponse=$(echo "$unblockContactResponseFull" | sed '$d')
@@ -886,12 +899,12 @@ if [[ -n "$realContactNameFromViewbalances" ]]; then
         echo hash_hmac('sha256', \$message, \$secret);
     " 2>/dev/null)
 
-    realContactResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
+    realContactResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
         -H "X-API-Key: ${apiKeyId}" \
         -H "X-API-Timestamp: ${timestamp}" \
         -H "X-API-Signature: ${signature}" \
         -H "Content-Type: application/json" \
-        "http://localhost/api/v1/contacts/${realContactNameFromViewbalances}" 2>&1)
+        "${LOCAL_API_BASE}/api/v1/contacts/${realContactNameFromViewbalances}" 2>&1)
 
     realContactCode=$(echo "$realContactResponseFull" | tail -1)
     realContactResponse=$(echo "$realContactResponseFull" | sed '$d')
@@ -928,14 +941,14 @@ if [[ -n "$realContactNameFromViewbalances" ]]; then
         echo hash_hmac('sha256', \$message, \$secret);
     " 2>/dev/null)
 
-    realSendResponseFull=$(docker exec ${testContainer} curl -s -w "\n%{http_code}" \
+    realSendResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
         -X POST \
         -H "X-API-Key: ${apiKeyId}" \
         -H "X-API-Timestamp: ${timestamp}" \
         -H "X-API-Signature: ${signature}" \
         -H "Content-Type: application/json" \
         -d "${realSendBody}" \
-        "http://localhost/api/v1/wallet/send" 2>&1)
+        "${LOCAL_API_BASE}/api/v1/wallet/send" 2>&1)
 
     realSendCode=$(echo "$realSendResponseFull" | tail -1)
     realSendResponse=$(echo "$realSendResponseFull" | sed '$d')

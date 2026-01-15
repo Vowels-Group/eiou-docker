@@ -92,20 +92,24 @@ docker exec ${receiver} eiou add ${senderAddress} ${sender} 0.1 1000 USD 2>&1 > 
 sleep 2
 
 # Wait for contacts to be accepted (pubkeys only available after acceptance)
+# Get PHP-compatible transport type based on address protocol
+receiverTransportType=$(getPhpTransportType "${receiverAddress}")
+senderTransportType=$(getPhpTransportType "${senderAddress}")
+
 echo -e "\t   Waiting for contacts to be accepted..."
 waitElapsed=0
 while [ $waitElapsed -lt 15 ]; do
     senderStatus=$(docker exec ${sender} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
-        \$status = \$app->services->getContactRepository()->getContactStatus('http', '${receiverAddress}');
+        \$status = \$app->services->getContactRepository()->getContactStatus('${receiverTransportType}', '${receiverAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
 
     receiverStatus=$(docker exec ${receiver} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
-        \$status = \$app->services->getContactRepository()->getContactStatus('http', '${senderAddress}');
+        \$status = \$app->services->getContactRepository()->getContactStatus('${senderTransportType}', '${senderAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
 
@@ -122,12 +126,12 @@ if [[ "$senderStatus" != "accepted" ]] || [[ "$receiverStatus" != "accepted" ]];
     echo -e "${YELLOW}\t   Warning: Contacts not fully accepted (sender: ${senderStatus}, receiver: ${receiverStatus})${NC}"
 fi
 
-# Get public keys directly via PHP (use MODE for transport type)
+# Get public keys directly via PHP (using getPhpTransportType for MODE-aware transport)
 # Using getContactPubkey which is the standard method used across tests
 receiverPubkeyB64=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${receiverAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -138,7 +142,7 @@ receiverPubkeyB64=$(docker exec ${sender} php -r "
 receiverPubkeyHash=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${receiverAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
     if (\$pubkey) {
         echo hash('sha256', \$pubkey);
     } else {
@@ -149,7 +153,7 @@ receiverPubkeyHash=$(docker exec ${sender} php -r "
 senderPubkeyB64=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${senderAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${senderTransportType}', '${senderAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -160,7 +164,7 @@ senderPubkeyB64=$(docker exec ${receiver} php -r "
 senderPubkeyHash=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${senderAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${senderTransportType}', '${senderAddress}');
     if (\$pubkey) {
         echo hash('sha256', \$pubkey);
     } else {
