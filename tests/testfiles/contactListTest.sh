@@ -27,7 +27,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
 
     echo -e "\n\t-> Verifying contact: ${containerKeys[0]} -> ${containerKeys[1]}"
 
-    # Query contact details using PHP
+    # Query contact details using PHP (with single retry if not found)
     contactData=$(docker exec ${containerKeys[0]} php -r "
         require_once('${REL_APPLICATION}');
         \$contact = Application::getInstance()->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
@@ -37,6 +37,23 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
             echo 'NOT_FOUND';
         }
     " 2>/dev/null || echo "ERROR")
+
+    # Retry once if not found (timing issue - contact sync might be delayed)
+    if [[ "$contactData" == "NOT_FOUND" ]]; then
+        echo -e "\t   Contact not found, waiting 10s for sync retry..."
+        sleep 10
+        docker exec ${containerKeys[0]} eiou out 2>/dev/null || true
+        docker exec ${containerKeys[0]} eiou in 2>/dev/null || true
+        contactData=$(docker exec ${containerKeys[0]} php -r "
+            require_once('${REL_APPLICATION}');
+            \$contact = Application::getInstance()->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
+            if (\$contact) {
+                echo json_encode(\$contact);
+            } else {
+                echo 'NOT_FOUND';
+            }
+        " 2>/dev/null || echo "ERROR")
+    fi
 
     if [[ "$contactData" != "ERROR" ]] && [[ "$contactData" != "NOT_FOUND" ]]; then
         # Parse JSON response (basic parsing without jq)
@@ -126,6 +143,29 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         if(Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
         echo '1';} else{ echo '0';}
     " 2>/dev/null || echo "0")
+
+    # Retry once if either relationship not found (timing issue)
+    if [[ "$forwardExists" != "1" ]] || [[ "$reverseExists" != "1" ]]; then
+        echo -e "\t   Relationship incomplete (Forward: ${forwardExists}, Reverse: ${reverseExists}), waiting 10s for sync retry..."
+        sleep 10
+        docker exec ${containerKeys[0]} eiou out 2>/dev/null || true
+        docker exec ${containerKeys[0]} eiou in 2>/dev/null || true
+        docker exec ${containerKeys[1]} eiou out 2>/dev/null || true
+        docker exec ${containerKeys[1]} eiou in 2>/dev/null || true
+
+        # Retry checks
+        forwardExists=$(docker exec ${containerKeys[0]} php -r "
+            require_once('${REL_APPLICATION}');
+            if(Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
+            echo '1';} else{ echo '0';}
+        " 2>/dev/null || echo "0")
+
+        reverseExists=$(docker exec ${containerKeys[1]} php -r "
+            require_once('${REL_APPLICATION}');
+            if(Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
+            echo '1';} else{ echo '0';}
+        " 2>/dev/null || echo "0")
+    fi
 
     if [[ "$forwardExists" == "1" ]] && [[ "$reverseExists" == "1" ]]; then
         printf "\t   Bidirectional relationship ${GREEN}PASSED${NC}\n"

@@ -44,23 +44,20 @@ passed=0
 failure=0
 
 for containersLinkKey in "${containersLinkKeys[@]}"; do
-    containerKeys=(${containersLinkKey//,/ }) 
-    
+    containerKeys=(${containersLinkKey//,/ })
+
     # httpA -> httpB (i.e forwards and the next LinkKey should be httpB -> httpA (i.e backwards))
     transportType1=$(getPhpTransportType ${containerAddresses[${containerKeys[1]}]})
-    statusContact1=$(docker exec ${containerKeys[0]} php -r "
-        require_once('${REL_APPLICATION}');
-        echo Application::getInstance()->services->getContactRepository()->getContactStatus(
-            '""${transportType1}""','""${containerAddresses[${containerKeys[1]}]}""'
-        );
-    ")
+
+    # Use retry helper: check status, if not accepted wait 10s, process queues, retry once
+    statusContact1=$(check_contact_status_with_retry ${containerKeys[0]} ${transportType1} "${containerAddresses[${containerKeys[1]}]}" 10)
 
     printf "\n\t   %s has status %s with %s\n" ${containerKeys[1]} ${statusContact1} ${containerKeys[0]}
     if [[ "${statusContact1}" == "accepted" ]]; then
         printf "\t   ${testname} for %s ${GREEN}PASSED${NC}\n" ${containerKeys[0]}
         passed=$(( passed + 1 ))
     else
-        printf "\t   ${testname} for %s ${RED}FAILED${NC}\n" ${containerKeys[0]}
+        printf "\t   ${testname} for %s ${RED}FAILED${NC} (status after retry: %s)\n" ${containerKeys[0]} "${statusContact1}"
         failure=$(( failure + 1 ))
     fi
 

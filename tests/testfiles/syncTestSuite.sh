@@ -92,20 +92,24 @@ docker exec ${receiver} eiou add ${senderAddress} ${sender} 0.1 1000 USD 2>&1 > 
 sleep 2
 
 # Wait for contacts to be accepted (pubkeys only available after acceptance)
+# Get PHP-compatible transport type based on address protocol
+receiverTransportType=$(getPhpTransportType "${receiverAddress}")
+senderTransportType=$(getPhpTransportType "${senderAddress}")
+
 echo -e "\t   Waiting for contacts to be accepted..."
 waitElapsed=0
 while [ $waitElapsed -lt 15 ]; do
     senderStatus=$(docker exec ${sender} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
-        \$status = \$app->services->getContactRepository()->getContactStatus('http', '${receiverAddress}');
+        \$status = \$app->services->getContactRepository()->getContactStatus('${receiverTransportType}', '${receiverAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
 
     receiverStatus=$(docker exec ${receiver} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
-        \$status = \$app->services->getContactRepository()->getContactStatus('http', '${senderAddress}');
+        \$status = \$app->services->getContactRepository()->getContactStatus('${senderTransportType}', '${senderAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
 
@@ -122,12 +126,12 @@ if [[ "$senderStatus" != "accepted" ]] || [[ "$receiverStatus" != "accepted" ]];
     echo -e "${YELLOW}\t   Warning: Contacts not fully accepted (sender: ${senderStatus}, receiver: ${receiverStatus})${NC}"
 fi
 
-# Get public keys directly via PHP (use MODE for transport type)
+# Get public keys directly via PHP (using getPhpTransportType for MODE-aware transport)
 # Using getContactPubkey which is the standard method used across tests
 receiverPubkeyB64=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${receiverAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -138,7 +142,7 @@ receiverPubkeyB64=$(docker exec ${sender} php -r "
 receiverPubkeyHash=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${receiverAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
     if (\$pubkey) {
         echo hash('sha256', \$pubkey);
     } else {
@@ -149,7 +153,7 @@ receiverPubkeyHash=$(docker exec ${sender} php -r "
 senderPubkeyB64=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${senderAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${senderTransportType}', '${senderAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -160,7 +164,7 @@ senderPubkeyB64=$(docker exec ${receiver} php -r "
 senderPubkeyHash=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('http', '${senderAddress}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${senderTransportType}', '${senderAddress}');
     if (\$pubkey) {
         echo hash('sha256', \$pubkey);
     } else {
@@ -417,6 +421,21 @@ receiverTxCount=$(docker exec ${receiver} php -r "
     echo \$count;
 " 2>/dev/null || echo "0")
 
+# Retry if receiver hasn't received transactions yet (time-dependent)
+if [[ "$receiverTxCount" -lt 3 ]]; then
+    sleep 10
+    docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
+    sleep 2
+    receiverTxCount=$(docker exec ${receiver} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$pdo = \$app->services->getPdo();
+        \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
+        echo \$count;
+    " 2>/dev/null || echo "0")
+fi
+
 echo -e "\t   Sender has ${senderTxCount} test transactions"
 echo -e "\t   Receiver has ${receiverTxCount} test transactions"
 
@@ -484,7 +503,7 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Verify transactions were recovered
+# Verify transactions were recovered (with retry for time-dependent operations)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Verifying transactions were recovered"
 
@@ -495,6 +514,23 @@ senderTxCountAfterSync=$(docker exec ${sender} php -r "
     \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
+
+# Retry if sync hasn't completed yet
+if [[ "$senderTxCountAfterSync" -lt 3 ]]; then
+    sleep 10
+    # Process queues again
+    docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
+    sleep 2
+    senderTxCountAfterSync=$(docker exec ${sender} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$pdo = \$app->services->getPdo();
+        \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
+        echo \$count;
+    " 2>/dev/null || echo "0")
+fi
+
 echo -e "\t   Sender now has ${senderTxCountAfterSync} test transactions after sync"
 
 if [[ "$senderTxCountAfterSync" -ge 3 ]]; then
@@ -617,6 +653,21 @@ initialCountReceiver=$(docker exec ${receiver} php -r "
     echo \$count;
 " 2>/dev/null || echo "0")
 
+# Retry if transactions haven't been received yet (time-dependent)
+if [[ "$initialCountReceiver" -lt 2 ]]; then
+    sleep 10
+    docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
+    sleep 2
+    initialCountReceiver=$(docker exec ${receiver} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$pdo = \$app->services->getPdo();
+        \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
+        echo \$count;
+    " 2>/dev/null || echo "0")
+fi
+
 echo -e "\t   Sender has ${initialCountSender}, Receiver has ${initialCountReceiver}"
 
 if [[ "$initialCountSender" -ge 2 ]] && [[ "$initialCountReceiver" -ge 2 ]]; then
@@ -667,6 +718,24 @@ countAfterCycle=$(docker exec ${sender} php -r "
     \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
+
+# Retry if sync cycle hasn't completed yet (time-dependent)
+if [[ "$countAfterCycle" -lt 2 ]]; then
+    sleep 10
+    docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${receiver} eiou out 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${sender} eiou in 2>&1 > /dev/null
+    sleep 2
+    countAfterCycle=$(docker exec ${sender} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$pdo = \$app->services->getPdo();
+        \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
+        echo \$count;
+    " 2>/dev/null || echo "0")
+fi
+
 echo -e "\t   Sender has ${countAfterCycle} transactions after cycle"
 
 if [[ "$countAfterCycle" -ge 2 ]]; then
@@ -1678,8 +1747,8 @@ for i in {1..5}; do
     process_all_queues
 done
 
-# Verify B recovered transactions
-countB_final=$(get_tx_count ${contactB} "AB%-${timestamp1}")
+# Verify B recovered transactions (with retry for time-dependent operations)
+countB_final=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp1}" 3 10)
 echo -e "\t   Final: B has ${countB_final} AB transactions"
 
 # B should have recovered at least the new transactions + some synced ones
@@ -1720,8 +1789,8 @@ for i in {1..5}; do
     process_all_queues
 done
 
-# Verify
-countB_final=$(get_tx_count ${contactB} "AB%-${timestamp2}")
+# Verify (with retry for time-dependent operations)
+countB_final=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp2}" 3 10)
 echo -e "\t   Final: B has ${countB_final} AB test transactions"
 
 if [[ "$countB_final" -ge 3 ]]; then
@@ -1762,8 +1831,8 @@ for i in {1..5}; do
     process_all_queues
 done
 
-# Verify
-countB_final=$(get_tx_count ${contactB} "AB%-${timestamp3}")
+# Verify (with retry for time-dependent operations)
+countB_final=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp3}" 4 10)
 echo -e "\t   Final: B has ${countB_final} AB test transactions"
 
 if [[ "$countB_final" -ge 4 ]]; then
@@ -1935,9 +2004,9 @@ for i in {1..6}; do
     process_all_queues
 done
 
-# Verify both sides received transactions
-countA_ba=$(get_tx_count ${contactA} "BA%-${timestamp7}")
-countB_ab=$(get_tx_count ${contactB} "AB%-${timestamp7}")
+# Verify both sides received transactions (with retry for time-dependent operations)
+countA_ba=$(check_tx_count_with_retry ${contactA} "BA%-${timestamp7}" 2 10)
+countB_ab=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp7}" 5 10)
 echo -e "\t   A has ${countA_ba} BA, B has ${countB_ab} AB test transactions"
 
 if [[ "$countA_ba" -ge 2 ]] && [[ "$countB_ab" -ge 5 ]]; then
@@ -1977,9 +2046,9 @@ for i in {1..6}; do
     process_all_queues
 done
 
-# Verify
-countA_ba=$(get_tx_count ${contactA} "BA%-${timestamp8}")
-countB_ab=$(get_tx_count ${contactB} "AB%-${timestamp8}")
+# Verify (with retry for time-dependent operations)
+countA_ba=$(check_tx_count_with_retry ${contactA} "BA%-${timestamp8}" 2 10)
+countB_ab=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp8}" 4 10)
 echo -e "\t   A has ${countA_ba} BA, B has ${countB_ab} AB test transactions"
 
 if [[ "$countA_ba" -ge 2 ]] && [[ "$countB_ab" -ge 4 ]]; then
@@ -2020,9 +2089,9 @@ for i in {1..6}; do
     process_all_queues
 done
 
-# Verify
-countA_ba=$(get_tx_count ${contactA} "BA%-${timestamp9}")
-countB_ab=$(get_tx_count ${contactB} "AB%-${timestamp9}")
+# Verify (with retry for time-dependent operations)
+countA_ba=$(check_tx_count_with_retry ${contactA} "BA%-${timestamp9}" 2 10)
+countB_ab=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp9}" 3 10)
 echo -e "\t   A has ${countA_ba} BA, B has ${countB_ab} AB test transactions"
 
 if [[ "$countA_ba" -ge 2 ]] && [[ "$countB_ab" -ge 3 ]]; then

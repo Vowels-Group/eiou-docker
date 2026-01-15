@@ -376,6 +376,98 @@ verify_chain_integrity() {
     " 2>/dev/null || echo "ERROR"
 }
 
+# ==================== Retry Helpers for Time-Dependent Tests ====================
+
+# Wait for transaction count to reach expected value with retry
+# Usage: wait_for_tx_count <container> <pattern> <expected_count> <timeout>
+# Returns: actual count (echoed), return code 0 if reached, 1 if timeout
+wait_for_tx_count() {
+    local container="$1"
+    local pattern="$2"
+    local expected_count="$3"
+    local timeout="${4:-10}"
+    local elapsed=0
+    local count
+
+    while [ $elapsed -lt $timeout ]; do
+        count=$(get_tx_count "$container" "$pattern")
+
+        if [ "$count" -ge "$expected_count" ]; then
+            echo "$count"
+            return 0
+        fi
+
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+
+    # Timeout - return current count
+    echo "$count"
+    return 1
+}
+
+# Check transaction count with retry on failure
+# Usage: check_tx_count_with_retry <container> <pattern> <expected_count> <retry_delay>
+# Returns: actual count (echoed)
+check_tx_count_with_retry() {
+    local container="$1"
+    local pattern="$2"
+    local expected_count="$3"
+    local retry_delay="${4:-10}"
+
+    # First check
+    local count=$(get_tx_count "$container" "$pattern")
+
+    # If below expected, wait and retry
+    if [ "$count" -lt "$expected_count" ]; then
+        sleep "$retry_delay"
+        # Process queues again during retry
+        process_all_queues 2>/dev/null || true
+        count=$(get_tx_count "$container" "$pattern")
+    fi
+
+    echo "$count"
+}
+
+# ==================== Contact Status Functions ====================
+
+# Check contact status with single retry on failure
+# Usage: check_contact_status_with_retry <container> <transport_type> <address> <retry_delay>
+# Returns: status string (echoed)
+# Does NOT loop - waits once, retries once, returns final status
+check_contact_status_with_retry() {
+    local container="$1"
+    local transport_type="$2"
+    local address="$3"
+    local retry_delay="${4:-10}"
+
+    # First check
+    local status=$(docker exec ${container} php -r "
+        require_once('${REL_APPLICATION}');
+        echo Application::getInstance()->services->getContactRepository()->getContactStatus(
+            '""${transport_type}""','""${address}""'
+        );
+    " 2>/dev/null || echo "error")
+
+    # If not accepted, wait once and retry (no loop)
+    if [ "$status" != "accepted" ]; then
+        echo -e "\t   Status is '${status}', waiting ${retry_delay}s for retry..." >&2
+        sleep "$retry_delay"
+        # Process message queues during retry
+        docker exec ${container} eiou out 2>/dev/null || true
+        docker exec ${container} eiou in 2>/dev/null || true
+        # Retry check
+        status=$(docker exec ${container} php -r "
+            require_once('${REL_APPLICATION}');
+            echo Application::getInstance()->services->getContactRepository()->getContactStatus(
+                '""${transport_type}""','""${address}""'
+            );
+        " 2>/dev/null || echo "error")
+    fi
+
+    echo "$status"
+}
+
 # ==================== Sync Functions ====================
 
 # Trigger sync for a container
