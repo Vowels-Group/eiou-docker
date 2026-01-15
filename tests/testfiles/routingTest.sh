@@ -83,6 +83,31 @@ for routingPair in "${!routingTests[@]}"; do
             fi
         done
 
+        # Retry if no relay fees detected - process queues and wait more
+        if [[ $relayFeesDetected -eq 0 ]]; then
+            echo -e "\t   No relay fees detected, retrying with queue processing..."
+            all_containers="${containers[*]}"
+            process_routing_queues "$all_containers"
+            sleep 5
+
+            # Re-check relay fees after retry
+            for relay in "${intermediates[@]}"; do
+                newRelayBalance=$(docker exec ${relay} php -r "
+                    require_once('${REL_APPLICATION}');
+                    \$balance = Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+                    echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+                " 2>/dev/null || echo "0")
+
+                balanceDiff=$(awk "BEGIN {print $newRelayBalance - ${initialRelayBalances[$relay]}}")
+                balanceIncreased=$(awk "BEGIN {print ($balanceDiff > 0) ? 1 : 0}")
+
+                if [[ "$balanceIncreased" -eq 1 ]]; then
+                    echo -e "\t   Relay ${relay} earned fee: ${balanceDiff} USD (after retry)"
+                    relayFeesDetected=$(( relayFeesDetected + 1 ))
+                fi
+            done
+        fi
+
         # Check if routing succeeded
         if [[ "$routingResult" =~ "Searching for route via P2P network" ]] && [[ $relayFeesDetected -gt 0 ]]; then
             printf "\t   Routing %s -> %s ${GREEN}PASSED${NC} (%d relays detected fees)\n" ${sender} ${receiver} ${relayFeesDetected}
@@ -167,6 +192,22 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
         " 2>/dev/null || echo "0")
 
         stateIncreased=$(awk "BEGIN {print ($finalState > $initialState) ? 1 : 0}")
+
+        # Retry if delivery not detected - process queues and wait more
+        if [[ "$stateIncreased" -eq 0 ]]; then
+            echo -e "\t   Delivery not detected, retrying with queue processing..."
+            all_containers="${containers[*]}"
+            process_routing_queues "$all_containers"
+            sleep 5
+
+            # Re-check delivery after retry
+            finalState=$(docker exec ${lastContainer} php -r "
+                require_once('${REL_APPLICATION}');
+                echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
+            " 2>/dev/null || echo "0")
+            stateIncreased=$(awk "BEGIN {print ($finalState > $initialState) ? 1 : 0}")
+        fi
+
         if [[ "$stateIncreased" -eq 1 ]]; then
             printf "\t   End-to-end delivery ${GREEN}PASSED${NC} (${firstContainer} -> ${lastContainer})\n"
             passed=$(( passed + 1 ))

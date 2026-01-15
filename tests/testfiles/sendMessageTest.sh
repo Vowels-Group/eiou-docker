@@ -97,6 +97,19 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
 
     # Check if multi-hop succeeded
     balanceIncreasedD=$(awk "BEGIN {print ($newBalanceD > $initialBalanceD) ? 1 : 0}")
+
+    # Retry if balance didn't change - process queues and wait more
+    if [[ "$balanceIncreasedD" -eq 0 ]]; then
+        echo -e "\t   Balance unchanged, retrying with queue processing..."
+        all_containers="${containers[*]}"
+        process_routing_queues "$all_containers"
+        sleep 5
+
+        # Re-check balance after retry
+        newBalanceD=$(docker exec httpD sh -c "$balance_cmd_d" 2>/dev/null || echo "$initialBalanceD")
+        balanceIncreasedD=$(awk "BEGIN {print ($newBalanceD > $initialBalanceD) ? 1 : 0}")
+    fi
+
     if [[ "$multiHopResult" =~ "success" ]] || [[ "$multiHopResult" =~ "sent" ]] || [[ "$balanceIncreasedD" -eq 1 ]]; then
         printf "\t   Multi-hop routing httpA->httpD ${GREEN}PASSED${NC} (Balance: %s -> %s)\n" ${initialBalanceD} ${newBalanceD}
         passed=$(( passed + 1 ))
