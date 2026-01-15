@@ -98,12 +98,12 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     # Check if multi-hop succeeded
     balanceIncreasedD=$(awk "BEGIN {print ($newBalanceD > $initialBalanceD) ? 1 : 0}")
 
-    # Retry if balance didn't change - process queues and wait more
+    # Retry if balance didn't change - process queues and wait more (using same timeout as initial wait)
     if [[ "$balanceIncreasedD" -eq 0 ]]; then
-        echo -e "\t   Balance unchanged, retrying with queue processing..."
+        echo -e "\t   Balance unchanged, retrying with queue processing (timeout: 30s)..."
         all_containers="${containers[*]}"
         process_routing_queues "$all_containers"
-        sleep 5
+        sleep 30
 
         # Re-check balance after retry
         newBalanceD=$(docker exec httpD sh -c "$balance_cmd_d" 2>/dev/null || echo "$initialBalanceD")

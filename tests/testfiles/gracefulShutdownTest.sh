@@ -117,7 +117,7 @@ dbCheck=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     try {
         \$app = Application::getInstance();
-        \$pdo = \$app->getPdo();
+        \$pdo = \$app->services->getPdo();
         \$stmt = \$pdo->query('SELECT 1');
         echo 'DB_OK';
     } catch (Exception \$e) {
