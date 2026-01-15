@@ -158,6 +158,34 @@ class ContactPayload extends BasePayload
     }
 
     /**
+     * Build a mutually accepted contact payload
+     *
+     * Used when receiving a contact request from someone we already have as pending
+     * (mutual request scenario - both sides sent requests to each other).
+     *
+     * @param string $address The address to send the acceptance to
+     * @param array|null $knownAddresses All known addresses for the sender (http, tor, etc.)
+     * @return string JSON-encoded contact accepted payload
+     */
+    public function buildMutuallyAccepted(string $address, ?array $knownAddresses = null): string
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        $payload = [
+            'status' => Constants::STATUS_ACCEPTED,
+            'message' => 'Contact request mutually accepted (both sides sent requests)',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+
+        // Include all known addresses if available
+        if ($knownAddresses !== null) {
+            $payload['senderAddresses'] = $this->filterAddresses($knownAddresses);
+        }
+
+        return json_encode($payload);
+    }
+
+    /**
      * Filter addresses array to return only transport addresses with values
      *
      * Removes pubkey_hash and any empty/null address fields.
