@@ -152,6 +152,9 @@ fi
 for container in $CONTAINER_LIST; do
     printf "Checking ${container}... "
     elapsed=0
+    hostname_ready=false
+    tor_ready=false
+
     while [ $elapsed -lt $MAX_WAIT ]; do
         # Check if container is still running
         if ! docker ps | grep -q "$container"; then
@@ -161,26 +164,59 @@ for container in $CONTAINER_LIST; do
 
         # Verify if userconfig.json exists, it's valid JSON and has required fields
         if [ "$MODE" == 'http' ] || [ "$MODE" == 'https' ]; then
-            httpAddress=$(docker exec "$container" php -r '
-                if (file_exists("/etc/eiou/userconfig.json")) {
-                    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
-                    if (isset($json["hostname"])){
-                        echo $json["hostname"];
-                    }
-                }')
-            if [[ ! -z ${httpAddress} ]]; then
-                # Validate protocol matches MODE for explicit protocol modes
-                if [ "$MODE" == 'https' ] && [[ ${httpAddress} == https://* ]]; then
-                    printf "${GREEN}Ready (HTTPS)${NC}\n"
-                    break
-                elif [ "$MODE" == 'http' ] && [[ ${httpAddress} == http://* ]]; then
-                    printf "${GREEN}Ready (HTTP)${NC}\n"
-                    break
-                elif [ "$MODE" == 'http' ]; then
-                    # For backward compatibility: http mode accepts https:// addresses
-                    printf "${GREEN}Ready${NC}\n"
-                    break
+            # First check hostname is set
+            if [ "$hostname_ready" != "true" ]; then
+                httpAddress=$(docker exec "$container" php -r '
+                    if (file_exists("/etc/eiou/userconfig.json")) {
+                        $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                        if (isset($json["hostname"])){
+                            echo $json["hostname"];
+                        }
+                    }')
+                if [[ ! -z ${httpAddress} ]]; then
+                    # Validate protocol matches MODE for explicit protocol modes
+                    if [ "$MODE" == 'https' ] && [[ ${httpAddress} == https://* ]]; then
+                        hostname_ready=true
+                    elif [ "$MODE" == 'http' ] && [[ ${httpAddress} == http://* ]]; then
+                        hostname_ready=true
+                    elif [ "$MODE" == 'http' ]; then
+                        # For backward compatibility: http mode accepts https:// addresses
+                        hostname_ready=true
+                    fi
                 fi
+            fi
+
+            # Then check Tor connectivity (processors won't start until Tor is ready)
+            if [ "$hostname_ready" == "true" ] && [ "$tor_ready" != "true" ]; then
+                torAddress=$(docker exec "$container" php -r '
+                    if (file_exists("/etc/eiou/userconfig.json")) {
+                        $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                        if(isset($json["torAddress"])){
+                            echo $json["torAddress"];
+                        }
+                    }')
+                if [[ ! -z ${torAddress} ]]; then
+                    # Verify actual TOR connectivity via SOCKS proxy
+                    if docker exec "$container" curl --socks5-hostname 127.0.0.1:9050 \
+                        --connect-timeout 5 \
+                        --max-time 10 \
+                        --silent \
+                        --fail \
+                        --output /dev/null \
+                        "$torAddress" 2>/dev/null; then
+                        tor_ready=true
+                    fi
+                fi
+            fi
+
+            # Both hostname and Tor must be ready
+            if [ "$hostname_ready" == "true" ] && [ "$tor_ready" == "true" ]; then
+                if [ "$MODE" == 'https' ]; then
+                    printf "${GREEN}Ready (HTTPS + Tor)${NC}\n"
+                else
+                    printf "${GREEN}Ready (HTTP + Tor)${NC}\n"
+                fi
+                break
             fi
         elif [ "$MODE" == 'tor' ]; then
             torAddress=$(docker exec "$container" php -r '
@@ -211,6 +247,7 @@ for container in $CONTAINER_LIST; do
 
     if [ $elapsed -ge $MAX_WAIT ]; then
         printf "${RED}Timeout waiting for initialization!${NC}\n"
+        printf "${YELLOW}Hostname ready: ${hostname_ready}, Tor ready: ${tor_ready}${NC}\n"
         docker logs "$container" | tail -n 20
         exit 1
     fi
