@@ -36,8 +36,9 @@ class RateLimiterService {
      * @return array ['allowed' => bool, 'remaining' => int, 'reset_at' => timestamp]
      */
     public function checkLimit(string $identifier, string $action, int $maxAttempts = 10, int $windowSeconds = 60, int $blockSeconds = 300): array {
-        // If rate limiting is disabled, always allow
-        if (!Constants::RATE_LIMIT_ENABLED) {
+        // If rate limiting is disabled or in test mode, always allow
+        $testMode = getenv('EIOU_TEST_MODE') === 'true';
+        if (!Constants::RATE_LIMIT_ENABLED || $testMode) {
             return [
                 'allowed' => true,
                 'remaining' => $maxAttempts,

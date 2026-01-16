@@ -1576,12 +1576,12 @@ setup_ab_chain() {
     echo -e "\t   Creating AB chain (AB0-AB3)..."
 
     # AB0 is the contact transaction (already exists from test setup)
-    # Send AB1, AB2, AB3
-    docker exec ${contactA} eiou send ${addressB} 1 USD "AB1-${ts}" 2>&1 > /dev/null
+    # Send AB1, AB2, AB3 (use EIOU_TEST_MODE to bypass rate limiter)
+    docker exec -e EIOU_TEST_MODE=true ${contactA} eiou send ${addressB} 1 USD "AB1-${ts}" 2>&1 > /dev/null
     sleep 1
-    docker exec ${contactA} eiou send ${addressB} 2 USD "AB2-${ts}" 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${contactA} eiou send ${addressB} 2 USD "AB2-${ts}" 2>&1 > /dev/null
     sleep 1
-    docker exec ${contactA} eiou send ${addressB} 3 USD "AB3-${ts}" 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${contactA} eiou send ${addressB} 3 USD "AB3-${ts}" 2>&1 > /dev/null
     sleep 2
 
     # Process transactions
@@ -1596,11 +1596,12 @@ setup_cb_chain() {
     local ts="$1"
     echo -e "\t   Creating CB chain (CB0-CB3)..."
 
-    docker exec ${contactC} eiou send ${addressB} 1 USD "CB1-${ts}" 2>&1 > /dev/null
+    # Use EIOU_TEST_MODE to bypass rate limiter
+    docker exec -e EIOU_TEST_MODE=true ${contactC} eiou send ${addressB} 1 USD "CB1-${ts}" 2>&1 > /dev/null
     sleep 1
-    docker exec ${contactC} eiou send ${addressB} 2 USD "CB2-${ts}" 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${contactC} eiou send ${addressB} 2 USD "CB2-${ts}" 2>&1 > /dev/null
     sleep 1
-    docker exec ${contactC} eiou send ${addressB} 3 USD "CB3-${ts}" 2>&1 > /dev/null
+    docker exec -e EIOU_TEST_MODE=true ${contactC} eiou send ${addressB} 3 USD "CB3-${ts}" 2>&1 > /dev/null
     sleep 2
 
     docker exec -e EIOU_TEST_MODE=true ${contactC} eiou out 2>&1 > /dev/null
@@ -1680,7 +1681,8 @@ send_multiple_transactions() {
     local count="$6"
 
     for i in $(seq $start_num $((start_num + count - 1))); do
-        docker exec ${sender} eiou send ${receiver_addr} 1 USD "${prefix}${i}-${ts}" 2>&1 > /dev/null
+        # Use EIOU_TEST_MODE to bypass rate limiter
+        docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiver_addr} 1 USD "${prefix}${i}-${ts}" 2>&1 > /dev/null
         sleep 0.5  # Allow transaction to be committed before next one
     done
 }
