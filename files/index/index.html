@@ -98,9 +98,13 @@ elseif ($type === "send") {
   // Handle eIOU
   $debugService->output("Processing send request from " . print_r($envelope['senderAddress'],true) . " with hash " . print_r($messageContent['hash'] ?? $messageContent['memo'], TRUE), 'SILENT');
   $transactionService = $serviceContainer->getTransactionService();
-  if($transactionService->checkTransactionPossible($request)){
-    $transactionService->processTransaction($request);
-  }
+  // checkTransactionPossible handles everything internally:
+  // - Validates the transaction
+  // - Triggers sync if needed
+  // - Processes and stores the transaction
+  // - Echoes acceptance/rejection response
+  // Returns false in all cases (processing handled internally)
+  $transactionService->checkTransactionPossible($request);
 }
 elseif ($type === "p2p") {
   // Handle Peer to peer Request
