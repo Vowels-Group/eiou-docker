@@ -733,12 +733,26 @@ class TransactionService {
                 }
                 return false;
             }
-            // IMPORTANT: Do NOT echo acceptance here!
-            // The caller MUST call processTransaction() first and echo acceptance
-            // only AFTER successful storage. This prevents chain divergence from
-            // the acceptance-before-storage bug where sender thinks receiver accepted
-            // but receiver never stored the transaction.
-            return true;
+            // All validations passed - process transaction and echo acceptance
+            // IMPORTANT: Storage MUST succeed before acceptance is sent
+            // to prevent chain divergence from acceptance-before-storage bug
+            try {
+                $this->processTransaction($request);
+                if ($echo) {
+                    echo $this->transactionPayload->buildAcceptance($request);
+                }
+                // Return false to prevent caller from calling processTransaction again
+                return false;
+            } catch (Exception $e) {
+                SecureLogger::logException($e, [
+                    'method' => 'checkTransactionPossible',
+                    'context' => 'normal_transaction_processing_failed'
+                ]);
+                if ($echo) {
+                    echo $this->transactionPayload->buildRejection($request, 'processing_error');
+                }
+                return false;
+            }
         } catch (PDOException $e) {
             // Use SecureLogger's exception logging
             SecureLogger::logException($e, [

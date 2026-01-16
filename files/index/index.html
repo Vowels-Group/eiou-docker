@@ -98,26 +98,13 @@ elseif ($type === "send") {
   // Handle eIOU
   $debugService->output("Processing send request from " . print_r($envelope['senderAddress'],true) . " with hash " . print_r($messageContent['hash'] ?? $messageContent['memo'], TRUE), 'SILENT');
   $transactionService = $serviceContainer->getTransactionService();
-  // checkTransactionPossible returns true if validation passed and caller should process
-  // It returns false if already handled (rejection echoed, or processed after sync)
-  if($transactionService->checkTransactionPossible($request)){
-    // IMPORTANT: Echo acceptance ONLY after successful storage
-    // This prevents chain divergence from acceptance-before-storage bug
-    try {
-      $transactionService->processTransaction($request);
-      // Storage succeeded - now send acceptance
-      $transactionPayload = Application::getInstance()->services->getTransactionPayloadService();
-      echo $transactionPayload->buildAcceptance($request);
-    } catch (Exception $e) {
-      // Storage failed - send rejection (transaction was never stored)
-      SecureLogger::logException($e, [
-        'method' => 'index.html',
-        'context' => 'transaction_processing_failed'
-      ]);
-      $transactionPayload = Application::getInstance()->services->getTransactionPayloadService();
-      echo $transactionPayload->buildRejection($request, 'processing_error');
-    }
-  }
+  // checkTransactionPossible handles everything internally:
+  // - Validates the transaction
+  // - Triggers sync if needed
+  // - Processes and stores the transaction
+  // - Echoes acceptance/rejection response
+  // Returns false in all cases (processing handled internally)
+  $transactionService->checkTransactionPossible($request);
 }
 elseif ($type === "p2p") {
   // Handle Peer to peer Request

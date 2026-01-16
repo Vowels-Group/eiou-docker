@@ -525,9 +525,9 @@ if [[ ${#containers[@]} -ge 1 ]]; then
         failure=$(( failure + 1 ))
     fi
 
-    # Restore original hostname
+    # Restore original hostname (use https:// to match startup.sh default)
     printf "\t   Restoring original hostname...\n"
-    docker exec ${testContainer} eiou changesettings hostname "http://${testContainer}" >/dev/null 2>&1
+    docker exec ${testContainer} eiou changesettings hostname "https://${testContainer}" >/dev/null 2>&1
     sleep 1
 fi
 
