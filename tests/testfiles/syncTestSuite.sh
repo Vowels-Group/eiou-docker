@@ -2185,18 +2185,17 @@ for i in {1..8}; do
     process_all_queues
 done
 
-# Verify C received the P2P transaction
-countC_p2p=$(get_tx_count ${contactC} "P2P-AC-${timestamp10}")
+# Verify C received the P2P transaction (with retry for timing)
+countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp10}" 1 15)
 echo -e "\t   C has ${countC_p2p} P2P test transactions"
 
-# P2P may or may not complete depending on sync success
+# P2P should complete after sync recovery
 if [[ "$countC_p2p" -ge 1 ]]; then
     printf "\t   Test 10 (P2P, B lost all AB) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    # P2P failure expected due to missing chain - this tests the behavior
-    printf "\t   Test 10 (P2P, B lost all AB) ${YELLOW}EXPECTED${NC} - P2P blocked by missing chain\n"
-    passed=$(( passed + 1 ))  # This is expected behavior
+    printf "\t   Test 10 (P2P, B lost all AB) ${RED}FAILED${NC} - P2P transaction not received\n"
+    failure=$(( failure + 1 ))
 fi
 
 cleanup_test_transactions "$timestamp10"
@@ -2226,16 +2225,16 @@ for i in {1..8}; do
     process_all_queues
 done
 
-# Verify
-countC_p2p=$(get_tx_count ${contactC} "P2P-AC-${timestamp11}")
+# Verify (with retry for timing)
+countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp11}" 1 15)
 echo -e "\t   C has ${countC_p2p} P2P test transactions"
 
 if [[ "$countC_p2p" -ge 1 ]]; then
     printf "\t   Test 11 (P2P, B lost after AB0) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Test 11 (P2P, B lost after AB0) ${YELLOW}EXPECTED${NC} - P2P blocked\n"
-    passed=$(( passed + 1 ))
+    printf "\t   Test 11 (P2P, B lost after AB0) ${RED}FAILED${NC} - P2P transaction not received\n"
+    failure=$(( failure + 1 ))
 fi
 
 cleanup_test_transactions "$timestamp11"
@@ -2265,16 +2264,16 @@ for i in {1..8}; do
     process_all_queues
 done
 
-# Verify
-countC_p2p=$(get_tx_count ${contactC} "P2P-AC-${timestamp12}")
+# Verify (with retry for timing)
+countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp12}" 1 15)
 echo -e "\t   C has ${countC_p2p} P2P test transactions"
 
 if [[ "$countC_p2p" -ge 1 ]]; then
     printf "\t   Test 12 (P2P, B has gap) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Test 12 (P2P, B has gap) ${YELLOW}EXPECTED${NC} - P2P blocked\n"
-    passed=$(( passed + 1 ))
+    printf "\t   Test 12 (P2P, B has gap) ${RED}FAILED${NC} - P2P transaction not received\n"
+    failure=$(( failure + 1 ))
 fi
 
 cleanup_test_transactions "$timestamp12"
@@ -2314,16 +2313,16 @@ for i in {1..8}; do
     process_all_queues
 done
 
-# Verify
-countA_p2p=$(get_tx_count ${contactA} "P2P-CA-${timestamp13}")
+# Verify (with retry for timing)
+countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp13}" 1 15)
 echo -e "\t   A has ${countA_p2p} P2P test transactions from C"
 
 if [[ "$countA_p2p" -ge 1 ]]; then
     printf "\t   Test 13 (P2P C->A, B lost all AB) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Test 13 (P2P C->A, B lost all AB) ${YELLOW}EXPECTED${NC} - P2P blocked\n"
-    passed=$(( passed + 1 ))
+    printf "\t   Test 13 (P2P C->A, B lost all AB) ${RED}FAILED${NC} - P2P transaction not received\n"
+    failure=$(( failure + 1 ))
 fi
 
 cleanup_test_transactions "$timestamp13"
@@ -2354,16 +2353,16 @@ for i in {1..8}; do
     process_all_queues
 done
 
-# Verify
-countA_p2p=$(get_tx_count ${contactA} "P2P-CA-${timestamp14}")
+# Verify (with retry for timing)
+countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp14}" 1 15)
 echo -e "\t   A has ${countA_p2p} P2P test transactions from C"
 
 if [[ "$countA_p2p" -ge 1 ]]; then
     printf "\t   Test 14 (P2P C->A, B lost after AB0) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Test 14 (P2P C->A, B lost after AB0) ${YELLOW}EXPECTED${NC} - P2P blocked\n"
-    passed=$(( passed + 1 ))
+    printf "\t   Test 14 (P2P C->A, B lost after AB0) ${RED}FAILED${NC} - P2P transaction not received\n"
+    failure=$(( failure + 1 ))
 fi
 
 cleanup_test_transactions "$timestamp14"
@@ -2394,16 +2393,16 @@ for i in {1..8}; do
     process_all_queues
 done
 
-# Verify
-countA_p2p=$(get_tx_count ${contactA} "P2P-CA-${timestamp15}")
+# Verify (with retry for timing)
+countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp15}" 1 15)
 echo -e "\t   A has ${countA_p2p} P2P test transactions from C"
 
 if [[ "$countA_p2p" -ge 1 ]]; then
     printf "\t   Test 15 (P2P C->A, B has gap) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Test 15 (P2P C->A, B has gap) ${YELLOW}EXPECTED${NC} - P2P blocked\n"
-    passed=$(( passed + 1 ))
+    printf "\t   Test 15 (P2P C->A, B has gap) ${RED}FAILED${NC} - P2P transaction not received\n"
+    failure=$(( failure + 1 ))
 fi
 
 cleanup_test_transactions "$timestamp15"
@@ -2484,13 +2483,18 @@ for i in {1..10}; do
     process_all_queues
 done
 
-# Verify
-countA_p2p=$(get_tx_count ${contactA} "P2P-CA-${timestamp17}")
-countC_p2p=$(get_tx_count ${contactC} "P2P-AC-${timestamp17}")
+# Verify both end-recipients received transactions (with retry for timing)
+countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp17}" 1 15)
+countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp17}" 1 15)
 echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
 
-printf "\t   Test 17 (simultaneous P2P, B missing AB3) ${GREEN}PASSED${NC}\n"
-passed=$(( passed + 1 ))
+if [[ "$countA_p2p" -ge 1 ]] && [[ "$countC_p2p" -ge 1 ]]; then
+    printf "\t   Test 17 (simultaneous P2P, B missing AB3) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Test 17 (simultaneous P2P, B missing AB3) ${RED}FAILED${NC} - A has ${countA_p2p}, C has ${countC_p2p}\n"
+    failure=$(( failure + 1 ))
+fi
 
 cleanup_test_transactions "$timestamp17"
 
@@ -2523,13 +2527,18 @@ for i in {1..10}; do
     process_all_queues
 done
 
-# Verify
-countA_p2p=$(get_tx_count ${contactA} "P2P-CA-${timestamp18}")
-countC_p2p=$(get_tx_count ${contactC} "P2P-AC-${timestamp18}")
+# Verify both end-recipients received transactions (with retry for timing)
+countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp18}" 1 15)
+countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp18}" 1 15)
 echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
 
-printf "\t   Test 18 (simultaneous P2P, broken chain) ${GREEN}PASSED${NC}\n"
-passed=$(( passed + 1 ))
+if [[ "$countA_p2p" -ge 1 ]] && [[ "$countC_p2p" -ge 1 ]]; then
+    printf "\t   Test 18 (simultaneous P2P, broken chain) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Test 18 (simultaneous P2P, broken chain) ${RED}FAILED${NC} - A has ${countA_p2p}, C has ${countC_p2p}\n"
+    failure=$(( failure + 1 ))
+fi
 
 cleanup_test_transactions "$timestamp18"
 
@@ -2571,14 +2580,18 @@ for i in {1..10}; do
     process_all_queues
 done
 
-# In double disaster, P2P should fail but system should remain stable
-countA_p2p=$(get_tx_count ${contactA} "P2P-CA-${timestamp19}")
-countC_p2p=$(get_tx_count ${contactC} "P2P-AC-${timestamp19}")
+# Verify both end-recipients received transactions after sync recovery (with retry for timing)
+countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp19}" 1 20)
+countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp19}" 1 20)
 echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
 
-# System stability is the key metric here
-printf "\t   Test 19 (double disaster, no chains) ${GREEN}PASSED${NC} - system stable\n"
-passed=$(( passed + 1 ))
+if [[ "$countA_p2p" -ge 1 ]] && [[ "$countC_p2p" -ge 1 ]]; then
+    printf "\t   Test 19 (double disaster, no chains) ${GREEN}PASSED${NC} - both recipients received\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Test 19 (double disaster, no chains) ${RED}FAILED${NC} - A has ${countA_p2p}, C has ${countC_p2p}\n"
+    failure=$(( failure + 1 ))
+fi
 
 cleanup_test_transactions "$timestamp19"
 
@@ -2611,13 +2624,18 @@ for i in {1..10}; do
     process_all_queues
 done
 
-# Verify
-countA_p2p=$(get_tx_count ${contactA} "P2P-CA-${timestamp20}")
-countC_p2p=$(get_tx_count ${contactC} "P2P-AC-${timestamp20}")
+# Verify both end-recipients received transactions after sync recovery (with retry for timing)
+countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp20}" 1 20)
+countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp20}" 1 20)
 echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
 
-printf "\t   Test 20 (double disaster, contacts only) ${GREEN}PASSED${NC} - system stable\n"
-passed=$(( passed + 1 ))
+if [[ "$countA_p2p" -ge 1 ]] && [[ "$countC_p2p" -ge 1 ]]; then
+    printf "\t   Test 20 (double disaster, contacts only) ${GREEN}PASSED${NC} - both recipients received\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Test 20 (double disaster, contacts only) ${RED}FAILED${NC} - A has ${countA_p2p}, C has ${countC_p2p}\n"
+    failure=$(( failure + 1 ))
+fi
 
 cleanup_test_transactions "$timestamp20"
 
