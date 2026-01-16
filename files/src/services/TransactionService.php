@@ -604,12 +604,26 @@ class TransactionService {
                                 return false;
                             }
 
-                            // All checks passed after sync - accept and process
-                            if ($echo) {
-                                echo $this->transactionPayload->buildAcceptance($request);
+                            // All checks passed after sync - process first, then accept
+                            // IMPORTANT: Storage MUST succeed before acceptance is sent
+                            // to prevent chain divergence from acceptance-before-storage bug
+                            try {
+                                $this->processTransaction($request);
+                                if ($echo) {
+                                    echo $this->transactionPayload->buildAcceptance($request);
+                                }
+                                // Return false to prevent caller from calling processTransaction again
+                                return false;
+                            } catch (Exception $e) {
+                                SecureLogger::logException($e, [
+                                    'method' => 'checkTransactionPossible',
+                                    'context' => 'sync_transaction_processing_failed'
+                                ]);
+                                if ($echo) {
+                                    echo $this->transactionPayload->buildRejection($request, 'processing_error');
+                                }
+                                return false;
                             }
-                            $this->processTransaction($request);
-                            return true;
                         }
                     }
                 } catch (Exception $e) {
@@ -719,9 +733,11 @@ class TransactionService {
                 }
                 return false;
             }
-            if($echo){
-                echo $this->transactionPayload->buildAcceptance($request);
-            }
+            // IMPORTANT: Do NOT echo acceptance here!
+            // The caller MUST call processTransaction() first and echo acceptance
+            // only AFTER successful storage. This prevents chain divergence from
+            // the acceptance-before-storage bug where sender thinks receiver accepted
+            // but receiver never stored the transaction.
             return true;
         } catch (PDOException $e) {
             // Use SecureLogger's exception logging
