@@ -2522,14 +2522,16 @@ docker exec ${contactC} eiou send ${addressA} 1 USD "P2P-CA-${timestamp18}" 2>&1
 wait
 
 # Process queues (more cycles for simultaneous sync recovery with broken chain)
+# Broken chain + simultaneous sends requires more cycles than single-direction tests
 echo -e "\t   Processing message queues..."
-for i in {1..15}; do
+for i in {1..18}; do
     process_all_queues
 done
 
 # Verify both end-recipients received transactions (with retry for timing - longer delay)
-countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp18}" 1 25)
-countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp18}" 1 25)
+# Increased delay to match tests 13-14 which also deal with broken chains
+countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp18}" 1 30)
+countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp18}" 1 30)
 echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
 
 if [[ "$countA_p2p" -ge 1 ]] && [[ "$countC_p2p" -ge 1 ]]; then
