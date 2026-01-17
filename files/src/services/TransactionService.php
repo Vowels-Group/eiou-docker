@@ -1340,10 +1340,44 @@ class TransactionService {
                                     );
 
                                     output(outputSyncP2pInlineRetrySuccess(), 'SILENT');
-                                    // Revert status to pending for retry
-                                    $this->transactionRepository->updateStatus($memo, Constants::STATUS_PENDING);
-                                    $this->p2pRepository->updateStatus($memo, 'found');
-                                    return true; // Exit to allow retry on next processing cycle
+
+                                    // IMMEDIATE RETRY: Send the re-signed transaction now instead of waiting
+                                    // This prevents P2P expiration from cancelling the transaction between cycles
+                                    output('Inline retry: Immediately resending transaction with updated previous_txid...', 'SILENT');
+
+                                    // Re-build payload with updated signature from database
+                                    $retryMessageData = $this->transactionRepository->getByTxid($txid);
+                                    $retryMessage = is_array($retryMessageData) && isset($retryMessageData[0])
+                                        ? $retryMessageData[0]
+                                        : $retryMessageData;
+
+                                    if ($retryMessage) {
+                                        $retryPayload = $this->transactionPayload->buildFromDatabase($retryMessage);
+                                        $retrySendResult = $this->sendTransactionMessage($retryMessage['receiver_address'], $retryPayload, $txid, $isRelay);
+                                        $retryResponse = $retrySendResult['response'];
+
+                                        if ($retryResponse && $retryResponse['status'] === Constants::STATUS_ACCEPTED) {
+                                            output('Inline retry: Transaction accepted!', 'SILENT');
+                                            $this->transactionRepository->updateStatus($txid, Constants::STATUS_ACCEPTED, true);
+
+                                            // Store signature data for future sync verification
+                                            $retrySigData = $retrySendResult['signing_data'] ?? null;
+                                            if ($retrySigData && isset($retrySigData['signature']) && isset($retrySigData['nonce'])) {
+                                                $this->transactionRepository->updateSignatureData(
+                                                    $txid,
+                                                    $retrySigData['signature'],
+                                                    $retrySigData['nonce']
+                                                );
+                                            }
+                                            return true; // Transaction accepted after inline retry
+                                        } elseif ($retryResponse && $retryResponse['status'] === Constants::STATUS_REJECTED) {
+                                            output('Inline retry: Still rejected after update, reason: ' . ($retryResponse['reason'] ?? 'unknown'), 'SILENT');
+                                            // Fall through to sync/hold flow below
+                                        } else {
+                                            output('Inline retry: Send failed, falling back to sync flow', 'SILENT');
+                                            // Fall through to sync/hold flow below
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1382,14 +1416,75 @@ class TransactionService {
                         // Sync balances after transaction chain sync
                         $syncService->syncContactBalance($message['receiver_public_key']);
 
-                        output('Balances synced. Will retry transaction...', 'SILENT');
-                        // Revert status to pending for retry
-                        $this->transactionRepository->updateStatus($memo, Constants::STATUS_PENDING);
-                        $this->p2pRepository->updateStatus($memo, 'found');
-                        return true; // Transaction was processed (will retry after sync)
+                        // CRITICAL: After sync, update previous_txid to correct value
+                        // The sync brought in missing transactions, so getPreviousTxid now returns correct value
+                        $correctPrevTxid = $this->transactionRepository->getPreviousTxid(
+                            $this->currentUser->getPublicKey(),
+                            $message['receiver_public_key']
+                        );
+
+                        if ($correctPrevTxid !== null) {
+                            // Update the transaction's previous_txid
+                            $this->transactionRepository->updatePreviousTxid($txid, $correctPrevTxid);
+
+                            // Re-fetch and re-sign the transaction with updated previous_txid
+                            $updatedMessageData = $this->transactionRepository->getByTxid($txid);
+                            $updatedMessage = is_array($updatedMessageData) && isset($updatedMessageData[0])
+                                ? $updatedMessageData[0]
+                                : $updatedMessageData;
+
+                            if ($updatedMessage) {
+                                // Re-build payload with correct previous_txid
+                                $newPayload = $this->transactionPayload->buildFromDatabase($updatedMessage);
+
+                                // Re-sign the transaction
+                                $transportUtility = $this->utilityContainer->getTransportUtility();
+                                $signResult = $transportUtility->signWithCapture($newPayload);
+
+                                if ($signResult && isset($signResult['signature']) && isset($signResult['nonce'])) {
+                                    // Update signature in database
+                                    $this->transactionRepository->updateSignatureData(
+                                        $txid,
+                                        $signResult['signature'],
+                                        $signResult['nonce']
+                                    );
+                                    output('Transaction re-signed with correct previous_txid after sync', 'SILENT');
+
+                                    // IMMEDIATE RETRY after sync: Send the re-signed transaction now
+                                    // This prevents P2P expiration from cancelling the transaction between cycles
+                                    output('Sync retry: Immediately resending transaction after sync...', 'SILENT');
+
+                                    $syncRetryPayload = $this->transactionPayload->buildFromDatabase($updatedMessage);
+                                    $syncRetrySendResult = $this->sendTransactionMessage($updatedMessage['receiver_address'], $syncRetryPayload, $txid, $isRelay);
+                                    $syncRetryResponse = $syncRetrySendResult['response'];
+
+                                    if ($syncRetryResponse && $syncRetryResponse['status'] === Constants::STATUS_ACCEPTED) {
+                                        output('Sync retry: Transaction accepted!', 'SILENT');
+                                        $this->transactionRepository->updateStatus($txid, Constants::STATUS_ACCEPTED, true);
+
+                                        // Store signature data for future sync verification
+                                        $syncRetrySigData = $syncRetrySendResult['signing_data'] ?? null;
+                                        if ($syncRetrySigData && isset($syncRetrySigData['signature']) && isset($syncRetrySigData['nonce'])) {
+                                            $this->transactionRepository->updateSignatureData(
+                                                $txid,
+                                                $syncRetrySigData['signature'],
+                                                $syncRetrySigData['nonce']
+                                            );
+                                        }
+                                        return true; // Transaction accepted after sync retry
+                                    } else {
+                                        output('Sync retry: Send failed or rejected, marking transaction accordingly', 'SILENT');
+                                        // Fall through to cancellation below
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         output('Sync failed or no transactions to sync', 'SILENT');
                     }
+
+                    // If we got here after sync, it means the immediate retry didn't succeed
+                    // Fall through to cancellation
                 }
 
                 $this->p2pRepository->updateStatus($memo, Constants::STATUS_CANCELLED);
