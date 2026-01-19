@@ -116,8 +116,8 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
      * @return int Number of contacts processed
      */
     protected function processMessages(): int {
-        // Check if feature is enabled
-        if (!Constants::CONTACT_STATUS_ENABLED) {
+        // Check if feature is enabled (supports env var override for testing)
+        if (!Constants::isContactStatusEnabled()) {
             // Reset all contacts to unknown status and exit processor
             $this->resetAllContactsToUnknown();
             $this->shouldStop = true;

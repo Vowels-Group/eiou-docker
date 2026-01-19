@@ -17,7 +17,7 @@ require_once(__DIR__ . "/Functions.php");
 require_once __DIR__ . '/SecurityInit.php';
 
 // Check if contact status feature is enabled before starting
-if (!Constants::CONTACT_STATUS_ENABLED) {
+if (!Constants::isContactStatusEnabled()) {
     echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] Contact status polling is disabled in constants, exiting.\n";
     exit(0);
 }

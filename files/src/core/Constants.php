@@ -84,7 +84,23 @@ class Constants {
     // Contact status processor configuration
     // Set CONTACT_STATUS_ENABLED to false to disable contact pinging entirely
     // When disabled, all contacts will show 'unknown' status
+    // Can be overridden by EIOU_CONTACT_STATUS_ENABLED environment variable
     const CONTACT_STATUS_ENABLED = true;
+
+    /**
+     * Check if contact status feature is enabled
+     * Supports runtime override via EIOU_CONTACT_STATUS_ENABLED env variable
+     * Used during testing to disable pings that interfere with sync tests
+     *
+     * @return bool Whether contact status polling is enabled
+     */
+    public static function isContactStatusEnabled(): bool {
+        $envValue = getenv('EIOU_CONTACT_STATUS_ENABLED');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return self::CONTACT_STATUS_ENABLED;
+    }
     const CONTACT_STATUS_POLLING_INTERVAL_MS = 300000;  // 5 minutes between ping cycles
     const CONTACT_STATUS_MIN_INTERVAL_MS = 60000;       // Minimum 1 minute
     const CONTACT_STATUS_MAX_INTERVAL_MS = 600000;      // Maximum 10 minutes
