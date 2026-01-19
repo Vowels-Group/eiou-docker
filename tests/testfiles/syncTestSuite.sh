@@ -2645,6 +2645,137 @@ fi  # End P2P_TESTS_AVAILABLE check
 
 fi  # End 3+ containers check for Section 10
 
+##################### SECTION 11: Recipient Signature Sync Validation #####################
+# Tests for recipient signature validation during sync (Issue #467)
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 11: Recipient Signature Sync Validation"
+echo "========================================================================"
+
+echo -e "\n[11.1 Recipient Signature Verification Method]"
+
+# Test: Verify verifyRecipientSignature method exists in SyncService
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing verifyRecipientSignature method exists"
+
+recipSigMethodCheck=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$syncService = \$app->services->getSyncService();
+
+    // Check private method exists using reflection
+    \$reflection = new ReflectionClass(\$syncService);
+    try {
+        \$method = \$reflection->getMethod('verifyRecipientSignature');
+        echo 'METHOD_EXISTS';
+    } catch (ReflectionException \$e) {
+        echo 'METHOD_MISSING';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$recipSigMethodCheck" == "METHOD_EXISTS" ]]; then
+    printf "\t   verifyRecipientSignature method ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   verifyRecipientSignature method ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[11.2 Recipient Signature in Sync Response]"
+
+# Test: Verify recipient_signature is included in sync response data structure
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing recipient_signature field in sync response"
+
+syncResponseFieldCheck=$(docker exec ${sender} php -r "
+    // Check that handleTransactionSyncRequest includes recipient_signature
+    \$syncServiceFile = file_get_contents('/etc/eiou/src/services/SyncService.php');
+
+    // Check for recipient_signature in sync response data construction
+    if (strpos(\$syncServiceFile, \"'recipient_signature' => \\\$tx['recipient_signature']\") !== false) {
+        echo 'FIELD_INCLUDED';
+    } else {
+        echo 'FIELD_MISSING';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$syncResponseFieldCheck" == "FIELD_INCLUDED" ]]; then
+    printf "\t   recipient_signature in sync response ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   recipient_signature in sync response ${RED}FAILED${NC} (%s)\n" "${syncResponseFieldCheck}"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[11.3 Recipient Signature Skipped for Non-Accepted Transactions]"
+
+# Test: Verify verifyRecipientSignature returns true for cancelled/rejected transactions
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing recipient signature validation skips cancelled transactions"
+
+skipCancelledCheck=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$syncService = \$app->services->getSyncService();
+
+    // Use reflection to access private method
+    \$reflection = new ReflectionClass(\$syncService);
+    \$method = \$reflection->getMethod('verifyRecipientSignature');
+    \$method->setAccessible(true);
+
+    // Test with cancelled transaction (should return true - validation not required)
+    \$cancelledTx = [
+        'txid' => 'test_cancelled_' . time(),
+        'status' => 'cancelled',
+        'recipient_signature' => null  // No signature for cancelled
+    ];
+
+    \$result = \$method->invoke(\$syncService, \$cancelledTx);
+    echo \$result ? 'CORRECTLY_SKIPPED' : 'INCORRECTLY_FAILED';
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$skipCancelledCheck" == "CORRECTLY_SKIPPED" ]]; then
+    printf "\t   Cancelled transaction skip ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Cancelled transaction skip ${RED}FAILED${NC} (%s)\n" "${skipCancelledCheck}"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: Verify verifyRecipientSignature returns true for rejected transactions
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing recipient signature validation skips rejected transactions"
+
+skipRejectedCheck=$(docker exec ${sender} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$syncService = \$app->services->getSyncService();
+
+    // Use reflection to access private method
+    \$reflection = new ReflectionClass(\$syncService);
+    \$method = \$reflection->getMethod('verifyRecipientSignature');
+    \$method->setAccessible(true);
+
+    // Test with rejected transaction (should return true - validation not required)
+    \$rejectedTx = [
+        'txid' => 'test_rejected_' . time(),
+        'status' => 'rejected',
+        'recipient_signature' => null  // No signature for rejected
+    ];
+
+    \$result = \$method->invoke(\$syncService, \$rejectedTx);
+    echo \$result ? 'CORRECTLY_SKIPPED' : 'INCORRECTLY_FAILED';
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$skipRejectedCheck" == "CORRECTLY_SKIPPED" ]]; then
+    printf "\t   Rejected transaction skip ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Rejected transaction skip ${RED}FAILED${NC} (%s)\n" "${skipRejectedCheck}"
+    failure=$(( failure + 1 ))
+fi
+
 ########################################################################
 
 succesrate "${totaltests}" "${passed}" "${failure}" "'sync test suite'"

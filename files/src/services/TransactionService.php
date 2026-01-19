@@ -711,6 +711,10 @@ class TransactionService {
                             // IMPORTANT: Storage MUST succeed before acceptance is sent
                             // to prevent chain divergence from acceptance-before-storage bug
                             try {
+                                // Generate recipient signature before processing so it's stored and can be returned
+                                if (!isset($request['recipientSignature'])) {
+                                    $request['recipientSignature'] = $this->transactionPayload->generateRecipientSignature($request);
+                                }
                                 $this->processTransaction($request);
                                 if ($echo) {
                                     echo $this->transactionPayload->buildAcceptance($request);
@@ -840,6 +844,10 @@ class TransactionService {
             // IMPORTANT: Storage MUST succeed before acceptance is sent
             // to prevent chain divergence from acceptance-before-storage bug
             try {
+                // Generate recipient signature before processing so it's stored and can be returned
+                if (!isset($request['recipientSignature'])) {
+                    $request['recipientSignature'] = $this->transactionPayload->generateRecipientSignature($request);
+                }
                 $this->processTransaction($request);
                 if ($echo) {
                     echo $this->transactionPayload->buildAcceptance($request);
@@ -1076,6 +1084,13 @@ class TransactionService {
                 // If direct transaction - receiver knows both sender and recipient
                 // end_recipient is myself (receiver), initial_sender is the sender
                 $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+
+                // Generate recipient signature if not already present
+                // This signature proves the receiver accepted the transaction
+                if (!isset($request['recipientSignature'])) {
+                    $request['recipientSignature'] = $this->transactionPayload->generateRecipientSignature($request);
+                }
+
                 $insertTransactionResponse = $this->transactionRepository->insertTransaction($request,'received');
 
                 // Update tracking fields after insert (these are NOT part of signed payload)
@@ -1099,6 +1114,13 @@ class TransactionService {
                     // If Transaction is for end-recipient
                     // end_recipient is myself, initial_sender will be updated via inquiry message later
                     $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+
+                    // Generate recipient signature if not already present
+                    // This signature proves the receiver accepted the transaction
+                    if (!isset($request['recipientSignature'])) {
+                        $request['recipientSignature'] = $this->transactionPayload->generateRecipientSignature($request);
+                    }
+
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'received'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
 
@@ -1195,6 +1217,14 @@ class TransactionService {
                                 $txid,
                                 $signingData['signature'],
                                 $signingData['nonce']
+                            );
+                        }
+
+                        // Store recipient signature for future sync verification
+                        if (isset($response['recipientSignature'])) {
+                            $this->transactionRepository->updateRecipientSignature(
+                                $txid,
+                                $response['recipientSignature']
                             );
                         }
                     } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
@@ -1414,6 +1444,14 @@ class TransactionService {
                         $signingData['nonce']
                     );
                 }
+
+                // Store recipient signature for future sync verification
+                if (isset($response['recipientSignature'])) {
+                    $this->transactionRepository->updateRecipientSignature(
+                        $txid,
+                        $response['recipientSignature']
+                    );
+                }
             } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
                 // Check if rejection is due to invalid_previous_txid - attempt inline retry first
                 if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
@@ -1478,6 +1516,14 @@ class TransactionService {
                                                     $txid,
                                                     $retrySigData['signature'],
                                                     $retrySigData['nonce']
+                                                );
+                                            }
+
+                                            // Store recipient signature for future sync verification
+                                            if (isset($retryResponse['recipientSignature'])) {
+                                                $this->transactionRepository->updateRecipientSignature(
+                                                    $txid,
+                                                    $retryResponse['recipientSignature']
                                                 );
                                             }
                                             return true; // Transaction accepted after inline retry
@@ -1580,6 +1626,15 @@ class TransactionService {
                                                 $txid,
                                                 $syncRetrySigData['signature'],
                                                 $syncRetrySigData['nonce']
+                                            );
+
+                                        }
+
+                                        // Store recipient signature for future sync verification
+                                        if (isset($syncRetryResponse['recipientSignature'])) {
+                                            $this->transactionRepository->updateRecipientSignature(
+                                                $txid,
+                                                $syncRetryResponse['recipientSignature']
                                             );
                                         }
                                         return true; // Transaction accepted after sync retry

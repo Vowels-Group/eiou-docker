@@ -160,13 +160,21 @@ class TransactionPayload extends BasePayload
     /**
      * Build a transaction received payload when request was accepted successfully
      *
+     * The recipient signs the same message payload that was received to authenticate
+     * their acceptance of the transaction. This signature is sent back to the sender
+     * who stores it as recipient_signature for future sync verification.
+     *
      * @param array $request The transaction request data
-     * @return string JSON encoded received payload
+     * @return string JSON encoded received payload with recipient signature
      */
     public function buildAcceptance(array $request): string
     {
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress'] ?? '');
         $hashInfo = $this->resolveHashInfo($request);
+
+        // Use existing recipient signature if provided, otherwise generate one
+        // This allows the signature to be pre-generated and stored before acceptance is sent
+        $recipientSignature = $request['recipientSignature'] ?? $this->generateRecipientSignature($request);
 
         return json_encode([
             'status' => Constants::STATUS_ACCEPTED,
@@ -175,7 +183,62 @@ class TransactionPayload extends BasePayload
             'message' => "{$hashInfo['type']} {$hashInfo['value']} for transaction received by {$userAddress}",
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
+            'recipientSignature' => $recipientSignature,
         ]);
+    }
+
+    /**
+     * Generate recipient signature for a received transaction
+     *
+     * The recipient signs the core transaction data (same fields used by sender)
+     * to authenticate their acceptance. This signature can be verified during
+     * sync to prove the recipient actually accepted the transaction.
+     *
+     * @param array $request The transaction request data
+     * @return string|null Base64-encoded signature, or null if signing fails
+     */
+    public function generateRecipientSignature(array $request): ?string
+    {
+        // Reconstruct the message content that was signed by the sender
+        // This ensures consistency in what both parties sign
+        $messageContent = [
+            'type' => 'send',
+        ];
+
+        // Include 'time' field in same position as sender signature
+        if (isset($request['time']) && $request['time'] !== null) {
+            $messageContent['time'] = (int)$request['time'];
+        } else {
+            $messageContent['time'] = null;
+        }
+
+        $messageContent['receiverAddress'] = $request['receiverAddress'] ?? null;
+        $messageContent['receiverPublicKey'] = $request['receiverPublicKey'] ?? null;
+        $messageContent['amount'] = (int)($request['amount'] ?? 0);
+        $messageContent['currency'] = $request['currency'] ?? 'USD';
+        $messageContent['txid'] = $request['txid'] ?? null;
+        $messageContent['previousTxid'] = $request['previousTxid'] ?? null;
+        $messageContent['memo'] = $request['memo'] ?? 'standard';
+
+        // Use the same nonce that was used by the sender
+        $messageContent['nonce'] = (int)($request['nonce'] ?? $request['signatureNonce'] ?? time());
+
+        $message = json_encode($messageContent);
+
+        // Sign with recipient's private key
+        $privateKey = $this->currentUser->getPrivateKey();
+        if (empty($privateKey)) {
+            return null;
+        }
+
+        $signature = null;
+        $signed = openssl_sign($message, $signature, openssl_pkey_get_private($privateKey));
+
+        if (!$signed || $signature === null) {
+            return null;
+        }
+
+        return base64_encode($signature);
     }
 
     /**

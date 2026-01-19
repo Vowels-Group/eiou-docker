@@ -776,6 +776,109 @@ else
     failure=$(( failure + 1 ))
 fi
 
+##################### SECTION 7: Recipient Signature #####################
+# Tests for recipient signature functionality (Issue #467)
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 7: Recipient Signature"
+echo "========================================================================"
+
+echo -e "\n[7.1 Recipient Signature Database Schema]"
+
+# Test: Verify recipient_signature column exists in transactions table
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing recipient_signature column exists"
+
+recipientSigColumnCheck=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$pdo = Application::getInstance()->services->getPdo();
+    \$result = \$pdo->query(\"DESCRIBE transactions\");
+    \$columns = \$result->fetchAll(PDO::FETCH_COLUMN);
+
+    if (in_array('recipient_signature', \$columns)) {
+        echo 'COLUMN_EXISTS';
+    } else {
+        echo 'COLUMN_MISSING';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$recipientSigColumnCheck" == "COLUMN_EXISTS" ]]; then
+    printf "\t   recipient_signature column ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   recipient_signature column ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[7.2 Recipient Signature Repository Methods]"
+
+# Test: Verify updateRecipientSignature method exists
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing updateRecipientSignature method"
+
+updateRecipSigMethod=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$repo = \$app->services->getTransactionRepository();
+    echo method_exists(\$repo, 'updateRecipientSignature') ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$updateRecipSigMethod" == "EXISTS" ]]; then
+    printf "\t   updateRecipientSignature method ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   updateRecipientSignature method ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+echo -e "\n[7.3 TransactionPayload Recipient Signature]"
+
+# Test: Verify buildAcceptance includes recipientSignature
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing buildAcceptance includes recipientSignature"
+
+acceptancePayloadCheck=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    require_once('/etc/eiou/src/schemas/payloads/TransactionPayload.php');
+
+    \$app = Application::getInstance();
+    \$user = \$app->services->getCurrentUser();
+    \$utilContainer = \$app->services->getUtilityContainer();
+
+    \$payload = new TransactionPayload(\$user, \$utilContainer);
+
+    // Create mock request data
+    \$request = [
+        'txid' => 'test_txid_' . time(),
+        'memo' => 'standard',
+        'senderAddress' => 'https://test.example.com',
+        'receiverAddress' => 'https://receiver.example.com',
+        'receiverPublicKey' => \$user->getPublicKey(),
+        'amount' => 100,
+        'currency' => 'USD',
+        'time' => time(),
+        'nonce' => time()
+    ];
+
+    \$response = \$payload->buildAcceptance(\$request);
+    \$decoded = json_decode(\$response, true);
+
+    if (isset(\$decoded['recipientSignature'])) {
+        echo 'RECIPIENT_SIGNATURE_INCLUDED';
+    } else {
+        echo 'RECIPIENT_SIGNATURE_MISSING';
+    }
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$acceptancePayloadCheck" == "RECIPIENT_SIGNATURE_INCLUDED" ]]; then
+    printf "\t   buildAcceptance recipientSignature ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   buildAcceptance recipientSignature ${RED}FAILED${NC} (%s)\n" "${acceptancePayloadCheck}"
+    failure=$(( failure + 1 ))
+fi
+
 ################################################################################
 
 succesrate "${totaltests}" "${passed}" "${failure}" "'transaction test suite'"
