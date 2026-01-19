@@ -38,10 +38,10 @@ class Constants {
     }
 
     // Development/Production
-    // NOTE: Set APP_ENV to 'development' and APP_DEBUG to true only for local development
-    const APP_ENV = 'production';
+    // NOTE: Set APP_ENV to 'production' and APP_DEBUG to false for production deployments
+    const APP_ENV = 'development';
     const APP_VERSION = '0.0.1';
-    const APP_DEBUG = false;
+    const APP_DEBUG = true;
 
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.

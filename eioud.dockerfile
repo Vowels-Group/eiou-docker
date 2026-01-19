@@ -5,9 +5,6 @@
 #   - Apache: runs as www-data
 #   - MariaDB: runs as mysql
 #   - Tor: runs as debian-tor
-# A non-root USER directive is not trivially possible without architectural changes
-# such as using supervisord with individual service users. For production deployments,
-# consider using Kubernetes with separate pods per service for better security isolation.
 
 FROM debian:12-slim
 
