@@ -577,6 +577,25 @@ class SyncService {
                     continue;
                 }
 
+                // Verify recipient signature for accepted/completed transactions
+                if (!$this->verifyRecipientSignature($tx)) {
+                    SecureLogger::warning("Sync: Recipient signature verification failed - skipping", [
+                        'txid' => $tx['txid'] ?? 'unknown',
+                        'status' => $tx['status'] ?? 'unknown',
+                        'has_recipient_signature' => !empty($tx['recipient_signature'])
+                    ]);
+
+                    if (!isset($result['recipient_signature_failures'])) {
+                        $result['recipient_signature_failures'] = [];
+                    }
+                    $result['recipient_signature_failures'][] = [
+                        'txid' => $tx['txid'] ?? 'unknown',
+                        'status' => $tx['status'] ?? 'unknown'
+                    ];
+
+                    continue;
+                }
+
                 // Insert the missing transaction (only reached if signature is valid)
                 // IMPORTANT: Always insert with ORIGINAL previous_txid to preserve signature validity.
                 // When there's a chain conflict (two transactions with same previous_txid),
@@ -597,6 +616,7 @@ class SyncService {
                     // Include signature data for future verification
                     'signature' => $tx['sender_signature'] ?? null,
                     'nonce' => $tx['signature_nonce'] ?? null,
+                    'recipientSignature' => $tx['recipient_signature'] ?? null,
                     'time' => $tx['time'] ?? null
                 ];
 
@@ -950,7 +970,8 @@ class SyncService {
                     'status' => $tx['status'],
                     // Include signature data for verification
                     'sender_signature' => $tx['sender_signature'] ?? null,
-                    'signature_nonce' => $tx['signature_nonce'] ?? null
+                    'signature_nonce' => $tx['signature_nonce'] ?? null,
+                    'recipient_signature' => $tx['recipient_signature'] ?? null
                 ];
 
                 // Privacy: Only include description for contact or standard (direct) transactions
@@ -1092,6 +1113,84 @@ class SyncService {
      */
     public function verifyTransactionSignaturePublic(array $tx): bool {
         return $this->verifyTransactionSignature($tx);
+    }
+
+    /**
+     * Verify recipient signature for a transaction
+     *
+     * Verifies that the transaction was acknowledged and signed by the recipient.
+     * This signature is only expected for transactions with status 'accepted' or 'completed'.
+     * Transactions that were cancelled, rejected, or expired will not have recipient signatures.
+     *
+     * The recipient signature is created by the receiver signing the same message content
+     * that the sender signed (transaction fields + nonce).
+     *
+     * @param array $tx Transaction data with recipient_signature
+     * @return bool True if signature is valid or not required, false if required but invalid
+     */
+    private function verifyRecipientSignature(array $tx): bool {
+        $status = $tx['status'] ?? '';
+
+        // Recipient signature only required for accepted/completed transactions
+        // Cancelled, rejected, expired, pending, sending, sent transactions don't have recipient signatures
+        if (!in_array($status, [Constants::STATUS_ACCEPTED, Constants::STATUS_COMPLETED])) {
+            return true; // Not required for this status
+        }
+
+        // For accepted/completed, recipient_signature is required
+        if (empty($tx['recipient_signature'])) {
+            SecureLogger::debug("Transaction missing recipient signature", [
+                'txid' => $tx['txid'] ?? 'unknown',
+                'status' => $status
+            ]);
+            // Return true for now to allow gradual migration - existing transactions won't have this
+            // TODO: After migration period, change to return false
+            return true;
+        }
+
+        // Reconstruct the message that was signed (same as sender signature)
+        $messageContent = $this->reconstructSignedMessage($tx);
+        if ($messageContent === null) {
+            SecureLogger::debug("Could not reconstruct message for recipient signature verification", [
+                'txid' => $tx['txid'] ?? 'unknown'
+            ]);
+            return false;
+        }
+
+        // Get receiver's public key
+        $receiverPublicKey = $tx['receiver_public_key'] ?? null;
+        if (empty($receiverPublicKey)) {
+            SecureLogger::debug("Missing receiver public key for recipient signature verification", [
+                'txid' => $tx['txid'] ?? 'unknown'
+            ]);
+            return false;
+        }
+
+        // Get the public key resource
+        $publicKeyResource = openssl_pkey_get_public($receiverPublicKey);
+        if ($publicKeyResource === false) {
+            SecureLogger::warning("Invalid receiver public key for recipient signature verification", [
+                'txid' => $tx['txid'] ?? 'unknown'
+            ]);
+            return false;
+        }
+
+        // Verify the signature
+        $verified = openssl_verify(
+            $messageContent,
+            base64_decode($tx['recipient_signature']),
+            $publicKeyResource
+        );
+
+        if ($verified !== 1) {
+            SecureLogger::warning("Recipient signature verification failed", [
+                'txid' => $tx['txid'] ?? 'unknown',
+                'status' => $status,
+                'verify_result' => $verified
+            ]);
+        }
+
+        return $verified === 1;
     }
 
     /**
@@ -1578,6 +1677,15 @@ class SyncService {
                     continue;
                 }
 
+                // Verify recipient signature for accepted/completed transactions
+                if (!$this->verifyRecipientSignature($tx)) {
+                    SecureLogger::warning("Bidirectional sync: Recipient signature verification failed", [
+                        'txid' => $tx['txid'] ?? 'unknown',
+                        'status' => $tx['status'] ?? 'unknown'
+                    ]);
+                    continue;
+                }
+
                 // Determine transaction type
                 $txType = ($tx['sender_public_key'] ?? '') === $this->currentUser->getPublicKey()
                     ? Constants::TX_TYPE_SENT
@@ -1663,6 +1771,7 @@ class SyncService {
                             'status' => $txData['status'],
                             'sender_signature' => $txData['sender_signature'] ?? null,
                             'signature_nonce' => $txData['signature_nonce'] ?? null,
+                            'recipient_signature' => $txData['recipient_signature'] ?? null,
                             'description' => ($txData['memo'] === 'contact' || $txData['memo'] === 'standard')
                                 ? ($txData['description'] ?? null)
                                 : null

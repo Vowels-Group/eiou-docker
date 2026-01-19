@@ -1183,6 +1183,7 @@ class TransactionRepository extends AbstractRepository {
                 'txid' => $request['txid'],
                 'previous_txid' => $previousTxid,
                 'sender_signature' => $request['signature'] ?? null, // upon initial inserting a standard transaction in database of original sender it is null
+                'recipient_signature' => $request['recipientSignature'] ?? null, // recipient's signature upon accepting
                 'signature_nonce' => $request['nonce'] ?? $request['signatureNonce'] ?? null, // nonce from signed message (for verification)
                 'time' => $request['time'] ?? null, // microtime used for P2P/RP2P hash or transaction creation
                 'memo' => $request['memo'],
@@ -2214,6 +2215,24 @@ class TransactionRepository extends AbstractRepository {
         $affectedRows = $this->update([
             'sender_signature' => $signature,
             'signature_nonce' => $nonce
+        ], 'txid', $txid);
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Update recipient signature for a transaction
+     *
+     * Stores the recipient's signature that was received in the acceptance response.
+     * This signature authenticates that the recipient actually accepted the transaction
+     * and can be verified during sync operations.
+     *
+     * @param string $txid Transaction ID
+     * @param string $signature Base64-encoded recipient signature
+     * @return bool Success status
+     */
+    public function updateRecipientSignature(string $txid, string $signature): bool {
+        $affectedRows = $this->update([
+            'recipient_signature' => $signature
         ], 'txid', $txid);
         return $affectedRows >= 0;
     }

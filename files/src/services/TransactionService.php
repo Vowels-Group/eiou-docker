@@ -1197,6 +1197,14 @@ class TransactionService {
                                 $signingData['nonce']
                             );
                         }
+
+                        // Store recipient signature for future sync verification
+                        if (isset($response['recipientSignature'])) {
+                            $this->transactionRepository->updateRecipientSignature(
+                                $txid,
+                                $response['recipientSignature']
+                            );
+                        }
                     } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
                         // Check if rejection is due to invalid_previous_txid - attempt inline retry first
                         if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
@@ -1414,6 +1422,14 @@ class TransactionService {
                         $signingData['nonce']
                     );
                 }
+
+                // Store recipient signature for future sync verification
+                if (isset($response['recipientSignature'])) {
+                    $this->transactionRepository->updateRecipientSignature(
+                        $txid,
+                        $response['recipientSignature']
+                    );
+                }
             } elseif($response && $response['status'] === Constants::STATUS_REJECTED){
                 // Check if rejection is due to invalid_previous_txid - attempt inline retry first
                 if (isset($response['reason']) && $response['reason'] === 'invalid_previous_txid') {
@@ -1478,6 +1494,14 @@ class TransactionService {
                                                     $txid,
                                                     $retrySigData['signature'],
                                                     $retrySigData['nonce']
+                                                );
+                                            }
+
+                                            // Store recipient signature for future sync verification
+                                            if (isset($retryResponse['recipientSignature'])) {
+                                                $this->transactionRepository->updateRecipientSignature(
+                                                    $txid,
+                                                    $retryResponse['recipientSignature']
                                                 );
                                             }
                                             return true; // Transaction accepted after inline retry
@@ -1580,6 +1604,15 @@ class TransactionService {
                                                 $txid,
                                                 $syncRetrySigData['signature'],
                                                 $syncRetrySigData['nonce']
+                                            );
+
+                                        }
+
+                                        // Store recipient signature for future sync verification
+                                        if (isset($syncRetryResponse['recipientSignature'])) {
+                                            $this->transactionRepository->updateRecipientSignature(
+                                                $txid,
+                                                $syncRetryResponse['recipientSignature']
                                             );
                                         }
                                         return true; // Transaction accepted after sync retry
