@@ -199,13 +199,14 @@ class ContactStatusService {
      * @return array Result with status, online_status, chain_valid, and message
      */
     public function pingContact(string $identifier): array {
-        // Rate limit manual pings: 3 per minute, block for 60 seconds if exceeded
+        // Rate limit manual pings: 3 per 5 minutes, block for 300 seconds if exceeded
+        // Aligns with the automatic ping processor's minimum interval of 5 minutes
         $rateLimiter = Application::getInstance()->services->getRateLimiterService();
         $userIdentifier = $this->currentUser->getPublicKeyHash() ?? 'anonymous';
-        $rateCheck = $rateLimiter->checkLimit($userIdentifier, 'manual_ping', 3, 60, 60);
+        $rateCheck = $rateLimiter->checkLimit($userIdentifier, 'manual_ping', 3, 300, 300);
 
         if (!$rateCheck['allowed']) {
-            $retryAfter = $rateCheck['retry_after'] ?? 60;
+            $retryAfter = $rateCheck['retry_after'] ?? 300;
             return [
                 'success' => false,
                 'error' => 'rate_limited',

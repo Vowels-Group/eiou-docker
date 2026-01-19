@@ -870,7 +870,7 @@ fi
 ############################ TEST 4.4: RATE LIMITING TEST ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n[4.4 Test manual ping rate limiting (3 per minute)]"
+echo -e "\n[4.4 Test manual ping rate limiting (3 per 5 minutes)]"
 
 # Disable test mode temporarily to test rate limiting
 # Note: In test mode, rate limiting is bypassed, so we verify the rate limiter is called
