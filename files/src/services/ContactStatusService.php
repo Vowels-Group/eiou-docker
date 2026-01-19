@@ -235,8 +235,8 @@ class ContactStatusService {
             ];
         }
 
-        // Get contact address
-        $contactAddress = $contact['http'] ?? $contact['tor'] ?? null;
+        // Get contact address (prefer Tor over HTTP for privacy)
+        $contactAddress = $contact['tor'] ?? $contact['http'] ?? null;
 
         if (!$contactAddress) {
             return [

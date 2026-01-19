@@ -150,7 +150,8 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
      * @return bool True if ping was processed
      */
     private function pingContact(array $contact): bool {
-        $contactAddress = $contact['http'] ?? $contact['tor'] ?? null;
+        // Prefer Tor over HTTP for privacy
+        $contactAddress = $contact['tor'] ?? $contact['http'] ?? null;
 
         if (!$contactAddress) {
             SecureLogger::warning("Contact has no address for ping", [
