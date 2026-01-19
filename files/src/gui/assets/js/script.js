@@ -1050,6 +1050,16 @@ function openContactModal(contact, openTab) {
     var resultMsg = document.getElementById('ping_result_message');
     if (resultMsg) resultMsg.textContent = '';
 
+    // Show/hide ping button based on contact status (only show for accepted contacts)
+    var pingBtn = document.getElementById('ping_contact_btn');
+    if (pingBtn) {
+        if (contact.status === 'accepted') {
+            pingBtn.style.display = 'inline-block';
+        } else {
+            pingBtn.style.display = 'none';
+        }
+    }
+
     // Show/hide block/unblock buttons based on status
     if (contact.status === 'blocked') {
         document.getElementById('blockForm').style.display = 'none';
@@ -1107,7 +1117,7 @@ function closeContactModal() {
 // Track current contact address for ping
 var currentContactAddress = null;
 
-// Ping contact to check online status
+// Ping contact to check online status (Tor Browser compatible)
 function pingContact() {
     var btn = document.getElementById('ping_contact_btn');
     var icon = document.getElementById('ping_icon');
@@ -1117,35 +1127,65 @@ function pingContact() {
     var chainStatusEl = document.getElementById('modal_chain_status');
 
     if (!currentContactAddress) {
-        resultMsg.textContent = 'No contact address';
-        resultMsg.style.color = '#dc3545';
+        if (resultMsg) {
+            resultMsg.textContent = 'No contact address';
+            resultMsg.style.color = '#dc3545';
+        }
         return;
     }
 
     // Disable button and show loading state
-    btn.disabled = true;
-    icon.className = 'fas fa-spinner fa-spin';
-    btnText.textContent = 'Checking...';
-    resultMsg.textContent = '';
+    if (btn) btn.disabled = true;
+    if (icon) icon.className = 'fas fa-spinner fa-spin';
+    if (btnText) btnText.textContent = 'Checking...';
+    if (resultMsg) resultMsg.textContent = '';
 
-    // Get CSRF token
+    // Get CSRF token (try multiple selectors for compatibility)
     var csrfToken = document.querySelector('input[name="csrf_token"]');
     if (!csrfToken) {
-        resultMsg.textContent = 'CSRF token not found';
-        resultMsg.style.color = '#dc3545';
+        csrfToken = document.getElementById('csrf_token');
+    }
+    if (!csrfToken || !csrfToken.value) {
+        if (resultMsg) {
+            resultMsg.textContent = 'CSRF token not found';
+            resultMsg.style.color = '#dc3545';
+        }
         resetPingButton();
         return;
     }
 
-    // Create form data
+    // Create form data for POST request (Tor Browser compatible)
     var formData = new FormData();
     formData.append('action', 'pingContact');
     formData.append('contact_address', currentContactAddress);
     formData.append('csrf_token', csrfToken.value);
 
-    // Send AJAX request
+    // Send AJAX request (Tor Browser compatible XMLHttpRequest)
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', window.location.href.split('?')[0], true);
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000; // 60 second timeout for Tor connections
+
+    xhr.ontimeout = function() {
+        resetPingButton();
+        if (resultMsg) {
+            resultMsg.textContent = 'Request timed out - contact may be offline';
+            resultMsg.style.color = '#dc3545';
+        }
+        // Update status to offline on timeout
+        if (onlineStatusEl) {
+            onlineStatusEl.textContent = 'Offline';
+            onlineStatusEl.className = 'status-badge status-offline';
+        }
+    };
+
+    xhr.onerror = function() {
+        resetPingButton();
+        if (resultMsg) {
+            resultMsg.textContent = 'Network error';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
             resetPingButton();
@@ -1158,11 +1198,13 @@ function pingContact() {
                         // Update online status indicator
                         var onlineStatus = response.online_status || 'unknown';
                         var statusText = onlineStatus.charAt(0).toUpperCase() + onlineStatus.slice(1);
-                        onlineStatusEl.textContent = statusText;
-                        onlineStatusEl.className = 'status-badge status-' + onlineStatus;
+                        if (onlineStatusEl) {
+                            onlineStatusEl.textContent = statusText;
+                            onlineStatusEl.className = 'status-badge status-' + onlineStatus;
+                        }
 
                         // Update chain status if available
-                        if (response.chain_valid !== null && response.chain_valid !== undefined) {
+                        if (chainStatusEl && response.chain_valid !== null && response.chain_valid !== undefined) {
                             var chainText, chainClass;
                             if (response.chain_valid === true || response.chain_valid === 1) {
                                 chainText = 'Valid';
@@ -1176,20 +1218,29 @@ function pingContact() {
                         }
 
                         // Show success message
-                        resultMsg.textContent = response.message || 'Ping complete';
-                        resultMsg.style.color = onlineStatus === 'online' ? '#28a745' : '#dc3545';
+                        if (resultMsg) {
+                            resultMsg.textContent = response.message || 'Ping complete';
+                            resultMsg.style.color = onlineStatus === 'online' ? '#28a745' : '#dc3545';
+                        }
                     } else {
                         // Show error message
-                        resultMsg.textContent = response.message || 'Ping failed';
-                        resultMsg.style.color = '#dc3545';
+                        if (resultMsg) {
+                            resultMsg.textContent = response.message || 'Ping failed';
+                            resultMsg.style.color = '#dc3545';
+                        }
                     }
                 } catch (e) {
-                    resultMsg.textContent = 'Invalid response';
+                    if (resultMsg) {
+                        resultMsg.textContent = 'Invalid response';
+                        resultMsg.style.color = '#dc3545';
+                    }
+                }
+            } else if (xhr.status !== 0) {
+                // Status 0 means aborted/timeout (handled separately)
+                if (resultMsg) {
+                    resultMsg.textContent = 'Request failed';
                     resultMsg.style.color = '#dc3545';
                 }
-            } else {
-                resultMsg.textContent = 'Request failed';
-                resultMsg.style.color = '#dc3545';
             }
         }
     };
@@ -1201,9 +1252,9 @@ function resetPingButton() {
     var icon = document.getElementById('ping_icon');
     var btnText = document.getElementById('ping_btn_text');
 
-    btn.disabled = false;
-    icon.className = 'fas fa-wifi';
-    btnText.textContent = 'Check Status';
+    if (btn) btn.disabled = false;
+    if (icon) icon.className = 'fas fa-wifi';
+    if (btnText) btnText.textContent = 'Check Status';
 }
 
 // Refresh contact modal and reopen on transactions tab (Tor Browser compatible)
