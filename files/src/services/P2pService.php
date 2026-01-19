@@ -306,11 +306,29 @@ class P2pService {
                 }
                 return false;
             }
-            if($echo){
-                // Return 'inserted' status since the P2P will be stored in the database
-                echo $this->p2pPayload->buildInserted($request);
+
+            // All validations passed - process P2P and echo acceptance
+            // IMPORTANT: Storage MUST succeed before acceptance is sent
+            // to prevent false positives from acceptance-before-storage bug
+            // (follows same pattern as TransactionService.checkTransactionPossible)
+            try {
+                $this->handleP2pRequest($request);
+                if($echo){
+                    // Return 'inserted' status AFTER the P2P has been stored in the database
+                    echo $this->p2pPayload->buildInserted($request);
+                }
+                // Return false to prevent caller from calling handleP2pRequest again
+                return false;
+            } catch (Exception $e) {
+                SecureLogger::logException($e, [
+                    'method' => 'checkP2pPossible',
+                    'context' => 'p2p_processing_failed'
+                ]);
+                if($echo){
+                    echo $this->p2pPayload->buildRejection($request, 'processing_error');
+                }
+                return false;
             }
-            return true;
         } catch (PDOException $e) {
             // Handle database error
             SecureLogger::error("Error retrieving existence of P2P by hash", ['error' => $e->getMessage()]);

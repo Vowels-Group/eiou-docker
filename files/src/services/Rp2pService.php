@@ -249,11 +249,29 @@ class RP2pService {
                 }
                 return false;
             }
-            if($echo){
-                // Return 'inserted' status since the RP2P will be stored in the database
-                echo  $this->rp2pPayload->buildInserted($request);
+
+            // All validations passed - process RP2P and echo acceptance
+            // IMPORTANT: Storage MUST succeed before acceptance is sent
+            // to prevent false positives from acceptance-before-storage bug
+            // (follows same pattern as TransactionService.checkTransactionPossible)
+            try {
+                $this->handleRp2pRequest($request);
+                if($echo){
+                    // Return 'inserted' status AFTER the RP2P has been stored in the database
+                    echo  $this->rp2pPayload->buildInserted($request);
+                }
+                // Return false to prevent caller from calling handleRp2pRequest again
+                return false;
+            } catch (Exception $e) {
+                SecureLogger::logException($e, [
+                    'method' => 'checkRp2pPossible',
+                    'context' => 'rp2p_processing_failed'
+                ]);
+                if($echo){
+                    echo  $this->rp2pPayload->buildRejection($request, 'processing_error');
+                }
+                return false;
             }
-            return true;
         } catch (PDOException $e) {
             // Handle database error
             SecureLogger::error("Error retrieving existence of RP2P by hash", ['error' => $e->getMessage()]);
