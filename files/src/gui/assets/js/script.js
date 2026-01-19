@@ -735,33 +735,41 @@ window.addEventListener('DOMContentLoaded', function() {
     initializeFormLoaders();
 });
 
-// Copy to clipboard function with modern Clipboard API
+// Copy to clipboard function - tries execCommand first for Tor Browser compatibility
 function copyToClipboard(text, successMessage) {
     successMessage = successMessage || 'Copied to clipboard!';
 
-    // Try modern Clipboard API first
+    // Try execCommand first - more reliable in Tor Browser and restrictive environments
+    if (tryExecCommandCopy(text)) {
+        showToast('Success', successMessage, 'success');
+        return;
+    }
+
+    // Fall back to modern Clipboard API
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text)
             .then(function() {
                 showToast('Success', successMessage, 'success');
             })
-            .catch(function(err) {
-                // Fallback for clipboard permission denied
-                fallbackCopyToClipboard(text, successMessage);
+            .catch(function() {
+                // Both methods failed - show manual copy modal
+                showManualCopyModal(text, successMessage);
             });
     } else {
-        // Fallback for older browsers / Tor Browser
-        fallbackCopyToClipboard(text, successMessage);
+        // No clipboard methods available - show manual copy modal
+        showManualCopyModal(text, successMessage);
     }
 }
 
-// Fallback copy method using execCommand (Tor Browser compatible)
-function fallbackCopyToClipboard(text, successMessage) {
+// Try copying using execCommand (synchronous, Tor Browser compatible)
+function tryExecCommandCopy(text) {
     var tempTextarea = document.createElement('textarea');
     tempTextarea.value = text;
     tempTextarea.style.position = 'fixed';
     tempTextarea.style.left = '-9999px';
     tempTextarea.style.top = '0';
+    // Prevent iOS zoom on focus
+    tempTextarea.style.fontSize = '16px';
     document.body.appendChild(tempTextarea);
     tempTextarea.focus();
     tempTextarea.select();
@@ -774,13 +782,7 @@ function fallbackCopyToClipboard(text, successMessage) {
     }
 
     document.body.removeChild(tempTextarea);
-
-    if (successful) {
-        showToast('Success', successMessage, 'success');
-    } else {
-        // Show manual copy modal for Tor Browser compatibility
-        showManualCopyModal(text, successMessage);
-    }
+    return successful;
 }
 
 // Manual copy modal for Tor Browser compatibility
