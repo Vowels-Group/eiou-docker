@@ -1139,13 +1139,11 @@ class SyncService {
 
         // For accepted/completed, recipient_signature is required
         if (empty($tx['recipient_signature'])) {
-            SecureLogger::debug("Transaction missing recipient signature", [
+            SecureLogger::warning("Transaction missing required recipient signature", [
                 'txid' => $tx['txid'] ?? 'unknown',
                 'status' => $status
             ]);
-            // Return true for now to allow gradual migration - existing transactions won't have this
-            // TODO: After migration period, change to return false
-            return true;
+            return false;
         }
 
         // Reconstruct the message that was signed (same as sender signature)

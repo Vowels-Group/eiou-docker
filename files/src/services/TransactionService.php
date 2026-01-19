@@ -1076,6 +1076,13 @@ class TransactionService {
                 // If direct transaction - receiver knows both sender and recipient
                 // end_recipient is myself (receiver), initial_sender is the sender
                 $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+
+                // Generate recipient signature if not already present
+                // This signature proves the receiver accepted the transaction
+                if (!isset($request['recipientSignature'])) {
+                    $request['recipientSignature'] = $this->transactionPayload->generateRecipientSignature($request);
+                }
+
                 $insertTransactionResponse = $this->transactionRepository->insertTransaction($request,'received');
 
                 // Update tracking fields after insert (these are NOT part of signed payload)
@@ -1099,6 +1106,13 @@ class TransactionService {
                     // If Transaction is for end-recipient
                     // end_recipient is myself, initial_sender will be updated via inquiry message later
                     $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+
+                    // Generate recipient signature if not already present
+                    // This signature proves the receiver accepted the transaction
+                    if (!isset($request['recipientSignature'])) {
+                        $request['recipientSignature'] = $this->transactionPayload->generateRecipientSignature($request);
+                    }
+
                     $insertTransactionResponse = json_decode($this->transactionRepository->insertTransaction($request,'received'), true);
                     output(outputTransactionInsertion($insertTransactionResponse));
 

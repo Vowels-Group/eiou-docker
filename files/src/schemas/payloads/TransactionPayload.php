@@ -172,9 +172,9 @@ class TransactionPayload extends BasePayload
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress'] ?? '');
         $hashInfo = $this->resolveHashInfo($request);
 
-        // Generate recipient signature over the transaction data
-        // This uses the same fields that were signed by the sender for consistency
-        $recipientSignature = $this->generateRecipientSignature($request);
+        // Use existing recipient signature if provided, otherwise generate one
+        // This allows the signature to be pre-generated and stored before acceptance is sent
+        $recipientSignature = $request['recipientSignature'] ?? $this->generateRecipientSignature($request);
 
         return json_encode([
             'status' => Constants::STATUS_ACCEPTED,
@@ -197,7 +197,7 @@ class TransactionPayload extends BasePayload
      * @param array $request The transaction request data
      * @return string|null Base64-encoded signature, or null if signing fails
      */
-    private function generateRecipientSignature(array $request): ?string
+    public function generateRecipientSignature(array $request): ?string
     {
         // Reconstruct the message content that was signed by the sender
         // This ensures consistency in what both parties sign
