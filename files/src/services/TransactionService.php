@@ -711,6 +711,10 @@ class TransactionService {
                             // IMPORTANT: Storage MUST succeed before acceptance is sent
                             // to prevent chain divergence from acceptance-before-storage bug
                             try {
+                                // Generate recipient signature before processing so it's stored and can be returned
+                                if (!isset($request['recipientSignature'])) {
+                                    $request['recipientSignature'] = $this->transactionPayload->generateRecipientSignature($request);
+                                }
                                 $this->processTransaction($request);
                                 if ($echo) {
                                     echo $this->transactionPayload->buildAcceptance($request);
@@ -840,6 +844,10 @@ class TransactionService {
             // IMPORTANT: Storage MUST succeed before acceptance is sent
             // to prevent chain divergence from acceptance-before-storage bug
             try {
+                // Generate recipient signature before processing so it's stored and can be returned
+                if (!isset($request['recipientSignature'])) {
+                    $request['recipientSignature'] = $this->transactionPayload->generateRecipientSignature($request);
+                }
                 $this->processTransaction($request);
                 if ($echo) {
                     echo $this->transactionPayload->buildAcceptance($request);
