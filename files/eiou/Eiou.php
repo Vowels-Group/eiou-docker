@@ -176,7 +176,7 @@ elseif($request === "sync"){
 // Message queue processing commands for testing (requires EIOU_TEST_MODE=true)
 elseif($request === "out"){
   if (getenv('EIOU_TEST_MODE') !== 'true') {
-    $output->error("Command not available", [], "This command is only available in test mode");
+    $output->error("This command is only available in test mode", ErrorCodes::PERMISSION_DENIED);
     exit(1);
   }
   // Process outgoing message queue (pending transactions)
@@ -190,7 +190,7 @@ elseif($request === "out"){
 }
 elseif($request === "in"){
   if (getenv('EIOU_TEST_MODE') !== 'true') {
-    $output->error("Command not available", [], "This command is only available in test mode");
+    $output->error("This command is only available in test mode", ErrorCodes::PERMISSION_DENIED);
     exit(1);
   }
   // Process incoming/held transactions

@@ -84,11 +84,11 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
         require_once '/etc/eiou/src/schemas/payloads/ContactStatusPayload.php';
         $this->contactStatusPayload = new ContactStatusPayload($this->currentUser, $this->utilityContainer);
 
-        // Configure adaptive polling
+        // Configure adaptive polling (keys must end with _ms to match AdaptivePoller)
         $pollerConfig = [
-            'min_interval' => Constants::CONTACT_STATUS_MIN_INTERVAL_MS,
-            'max_interval' => Constants::CONTACT_STATUS_MAX_INTERVAL_MS,
-            'idle_interval' => Constants::CONTACT_STATUS_IDLE_INTERVAL_MS,
+            'min_interval_ms' => Constants::CONTACT_STATUS_MIN_INTERVAL_MS,
+            'max_interval_ms' => Constants::CONTACT_STATUS_MAX_INTERVAL_MS,
+            'idle_interval_ms' => Constants::CONTACT_STATUS_IDLE_INTERVAL_MS,
             'adaptive' => Constants::CONTACT_STATUS_ADAPTIVE_POLLING
         ];
 

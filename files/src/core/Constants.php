@@ -102,8 +102,8 @@ class Constants {
         return self::CONTACT_STATUS_ENABLED;
     }
     const CONTACT_STATUS_POLLING_INTERVAL_MS = 300000;  // 5 minutes between ping cycles
-    const CONTACT_STATUS_MIN_INTERVAL_MS = 60000;       // Minimum 1 minute
-    const CONTACT_STATUS_MAX_INTERVAL_MS = 600000;      // Maximum 10 minutes
+    const CONTACT_STATUS_MIN_INTERVAL_MS = 300000;      // Minimum 5 minutes
+    const CONTACT_STATUS_MAX_INTERVAL_MS = 1800000;     // Maximum 30 minutes
     const CONTACT_STATUS_IDLE_INTERVAL_MS = 300000;     // Idle at 5 minutes
     const CONTACT_STATUS_ADAPTIVE_POLLING = true;
     const CONTACT_STATUS_SYNC_ON_PING = true;           // Whether to trigger sync check on ping
