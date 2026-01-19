@@ -110,17 +110,23 @@ elseif ($type === "p2p") {
   // Handle Peer to peer Request
   $debugService->output("Processing p2p request from " . print_r($envelope['senderAddress'],true) . " with hash " . print_r($messageContent['hash'], TRUE), 'SILENT');
   $p2pService = $serviceContainer->getP2pService();
-  if($p2pService->checkP2pPossible($request)){
-    $p2pService->handleP2pRequest($request);
-  }
+  // checkP2pPossible handles everything internally:
+  // - Validates the P2P request
+  // - Processes and stores the P2P
+  // - Echoes inserted/rejection response
+  // Returns false in all cases (processing handled internally)
+  $p2pService->checkP2pPossible($request);
 }
 elseif ($type === "rp2p") {
   // Handle Peer to peer Response
   $debugService->output("Processing rp2p request from " . print_r($envelope['senderAddress'],true) . " with hash " . print_r($messageContent['hash'], TRUE), 'SILENT');
   $rp2pService = $serviceContainer->getRp2pService();
-  if($rp2pService->checkRp2pPossible($request)){
-    $rp2pService->handleRp2pRequest($request);
-  }
+  // checkRp2pPossible handles everything internally:
+  // - Validates the RP2P request
+  // - Processes and stores the RP2P
+  // - Echoes inserted/rejection response
+  // Returns false in all cases (processing handled internally)
+  $rp2pService->checkRp2pPossible($request);
 }
 elseif ($type === "message") {
   // Handle messages
