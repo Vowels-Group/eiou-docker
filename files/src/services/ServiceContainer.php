@@ -738,6 +738,101 @@ class ServiceContainer {
     }
 
     /**
+     * Wire circular dependencies between services using setter injection
+     *
+     * This method should be called after all services that have circular dependencies
+     * are initialized. It uses setter injection to break circular dependency cycles
+     * while maintaining the lazy loading pattern.
+     *
+     * Circular dependencies handled:
+     * - TransactionService <--> SyncService
+     * - SyncService <--> HeldTransactionService
+     * - ContactService --> SyncService
+     * - ContactStatusService --> SyncService, RateLimiterService
+     * - MessageService --> SyncService
+     * - HeldTransactionService --> SyncService
+     * - Rp2pService --> TransactionService
+     * - TransactionService --> P2pService, ContactService
+     */
+    public function wireCircularDependencies(): void {
+        // Wire TransactionService <-> SyncService
+        if (isset($this->services['TransactionService']) && isset($this->services['SyncService'])) {
+            $this->services['TransactionService']->setSyncService($this->services['SyncService']);
+        }
+
+        // Wire SyncService <-> HeldTransactionService
+        if (isset($this->services['SyncService']) && isset($this->services['HeldTransactionService'])) {
+            $this->services['SyncService']->setHeldTransactionService($this->services['HeldTransactionService']);
+        }
+
+        // Wire HeldTransactionService -> SyncService
+        if (isset($this->services['HeldTransactionService']) && isset($this->services['SyncService'])) {
+            $this->services['HeldTransactionService']->setSyncService($this->services['SyncService']);
+        }
+
+        // Wire ContactService -> SyncService
+        if (isset($this->services['ContactService']) && isset($this->services['SyncService'])) {
+            $this->services['ContactService']->setSyncService($this->services['SyncService']);
+        }
+
+        // Wire ContactStatusService -> SyncService, RateLimiterService
+        if (isset($this->services['ContactStatusService'])) {
+            if (isset($this->services['SyncService'])) {
+                $this->services['ContactStatusService']->setSyncService($this->services['SyncService']);
+            }
+            if (isset($this->services['RateLimiterService'])) {
+                $this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
+            }
+        }
+
+        // Wire MessageService -> SyncService
+        if (isset($this->services['MessageService']) && isset($this->services['SyncService'])) {
+            $this->services['MessageService']->setSyncService($this->services['SyncService']);
+        }
+
+        // Wire Rp2pService -> TransactionService
+        if (isset($this->services['Rp2pService']) && isset($this->services['TransactionService'])) {
+            $this->services['Rp2pService']->setTransactionService($this->services['TransactionService']);
+        }
+
+        // Wire TransactionService -> P2pService, ContactService
+        if (isset($this->services['TransactionService'])) {
+            if (isset($this->services['P2pService'])) {
+                $this->services['TransactionService']->setP2pService($this->services['P2pService']);
+            }
+            if (isset($this->services['ContactService'])) {
+                $this->services['TransactionService']->setContactService($this->services['ContactService']);
+            }
+        }
+    }
+
+    /**
+     * Initialize all services and wire circular dependencies
+     *
+     * This method eagerly initializes all commonly used services and wires up
+     * their circular dependencies. Call this when you want to ensure all services
+     * are ready and properly connected before processing requests.
+     *
+     * Note: This is optional. Services will still work without calling this method
+     * due to the fallback to Application::getInstance() in each getter.
+     */
+    public function wireAllServices(): void {
+        // Initialize core services (order matters for some dependencies)
+        $this->getSyncService();
+        $this->getHeldTransactionService();
+        $this->getContactService();
+        $this->getTransactionService();
+        $this->getP2pService();
+        $this->getRp2pService();
+        $this->getMessageService();
+        $this->getContactStatusService();
+        $this->getRateLimiterService();
+
+        // Wire circular dependencies
+        $this->wireCircularDependencies();
+    }
+
+    /**
      * Register a custom service instance
      *
      * @param string $name Service name

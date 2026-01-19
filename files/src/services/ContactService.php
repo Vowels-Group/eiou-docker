@@ -99,6 +99,32 @@ class ContactService {
     private TransactionRepository $transactionRepository;
 
     /**
+     * @var SyncService|null Sync service for contact synchronization
+     */
+    private ?SyncService $syncService = null;
+
+    /**
+     * Set the sync service (setter injection for circular dependency)
+     *
+     * @param SyncService $service Sync service
+     */
+    public function setSyncService(SyncService $service): void {
+        $this->syncService = $service;
+    }
+
+    /**
+     * Get the sync service with fallback to Application singleton
+     *
+     * @return SyncService
+     */
+    private function getSyncService(): SyncService {
+        if ($this->syncService === null) {
+            $this->syncService = Application::getInstance()->services->getSyncService();
+        }
+        return $this->syncService;
+    }
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact Repository
@@ -525,7 +551,7 @@ class ContactService {
             if($contact['name']){
                 // This contact was already sent a contact request, but has not yet responded to user (try resyncing)
                 // Use full sync chain for wallet restoration scenarios: Contact -> Transactions -> Balances
-                $syncService = Application::getInstance()->services->getSyncService();
+                $syncService = $this->getSyncService();
                 $syncResult = $syncService->syncReaddedContact($address, $contact['pubkey']);
 
                 if ($syncResult['success'] && $syncResult['contact_synced']) {
@@ -750,7 +776,7 @@ class ContactService {
                     }
 
                     // Full sync for re-added contact: sync contact status, transaction chain, and balances
-                    $syncService = Application::getInstance()->services->getSyncService();
+                    $syncService = $this->getSyncService();
                     $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
 
                     if ($syncResult['success']) {
@@ -808,7 +834,7 @@ class ContactService {
                     // Full sync for re-added contact: sync contact status, transaction chain, and balances
                     // If contact still has transaction chain on their end, resync from original contact transaction
                     // through all known transactions (verifying signatures) and finally sync balances
-                    $syncService = Application::getInstance()->services->getSyncService();
+                    $syncService = $this->getSyncService();
                     $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
 
                     if ($syncResult['success']) {

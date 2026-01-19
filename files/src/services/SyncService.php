@@ -89,6 +89,32 @@ class SyncService {
     private MessagePayload $messagePayload;
 
     /**
+     * @var HeldTransactionService|null Held transaction service for sync notifications
+     */
+    private ?HeldTransactionService $heldTransactionService = null;
+
+    /**
+     * Set the held transaction service (setter injection for circular dependency)
+     *
+     * @param HeldTransactionService $service Held transaction service
+     */
+    public function setHeldTransactionService(HeldTransactionService $service): void {
+        $this->heldTransactionService = $service;
+    }
+
+    /**
+     * Get the held transaction service with fallback to Application singleton
+     *
+     * @return HeldTransactionService
+     */
+    private function getHeldTransactionService(): HeldTransactionService {
+        if ($this->heldTransactionService === null) {
+            $this->heldTransactionService = Application::getInstance()->services->getHeldTransactionService();
+        }
+        return $this->heldTransactionService;
+    }
+
+    /**
      * Constructor
      * @param ContactRepository $contactRepository Contact repository
      * @param AddressRepository $addressRepository Address Repository
@@ -546,20 +572,6 @@ class SyncService {
                         'sender' => $tx['sender_address'] ?? 'unknown'
                     ];
 
-                    // Store warning in session for GUI notification
-                    if (session_status() === PHP_SESSION_ACTIVE) {
-                        if (!isset($_SESSION['sync_warnings'])) {
-                            $_SESSION['sync_warnings'] = [];
-                        }
-                        $_SESSION['sync_warnings'][] = [
-                            'message' => 'Transaction signature verification failed during sync',
-                            'type' => 'warning',
-                            'txid' => $tx['txid'] ?? 'unknown',
-                            'sender' => $tx['sender_address'] ?? 'unknown',
-                            'timestamp' => time()
-                        ];
-                    }
-
                     // CONTINUE processing - skip this transaction but process remaining ones
                     // This allows partial sync recovery instead of complete failure
                     continue;
@@ -627,23 +639,12 @@ class SyncService {
 
         // Notify HeldTransactionService of sync completion
         try {
-            $app = Application::getInstance();
-            if ($app->services->hasService('HeldTransactionService')) {
-                $heldService = $app->services->getService('HeldTransactionService');
-                $heldService->onSyncComplete(
-                    $contactPublicKey,
-                    $result['success'],
-                    $result['synced_count']
-                );
-            } else {
-                // Try to get via getter if registered
-                $heldService = $app->services->getHeldTransactionService();
-                $heldService->onSyncComplete(
-                    $contactPublicKey,
-                    $result['success'],
-                    $result['synced_count']
-                );
-            }
+            $heldService = $this->getHeldTransactionService();
+            $heldService->onSyncComplete(
+                $contactPublicKey,
+                $result['success'],
+                $result['synced_count']
+            );
         } catch (Exception $e) {
             // Log but don't fail - held transaction notification is non-critical
             SecureLogger::debug("Could not notify HeldTransactionService of sync completion", [

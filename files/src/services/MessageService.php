@@ -78,6 +78,32 @@ class MessageService {
     private ?MessageDeliveryService $messageDeliveryService = null;
 
     /**
+     * @var SyncService|null Sync service for handling sync requests
+     */
+    private ?SyncService $syncService = null;
+
+    /**
+     * Set the sync service (setter injection for circular dependency)
+     *
+     * @param SyncService $service Sync service
+     */
+    public function setSyncService(SyncService $service): void {
+        $this->syncService = $service;
+    }
+
+    /**
+     * Get the sync service with fallback to Application singleton
+     *
+     * @return SyncService
+     */
+    private function getSyncService(): SyncService {
+        if ($this->syncService === null) {
+            $this->syncService = Application::getInstance()->services->getSyncService();
+        }
+        return $this->syncService;
+    }
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
@@ -624,7 +650,7 @@ class MessageService {
         if ($syncType === 'transaction_chain') {
             if (isset($request['inquiry']) && $request['inquiry']) {
                 // This is a sync request - delegate to SyncService
-                $syncService = Application::getInstance()->services->getSyncService();
+                $syncService = $this->getSyncService();
                 $syncService->handleTransactionSyncRequest($request);
             } else {
                 // This is a sync response - should be handled by the requester
