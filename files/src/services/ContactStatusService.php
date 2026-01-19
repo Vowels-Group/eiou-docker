@@ -261,11 +261,22 @@ class ContactStatusService {
             ]);
 
             // Send ping
+            SecureLogger::info("Manual ping initiated", [
+                'contact_name' => $contact['name'],
+                'contact_address' => $contactAddress
+            ]);
+
             $rawResponse = $this->transportUtility->send($contactAddress, $payload);
             $response = json_decode($rawResponse, true);
 
             // Update contact based on response
             if ($response && isset($response['status'])) {
+                SecureLogger::info("Manual ping response received", [
+                    'contact_name' => $contact['name'],
+                    'status' => $response['status'],
+                    'chain_valid' => $response['chainValid'] ?? 'not provided'
+                ]);
+
                 if ($response['status'] === 'pong') {
                     // Contact is online
                     $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_ONLINE);
@@ -314,6 +325,11 @@ class ContactStatusService {
             }
 
             // No valid response - contact is offline
+            SecureLogger::info("Manual ping: contact offline (no valid response)", [
+                'contact_name' => $contact['name'],
+                'contact_address' => $contactAddress
+            ]);
+
             $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_OFFLINE);
             return [
                 'success' => true,
