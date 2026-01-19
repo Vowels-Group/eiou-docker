@@ -6,7 +6,7 @@ require_once __DIR__ . '/../utils/SecureLogger.php';
 /**
  * Contact Status Service
  *
- * Handles incoming ping requests from other nodes.
+ * Handles incoming ping requests from other nodes and outgoing manual pings.
  * Responds with pong containing local chain state for comparison.
  *
  * @package Services
@@ -26,6 +26,11 @@ class ContactStatusService {
      * @var UtilityServiceContainer Utility service container
      */
     private UtilityServiceContainer $utilityContainer;
+
+    /**
+     * @var TransportUtilityService Transport utility for sending pings
+     */
+    private TransportUtilityService $transportUtility;
 
     /**
      * @var UserContext Current user context
@@ -59,6 +64,7 @@ class ContactStatusService {
         $this->contactRepository = $contactRepository;
         $this->transactionRepository = $transactionRepository;
         $this->utilityContainer = $utilityContainer;
+        $this->transportUtility = $utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
 
         // Initialize payload builder
@@ -182,5 +188,192 @@ class ContactStatusService {
      */
     public function getRepository(): ContactRepository {
         return $this->contactRepository;
+    }
+
+    /**
+     * Manually ping a specific contact and update their status
+     *
+     * Rate limited to 3 pings per minute per user to prevent abuse.
+     *
+     * @param string $identifier Contact name or address to ping
+     * @return array Result with status, online_status, chain_valid, and message
+     */
+    public function pingContact(string $identifier): array {
+        // Rate limit manual pings: 3 per minute, block for 60 seconds if exceeded
+        $rateLimiter = Application::getInstance()->services->getRateLimiterService();
+        $userIdentifier = $this->currentUser->getPublicKeyHash() ?? 'anonymous';
+        $rateCheck = $rateLimiter->checkLimit($userIdentifier, 'manual_ping', 3, 60, 60);
+
+        if (!$rateCheck['allowed']) {
+            $retryAfter = $rateCheck['retry_after'] ?? 60;
+            return [
+                'success' => false,
+                'error' => 'rate_limited',
+                'message' => "Too many ping requests. Please wait {$retryAfter} seconds.",
+                'retry_after' => $retryAfter
+            ];
+        }
+
+        // Find the contact by name or address
+        $contact = $this->contactRepository->getContactByNameOrAddress($identifier);
+
+        if (!$contact) {
+            return [
+                'success' => false,
+                'error' => 'contact_not_found',
+                'message' => "Contact not found: $identifier"
+            ];
+        }
+
+        // Check if contact is accepted
+        if ($contact['status'] !== 'accepted') {
+            return [
+                'success' => false,
+                'error' => 'contact_not_accepted',
+                'message' => "Contact is not accepted (status: {$contact['status']})"
+            ];
+        }
+
+        // Get contact address
+        $contactAddress = $contact['http'] ?? $contact['tor'] ?? null;
+
+        if (!$contactAddress) {
+            return [
+                'success' => false,
+                'error' => 'no_address',
+                'message' => 'Contact has no address configured'
+            ];
+        }
+
+        try {
+            // Get the latest transaction ID in the chain with this contact
+            $prevTxid = $this->transactionRepository->getPreviousTxid(
+                $this->currentUser->getPublicKey(),
+                $contact['pubkey']
+            );
+
+            // Build ping payload
+            $payload = $this->contactStatusPayload->build([
+                'receiverAddress' => $contactAddress,
+                'prevTxid' => $prevTxid,
+                'requestSync' => Constants::CONTACT_STATUS_SYNC_ON_PING
+            ]);
+
+            // Send ping
+            $rawResponse = $this->transportUtility->send($contactAddress, $payload);
+            $response = json_decode($rawResponse, true);
+
+            // Update contact based on response
+            if ($response && isset($response['status'])) {
+                if ($response['status'] === 'pong') {
+                    // Contact is online
+                    $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_ONLINE);
+
+                    // Check chain validity
+                    $chainValid = $response['chainValid'] ?? true;
+                    $remotePrevTxid = $response['prevTxid'] ?? null;
+
+                    // If chains don't match, update status and optionally trigger sync
+                    if (!$chainValid || ($prevTxid !== $remotePrevTxid && $prevTxid !== null && $remotePrevTxid !== null)) {
+                        $this->updateChainStatus($contact['pubkey'], false);
+
+                        // Trigger sync if enabled
+                        if (Constants::CONTACT_STATUS_SYNC_ON_PING) {
+                            $this->triggerSync($contactAddress, $contact['pubkey']);
+                        }
+
+                        return [
+                            'success' => true,
+                            'contact_name' => $contact['name'],
+                            'online_status' => 'online',
+                            'chain_valid' => false,
+                            'message' => 'Contact is online but chain needs sync'
+                        ];
+                    } else {
+                        $this->updateChainStatus($contact['pubkey'], true);
+                        return [
+                            'success' => true,
+                            'contact_name' => $contact['name'],
+                            'online_status' => 'online',
+                            'chain_valid' => true,
+                            'message' => 'Contact is online and chain is valid'
+                        ];
+                    }
+                } elseif ($response['status'] === 'rejected') {
+                    // Contact rejected ping but responded - still online
+                    $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_ONLINE);
+                    return [
+                        'success' => true,
+                        'contact_name' => $contact['name'],
+                        'online_status' => 'online',
+                        'chain_valid' => null,
+                        'message' => 'Contact is online (ping rejected: ' . ($response['reason'] ?? 'unknown') . ')'
+                    ];
+                }
+            }
+
+            // No valid response - contact is offline
+            $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_OFFLINE);
+            return [
+                'success' => true,
+                'contact_name' => $contact['name'],
+                'online_status' => 'offline',
+                'chain_valid' => null,
+                'message' => 'Contact is offline (no valid response)'
+            ];
+
+        } catch (\Exception $e) {
+            // Connection error - contact is offline
+            $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_OFFLINE);
+            SecureLogger::warning("Manual contact ping failed", [
+                'contact_address' => $contactAddress,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => true,
+                'contact_name' => $contact['name'],
+                'online_status' => 'offline',
+                'chain_valid' => null,
+                'message' => 'Contact is offline (connection failed)'
+            ];
+        }
+    }
+
+    /**
+     * Update contact online status
+     *
+     * @param string $pubkey Contact public key
+     * @param string $status New online status
+     */
+    private function updateContactStatus(string $pubkey, string $status): void {
+        try {
+            $this->contactRepository->updateContactFields($pubkey, [
+                'online_status' => $status,
+                'last_ping_at' => date('Y-m-d H:i:s.u')
+            ]);
+        } catch (\Exception $e) {
+            SecureLogger::error("Failed to update contact online status", [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Update contact chain validation status
+     *
+     * @param string $pubkey Contact public key
+     * @param bool $valid Whether chain is valid
+     */
+    private function updateChainStatus(string $pubkey, bool $valid): void {
+        try {
+            $this->contactRepository->updateContactFields($pubkey, [
+                'valid_chain' => $valid ? 1 : 0
+            ]);
+        } catch (\Exception $e) {
+            SecureLogger::error("Failed to update contact chain status", [
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 }

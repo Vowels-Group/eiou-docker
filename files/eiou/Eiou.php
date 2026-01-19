@@ -129,6 +129,31 @@ elseif($request === "search"){
   $contactService = $app->services->getContactService();
   $contactService->searchContacts($cleanArgv, $output);
 }
+elseif($request === "ping"){
+  // Ping a contact to check online status
+  $debugService->output("Executing ping contact request", 'SILENT');
+
+  $identifier = $cleanArgv[2] ?? null;
+  if (!$identifier) {
+    $output->error("Contact name or address required", ErrorCodes::MISSING_ARGUMENT);
+    exit(1);
+  }
+
+  $contactStatusService = $app->services->getContactStatusService();
+  $result = $contactStatusService->pingContact($identifier);
+
+  if ($result['success']) {
+    $output->success("Ping complete: {$result['contact_name']} is {$result['online_status']}", [
+      'contact_name' => $result['contact_name'],
+      'online_status' => $result['online_status'],
+      'chain_valid' => $result['chain_valid'],
+      'message' => $result['message']
+    ]);
+  } else {
+    $output->error($result['message'], $result['error'] === 'contact_not_found' ? ErrorCodes::CONTACT_NOT_FOUND : ErrorCodes::GENERAL_ERROR);
+    exit(1);
+  }
+}
 // Transactions
 elseif($request === "send"){
   // Send eIOU

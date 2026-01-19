@@ -31,6 +31,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         exit; // Ensure we don't continue to render HTML
     }
+
+    // AJAX-only contact actions (returns JSON, exits immediately)
+    if ($action === 'pingContact') {
+        // contactController handles JSON header and response
+        try {
+            $contactController->routeAction();
+        } catch (Exception $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => 'Server error: ' . $e->getMessage()]);
+        }
+        exit; // Ensure we don't continue to render HTML
+    }
 }
 
 // Handle GET requests for update checking
