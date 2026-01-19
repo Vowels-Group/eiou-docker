@@ -14,8 +14,28 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * with tracking, retry logic, and dead letter queue support.
  *
  * @package Services
+ *
+ * SECTION INDEX:
+ * - Properties.......................... Line ~20
+ * - Constructor & Dependency Injection.. Line ~126
+ * - Locking & Synchronization........... Line ~212
+ * - Chain Verification & Sync........... Line ~281
+ * - Message Sending..................... Line ~361
+ * - Transaction Validation.............. Line ~400
+ * - ID & Hash Generation................ Line ~778
+ * - Transaction Matching & Fees......... Line ~823
+ * - Transaction Data Preparation........ Line ~868
+ * - Transaction Processing.............. Line ~953
+ * - Send Operations..................... Line ~1567
+ * - Balance & Contact Operations........ Line ~1863
+ * - Repository Wrappers................. Line ~1923
  */
 class TransactionService {
+
+    // =========================================================================
+    // PROPERTIES
+    // =========================================================================
+
     /**
      * @var ContactRepository Contact repository instance
      */
@@ -106,6 +126,10 @@ class TransactionService {
      */
     private ?HeldTransactionService $heldTransactionService = null;
 
+    // =========================================================================
+    // CONSTRUCTOR & DEPENDENCY INJECTION
+    // =========================================================================
+
     /**
      * Constructor
      *
@@ -193,6 +217,10 @@ class TransactionService {
         $this->syncService = $service;
     }
 
+    // =========================================================================
+    // LOCKING & SYNCHRONIZATION
+    // =========================================================================
+
     /**
      * @var array Per-contact send locks to serialize simultaneous sends
      */
@@ -263,6 +291,10 @@ class TransactionService {
             unset(self::$contactSendLocks[$contactPubkeyHash]);
         }
     }
+
+    // =========================================================================
+    // CHAIN VERIFICATION & SYNC
+    // =========================================================================
 
     /**
      * Verify sender's local chain integrity and sync if needed
@@ -340,6 +372,10 @@ class TransactionService {
         return $result;
     }
 
+    // =========================================================================
+    // MESSAGE SENDING
+    // =========================================================================
+
     /**
      * Send a transaction message with optional delivery tracking
      *
@@ -390,6 +426,10 @@ class TransactionService {
             'messageId' => $messageId
         ];
     }
+
+    // =========================================================================
+    // TRANSACTION VALIDATION
+    // =========================================================================
 
     /**
      * Check if previous transaction ID is valid
@@ -769,6 +809,10 @@ class TransactionService {
         }
     }
 
+    // =========================================================================
+    // ID & HASH GENERATION
+    // =========================================================================
+
     /**
      * Create unique transaction ID from transaction data
      *
@@ -943,6 +987,10 @@ class TransactionService {
 
         return $data;
     }
+
+    // =========================================================================
+    // TRANSACTION PROCESSING
+    // =========================================================================
 
     /**
      * Process incoming transaction request
@@ -1557,6 +1605,10 @@ class TransactionService {
         return false; // Should not reach here
     }
 
+    // =========================================================================
+    // SEND OPERATIONS
+    // =========================================================================
+
     /**
      * Send eIOU
      *
@@ -1853,6 +1905,10 @@ class TransactionService {
         );
     }
 
+    // =========================================================================
+    // BALANCE & CONTACT OPERATIONS
+    // =========================================================================
+
     /**
      * Convert Contact Information back to proper units for display
      *
@@ -1913,6 +1969,10 @@ class TransactionService {
         }
         return $contactsWithBalances;
     }
+
+    // =========================================================================
+    // REPOSITORY WRAPPERS
+    // =========================================================================
 
     /**
      * Get transaction by txid
