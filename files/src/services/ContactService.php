@@ -13,11 +13,26 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * with tracking, retry logic, and dead letter queue support.
  *
  * @package Services
+ *
+ * SECTION INDEX:
+ * - Properties & Constructor............. Line ~20
+ * - Contact Transaction Helpers.......... Line ~149
+ * - Message Sending...................... Line ~307
+ * - Add Contact Operations............... Line ~348
+ * - Accept Contact....................... Line ~858
+ * - Contact Creation Handler............. Line ~873
+ * - Contact Lookup & Search.............. Line ~970
+ * - Contact Existence Checks............. Line ~1148
+ * - Contact Status Management............ Line ~1190
+ * - Contact Updates...................... Line ~1354
+ * - Repository Wrappers.................. Line ~1437
  */
-
-
-
 class ContactService {
+
+    // =========================================================================
+    // PROPERTIES
+    // =========================================================================
+
     /**
      * @var ContactRepository Contact Repository instance
      */
@@ -84,6 +99,32 @@ class ContactService {
     private TransactionRepository $transactionRepository;
 
     /**
+     * @var SyncService|null Sync service for contact synchronization
+     */
+    private ?SyncService $syncService = null;
+
+    /**
+     * Set the sync service (setter injection for circular dependency)
+     *
+     * @param SyncService $service Sync service
+     */
+    public function setSyncService(SyncService $service): void {
+        $this->syncService = $service;
+    }
+
+    /**
+     * Get the sync service with fallback to Application singleton
+     *
+     * @return SyncService
+     */
+    private function getSyncService(): SyncService {
+        if ($this->syncService === null) {
+            $this->syncService = Application::getInstance()->services->getSyncService();
+        }
+        return $this->syncService;
+    }
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact Repository
@@ -135,6 +176,10 @@ class ContactService {
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
     }
+
+    // =========================================================================
+    // CONTACT TRANSACTION HELPERS
+    // =========================================================================
 
     /**
      * Create unique transaction ID for contact requests
@@ -292,6 +337,10 @@ class ContactService {
         return $this->transactionRepository->completeReceivedContactTransaction($senderPublicKey);
     }
 
+    // =========================================================================
+    // MESSAGE SENDING
+    // =========================================================================
+
     /**
      * Send a contact message with optional delivery tracking
      *
@@ -334,6 +383,10 @@ class ContactService {
             'messageId' => $messageId
         ];
     }
+
+    // =========================================================================
+    // ADD CONTACT OPERATIONS
+    // =========================================================================
 
     /**
      * Add a contact
@@ -498,7 +551,7 @@ class ContactService {
             if($contact['name']){
                 // This contact was already sent a contact request, but has not yet responded to user (try resyncing)
                 // Use full sync chain for wallet restoration scenarios: Contact -> Transactions -> Balances
-                $syncService = Application::getInstance()->services->getSyncService();
+                $syncService = $this->getSyncService();
                 $syncResult = $syncService->syncReaddedContact($address, $contact['pubkey']);
 
                 if ($syncResult['success'] && $syncResult['contact_synced']) {
@@ -723,7 +776,7 @@ class ContactService {
                     }
 
                     // Full sync for re-added contact: sync contact status, transaction chain, and balances
-                    $syncService = Application::getInstance()->services->getSyncService();
+                    $syncService = $this->getSyncService();
                     $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
 
                     if ($syncResult['success']) {
@@ -781,7 +834,7 @@ class ContactService {
                     // Full sync for re-added contact: sync contact status, transaction chain, and balances
                     // If contact still has transaction chain on their end, resync from original contact transaction
                     // through all known transactions (verifying signatures) and finally sync balances
-                    $syncService = Application::getInstance()->services->getSyncService();
+                    $syncService = $this->getSyncService();
                     $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
 
                     if ($syncResult['success']) {
@@ -845,6 +898,10 @@ class ContactService {
         }
     }
 
+    // =========================================================================
+    // ACCEPT CONTACT
+    // =========================================================================
+
     /**
      * Accept a contact request
      *
@@ -863,6 +920,10 @@ class ContactService {
         }
         return $success;
     }
+
+    // =========================================================================
+    // CONTACT CREATION HANDLER
+    // =========================================================================
 
     /**
      * Handle contact creation request (incoming)
@@ -960,6 +1021,10 @@ class ContactService {
             }
         }
     }
+
+    // =========================================================================
+    // CONTACT LOOKUP & SEARCH
+    // =========================================================================
 
     /**
      * Lookup contact information
@@ -1139,6 +1204,10 @@ class ContactService {
         }
     }
 
+    // =========================================================================
+    // CONTACT EXISTENCE CHECKS
+    // =========================================================================
+
     /**
      * Check if contact exists
      *
@@ -1179,6 +1248,10 @@ class ContactService {
     public function isNotBlocked(string $pubkey): bool {
         return $this->contactRepository->isNotBlocked($pubkey);
     }
+
+    // =========================================================================
+    // CONTACT STATUS MANAGEMENT
+    // =========================================================================
 
     /**
      * Block a contact
@@ -1345,6 +1418,10 @@ class ContactService {
         }
     }
 
+    // =========================================================================
+    // CONTACT UPDATES
+    // =========================================================================
+
     /**
      * Update specific contact fields through CLI interaction
      *
@@ -1427,6 +1504,10 @@ class ContactService {
             $output->error("Failed to update contact", ErrorCodes::UPDATE_FAILED, 500, $updateData);
         }
     }
+
+    // =========================================================================
+    // REPOSITORY WRAPPERS
+    // =========================================================================
 
     /**
      * Get all contact addresses
@@ -1548,11 +1629,11 @@ class ContactService {
     /**
      * Lookup contact name by address
      *
-     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string|null $transportIndex Address type, i.e. http, tor (null returns null gracefully)
      * @param string $address Contact address
      * @return string|null Contact name or null
      */
-    public function lookupNameByAddress(string $transportIndex, string $address): ?string {
+    public function lookupNameByAddress(?string $transportIndex, string $address): ?string {
         return $this->contactRepository->lookupNameByAddress($transportIndex, $address);
     }
 

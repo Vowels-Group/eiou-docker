@@ -14,8 +14,28 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * with tracking, retry logic, and dead letter queue support.
  *
  * @package Services
+ *
+ * SECTION INDEX:
+ * - Properties.......................... Line ~20
+ * - Constructor & Dependency Injection.. Line ~126
+ * - Locking & Synchronization........... Line ~212
+ * - Chain Verification & Sync........... Line ~281
+ * - Message Sending..................... Line ~361
+ * - Transaction Validation.............. Line ~400
+ * - ID & Hash Generation................ Line ~778
+ * - Transaction Matching & Fees......... Line ~823
+ * - Transaction Data Preparation........ Line ~868
+ * - Transaction Processing.............. Line ~953
+ * - Send Operations..................... Line ~1567
+ * - Balance & Contact Operations........ Line ~1863
+ * - Repository Wrappers................. Line ~1923
  */
 class TransactionService {
+
+    // =========================================================================
+    // PROPERTIES
+    // =========================================================================
+
     /**
      * @var ContactRepository Contact repository instance
      */
@@ -107,6 +127,88 @@ class TransactionService {
     private ?HeldTransactionService $heldTransactionService = null;
 
     /**
+     * @var SyncService|null Sync service for transaction chain synchronization
+     */
+    private ?SyncService $syncService = null;
+
+    /**
+     * @var P2pService|null P2P service for peer-to-peer transactions
+     */
+    private ?P2pService $p2pService = null;
+
+    /**
+     * @var ContactService|null Contact service for contact operations
+     */
+    private ?ContactService $contactService = null;
+
+    /**
+     * Set the sync service (setter injection for circular dependency)
+     *
+     * @param SyncService $service Sync service
+     */
+    public function setSyncService(SyncService $service): void {
+        $this->syncService = $service;
+    }
+
+    /**
+     * Get the sync service with fallback to Application singleton
+     *
+     * @return SyncService
+     */
+    private function getSyncService(): SyncService {
+        if ($this->syncService === null) {
+            $this->syncService = Application::getInstance()->services->getSyncService();
+        }
+        return $this->syncService;
+    }
+
+    /**
+     * Set the P2P service (setter injection for circular dependency)
+     *
+     * @param P2pService $service P2P service
+     */
+    public function setP2pService(P2pService $service): void {
+        $this->p2pService = $service;
+    }
+
+    /**
+     * Get the P2P service with fallback to Application singleton
+     *
+     * @return P2pService
+     */
+    private function getP2pService(): P2pService {
+        if ($this->p2pService === null) {
+            $this->p2pService = Application::getInstance()->services->getP2pService();
+        }
+        return $this->p2pService;
+    }
+
+    /**
+     * Set the contact service (setter injection for circular dependency)
+     *
+     * @param ContactService $service Contact service
+     */
+    public function setContactService(ContactService $service): void {
+        $this->contactService = $service;
+    }
+
+    /**
+     * Get the contact service with fallback to Application singleton
+     *
+     * @return ContactService
+     */
+    private function getContactService(): ContactService {
+        if ($this->contactService === null) {
+            $this->contactService = Application::getInstance()->services->getContactService();
+        }
+        return $this->contactService;
+    }
+
+    // =========================================================================
+    // CONSTRUCTOR & DEPENDENCY INJECTION
+    // =========================================================================
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
@@ -179,19 +281,9 @@ class TransactionService {
         $this->heldTransactionService = $service;
     }
 
-    /**
-     * @var SyncService|null Sync service for chain verification
-     */
-    private ?SyncService $syncService = null;
-
-    /**
-     * Set the sync service (for lazy initialization)
-     *
-     * @param SyncService $service Sync service
-     */
-    public function setSyncService(SyncService $service): void {
-        $this->syncService = $service;
-    }
+    // =========================================================================
+    // LOCKING & SYNCHRONIZATION
+    // =========================================================================
 
     /**
      * @var array Per-contact send locks to serialize simultaneous sends
@@ -264,6 +356,10 @@ class TransactionService {
         }
     }
 
+    // =========================================================================
+    // CHAIN VERIFICATION & SYNC
+    // =========================================================================
+
     /**
      * Verify sender's local chain integrity and sync if needed
      *
@@ -307,10 +403,9 @@ class TransactionService {
 
         // Try to sync if sync service is available
         if ($this->syncService === null) {
-            // Attempt to get sync service from Application if not set
+            // Attempt to get sync service using getter with fallback
             try {
-                $app = Application::getInstance();
-                $this->syncService = $app->services->getSyncService();
+                $syncServiceRef = $this->getSyncService();
             } catch (\Exception $e) {
                 $result['success'] = false;
                 $result['error'] = 'Sync service not available to repair chain';
@@ -339,6 +434,10 @@ class TransactionService {
         output(outputSyncChainRepaired(), 'SILENT');
         return $result;
     }
+
+    // =========================================================================
+    // MESSAGE SENDING
+    // =========================================================================
 
     /**
      * Send a transaction message with optional delivery tracking
@@ -390,6 +489,10 @@ class TransactionService {
             'messageId' => $messageId
         ];
     }
+
+    // =========================================================================
+    // TRANSACTION VALIDATION
+    // =========================================================================
 
     /**
      * Check if previous transaction ID is valid
@@ -564,7 +667,7 @@ class TransactionService {
 
                 // Proactively sync with the sender to recover missing transactions
                 try {
-                    $syncService = Application::getInstance()->services->getSyncService();
+                    $syncService = $this->getSyncService();
                     $syncResult = $syncService->syncTransactionChain(
                         $request['senderAddress'],
                         $request['senderPublicKey']
@@ -679,7 +782,7 @@ class TransactionService {
                         ]);
 
                         // Verify the new signature is valid
-                        $syncService = Application::getInstance()->services->getSyncService();
+                        $syncService = $this->getSyncService();
                         $txForVerification = [
                             'txid' => $request['txid'],
                             'previous_txid' => $newPreviousTxid,
@@ -768,6 +871,10 @@ class TransactionService {
             return false;
         }
     }
+
+    // =========================================================================
+    // ID & HASH GENERATION
+    // =========================================================================
 
     /**
      * Create unique transaction ID from transaction data
@@ -943,6 +1050,10 @@ class TransactionService {
 
         return $data;
     }
+
+    // =========================================================================
+    // TRANSACTION PROCESSING
+    // =========================================================================
 
     /**
      * Process incoming transaction request
@@ -1129,7 +1240,7 @@ class TransactionService {
 
                                             // Also trigger sync to recover missing transactions that expected_txid references
                                             // This ensures local chain is complete, not just the outgoing pointer
-                                            $syncService = Application::getInstance()->services->getSyncService();
+                                            $syncService = $this->getSyncService();
                                             $syncResult = $syncService->syncTransactionChain(
                                                 $message['receiver_address'],
                                                 $message['receiver_public_key']
@@ -1166,7 +1277,7 @@ class TransactionService {
 
                             // Fallback to existing sync behavior if holding failed
                             output('Attempting immediate sync...', 'SILENT');
-                            $syncService = Application::getInstance()->services->getSyncService();
+                            $syncService = $this->getSyncService();
                             $syncResult = $syncService->syncTransactionChain(
                                 $message['receiver_address'],
                                 $message['receiver_public_key']
@@ -1191,7 +1302,7 @@ class TransactionService {
                         $this->transactionRepository->updateStatus($txid, Constants::STATUS_REJECTED, true);
                         output(outputIssueTransactionTryP2p($response),'SILENT');
                         // Send P2P request for failed direct transaction using P2pService directly
-                        Application::getInstance()->services->getP2pService()->sendP2pRequestFromFailedDirectTransaction($message);
+                        $this->getP2pService()->sendP2pRequestFromFailedDirectTransaction($message);
                     } elseif(!$sendResult['success']) {
                         // Message delivery failed after retries
                         $trackingResult = $sendResult['tracking'] ?? [];
@@ -1403,7 +1514,7 @@ class TransactionService {
 
                     // Fallback to existing sync behavior if holding failed
                     output('Attempting immediate sync...', 'SILENT');
-                    $syncService = Application::getInstance()->services->getSyncService();
+                    $syncService = $this->getSyncService();
                     $syncResult = $syncService->syncTransactionChain(
                         $message['receiver_address'],
                         $message['receiver_public_key']
@@ -1557,6 +1668,10 @@ class TransactionService {
         return false; // Should not reach here
     }
 
+    // =========================================================================
+    // SEND OPERATIONS
+    // =========================================================================
+
     /**
      * Send eIOU
      *
@@ -1660,7 +1775,7 @@ class TransactionService {
         }
 
         // If receiver's public key is in contacts, prepare a transaction to send directly to them
-        $contactService = Application::getInstance()->services->getContactService();
+        $contactService = $this->getContactService();
         if ($contactInfo = $contactService->lookupContactInfo($request[2])) {
             if($contactInfo['status'] === Constants::CONTACT_STATUS_ACCEPTED){
                 // Contact is accepted
@@ -1674,7 +1789,7 @@ class TransactionService {
                     // No viable transport mode found, try P2P
                     $this->handleP2pRoute($request, $output);
                 } else {
-                    $syncResult = Application::getInstance()->services->getSyncService()->syncSingleContact($contactInfo[$transportIndex],'SILENT');
+                    $syncResult = $this->getSyncService()->syncSingleContact($contactInfo[$transportIndex],'SILENT');
                     if($syncResult){
                         $this->handleDirectRoute($request, $contactInfo, $output);
                     } else{
@@ -1802,7 +1917,7 @@ class TransactionService {
 
         try {
             // Send P2P request when contact not found using P2pService directly
-            Application::getInstance()->services->getP2pService()->sendP2pRequest($request);
+            $this->getP2pService()->sendP2pRequest($request);
 
             // Build response data
             $txResponse = array_merge($txData, [
@@ -1852,6 +1967,10 @@ class TransactionService {
             $data['initial_sender_address'] ?? null
         );
     }
+
+    // =========================================================================
+    // BALANCE & CONTACT OPERATIONS
+    // =========================================================================
 
     /**
      * Convert Contact Information back to proper units for display
@@ -1913,6 +2032,10 @@ class TransactionService {
         }
         return $contactsWithBalances;
     }
+
+    // =========================================================================
+    // REPOSITORY WRAPPERS
+    // =========================================================================
 
     /**
      * Get transaction by txid

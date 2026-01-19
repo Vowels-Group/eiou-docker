@@ -1,6 +1,36 @@
 <?php
 # Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
+/**
+ * GUI Request Router and View Data Initializer
+ *
+ * This file serves as the central routing layer for the GUI, responsible for:
+ *
+ * 1. POST Request Routing:
+ *    - Contact actions (add, accept, delete, block, unblock, edit)
+ *    - Transaction actions (sendEIOU)
+ *    - Settings actions (updateSettings, clearDebugLogs, sendDebugReport)
+ *    - AJAX endpoints (getDebugReportJson, pingContact) - return JSON and exit
+ *
+ * 2. GET Request Handling:
+ *    - Transaction update checking for real-time UI updates
+ *    - Message display from redirect parameters
+ *
+ * 3. View Data Initialization:
+ *    - User balance and earnings data
+ *    - Transaction history and in-progress transactions
+ *    - Contact lists (all, pending, accepted, blocked)
+ *    - Address types from database schema
+ *
+ * 4. Notification Tracking (via $_SESSION):
+ *    - Completed transaction detection by comparing in-progress txids
+ *    - Dead Letter Queue new item detection
+ *
+ * Dependencies: Expects $contactController, $transactionController, $settingsController,
+ * $user, $transactionService, $currencyUtility, $p2pService, $contactService, and
+ * $serviceContainer to be initialized before inclusion.
+ */
+
 // Route controllers if POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];

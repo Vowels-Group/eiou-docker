@@ -49,6 +49,32 @@ class HeldTransactionService {
     private $transactionPayload;
 
     /**
+     * @var SyncService|null Sync service for transaction chain sync
+     */
+    private ?SyncService $syncService = null;
+
+    /**
+     * Set the sync service (setter injection for circular dependency)
+     *
+     * @param SyncService $service Sync service
+     */
+    public function setSyncService(SyncService $service): void {
+        $this->syncService = $service;
+    }
+
+    /**
+     * Get the sync service with fallback to Application singleton
+     *
+     * @return SyncService
+     */
+    private function getSyncService(): SyncService {
+        if ($this->syncService === null) {
+            $this->syncService = Application::getInstance()->services->getSyncService();
+        }
+        return $this->syncService;
+    }
+
+    /**
      * Constructor
      *
      * @param HeldTransactionRepository $heldRepository Held transaction repository
@@ -153,7 +179,7 @@ class HeldTransactionService {
             $started = $this->heldRepository->markSyncStarted($contactPubkeyHash);
 
             // Initiate sync through SyncService
-            $syncService = Application::getInstance()->services->getSyncService();
+            $syncService = $this->getSyncService();
             $contactAddress = $transaction['receiver_address'] ?? null;
 
             if (!$contactAddress) {

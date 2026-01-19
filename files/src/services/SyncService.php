@@ -10,8 +10,24 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * Handles all business logic for sync management.
  *
  * @package Services
+ *
+ * SECTION INDEX:
+ * - Properties & Constructor............. Line ~14
+ * - CLI Sync Entry Points................ Line ~122
+ * - Contact Sync Operations.............. Line ~169
+ * - Transaction Sync Operations.......... Line ~274
+ * - Chain Conflict Resolution............ Line ~652
+ * - Sync Request Handling................ Line ~870
+ * - Signature Verification............... Line ~970
+ * - Balance Sync Operations.............. Line ~1177
+ * - Bidirectional Sync................... Line ~1444
  */
 class SyncService {
+
+    // =========================================================================
+    // PROPERTIES
+    // =========================================================================
+
     /**
      * @var ContactRepository Contact repository instance
      */
@@ -73,6 +89,32 @@ class SyncService {
     private MessagePayload $messagePayload;
 
     /**
+     * @var HeldTransactionService|null Held transaction service for sync notifications
+     */
+    private ?HeldTransactionService $heldTransactionService = null;
+
+    /**
+     * Set the held transaction service (setter injection for circular dependency)
+     *
+     * @param HeldTransactionService $service Held transaction service
+     */
+    public function setHeldTransactionService(HeldTransactionService $service): void {
+        $this->heldTransactionService = $service;
+    }
+
+    /**
+     * Get the held transaction service with fallback to Application singleton
+     *
+     * @return HeldTransactionService
+     */
+    private function getHeldTransactionService(): HeldTransactionService {
+        if ($this->heldTransactionService === null) {
+            $this->heldTransactionService = Application::getInstance()->services->getHeldTransactionService();
+        }
+        return $this->heldTransactionService;
+    }
+
+    /**
      * Constructor
      * @param ContactRepository $contactRepository Contact repository
      * @param AddressRepository $addressRepository Address Repository
@@ -112,6 +154,10 @@ class SyncService {
         require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
         $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
     }
+
+    // =========================================================================
+    // CLI SYNC ENTRY POINTS
+    // =========================================================================
 
     /**
      * Handler for sync through user-input
@@ -160,6 +206,10 @@ class SyncService {
             'balances' => $balanceResults
         ], "Synced contacts, transactions and balances");
     }
+
+    // =========================================================================
+    // CONTACT SYNC OPERATIONS
+    // =========================================================================
 
     /**
      * Sync all contacts
@@ -265,6 +315,10 @@ class SyncService {
         }
         return true;
     }
+
+    // =========================================================================
+    // TRANSACTION SYNC OPERATIONS
+    // =========================================================================
 
     /**
      * Sync all transactions
@@ -518,20 +572,6 @@ class SyncService {
                         'sender' => $tx['sender_address'] ?? 'unknown'
                     ];
 
-                    // Store warning in session for GUI notification
-                    if (session_status() === PHP_SESSION_ACTIVE) {
-                        if (!isset($_SESSION['sync_warnings'])) {
-                            $_SESSION['sync_warnings'] = [];
-                        }
-                        $_SESSION['sync_warnings'][] = [
-                            'message' => 'Transaction signature verification failed during sync',
-                            'type' => 'warning',
-                            'txid' => $tx['txid'] ?? 'unknown',
-                            'sender' => $tx['sender_address'] ?? 'unknown',
-                            'timestamp' => time()
-                        ];
-                    }
-
                     // CONTINUE processing - skip this transaction but process remaining ones
                     // This allows partial sync recovery instead of complete failure
                     continue;
@@ -599,23 +639,12 @@ class SyncService {
 
         // Notify HeldTransactionService of sync completion
         try {
-            $app = Application::getInstance();
-            if ($app->services->hasService('HeldTransactionService')) {
-                $heldService = $app->services->getService('HeldTransactionService');
-                $heldService->onSyncComplete(
-                    $contactPublicKey,
-                    $result['success'],
-                    $result['synced_count']
-                );
-            } else {
-                // Try to get via getter if registered
-                $heldService = $app->services->getHeldTransactionService();
-                $heldService->onSyncComplete(
-                    $contactPublicKey,
-                    $result['success'],
-                    $result['synced_count']
-                );
-            }
+            $heldService = $this->getHeldTransactionService();
+            $heldService->onSyncComplete(
+                $contactPublicKey,
+                $result['success'],
+                $result['synced_count']
+            );
         } catch (Exception $e) {
             // Log but don't fail - held transaction notification is non-critical
             SecureLogger::debug("Could not notify HeldTransactionService of sync completion", [
@@ -626,6 +655,10 @@ class SyncService {
 
         return $result;
     }
+
+    // =========================================================================
+    // CHAIN CONFLICT RESOLUTION
+    // =========================================================================
 
     /**
      * Resolve a chain conflict between two transactions claiming the same previous_txid
@@ -858,6 +891,10 @@ class SyncService {
         }
     }
 
+    // =========================================================================
+    // SYNC REQUEST HANDLING
+    // =========================================================================
+
     /**
      * Handle incoming transaction sync request
      *
@@ -951,6 +988,10 @@ class SyncService {
             echo $this->messagePayload->buildTransactionSyncRejection($senderAddress, 'internal_error');
         }
     }
+
+    // =========================================================================
+    // SIGNATURE VERIFICATION
+    // =========================================================================
 
     /**
      * Verify transaction signature
@@ -1163,6 +1204,10 @@ class SyncService {
 
         return json_encode($messageContent);
     }
+
+    // =========================================================================
+    // BALANCE SYNC OPERATIONS
+    // =========================================================================
 
     /**
      * Sync balance for a specific contact
@@ -1419,6 +1464,10 @@ class SyncService {
 
         return $results;
     }
+
+    // =========================================================================
+    // BIDIRECTIONAL SYNC
+    // =========================================================================
 
     /**
      * Perform bidirectional sync negotiation with a contact

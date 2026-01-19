@@ -11,8 +11,22 @@ require_once __DIR__ . '/../cli/CliOutputManager.php';
  * Handles all business logic for cli management.
  *
  * @package Services
+ *
+ * SECTION INDEX:
+ * - Properties & Constructor............. Line ~26
+ * - Settings Management.................. Line ~95
+ * - Settings & Help Display.............. Line ~391
+ * - User Information..................... Line ~776
+ * - Balance Operations................... Line ~886
+ * - Transaction History.................. Line ~1055
+ * - SSL Certificate Management........... Line ~1187
  */
 class CliService {
+
+    // =========================================================================
+    // PROPERTIES & CONSTRUCTOR
+    // =========================================================================
+
     /**
      * @var ContactRepository Contact Repository instance
      */
@@ -77,6 +91,10 @@ class CliService {
         $this->transportUtility = $utilityContainer->getTransportUtility();
         $this->generalUtility = $utilityContainer->getGeneralUtility();
     }
+
+    // =========================================================================
+    // SETTINGS MANAGEMENT
+    // =========================================================================
 
     /**
      * Handler for (CLI) input changes to user settings
@@ -369,6 +387,10 @@ class CliService {
             'config_file' => $configFile
         ]);
     }
+
+    // =========================================================================
+    // SETTINGS & HELP DISPLAY
+    // =========================================================================
 
     /**
      * Display current settings of user in the CLI
@@ -751,6 +773,10 @@ HELP;
         echo $help;
     }
 
+    // =========================================================================
+    // USER INFORMATION
+    // =========================================================================
+
     /**
      * Display user information to user in the CLI
      *
@@ -857,11 +883,15 @@ HELP;
         }
     }
 
+    // =========================================================================
+    // BALANCE OPERATIONS
+    // =========================================================================
+
     /**
      * View balance information in the CLI based on transactions, either received or send by user
      *
      * @param string $direction received/send
-     * @param string $where from/to 
+     * @param string $where from/to
      * @param array $results Formated transaction data
      * @param int $displayLimit The limit of output displayed
     */
@@ -1022,6 +1052,10 @@ HELP;
         }
     }
 
+    // =========================================================================
+    // TRANSACTION HISTORY
+    // =========================================================================
+
     /**
      * Display all transaction history in pretty print 'table' to user in the CLI
      *
@@ -1149,6 +1183,10 @@ HELP;
             echo "Displaying " . $effectiveLimit .  " out of " . $countResults . " total transactions.\n";
         }
     }
+
+    // =========================================================================
+    // SSL CERTIFICATE MANAGEMENT
+    // =========================================================================
 
     /**
      * Regenerate SSL certificate when hostname changes

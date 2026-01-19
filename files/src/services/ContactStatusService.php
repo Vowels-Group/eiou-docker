@@ -45,7 +45,54 @@ class ContactStatusService {
     /**
      * @var SyncService|null Sync service for chain validation
      */
-    private ?object $syncService = null;
+    private ?SyncService $syncService = null;
+
+    /**
+     * @var RateLimiterService|null Rate limiter service for manual ping rate limiting
+     */
+    private ?RateLimiterService $rateLimiterService = null;
+
+    /**
+     * Set the sync service (setter injection for circular dependency)
+     *
+     * @param SyncService $service Sync service
+     */
+    public function setSyncService(SyncService $service): void {
+        $this->syncService = $service;
+    }
+
+    /**
+     * Get the sync service with fallback to Application singleton
+     *
+     * @return SyncService
+     */
+    private function getSyncService(): SyncService {
+        if ($this->syncService === null) {
+            $this->syncService = Application::getInstance()->services->getSyncService();
+        }
+        return $this->syncService;
+    }
+
+    /**
+     * Set the rate limiter service (setter injection for circular dependency)
+     *
+     * @param RateLimiterService $service Rate limiter service
+     */
+    public function setRateLimiterService(RateLimiterService $service): void {
+        $this->rateLimiterService = $service;
+    }
+
+    /**
+     * Get the rate limiter service with fallback to Application singleton
+     *
+     * @return RateLimiterService
+     */
+    private function getRateLimiterService(): RateLimiterService {
+        if ($this->rateLimiterService === null) {
+            $this->rateLimiterService = Application::getInstance()->services->getRateLimiterService();
+        }
+        return $this->rateLimiterService;
+    }
 
     /**
      * Constructor
@@ -162,13 +209,8 @@ class ContactStatusService {
      */
     private function triggerSync(string $address, string $pubkey): void {
         try {
-            // Lazy load sync service
-            if ($this->syncService === null) {
-                $this->syncService = Application::getInstance()->services->getSyncService();
-            }
-
             // Use existing sync method
-            $this->syncService->syncTransactionChain($address, $pubkey);
+            $this->getSyncService()->syncTransactionChain($address, $pubkey);
 
             SecureLogger::info("Chain sync triggered from incoming ping request", [
                 'contact_address' => $address
@@ -201,7 +243,7 @@ class ContactStatusService {
     public function pingContact(string $identifier): array {
         // Rate limit manual pings: 3 per 5 minutes, block for 300 seconds if exceeded
         // Aligns with the automatic ping processor's minimum interval of 5 minutes
-        $rateLimiter = Application::getInstance()->services->getRateLimiterService();
+        $rateLimiter = $this->getRateLimiterService();
         $userIdentifier = $this->currentUser->getPublicKeyHash() ?? 'anonymous';
         $rateCheck = $rateLimiter->checkLimit($userIdentifier, 'manual_ping', 3, 300, 300);
 

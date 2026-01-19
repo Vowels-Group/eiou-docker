@@ -225,7 +225,7 @@
                     })
                     .catch(function(err) {
                         clearTimeout(timeoutId);
-                        console.log('Auto-refresh check failed:', err);
+                        // Error logged silently - auto-refresh will retry
                     });
             }, AUTO_REFRESH_DELAY);
         }

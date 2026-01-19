@@ -70,6 +70,32 @@ class RP2pService {
     private ?MessageDeliveryService $messageDeliveryService = null;
 
     /**
+     * @var TransactionService|null Transaction service for sending P2P transactions
+     */
+    private ?TransactionService $transactionService = null;
+
+    /**
+     * Set the transaction service (setter injection for circular dependency)
+     *
+     * @param TransactionService $service Transaction service
+     */
+    public function setTransactionService(TransactionService $service): void {
+        $this->transactionService = $service;
+    }
+
+    /**
+     * Get the transaction service with fallback to Application singleton
+     *
+     * @return TransactionService
+     */
+    private function getTransactionService(): TransactionService {
+        if ($this->transactionService === null) {
+            $this->transactionService = Application::getInstance()->services->getTransactionService();
+        }
+        return $this->transactionService;
+    }
+
+    /**
      * Constructor
      *
      * @param ContactRepository $contactRepository Contact repository
@@ -194,7 +220,7 @@ class RP2pService {
                 // Check if the fee percent is below the set maximum fee percent the user would pay
                 if ($feePercent <= $this->currentUser->getMaxFee()) {
                     // Send transaction through rp2p chain using TransactionService directly
-                    Application::getInstance()->services->getTransactionService()->sendP2pEiou($request);
+                    $this->getTransactionService()->sendP2pEiou($request);
                 } else {
                     output(outputFeeRejection(), 'SILENT');
                 }

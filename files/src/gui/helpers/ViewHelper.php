@@ -89,20 +89,23 @@ class ViewHelper
 
         $html = '<div class="pagination">';
 
+        // Escape baseUrl to prevent XSS
+        $safeBaseUrl = htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8');
+
         // Previous button
         if ($currentPage > 1) {
-            $html .= '<a href="' . $baseUrl . '&page=' . ($currentPage - 1) . '">&laquo; Previous</a>';
+            $html .= '<a href="' . $safeBaseUrl . '&page=' . ($currentPage - 1) . '">&laquo; Previous</a>';
         }
 
         // Page numbers
         for ($i = 1; $i <= $totalPages; $i++) {
             $active = ($i === $currentPage) ? ' class="active"' : '';
-            $html .= '<a href="' . $baseUrl . '&page=' . $i . '"' . $active . '>' . $i . '</a>';
+            $html .= '<a href="' . $safeBaseUrl . '&page=' . $i . '"' . $active . '>' . $i . '</a>';
         }
 
         // Next button
         if ($currentPage < $totalPages) {
-            $html .= '<a href="' . $baseUrl . '&page=' . ($currentPage + 1) . '">Next &raquo;</a>';
+            $html .= '<a href="' . $safeBaseUrl . '&page=' . ($currentPage + 1) . '">Next &raquo;</a>';
         }
 
         $html .= '</div>';

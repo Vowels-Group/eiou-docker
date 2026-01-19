@@ -14,8 +14,26 @@ require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
  * Implements the Transaction Reliability & Message Handling System.
  *
  * @package Services
+ *
+ * SECTION INDEX:
+ * - Constants & Properties............... Line ~33
+ * - Constructor.......................... Line ~103
+ * - Debugging & Logging.................. Line ~142
+ * - Message Sending...................... Line ~214
+ * - Delivery Processing.................. Line ~512
+ * - Status & Result Helpers.............. Line ~705
+ * - Metrics.............................. Line ~801
+ * - Retry Queue Processing............... Line ~935
+ * - DLQ & Statistics..................... Line ~1085
+ * - Acknowledgment Building.............. Line ~1256
+ * - Maintenance & Stage Updates.......... Line ~1322
  */
 class MessageDeliveryService {
+
+    // =========================================================================
+    // CONSTANTS & PROPERTIES
+    // =========================================================================
+
     /**
      * Success response statuses that indicate delivery was successful
      * Includes contact-specific statuses: 'warning' (contact already exists), 'updated' (address updated)
@@ -82,6 +100,10 @@ class MessageDeliveryService {
      */
     private int $deliveryStartTime = 0;
 
+    // =========================================================================
+    // CONSTRUCTOR
+    // =========================================================================
+
     /**
      * Constructor
      *
@@ -116,6 +138,10 @@ class MessageDeliveryService {
         $this->baseDelay = $baseDelay;
         $this->jitterFactor = $jitterFactor;
     }
+
+    // =========================================================================
+    // DEBUGGING & LOGGING
+    // =========================================================================
 
     /**
      * Output debug message for message delivery events
@@ -184,6 +210,10 @@ class MessageDeliveryService {
             SecureLogger::logException($e, $context);
         }
     }
+
+    // =========================================================================
+    // MESSAGE SENDING
+    // =========================================================================
 
     /**
      * Send a message with delivery tracking (unified interface)
@@ -479,6 +509,10 @@ class MessageDeliveryService {
         );
     }
 
+    // =========================================================================
+    // DELIVERY PROCESSING
+    // =========================================================================
+
     /**
      * Attempt delivery with synchronous retries
      *
@@ -668,6 +702,10 @@ class MessageDeliveryService {
         return $result;
     }
 
+    // =========================================================================
+    // STATUS & RESULT HELPERS
+    // =========================================================================
+
     /**
      * Determine if a status should complete delivery for a message type
      *
@@ -759,6 +797,10 @@ class MessageDeliveryService {
             'response' => $response
         ];
     }
+
+    // =========================================================================
+    // METRICS
+    // =========================================================================
 
     /**
      * Record a delivery metric
@@ -889,6 +931,10 @@ class MessageDeliveryService {
         // Cap at maximum delay
         return min($delay, self::MAX_RETRY_DELAY_SECONDS);
     }
+
+    // =========================================================================
+    // RETRY QUEUE PROCESSING
+    // =========================================================================
 
     /**
      * Process messages ready for retry (asynchronous/background processing)
@@ -1035,6 +1081,10 @@ class MessageDeliveryService {
                ((int) $delivery['retry_count'] >= (int) $delivery['max_retries'] &&
                 !in_array($delivery['delivery_stage'], ['completed', 'received', 'inserted', 'forwarded']));
     }
+
+    // =========================================================================
+    // DLQ & STATISTICS
+    // =========================================================================
 
     /**
      * Get the current delivery status for a message
@@ -1203,6 +1253,10 @@ class MessageDeliveryService {
         }
     }
 
+    // =========================================================================
+    // ACKNOWLEDGMENT BUILDING
+    // =========================================================================
+
     /**
      * Build multi-stage acknowledgment response
      *
@@ -1264,6 +1318,10 @@ class MessageDeliveryService {
         }
         return $this->buildAcknowledgment('forwarded', $messageId, $info);
     }
+
+    // =========================================================================
+    // MAINTENANCE & STAGE UPDATES
+    // =========================================================================
 
     /**
      * Cleanup old records
