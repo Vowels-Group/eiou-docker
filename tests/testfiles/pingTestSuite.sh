@@ -795,9 +795,10 @@ pingResultA=$(docker exec ${containerA} php -r "
     echo json_encode(\$result);
 " 2>/dev/null || echo '{"success":false,"error":"exception"}')
 
-# Parse result
-pingSuccess=$(echo "$pingResultA" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['success'] ? 'true' : 'false';")
-pingOnlineStatus=$(echo "$pingResultA" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['online_status'] ?? 'unknown';")
+# Parse result using shell (php not available on host)
+pingSuccess=$(echo "$pingResultA" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
+pingOnlineStatus=$(echo "$pingResultA" | grep -o '"online_status":"[^"]*"' | sed 's/.*"online_status":"\([^"]*\)".*/\1/' | head -1)
+[[ -z "$pingOnlineStatus" ]] && pingOnlineStatus="unknown"
 
 if [[ "$pingSuccess" == "true" ]]; then
     printf "\t   Manual ping command ${GREEN}PASSED${NC} - Status: ${pingOnlineStatus}\n"
@@ -820,8 +821,9 @@ pingNonExistent=$(docker exec ${containerA} php -r "
     echo json_encode(\$result);
 " 2>/dev/null || echo '{"success":false,"error":"exception"}')
 
-pingNonExistentSuccess=$(echo "$pingNonExistent" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['success'] ? 'true' : 'false';")
-pingNonExistentError=$(echo "$pingNonExistent" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['error'] ?? '';")
+# Parse result using shell (php not available on host)
+pingNonExistentSuccess=$(echo "$pingNonExistent" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
+pingNonExistentError=$(echo "$pingNonExistent" | grep -o '"error":"[^"]*"' | sed 's/.*"error":"\([^"]*\)".*/\1/' | head -1)
 
 if [[ "$pingNonExistentSuccess" == "false" ]] && [[ "$pingNonExistentError" == "contact_not_found" ]]; then
     printf "\t   Ping non-existent contact ${GREEN}PASSED${NC} - Correctly returns error\n"
@@ -853,7 +855,8 @@ if [[ -n "$contactNameB" ]]; then
         echo json_encode(\$result);
     " 2>/dev/null || echo '{"success":false,"error":"exception"}')
 
-    pingByNameSuccess=$(echo "$pingByName" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['success'] ? 'true' : 'false';")
+    # Parse result using shell (php not available on host)
+    pingByNameSuccess=$(echo "$pingByName" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
 
     if [[ "$pingByNameSuccess" == "true" ]]; then
         printf "\t   Ping by contact name ${GREEN}PASSED${NC} - Name: ${contactNameB}\n"
