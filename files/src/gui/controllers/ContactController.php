@@ -570,11 +570,6 @@ class ContactController
         // Set JSON header
         header('Content-Type: application/json');
 
-        // Log entry point for debugging
-        SecureLogger::info("GUI ping contact request received", [
-            'contact_address' => $_POST['contact_address'] ?? 'not provided'
-        ]);
-
         try {
             // CSRF Protection: Verify token before processing
             $this->session->verifyCSRFToken();
@@ -609,18 +604,9 @@ class ContactController
             $contactAddress = $addressValidation['value'];
 
             // Get ContactStatusService and ping the contact
-            SecureLogger::info("GUI ping: calling ContactStatusService", [
-                'validated_address' => $contactAddress
-            ]);
-
             $app = Application::getInstance();
             $contactStatusService = $app->services->getContactStatusService();
             $result = $contactStatusService->pingContact($contactAddress);
-
-            SecureLogger::info("GUI ping: result received", [
-                'success' => $result['success'] ?? false,
-                'online_status' => $result['online_status'] ?? 'unknown'
-            ]);
 
             echo json_encode($result);
 
