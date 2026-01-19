@@ -17,7 +17,7 @@ SELECT message FROM debug;
 # CONTACTS TABLE
 # ============================================================
 # Full contacts info (excludes pubkey, pubkey_hash)
-SELECT id, contact_id, name, status, currency, fee_percent, credit_limit, created_at FROM contacts;
+SELECT id, contact_id, name, status, currency, fee_percent, credit_limit, online_status, valid_chain, last_ping_at, created_at FROM contacts;
 
 # ============================================================
 # ADDRESSES TABLE
