@@ -577,7 +577,7 @@ fi
 echo -e "\t Tor address: $tor"
 readable="${pubkey//$'\n'/$'\n\t\t'}"
 echo -e "\t Public Key: \n\t\t $readable"
-echo -e "\t Authentication Code: $authcode"
+echo -e "\t Authentication Code: (see secure temp file or run 'eiou authcode' to retrieve)"
 
 
 # Start p2p message processing in background
