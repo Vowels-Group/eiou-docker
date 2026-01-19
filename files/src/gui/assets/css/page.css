@@ -364,6 +364,16 @@ body {
     border: 1px solid #d6d8db;
 }
 
+/* Ping Status Controls */
+.ping-controls {
+    margin-top: 0.75rem;
+}
+
+.ping-result-message {
+    margin-left: 0.5rem;
+    font-size: 0.85rem;
+}
+
 /* Chain warning badge on contact card */
 .badge-warning {
     background-color: #fff3cd;
