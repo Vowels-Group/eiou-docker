@@ -1,0 +1,186 @@
+<?php
+# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+
+require_once __DIR__ . '/../utils/SecureLogger.php';
+
+/**
+ * Contact Status Service
+ *
+ * Handles incoming ping requests from other nodes.
+ * Responds with pong containing local chain state for comparison.
+ *
+ * @package Services
+ */
+class ContactStatusService {
+    /**
+     * @var ContactRepository Contact repository instance
+     */
+    private ContactRepository $contactRepository;
+
+    /**
+     * @var TransactionRepository Transaction repository instance
+     */
+    private TransactionRepository $transactionRepository;
+
+    /**
+     * @var UtilityServiceContainer Utility service container
+     */
+    private UtilityServiceContainer $utilityContainer;
+
+    /**
+     * @var UserContext Current user context
+     */
+    private UserContext $currentUser;
+
+    /**
+     * @var ContactStatusPayload Payload builder
+     */
+    private ContactStatusPayload $contactStatusPayload;
+
+    /**
+     * @var SyncService|null Sync service for chain validation
+     */
+    private ?object $syncService = null;
+
+    /**
+     * Constructor
+     *
+     * @param ContactRepository $contactRepository Contact repository
+     * @param TransactionRepository $transactionRepository Transaction repository
+     * @param UtilityServiceContainer $utilityContainer Utility container
+     * @param UserContext $currentUser Current user context
+     */
+    public function __construct(
+        ContactRepository $contactRepository,
+        TransactionRepository $transactionRepository,
+        UtilityServiceContainer $utilityContainer,
+        UserContext $currentUser
+    ) {
+        $this->contactRepository = $contactRepository;
+        $this->transactionRepository = $transactionRepository;
+        $this->utilityContainer = $utilityContainer;
+        $this->currentUser = $currentUser;
+
+        // Initialize payload builder
+        require_once '/etc/eiou/src/schemas/payloads/ContactStatusPayload.php';
+        $this->contactStatusPayload = new ContactStatusPayload($this->currentUser, $this->utilityContainer);
+    }
+
+    /**
+     * Handle incoming ping request
+     *
+     * @param array $request The ping request data
+     * @return void Echoes JSON response
+     */
+    public function handlePingRequest(array $request): void {
+        // Validate sender public key exists
+        if (!isset($request['senderPublicKey'])) {
+            echo json_encode([
+                'status' => 'rejected',
+                'reason' => 'missing_public_key',
+                'message' => 'Sender public key is required'
+            ]);
+            return;
+        }
+
+        // Check if contact status feature is enabled
+        if (!Constants::CONTACT_STATUS_ENABLED) {
+            echo $this->contactStatusPayload->buildRejection($request, 'disabled');
+            return;
+        }
+
+        $senderPubkey = $request['senderPublicKey'];
+
+        // Check if sender is an accepted contact
+        if (!$this->contactRepository->isAcceptedContactPubkey($senderPubkey)) {
+            // Check if contact exists but is blocked
+            if (!$this->contactRepository->isNotBlocked($senderPubkey)) {
+                echo $this->contactStatusPayload->buildRejection($request, 'blocked');
+                return;
+            }
+            // Contact doesn't exist or is pending
+            echo $this->contactStatusPayload->buildRejection($request, 'unknown_contact');
+            return;
+        }
+
+        // Get our local prev_txid for this contact's chain
+        $localPrevTxid = $this->transactionRepository->getPreviousTxid(
+            $this->currentUser->getPublicKey(),
+            $senderPubkey
+        );
+
+        // Compare with sender's prev_txid
+        $remotePrevTxid = $request['prevTxid'] ?? null;
+        $chainValid = true;
+
+        if ($remotePrevTxid !== null && $localPrevTxid !== null) {
+            // Both have transactions - compare
+            $chainValid = ($localPrevTxid === $remotePrevTxid);
+
+            // If chains don't match and sync was requested, trigger sync
+            if (!$chainValid && ($request['requestSync'] ?? false)) {
+                $this->triggerSync($request['senderAddress'], $senderPubkey);
+            }
+        }
+
+        // Update the sender's online status since they pinged us
+        $this->updateContactOnlineStatus($senderPubkey);
+
+        // Send pong response
+        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, $chainValid);
+    }
+
+    /**
+     * Update contact's online status to online and record last ping time
+     *
+     * @param string $pubkey Contact public key
+     */
+    private function updateContactOnlineStatus(string $pubkey): void {
+        try {
+            $this->contactRepository->updateContactFields($pubkey, [
+                'online_status' => Constants::CONTACT_ONLINE_STATUS_ONLINE,
+                'last_ping_at' => date('Y-m-d H:i:s.u')
+            ]);
+        } catch (\Exception $e) {
+            SecureLogger::error("Failed to update contact online status on ping receive", [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Trigger transaction chain sync with contact
+     *
+     * @param string $address Contact address
+     * @param string $pubkey Contact public key
+     */
+    private function triggerSync(string $address, string $pubkey): void {
+        try {
+            // Lazy load sync service
+            if ($this->syncService === null) {
+                $this->syncService = Application::getInstance()->services->getSyncService();
+            }
+
+            // Use existing sync method
+            $this->syncService->syncTransactionChain($address, $pubkey);
+
+            SecureLogger::info("Chain sync triggered from incoming ping request", [
+                'contact_address' => $address
+            ]);
+        } catch (\Exception $e) {
+            SecureLogger::warning("Chain sync failed during incoming ping", [
+                'contact_address' => $address,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Get the contact repository (for processor access)
+     *
+     * @return ContactRepository
+     */
+    public function getRepository(): ContactRepository {
+        return $this->contactRepository;
+    }
+}

@@ -134,6 +134,12 @@ elseif ($type === "message") {
   $messageService = $serviceContainer->getMessageService();
   $messageService->handleMessageRequest($request);
 }
+elseif ($type === "ping") {
+  // Handle contact status ping
+  $debugService->output("Processing ping from " . print_r($envelope['senderAddress'],true), 'SILENT');
+  $contactStatusService = $serviceContainer->getContactStatusService();
+  $contactStatusService->handlePingRequest($request);
+}
 else {
   // Handle unknown request type
   $debugService->output("Processing nonstandard request", 'SILENT');

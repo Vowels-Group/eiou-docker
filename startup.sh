@@ -595,6 +595,11 @@ nohup php /etc/eiou/CleanupMessages.php > /dev/null 2>&1 &
 CLEANUP_PID=$!
 echo "Cleanup processing started successfully (PID: $CLEANUP_PID)"
 
+# Start contact status polling in background (optional - respects CONTACT_STATUS_ENABLED)
+nohup php /etc/eiou/ContactStatusMessages.php > /dev/null 2>&1 &
+CONTACT_STATUS_PID=$!
+echo "Contact status polling started successfully (PID: $CONTACT_STATUS_PID)"
+
 # Watchdog function to monitor and restart processors if they die
 watchdog() {
     local WATCHDOG_INTERVAL=30       # Check every 30 seconds
@@ -605,9 +610,11 @@ watchdog() {
     local P2P_RESTARTS=0
     local TRANSACTION_RESTARTS=0
     local CLEANUP_RESTARTS=0
+    local CONTACT_STATUS_RESTARTS=0
     local P2P_LAST_RESTART=0
     local TRANSACTION_LAST_RESTART=0
     local CLEANUP_LAST_RESTART=0
+    local CONTACT_STATUS_LAST_RESTART=0
 
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watchdog started - monitoring processor PIDs"
 
@@ -657,6 +664,21 @@ watchdog() {
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages restarted (new PID: $CLEANUP_PID)"
             elif [ $CLEANUP_RESTARTS -ge $MAX_RESTARTS ]; then
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+            fi
+        fi
+
+        # Check ContactStatusMessages processor (optional - may exit if feature disabled)
+        if ! kill -0 $CONTACT_STATUS_PID 2>/dev/null; then
+            local TIME_SINCE_RESTART=$((CURRENT_TIME - CONTACT_STATUS_LAST_RESTART))
+            if [ $CONTACT_STATUS_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                CONTACT_STATUS_RESTARTS=$((CONTACT_STATUS_RESTARTS + 1))
+                CONTACT_STATUS_LAST_RESTART=$CURRENT_TIME
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages died (was PID $CONTACT_STATUS_PID), restarting (attempt $CONTACT_STATUS_RESTARTS/$MAX_RESTARTS)..."
+                nohup php /etc/eiou/ContactStatusMessages.php > /dev/null 2>&1 &
+                CONTACT_STATUS_PID=$!
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages restarted (new PID: $CONTACT_STATUS_PID)"
+            elif [ $CONTACT_STATUS_RESTARTS -ge $MAX_RESTARTS ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
             fi
         fi
     done

@@ -29,8 +29,12 @@
             <?php foreach ($acceptedContacts as $contact): ?>
                 <?php
                     $contactData = $contactDataBuilder->buildEncodedContactData($contact, 'accepted');
+                    $onlineStatus = $contact['online_status'] ?? 'unknown';
+                    $validChain = $contact['valid_chain'] ?? null;
                 ?>
-                <div class="contact-card" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer;">
+                <div class="contact-card" data-contact-id="<?php echo htmlspecialchars($contact['contact_id'] ?? ''); ?>" data-contact-name="<?php echo htmlspecialchars(strtolower($contact['name'] ?? '')); ?>" data-contact-address="<?php echo htmlspecialchars(strtolower(($contact['http'] ?? '') . ' ' . ($contact['tor'] ?? ''))); ?>" onclick="openContactModal(<?php echo $contactData; ?>)" style="cursor: pointer; position: relative;">
+                    <!-- Online Status Indicator -->
+                    <span class="contact-status-indicator status-<?php echo htmlspecialchars($onlineStatus); ?>" title="<?php echo ucfirst(htmlspecialchars($onlineStatus)); ?><?php echo $validChain !== null ? ($validChain ? ' - Chain Valid' : ' - Chain Invalid') : ''; ?>"></span>
                     <div class="contact-avatar" style="background: linear-gradient(135deg, #0d6efd, #0b5ed7);">
                         <?php echo strtoupper(substr($contact['name'], 0, 1)); ?>
                     </div>
@@ -38,6 +42,9 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                         <div class="contact-badges">
                             <span class="badge badge-accepted">Accepted</span>
+                            <?php if ($validChain === 0): ?>
+                            <span class="badge badge-warning" title="Transaction chain needs sync"><i class="fas fa-exclamation-triangle"></i></span>
+                            <?php endif; ?>
                         </div>
                         <div class="contact-address-icons">
                             <?php if (!empty($contact['http'])): ?>
@@ -188,6 +195,24 @@
                     <div class="info-item">
                         <label><i class="fas fa-percent"></i> Fee</label>
                         <div class="info-value"><span id="modal_fee">0.00</span>%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="contact-info-section">
+                <h4><i class="fas fa-signal"></i> Connection Status</h4>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label><i class="fas fa-circle"></i> Online Status</label>
+                        <div class="info-value">
+                            <span id="modal_online_status" class="status-badge status-unknown">Unknown</span>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <label><i class="fas fa-link"></i> Chain Status</label>
+                        <div class="info-value">
+                            <span id="modal_chain_status" class="chain-badge chain-unknown">Not Checked</span>
+                        </div>
                     </div>
                 </div>
             </div>

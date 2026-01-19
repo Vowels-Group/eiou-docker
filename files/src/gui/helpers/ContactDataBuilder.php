@@ -53,7 +53,9 @@ class ContactDataBuilder
             'pubkey' => $contact['pubkey'] ?? '',
             'balance' => $contact['balance'] ?? 0,
             'contact_id' => $contact['contact_id'] ?? '',
-            'transactions' => $contact['transactions'] ?? []
+            'transactions' => $contact['transactions'] ?? [],
+            'online_status' => $contact['online_status'] ?? 'unknown',
+            'valid_chain' => $contact['valid_chain'] ?? null
         ], $addresses);
     }
 

@@ -1001,6 +1001,35 @@ function openContactModal(contact, openTab) {
     statusBadge.textContent = contact.status.charAt(0).toUpperCase() + contact.status.slice(1);
     statusBadge.className = 'badge badge-' + contact.status;
 
+    // Set online status (online/offline/unknown)
+    var onlineStatusEl = document.getElementById('modal_online_status');
+    if (onlineStatusEl) {
+        var onlineStatus = contact.online_status || 'unknown';
+        var statusText = onlineStatus.charAt(0).toUpperCase() + onlineStatus.slice(1);
+        onlineStatusEl.textContent = statusText;
+        onlineStatusEl.className = 'status-badge status-' + onlineStatus;
+    }
+
+    // Set chain status (valid/invalid/not checked)
+    var chainStatusEl = document.getElementById('modal_chain_status');
+    if (chainStatusEl) {
+        var validChain = contact.valid_chain;
+        var chainText;
+        var chainClass;
+        if (validChain === null || validChain === undefined) {
+            chainText = 'Not Checked';
+            chainClass = 'chain-unknown';
+        } else if (validChain === true || validChain === 1) {
+            chainText = 'Valid';
+            chainClass = 'chain-valid';
+        } else {
+            chainText = 'Needs Sync';
+            chainClass = 'chain-invalid';
+        }
+        chainStatusEl.textContent = chainText;
+        chainStatusEl.className = 'chain-badge ' + chainClass;
+    }
+
     // Set form values
     document.getElementById('edit_contact_address').value = contact.address;
     document.getElementById('edit_contact_name').value = contact.name;

@@ -171,6 +171,11 @@ function runColumnMigrations(PDO $pdo): array {
             'sending_started_at' => 'DATETIME(6) DEFAULT NULL AFTER end_recipient_address',
             'recovery_count' => 'INT DEFAULT 0 AFTER sending_started_at',
             'needs_manual_review' => 'TINYINT(1) DEFAULT 0 AFTER recovery_count'
+        ],
+        'contacts' => [
+            'online_status' => "ENUM('online', 'offline', 'unknown') DEFAULT 'unknown' AFTER status",
+            'valid_chain' => 'TINYINT(1) DEFAULT NULL AFTER online_status',
+            'last_ping_at' => 'TIMESTAMP(6) NULL AFTER created_at'
         ]
     ];
 
@@ -265,6 +270,9 @@ function runColumnMigrations(PDO $pdo): array {
     $indexesToAdd = [
         'transactions' => [
             'idx_transactions_sending_recovery' => 'status, sending_started_at'
+        ],
+        'contacts' => [
+            'idx_contacts_online_status' => 'online_status'
         ]
     ];
 
