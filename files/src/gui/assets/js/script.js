@@ -45,6 +45,16 @@ function safeStorageRemove(key) {
     }
 }
 
+// HTML escape function to prevent XSS attacks when inserting user data into DOM
+function escapeHtml(text) {
+    if (text === null || text === undefined) {
+        return '';
+    }
+    var div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
     // Simple script to show/hide the floating action button
     // This is minimal JavaScript that should work in Tor Browser
     window.addEventListener('scroll', function() {
@@ -273,7 +283,7 @@ function openTransactionModal(index) {
 
     // Header with amount
     html += '<div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, ' + directionColor + ' 0%, ' + (tx.type === 'sent' ? '#ff6b6b' : '#20c997') + ' 100%); border-radius: 8px; margin-bottom: 1.5rem;">';
-    html += '<div style="font-size: 2rem; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);">' + (tx.type === 'sent' ? '-' : '+') + '$' + parseFloat(tx.amount).toFixed(2) + ' ' + tx.currency + '</div>';
+    html += '<div style="font-size: 2rem; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);">' + (tx.type === 'sent' ? '-' : '+') + '$' + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
     html += '<div style="color: white; margin-top: 0.5rem; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
     html += '</div>';
 
@@ -290,28 +300,28 @@ function openTransactionModal(index) {
     // Counterparty (To/From)
     html += '<div class="tx-detail-row">';
     html += '<div class="tx-detail-label">' + (tx.type === 'sent' ? 'To' : 'From') + '</div>';
-    html += '<div class="tx-detail-value">' + (tx.counterparty_name ? '<strong>' + tx.counterparty_name + '</strong><br>' : '') + '<span style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + tx.counterparty_address + '</span></div>';
+    html += '<div class="tx-detail-value">' + (tx.counterparty_name ? '<strong>' + escapeHtml(tx.counterparty_name) + '</strong><br>' : '') + '<span style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + escapeHtml(tx.counterparty_address) + '</span></div>';
     html += '</div>';
 
     // Description (moved up, right after To/From)
     if (tx.description) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + tx.description + '</div>';
+        html += '<div class="tx-detail-value">' + escapeHtml(tx.description) + '</div>';
         html += '</div>';
     }
 
     // Date/Time
     html += '<div class="tx-detail-row">';
     html += '<div class="tx-detail-label">Date & Time</div>';
-    html += '<div class="tx-detail-value">' + tx.date + '</div>';
+    html += '<div class="tx-detail-value">' + escapeHtml(tx.date) + '</div>';
     html += '</div>';
 
     // Transaction ID
     if (tx.txid) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Transaction ID</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.txid + '</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + escapeHtml(tx.txid) + '</div>';
         html += '</div>';
     }
 
@@ -319,7 +329,7 @@ function openTransactionModal(index) {
     if (tx.tx_type === 'p2p' && tx.memo && tx.memo !== 'standard') {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Routing Hash</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + truncate(tx.memo, 64) + '</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + escapeHtml(truncate(tx.memo, 64)) + '</div>';
         html += '</div>';
     }
 
@@ -335,14 +345,14 @@ function openTransactionModal(index) {
         // End Recipient
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">End Recipient</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + tx.p2p_destination + '</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + escapeHtml(tx.p2p_destination) + '</div>';
         html += '</div>';
 
         // Amount to Recipient
         if (tx.p2p_amount) {
             html += '<div class="tx-detail-row">';
             html += '<div class="tx-detail-label">Amount to Recipient</div>';
-            html += '<div class="tx-detail-value">$' + parseFloat(tx.p2p_amount).toFixed(2) + ' ' + tx.currency + '</div>';
+            html += '<div class="tx-detail-value">$' + parseFloat(tx.p2p_amount).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
             html += '</div>';
         }
 
@@ -350,7 +360,7 @@ function openTransactionModal(index) {
         if (tx.p2p_fee) {
             html += '<div class="tx-detail-row">';
             html += '<div class="tx-detail-label">Transaction Fee</div>';
-            html += '<div class="tx-detail-value">$' + parseFloat(tx.p2p_fee).toFixed(2) + ' ' + tx.currency + '</div>';
+            html += '<div class="tx-detail-value">$' + parseFloat(tx.p2p_fee).toFixed(2) + ' ' + escapeHtml(tx.currency) + '</div>';
             html += '</div>';
         }
 
@@ -418,8 +428,8 @@ function showToast(title, message, type) {
 
     toast.innerHTML = '<i class="fas ' + icons[type] + ' toast-icon"></i>' +
         '<div class="toast-content">' +
-        '<div class="toast-title">' + title + '</div>' +
-        '<div class="toast-message">' + message + '</div>' +
+        '<div class="toast-title">' + escapeHtml(title) + '</div>' +
+        '<div class="toast-message">' + escapeHtml(message) + '</div>' +
         '</div>' +
         '<button class="toast-close" onclick="this.parentElement.parentNode.removeChild(this.parentElement)">&times;</button>';
 
@@ -1088,9 +1098,9 @@ function openContactModal(contact, openTab) {
             html += '<div class="tx-icon"><i class="fas ' + typeIcon + '"></i></div>';
             html += '<div class="tx-details">';
             html += '<div class="tx-type">' + typeLabel + '</div>';
-            html += '<div class="tx-date">' + (tx.date || 'Unknown date') + '</div>';
+            html += '<div class="tx-date">' + escapeHtml(tx.date || 'Unknown date') + '</div>';
             html += '</div>';
-            html += '<div class="tx-amount">' + amountPrefix + parseFloat(tx.amount).toFixed(2) + ' ' + (tx.currency || 'USD') + '<i class="fas fa-chevron-right" style="margin-left: 0.5rem; font-size: 0.8rem; color: #6c757d;"></i></div>';
+            html += '<div class="tx-amount">' + amountPrefix + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency || 'USD') + '<i class="fas fa-chevron-right" style="margin-left: 0.5rem; font-size: 0.8rem; color: #6c757d;"></i></div>';
             html += '</div>';
         }
         transactionsEl.innerHTML = html;
@@ -1412,7 +1422,7 @@ function showContactTxDetail(index) {
 
     // Header with amount
     html += '<div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, ' + directionColor + ' 0%, ' + gradientEnd + ' 100%); border-radius: 8px; margin-bottom: 1.5rem;">';
-    html += '<div style="font-size: 2rem; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);">' + (tx.type === 'sent' ? '-' : '+') + '$' + parseFloat(tx.amount).toFixed(2) + ' ' + (tx.currency || 'USD') + '</div>';
+    html += '<div style="font-size: 2rem; font-weight: bold; color: white; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);">' + (tx.type === 'sent' ? '-' : '+') + '$' + parseFloat(tx.amount).toFixed(2) + ' ' + escapeHtml(tx.currency || 'USD') + '</div>';
     html += '<div style="color: white; margin-top: 0.5rem; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);"><i class="fas ' + directionIcon + '"></i> ' + directionText + '</div>';
     html += '</div>';
 
@@ -1431,7 +1441,7 @@ function showContactTxDetail(index) {
     if (counterpartyAddress) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">' + (tx.type === 'sent' ? 'To' : 'From') + '</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + counterpartyAddress + '</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">' + escapeHtml(counterpartyAddress) + '</div>';
         html += '</div>';
     }
 
@@ -1439,21 +1449,21 @@ function showContactTxDetail(index) {
     if (tx.description) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Description</div>';
-        html += '<div class="tx-detail-value">' + tx.description + '</div>';
+        html += '<div class="tx-detail-value">' + escapeHtml(tx.description) + '</div>';
         html += '</div>';
     }
 
     // Date/Time
     html += '<div class="tx-detail-row">';
     html += '<div class="tx-detail-label">Date & Time</div>';
-    html += '<div class="tx-detail-value">' + (tx.date || 'Unknown') + '</div>';
+    html += '<div class="tx-detail-value">' + escapeHtml(tx.date || 'Unknown') + '</div>';
     html += '</div>';
 
     // Transaction ID
     if (tx.txid) {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Transaction ID</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.txid + '</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + escapeHtml(tx.txid) + '</div>';
         html += '</div>';
     }
 
@@ -1461,7 +1471,7 @@ function showContactTxDetail(index) {
     if (tx.tx_type === 'p2p' && tx.memo && tx.memo !== 'standard') {
         html += '<div class="tx-detail-row">';
         html += '<div class="tx-detail-label">Routing Hash</div>';
-        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + tx.memo + '</div>';
+        html += '<div class="tx-detail-value" style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">' + escapeHtml(tx.memo) + '</div>';
         html += '</div>';
     }
 
