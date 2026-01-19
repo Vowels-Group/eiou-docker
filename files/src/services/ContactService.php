@@ -13,11 +13,26 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * with tracking, retry logic, and dead letter queue support.
  *
  * @package Services
+ *
+ * SECTION INDEX:
+ * - Properties & Constructor............. Line ~20
+ * - Contact Transaction Helpers.......... Line ~149
+ * - Message Sending...................... Line ~307
+ * - Add Contact Operations............... Line ~348
+ * - Accept Contact....................... Line ~858
+ * - Contact Creation Handler............. Line ~873
+ * - Contact Lookup & Search.............. Line ~970
+ * - Contact Existence Checks............. Line ~1148
+ * - Contact Status Management............ Line ~1190
+ * - Contact Updates...................... Line ~1354
+ * - Repository Wrappers.................. Line ~1437
  */
-
-
-
 class ContactService {
+
+    // =========================================================================
+    // PROPERTIES
+    // =========================================================================
+
     /**
      * @var ContactRepository Contact Repository instance
      */
@@ -135,6 +150,10 @@ class ContactService {
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
     }
+
+    // =========================================================================
+    // CONTACT TRANSACTION HELPERS
+    // =========================================================================
 
     /**
      * Create unique transaction ID for contact requests
@@ -292,6 +311,10 @@ class ContactService {
         return $this->transactionRepository->completeReceivedContactTransaction($senderPublicKey);
     }
 
+    // =========================================================================
+    // MESSAGE SENDING
+    // =========================================================================
+
     /**
      * Send a contact message with optional delivery tracking
      *
@@ -334,6 +357,10 @@ class ContactService {
             'messageId' => $messageId
         ];
     }
+
+    // =========================================================================
+    // ADD CONTACT OPERATIONS
+    // =========================================================================
 
     /**
      * Add a contact
@@ -845,6 +872,10 @@ class ContactService {
         }
     }
 
+    // =========================================================================
+    // ACCEPT CONTACT
+    // =========================================================================
+
     /**
      * Accept a contact request
      *
@@ -863,6 +894,10 @@ class ContactService {
         }
         return $success;
     }
+
+    // =========================================================================
+    // CONTACT CREATION HANDLER
+    // =========================================================================
 
     /**
      * Handle contact creation request (incoming)
@@ -960,6 +995,10 @@ class ContactService {
             }
         }
     }
+
+    // =========================================================================
+    // CONTACT LOOKUP & SEARCH
+    // =========================================================================
 
     /**
      * Lookup contact information
@@ -1139,6 +1178,10 @@ class ContactService {
         }
     }
 
+    // =========================================================================
+    // CONTACT EXISTENCE CHECKS
+    // =========================================================================
+
     /**
      * Check if contact exists
      *
@@ -1179,6 +1222,10 @@ class ContactService {
     public function isNotBlocked(string $pubkey): bool {
         return $this->contactRepository->isNotBlocked($pubkey);
     }
+
+    // =========================================================================
+    // CONTACT STATUS MANAGEMENT
+    // =========================================================================
 
     /**
      * Block a contact
@@ -1345,6 +1392,10 @@ class ContactService {
         }
     }
 
+    // =========================================================================
+    // CONTACT UPDATES
+    // =========================================================================
+
     /**
      * Update specific contact fields through CLI interaction
      *
@@ -1427,6 +1478,10 @@ class ContactService {
             $output->error("Failed to update contact", ErrorCodes::UPDATE_FAILED, 500, $updateData);
         }
     }
+
+    // =========================================================================
+    // REPOSITORY WRAPPERS
+    // =========================================================================
 
     /**
      * Get all contact addresses

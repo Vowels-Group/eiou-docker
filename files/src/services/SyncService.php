@@ -10,8 +10,24 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * Handles all business logic for sync management.
  *
  * @package Services
+ *
+ * SECTION INDEX:
+ * - Properties & Constructor............. Line ~14
+ * - CLI Sync Entry Points................ Line ~122
+ * - Contact Sync Operations.............. Line ~169
+ * - Transaction Sync Operations.......... Line ~274
+ * - Chain Conflict Resolution............ Line ~652
+ * - Sync Request Handling................ Line ~870
+ * - Signature Verification............... Line ~970
+ * - Balance Sync Operations.............. Line ~1177
+ * - Bidirectional Sync................... Line ~1444
  */
 class SyncService {
+
+    // =========================================================================
+    // PROPERTIES
+    // =========================================================================
+
     /**
      * @var ContactRepository Contact repository instance
      */
@@ -113,6 +129,10 @@ class SyncService {
         $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
     }
 
+    // =========================================================================
+    // CLI SYNC ENTRY POINTS
+    // =========================================================================
+
     /**
      * Handler for sync through user-input
      *
@@ -160,6 +180,10 @@ class SyncService {
             'balances' => $balanceResults
         ], "Synced contacts, transactions and balances");
     }
+
+    // =========================================================================
+    // CONTACT SYNC OPERATIONS
+    // =========================================================================
 
     /**
      * Sync all contacts
@@ -265,6 +289,10 @@ class SyncService {
         }
         return true;
     }
+
+    // =========================================================================
+    // TRANSACTION SYNC OPERATIONS
+    // =========================================================================
 
     /**
      * Sync all transactions
@@ -627,6 +655,10 @@ class SyncService {
         return $result;
     }
 
+    // =========================================================================
+    // CHAIN CONFLICT RESOLUTION
+    // =========================================================================
+
     /**
      * Resolve a chain conflict between two transactions claiming the same previous_txid
      *
@@ -858,6 +890,10 @@ class SyncService {
         }
     }
 
+    // =========================================================================
+    // SYNC REQUEST HANDLING
+    // =========================================================================
+
     /**
      * Handle incoming transaction sync request
      *
@@ -951,6 +987,10 @@ class SyncService {
             echo $this->messagePayload->buildTransactionSyncRejection($senderAddress, 'internal_error');
         }
     }
+
+    // =========================================================================
+    // SIGNATURE VERIFICATION
+    // =========================================================================
 
     /**
      * Verify transaction signature
@@ -1163,6 +1203,10 @@ class SyncService {
 
         return json_encode($messageContent);
     }
+
+    // =========================================================================
+    // BALANCE SYNC OPERATIONS
+    // =========================================================================
 
     /**
      * Sync balance for a specific contact
@@ -1419,6 +1463,10 @@ class SyncService {
 
         return $results;
     }
+
+    // =========================================================================
+    // BIDIRECTIONAL SYNC
+    // =========================================================================
 
     /**
      * Perform bidirectional sync negotiation with a contact
