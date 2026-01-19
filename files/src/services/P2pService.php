@@ -512,11 +512,15 @@ class P2pService {
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
         output(outputP2pComponents($data), 'SILENT');
 
+        // Request level randomization for network traffic analysis prevention
+        // Uses overlapping random distributions: abs(rand(300,700) - rand(200,500)) + rand(1,10)
+        // This produces unpredictable but bounded values, preventing attackers from
+        // correlating request patterns across the P2P network. See Constants.php for details.
         $data['minRequestLevel'] = abs(
             rand(Constants::P2P_MIN_REQUEST_LEVEL_RANGE_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANGE_HIGH) -
             rand(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_HIGH)
-        ) + rand(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH); // Calculate random lower bound for request level
-        $data['maxRequestLevel'] = $data['minRequestLevel'] + $this->transportUtility->jitter($this->currentUser->getMaxP2pLevel()); // Add upper bound to request level, using users max
+        ) + rand(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH);
+        $data['maxRequestLevel'] = $data['minRequestLevel'] + $this->transportUtility->jitter($this->currentUser->getMaxP2pLevel());
 
         return $data;
     }
@@ -548,11 +552,13 @@ class P2pService {
         output(outputGeneratedP2pHash($data['hash']), 'SILENT');
         output(outputP2pComponents($data), 'SILENT');
 
+        // Request level randomization for network traffic analysis prevention
+        // See prepareP2pRequest() and Constants.php for algorithm details.
         $data['minRequestLevel'] = abs(
             rand(Constants::P2P_MIN_REQUEST_LEVEL_RANGE_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANGE_HIGH) -
             rand(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_HIGH)
-        ) + rand(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH); // Calculate random lower bound for request level
-        $data['maxRequestLevel'] = $data['minRequestLevel'] + $this->transportUtility->jitter($this->currentUser->getMaxP2pLevel()); // Add upper bound to request level, using users max
+        ) + rand(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH);
+        $data['maxRequestLevel'] = $data['minRequestLevel'] + $this->transportUtility->jitter($this->currentUser->getMaxP2pLevel());
 
         return $data;
     }

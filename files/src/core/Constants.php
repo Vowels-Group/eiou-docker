@@ -38,9 +38,10 @@ class Constants {
     }
 
     // Development/Production
-    const APP_ENV = 'development';
+    // NOTE: Set APP_ENV to 'development' and APP_DEBUG to true only for local development
+    const APP_ENV = 'production';
     const APP_VERSION = '0.0.1';
-    const APP_DEBUG = true;
+    const APP_DEBUG = false;
 
     // Rate limiting
     // WARNING: RATE_LIMIT_ENABLED should always be true in production.
@@ -120,18 +121,26 @@ class Constants {
     const DEFAULT_TRANSPORT_MODE = 'tor';
     const VALID_TRANSPORT_INDICES = ['http', 'tor'];
 
-    // P2P Network
-    const P2P_DEFAULT_MAX_REQUEST_LEVEL = 6;
-    const P2P_MIN_REQUEST_LEVEL_RANGE_LOW = 300;
-    const P2P_MIN_REQUEST_LEVEL_RANGE_HIGH = 700;
-    const P2P_MIN_REQUEST_LEVEL_RANDOM_LOW = 200;
-    const P2P_MIN_REQUEST_LEVEL_RANDOM_HIGH = 500;
-    const P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW = 1;
-    const P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH = 10;
-    const P2P_DEFAULT_EXPIRATION_SECONDS = 300; // 5 minutes
-    const P2P_MIN_EXPIRATION_SECONDS = 60; // Minimum expiration time
-    const P2P_REQUEST_LEVEL_VALIDATION_MAX = 1000;
-    const P2P_MAX_ROUTING_LEVEL = 20; // Maximum allowed P2P routing hops
+    // P2P Network Configuration
+    // These constants control the peer-to-peer transaction routing system
+    const P2P_DEFAULT_MAX_REQUEST_LEVEL = 6;  // Default maximum routing hops per user preference
+
+    // P2P Request Level Randomization
+    // The minimum request level is randomized to prevent network traffic analysis attacks.
+    // Formula: abs(rand(RANGE_LOW, RANGE_HIGH) - rand(RANDOM_LOW, RANDOM_HIGH)) + rand(OFFSET_LOW, OFFSET_HIGH)
+    // This creates overlapping random distributions that produce unpredictable but bounded values.
+    // The randomization prevents attackers from correlating request patterns across the network.
+    const P2P_MIN_REQUEST_LEVEL_RANGE_LOW = 300;    // Base range lower bound
+    const P2P_MIN_REQUEST_LEVEL_RANGE_HIGH = 700;   // Base range upper bound
+    const P2P_MIN_REQUEST_LEVEL_RANDOM_LOW = 200;   // Subtraction range lower bound
+    const P2P_MIN_REQUEST_LEVEL_RANDOM_HIGH = 500;  // Subtraction range upper bound
+    const P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW = 1;   // Final offset lower bound
+    const P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH = 10; // Final offset upper bound
+
+    const P2P_DEFAULT_EXPIRATION_SECONDS = 300; // 5 minutes - time before P2P request expires
+    const P2P_MIN_EXPIRATION_SECONDS = 60; // Minimum expiration time to allow network propagation
+    const P2P_REQUEST_LEVEL_VALIDATION_MAX = 1000; // Maximum valid request level for input validation
+    const P2P_MAX_ROUTING_LEVEL = 20; // Maximum allowed P2P routing hops (prevents infinite routing)
 
     // Contact management
     const CONTACT_DEFAULT_FEE_PERCENT = 0.1;

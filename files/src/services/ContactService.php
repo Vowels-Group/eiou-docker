@@ -1548,11 +1548,11 @@ class ContactService {
     /**
      * Lookup contact name by address
      *
-     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string|null $transportIndex Address type, i.e. http, tor (null returns null gracefully)
      * @param string $address Contact address
      * @return string|null Contact name or null
      */
-    public function lookupNameByAddress(string $transportIndex, string $address): ?string {
+    public function lookupNameByAddress(?string $transportIndex, string $address): ?string {
         return $this->contactRepository->lookupNameByAddress($transportIndex, $address);
     }
 

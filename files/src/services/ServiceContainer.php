@@ -123,8 +123,12 @@ class ServiceContainer {
      * Get PDO instance
      *
      * @return PDO Database connection
+     * @throws RuntimeException If database connection is not available
      */
     public function getPdo(): PDO {
+        if ($this->pdo === null) {
+            throw new RuntimeException('Database connection is not available');
+        }
         return $this->pdo;
     }
 

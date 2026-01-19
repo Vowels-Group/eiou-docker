@@ -56,11 +56,8 @@ class KeyEncryption {
         }
 
         // Generate new master key (32 bytes = 256 bits)
+        // Note: random_bytes() throws Exception on failure in PHP 7+, never returns false
         $key = random_bytes(32);
-
-        if ($key === false || strlen($key) !== 32) {
-            throw new RuntimeException('Failed to generate secure random key');
-        }
 
         // Save master key with strict permissions
         $oldUmask = umask(0077); // Ensure 600 permissions
@@ -95,11 +92,8 @@ class KeyEncryption {
         $key = self::getMasterKey();
 
         // Generate unique IV (Initialization Vector)
+        // Note: random_bytes() throws Exception on failure in PHP 7+, never returns false
         $iv = random_bytes(self::IV_LENGTH);
-
-        if ($iv === false || strlen($iv) !== self::IV_LENGTH) {
-            throw new RuntimeException('Failed to generate IV');
-        }
 
         // Encrypt with AES-256-GCM
         $tag = '';

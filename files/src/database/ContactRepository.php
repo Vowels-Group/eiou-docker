@@ -697,12 +697,13 @@ class ContactRepository extends AbstractRepository {
     /**
      * Lookup contact name by address
      *
-     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string|null $transportIndex Address type, i.e. http, tor (null returns null gracefully)
      * @param string $address Contact address
      * @return string|null Contact name or null
      */
-    public function lookupNameByAddress(string $transportIndex, string $address): ?string {
-        if (!$this->isValidTransportIndex($transportIndex)) {
+    public function lookupNameByAddress(?string $transportIndex, string $address): ?string {
+        // Handle null transport index gracefully (can occur when determineTransportType returns null)
+        if ($transportIndex === null || !$this->isValidTransportIndex($transportIndex)) {
             return null;
         }
         $query = "SELECT name

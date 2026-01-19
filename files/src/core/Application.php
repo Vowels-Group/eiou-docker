@@ -430,29 +430,30 @@ class Application {
     /**
      * Register a service
      *
+     * @deprecated Use ServiceContainer::registerService() instead via $app->services->registerService()
      * @param string $name
      * @param object|callable $service
      */
     public function registerService($name, $service) {
-        $this->services[$name] = $service;
+        // Delegate to ServiceContainer
+        if ($this->services instanceof ServiceContainer) {
+            $this->services->registerService($name, $service);
+        }
     }
 
     /**
      * Get a service
      *
+     * @deprecated Use ServiceContainer::getService() instead via $app->services->getService()
      * @param string $name
      * @return mixed
      */
     public function getService($name) {
-        if (!isset($this->services[$name])) {
-            return null;
+        // Delegate to ServiceContainer
+        if ($this->services instanceof ServiceContainer) {
+            return $this->services->getService($name);
         }
-
-        if (is_callable($this->services[$name])) {
-            // Lazy load service
-            $this->services[$name] = call_user_func($this->services[$name]);
-        }
-        return $this->services[$name];
+        return null;
     }
 
     /**

@@ -9,6 +9,12 @@ require_once __DIR__ . '/AbstractRepository.php';
  * Manages all database interactions for the transactions table.
  *
  * @package Database\Repository
+ *
+ * TECH DEBT: Many methods contain redundant `if (!$stmt)` checks after execute().
+ * Since PDO is configured with ERRMODE_EXCEPTION (see Pdo.php), the execute() method
+ * will throw an exception on failure rather than returning false. These checks are
+ * vestigial from defensive coding practices but can be safely removed in a future
+ * refactoring pass. The checks don't cause harm, just unnecessary branches.
  */
 class TransactionRepository extends AbstractRepository {
     /**

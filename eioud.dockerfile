@@ -1,5 +1,14 @@
 # Copyright 2025 Adrien Hubert (adrien@eiou.org)
 
+# SECURITY NOTE: This container runs as root to manage multiple services (Apache, MariaDB, Tor, cron).
+# Each service drops privileges to its appropriate user after startup:
+#   - Apache: runs as www-data
+#   - MariaDB: runs as mysql
+#   - Tor: runs as debian-tor
+# A non-root USER directive is not trivially possible without architectural changes
+# such as using supervisord with individual service users. For production deployments,
+# consider using Kubernetes with separate pods per service for better security isolation.
+
 FROM debian:12-slim
 
 # Install required packages for a LAMP server

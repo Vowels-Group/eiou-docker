@@ -223,17 +223,12 @@ else
 fi
 
 # Test 14: history (JSON output)
-# NOTE: There's a known bug in history --json with lookupNameByAddress()
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'history' command (JSON output)"
 historyJsonOutput=$(docker exec ${testContainer} eiou history --json 2>&1)
 
-# Check for success OR known error (bug in lookupNameByAddress call)
 if [[ "$historyJsonOutput" =~ '"success"' ]] && [[ "$historyJsonOutput" =~ 'true' ]]; then
     printf "\t   history command (JSON) ${GREEN}PASSED${NC}\n"
-    passed=$(( passed + 1 ))
-elif [[ "$historyJsonOutput" =~ "lookupNameByAddress" ]]; then
-    printf "\t   history command (JSON) ${YELLOW}SKIPPED${NC} (known bug)\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   history command (JSON) ${RED}FAILED${NC}\n"
