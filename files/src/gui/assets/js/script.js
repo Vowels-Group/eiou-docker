@@ -160,7 +160,7 @@ function initializeSendForm() {
                     var addr = addresses[type];
                     var truncatedAddr = addr.length > 30 ? addr.substring(0, 30) + '...' : addr;
                     var displayType = type.toUpperCase();
-                    addressTypeSelect.innerHTML += '<option value="' + type + '">' + displayType + ' (' + truncatedAddr + ')</option>';
+                    addressTypeSelect.innerHTML += '<option value="' + escapeHtml(type) + '">' + escapeHtml(displayType) + ' (' + escapeHtml(truncatedAddr) + ')</option>';
                 }
 
                 // Show address type selector if at least one address available
@@ -236,9 +236,9 @@ function openTransactionModal(index) {
     var modal = document.getElementById('transactionModal');
     var content = document.getElementById('tx-modal-content');
 
-    // Build status badge HTML
-    var statusClass = 'tx-status-' + tx.status;
-    var statusBadge = '<span class="tx-status-badge ' + statusClass + '">' + tx.status.charAt(0).toUpperCase() + tx.status.slice(1) + '</span>';
+    // Build status badge HTML (escapeHtml for defense-in-depth)
+    var statusClass = 'tx-status-' + escapeHtml(tx.status);
+    var statusBadge = '<span class="tx-status-badge ' + statusClass + '">' + escapeHtml(tx.status.charAt(0).toUpperCase() + tx.status.slice(1)) + '</span>';
 
     // Build transaction type badge with role indicator
     var txTypeBadge = '';
@@ -1398,9 +1398,9 @@ function showContactTxDetail(index) {
     var directionText = tx.type === 'sent' ? 'Sent' : 'Received';
     var gradientEnd = tx.type === 'sent' ? '#ff6b6b' : '#20c997';
 
-    // Build status badge
+    // Build status badge (escapeHtml for defense-in-depth)
     var status = tx.status || 'completed';
-    var statusBadge = '<span class="tx-status-badge tx-status-' + status + '">' + status.charAt(0).toUpperCase() + status.slice(1) + '</span>';
+    var statusBadge = '<span class="tx-status-badge tx-status-' + escapeHtml(status) + '">' + escapeHtml(status.charAt(0).toUpperCase() + status.slice(1)) + '</span>';
 
     // Build transaction type badge (both yellow for consistency)
     var txType = tx.tx_type || 'standard';
