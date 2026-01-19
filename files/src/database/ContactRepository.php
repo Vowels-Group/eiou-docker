@@ -834,6 +834,60 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Retrieve contact by name or address (http/tor)
+     *
+     * Searches by exact name match first, then by http or tor address.
+     *
+     * @param string $identifier Contact name or address
+     * @return array|null Full contact data or null
+     */
+    public function getContactByNameOrAddress(string $identifier): ?array {
+        // First try exact name match
+        $query = "SELECT *
+                    FROM addresses a JOIN {$this->tableName} c
+                    ON a.pubkey_hash = c.pubkey_hash
+                    WHERE c.name = :identifier
+                    LIMIT 1";
+        $stmt = $this->execute($query, [':identifier' => $identifier]);
+        if ($stmt) {
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($result) {
+                return $result;
+            }
+        }
+
+        // Try http address
+        $query = "SELECT *
+                    FROM addresses a JOIN {$this->tableName} c
+                    ON a.pubkey_hash = c.pubkey_hash
+                    WHERE a.http = :identifier
+                    LIMIT 1";
+        $stmt = $this->execute($query, [':identifier' => $identifier]);
+        if ($stmt) {
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($result) {
+                return $result;
+            }
+        }
+
+        // Try tor address
+        $query = "SELECT *
+                    FROM addresses a JOIN {$this->tableName} c
+                    ON a.pubkey_hash = c.pubkey_hash
+                    WHERE a.tor = :identifier
+                    LIMIT 1";
+        $stmt = $this->execute($query, [':identifier' => $identifier]);
+        if ($stmt) {
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($result) {
+                return $result;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Retrieve contact public key by address
      *
      * @param string $transportIndex Address type, i.e. http, tor

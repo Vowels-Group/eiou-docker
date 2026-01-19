@@ -561,6 +561,72 @@ class ContactController
     }
 
     /**
+     * Handle ping contact request (AJAX - returns JSON)
+     *
+     * @return void
+     */
+    public function handlePingContact(): void
+    {
+        // Set JSON header
+        header('Content-Type: application/json');
+
+        try {
+            // CSRF Protection: Verify token before processing
+            $this->session->verifyCSRFToken();
+
+            // Import validation and security classes
+            require_once __DIR__ . '/../../utils/InputValidator.php';
+            require_once __DIR__ . '/../../utils/Security.php';
+
+            // Sanitize input data
+            $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
+
+            if (empty($contactAddress)) {
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'missing_address',
+                    'message' => 'Contact address is required'
+                ]);
+                return;
+            }
+
+            // Validate address
+            $addressValidation = InputValidator::validateAddress($contactAddress);
+            if (!$addressValidation['valid']) {
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'invalid_address',
+                    'message' => 'Invalid address: ' . $addressValidation['error']
+                ]);
+                return;
+            }
+
+            $contactAddress = $addressValidation['value'];
+
+            // Get ContactStatusService and ping the contact
+            $app = Application::getInstance();
+            $contactStatusService = $app->services->getContactStatusService();
+            $result = $contactStatusService->pingContact($contactAddress);
+
+            echo json_encode($result);
+
+        } catch (\Throwable $e) {
+            // Use SecureLogger for exception logging
+            SecureLogger::logException($e, [
+                'controller' => 'ContactController',
+                'action' => __FUNCTION__
+            ]);
+            echo json_encode([
+                'success' => false,
+                'error' => 'internal_error',
+                'message' => Constants::APP_ENV !== 'production'
+                    ? 'Internal server error: ' . $e->getMessage()
+                    : 'Internal server error'
+            ]);
+        }
+    }
+
+    /**
      * Route contact actions based on POST data
      *
      * @return void
@@ -595,6 +661,10 @@ class ContactController
 
             case 'editContact':
                 $this->handleEditContact();
+                break;
+
+            case 'pingContact':
+                $this->handlePingContact();
                 break;
         }
     }

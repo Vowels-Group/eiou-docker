@@ -415,6 +415,19 @@ class Application {
     }
 
     /**
+     * Get ContactStatusProcessor instance
+     *
+     * @return ContactStatusProcessor
+     */
+    public function getContactStatusProcessor(): ContactStatusProcessor {
+         if (!isset($this->processors['contactStatusProcessor'])) {
+            require_once $this->getRootPath() . '/src/processors/ContactStatusProcessor.php';
+            $this->processors['contactStatusProcessor'] = new ContactStatusProcessor();
+         }
+         return $this->processors['contactStatusProcessor'];
+    }
+
+    /**
      * Register a service
      *
      * @param string $name

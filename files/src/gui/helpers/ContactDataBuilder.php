@@ -38,8 +38,20 @@ class ContactDataBuilder
         // Dynamically build addresses array based on configured types
         foreach ($this->addressTypes as $type) {
             $addresses[$type] = $contact[$type] ?? '';
-            if ($primaryAddress === null && !empty($contact[$type])) {
-                $primaryAddress = $contact[$type];
+        }
+
+        // Set primary address, preferring Tor over HTTP for privacy
+        if (!empty($contact['tor'])) {
+            $primaryAddress = $contact['tor'];
+        } elseif (!empty($contact['http'])) {
+            $primaryAddress = $contact['http'];
+        } else {
+            // Fall back to first available address type
+            foreach ($this->addressTypes as $type) {
+                if (!empty($contact[$type])) {
+                    $primaryAddress = $contact[$type];
+                    break;
+                }
             }
         }
 
@@ -53,7 +65,9 @@ class ContactDataBuilder
             'pubkey' => $contact['pubkey'] ?? '',
             'balance' => $contact['balance'] ?? 0,
             'contact_id' => $contact['contact_id'] ?? '',
-            'transactions' => $contact['transactions'] ?? []
+            'transactions' => $contact['transactions'] ?? [],
+            'online_status' => $contact['online_status'] ?? 'unknown',
+            'valid_chain' => $contact['valid_chain'] ?? null
         ], $addresses);
     }
 

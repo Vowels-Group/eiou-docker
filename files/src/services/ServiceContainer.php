@@ -607,6 +607,26 @@ class ServiceContainer {
     }
 
     /**
+     * Get ContactStatusService instance
+     *
+     * Handles incoming ping requests and chain validation.
+     *
+     * @return ContactStatusService
+     */
+    public function getContactStatusService(): ContactStatusService {
+        if (!isset($this->services['ContactStatusService'])) {
+            require_once __DIR__ . '/ContactStatusService.php';
+            $this->services['ContactStatusService'] = new ContactStatusService(
+                $this->getContactRepository(),
+                $this->getTransactionRepository(),
+                $this->getUtilityContainer(),
+                $this->currentUser
+            );
+        }
+        return $this->services['ContactStatusService'];
+    }
+
+    /**
      * Get ApiAuthService instance
      *
      * Provides API authentication using HMAC signature verification.

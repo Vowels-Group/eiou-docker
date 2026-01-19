@@ -125,6 +125,12 @@ printf "Mode:  ${MODE}\n"
 printf "Time:  $(date '+%Y-%m-%d %H:%M:%S')\n"
 printf "\n"
 
+# Disable contact status pinging during tests to prevent interference with sync tests
+# The ping feature is tested separately in pingTestSuite.sh which re-enables it
+export EIOU_CONTACT_STATUS_ENABLED=false
+printf "${YELLOW}Note: Contact status pinging disabled during test suite${NC}\n"
+printf "\n"
+
 # Step 1: Build the topology
 printf "${GREEN}[Step 1/3]${NC} Building topology '${BUILD_NAME}'...\n"
 . "$BUILD_FILE"
@@ -294,6 +300,7 @@ gracefulShutdownTest
 transactionRecoveryTest
 seedphraseTestSuite
 processorLockfileTest
+pingTestSuite
 "
 
 # Run each test in order

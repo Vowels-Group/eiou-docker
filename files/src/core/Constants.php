@@ -81,6 +81,33 @@ class Constants {
     const CLEANUP_IDLE_INTERVAL_MS = 10000;
     const CLEANUP_ADAPTIVE_POLLING = true;
 
+    // Contact status processor configuration
+    // Set CONTACT_STATUS_ENABLED to false to disable contact pinging entirely
+    // When disabled, all contacts will show 'unknown' status
+    // Can be overridden by EIOU_CONTACT_STATUS_ENABLED environment variable
+    const CONTACT_STATUS_ENABLED = true;
+
+    /**
+     * Check if contact status feature is enabled
+     * Supports runtime override via EIOU_CONTACT_STATUS_ENABLED env variable
+     * Used during testing to disable pings that interfere with sync tests
+     *
+     * @return bool Whether contact status polling is enabled
+     */
+    public static function isContactStatusEnabled(): bool {
+        $envValue = getenv('EIOU_CONTACT_STATUS_ENABLED');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return self::CONTACT_STATUS_ENABLED;
+    }
+    const CONTACT_STATUS_POLLING_INTERVAL_MS = 300000;  // 5 minutes between ping cycles
+    const CONTACT_STATUS_MIN_INTERVAL_MS = 300000;      // Minimum 5 minutes
+    const CONTACT_STATUS_MAX_INTERVAL_MS = 1800000;     // Maximum 30 minutes
+    const CONTACT_STATUS_IDLE_INTERVAL_MS = 300000;     // Idle at 5 minutes
+    const CONTACT_STATUS_ADAPTIVE_POLLING = true;
+    const CONTACT_STATUS_SYNC_ON_PING = true;           // Whether to trigger sync check on ping
+
     // Transaction Recovery configuration
     const RECOVERY_SENDING_TIMEOUT_SECONDS = 120; // Transactions stuck in 'sending' for this long are recovered
     const RECOVERY_MAX_RETRY_COUNT = 3; // Max times a transaction can be recovered before manual review
@@ -162,6 +189,11 @@ class Constants {
     const CONTACT_STATUS_PENDING = 'pending';
     const CONTACT_STATUS_ACCEPTED = 'accepted';
     const CONTACT_STATUS_BLOCKED = 'blocked';
+
+    // Contact online status values
+    const CONTACT_ONLINE_STATUS_ONLINE = 'online';
+    const CONTACT_ONLINE_STATUS_OFFLINE = 'offline';
+    const CONTACT_ONLINE_STATUS_UNKNOWN = 'unknown';
 
     // Message delivery stages
     const DELIVERY_PENDING = 'pending';

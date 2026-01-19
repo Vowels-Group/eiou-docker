@@ -1906,7 +1906,9 @@ class TransactionService {
                 'currency' => $contact['currency'],
                 'pubkey' => $contact['pubkey'] ?? '',
                 'contact_id' => $contact['contact_id'] ?? '',
-                'transactions' => $transactions
+                'transactions' => $transactions,
+                'online_status' => $contact['online_status'] ?? 'unknown',
+                'valid_chain' => $contact['valid_chain'] ?? null
             ]);
         }
         return $contactsWithBalances;
