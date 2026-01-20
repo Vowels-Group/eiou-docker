@@ -37,6 +37,14 @@
 exec 1> >(stdbuf -oL cat)
 exec 2> >(stdbuf -oL cat >&2)
 
+# Source the banner script for warning messages
+# This file can be edited to update the warning banners without modifying startup.sh
+if [ -f "/app/scripts/banner.sh" ]; then
+    source /app/scripts/banner.sh
+    # Display alpha/testing warning at container start
+    show_alpha_warning
+fi
+
 # Graceful shutdown configuration
 SHUTDOWN_TIMEOUT=30  # Maximum seconds to wait for processes to terminate
 SHUTDOWN_IN_PROGRESS=false
@@ -396,8 +404,12 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
 
         # Check if restore was successful
         if [ $RESTORE_EXIT_CODE -ne 0 ]; then
-            echo "ERROR: Wallet restoration failed:"
-            echo "$RESTORE_RESULT"
+            if type show_error_banner &>/dev/null; then
+                show_error_banner "WALLET RESTORATION FAILED" "$RESTORE_RESULT"
+            else
+                echo "ERROR: Wallet restoration failed:"
+                echo "$RESTORE_RESULT"
+            fi
             exit 1
         fi
 
@@ -440,8 +452,12 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
 
         # Check if restore was successful
         if [ $RESTORE_EXIT_CODE -ne 0 ]; then
-            echo "ERROR: Wallet restoration failed:"
-            echo "$RESTORE_RESULT"
+            if type show_error_banner &>/dev/null; then
+                show_error_banner "WALLET RESTORATION FAILED" "$RESTORE_RESULT"
+            else
+                echo "ERROR: Wallet restoration failed:"
+                echo "$RESTORE_RESULT"
+            fi
             exit 1
         fi
 
@@ -735,6 +751,11 @@ watchdog() {
         fi
     done
 }
+
+# Display alpha/testing reminder before watchdog starts
+if type show_alpha_warning_short &>/dev/null; then
+    show_alpha_warning_short
+fi
 
 # Start watchdog in background
 watchdog &
