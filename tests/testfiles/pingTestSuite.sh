@@ -786,18 +786,24 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[4.1 Test manual ping command: eiou ping]"
 
 # Test pinging B from A using the CLI command
-pingResultA=$(docker exec ${containerA} php -r "
+# Use EIOU_TEST_MODE=true to bypass rate limiting during tests
+pingResultA=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
     // Test the eiou ping command logic directly
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$contactStatusService = \$app->services->getContactStatusService();
-    \$result = \$contactStatusService->pingContact('${addressB}');
-    echo json_encode(\$result);
-" 2>/dev/null || echo '{"success":false,"error":"exception"}')
+    try {
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$contactStatusService = \$app->services->getContactStatusService();
+        \$result = \$contactStatusService->pingContact('${addressB}');
+        echo json_encode(\$result);
+    } catch (Throwable \$e) {
+        echo json_encode(['success' => false, 'error' => 'exception', 'message' => \$e->getMessage()]);
+    }
+" 2>&1 || echo '{"success":false,"error":"exception","message":"php_execution_failed"}')
 
-# Parse result
-pingSuccess=$(echo "$pingResultA" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['success'] ? 'true' : 'false';")
-pingOnlineStatus=$(echo "$pingResultA" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['online_status'] ?? 'unknown';")
+# Parse result using shell (php not available on host)
+pingSuccess=$(echo "$pingResultA" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
+pingOnlineStatus=$(echo "$pingResultA" | grep -o '"online_status":"[^"]*"' | sed 's/.*"online_status":"\([^"]*\)".*/\1/' | head -1)
+[[ -z "$pingOnlineStatus" ]] && pingOnlineStatus="unknown"
 
 if [[ "$pingSuccess" == "true" ]]; then
     printf "\t   Manual ping command ${GREEN}PASSED${NC} - Status: ${pingOnlineStatus}\n"
@@ -820,8 +826,9 @@ pingNonExistent=$(docker exec ${containerA} php -r "
     echo json_encode(\$result);
 " 2>/dev/null || echo '{"success":false,"error":"exception"}')
 
-pingNonExistentSuccess=$(echo "$pingNonExistent" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['success'] ? 'true' : 'false';")
-pingNonExistentError=$(echo "$pingNonExistent" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['error'] ?? '';")
+# Parse result using shell (php not available on host)
+pingNonExistentSuccess=$(echo "$pingNonExistent" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
+pingNonExistentError=$(echo "$pingNonExistent" | grep -o '"error":"[^"]*"' | sed 's/.*"error":"\([^"]*\)".*/\1/' | head -1)
 
 if [[ "$pingNonExistentSuccess" == "false" ]] && [[ "$pingNonExistentError" == "contact_not_found" ]]; then
     printf "\t   Ping non-existent contact ${GREEN}PASSED${NC} - Correctly returns error\n"
@@ -845,15 +852,21 @@ contactNameB=$(docker exec ${containerA} php -r "
 " 2>/dev/null || echo "")
 
 if [[ -n "$contactNameB" ]]; then
-    pingByName=$(docker exec ${containerA} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
-        \$contactStatusService = \$app->services->getContactStatusService();
-        \$result = \$contactStatusService->pingContact('${contactNameB}');
-        echo json_encode(\$result);
-    " 2>/dev/null || echo '{"success":false,"error":"exception"}')
+    # Use EIOU_TEST_MODE=true to bypass rate limiting during tests
+    pingByName=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
+        try {
+            require_once('${REL_APPLICATION}');
+            \$app = Application::getInstance();
+            \$contactStatusService = \$app->services->getContactStatusService();
+            \$result = \$contactStatusService->pingContact('${contactNameB}');
+            echo json_encode(\$result);
+        } catch (Throwable \$e) {
+            echo json_encode(['success' => false, 'error' => 'exception', 'message' => \$e->getMessage()]);
+        }
+    " 2>&1 || echo '{"success":false,"error":"exception","message":"php_execution_failed"}')
 
-    pingByNameSuccess=$(echo "$pingByName" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['success'] ? 'true' : 'false';")
+    # Parse result using shell (php not available on host)
+    pingByNameSuccess=$(echo "$pingByName" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
 
     if [[ "$pingByNameSuccess" == "true" ]]; then
         printf "\t   Ping by contact name ${GREEN}PASSED${NC} - Name: ${contactNameB}\n"
