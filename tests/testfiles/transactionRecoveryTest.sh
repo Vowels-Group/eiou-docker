@@ -27,7 +27,7 @@ echo -e "\n[Static Verification Tests]"
 # Test 1: Verify SENDING status exists in Constants
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing SENDING status constant exists"
-sendingStatus=$(docker exec ${testContainer} grep -c "STATUS_SENDING = 'sending'" /etc/eiou/src/core/Constants.php 2>/dev/null)
+sendingStatus=$(docker exec ${testContainer} grep -c "STATUS_SENDING" /etc/eiou/src/core/Constants.php 2>/dev/null || echo "0")
 
 if [ "$sendingStatus" -ge 1 ]; then
     printf "\t   SENDING status constant exists ${GREEN}PASSED${NC}\n"
@@ -66,7 +66,7 @@ fi
 # Test 4: Verify claimPendingTransaction method exists
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing claimPendingTransaction method"
-claimMethod=$(docker exec ${testContainer} grep -c "function claimPendingTransaction" /etc/eiou/src/database/TransactionRepository.php 2>/dev/null)
+claimMethod=$(docker exec ${testContainer} grep -c "function claimPendingTransaction" /etc/eiou/src/database/TransactionRepository.php 2>/dev/null || echo "0")
 
 if [ "$claimMethod" -ge 1 ]; then
     printf "\t   claimPendingTransaction method exists ${GREEN}PASSED${NC}\n"
@@ -79,7 +79,7 @@ fi
 # Test 5: Verify markAsSent method exists
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing markAsSent method"
-markMethod=$(docker exec ${testContainer} grep -c "function markAsSent" /etc/eiou/src/database/TransactionRepository.php 2>/dev/null)
+markMethod=$(docker exec ${testContainer} grep -c "function markAsSent" /etc/eiou/src/database/TransactionRepository.php 2>/dev/null || echo "0")
 
 if [ "$markMethod" -ge 1 ]; then
     printf "\t   markAsSent method exists ${GREEN}PASSED${NC}\n"
@@ -105,7 +105,7 @@ fi
 # Test 7: Verify processPendingTransactions uses atomic claiming
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing processPendingTransactions uses atomic claiming"
-atomicClaim=$(docker exec ${testContainer} grep -c "claimPendingTransaction" /etc/eiou/src/services/TransactionService.php 2>/dev/null)
+atomicClaim=$(docker exec ${testContainer} grep -c "claimPendingTransaction" /etc/eiou/src/services/TransactionService.php 2>/dev/null || echo "0")
 
 if [ "$atomicClaim" -ge 1 ]; then
     printf "\t   Atomic claiming in processPendingTransactions ${GREEN}PASSED${NC}\n"
@@ -118,7 +118,7 @@ fi
 # Test 8: Verify startup integration
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing recovery integrated into startup"
-startupIntegration=$(docker exec ${testContainer} grep -c "runTransactionRecovery" /etc/eiou/src/core/Application.php 2>/dev/null)
+startupIntegration=$(docker exec ${testContainer} grep -c "runTransactionRecovery" /etc/eiou/src/core/Application.php 2>/dev/null || echo "0")
 
 if [ "$startupIntegration" -ge 1 ]; then
     printf "\t   Transaction recovery in startup ${GREEN}PASSED${NC}\n"

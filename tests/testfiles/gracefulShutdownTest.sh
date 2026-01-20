@@ -82,8 +82,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'eiou shutdown' command"
 shutdownOutput=$(docker exec ${testContainer} eiou shutdown 2>&1)
 
-# Give processors time to handle shutdown
-sleep 2
+# Give processors time to handle shutdown (longer wait to ensure watchdog doesn't restart them)
+sleep 10
 
 # Verify processors stopped
 processCheckAfter=$(docker exec ${testContainer} sh -c "ps aux | grep -E 'P2pMessages|TransactionMessages|CleanupMessages' | grep -v grep | wc -l" 2>&1)

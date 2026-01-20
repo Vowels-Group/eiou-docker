@@ -181,14 +181,26 @@ check_logs_for_message() {
 echo -e "[Section 1: Lockfile Creation Verification]"
 echo -e "Testing that lockfiles are created correctly when processors start...\n"
 
+# Brief wait to allow processors to start and create lockfiles
+# (Tests may run immediately after container startup)
+echo -e "\t   Waiting for processors to initialize (15s)..."
+sleep 15
+
 for processor in "${!PROCESSORS[@]}"; do
     lockfile="${PROCESSORS[$processor]}"
     totaltests=$(( totaltests + 1 ))
 
     echo -e "\t-> Checking lockfile for ${processor}"
 
-    # Check if lockfile exists
-    lockfileExists=$(docker exec ${testContainer} test -f ${lockfile} && echo "yes" || echo "no")
+    # Retry loop to handle timing issues - wait up to 20 seconds for lockfile
+    lockfileExists="no"
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+        lockfileExists=$(docker exec ${testContainer} test -f ${lockfile} && echo "yes" || echo "no")
+        if [ "$lockfileExists" == "yes" ]; then
+            break
+        fi
+        sleep 2
+    done
 
     if [ "$lockfileExists" == "yes" ]; then
         # Get PID from lockfile
