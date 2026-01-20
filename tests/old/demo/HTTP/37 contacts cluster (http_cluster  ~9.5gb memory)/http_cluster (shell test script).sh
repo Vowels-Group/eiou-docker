@@ -4,11 +4,11 @@
 set -e # Stop script on failure
 
 # Check if network exists and create it if necessary
-if docker network inspect eioud-network >/dev/null 2>&1; then
+if docker network inspect eiou-network >/dev/null 2>&1; then
     echo "Network already exists."
 else
     echo "Creating network..."
-    docker network create --driver bridge eioud-network
+    docker network create --driver bridge eiou-network
 fi
 
 # Function to remove a container if it exists
@@ -67,9 +67,9 @@ readonly defaultFee=0.1
 readonly defaultCredit=1000
 
 # Define contacts, direction ->
-# example: [eioud-0-http,eioud-1-http] defines eioud-1-http as a contact of eioud-0-http
+# example: [eiou-0-http,eiou-1-http] defines eiou-1-http as a contact of eiou-0-http
 #          must be accepted in reverse that is to say: 
-#          [eioud-0-http,eioud-1-http] needs to be followed by [eioud-1-http,eioud-0-http]
+#          [eiou-0-http,eiou-1-http] needs to be followed by [eiou-1-http,eiou-0-http]
 declare -A containersLinks=(
     [A0,A1]="$defaultFee $defaultCredit USD"
     [A1,A0]="$defaultFee $defaultCredit USD"
@@ -191,11 +191,11 @@ for container in "${containers[@]}"; do
 done
 
 echo "Building base image..."
-docker build -f eioud.dockerfile -t eioud .
+docker build -f eiou.dockerfile -t eiou .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
-    docker run -d --network=eioud-network --name $container -e QUICKSTART=$container eiou/eiou
+    docker run -d --network=eiou-network --name $container -e QUICKSTART=$container eiou/eiou
 done
 
 # Save container Addresses in the associative array containerAddresses

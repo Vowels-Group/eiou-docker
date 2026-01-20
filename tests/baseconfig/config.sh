@@ -26,7 +26,7 @@ NC='\033[0m'                # Revert to normal color
 CHECK='\u2714'              # Checkmark
 CROSS='\u274c'              # Crossmark
 
-network="eioud-network"
+network="eiou-network"
 
 # Define paths with double slashes to prevent Git Bash MSYS path conversion
 # These paths are used INSIDE Docker containers, not on the host system

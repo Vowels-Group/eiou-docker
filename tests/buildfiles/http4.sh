@@ -83,11 +83,11 @@ done
 
 echo "Building base image..."
 cd ../
-docker build -f eioud.dockerfile -t eioud .
+docker build -f eiou.dockerfile -t eiou .
 
 echo -e "\nCreating containers..."
 # Pass EIOU_CONTACT_STATUS_ENABLED from parent shell (defaults to true if not set)
 CONTACT_STATUS_FLAG="${EIOU_CONTACT_STATUS_ENABLED:-true}"
 for container in "${containers[@]}"; do
-    docker run -d --network=eioud-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-files:/etc/eiou/" -v "${container}-index:/var/www/html" -v "${container}-eiou:/usr/local/bin/" -e QUICKSTART=$container -e EIOU_CONTACT_STATUS_ENABLED=$CONTACT_STATUS_FLAG eiou/eiou
+    docker run -d --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-files:/etc/eiou/" -v "${container}-index:/var/www/html" -v "${container}-eiou:/usr/local/bin/" -e QUICKSTART=$container -e EIOU_CONTACT_STATUS_ENABLED=$CONTACT_STATUS_FLAG eiou/eiou
 done

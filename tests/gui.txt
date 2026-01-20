@@ -4,7 +4,7 @@
 ## Build Instructions
 
 # Build the Docker image (run this first)
-docker build -f eioud.dockerfile -t eioud .
+docker build -f eiou.dockerfile -t eiou .
 
 # Create the network (only need to do this once per docker installation)
 docker network create -d bridge eiou-network

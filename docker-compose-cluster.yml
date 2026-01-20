@@ -40,7 +40,7 @@ services:
   cluster-a:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a
     networks:
       - eiou-network-compose
@@ -70,7 +70,7 @@ services:
   cluster-a1:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a1
     networks:
       - eiou-network-compose
@@ -93,7 +93,7 @@ services:
   cluster-a2:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a2
     networks:
       - eiou-network-compose
@@ -116,7 +116,7 @@ services:
   cluster-a3:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a3
     networks:
       - eiou-network-compose
@@ -139,7 +139,7 @@ services:
   cluster-a4:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a4
     networks:
       - eiou-network-compose
@@ -163,7 +163,7 @@ services:
   cluster-a11:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a11
     networks:
       - eiou-network-compose
@@ -186,7 +186,7 @@ services:
   cluster-a12:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a12
     networks:
       - eiou-network-compose
@@ -209,7 +209,7 @@ services:
   cluster-a21:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a21
     networks:
       - eiou-network-compose
@@ -232,7 +232,7 @@ services:
   cluster-a22:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a22
     networks:
       - eiou-network-compose
@@ -255,7 +255,7 @@ services:
   cluster-a31:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a31
     networks:
       - eiou-network-compose
@@ -278,7 +278,7 @@ services:
   cluster-a32:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a32
     networks:
       - eiou-network-compose
@@ -301,7 +301,7 @@ services:
   cluster-a41:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a41
     networks:
       - eiou-network-compose
@@ -324,7 +324,7 @@ services:
   cluster-a42:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: cluster-a42
     networks:
       - eiou-network-compose

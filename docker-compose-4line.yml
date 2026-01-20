@@ -23,7 +23,7 @@ services:
   alice:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: alice
     networks:
       - eiou-network-compose
@@ -58,7 +58,7 @@ services:
   bob:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: bob
     networks:
       - eiou-network-compose
@@ -81,7 +81,7 @@ services:
   carol:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: carol
     networks:
       - eiou-network-compose
@@ -104,7 +104,7 @@ services:
   daniel:
     build:
       context: .
-      dockerfile: eioud.dockerfile
+      dockerfile: eiou.dockerfile
     container_name: daniel
     networks:
       - eiou-network-compose

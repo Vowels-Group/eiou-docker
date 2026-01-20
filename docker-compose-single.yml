@@ -21,18 +21,18 @@
 
 # Copyright 2025-2026 Vowels Group, LLC
 services:
-  eioud:
+  eiou:
     build:
       context: .
-      dockerfile: eioud.dockerfile
-    container_name: eioud-single
+      dockerfile: eiou.dockerfile
+    container_name: eiou-single
     networks:
       - eiou-network-compose
     ports:
       - "80:80"
       - "443:443"
     environment:
-      - QUICKSTART=eioud
+      - QUICKSTART=eiou
       # WSL2/Slow Environment Timeouts (optional):
       # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
       # - EIOU_TOR_TIMEOUT=120              # Tor connection wait (default: 120s)
@@ -45,10 +45,10 @@ services:
     # For CA-signed certificates, uncomment:
     #   - ./ssl-ca:/ssl-ca:ro              # Mount ca.crt, ca.key
     volumes:
-      - eioud-mysql-data:/var/lib/mysql
-      - eioud-files:/etc/eiou/
-      - eioud-index:/var/www/html
-      - eioud-eiou:/usr/local/bin/
+      - eiou-mysql-data:/var/lib/mysql
+      - eiou-files:/etc/eiou/
+      - eiou-index:/var/www/html
+      - eiou-eiou:/usr/local/bin/
     restart: unless-stopped
     stop_grace_period: 45s
     healthcheck:
@@ -64,11 +64,11 @@ networks:
     name: eiou-network-compose
 
 volumes:
-  eioud-mysql-data:
-    name: eioud-mysql-data
-  eioud-files:
-    name: eioud-files
-  eioud-index:
-    name: eioud-index
-  eioud-eiou:
-    name: eioud-eiou
+  eiou-mysql-data:
+    name: eiou-mysql-data
+  eiou-files:
+    name: eiou-files
+  eiou-index:
+    name: eiou-index
+  eiou-eiou:
+    name: eiou-eiou

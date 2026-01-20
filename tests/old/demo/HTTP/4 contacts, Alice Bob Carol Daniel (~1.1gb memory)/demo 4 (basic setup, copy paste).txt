@@ -6,7 +6,7 @@ powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else {
 
 
 # Build base image
-docker build -f eioud.dockerfile -t eioud .
+docker build -f eiou.dockerfile -t eiou .
 
 # Start containers
 docker run -d  --network=demo-net --name Alice -e QUICKSTART=Alice eiou/eiou
