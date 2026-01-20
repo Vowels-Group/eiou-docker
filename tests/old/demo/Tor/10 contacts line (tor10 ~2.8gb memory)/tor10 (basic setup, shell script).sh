@@ -74,7 +74,7 @@ docker build -f eioud.dockerfile -t eioud .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
-    docker run -d --network=eioud-network --name $container eioud
+    docker run -d --network=eioud-network --name $container eiou/eiou
 done
 
 echo -e "\nWaiting for 5 seconds for proper container startup..."

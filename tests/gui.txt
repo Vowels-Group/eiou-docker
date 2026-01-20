@@ -20,16 +20,16 @@ docker network create -d bridge eiou-network
 
 
 # Windows (PowerShell/Command Prompt) 
-docker run -d --name Alice --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -e QUICKSTART=Alice eioud
-docker run -d --name Bob --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -e QUICKSTART=Bob eioud
-docker run -d --name Carol --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -e QUICKSTART=Carol eioud
-docker run -d --name Daniel --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -e QUICKSTART=Daniel eioud
+docker run -d --name Alice --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -e QUICKSTART=Alice eiou/eiou
+docker run -d --name Bob --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -e QUICKSTART=Bob eiou/eiou
+docker run -d --name Carol --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -e QUICKSTART=Carol eiou/eiou
+docker run -d --name Daniel --network eiou-network -v "${PWD}\files\src\:/etc/eiou/src/" -e QUICKSTART=Daniel eiou/eiou
 
 # Linux/macOS (Bash/Zsh)
-docker run -d --name Alice --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Alice eioud
-docker run -d --name Bob --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Bob eioud
-docker run -d --name Carol --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Carol eioud
-docker run -d --name Daniel --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Daniel eioud
+docker run -d --name Alice --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Alice eiou/eiou
+docker run -d --name Bob --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Bob eiou/eiou
+docker run -d --name Carol --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Carol eiou/eiou
+docker run -d --name Daniel --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Daniel eiou/eiou
 
 # Alternative absolute path examples:
 # Windows: -v "C:\path\to\your\eiou\files\index\walletIndex.html:/var/www/html/index.html"
@@ -42,14 +42,14 @@ docker run -d --name Daniel --network eiou-network -v "$(pwd)/files/src/:/etc/ei
 # No volume mounting needed - they use the default GUI
 
 # Windows (PowerShell/Command Prompt)
-docker run -d --name Alice --network eiou-network -e QUICKSTART=Alice eioud
-docker run -d --name Carol --network eiou-network -e QUICKSTART=Carol eioud
-docker run -d --name Daniel --network eiou-network -e QUICKSTART=Daniel eioud
+docker run -d --name Alice --network eiou-network -e QUICKSTART=Alice eiou/eiou
+docker run -d --name Carol --network eiou-network -e QUICKSTART=Carol eiou/eiou
+docker run -d --name Daniel --network eiou-network -e QUICKSTART=Daniel eiou/eiou
 
 # Linux/macOS (Bash/Zsh)
-docker run -d --name Alice --network eiou-network -e QUICKSTART=Alice eioud
-docker run -d --name Carol --network eiou-network -e QUICKSTART=Carol eioud
-docker run -d --name Daniel --network eiou-network -e QUICKSTART=Daniel eioud
+docker run -d --name Alice --network eiou-network -e QUICKSTART=Alice eiou/eiou
+docker run -d --name Carol --network eiou-network -e QUICKSTART=Carol eiou/eiou
+docker run -d --name Daniel --network eiou-network -e QUICKSTART=Daniel eiou/eiou
 
 ## Accessing the GUI
 

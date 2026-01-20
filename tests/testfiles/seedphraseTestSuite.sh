@@ -337,7 +337,7 @@ echo -e "\n\t-> Step 1.12: Restoring wallet with 'docker run -d ... -e RESTORE=<
 
 # Create a completely new Container
 restoreContainer="httpRestoreSeedTest"
-restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-files:/etc/eiou/" -v "${restoreContainer}-index:/var/www/html" -v "${restoreContainer}-eiou:/usr/local/bin/" -e  RESTORE="${seedPhrase}" eioud 2>&1)
+restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-files:/etc/eiou/" -v "${restoreContainer}-index:/var/www/html" -v "${restoreContainer}-eiou:/usr/local/bin/" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
 
 # Small delay to ensure file system sync (and bootup container)
 sleep 5
@@ -815,7 +815,7 @@ MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileCon
     -v "${restoreFileContainer}-files:/etc/eiou/" \
     -v "${restoreFileContainer}-index:/var/www/html" \
     -v "${restoreFileContainer}-eiou:/usr/local/bin/" \
-    eioud > /dev/null 2>&1
+    eiou/eiou > /dev/null 2>&1
 
 sleep 30
 
@@ -894,7 +894,7 @@ docker run -d --network="${network}" --name "${restoreEnvContainer}" \
     -v "${restoreEnvContainer}-files:/etc/eiou/" \
     -v "${restoreEnvContainer}-index:/var/www/html" \
     -v "${restoreEnvContainer}-eiou:/usr/local/bin/" \
-    eioud > /dev/null 2>&1
+    eiou/eiou > /dev/null 2>&1
 
 sleep 25
 
@@ -1220,7 +1220,7 @@ echo -e "\n\t-> Step 3.11: Testing authcode restoration in new container"
 
 # Create a completely new Container
 authcodeRestoreContainer="httpAuthcodeRestoreTest"
-authcodeContainerHash=$(docker run -d --network="${network}" --name "${authcodeRestoreContainer}" -v "${authcodeRestoreContainer}-mysql-data:/var/lib/mysql" -v "${authcodeRestoreContainer}-files:/etc/eiou/" -v "${authcodeRestoreContainer}-index:/var/www/html" -v "${authcodeRestoreContainer}-eiou:/usr/local/bin/" -e RESTORE="${seedPhraseAuth}" eioud 2>&1)
+authcodeContainerHash=$(docker run -d --network="${network}" --name "${authcodeRestoreContainer}" -v "${authcodeRestoreContainer}-mysql-data:/var/lib/mysql" -v "${authcodeRestoreContainer}-files:/etc/eiou/" -v "${authcodeRestoreContainer}-index:/var/www/html" -v "${authcodeRestoreContainer}-eiou:/usr/local/bin/" -e RESTORE="${seedPhraseAuth}" eiou/eiou 2>&1)
 
 sleep 5
 

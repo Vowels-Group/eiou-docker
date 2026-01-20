@@ -8,10 +8,10 @@ powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else {
 docker build -f eioud.dockerfile -t eioud .
 
 # Start containers
-docker run -d  --network=demo-net --name https0 -e QUICKSTART=https0 eioud
-docker run -d  --network=demo-net --name https1 -e QUICKSTART=https1 eioud
-docker run -d  --network=demo-net --name https2 -e QUICKSTART=https2 eioud
-docker run -d  --network=demo-net --name https3 -e QUICKSTART=https3 eioud
+docker run -d  --network=demo-net --name https0 -e QUICKSTART=https0 eiou/eiou
+docker run -d  --network=demo-net --name https1 -e QUICKSTART=https1 eiou/eiou
+docker run -d  --network=demo-net --name https2 -e QUICKSTART=https2 eiou/eiou
+docker run -d  --network=demo-net --name https3 -e QUICKSTART=https3 eiou/eiou
 sleep 5
 
 # add contacts

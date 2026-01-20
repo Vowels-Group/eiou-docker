@@ -8,16 +8,16 @@ powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else {
 docker build -f eioud.dockerfile -t eioud .
 
 # Start containers
-docker run -d  --network=demo-net --name httpA -e QUICKSTART=httpA eioud
-docker run -d  --network=demo-net --name httpB -e QUICKSTART=httpB eioud
-docker run -d  --network=demo-net --name httpC -e QUICKSTART=httpC eioud
-docker run -d  --network=demo-net --name httpD -e QUICKSTART=httpD eioud
-docker run -d  --network=demo-net --name httpE -e QUICKSTART=httpE eioud
-docker run -d  --network=demo-net --name httpF -e QUICKSTART=httpF eioud
-docker run -d  --network=demo-net --name httpG -e QUICKSTART=httpG eioud
-docker run -d  --network=demo-net --name httpH -e QUICKSTART=httpH eioud
-docker run -d  --network=demo-net --name httpI -e QUICKSTART=httpI eioud
-docker run -d  --network=demo-net --name httpJ -e QUICKSTART=httpJ eioud
+docker run -d  --network=demo-net --name httpA -e QUICKSTART=httpA eiou/eiou
+docker run -d  --network=demo-net --name httpB -e QUICKSTART=httpB eiou/eiou
+docker run -d  --network=demo-net --name httpC -e QUICKSTART=httpC eiou/eiou
+docker run -d  --network=demo-net --name httpD -e QUICKSTART=httpD eiou/eiou
+docker run -d  --network=demo-net --name httpE -e QUICKSTART=httpE eiou/eiou
+docker run -d  --network=demo-net --name httpF -e QUICKSTART=httpF eiou/eiou
+docker run -d  --network=demo-net --name httpG -e QUICKSTART=httpG eiou/eiou
+docker run -d  --network=demo-net --name httpH -e QUICKSTART=httpH eiou/eiou
+docker run -d  --network=demo-net --name httpI -e QUICKSTART=httpI eiou/eiou
+docker run -d  --network=demo-net --name httpJ -e QUICKSTART=httpJ eiou/eiou
 sleep 5
 
 # add contacts
