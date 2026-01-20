@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 /**
  * Message payload builder for contact and transaction messages
@@ -414,7 +414,7 @@ class MessagePayload extends BasePayload
     /**
      * Build sync negotiation request payload
      *
-     * Issue #428: Request bidirectional sync by sharing our txid list.
+     * Request bidirectional sync by sharing our txid list.
      * The recipient will compare and return transactions we're missing.
      *
      * @param string $address The recipient's address
@@ -439,7 +439,7 @@ class MessagePayload extends BasePayload
     /**
      * Build sync negotiation response payload
      *
-     * Issue #428: Respond to sync negotiation with our txid list
+     * Respond to sync negotiation with our txid list
      * and any transactions the requester is missing.
      *
      * @param string $address The requester's address
@@ -466,7 +466,7 @@ class MessagePayload extends BasePayload
     /**
      * Build sync negotiation rejection payload
      *
-     * Issue #428: Reject sync negotiation request.
+     * Reject sync negotiation request.
      *
      * @param string $address The requester's address
      * @param string $reason The rejection reason

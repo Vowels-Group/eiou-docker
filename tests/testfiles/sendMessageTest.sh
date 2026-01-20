@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 # Test sending messages between connected contacts
 echo -e "\nTesting message sending between contacts..."

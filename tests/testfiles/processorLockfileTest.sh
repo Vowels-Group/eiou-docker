@@ -1,8 +1,8 @@
 #!/bin/sh
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 ############################ Processor Lockfile Test Suite ############################
-# Tests for Issue #430: Processor lockfile fix to prevent random restarts
+# Tests for processor lockfile fix to prevent random restarts
 #
 # This test suite verifies:
 # 1. Lockfile creation - Lockfiles are created correctly when processors start
@@ -43,7 +43,7 @@ LOG_CHECK_PERIOD=60
 
 echo -e "\n"
 echo "========================================================================"
-echo "              PROCESSOR LOCKFILE TEST SUITE (Issue #430)"
+echo "              PROCESSOR LOCKFILE TEST SUITE"
 echo "========================================================================"
 echo -e "\n"
 
@@ -434,7 +434,7 @@ elif [ "$removingStaleLogs" -gt 0 ] && [ "$removingStaleLogs" -le 3 ]; then
 else
     printf "\t   Spurious stale lockfile messages ${RED}FAILED${NC}\n"
     printf "\t   Found %s 'stale lockfile' and %s 'Removing stale lockfile' messages\n" "$staleMessages" "$removingStaleLogs"
-    printf "\t   This may indicate the Issue #430 fix is not applied or not working correctly\n"
+    printf "\t   This may indicate the lockfile fix is not applied or not working correctly\n"
     failure=$(( failure + 1 ))
 fi
 

@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 /**
  * Transaction Controller

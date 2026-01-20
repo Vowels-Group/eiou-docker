@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 # Test SSL certificate generation and HTTPS functionality
 # Verifies that self-signed SSL certificates are properly generated

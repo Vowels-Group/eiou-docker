@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 // Check if userconfig.json already exists and if so if the user keys are available
 $run = false;

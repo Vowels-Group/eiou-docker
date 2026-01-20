@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 ############################ Sync Test Suite ############################
 # Consolidated sync tests combining:
@@ -923,14 +923,14 @@ else
     failure=$(( failure + 1 ))
 fi
 
-##################### SECTION 8: Issue #404 - Proactive Sync & Description Privacy #####################
-# Tests for Issue #404 fixes:
+##################### SECTION 8: Proactive Sync & Description Privacy #####################
+# Tests for proactive sync and description privacy:
 # 1. Receiver proactively syncs when prev_id doesn't match
 # 2. Descriptions are filtered during sync (only contact/standard transactions)
 
 echo -e "\n"
 echo "========================================================================"
-echo "Section 8: Issue #404 - Proactive Sync & Description Privacy"
+echo "Section 8: Proactive Sync & Description Privacy"
 echo "========================================================================"
 
 echo -e "\n[8.1 Proactive Sync Trigger Test]"
@@ -1141,15 +1141,15 @@ else
     failure=$(( failure + 1 ))
 fi
 
-##################### SECTION 9: Issue #408 - Simultaneous Transaction Chain Conflict Resolution #####################
-# Tests for Issue #408 fix:
+##################### SECTION 9: Simultaneous Transaction Chain Conflict Resolution #####################
+# Tests for chain conflict resolution:
 # When Contact A and Contact B both send transactions simultaneously with the same
 # previous_txid, they create a "chain fork". The fix implements deterministic
 # conflict resolution using lexicographic txid comparison.
 
 echo -e "\n"
 echo "========================================================================"
-echo "Section 9: Issue #408 - Simultaneous Transaction Chain Conflict Resolution"
+echo "Section 9: Simultaneous Transaction Chain Conflict Resolution"
 echo "========================================================================"
 
 echo -e "\n[9.1 Chain Conflict Resolution Method Test]"
@@ -1473,8 +1473,8 @@ docker exec ${receiver} php -r "
 
 fi  # End PUBKEYS_AVAILABLE check for section 9.6
 
-##################### SECTION 10: Issue #423 - Comprehensive Sync Scenarios #####################
-# Tests for Issue #423: Check Synching in Standard and P2p settings
+##################### SECTION 10: Comprehensive Sync Scenarios #####################
+# Tests for comprehensive sync scenarios: Check Synching in Standard and P2p settings
 # These tests verify synching works when contacts have lost transactions
 # and that transaction queues behave correctly when rejections trigger syncs.
 #
@@ -1489,7 +1489,7 @@ fi  # End PUBKEYS_AVAILABLE check for section 9.6
 
 echo -e "\n"
 echo "========================================================================"
-echo "Section 10: Issue #423 - Comprehensive Sync Scenarios"
+echo "Section 10: Comprehensive Sync Scenarios"
 echo "========================================================================"
 
 # Setup: Need at least 3 containers for P2P tests (A, B, C)
@@ -1540,7 +1540,7 @@ if [[ -z "$addressA" ]] || [[ -z "$addressB" ]] || [[ -z "$addressC" ]]; then
     fi
 fi
 
-echo -e "\n[Test Setup for Issue #423]"
+echo -e "\n[Test Setup for Comprehensive Sync]"
 echo -e "\t   Contact A: ${contactA} (${addressA})"
 echo -e "\t   Contact B: ${contactB} (${addressB})"
 echo -e "\t   Contact C: ${contactC} (${addressC})"
@@ -2646,7 +2646,7 @@ fi  # End P2P_TESTS_AVAILABLE check
 fi  # End 3+ containers check for Section 10
 
 ##################### SECTION 11: Recipient Signature Sync Validation #####################
-# Tests for recipient signature validation during sync (Issue #467)
+# Tests for recipient signature validation during sync
 
 echo -e "\n"
 echo "========================================================================"
