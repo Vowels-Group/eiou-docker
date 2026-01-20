@@ -780,21 +780,14 @@ echo "========================================================================"
 echo "Section 4: Manual Ping CLI Tests"
 echo "========================================================================"
 
-# Clear rate limits for manual_ping before running tests
-# This prevents rate limiting from earlier test sections affecting these tests
-docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$pdo = Application::getInstance()->services->getPdo();
-    \$pdo->exec(\"DELETE FROM rate_limits WHERE action = 'manual_ping'\");
-" 2>/dev/null || true
-
 ############################ TEST 4.1: MANUAL PING VIA CLI ############################
 
 totaltests=$(( totaltests + 1 ))
 echo -e "\n[4.1 Test manual ping command: eiou ping]"
 
 # Test pinging B from A using the CLI command
-pingResultA=$(docker exec ${containerA} php -r "
+# Use EIOU_TEST_MODE=true to bypass rate limiting during tests
+pingResultA=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
     // Test the eiou ping command logic directly
     try {
         require_once('${REL_APPLICATION}');
@@ -859,7 +852,8 @@ contactNameB=$(docker exec ${containerA} php -r "
 " 2>/dev/null || echo "")
 
 if [[ -n "$contactNameB" ]]; then
-    pingByName=$(docker exec ${containerA} php -r "
+    # Use EIOU_TEST_MODE=true to bypass rate limiting during tests
+    pingByName=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
         try {
             require_once('${REL_APPLICATION}');
             \$app = Application::getInstance();
