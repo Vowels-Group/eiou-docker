@@ -78,11 +78,11 @@ for container in "${containers[@]}"; do
 done
 
 echo "Building base image..."
-docker build -f eioud.dockerfile -t eioud .
+docker build -f eiou.dockerfile -t eiou/eiou .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
-    docker run -d --network=network --name $container -e QUICKSTART=$container eioud
+    docker run -d --network=network --name $container -e QUICKSTART=$container eiou/eiou
 done
 
 # Save container Addresses in the associative array containerAddresses

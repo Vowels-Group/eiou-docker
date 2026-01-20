@@ -5,46 +5,46 @@ docker network create -d bridge demo-net
 powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
 
 # Build base image
-docker build -f eioud.dockerfile -t eioud .
+docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --network=demo-net --name A0 -e QUICKSTART=A0 eioud
-docker run -d --network=demo-net --name A1 -e QUICKSTART=A1 eioud
-docker run -d --network=demo-net --name A11 -e QUICKSTART=A11 eioud
-docker run -d --network=demo-net --name A111 -e QUICKSTART=A111 eioud
-docker run -d --network=demo-net --name A112 -e QUICKSTART=A112 eioud
-docker run -d --network=demo-net --name A113 -e QUICKSTART=A113 eioud
-docker run -d --network=demo-net --name A12 -e QUICKSTART=A12 eioud
-docker run -d --network=demo-net --name A121 -e QUICKSTART=A121 eioud
-docker run -d --network=demo-net --name A122 -e QUICKSTART=A122 eioud
-docker run -d --network=demo-net --name A123 -e QUICKSTART=A123 eioud
-docker run -d --network=demo-net --name A2 -e QUICKSTART=A2 eioud
-docker run -d --network=demo-net --name A21 -e QUICKSTART=A21 eioud
-docker run -d --network=demo-net --name A211 -e QUICKSTART=A211 eioud
-docker run -d --network=demo-net --name A212 -e QUICKSTART=A212 eioud
-docker run -d --network=demo-net --name A213 -e QUICKSTART=A213 eioud
-docker run -d --network=demo-net --name A22 -e QUICKSTART=A22 eioud
-docker run -d --network=demo-net --name A221 -e QUICKSTART=A221 eioud
-docker run -d --network=demo-net --name A222 -e QUICKSTART=A222 eioud
-docker run -d --network=demo-net --name A223 -e QUICKSTART=A223 eioud
-docker run -d --network=demo-net --name A3 -e QUICKSTART=A3 eioud
-docker run -d --network=demo-net --name A31 -e QUICKSTART=A31 eioud
-docker run -d --network=demo-net --name A311 -e QUICKSTART=A311 eioud
-docker run -d --network=demo-net --name A312 -e QUICKSTART=A312 eioud
-docker run -d --network=demo-net --name A313 -e QUICKSTART=A313 eioud
-docker run -d --network=demo-net --name A32 -e QUICKSTART=A32 eioud
-docker run -d --network=demo-net --name A321 -e QUICKSTART=A321 eioud
-docker run -d --network=demo-net --name A322 -e QUICKSTART=A322 eioud
-docker run -d --network=demo-net --name A323 -e QUICKSTART=A323 eioud
-docker run -d --network=demo-net --name A4 -e QUICKSTART=A4 eioud
-docker run -d --network=demo-net --name A41 -e QUICKSTART=A41 eioud
-docker run -d --network=demo-net --name A411 -e QUICKSTART=A411 eioud
-docker run -d --network=demo-net --name A412 -e QUICKSTART=A412 eioud
-docker run -d --network=demo-net --name A413 -e QUICKSTART=A413 eioud
-docker run -d --network=demo-net --name A42 -e QUICKSTART=A42 eioud
-docker run -d --network=demo-net --name A421 -e QUICKSTART=A421 eioud
-docker run -d --network=demo-net --name A422 -e QUICKSTART=A422 eioud
-docker run -d --network=demo-net --name A423 -e QUICKSTART=A423 eioud
+docker run -d --network=demo-net --name A0 -e QUICKSTART=A0 eiou/eiou
+docker run -d --network=demo-net --name A1 -e QUICKSTART=A1 eiou/eiou
+docker run -d --network=demo-net --name A11 -e QUICKSTART=A11 eiou/eiou
+docker run -d --network=demo-net --name A111 -e QUICKSTART=A111 eiou/eiou
+docker run -d --network=demo-net --name A112 -e QUICKSTART=A112 eiou/eiou
+docker run -d --network=demo-net --name A113 -e QUICKSTART=A113 eiou/eiou
+docker run -d --network=demo-net --name A12 -e QUICKSTART=A12 eiou/eiou
+docker run -d --network=demo-net --name A121 -e QUICKSTART=A121 eiou/eiou
+docker run -d --network=demo-net --name A122 -e QUICKSTART=A122 eiou/eiou
+docker run -d --network=demo-net --name A123 -e QUICKSTART=A123 eiou/eiou
+docker run -d --network=demo-net --name A2 -e QUICKSTART=A2 eiou/eiou
+docker run -d --network=demo-net --name A21 -e QUICKSTART=A21 eiou/eiou
+docker run -d --network=demo-net --name A211 -e QUICKSTART=A211 eiou/eiou
+docker run -d --network=demo-net --name A212 -e QUICKSTART=A212 eiou/eiou
+docker run -d --network=demo-net --name A213 -e QUICKSTART=A213 eiou/eiou
+docker run -d --network=demo-net --name A22 -e QUICKSTART=A22 eiou/eiou
+docker run -d --network=demo-net --name A221 -e QUICKSTART=A221 eiou/eiou
+docker run -d --network=demo-net --name A222 -e QUICKSTART=A222 eiou/eiou
+docker run -d --network=demo-net --name A223 -e QUICKSTART=A223 eiou/eiou
+docker run -d --network=demo-net --name A3 -e QUICKSTART=A3 eiou/eiou
+docker run -d --network=demo-net --name A31 -e QUICKSTART=A31 eiou/eiou
+docker run -d --network=demo-net --name A311 -e QUICKSTART=A311 eiou/eiou
+docker run -d --network=demo-net --name A312 -e QUICKSTART=A312 eiou/eiou
+docker run -d --network=demo-net --name A313 -e QUICKSTART=A313 eiou/eiou
+docker run -d --network=demo-net --name A32 -e QUICKSTART=A32 eiou/eiou
+docker run -d --network=demo-net --name A321 -e QUICKSTART=A321 eiou/eiou
+docker run -d --network=demo-net --name A322 -e QUICKSTART=A322 eiou/eiou
+docker run -d --network=demo-net --name A323 -e QUICKSTART=A323 eiou/eiou
+docker run -d --network=demo-net --name A4 -e QUICKSTART=A4 eiou/eiou
+docker run -d --network=demo-net --name A41 -e QUICKSTART=A41 eiou/eiou
+docker run -d --network=demo-net --name A411 -e QUICKSTART=A411 eiou/eiou
+docker run -d --network=demo-net --name A412 -e QUICKSTART=A412 eiou/eiou
+docker run -d --network=demo-net --name A413 -e QUICKSTART=A413 eiou/eiou
+docker run -d --network=demo-net --name A42 -e QUICKSTART=A42 eiou/eiou
+docker run -d --network=demo-net --name A421 -e QUICKSTART=A421 eiou/eiou
+docker run -d --network=demo-net --name A422 -e QUICKSTART=A422 eiou/eiou
+docker run -d --network=demo-net --name A423 -e QUICKSTART=A423 eiou/eiou
 sleep 5
 
 # Add friends (NOTE that names are NOT arbitrary)

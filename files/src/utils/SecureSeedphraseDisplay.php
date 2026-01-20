@@ -114,6 +114,31 @@ class SecureSeedphraseDisplay
             fwrite($tty, "║                                                               ║\n");
         }
 
+        // Display restore instructions with copy-paste ready command
+        fwrite($tty, "╠═══════════════════════════════════════════════════════════════╣\n");
+        fwrite($tty, "║                     WALLET RESTORATION                        ║\n");
+        fwrite($tty, "╠═══════════════════════════════════════════════════════════════╣\n");
+        fwrite($tty, "║ To restore, use the RESTORE environment variable:            ║\n");
+        fwrite($tty, "║                                                               ║\n");
+        fwrite($tty, "\033[1;32m"); // Bold green
+        fwrite($tty, "║ docker run -e RESTORE=\"<seedphrase>\" eiou/eiou                ║\n");
+        fwrite($tty, "\033[0m"); // Reset
+        fwrite($tty, "║                                                               ║\n");
+        fwrite($tty, "║ Your copy-paste ready command:                                ║\n");
+        fwrite($tty, "\033[1;32m"); // Bold green
+        $restoreCmd = 'docker run -e RESTORE="' . $seedphrase . '" eiou/eiou';
+        // Wrap long command across multiple lines if needed
+        $cmdChunks = str_split($restoreCmd, 59);
+        foreach ($cmdChunks as $chunk) {
+            $padded = str_pad($chunk, 61);
+            fwrite($tty, "║ " . $padded . " ║\n");
+        }
+        fwrite($tty, "\033[0m"); // Reset
+        fwrite($tty, "║                                                               ║\n");
+        fwrite($tty, "║ For better security, use RESTORE_FILE instead:                ║\n");
+        fwrite($tty, "║ docker run -v /path/seed.txt:/seed:ro \\                       ║\n");
+        fwrite($tty, "║   -e RESTORE_FILE=/seed eiou/eiou                             ║\n");
+
         fwrite($tty, "╚═══════════════════════════════════════════════════════════════╝\n");
         fwrite($tty, "\n");
 
@@ -188,6 +213,18 @@ class SecureSeedphraseDisplay
             $content .= "═══════════════════════════════════════════════════════════════\n\n";
             $content .= "  " . $authcode . "\n\n";
         }
+
+        // Include restore instructions with copy-paste ready command
+        $content .= "═══════════════════════════════════════════════════════════════\n";
+        $content .= "                    WALLET RESTORATION\n";
+        $content .= "═══════════════════════════════════════════════════════════════\n\n";
+        $content .= " To restore this wallet, use the RESTORE environment variable:\n\n";
+        $content .= "   docker run -e RESTORE=\"<seedphrase>\" eiou/eiou\n\n";
+        $content .= " Your copy-paste ready command:\n\n";
+        $content .= "   docker run -e RESTORE=\"" . $seedphrase . "\" eiou/eiou\n\n";
+        $content .= " For better security, save seedphrase to a file and use:\n\n";
+        $content .= "   docker run -v /path/seed.txt:/seed:ro \\\n";
+        $content .= "     -e RESTORE_FILE=/seed eiou/eiou\n\n";
 
         $content .= "═══════════════════════════════════════════════════════════════\n";
         $content .= " This file will be automatically deleted in " . self::FILE_TTL . " seconds.\n";

@@ -5,13 +5,13 @@ docker network create -d bridge demo-net
 powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
 
 # Build base image
-docker build -f eioud.dockerfile -t eioud .
+docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d  --network=demo-net --name Alice -e QUICKSTART=Alice eioud
-docker run -d  --network=demo-net --name Bob -e QUICKSTART=Bob eioud
-docker run -d  --network=demo-net --name Carol -e QUICKSTART=Carol eioud
-docker run -d  --network=demo-net --name Daniel -e QUICKSTART=Daniel eioud
+docker run -d  --network=demo-net --name Alice -e QUICKSTART=Alice eiou/eiou
+docker run -d  --network=demo-net --name Bob -e QUICKSTART=Bob eiou/eiou
+docker run -d  --network=demo-net --name Carol -e QUICKSTART=Carol eiou/eiou
+docker run -d  --network=demo-net --name Daniel -e QUICKSTART=Daniel eiou/eiou
 sleep 5
 
 # add contacts

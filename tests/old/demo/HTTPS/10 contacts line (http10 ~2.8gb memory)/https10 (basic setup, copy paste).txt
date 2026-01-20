@@ -6,19 +6,19 @@ docker network create -d bridge demo-net
 powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
 
 # Build base image
-docker build -f eioud.dockerfile -t eioud .
+docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d  --network=demo-net --name httpsA -e QUICKSTART=httpsA eioud
-docker run -d  --network=demo-net --name httpsB -e QUICKSTART=httpsB eioud
-docker run -d  --network=demo-net --name httpsC -e QUICKSTART=httpsC eioud
-docker run -d  --network=demo-net --name httpsD -e QUICKSTART=httpsD eioud
-docker run -d  --network=demo-net --name httpsE -e QUICKSTART=httpsE eioud
-docker run -d  --network=demo-net --name httpsF -e QUICKSTART=httpsF eioud
-docker run -d  --network=demo-net --name httpsG -e QUICKSTART=httpsG eioud
-docker run -d  --network=demo-net --name httpsH -e QUICKSTART=httpsH eioud
-docker run -d  --network=demo-net --name httpsI -e QUICKSTART=httpsI eioud
-docker run -d  --network=demo-net --name httpsJ -e QUICKSTART=httpsJ eioud
+docker run -d  --network=demo-net --name httpsA -e QUICKSTART=httpsA eiou/eiou
+docker run -d  --network=demo-net --name httpsB -e QUICKSTART=httpsB eiou/eiou
+docker run -d  --network=demo-net --name httpsC -e QUICKSTART=httpsC eiou/eiou
+docker run -d  --network=demo-net --name httpsD -e QUICKSTART=httpsD eiou/eiou
+docker run -d  --network=demo-net --name httpsE -e QUICKSTART=httpsE eiou/eiou
+docker run -d  --network=demo-net --name httpsF -e QUICKSTART=httpsF eiou/eiou
+docker run -d  --network=demo-net --name httpsG -e QUICKSTART=httpsG eiou/eiou
+docker run -d  --network=demo-net --name httpsH -e QUICKSTART=httpsH eiou/eiou
+docker run -d  --network=demo-net --name httpsI -e QUICKSTART=httpsI eiou/eiou
+docker run -d  --network=demo-net --name httpsJ -e QUICKSTART=httpsJ eiou/eiou
 sleep 5
 
 # add contacts

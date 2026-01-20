@@ -147,11 +147,11 @@ printf "\n${GREEN}Waiting for containers to initialize...${NC}\n"
 # WSL2 environments have slower I/O; use EIOU_INIT_TIMEOUT env var to override
 MAX_WAIT=${EIOU_INIT_TIMEOUT:-90}  # Maximum wait time per container in seconds
 
-# Get list of eioud containers from docker
-CONTAINER_LIST=$(docker ps --filter "ancestor=eioud" --format "{{.Names}}" 2>/dev/null)
+# Get list of eiou containers from docker
+CONTAINER_LIST=$(docker ps --filter "ancestor=eiou/eiou" --format "{{.Names}}" 2>/dev/null)
 
 if [ -z "$CONTAINER_LIST" ]; then
-    printf "${RED}No eioud containers found!${NC}\n"
+    printf "${RED}No eiou containers found!${NC}\n"
     exit 1
 fi
 

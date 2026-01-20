@@ -626,10 +626,18 @@ fi
 # Display user information
 echo "User Information: "
 if [[ ! -z ${http} ]]; then
-    echo -e "\t HTTP address: $http"
-    # Also show HTTPS address (replace http:// with https://)
-    https="${http/http:\/\//https:\/\/}"
-    echo -e "\t HTTPS address: $https"
+    if [[ ${http} == https://* ]]; then
+        # URL is already HTTPS, only show HTTPS address
+        echo -e "\t HTTPS address: $http"
+    elif [[ ${http} == http://* ]]; then
+        # URL is HTTP, show both HTTP and HTTPS options
+        echo -e "\t HTTP address: $http"
+        https="${http/http:\/\//https:\/\/}"
+        echo -e "\t HTTPS address: $https"
+    else
+        # No protocol prefix, show as-is
+        echo -e "\t Address: $http"
+    fi
 fi
 echo -e "\t Tor address: $tor"
 readable="${pubkey//$'\n'/$'\n\t\t'}"

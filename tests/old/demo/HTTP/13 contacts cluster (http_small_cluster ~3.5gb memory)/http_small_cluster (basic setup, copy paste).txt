@@ -5,22 +5,22 @@ docker network create -d bridge demo-net
 powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
 
 # Build base image
-docker build -f eioud.dockerfile -t eioud .
+docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --network=demo-net --name A0 -e QUICKSTART=A0 eioud
-docker run -d --network=demo-net --name A1 -e QUICKSTART=A1 eioud
-docker run -d --network=demo-net --name A11 -e QUICKSTART=A11 eioud
-docker run -d --network=demo-net --name A12 -e QUICKSTART=A12 eioud
-docker run -d --network=demo-net --name A2 -e QUICKSTART=A2 eioud
-docker run -d --network=demo-net --name A21 -e QUICKSTART=A21 eioud
-docker run -d --network=demo-net --name A22 -e QUICKSTART=A22 eioud
-docker run -d --network=demo-net --name A3 -e QUICKSTART=A3 eioud
-docker run -d --network=demo-net --name A31 -e QUICKSTART=A31 eioud
-docker run -d --network=demo-net --name A32 -e QUICKSTART=A32 eioud
-docker run -d --network=demo-net --name A4 -e QUICKSTART=A4 eioud
-docker run -d --network=demo-net --name A41 -e QUICKSTART=A41 eioud
-docker run -d --network=demo-net --name A42 -e QUICKSTART=A42 eioud
+docker run -d --network=demo-net --name A0 -e QUICKSTART=A0 eiou/eiou
+docker run -d --network=demo-net --name A1 -e QUICKSTART=A1 eiou/eiou
+docker run -d --network=demo-net --name A11 -e QUICKSTART=A11 eiou/eiou
+docker run -d --network=demo-net --name A12 -e QUICKSTART=A12 eiou/eiou
+docker run -d --network=demo-net --name A2 -e QUICKSTART=A2 eiou/eiou
+docker run -d --network=demo-net --name A21 -e QUICKSTART=A21 eiou/eiou
+docker run -d --network=demo-net --name A22 -e QUICKSTART=A22 eiou/eiou
+docker run -d --network=demo-net --name A3 -e QUICKSTART=A3 eiou/eiou
+docker run -d --network=demo-net --name A31 -e QUICKSTART=A31 eiou/eiou
+docker run -d --network=demo-net --name A32 -e QUICKSTART=A32 eiou/eiou
+docker run -d --network=demo-net --name A4 -e QUICKSTART=A4 eiou/eiou
+docker run -d --network=demo-net --name A41 -e QUICKSTART=A41 eiou/eiou
+docker run -d --network=demo-net --name A42 -e QUICKSTART=A42 eiou/eiou
 sleep 5
 
 # Add friends (NOTE that names are NOT arbitrary)
