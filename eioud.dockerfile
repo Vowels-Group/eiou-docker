@@ -6,9 +6,26 @@
 #   - MariaDB: runs as mysql
 #   - Tor: runs as debian-tor
 
+# =============================================================================
+# EIOU Node Docker Image
+# =============================================================================
+# Builds a complete EIOU node with:
+# - Apache2 web server for GUI and API
+# - MariaDB database for transactions and contacts
+# - Tor for anonymous .onion addressing
+# - PHP runtime for application logic
+# =============================================================================
+
 FROM debian:12-slim
 
-# Install required packages for a LAMP server
+# Install required packages:
+# - apache2: Web server for GUI and REST API endpoints
+# - cron: Scheduled task execution for maintenance jobs
+# - curl: HTTP client for peer-to-peer communication
+# - mariadb-server: Database for wallet, transactions, contacts
+# - openssl: SSL certificate generation and cryptography
+# - php, php-*: PHP runtime with required extensions
+# - tor: Anonymous network for .onion addresses
 RUN apt-get update && apt-get install -y \
     apache2 \
     cron \
@@ -22,7 +39,9 @@ RUN apt-get update && apt-get install -y \
     tor \
     && rm -rf /var/lib/apt/lists/*
 
-# Edit /etc/tor/torrc
+# Configure Tor hidden service:
+# - HiddenServiceDir: Directory for Tor identity keys and hostname
+# - HiddenServicePort: Maps port 80 to internal Apache
 RUN chmod o+w /etc/tor/torrc && \
     echo "HiddenServiceDir /var/lib/tor/hidden_service/" >> /etc/tor/torrc && \
     echo "HiddenServicePort 80 127.0.0.1:80" >> /etc/tor/torrc && \
@@ -129,7 +148,11 @@ RUN touch /var/log/php_errors.log && \
     chown www-data:www-data /var/log/php_errors.log && \
     chmod 640 /var/log/php_errors.log
 
-# Declare volumes for data persistence
+# Persistent volumes:
+# - /var/lib/mysql: Database files (transactions, contacts, balances)
+# - /etc/eiou: Wallet configuration and encryption keys
+# - /usr/local/bin: CLI tools
+# - /var/www/html: Web interface files
 VOLUME ["/var/lib/mysql", "/etc/eiou", "/usr/local/bin/", "/var/www/html/"]
 
 # Copy and set up startup script

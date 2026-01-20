@@ -1,6 +1,20 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ Message Delivery Test ############################
+# Tests MessageDeliveryService and Dead Letter Queue functionality
+#
+# Verifies:
+# - Message delivery completes successfully
+# - Failed messages are moved to dead letter queue
+# - Retry logic handles transient failures
+# - Delivery status is tracked correctly
+#
+# Prerequisites:
+# - Containers must be running
+# - Contacts must be established (run addContactsTest first)
+#############################################################################
+
 # Test MessageDeliveryService and Dead Letter Queue functionality
 echo -e "\nTesting MessageDeliveryService and DLQ..."
 

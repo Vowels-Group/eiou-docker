@@ -1,6 +1,20 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ Add Contacts Test ############################
+# Tests contact addition workflow between containers
+#
+# Verifies:
+# - Contact requests are sent successfully between nodes
+# - Contact acceptance is processed correctly
+# - Contact status changes to 'accepted' after mutual addition
+#
+# Prerequisites:
+# - Containers must be running
+# - containerAddresses array must be populated by build file
+# - containersLinks array defines which contacts to add
+#########################################################################
+
 # Add contacts
 echo -e "\nAdding contacts..."
 containersLinkKeys=($(for x in ${!containersLinks[@]}; do echo $x; done | sort))

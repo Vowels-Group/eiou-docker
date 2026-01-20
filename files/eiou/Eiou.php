@@ -1,6 +1,35 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+/**
+ * EIOU CLI Entry Point
+ *
+ * Main command-line interface for interacting with an EIOU wallet.
+ * This script processes user commands and delegates to appropriate services.
+ *
+ * Usage: php eiou.php <command> [arguments] [--json]
+ *
+ * Commands:
+ *   generate [restore <seed>]  - Generate new wallet or restore from seed
+ *   info [detail]              - Display wallet information
+ *   add <address> <name> ...   - Add a new contact
+ *   send <address> <amount>    - Send an eIOU transaction
+ *   viewbalances [contact]     - View balance(s)
+ *   history [contact]          - View transaction history
+ *   help [command]             - Display help information
+ *   sync [type]                - Synchronize data
+ *   ping <contact>             - Check contact online status
+ *   shutdown                   - Graceful shutdown
+ *
+ * Output Flags:
+ *   --json, -j     - Output in JSON format
+ *   --no-metadata  - Exclude metadata from JSON output
+ *
+ * Rate Limiting:
+ *   Commands are rate-limited per wallet to prevent abuse.
+ *   Limits vary by command type (see $cliRateLimits below).
+ */
+
 // This file is how users interact with eiou
 require_once '/etc/eiou/Functions.php';
 

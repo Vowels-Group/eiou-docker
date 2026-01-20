@@ -1,6 +1,20 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ CLI Commands Test ############################
+# Tests CLI commands for correct output in both regular and JSON formats
+#
+# Verifies:
+# - All CLI commands execute without errors
+# - Regular output format is correct and readable
+# - JSON output format is valid and parseable
+# - Command arguments are validated properly
+#
+# Prerequisites:
+# - Containers must be running
+# - Wallet must be initialized
+#########################################################################
+
 # Test CLI commands for correct output in both regular and JSON formats
 # Tests help, info, viewsettings, viewbalances, history, viewcontact, search commands
 

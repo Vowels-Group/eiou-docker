@@ -1,3 +1,27 @@
+# =============================================================================
+# EIOU Docker - 10-Node Line Topology
+# =============================================================================
+# Purpose: 10-node linear chain for extended routing and scaling tests
+#
+# Topology:
+#   node-a <-> node-b <-> node-c <-> node-d <-> node-e <->
+#   node-f <-> node-g <-> node-h <-> node-i <-> node-j
+#
+# Resource Requirements: ~2.8GB RAM total
+#
+# Usage:
+#   docker-compose -f docker-compose-10line.yml up -d --build
+#   docker-compose -f docker-compose-10line.yml down -v
+#
+# Note: This compose file creates standalone containers without contact
+# interconnections. Node contacts must be established manually after
+# startup. The topology diagram above is a suggested configuration;
+# nodes can be interconnected in any desired pattern.
+#
+# NOTE: Default p2pRequestLevel max is 5 hops. Some routing tests
+# between distant nodes may need this limit adjusted.
+# =============================================================================
+
 # Copyright 2025-2026 Vowels Group, LLC
 services:
   node-a:

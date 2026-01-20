@@ -1,3 +1,24 @@
+# =============================================================================
+# EIOU Docker - Single Node Configuration
+# =============================================================================
+# Purpose: Single container for basic testing and development
+#
+# Topology: Single node (alice)
+#
+# Resource Requirements: ~275MB RAM
+#
+# Usage:
+#   docker-compose -f docker-compose-single.yml up -d --build
+#   docker-compose -f docker-compose-single.yml down -v
+#
+# Environment Variables:
+#   EIOU_INIT_TIMEOUT: Initialization timeout in seconds (default: 120)
+#                      Increase for WSL2 or slow environments
+#
+# Note: This compose file creates a standalone container. For multi-node
+# setups, contacts must be established manually after container startup.
+# =============================================================================
+
 # Copyright 2025-2026 Vowels Group, LLC
 services:
   eioud:

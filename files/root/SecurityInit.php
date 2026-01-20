@@ -2,8 +2,29 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 /**
- * Security initialization file
- * Include this at the beginning of all PHP entry points
+ * Security Initialization File
+ *
+ * Initializes security components for all EIOU PHP entry points.
+ * This file should be included early in the request lifecycle.
+ *
+ * Initialization Sequence:
+ * 1. Load Constants and ErrorHandler
+ * 2. Load Security utilities and RateLimiter
+ * 3. Initialize SecureLogger
+ * 4. Set security headers (web requests only)
+ * 5. Configure and start secure session
+ * 6. Apply rate limiting based on action type
+ *
+ * Rate Limits (web requests):
+ *   api_request:    100 requests/minute, 5-minute block on exceed
+ *   login_attempt:  5 attempts/5 minutes, 15-minute block on exceed
+ *   transaction:    20 transactions/minute, 10-minute block on exceed
+ *   contact_add:    10 contacts/minute, 5-minute block on exceed
+ *
+ * Helper Functions Defined:
+ *   h($string) - HTML encoding for safe output
+ *   j($value)  - JavaScript encoding for safe output
+ *   u($string) - URL encoding for safe output
  */
 
 // Load constants
@@ -94,17 +115,32 @@ if (php_sapi_name() !== 'cli') {
 // Note: Error and exception handlers are now managed by ErrorHandler::init()
 // No need to set them here as ErrorHandler provides centralized error handling
 
-// Helper function for secure output encoding
+/**
+ * Secure HTML encoding for output
+ *
+ * @param string $string The string to encode
+ * @return string HTML-encoded string safe for browser output
+ */
 function h($string) {
     return Security::htmlEncode($string);
 }
 
-// Helper function for JavaScript encoding
+/**
+ * Secure JavaScript encoding for output
+ *
+ * @param mixed $value The value to encode (will be JSON-encoded)
+ * @return string JSON-encoded string safe for JavaScript contexts
+ */
 function j($value) {
     return Security::jsEncode($value);
 }
 
-// Helper function for URL encoding
+/**
+ * Secure URL encoding
+ *
+ * @param string $string The string to URL-encode
+ * @return string URL-encoded string safe for use in URLs
+ */
 function u($string) {
     return Security::urlEncode($string);
 }

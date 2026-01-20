@@ -1,6 +1,19 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ Send Message Test ############################
+# Tests message sending between connected contacts
+#
+# Verifies:
+# - Direct message delivery between adjacent contacts
+# - Multi-hop message routing through intermediate nodes
+# - Balance changes reflect sent amounts and fees
+#
+# Prerequisites:
+# - Containers must be running
+# - Contacts must be established (run addContactsTest first)
+#########################################################################
+
 # Test sending messages between connected contacts
 echo -e "\nTesting message sending between contacts..."
 

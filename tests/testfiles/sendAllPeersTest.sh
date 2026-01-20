@@ -1,6 +1,19 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ Send All Peers Test ############################
+# Tests transaction sending to all connected peers in the network
+#
+# Verifies:
+# - Transactions can be sent to all directly connected contacts
+# - Bidirectional link establishment and verification
+# - Full mesh connectivity where applicable
+#
+# Prerequisites:
+# - Containers must be running
+# - Contacts must be established (run addContactsTest first)
+###########################################################################
+
 # Test sending transactions to ALL connected peers (not just along defined links)
 # This test sends from each container to all its contacts to verify full mesh capability
 echo "Testing send to all peers functionality..."

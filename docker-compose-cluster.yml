@@ -1,3 +1,39 @@
+# =============================================================================
+# EIOU Docker - 13-Node Cluster Topology
+# =============================================================================
+# Purpose: Hierarchical star cluster for complex routing and network tests
+#
+# Topology (star with 4 branches, each with 2 leaf nodes):
+#
+#   a31 a32     a41 a42
+#     \  /       \  /
+#      a3         a4
+#        \       /
+#           a
+#        /       \
+#      a2         a1
+#     /  \       /  \
+#   a22 a21   a12  a11
+#
+# Center: cluster-a (hub)
+# Branches: cluster-a1, cluster-a2, cluster-a3, cluster-a4
+# Leaves: cluster-a11, cluster-a12, cluster-a21, cluster-a22,
+#         cluster-a31, cluster-a32, cluster-a41, cluster-a42
+#
+# Total: 13 nodes (1 hub + 4 branches + 8 leaves)
+#
+# Resource Requirements: ~3.5GB RAM total
+#
+# Usage:
+#   docker-compose -f docker-compose-cluster.yml up -d --build
+#   docker-compose -f docker-compose-cluster.yml down -v
+#
+# Note: This compose file creates standalone containers without contact
+# interconnections. Node contacts must be established manually after
+# startup. The topology diagram above is a suggested configuration;
+# nodes can be interconnected in any desired pattern.
+# =============================================================================
+
 # Copyright 2025-2026 Vowels Group, LLC
 services:
   # Root node

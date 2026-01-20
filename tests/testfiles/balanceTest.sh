@@ -1,6 +1,21 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ Balance Verification Test ############################
+# Tests balance queries and verification across all containers
+#
+# Verifies:
+# - All containers can query their own balances
+# - Balance changes are reflected after transactions
+# - viewbalances command returns correct output format
+# - Balance calculations account for transaction fees
+#
+# Prerequisites:
+# - Containers must be running
+# - Contacts must be added (run addContactsTest first)
+# - Some transactions should exist for meaningful balance checks
+##################################################################################
+
 # Test balance checking and verification across all containers
 echo -e "\nTesting balance queries and calculations..."
 
