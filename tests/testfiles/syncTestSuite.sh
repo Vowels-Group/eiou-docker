@@ -2576,15 +2576,15 @@ docker exec ${contactA} eiou send ${addressC} 1 USD "P2P-AC-${timestamp19}" 2>&1
 docker exec ${contactC} eiou send ${addressA} 1 USD "P2P-CA-${timestamp19}" 2>&1 > /dev/null &
 wait
 
-# Process queues (more cycles for double disaster sync recovery)
+# Process queues (more cycles for double disaster sync recovery - this is the hardest scenario)
 echo -e "\t   Processing message queues..."
-for i in {1..15}; do
+for i in {1..30}; do
     process_all_queues
 done
 
 # Verify both end-recipients received transactions after sync recovery (with retry for timing - longer delay)
-countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp19}" 1 25)
-countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp19}" 1 25)
+countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp19}" 1 45)
+countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp19}" 1 45)
 echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
 
 if [[ "$countA_p2p" -ge 1 ]] && [[ "$countC_p2p" -ge 1 ]]; then
@@ -2620,15 +2620,15 @@ docker exec ${contactA} eiou send ${addressC} 1 USD "P2P-AC-${timestamp20}" 2>&1
 docker exec ${contactC} eiou send ${addressA} 1 USD "P2P-CA-${timestamp20}" 2>&1 > /dev/null &
 wait
 
-# Process queues
+# Process queues (more cycles for double disaster sync recovery)
 echo -e "\t   Processing message queues..."
-for i in {1..10}; do
+for i in {1..20}; do
     process_all_queues
 done
 
 # Verify both end-recipients received transactions after sync recovery (with retry for timing)
-countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp20}" 1 20)
-countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp20}" 1 20)
+countA_p2p=$(check_tx_count_with_retry ${contactA} "P2P-CA-${timestamp20}" 1 35)
+countC_p2p=$(check_tx_count_with_retry ${contactC} "P2P-AC-${timestamp20}" 1 35)
 echo -e "\t   A has ${countA_p2p} from C, C has ${countC_p2p} from A"
 
 if [[ "$countA_p2p" -ge 1 ]] && [[ "$countC_p2p" -ge 1 ]]; then

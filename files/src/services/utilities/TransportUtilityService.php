@@ -199,11 +199,19 @@ class TransportUtilityService
     public function resolveUserAddressForTransport(string $address): string {
         // Check if the address is a Tor (.onion) address
         if ($this->isTorAddress($address)) {
-            return $this->currentUser->getTorAddress();
+            $torAddress = $this->currentUser->getTorAddress();
+            // Return Tor address or fall back to original address (never downgrade to HTTP)
+            return $torAddress ?? $address;
         }
         // Check if the address is an HTTP/HTTPS address
         elseif ($this->isHttpAddress($address)) {
-            return $this->currentUser->getHttpAddress();
+            $httpAddress = $this->currentUser->getHttpAddress();
+            // Fall back to Tor address if HTTP not configured (secure upgrade)
+            if ($httpAddress !== null) {
+                return $httpAddress;
+            }
+            $torAddress = $this->currentUser->getTorAddress();
+            return $torAddress ?? $address;
         }
         // If no specific transport type is detected, return the original address
         return $address;

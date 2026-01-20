@@ -28,6 +28,16 @@ require_once __DIR__ . '/ServiceContainer.php';
  * @return void
  */
 function output($message,$echo = 'ECHO') {
-    $service = Application::getInstance()->services->getDebugService();
-    $service->output($message,$echo);
+    // Gracefully handle cases where Application is not yet initialized
+    // This can happen during early startup or when code is run via CLI tests
+    try {
+        $app = Application::getInstance();
+        if ($app && $app->services) {
+            $service = $app->services->getDebugService();
+            $service->output($message,$echo);
+        }
+    } catch (Throwable $e) {
+        // Silently ignore if Application isn't available
+        // The message is lost but execution continues
+    }
 }

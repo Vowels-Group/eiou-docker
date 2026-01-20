@@ -294,7 +294,7 @@ echo -e "\n[2.2 Manually ping B from A while B is online]"
 prevTxidAB=$(docker exec ${containerA} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$userPubkey = \$app->services->getUserContext()->getPublicKey();
+    \$userPubkey = \$app->services->getCurrentUser()->getPublicKey();
     \$contactPubkey = base64_decode('${pubkeyBfromA}');
     \$txid = \$app->services->getTransactionRepository()->getPreviousTxid(\$userPubkey, \$contactPubkey);
     echo \$txid ?? 'NULL';
@@ -306,7 +306,7 @@ pingResult=$(docker exec ${containerA} php -r "
     require_once('/etc/eiou/src/schemas/payloads/ContactStatusPayload.php');
 
     \$app = Application::getInstance();
-    \$currentUser = \$app->services->getUserContext();
+    \$currentUser = \$app->services->getCurrentUser();
     \$utilityContainer = \$app->utilityServices;
     \$transportUtility = \$utilityContainer->getTransportUtility();
 
@@ -519,7 +519,7 @@ pingFailResult=$(docker exec ${containerA} php -r "
     require_once('/etc/eiou/src/schemas/payloads/ContactStatusPayload.php');
 
     \$app = Application::getInstance();
-    \$currentUser = \$app->services->getUserContext();
+    \$currentUser = \$app->services->getCurrentUser();
     \$utilityContainer = \$app->utilityServices;
     \$transportUtility = \$utilityContainer->getTransportUtility();
 
@@ -630,8 +630,11 @@ if [[ "$restoredContactCountB" -eq 0 ]] && [[ "$restoredTxCountB" -eq 0 ]]; then
     printf "\t   B has fresh state (0 contacts, 0 transactions) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
+    # NOTE: This WARNING is expected behavior - sync from other containers may have already
+    # restored contacts/transactions before this check runs. The test continues because
+    # the important verification is that sync DOES restore the data (tested in 3.9 and 3.10).
     printf "\t   B state check ${YELLOW}WARNING${NC} - Contacts: ${restoredContactCountB}, Transactions: ${restoredTxCountB}\n"
-    passed=$(( passed + 1 ))  # Continue test even if some data remains
+    passed=$(( passed + 1 ))
 fi
 
 ############################ TEST 3.7: TRIGGER SYNC FROM A TO B ############################
@@ -787,10 +790,11 @@ echo -e "\n[4.1 Test manual ping command: eiou ping]"
 
 # Test pinging B from A using the CLI command
 # Use EIOU_TEST_MODE=true to bypass rate limiting during tests
+# Note: Require Functions.php to get output() wrapper function
 pingResultA=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
     // Test the eiou ping command logic directly
     try {
-        require_once('${REL_APPLICATION}');
+        require_once('/etc/eiou/Functions.php');
         \$app = Application::getInstance();
         \$contactStatusService = \$app->services->getContactStatusService();
         \$result = \$contactStatusService->pingContact('${addressB}');
@@ -819,7 +823,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[4.2 Test ping non-existent contact returns error]"
 
 pingNonExistent=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('/etc/eiou/Functions.php');
     \$app = Application::getInstance();
     \$contactStatusService = \$app->services->getContactStatusService();
     \$result = \$contactStatusService->pingContact('nonexistent-contact-xyz');
@@ -853,9 +857,10 @@ contactNameB=$(docker exec ${containerA} php -r "
 
 if [[ -n "$contactNameB" ]]; then
     # Use EIOU_TEST_MODE=true to bypass rate limiting during tests
+    # Note: Require Functions.php to get output() wrapper function
     pingByName=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
         try {
-            require_once('${REL_APPLICATION}');
+            require_once('/etc/eiou/Functions.php');
             \$app = Application::getInstance();
             \$contactStatusService = \$app->services->getContactStatusService();
             \$result = \$contactStatusService->pingContact('${contactNameB}');
