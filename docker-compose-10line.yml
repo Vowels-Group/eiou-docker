@@ -13,7 +13,10 @@
 #   docker-compose -f docker-compose-10line.yml up -d --build
 #   docker-compose -f docker-compose-10line.yml down -v
 #
-# Test Suite: Use with tests/buildfiles/http10.sh
+# Note: This compose file creates standalone containers without contact
+# interconnections. Node contacts must be established manually after
+# startup. The topology diagram above is a suggested configuration;
+# nodes can be interconnected in any desired pattern.
 #
 # NOTE: Default p2pRequestLevel max is 5 hops. Some routing tests
 # between distant nodes may need this limit adjusted.

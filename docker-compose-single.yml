@@ -14,6 +14,9 @@
 # Environment Variables:
 #   EIOU_INIT_TIMEOUT: Initialization timeout in seconds (default: 120)
 #                      Increase for WSL2 or slow environments
+#
+# Note: This compose file creates a standalone container. For multi-node
+# setups, contacts must be established manually after container startup.
 # =============================================================================
 
 # Copyright 2025-2026 Vowels Group, LLC

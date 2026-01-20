@@ -12,7 +12,10 @@
 #   docker-compose -f docker-compose-4line.yml up -d --build
 #   docker-compose -f docker-compose-4line.yml down -v
 #
-# Test Suite: Use with tests/buildfiles/http4.sh
+# Note: This compose file creates standalone containers without contact
+# interconnections. Node contacts must be established manually after
+# startup. The topology diagram above is a suggested configuration;
+# nodes can be interconnected in any desired pattern.
 # =============================================================================
 
 # Copyright 2025-2026 Vowels Group, LLC
