@@ -143,7 +143,7 @@ class Wallet{
                 $output->error("Invalid hostname format. Must be a valid URL.", ErrorCodes::INVALID_HOSTNAME, 400, [
                     'provided' => $argv[2]
                 ]);
-                return;
+                exit(1);
             }
         }
 
@@ -189,7 +189,7 @@ class Wallet{
                 400,
                 ['expected_words' => '24', 'provided' => count($argv) - 3]
             );
-            return;
+            exit(1);
         }
 
         // Extract seed phrase words (everything after "restore")
@@ -205,7 +205,7 @@ class Wallet{
                 400,
                 ['expected' => '24', 'provided' => $wordCount]
             );
-            return;
+            exit(1);
         }
 
         // Validate the mnemonic (checksum verification)
@@ -218,7 +218,7 @@ class Wallet{
             );
             // Clear invalid mnemonic from memory
             KeyEncryption::secureClear($mnemonic);
-            return;
+            exit(1);
         }
 
         // Check if wallet already exists
@@ -229,7 +229,7 @@ class Wallet{
                 409
             );
             KeyEncryption::secureClear($mnemonic);
-            return;
+            exit(1);
         }
 
         // Add default user values in defaultconfig.json
@@ -336,7 +336,7 @@ class Wallet{
                 400,
                 ['hint' => 'Provide the path to a file containing the 24-word seed phrase']
             );
-            return;
+            exit(1);
         }
 
         $filepath = $argv[3];
@@ -348,7 +348,7 @@ class Wallet{
                 ErrorCodes::FILE_NOT_FOUND,
                 404
             );
-            return;
+            exit(1);
         }
 
         if (!is_readable($filepath)) {
@@ -357,7 +357,7 @@ class Wallet{
                 ErrorCodes::FILE_NOT_READABLE,
                 403
             );
-            return;
+            exit(1);
         }
 
         // Read seedphrase from file
@@ -369,7 +369,7 @@ class Wallet{
                 ErrorCodes::INVALID_SEED_PHRASE,
                 400
             );
-            return;
+            exit(1);
         }
 
         // Extract seed phrase words from file content
@@ -386,7 +386,7 @@ class Wallet{
                 400,
                 ['hint' => 'Ensure the file contains a valid 24-word BIP39 seed phrase']
             );
-            return;
+            exit(1);
         }
 
         // Build argv array for restoreWallet with the seedphrase words

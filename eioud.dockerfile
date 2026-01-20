@@ -155,6 +155,10 @@ RUN touch /var/log/php_errors.log && \
 # - /var/www/html: Web interface files
 VOLUME ["/var/lib/mysql", "/etc/eiou", "/usr/local/bin/", "/var/www/html/"]
 
+# Copy scripts directory (includes banner.sh for warning messages)
+COPY scripts/ /app/scripts/
+RUN chmod +x /app/scripts/*.sh
+
 # Copy and set up startup script
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh
