@@ -119,14 +119,15 @@ class SecureSeedphraseDisplay
         fwrite($tty, "║                     WALLET RESTORATION                        ║\n");
         fwrite($tty, "╠═══════════════════════════════════════════════════════════════╣\n");
         fwrite($tty, "║ To restore, use the RESTORE environment variable:            ║\n");
+        fwrite($tty, "║ (Replace <image> with your Docker image name, e.g., eioud)   ║\n");
         fwrite($tty, "║                                                               ║\n");
         fwrite($tty, "\033[1;32m"); // Bold green
-        fwrite($tty, "║ docker run -e RESTORE=\"<seedphrase>\" eioud                    ║\n");
+        fwrite($tty, "║ docker run -e RESTORE=\"<seedphrase>\" <image>                  ║\n");
         fwrite($tty, "\033[0m"); // Reset
         fwrite($tty, "║                                                               ║\n");
-        fwrite($tty, "║ Your copy-paste ready command:                                ║\n");
+        fwrite($tty, "║ Your copy-paste ready command (update image name if needed): ║\n");
         fwrite($tty, "\033[1;32m"); // Bold green
-        $restoreCmd = 'docker run -e RESTORE="' . $seedphrase . '" eioud';
+        $restoreCmd = 'docker run -e RESTORE="' . $seedphrase . '" <image>';
         // Wrap long command across multiple lines if needed
         $cmdChunks = str_split($restoreCmd, 59);
         foreach ($cmdChunks as $chunk) {
@@ -137,6 +138,7 @@ class SecureSeedphraseDisplay
         fwrite($tty, "║                                                               ║\n");
         fwrite($tty, "║ For better security, use RESTORE_FILE instead:                ║\n");
         fwrite($tty, "║ docker run -v /path/seed.txt:/seed:ro -e RESTORE_FILE=/seed   ║\n");
+        fwrite($tty, "║ (Add your image name at the end of the command)               ║\n");
 
         fwrite($tty, "╚═══════════════════════════════════════════════════════════════╝\n");
         fwrite($tty, "\n");
@@ -217,12 +219,13 @@ class SecureSeedphraseDisplay
         $content .= "═══════════════════════════════════════════════════════════════\n";
         $content .= "                    WALLET RESTORATION\n";
         $content .= "═══════════════════════════════════════════════════════════════\n\n";
-        $content .= " To restore this wallet, use the RESTORE environment variable:\n\n";
-        $content .= "   docker run -e RESTORE=\"<seedphrase>\" eioud\n\n";
-        $content .= " Your copy-paste ready command:\n\n";
-        $content .= "   docker run -e RESTORE=\"" . $seedphrase . "\" eioud\n\n";
+        $content .= " To restore this wallet, use the RESTORE environment variable.\n";
+        $content .= " Replace <image> with your Docker image name (e.g., eioud):\n\n";
+        $content .= "   docker run -e RESTORE=\"<seedphrase>\" <image>\n\n";
+        $content .= " Your copy-paste ready command (update image name if needed):\n\n";
+        $content .= "   docker run -e RESTORE=\"" . $seedphrase . "\" <image>\n\n";
         $content .= " For better security, save seedphrase to a file and use:\n\n";
-        $content .= "   docker run -v /path/seed.txt:/seed:ro -e RESTORE_FILE=/seed eioud\n\n";
+        $content .= "   docker run -v /path/seed.txt:/seed:ro -e RESTORE_FILE=/seed <image>\n\n";
 
         $content .= "═══════════════════════════════════════════════════════════════\n";
         $content .= " This file will be automatically deleted in " . self::FILE_TTL . " seconds.\n";
