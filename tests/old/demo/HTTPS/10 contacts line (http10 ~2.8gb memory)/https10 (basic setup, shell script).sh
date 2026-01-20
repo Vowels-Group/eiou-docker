@@ -69,7 +69,7 @@ for container in "${containers[@]}"; do
 done
 
 echo "Building base image..."
-docker build -f eiou.dockerfile -t eiou .
+docker build -f eiou.dockerfile -t eiou/eiou .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
