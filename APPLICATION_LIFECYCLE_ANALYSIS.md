@@ -4,7 +4,9 @@
 
 This document analyzes the EIOU Docker application's lifecycle architecture, specifically addressing the question of whether the Application should be "always running" (persistent) versus spinning up and down with each task (ephemeral).
 
-**Conclusion**: The current persistent daemon architecture is the **correct approach** for message processors. The Application singleton persists for the lifetime of each PHP daemon process. However, there is an optimization opportunity: transaction recovery currently runs on every Application instantiation, including HTTP API requests, which is inefficient.
+**Conclusion**: The current persistent daemon architecture is the **correct approach** for message processors. The Application singleton persists for the lifetime of each PHP daemon process.
+
+**Update (2026-01-20)**: The identified optimization has been implemented. Transaction recovery now only runs for CLI/daemon processes, not HTTP API requests. See [Recommendation #1](#1-gate-recovery-to-clidaemon-only--implemented) for details.
 
 ---
 
@@ -109,22 +111,26 @@ Transaction recovery is triggered in the Application constructor:
 $this->runTransactionRecovery();
 ```
 
-This means recovery runs on **every Application instantiation**:
+~~This means recovery runs on **every Application instantiation**:~~
+
+**After Implementation** (2026-01-20): Recovery now only runs for CLI processes:
 
 | Entry Point | Application Instantiation | Recovery Runs |
 |-------------|---------------------------|---------------|
-| Message processor startup | Once per daemon | Once |
-| Processor restart (watchdog) | Once per restart | Once |
-| HTTP API request | Once per request | Every request |
+| Message processor startup | Once per daemon | ✅ Once |
+| Processor restart (watchdog) | Once per restart | ✅ Once |
+| HTTP API request | Once per request | ❌ Never (fixed) |
 
-### The Identified Issue
+### The Identified Issue (RESOLVED)
 
-**Problem**: Transaction recovery runs on every HTTP API request. This is inefficient because:
+~~**Problem**: Transaction recovery runs on every HTTP API request. This is inefficient because:~~
 
-1. Unnecessary database queries on every API call
-2. Potential race conditions if multiple requests try to recover the same transactions
-3. Slower API response times
-4. Recovery is only needed for daemon processors (which handle transactions)
+1. ~~Unnecessary database queries on every API call~~
+2. ~~Potential race conditions if multiple requests try to recover the same transactions~~
+3. ~~Slower API response times~~
+4. ~~Recovery is only needed for daemon processors (which handle transactions)~~
+
+**Resolution**: The `isCli()` check was added to gate transaction recovery to CLI/daemon processes only. HTTP API requests no longer trigger recovery.
 
 ---
 
@@ -165,17 +171,21 @@ The user's concern about "Application spinning up each time" is likely observing
 
 ## Recommendations
 
-### 1. Gate Recovery to CLI/Daemon Only
+### 1. Gate Recovery to CLI/Daemon Only ✅ IMPLEMENTED
 
 The Application already has an `isCli()` method. Use it to prevent recovery on HTTP requests:
 
 ```php
-// Proposed change in Application.php constructor
+// Implemented in Application.php constructor (lines 93-98)
+// Run transaction recovery only for CLI/daemon processes (not HTTP API requests)
+// This prevents unnecessary recovery runs and potential race conditions on every API call
+// Recovery is only needed when message processor daemons start up after a crash
 if ($this->isCli()) {
-    // Run transaction recovery only for CLI/daemon processes
     $this->runTransactionRecovery();
 }
 ```
+
+**Status**: Implemented on 2026-01-20. Transaction recovery now only runs for CLI/daemon processes, not HTTP API requests.
 
 ### 2. Add Recovery Lock (Optional Enhancement)
 
@@ -220,7 +230,7 @@ Add clear documentation about:
 | Should Application be always running? | **Yes** - for message processors (daemons) |
 | Should Application spin up/down per task? | **No** - ephemeral would break financial integrity |
 | Is the current architecture correct? | **Yes** - persistent daemons are the right approach |
-| Is there room for improvement? | **Yes** - gate recovery to CLI processes only |
+| Is there room for improvement? | **Yes** - ✅ CLI-only recovery gate now implemented |
 
 ---
 
