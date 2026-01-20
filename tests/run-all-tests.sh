@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 # Automated test runner for EIOU Docker test suite
 # Runs all tests in correct dependency order without user interaction

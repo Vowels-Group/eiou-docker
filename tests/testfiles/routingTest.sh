@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 # Test multi-hop message routing and relay fees
 echo -e "\nTesting multi-hop routing and relay fees..."

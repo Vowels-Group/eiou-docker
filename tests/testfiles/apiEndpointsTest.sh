@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 # Test REST API endpoints for the EIOU API integration
 # Tests API key creation, system status, wallet info, contacts, and error handling

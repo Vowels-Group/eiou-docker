@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 # Test MessageDeliveryService and Dead Letter Queue functionality
 echo -e "\nTesting MessageDeliveryService and DLQ..."

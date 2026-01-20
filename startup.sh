@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 # Enable unbuffered output for real-time docker logs
 exec 1> >(stdbuf -oL cat)

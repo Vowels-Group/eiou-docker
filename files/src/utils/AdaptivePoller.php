@@ -1,6 +1,6 @@
 <?php
 
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 /**
  * Adaptive polling mechanism for background processors
  * Dynamically adjusts polling intervals based on system load and queue size

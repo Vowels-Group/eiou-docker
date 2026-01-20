@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 # Test curl error handling and transport utility functionality
 echo -e "\nTesting curl error handling and transport utilities..."

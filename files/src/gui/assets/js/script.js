@@ -1,4 +1,4 @@
-   // Copyright 2025 Adrien Hubert (adrien@eiou.org)
+   // Copyright 2025-2026 Vowels Group, LLC
 
 // Operation timeout configuration (15 seconds)
 var OPERATION_TIMEOUT_MS = 15000;

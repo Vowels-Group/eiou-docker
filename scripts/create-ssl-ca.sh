@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 #
 # SSL Certificate Authority Generator for EIOU Docker
 #

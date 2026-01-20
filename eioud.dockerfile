@@ -1,4 +1,4 @@
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 # SECURITY NOTE: This container runs as root to manage multiple services (Apache, MariaDB, Tor, cron).
 # Each service drops privileges to its appropriate user after startup:

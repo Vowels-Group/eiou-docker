@@ -1,5 +1,5 @@
 <?php
-# Copyright 2025 Adrien Hubert (adrien@eiou.org)
+# Copyright 2025-2026 Vowels Group, LLC
 
 require_once __DIR__ . '/AbstractRepository.php';
 
@@ -2275,7 +2275,7 @@ class TransactionRepository extends AbstractRepository {
      * Checks that the transaction chain between two parties has no gaps.
      * A gap exists when a transaction references a previous_txid that doesn't exist locally.
      *
-     * Issue #426: This is used for sender-side chain verification before creating
+     * This is used for sender-side chain verification before creating
      * new transactions. If gaps are detected, a sync should be triggered before sending.
      *
      * @param string $userPublicKey User's public key
@@ -2355,7 +2355,7 @@ class TransactionRepository extends AbstractRepository {
      * Get the full transaction chain between two parties for sync
      *
      * Returns all active transactions ordered from oldest to newest.
-     * Used for bidirectional sync negotiation (Issue #428).
+     * Used for bidirectional sync negotiation.
      *
      * @param string $userPublicKey User's public key
      * @param string $contactPublicKey Contact's public key
@@ -2400,7 +2400,7 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Get chain state summary for sync negotiation
      *
-     * Returns a summary of the local chain state for bidirectional sync (Issue #428).
+     * Returns a summary of the local chain state for bidirectional sync.
      *
      * @param string $userPublicKey User's public key
      * @param string $contactPublicKey Contact's public key
