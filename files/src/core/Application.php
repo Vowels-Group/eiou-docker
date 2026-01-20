@@ -90,8 +90,12 @@ class Application {
             $this->loadserviceContainer();
             $this->loadUtilityServiceContainer();
 
-            // Run transaction recovery to handle any stuck transactions from previous crashes
-            $this->runTransactionRecovery();
+            // Run transaction recovery only for CLI/daemon processes (not HTTP API requests)
+            // This prevents unnecessary recovery runs and potential race conditions on every API call
+            // Recovery is only needed when message processor daemons start up after a crash
+            if ($this->isCli()) {
+                $this->runTransactionRecovery();
+            }
         }
     }
 
