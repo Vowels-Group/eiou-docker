@@ -780,6 +780,14 @@ echo "========================================================================"
 echo "Section 4: Manual Ping CLI Tests"
 echo "========================================================================"
 
+# Clear rate limits for manual_ping before running tests
+# This prevents rate limiting from earlier test sections affecting these tests
+docker exec ${containerA} php -r "
+    require_once('${REL_APPLICATION}');
+    \$pdo = Application::getInstance()->services->getPdo();
+    \$pdo->exec(\"DELETE FROM rate_limits WHERE action = 'manual_ping'\");
+" 2>/dev/null || true
+
 ############################ TEST 4.1: MANUAL PING VIA CLI ############################
 
 totaltests=$(( totaltests + 1 ))
@@ -788,12 +796,16 @@ echo -e "\n[4.1 Test manual ping command: eiou ping]"
 # Test pinging B from A using the CLI command
 pingResultA=$(docker exec ${containerA} php -r "
     // Test the eiou ping command logic directly
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
-    \$contactStatusService = \$app->services->getContactStatusService();
-    \$result = \$contactStatusService->pingContact('${addressB}');
-    echo json_encode(\$result);
-" 2>/dev/null || echo '{"success":false,"error":"exception"}')
+    try {
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$contactStatusService = \$app->services->getContactStatusService();
+        \$result = \$contactStatusService->pingContact('${addressB}');
+        echo json_encode(\$result);
+    } catch (Throwable \$e) {
+        echo json_encode(['success' => false, 'error' => 'exception', 'message' => \$e->getMessage()]);
+    }
+" 2>&1 || echo '{"success":false,"error":"exception","message":"php_execution_failed"}')
 
 # Parse result using shell (php not available on host)
 pingSuccess=$(echo "$pingResultA" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
@@ -848,12 +860,16 @@ contactNameB=$(docker exec ${containerA} php -r "
 
 if [[ -n "$contactNameB" ]]; then
     pingByName=$(docker exec ${containerA} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
-        \$contactStatusService = \$app->services->getContactStatusService();
-        \$result = \$contactStatusService->pingContact('${contactNameB}');
-        echo json_encode(\$result);
-    " 2>/dev/null || echo '{"success":false,"error":"exception"}')
+        try {
+            require_once('${REL_APPLICATION}');
+            \$app = Application::getInstance();
+            \$contactStatusService = \$app->services->getContactStatusService();
+            \$result = \$contactStatusService->pingContact('${contactNameB}');
+            echo json_encode(\$result);
+        } catch (Throwable \$e) {
+            echo json_encode(['success' => false, 'error' => 'exception', 'message' => \$e->getMessage()]);
+        }
+    " 2>&1 || echo '{"success":false,"error":"exception","message":"php_execution_failed"}')
 
     # Parse result using shell (php not available on host)
     pingByNameSuccess=$(echo "$pingByName" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
