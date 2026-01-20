@@ -5,6 +5,47 @@ require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/ErrorCodes.php';
 require_once __DIR__ . '/../utils/SecureSeedphraseDisplay.php';
 
+/**
+ * Wallet management for BIP39 seed phrase generation and restoration
+ *
+ * This class handles cryptographic wallet operations for the EIOU system including:
+ * - Generating new wallets with secure random 24-word BIP39 seed phrases
+ * - Restoring wallets from existing seed phrases (via CLI arguments or file)
+ * - Deriving deterministic secp256k1 keypairs from seed data
+ * - Generating Tor hidden service addresses for anonymous communication
+ * - Creating authentication codes for wallet access
+ *
+ * Key Responsibilities:
+ * - Wallet generation with BIP39 mnemonic creation
+ * - Wallet restoration with checksum validation
+ * - Deterministic key derivation ensuring identical keypairs from same seed
+ * - Tor hidden service key generation for .onion addresses
+ * - Secure storage of encrypted private keys and mnemonics
+ * - Configuration file management for wallet settings
+ *
+ * Security Considerations:
+ * - Seed phrases and private keys are sensitive cryptographic material
+ * - All private keys, auth codes, and mnemonics are encrypted before storage
+ * - Sensitive values are cleared from memory after use via secureClear()
+ * - Seed phrases are displayed via SecureSeedphraseDisplay to prevent log capture
+ * - File-based restore (restore-file) prevents exposure in process listings
+ * - Configuration files use strict 0600 permissions (owner read/write only)
+ * - Seed phrases should only be displayed once during generation/restore
+ *
+ * Workflow:
+ * - New wallet: generateWallet() -> BIP39::generateMnemonic() -> derives keypair
+ *   -> generates Tor address -> encrypts and stores credentials
+ * - Restore via CLI: restoreWallet() -> validates mnemonic checksum -> derives
+ *   same keypair deterministically -> restores identical wallet
+ * - Restore via file: restoreWalletFromFile() -> reads seed from file (avoids
+ *   shell history exposure) -> calls restoreWallet() with extracted words
+ *
+ * @package EIOU\Core
+ * @see BIP39 For mnemonic generation and validation
+ * @see KeyEncryption For secure storage of sensitive data
+ * @see TorKeyDerivation For deterministic Tor hidden service generation
+ * @see SecureSeedphraseDisplay For secure seed phrase output
+ */
 class Wallet{
     /**
      * Generate wallet

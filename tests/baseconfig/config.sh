@@ -59,6 +59,9 @@ REL_FUNCTIONS=".//etc//eiou//Functions.php"
 
 ########################## General Functionality ############################
 
+# Display test results summary with color-coded pass/fail output
+# Usage: succesrate total_tests passed_count failed_count test_name
+# Example: succesrate 10 8 2 "contact"
 function succesrate(){
     local totaltests="$1"
     local passed="$2"
@@ -74,6 +77,9 @@ function succesrate(){
     fi
 }
 
+# Determine transport type from address URL
+# Usage: determineTransport "http://alice" -> "http"
+# Returns: "http", "https", or "tor" based on address format
 function determineTransport(){
     local address="$1"
     if [[ ${address} =~ ^https:\/\/ ]]; then

@@ -1,6 +1,20 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ Contact List Test ############################
+# Tests contact list storage and metadata verification
+#
+# Verifies:
+# - Contact information is stored correctly
+# - Contact metadata (name, fee, credit) is accurate
+# - Contact status reflects actual state
+# - Bidirectional contact relationships are maintained
+#
+# Prerequisites:
+# - Containers must be running
+# - Contacts must be established (run addContactsTest first)
+#########################################################################
+
 # Test contact list storage and metadata verification
 echo -e "\nTesting contact list storage and metadata..."
 

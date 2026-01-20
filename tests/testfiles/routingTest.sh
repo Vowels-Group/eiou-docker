@@ -1,6 +1,20 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ Routing Test ############################
+# Tests multi-hop message routing and relay fee calculation
+#
+# Verifies:
+# - Messages route through intermediate nodes correctly
+# - Relay fees are calculated and applied properly
+# - Routing paths match expected topology
+#
+# Prerequisites:
+# - Containers must be running with routingTests array defined
+# - Contacts must be established (run addContactsTest first)
+# - Network topology must support multi-hop routes
+####################################################################
+
 # Test multi-hop message routing and relay fees
 echo -e "\nTesting multi-hop routing and relay fees..."
 

@@ -1,6 +1,38 @@
 #!/bin/bash
 # Copyright 2025-2026 Vowels Group, LLC
 
+# =============================================================================
+# startup.sh - EIOU Node Container Entrypoint
+# =============================================================================
+# This script initializes and runs an EIOU node container.
+#
+# Startup Sequence:
+#   1. Configure output buffering for real-time logging
+#   2. Register signal handlers for graceful shutdown (SIGTERM, SIGINT, SIGHUP)
+#   3. Generate or install SSL certificates
+#   4. Start services (cron, tor, apache2, mariadb)
+#   5. Wait for MariaDB readiness
+#   6. Generate wallet or restore from seed phrase
+#   7. Restart Tor to load hidden service keys
+#   8. Validate message processing prerequisites
+#   9. Wait for Tor connectivity (if enabled)
+#   10. Start background message processors
+#   11. Start watchdog for process monitoring
+#   12. Keep container running while handling signals
+#
+# Environment Variables:
+#   QUICKSTART          - Hostname for quickstart mode (e.g., "alice")
+#   RESTORE             - 24-word seed phrase for wallet restoration
+#   RESTORE_FILE        - Path to file containing seed phrase (more secure)
+#   SSL_DOMAIN          - Primary domain for SSL certificate CN
+#   SSL_EXTRA_SANS      - Additional Subject Alternative Names for SSL
+#   EIOU_HS_TIMEOUT     - Tor hidden service timeout in seconds (default: 60)
+#   EIOU_TOR_TIMEOUT    - Tor connectivity timeout in seconds (default: 120)
+#   EIOU_TEST_MODE      - Enable test mode for manual message processing
+#   EIOU_CONTACT_STATUS_ENABLED - Enable contact status ping feature
+#
+# =============================================================================
+
 # Enable unbuffered output for real-time docker logs
 exec 1> >(stdbuf -oL cat)
 exec 2> >(stdbuf -oL cat >&2)
@@ -14,7 +46,16 @@ P2P_PID=""
 TRANSACTION_PID=""
 CLEANUP_PID=""
 
-# Graceful shutdown handler
+# -----------------------------------------------------------------------------
+# graceful_shutdown() - Signal handler for clean container termination
+# -----------------------------------------------------------------------------
+# Called on SIGTERM, SIGINT, or SIGHUP signals. Performs ordered shutdown:
+#   1. Stop watchdog to prevent process respawning during shutdown
+#   2. Send SIGTERM to PHP message processors and wait for completion
+#   3. Force kill any processors that exceed timeout (SHUTDOWN_TIMEOUT)
+#   4. Stop services in reverse startup order (apache2, mariadb, tor, cron)
+#   5. Clean up lockfiles to prevent stale state on next startup
+# -----------------------------------------------------------------------------
 graceful_shutdown() {
     # Prevent duplicate shutdown handling
     if [ "$SHUTDOWN_IN_PROGRESS" = true ]; then
@@ -600,7 +641,18 @@ nohup php /etc/eiou/ContactStatusMessages.php > /dev/null 2>&1 &
 CONTACT_STATUS_PID=$!
 echo "Contact status polling started successfully (PID: $CONTACT_STATUS_PID)"
 
-# Watchdog function to monitor and restart processors if they die
+# -----------------------------------------------------------------------------
+# watchdog() - Background process monitor for automatic processor recovery
+# -----------------------------------------------------------------------------
+# Monitors PHP message processor PIDs and restarts them if they crash.
+# Features:
+#   - Checks all processors every WATCHDOG_INTERVAL seconds (default: 30)
+#   - Enforces RESTART_COOLDOWN between restarts of same processor (default: 60s)
+#   - Limits total restarts per processor to MAX_RESTARTS (default: 10)
+#   - Tracks P2pMessages, TransactionMessages, CleanupMessages, ContactStatusMessages
+# Note: Watchdog is stopped first during graceful_shutdown() to prevent
+#       process respawning during container termination.
+# -----------------------------------------------------------------------------
 watchdog() {
     local WATCHDOG_INTERVAL=30       # Check every 30 seconds
     local RESTART_COOLDOWN=60        # Minimum seconds between restarts of same processor

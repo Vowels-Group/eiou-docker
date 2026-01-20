@@ -1,6 +1,20 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ Curl Error Handling Test ############################
+# Tests HTTP client error handling and timeout behavior
+#
+# Verifies:
+# - Connection timeouts are handled gracefully
+# - HTTP error responses are processed correctly
+# - Retry logic works for transient failures
+# - Error messages are informative
+#
+# Prerequisites:
+# - Containers must be running
+# - Contacts must be established (run addContactsTest first)
+################################################################################
+
 # Test curl error handling and transport utility functionality
 echo -e "\nTesting curl error handling and transport utilities..."
 
