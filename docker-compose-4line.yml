@@ -1,3 +1,20 @@
+# =============================================================================
+# EIOU Docker - 4-Node Line Topology
+# =============================================================================
+# Purpose: 4-node linear chain for multi-hop routing and sync tests
+#
+# Topology:
+#   alice <---> bob <---> carol <---> daniel
+#
+# Resource Requirements: ~1.1GB RAM total
+#
+# Usage:
+#   docker-compose -f docker-compose-4line.yml up -d --build
+#   docker-compose -f docker-compose-4line.yml down -v
+#
+# Test Suite: Use with tests/buildfiles/http4.sh
+# =============================================================================
+
 # Copyright 2025-2026 Vowels Group, LLC
 services:
   alice:

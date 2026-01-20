@@ -545,6 +545,19 @@ class CliService {
                 'arguments' => [
                     'setting' => ['type' => 'optional', 'description' => 'Setting name to change'],
                     'value' => ['type' => 'optional', 'description' => 'New value for the setting']
+                ],
+                'available_settings' => [
+                    'defaultFee' => 'Default fee percentage for transactions',
+                    'defaultCreditLimit' => 'Default credit limit for new contacts',
+                    'defaultCurrency' => 'Default currency code (e.g., USD)',
+                    'minFee' => 'Minimum fee amount',
+                    'maxFee' => 'Maximum fee percentage',
+                    'maxP2pLevel' => 'Maximum peer-to-peer routing level',
+                    'p2pExpiration' => 'Peer-to-peer request expiration time (seconds)',
+                    'maxOutput' => 'Maximum lines of output to display (integer or "all")',
+                    'defaultTransportMode' => 'Default transport type (http, tor)',
+                    'autoRefreshEnabled' => 'Enable auto-refresh for pending transactions (true/false)',
+                    'hostname' => 'Node hostname (e.g., http://alice)'
                 ]
             ],
             'generate' => [
@@ -577,12 +590,21 @@ class CliService {
             'out' => [
                 'description' => 'Process outgoing message queue (pending transactions)',
                 'usage' => 'out',
-                'arguments' => []
+                'arguments' => [],
+                'note' => 'Requires EIOU_TEST_MODE=true'
             ],
             'in' => [
                 'description' => 'Process incoming/held transactions',
                 'usage' => 'in',
-                'arguments' => []
+                'arguments' => [],
+                'note' => 'Requires EIOU_TEST_MODE=true'
+            ],
+            'ping' => [
+                'description' => 'Ping a contact to check their online status and chain validity',
+                'usage' => 'ping [address/name]',
+                'arguments' => [
+                    'address/name' => ['type' => 'required', 'description' => 'Contact address or name to ping']
+                ]
             ],
             'apikey' => [
                 'description' => 'Manage API keys for external API access',
@@ -670,6 +692,13 @@ class CliService {
                 'description' => 'Shutdown the application gracefully',
                 'usage' => 'shutdown',
                 'arguments' => []
+            ],
+            'global_options' => [
+                'description' => 'Global options available for all commands',
+                'options' => [
+                    '--json, -j' => 'Output results in JSON format for scripting/automation',
+                    '--no-metadata' => 'Exclude metadata (timestamp, node_id) from JSON output'
+                ]
             ]
         ];
 

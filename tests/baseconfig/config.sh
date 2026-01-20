@@ -1,6 +1,22 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################### Base Configuration #################################
+# Shared configuration variables and helper functions for EIOU Docker test suite
+#
+# This file provides:
+# - Container name arrays and network configuration
+# - Color codes for test output formatting
+# - Path variables (using // prefix for Windows Git Bash compatibility)
+# - Common utility functions for container management
+#
+# Usage: Source this file at the start of test scripts
+#        source baseconfig/config.sh
+#
+# NOTE: Paths use double slashes (//etc/eiou/) to prevent Git Bash on Windows
+# from converting /etc/ to C:/Program Files/Git/etc/. This is safe on Linux too.
+##################################################################################
+
 ############################### Base config #################################
 
 RED='\033[0;31m'            # Red for failure/error

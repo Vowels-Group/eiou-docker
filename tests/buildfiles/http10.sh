@@ -1,6 +1,35 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ HTTP 10-Node Build Configuration ############################
+# Creates a 10-node HTTP line topology for extended testing
+#
+# Topology (linear chain):
+#   A <-> B <-> C <-> D <-> E <-> F <-> G <-> H <-> I <-> J
+#
+# This topology tests:
+# - Multi-hop message routing (up to 9 hops)
+# - P2P request level limits (default max is 5)
+# - Longer transaction chains and sync behavior
+#
+# Usage: Source this file from run-all-tests.sh or directly
+#        source buildfiles/http10.sh
+#
+# Required:
+# - $network variable must be set (docker network name)
+# - remove_container_if_exists function from config.sh
+#
+# Configuration:
+# - defaultFee: Transaction fee (default: 0.01)
+# - defaultCredit: Credit limit (default: 1000)
+# - containers: Array of container names (node-a through node-j)
+#
+# Resource Requirements: ~2.8GB RAM for all containers
+#
+# NOTE: p2pRequestLevel has a max of 5 hops by default. Some routing tests
+# may require increasing this limit or testing within the 5-hop range.
+######################################################################################
+
 set -e # Stop script on failure
 
 # Check if network exists and create it if necessary

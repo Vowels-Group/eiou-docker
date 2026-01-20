@@ -1,6 +1,19 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ Hostname Verification Test ############################
+# Verifies hostname configuration in userconfig.json matches expected values
+#
+# Tests:
+# - HTTP mode: Verifies hostname uses http:// or https:// prefix
+# - HTTPS mode: Verifies hostname requires https:// prefix
+# - Hostname matches the container's configured address
+#
+# Prerequisites:
+# - Containers must be running with userconfig.json initialized
+# - MODE environment variable determines http/https validation
+##################################################################################
+
 ############################ Testing #############################
 
 testname="hostnameTest"

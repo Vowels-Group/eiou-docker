@@ -1,6 +1,29 @@
 #!/bin/sh
 # Copyright 2025-2026 Vowels Group, LLC
 
+############################ HTTP 4-Node Build Configuration ############################
+# Creates a 4-node HTTP line topology for testing
+#
+# Topology (linear):
+#   Alice <---> Bob <---> Carol <---> Daniel
+#
+# Usage: Source this file from run-all-tests.sh or directly
+#        source buildfiles/http4.sh
+#
+# Required:
+# - $network variable must be set (docker network name)
+# - remove_container_if_exists function from config.sh
+#
+# Configuration:
+# - defaultFee: Transaction fee (default: 0.01)
+# - defaultCredit: Credit limit (default: 1000)
+# - containers: Array of container names
+# - containerAddresses: HTTP addresses for each container
+# - containersLinks: Contact relationships to establish
+#
+# Resource Requirements: ~1.1GB RAM for all containers
+#####################################################################################
+
 set -e # Stop script on failure
 
 # Check if network exists and create it if necessary
