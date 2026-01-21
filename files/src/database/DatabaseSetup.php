@@ -165,11 +165,7 @@ function runColumnMigrations(PDO $pdo): array {
     $results = [];
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
-    $columnsToAdd = [
-        'addresses' => [
-            'https' => 'VARCHAR(255) UNIQUE DEFAULT NULL AFTER http'
-        ]
-    ];
+    $columnsToAdd = [];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
     $columnsToDrop = [];
