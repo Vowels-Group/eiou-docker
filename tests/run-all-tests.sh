@@ -160,9 +160,10 @@ printf "\n"
 printf "========================================\n"
 printf "  EIOU Docker Automated Test Runner\n"
 printf "========================================\n"
-printf "Build: ${BUILD_NAME}\n"
-printf "Mode:  ${MODE}\n"
-printf "Time:  $(date '+%Y-%m-%d %H:%M:%S')\n"
+printf "Build:  ${BUILD_NAME}\n"
+printf "Mode:   ${MODE}\n"
+printf "Subset: ${SUBSET}\n"
+printf "Time:   $(date '+%Y-%m-%d %H:%M:%S')\n"
 printf "\n"
 
 # Disable contact status pinging during tests to prevent interference with sync tests
