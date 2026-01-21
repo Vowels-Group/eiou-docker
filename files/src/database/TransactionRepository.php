@@ -93,9 +93,12 @@ class TransactionRepository extends AbstractRepository {
      */
     public function calculateTotalReceivedByUser(string $publicKey): float {
         $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
-                  WHERE receiver_public_key = :publicKey
-                  AND sender_public_key != :publicKey";
-        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
+                  WHERE receiver_public_key = :receiverKey
+                  AND sender_public_key != :senderKey";
+        $stmt = $this->execute($query, [
+            ':receiverKey' => $publicKey,
+            ':senderKey' => $publicKey
+        ]);
 
         if (!$stmt) {
             return 0;
