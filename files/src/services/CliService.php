@@ -1026,7 +1026,7 @@ HELP;
                         foreach($contactBalances as $contactBalance){
                             $balanceData['contacts'][] = [
                                 'name' => $contactResult['name'],
-                                'address' => $contactResult['http'] ?? $contactResult['tor'],
+                                'address' => $contactResult['tor'] ?? $contactResult['https'] ?? $contactResult['http'],
                                 'currency' => $contactBalance['currency'],
                                 'received' => number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
                                 'sent' => number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
