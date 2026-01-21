@@ -95,11 +95,12 @@
                 <label for="defaultTransportMode">Default Transport Mode:</label>
                 <select id="defaultTransportMode" name="defaultTransportMode" class="default-value">
                     <option value="http" <?php echo ($user->getDefaultTransportMode() === 'http') ? 'selected' : ''; ?>>HTTP</option>
+                    <option value="https" <?php echo ($user->getDefaultTransportMode() === 'https') ? 'selected' : ''; ?>>HTTPS</option>
                     <option value="tor" <?php echo ($user->getDefaultTransportMode() === 'tor') ? 'selected' : ''; ?>>Tor</option>
                 </select>
                 <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                     <i class="fas fa-info-circle"></i>
-                    Preferred network transport for communications
+                    Preferred network transport for communications (Tor is most secure, HTTP is least secure)
                 </small>
             </div>
 
