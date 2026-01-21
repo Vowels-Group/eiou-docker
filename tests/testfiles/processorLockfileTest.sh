@@ -115,14 +115,28 @@ docker exec ${testContainer} rm -f /tmp/transactionmessages_lock.pid 2>/dev/null
 docker exec ${testContainer} rm -f /tmp/cleanupmessages_lock.pid 2>/dev/null
 
 # Manually start processors (don't rely on watchdog - it may have race conditions)
+# First kill any that watchdog might have restarted during diagnostic
+docker exec ${testContainer} pkill -9 -f "Messages.php" 2>/dev/null || true
+docker exec ${testContainer} rm -f /tmp/*_lock.pid 2>/dev/null || true
+sleep 1
+
 printf "\t   Starting processors manually...\n"
 docker exec ${testContainer} sh -c "nohup php /etc/eiou/P2pMessages.php > /tmp/p2p_startup.log 2>&1 &"
 docker exec ${testContainer} sh -c "nohup php /etc/eiou/TransactionMessages.php > /tmp/transaction_startup.log 2>&1 &"
 docker exec ${testContainer} sh -c "nohup php /etc/eiou/CleanupMessages.php > /tmp/cleanup_startup.log 2>&1 &"
 
+# Check immediately (1 second) after start
+sleep 1
+printf "\t   ${YELLOW}Immediate check (1s after start):${NC}\n"
+printf "\t     Running processes: "
+docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null || echo "0"
+printf "\t     Lockfiles: "
+docker exec ${testContainer} ls /tmp/*_lock.pid 2>/dev/null | tr '\n' ' ' || echo "(none)"
+printf "\n"
+
 # Give processors time to fully initialize and create lockfiles
 printf "\t   Waiting for processor initialization (10s)...\n"
-sleep 10
+sleep 9  # Already waited 1 second above
 
 # Check if any startup errors occurred
 startupErrors=$(docker exec ${testContainer} sh -c "cat /tmp/*_startup.log 2>/dev/null | grep -i 'error\|exception\|fatal' | head -3" || true)
@@ -171,6 +185,82 @@ docker exec ${testContainer} grep -n "p2pmessages_lock" /etc/eiou/src/processors
 # List ALL files in /tmp to see what's there
 printf "\t   All /tmp files:\n"
 docker exec ${testContainer} ls -la /tmp/ 2>/dev/null | head -15 | sed 's/^/\t      /'
+
+# Direct lockfile creation test - this will tell us EXACTLY what happens
+printf "\t   ${YELLOW}DIRECT LOCKFILE TEST - Step by step:${NC}\n"
+
+# First ensure no processors are running (watchdog may have restarted them)
+docker exec ${testContainer} pkill -9 -f "Messages.php" 2>/dev/null || true
+sleep 1
+docker exec ${testContainer} rm -f /tmp/*_lock.pid 2>/dev/null || true
+
+docker exec ${testContainer} php -r '
+    echo "Step 1: Check lockfile path constant\n";
+    $lockfile = "/tmp/test_direct_lock.pid";
+    echo "  Using: $lockfile\n";
+
+    echo "Step 2: Check file_put_contents capability\n";
+    $result = @file_put_contents($lockfile, getmypid());
+    if ($result === false) {
+        echo "  FAILED: Could not write lockfile\n";
+        echo "  Error: " . error_get_last()["message"] . "\n";
+    } else {
+        echo "  SUCCESS: Wrote " . $result . " bytes\n";
+    }
+
+    echo "Step 3: Verify file exists\n";
+    if (file_exists($lockfile)) {
+        echo "  File exists: YES\n";
+        echo "  Content: " . file_get_contents($lockfile) . "\n";
+        echo "  Permissions: " . decoct(fileperms($lockfile)) . "\n";
+        unlink($lockfile);
+    } else {
+        echo "  File exists: NO - This is the bug!\n";
+    }
+
+    echo "Step 4: Test via P2pMessageProcessor (partial init)\n";
+    try {
+        require_once "/etc/eiou/root/Functions.php";
+        require_once "/etc/eiou/root/SecurityInit.php";
+        require_once "/etc/eiou/src/processors/P2pMessageProcessor.php";
+
+        echo "  Creating processor instance...\n";
+        $processor = new P2pMessageProcessor();
+        echo "  Processor created successfully\n";
+
+        // Get lockfile property via reflection (defined in parent AbstractMessageProcessor)
+        $reflection = new ReflectionProperty("AbstractMessageProcessor", "lockfile");
+        $reflection->setAccessible(true);
+        $lockfilePath = $reflection->getValue($processor);
+        echo "  Lockfile property value: $lockfilePath\n";
+
+        // Check if lockfile already exists (should not at this point)
+        echo "  Lockfile exists before init: " . (file_exists($lockfilePath) ? "YES (unexpected!)" : "NO (correct)") . "\n";
+
+        // Call initialize() directly but NOT run() (run() would loop forever)
+        echo "  Calling initialize()...\n";
+        $processor->initialize();
+        echo "  Initialize completed successfully\n";
+
+        // Check if lockfile was created
+        if (file_exists($lockfilePath)) {
+            echo "  LOCKFILE CREATED: YES\n";
+            echo "  Content: " . trim(file_get_contents($lockfilePath)) . "\n";
+            echo "  Current PID: " . getmypid() . "\n";
+        } else {
+            echo "  LOCKFILE CREATED: NO - BUG IN PROCESSOR CODE!\n";
+        }
+    } catch (Exception $e) {
+        echo "  EXCEPTION: " . $e->getMessage() . "\n";
+        echo "  File: " . $e->getFile() . ":" . $e->getLine() . "\n";
+    } catch (Error $e) {
+        echo "  ERROR: " . $e->getMessage() . "\n";
+        echo "  File: " . $e->getFile() . ":" . $e->getLine() . "\n";
+    }
+' 2>&1 | sed 's/^/\t      /'
+
+# Clean up test lockfile
+docker exec ${testContainer} rm -f /tmp/test_direct_lock.pid 2>/dev/null
 
 printf "\t   Pre-test cleanup complete\n\n"
 
