@@ -24,12 +24,13 @@ class ContactRepository extends AbstractRepository {
 
     /**
      * Validate transport index to prevent SQL injection
+     * Input is lowercased for case-insensitive matching
      *
      * @param string $transportIndex The transport index to validate
      * @return bool True if valid
      */
     private function isValidTransportIndex(string $transportIndex): bool {
-        return in_array($transportIndex, Constants::VALID_TRANSPORT_INDICES, true);
+        return in_array(strtolower($transportIndex), Constants::VALID_TRANSPORT_INDICES, true);
     }
 
     /**

@@ -25,12 +25,13 @@ class AddressRepository extends AbstractRepository {
     /**
      * Validate transport index to prevent SQL injection
      * Uses dynamic column detection via getAllAddressTypes()
+     * Input is lowercased for case-insensitive matching
      *
      * @param string $transportIndex Transport index to validate
      * @return bool True if valid, false otherwise
      */
     private function isValidTransportIndex(string $transportIndex): bool {
-        return in_array($transportIndex, $this->getAllAddressTypes(), true);
+        return in_array(strtolower($transportIndex), $this->getAllAddressTypes(), true);
     }
 
     /**
