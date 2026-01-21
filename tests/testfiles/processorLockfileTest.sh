@@ -185,7 +185,7 @@ printf "\t   Running PHP processes:\n"
 docker exec ${testContainer} pgrep -a -f "Messages.php" 2>/dev/null | sed 's/^/\t      /' || printf "\t      (none found)\n"
 
 printf "\t   Lockfile status:\n"
-docker exec ${testContainer} ls -la /tmp/*_lock.pid 2>/dev/null | sed 's/^/\t      /' || printf "\t      (no lockfiles found)\n"
+docker exec ${testContainer} sh -c 'ls -la /tmp/*_lock.pid 2>/dev/null || echo "(no lockfiles found)"' | sed 's/^/\t      /'
 
 printf "\t   Startup log (P2p, last 5 lines):\n"
 docker exec ${testContainer} tail -5 /tmp/p2p_startup.log 2>/dev/null | sed 's/^/\t      /' || printf "\t      (empty or missing)\n"
@@ -209,23 +209,24 @@ docker exec ${testContainer} php -r "file_put_contents('/tmp/test_lock.pid', get
 docker exec ${testContainer} rm -f /tmp/test_lock.pid 2>/dev/null
 
 # Check the actual file structure in the container
+# NOTE: All paths must be wrapped in sh -c to prevent Git Bash path conversion on Windows
 printf "\t   ${YELLOW}Container file structure check:${NC}\n"
 printf "\t     /etc/eiou/ contents:\n"
-docker exec ${testContainer} ls /etc/eiou/ 2>&1 | head -20 | sed 's/^/\t       /'
+docker exec ${testContainer} sh -c 'ls /etc/eiou/ 2>&1' | head -20 | sed 's/^/\t       /'
 
 printf "\t     /etc/eiou/src/ exists: "
-docker exec ${testContainer} sh -c "[ -d /etc/eiou/src ] && echo 'YES' || echo 'NO'"
+docker exec ${testContainer} sh -c '[ -d /etc/eiou/src ] && echo YES || echo NO'
 
 printf "\t     /etc/eiou/src/processors/ exists: "
-docker exec ${testContainer} sh -c "[ -d /etc/eiou/src/processors ] && echo 'YES' || echo 'NO'"
+docker exec ${testContainer} sh -c '[ -d /etc/eiou/src/processors ] && echo YES || echo NO'
 
 # If processors dir exists, show contents
 printf "\t     Processors directory contents:\n"
-docker exec ${testContainer} ls -la /etc/eiou/src/processors/ 2>&1 | sed 's/^/\t       /'
+docker exec ${testContainer} sh -c 'ls -la /etc/eiou/src/processors/ 2>&1' | sed 's/^/\t       /'
 
 # Check AbstractMessageProcessor lockfile code with proper error handling
 printf "\t   Checking lockfile code in AbstractMessageProcessor:\n"
-lockfileCode=$(docker exec ${testContainer} grep -n "file_put_contents.*lockfile" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>&1)
+lockfileCode=$(docker exec ${testContainer} sh -c 'grep -n "file_put_contents.*lockfile" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>&1')
 if [ -n "$lockfileCode" ]; then
     echo "$lockfileCode" | sed 's/^/\t      /'
 else
@@ -234,7 +235,7 @@ fi
 
 # Check checkSingleInstance exists
 printf "\t   Checking checkSingleInstance method:\n"
-checkMethod=$(docker exec ${testContainer} grep -n "function checkSingleInstance" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>&1)
+checkMethod=$(docker exec ${testContainer} sh -c 'grep -n "function checkSingleInstance" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>&1')
 if [ -n "$checkMethod" ]; then
     echo "$checkMethod" | sed 's/^/\t      /'
 else
@@ -243,16 +244,16 @@ fi
 
 # Check P2pMessageProcessor lockfile path
 printf "\t   Checking P2pMessageProcessor lockfile path:\n"
-p2pPath=$(docker exec ${testContainer} grep -n "p2pmessages_lock" /etc/eiou/src/processors/P2pMessageProcessor.php 2>&1)
+p2pPath=$(docker exec ${testContainer} sh -c 'grep -n "p2pmessages_lock" /etc/eiou/src/processors/P2pMessageProcessor.php 2>&1')
 if [ -n "$p2pPath" ]; then
     echo "$p2pPath" | sed 's/^/\t      /'
 else
     printf "\t      (NOT FOUND - container may have old code!)\n"
 fi
 
-# List ALL files in /tmp to see what's there
+# List ALL files in /tmp to see what's there (use sh -c to prevent Git Bash path conversion)
 printf "\t   All /tmp files:\n"
-docker exec ${testContainer} ls -la /tmp/ 2>/dev/null | head -15 | sed 's/^/\t      /'
+docker exec ${testContainer} sh -c 'ls -la /tmp/ 2>/dev/null' | head -15 | sed 's/^/\t      /'
 
 # Direct lockfile creation test - verify PHP can create lockfiles
 # NOTE: We do NOT kill processors here because that would delete the lockfiles
@@ -435,6 +436,11 @@ check_logs_for_message() {
 echo -e "[Section 1: Lockfile Creation Verification]"
 echo -e "Testing that lockfiles are created correctly when processors start...\n"
 
+# Debug: Show lockfile status at start of Section 1
+echo -e "\t   ${YELLOW}Section 1 start - verifying lockfiles still exist:${NC}"
+MSYS_NO_PATHCONV=1 docker exec ${testContainer} sh -c 'ls -la /tmp/*_lock.pid 2>/dev/null || echo "NO LOCKFILES FOUND"' | sed 's/^/\t     /'
+echo ""
+
 # Wait for processors to be running before checking lockfiles
 # The lockfiles are only created after processor initialize() is called
 echo -e "\t   Waiting for processors to start..."
@@ -460,9 +466,11 @@ for processor in "${!PROCESSORS[@]}"; do
     echo -e "\t-> Checking lockfile for ${processor}"
 
     # Retry loop to handle timing issues - wait up to 20 seconds for lockfile
+    # NOTE: Use MSYS_NO_PATHCONV=1 to prevent Git Bash path conversion on Windows
     lockfileExists="no"
     for attempt in 1 2 3 4 5 6 7 8 9 10; do
-        lockfileExists=$(docker exec ${testContainer} test -f ${lockfile} && echo "yes" || echo "no")
+        # Pass lockfile path via environment variable to avoid bash path expansion issues
+        lockfileExists=$(MSYS_NO_PATHCONV=1 docker exec ${testContainer} sh -c "test -f '${lockfile}' && echo yes || echo no")
         if [ "$lockfileExists" == "yes" ]; then
             break
         fi
