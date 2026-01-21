@@ -218,8 +218,9 @@ for container in $CONTAINER_LIST; do
             # For HTTP/HTTPS modes: hostname is required, Tor is optional
             # Check if processors have started (indicates container is fully ready)
             if [ "$hostname_ready" == "true" ]; then
-                processors_started=$(docker logs "$container" 2>&1 | grep -c "message processing started successfully" || echo "0")
-                if [ "$processors_started" -ge 2 ]; then
+                processors_started=$(docker logs "$container" 2>&1 | grep -c "message processing started successfully" | tr -d '[:space:]' || echo "0")
+                processors_started=${processors_started:-0}
+                if [ "$processors_started" -ge 2 ] 2>/dev/null; then
                     if [ "$tor_ready" == "true" ]; then
                         if [ "$MODE" == 'https' ]; then
                             printf "${GREEN}Ready (HTTPS + Tor)${NC}\n"
@@ -265,7 +266,8 @@ for container in $CONTAINER_LIST; do
 
     if [ $elapsed -ge $MAX_WAIT ]; then
         printf "${RED}Timeout waiting for initialization!${NC}\n"
-        processors_started=$(docker logs "$container" 2>&1 | grep -c "message processing started successfully" || echo "0")
+        processors_started=$(docker logs "$container" 2>&1 | grep -c "message processing started successfully" | tr -d '[:space:]' || echo "0")
+        processors_started=${processors_started:-0}
         printf "${YELLOW}Hostname ready: ${hostname_ready}, Tor ready: ${tor_ready}, Processors started: ${processors_started}${NC}\n"
         docker logs "$container" | tail -n 30
         exit 1
