@@ -4,22 +4,34 @@
 # Automated test runner for EIOU Docker test suite
 # Runs all tests in correct dependency order without user interaction
 #
-# Usage: ./run-all-tests.sh <build_name> [mode]
+# Usage: ./run-all-tests.sh <build_name> [mode] [subset]
 #
 # Arguments:
 #   build_name  - The topology to test (http4, http10, http13)
 #   mode        - Transport mode: http, https, or tor (default: http)
+#   subset      - Test subset to run (default: all)
 #
 # Examples:
-#   ./run-all-tests.sh http4           # Run with default mode (http)
-#   ./run-all-tests.sh http4 https     # Run with HTTPS mode
-#   ./run-all-tests.sh http4 http      # Run with HTTP mode
-#   ./run-all-tests.sh http4 tor       # Run with TOR mode
+#   ./run-all-tests.sh http4              # Run all tests with HTTP mode
+#   ./run-all-tests.sh http4 https        # Run all tests with HTTPS mode
+#   ./run-all-tests.sh http4 http quick   # Run quick validation tests
+#   ./run-all-tests.sh http4 http contacts # Run contact-related tests
 #
 # Mode descriptions:
 #   http  - Test containers with http:// addresses
 #   https - Test containers with https:// addresses (SSL enabled)
 #   tor   - Test containers with .onion addresses (Tor network)
+#
+# Test subsets:
+#   all          - Run all tests (default)
+#   quick        - Fast validation: hostname, contacts, basic messaging
+#   contacts     - Contact management: add, list, ping tests
+#   transactions - Transaction tests: send, balance, recovery
+#   messaging    - Message delivery and routing tests
+#   api          - API endpoints and CLI command tests
+#   sync         - Chain synchronization tests
+#   connections  - SSL certificates and Tor connectivity tests
+#   system       - System tests: shutdown, lockfiles, seedphrase
 #
 # Environment Variables (for WSL2/slow environments):
 #   EIOU_INIT_TIMEOUT  - Container initialization wait in seconds (default: 90)
@@ -31,19 +43,20 @@ set -e  # Exit on error
 
 # Check command line argument
 if [ $# -eq 0 ]; then
-    echo "Usage: $0 <build_name> <mode>"
+    echo "Usage: $0 <build_name> [mode] [subset]"
+    echo ""
     echo "Available builds: http4, http10, http13"
-    echo "Available modes: tor, http, https"
+    echo "Available modes:  http, https, tor (default: http)"
+    echo "Available subsets: all, quick, contacts, transactions, messaging, api, sync, connections, system"
     exit 1
 fi
 
 BUILD_NAME="$1"
 BUILD_FILE="./buildfiles/${BUILD_NAME}.sh"
-if [ $# -eq 1 ]; then
-    MODE="http"
-else
-    MODE="$2"
-fi
+
+# Set defaults
+MODE="${2:-http}"
+SUBSET="${3:-all}"
 
 # Validate MODE is one of the allowed values
 VALID_MODES="http https tor"
@@ -55,6 +68,33 @@ if ! echo "$VALID_MODES" | grep -qw "$MODE"; then
     echo "  http  - Test containers with http:// addresses"
     echo "  https - Test containers with https:// addresses (SSL enabled)"
     echo "  tor   - Test containers with .onion addresses (Tor network)"
+    exit 1
+fi
+
+# Display available subsets helper function
+show_available_subsets() {
+    printf "\n${YELLOW}Available test subsets:${NC}\n"
+    echo ""
+    printf "  ${GREEN}all${NC}          - Run all tests (default)\n"
+    printf "  ${GREEN}quick${NC}        - Fast validation: hostname, contacts, basic messaging\n"
+    printf "  ${GREEN}contacts${NC}     - Contact management: add, list, ping tests\n"
+    printf "  ${GREEN}transactions${NC} - Transaction tests: send, balance, recovery\n"
+    printf "  ${GREEN}messaging${NC}    - Message delivery and routing tests\n"
+    printf "  ${GREEN}api${NC}          - API endpoints and CLI command tests\n"
+    printf "  ${GREEN}sync${NC}         - Chain synchronization tests\n"
+    printf "  ${GREEN}connections${NC}  - SSL certificates and Tor connectivity tests\n"
+    printf "  ${GREEN}system${NC}       - System tests: shutdown, lockfiles, seedphrase\n"
+    echo ""
+    printf "${YELLOW}Note:${NC} Some subsets require 'addContactsTest' to run first.\n"
+    printf "      The runner automatically includes prerequisites when needed.\n"
+    echo ""
+}
+
+# Validate SUBSET is one of the allowed values
+VALID_SUBSETS="all quick contacts transactions messaging api sync connections system"
+if ! echo "$VALID_SUBSETS" | grep -qw "$SUBSET"; then
+    printf "${RED}Error: Invalid test subset '${SUBSET}'${NC}\n"
+    show_available_subsets
     exit 1
 fi
 
@@ -288,15 +328,17 @@ fi
 # Step 3: Run all tests in dependency order
 printf "\n${GREEN}[Step 3/3]${NC} Running test suite...\n"
 
-# Define test order (excluding hostnameTest/torAddressTest as it's already run)
-# TOR-specific tests are included for both modes but will validate TOR functionality
+# Define test subsets
+# Each subset includes its tests and any required prerequisites
 #
 # Consolidated test suites:
 # - torTestSuite: TOR address, service, permissions, and restart tests
 # - syncTestSuite: Transaction chain sync, signature validation, and contact sync tests
 # - transactionTestSuite: Transaction recording, inquiry, contact, and held transaction tests
 # - seedphraseTestSuite: Seed phrase restore, secure display, and authcode restoration tests
-TEST_ORDER="
+
+# Full test order (all tests)
+TESTS_ALL="
 sslCertificateTest
 torTestSuite
 addContactsTest
@@ -317,6 +359,99 @@ seedphraseTestSuite
 processorLockfileTest
 pingTestSuite
 "
+
+# Quick validation (fast smoke tests)
+TESTS_QUICK="
+addContactsTest
+sendMessageTest
+balanceTest
+"
+
+# Contact management tests
+TESTS_CONTACTS="
+addContactsTest
+contactListTest
+pingTestSuite
+"
+
+# Transaction tests (requires contacts)
+TESTS_TRANSACTIONS="
+addContactsTest
+balanceTest
+transactionTestSuite
+transactionRecoveryTest
+"
+
+# Messaging tests (requires contacts)
+TESTS_MESSAGING="
+addContactsTest
+sendMessageTest
+sendAllPeersTest
+routingTest
+messageDeliveryTest
+"
+
+# API and CLI tests (requires contacts for some endpoints)
+TESTS_API="
+addContactsTest
+curlErrorHandlingTest
+cliCommandsTest
+apiEndpointsTest
+"
+
+# Sync tests (requires contacts and transactions)
+TESTS_SYNC="
+addContactsTest
+sendMessageTest
+syncTestSuite
+"
+
+# Connection tests (SSL/Tor)
+TESTS_CONNECTIONS="
+sslCertificateTest
+torTestSuite
+"
+
+# System tests
+TESTS_SYSTEM="
+gracefulShutdownTest
+seedphraseTestSuite
+processorLockfileTest
+"
+
+# Select test order based on subset
+case "$SUBSET" in
+    all)
+        TEST_ORDER="$TESTS_ALL"
+        ;;
+    quick)
+        TEST_ORDER="$TESTS_QUICK"
+        ;;
+    contacts)
+        TEST_ORDER="$TESTS_CONTACTS"
+        ;;
+    transactions)
+        TEST_ORDER="$TESTS_TRANSACTIONS"
+        ;;
+    messaging)
+        TEST_ORDER="$TESTS_MESSAGING"
+        ;;
+    api)
+        TEST_ORDER="$TESTS_API"
+        ;;
+    sync)
+        TEST_ORDER="$TESTS_SYNC"
+        ;;
+    connections)
+        TEST_ORDER="$TESTS_CONNECTIONS"
+        ;;
+    system)
+        TEST_ORDER="$TESTS_SYSTEM"
+        ;;
+esac
+
+printf "${GREEN}Test subset: ${SUBSET}${NC}\n"
+printf "Tests to run: $(echo $TEST_ORDER | wc -w | tr -d ' ')\n"
 
 # Run each test in order
 for test_name in $TEST_ORDER; do
@@ -348,6 +483,7 @@ printf "                    TEST SUITE SUMMARY\n"
 printf "================================================================\n"
 printf "Build:          ${BUILD_NAME}\n"
 printf "Mode:           ${MODE}\n"
+printf "Subset:         ${SUBSET}\n"
 printf "Total Tests:    ${TOTAL_TESTS_RUN}\n"
 printf "${GREEN}Passed:         ${TOTAL_TESTS_PASSED}${NC}\n"
 
