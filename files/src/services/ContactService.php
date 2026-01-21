@@ -1056,10 +1056,13 @@ class ContactService {
         }
         if (isset($lookupResult['http'])){
             $data['http'] = $lookupResult['http'];
-        } 
+        }
+        if (isset($lookupResult['https'])){
+            $data['https'] = $lookupResult['https'];
+        }
         if (isset($lookupResult['tor'])){
             $data['tor'] = $lookupResult['tor'];
-        }  
+        }
         if (isset($lookupResult['status'])){
             $data['status'] = $lookupResult['status'];
         }
