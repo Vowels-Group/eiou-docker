@@ -160,6 +160,18 @@ printf "\t   Manual lockfile test:\n"
 docker exec ${testContainer} php -r "file_put_contents('/tmp/test_lock.pid', getmypid()); echo file_exists('/tmp/test_lock.pid') ? 'SUCCESS' : 'FAILED';" 2>/dev/null | sed 's/^/\t      /'
 docker exec ${testContainer} rm -f /tmp/test_lock.pid 2>/dev/null
 
+# Check if AbstractMessageProcessor has lockfile code
+printf "\t   Checking AbstractMessageProcessor lockfile code:\n"
+docker exec ${testContainer} grep -n "file_put_contents.*lockfile" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>/dev/null | sed 's/^/\t      /' || printf "\t      (lockfile code NOT FOUND!)\n"
+
+# Check the lockfile path being used
+printf "\t   Checking P2pMessageProcessor lockfile path:\n"
+docker exec ${testContainer} grep -n "p2pmessages_lock" /etc/eiou/src/processors/P2pMessageProcessor.php 2>/dev/null | sed 's/^/\t      /' || printf "\t      (path NOT FOUND!)\n"
+
+# List ALL files in /tmp to see what's there
+printf "\t   All /tmp files:\n"
+docker exec ${testContainer} ls -la /tmp/ 2>/dev/null | head -15 | sed 's/^/\t      /'
+
 printf "\t   Pre-test cleanup complete\n\n"
 
 ################################################################################
