@@ -130,15 +130,15 @@ sleep 1
 docker exec ${testContainer} rm -f /tmp/*_lock.pid 2>/dev/null || true
 
 # Check if any processors are running (should be 0 after pkill)
-runningCount=$(docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null || echo "0")
+runningCount=$(docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null | tr -d '\n' || echo "0")
 printf "\t   Processors running after kill: %s\n" "$runningCount"
 
 # Wait for watchdog to restart processors (watchdog interval is 30s)
 printf "\t   Waiting for watchdog to restart processors (max 45s)...\n"
 watchdogWait=0
 while [ $watchdogWait -lt 45 ]; do
-    runningCount=$(docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null || echo "0")
-    lockfileCount=$(docker exec ${testContainer} ls /tmp/*_lock.pid 2>/dev/null | wc -l || echo "0")
+    runningCount=$(docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null | tr -d '\n' || echo "0")
+    lockfileCount=$(docker exec ${testContainer} sh -c "ls /tmp/*_lock.pid 2>/dev/null | wc -l" | tr -d '\n' || echo "0")
 
     if [ "$runningCount" -ge 3 ] && [ "$lockfileCount" -ge 3 ]; then
         printf "\t   ${GREEN}Watchdog restarted processors (found %s processes, %s lockfiles)${NC}\n" "$runningCount" "$lockfileCount"
@@ -167,8 +167,8 @@ if [ "$runningCount" -lt 3 ] || [ "$lockfileCount" -lt 3 ]; then
     sleep 5
 
     # Check results
-    runningCount=$(docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null || echo "0")
-    lockfileCount=$(docker exec ${testContainer} ls /tmp/*_lock.pid 2>/dev/null | wc -l || echo "0")
+    runningCount=$(docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null | tr -d '\n' || echo "0")
+    lockfileCount=$(docker exec ${testContainer} sh -c "ls /tmp/*_lock.pid 2>/dev/null | wc -l" | tr -d '\n' || echo "0")
     printf "\t   After manual start: processes=%s, lockfiles=%s\n" "$runningCount" "$lockfileCount"
 fi
 
@@ -210,11 +210,23 @@ docker exec ${testContainer} rm -f /tmp/test_lock.pid 2>/dev/null
 
 # Check if AbstractMessageProcessor has lockfile code
 printf "\t   Checking AbstractMessageProcessor lockfile code:\n"
-docker exec ${testContainer} grep -n "file_put_contents.*lockfile" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>/dev/null | sed 's/^/\t      /' || printf "\t      (lockfile code NOT FOUND!)\n"
+docker exec ${testContainer} grep -n "file_put_contents.*lockfile" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>/dev/null | sed 's/^/\t      /' || printf "\t      (lockfile code NOT FOUND in AbstractMessageProcessor.php!)\n"
+
+# Check if AbstractMessageProcessor exists and show checkSingleInstance method
+printf "\t   AbstractMessageProcessor checkSingleInstance exists:\n"
+docker exec ${testContainer} grep -n "function checkSingleInstance" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>/dev/null | sed 's/^/\t      /' || printf "\t      (checkSingleInstance NOT FOUND!)\n"
 
 # Check the lockfile path being used
 printf "\t   Checking P2pMessageProcessor lockfile path:\n"
-docker exec ${testContainer} grep -n "p2pmessages_lock" /etc/eiou/src/processors/P2pMessageProcessor.php 2>/dev/null | sed 's/^/\t      /' || printf "\t      (path NOT FOUND!)\n"
+docker exec ${testContainer} grep -n "p2pmessages_lock" /etc/eiou/src/processors/P2pMessageProcessor.php 2>/dev/null | sed 's/^/\t      /' || printf "\t      (path NOT FOUND in P2pMessageProcessor.php!)\n"
+
+# Show what initialize() does
+printf "\t   AbstractMessageProcessor initialize method:\n"
+docker exec ${testContainer} grep -A5 "function initialize" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>/dev/null | head -8 | sed 's/^/\t      /' || printf "\t      (initialize NOT FOUND!)\n"
+
+# Check if files even exist at these paths
+printf "\t   Verifying file paths:\n"
+docker exec ${testContainer} ls -la /etc/eiou/src/processors/ 2>/dev/null | sed 's/^/\t      /' || printf "\t      (/etc/eiou/src/processors/ does not exist!)\n"
 
 # List ALL files in /tmp to see what's there
 printf "\t   All /tmp files:\n"
@@ -254,8 +266,9 @@ docker exec ${testContainer} php -r '
 
     echo "Step 4: Test via P2pMessageProcessor (partial init)\n";
     try {
-        require_once "/etc/eiou/root/Functions.php";
-        require_once "/etc/eiou/root/SecurityInit.php";
+        // Note: Files are at /etc/eiou/ (copied from files/root/)
+        require_once "/etc/eiou/Functions.php";
+        require_once "/etc/eiou/SecurityInit.php";
         require_once "/etc/eiou/src/processors/P2pMessageProcessor.php";
 
         echo "  Creating processor instance...\n";
