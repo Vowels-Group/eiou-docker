@@ -103,14 +103,33 @@ docker exec ${testContainer} sh -c "rm -f /tmp/eiou_send_lock_*.lock 2>/dev/null
 printf "\t   Stale lockfiles cleaned\n"
 
 # Kill any existing processors so they can restart fresh with clean lockfiles
-printf "\t   Restarting processors with clean state...\n"
-docker exec ${testContainer} pkill -9 -f "P2pMessages.php" 2>/dev/null || true
-docker exec ${testContainer} pkill -9 -f "TransactionMessages.php" 2>/dev/null || true
-docker exec ${testContainer} pkill -9 -f "CleanupMessages.php" 2>/dev/null || true
+printf "\t   Stopping existing processors...\n"
+docker exec ${testContainer} pkill -f "P2pMessages.php" 2>/dev/null || true
+docker exec ${testContainer} pkill -f "TransactionMessages.php" 2>/dev/null || true
+docker exec ${testContainer} pkill -f "CleanupMessages.php" 2>/dev/null || true
+sleep 2
 
-# Wait for watchdog to restart them (watchdog checks every 30 seconds)
-printf "\t   Waiting for watchdog to restart processors (35s)...\n"
-sleep 35
+# Remove lockfiles again after kill (in case they were created during shutdown)
+docker exec ${testContainer} rm -f /tmp/p2pmessages_lock.pid 2>/dev/null
+docker exec ${testContainer} rm -f /tmp/transactionmessages_lock.pid 2>/dev/null
+docker exec ${testContainer} rm -f /tmp/cleanupmessages_lock.pid 2>/dev/null
+
+# Manually start processors (don't rely on watchdog - it may have race conditions)
+printf "\t   Starting processors manually...\n"
+docker exec ${testContainer} sh -c "nohup php /etc/eiou/P2pMessages.php > /tmp/p2p_startup.log 2>&1 &"
+docker exec ${testContainer} sh -c "nohup php /etc/eiou/TransactionMessages.php > /tmp/transaction_startup.log 2>&1 &"
+docker exec ${testContainer} sh -c "nohup php /etc/eiou/CleanupMessages.php > /tmp/cleanup_startup.log 2>&1 &"
+
+# Give processors time to fully initialize and create lockfiles
+printf "\t   Waiting for processor initialization (10s)...\n"
+sleep 10
+
+# Check if any startup errors occurred
+startupErrors=$(docker exec ${testContainer} sh -c "cat /tmp/*_startup.log 2>/dev/null | grep -i 'error\|exception\|fatal' | head -3" || true)
+if [ -n "$startupErrors" ]; then
+    printf "\t   ${YELLOW}WARNING: Startup errors detected:${NC}\n"
+    echo "$startupErrors" | sed 's/^/\t   /'
+fi
 
 printf "\t   Pre-test cleanup complete\n\n"
 
