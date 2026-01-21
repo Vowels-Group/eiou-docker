@@ -2125,26 +2125,6 @@ class TransactionService {
     }
 
     /**
-     * Calculate total sent by user
-     *
-     * @param string $publicKey User's public key
-     * @return float Total amount sent
-     */
-    public function calculateTotalSentToContact(string $publicKey): float {
-        return $this->transactionRepository->calculateTotalSentToContact($publicKey);
-    }
-
-    /**
-     * Calculate total received by user
-     *
-     * @param string $publicKey User's public key
-     * @return float Total amount received
-     */
-    public function calculateTotalReceivedFromContact(string $publicKey): float {
-        return $this->transactionRepository->calculateTotalReceivedFromContact($publicKey);
-    }
-
-    /**
      * Get all sent transactions
      * 
      * @param int $limit

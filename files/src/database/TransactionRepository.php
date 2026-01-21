@@ -29,25 +29,6 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
-     * Calculate total amount sent to a public key
-     *
-     * @param string $publicKey Public key of contact
-     * @return float Total amount sent
-     */
-    public function calculateTotalSentToContact(string $publicKey): float {
-        $query = "SELECT SUM(amount) as total_sent FROM {$this->tableName}
-                  WHERE receiver_public_key = :publicKey";
-        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
-
-        if (!$stmt) {
-            return 0;
-        }
-
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['total_sent'] ?? 0);
-    }
-
-    /**
      * Calculate total amount sent by user
      *
      * @param string $userPublicKey User's public key
@@ -64,25 +45,6 @@ class TransactionRepository extends AbstractRepository {
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return (float) ($result['total_sent'] ?? 0);
-    }
-
-    /**
-     * Calculate total amount received from a public key
-     *
-     * @param string $publicKey Public key of contact
-     * @return float Total amount received
-     */
-    public function calculateTotalReceivedFromContact(string $publicKey): float {
-        $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
-                  WHERE sender_public_key = :publicKey";
-        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
-
-        if (!$stmt) {
-            return 0;
-        }
-
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['total_received'] ?? 0);
     }
 
     /**
