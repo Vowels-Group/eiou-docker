@@ -966,6 +966,9 @@ function openContactModal(contact, openTab) {
     if (contact.http) {
         addresses.push({ type: 'HTTP', address: contact.http, icon: 'fa-globe' });
     }
+    if (contact.https) {
+        addresses.push({ type: 'HTTPS', address: contact.https, icon: 'fa-globe' });
+    }
     if (contact.tor) {
         addresses.push({ type: 'TOR', address: contact.tor, icon: 'fa-user-secret' });
     }
