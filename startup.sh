@@ -626,18 +626,22 @@ fi
 # Display user information
 echo "User Information: "
 if [[ ! -z ${http} ]]; then
+    # Always show both HTTP and HTTPS addresses regardless of configured protocol
     if [[ ${http} == https://* ]]; then
-        # URL is already HTTPS, only show HTTPS address
-        echo -e "\t HTTPS address: $http"
+        # URL is HTTPS, derive HTTP from it
+        httpAddr="${http/https:\/\//http:\/\/}"
+        httpsAddr="$http"
     elif [[ ${http} == http://* ]]; then
-        # URL is HTTP, show both HTTP and HTTPS options
-        echo -e "\t HTTP address: $http"
-        https="${http/http:\/\//https:\/\/}"
-        echo -e "\t HTTPS address: $https"
+        # URL is HTTP, derive HTTPS from it
+        httpAddr="$http"
+        httpsAddr="${http/http:\/\//https:\/\/}"
     else
-        # No protocol prefix, show as-is
-        echo -e "\t Address: $http"
+        # No protocol prefix, add both
+        httpAddr="http://$http"
+        httpsAddr="https://$http"
     fi
+    echo -e "\t HTTP address: $httpAddr"
+    echo -e "\t HTTPS address: $httpsAddr"
 fi
 echo -e "\t Tor address: $tor"
 readable="${pubkey//$'\n'/$'\n\t\t'}"
@@ -660,10 +664,17 @@ nohup php /etc/eiou/CleanupMessages.php > /dev/null 2>&1 &
 CLEANUP_PID=$!
 echo "Cleanup processing started successfully (PID: $CLEANUP_PID)"
 
-# Start contact status polling in background (optional - respects CONTACT_STATUS_ENABLED)
-nohup php /etc/eiou/ContactStatusMessages.php > /dev/null 2>&1 &
-CONTACT_STATUS_PID=$!
-echo "Contact status polling started successfully (PID: $CONTACT_STATUS_PID)"
+# Start contact status polling in background (optional - respects EIOU_CONTACT_STATUS_ENABLED)
+# Check if contact status is enabled before starting (default: true if not set)
+CONTACT_STATUS_ENABLED="${EIOU_CONTACT_STATUS_ENABLED:-true}"
+if [ "$CONTACT_STATUS_ENABLED" = "true" ] || [ "$CONTACT_STATUS_ENABLED" = "1" ]; then
+    nohup php /etc/eiou/ContactStatusMessages.php > /dev/null 2>&1 &
+    CONTACT_STATUS_PID=$!
+    echo "Contact status polling started successfully (PID: $CONTACT_STATUS_PID)"
+else
+    CONTACT_STATUS_PID=""
+    echo "Contact status polling disabled (EIOU_CONTACT_STATUS_ENABLED=$CONTACT_STATUS_ENABLED)"
+fi
 
 # -----------------------------------------------------------------------------
 # watchdog() - Background process monitor for automatic processor recovery
@@ -699,7 +710,7 @@ watchdog() {
         local CURRENT_TIME=$(date +%s)
 
         # Check P2pMessages processor
-        if ! kill -0 $P2P_PID 2>/dev/null; then
+        if ! kill -0 "$P2P_PID" 2>/dev/null; then
             local TIME_SINCE_RESTART=$((CURRENT_TIME - P2P_LAST_RESTART))
             if [ $P2P_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
                 P2P_RESTARTS=$((P2P_RESTARTS + 1))
@@ -714,7 +725,7 @@ watchdog() {
         fi
 
         # Check TransactionMessages processor
-        if ! kill -0 $TRANSACTION_PID 2>/dev/null; then
+        if ! kill -0 "$TRANSACTION_PID" 2>/dev/null; then
             local TIME_SINCE_RESTART=$((CURRENT_TIME - TRANSACTION_LAST_RESTART))
             if [ $TRANSACTION_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
                 TRANSACTION_RESTARTS=$((TRANSACTION_RESTARTS + 1))
@@ -729,7 +740,7 @@ watchdog() {
         fi
 
         # Check CleanupMessages processor
-        if ! kill -0 $CLEANUP_PID 2>/dev/null; then
+        if ! kill -0 "$CLEANUP_PID" 2>/dev/null; then
             local TIME_SINCE_RESTART=$((CURRENT_TIME - CLEANUP_LAST_RESTART))
             if [ $CLEANUP_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
                 CLEANUP_RESTARTS=$((CLEANUP_RESTARTS + 1))
@@ -743,18 +754,20 @@ watchdog() {
             fi
         fi
 
-        # Check ContactStatusMessages processor (optional - may exit if feature disabled)
-        if ! kill -0 $CONTACT_STATUS_PID 2>/dev/null; then
-            local TIME_SINCE_RESTART=$((CURRENT_TIME - CONTACT_STATUS_LAST_RESTART))
-            if [ $CONTACT_STATUS_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
-                CONTACT_STATUS_RESTARTS=$((CONTACT_STATUS_RESTARTS + 1))
-                CONTACT_STATUS_LAST_RESTART=$CURRENT_TIME
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages died (was PID $CONTACT_STATUS_PID), restarting (attempt $CONTACT_STATUS_RESTARTS/$MAX_RESTARTS)..."
-                nohup php /etc/eiou/ContactStatusMessages.php > /dev/null 2>&1 &
-                CONTACT_STATUS_PID=$!
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages restarted (new PID: $CONTACT_STATUS_PID)"
-            elif [ $CONTACT_STATUS_RESTARTS -ge $MAX_RESTARTS ]; then
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+        # Check ContactStatusMessages processor (only if enabled - skip if CONTACT_STATUS_PID is empty)
+        if [ -n "$CONTACT_STATUS_PID" ]; then
+            if ! kill -0 "$CONTACT_STATUS_PID" 2>/dev/null; then
+                local TIME_SINCE_RESTART=$((CURRENT_TIME - CONTACT_STATUS_LAST_RESTART))
+                if [ $CONTACT_STATUS_RESTARTS -lt $MAX_RESTARTS ] && [ $TIME_SINCE_RESTART -ge $RESTART_COOLDOWN ]; then
+                    CONTACT_STATUS_RESTARTS=$((CONTACT_STATUS_RESTARTS + 1))
+                    CONTACT_STATUS_LAST_RESTART=$CURRENT_TIME
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages died (was PID $CONTACT_STATUS_PID), restarting (attempt $CONTACT_STATUS_RESTARTS/$MAX_RESTARTS)..."
+                    nohup php /etc/eiou/ContactStatusMessages.php > /dev/null 2>&1 &
+                    CONTACT_STATUS_PID=$!
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages restarted (new PID: $CONTACT_STATUS_PID)"
+                elif [ $CONTACT_STATUS_RESTARTS -ge $MAX_RESTARTS ]; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages exceeded max restarts ($MAX_RESTARTS), not restarting"
+                fi
             fi
         fi
     done

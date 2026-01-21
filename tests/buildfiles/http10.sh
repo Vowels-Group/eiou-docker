@@ -120,7 +120,7 @@ done
 
 echo "Building base image..."
 cd ../
-docker build -f eiou.dockerfile -t eiou .
+docker build -f eiou.dockerfile -t eiou/eiou .
 
 echo -e "\nCreating containers..."
 # Pass EIOU_CONTACT_STATUS_ENABLED from parent shell (defaults to true if not set)
