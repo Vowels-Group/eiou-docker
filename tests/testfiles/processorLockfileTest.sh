@@ -114,29 +114,63 @@ docker exec ${testContainer} rm -f /tmp/p2pmessages_lock.pid 2>/dev/null
 docker exec ${testContainer} rm -f /tmp/transactionmessages_lock.pid 2>/dev/null
 docker exec ${testContainer} rm -f /tmp/cleanupmessages_lock.pid 2>/dev/null
 
-# Manually start processors (don't rely on watchdog - it may have race conditions)
-# First kill any that watchdog might have restarted during diagnostic
+# Strategy: Use watchdog to restart processors (production code path)
+# This is more reliable than manually starting processors because:
+# 1. It tests the actual production restart mechanism
+# 2. No race conditions between test-started and watchdog-started processors
+# 3. Watchdog interval is 30s, cooldown is 60s, so we may need to wait
+
+printf "\t   Cleaning up for watchdog-based restart...\n"
+
+# Kill all processors (watchdog will restart them)
 docker exec ${testContainer} pkill -9 -f "Messages.php" 2>/dev/null || true
+sleep 1
+
+# Remove lockfiles so new processors must create fresh ones
 docker exec ${testContainer} rm -f /tmp/*_lock.pid 2>/dev/null || true
-sleep 1
 
-printf "\t   Starting processors manually...\n"
-docker exec ${testContainer} sh -c "nohup php /etc/eiou/P2pMessages.php > /tmp/p2p_startup.log 2>&1 &"
-docker exec ${testContainer} sh -c "nohup php /etc/eiou/TransactionMessages.php > /tmp/transaction_startup.log 2>&1 &"
-docker exec ${testContainer} sh -c "nohup php /etc/eiou/CleanupMessages.php > /tmp/cleanup_startup.log 2>&1 &"
+# Check if any processors are running (should be 0 after pkill)
+runningCount=$(docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null || echo "0")
+printf "\t   Processors running after kill: %s\n" "$runningCount"
 
-# Check immediately (1 second) after start
-sleep 1
-printf "\t   ${YELLOW}Immediate check (1s after start):${NC}\n"
-printf "\t     Running processes: "
-docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null || echo "0"
-printf "\t     Lockfiles: "
-docker exec ${testContainer} ls /tmp/*_lock.pid 2>/dev/null | tr '\n' ' ' || echo "(none)"
-printf "\n"
+# Wait for watchdog to restart processors (watchdog interval is 30s)
+printf "\t   Waiting for watchdog to restart processors (max 45s)...\n"
+watchdogWait=0
+while [ $watchdogWait -lt 45 ]; do
+    runningCount=$(docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null || echo "0")
+    lockfileCount=$(docker exec ${testContainer} ls /tmp/*_lock.pid 2>/dev/null | wc -l || echo "0")
 
-# Give processors time to fully initialize and create lockfiles
-printf "\t   Waiting for processor initialization (10s)...\n"
-sleep 9  # Already waited 1 second above
+    if [ "$runningCount" -ge 3 ] && [ "$lockfileCount" -ge 3 ]; then
+        printf "\t   ${GREEN}Watchdog restarted processors (found %s processes, %s lockfiles)${NC}\n" "$runningCount" "$lockfileCount"
+        break
+    fi
+
+    sleep 5
+    watchdogWait=$((watchdogWait + 5))
+    printf "\t   ... waiting (%ss, processes=%s, lockfiles=%s)\n" "$watchdogWait" "$runningCount" "$lockfileCount"
+done
+
+# If watchdog didn't restart, fall back to manual start
+if [ "$runningCount" -lt 3 ] || [ "$lockfileCount" -lt 3 ]; then
+    printf "\t   ${YELLOW}Watchdog did not restart all processors, starting manually...${NC}\n"
+
+    # Kill any partial restarts
+    docker exec ${testContainer} pkill -9 -f "Messages.php" 2>/dev/null || true
+    docker exec ${testContainer} rm -f /tmp/*_lock.pid 2>/dev/null || true
+    sleep 1
+
+    docker exec ${testContainer} sh -c "nohup php /etc/eiou/P2pMessages.php > /tmp/p2p_startup.log 2>&1 &"
+    docker exec ${testContainer} sh -c "nohup php /etc/eiou/TransactionMessages.php > /tmp/transaction_startup.log 2>&1 &"
+    docker exec ${testContainer} sh -c "nohup php /etc/eiou/CleanupMessages.php > /tmp/cleanup_startup.log 2>&1 &"
+
+    # Wait for manual start
+    sleep 5
+
+    # Check results
+    runningCount=$(docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null || echo "0")
+    lockfileCount=$(docker exec ${testContainer} ls /tmp/*_lock.pid 2>/dev/null | wc -l || echo "0")
+    printf "\t   After manual start: processes=%s, lockfiles=%s\n" "$runningCount" "$lockfileCount"
+fi
 
 # Check if any startup errors occurred
 startupErrors=$(docker exec ${testContainer} sh -c "cat /tmp/*_startup.log 2>/dev/null | grep -i 'error\|exception\|fatal' | head -3" || true)
