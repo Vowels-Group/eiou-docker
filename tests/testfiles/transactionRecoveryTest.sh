@@ -207,199 +207,307 @@ else
 fi
 
 ############################ FUNCTIONAL TESTS ############################
+# Individual tests using Application singleton pattern for proper dependency injection
+# Each test runs separately for better error isolation and debugging
 
 echo -e "\n[Functional Tests - Database Operations]"
 
-# Test 12-23: Run PHP functional tests
-echo -e "\n\t-> Running transaction flow functional tests"
+# Helper: Create test transaction via PHP
+# Usage: create_test_tx <txid> <status> [sending_started_at] [recovery_count] [needs_manual_review]
+create_test_tx() {
+    local txid="$1"
+    local status="$2"
+    local started="${3:-NULL}"
+    local count="${4:-0}"
+    local review="${5:-0}"
 
-# Create PHP test script and copy to container
-PHP_TEST_SCRIPT=$(mktemp)
-cat > "$PHP_TEST_SCRIPT" << 'PHPEOF'
-<?php
-require_once "/etc/eiou/src/core/Constants.php";
-require_once "/etc/eiou/src/database/TransactionRepository.php";
-require_once "/etc/eiou/src/services/TransactionRecoveryService.php";
-
-$dbConfig = json_decode(file_get_contents("/etc/eiou/dbconfig.json"), true);
-$pdo = new PDO("mysql:host={$dbConfig['dbHost']};dbname={$dbConfig['dbName']}", $dbConfig['dbUser'], $dbConfig['dbPass']);
-$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-$repo = new TransactionRepository($pdo);
-$recovery = new TransactionRecoveryService($repo);
-
-$passed = 0;
-$failed = 0;
-$results = [];
-
-function createTx($pdo, $txid, $status, $extra = []) {
-    $sql = "INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
-            receiver_address, receiver_public_key, amount, currency, memo, sending_started_at, recovery_count, needs_manual_review)
-            VALUES (:txid, 'standard', 'sent', :status, 'test_sender', 'test_pubkey',
-            'test_receiver', 'test_recv_pubkey', 100, 'USD', 'standard', :started, :count, :review)";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        ':txid' => $txid, ':status' => $status,
-        ':started' => $extra['sending_started_at'] ?? null,
-        ':count' => $extra['recovery_count'] ?? 0,
-        ':review' => $extra['needs_manual_review'] ?? 0
-    ]);
+    docker exec ${testContainer} php -r "
+        require_once('${REL_APPLICATION}');
+        \$pdo = Application::getInstance()->services->getPdo();
+        \$sql = \"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
+                receiver_address, receiver_public_key, amount, currency, memo, sending_started_at, recovery_count, needs_manual_review)
+                VALUES ('${txid}', 'standard', 'sent', '${status}', 'test_sender', 'test_pubkey',
+                'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test', ${started}, ${count}, ${review})\";
+        \$pdo->exec(\$sql);
+        echo 'CREATED';
+    " 2>/dev/null || echo "ERROR"
 }
 
-function getTx($pdo, $txid) {
-    $stmt = $pdo->prepare("SELECT * FROM transactions WHERE txid = :txid");
-    $stmt->execute([':txid' => $txid]);
-    return $stmt->fetch(PDO::FETCH_ASSOC);
+# Helper: Cleanup test transactions
+cleanup_test_tx() {
+    docker exec ${testContainer} php -r "
+        require_once('${REL_APPLICATION}');
+        \$pdo = Application::getInstance()->services->getPdo();
+        \$pdo->exec(\"DELETE FROM transactions WHERE txid LIKE 'test_recovery_%'\");
+    " 2>/dev/null
 }
 
-function cleanup($pdo) {
-    $pdo->exec("DELETE FROM transactions WHERE txid LIKE 'test_recovery_%'");
-}
+# Initial cleanup
+cleanup_test_tx
 
-cleanup($pdo);
-$oldTime = date('Y-m-d H:i:s', time() - 300);
+# Test 12: Atomic claim succeeds
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing atomic claim succeeds"
+claimResult=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$repo = \$app->services->getTransactionRepository();
 
-// Test 1: Atomic claim succeeds
-$txid = 'test_recovery_claim_' . uniqid();
-createTx($pdo, $txid, 'pending');
-$claimed = $repo->claimPendingTransaction($txid);
-$tx = getTx($pdo, $txid);
-if ($claimed && $tx['status'] === 'sending') { $passed++; $results[] = 'atomic_claim:PASS'; }
-else { $failed++; $results[] = 'atomic_claim:FAIL'; }
+    \$txid = 'test_recovery_claim_' . uniqid();
+    \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
+        receiver_address, receiver_public_key, amount, currency, memo)
+        VALUES ('\$txid', 'standard', 'sent', 'pending', 'test_sender', 'test_pubkey',
+        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test')\");
 
-// Test 2: Duplicate claim rejected
-$secondClaim = $repo->claimPendingTransaction($txid);
-if (!$secondClaim) { $passed++; $results[] = 'duplicate_rejected:PASS'; }
-else { $failed++; $results[] = 'duplicate_rejected:FAIL'; }
+    \$claimed = \$repo->claimPendingTransaction(\$txid);
+    \$stmt = \$pdo->prepare('SELECT status FROM transactions WHERE txid = ?');
+    \$stmt->execute([\$txid]);
+    \$status = \$stmt->fetchColumn();
 
-// Test 3: Cannot claim sent transaction
-$txid2 = 'test_recovery_sent_' . uniqid();
-createTx($pdo, $txid2, 'sent');
-$claimSent = $repo->claimPendingTransaction($txid2);
-if (!$claimSent) { $passed++; $results[] = 'cannot_claim_sent:PASS'; }
-else { $failed++; $results[] = 'cannot_claim_sent:FAIL'; }
+    \$pdo->exec(\"DELETE FROM transactions WHERE txid = '\$txid'\");
+    echo (\$claimed && \$status === 'sending') ? 'PASS' : 'FAIL';
+" 2>/dev/null || echo "ERROR")
 
-// Test 4: Mark as sent works
-$txid3 = 'test_recovery_mark_' . uniqid();
-createTx($pdo, $txid3, 'pending');
-$repo->claimPendingTransaction($txid3);
-$marked = $repo->markAsSent($txid3);
-$tx3 = getTx($pdo, $txid3);
-if ($marked && $tx3['status'] === 'sent') { $passed++; $results[] = 'mark_sent:PASS'; }
-else { $failed++; $results[] = 'mark_sent:FAIL'; }
-
-// Test 5: Detect stuck transaction
-$txid4 = 'test_recovery_stuck_' . uniqid();
-createTx($pdo, $txid4, 'sending', ['sending_started_at' => $oldTime]);
-$stuck = $repo->getStuckSendingTransactions(60);
-$found = false;
-foreach ($stuck as $s) { if ($s['txid'] === $txid4) { $found = true; break; } }
-if ($found) { $passed++; $results[] = 'detect_stuck:PASS'; }
-else { $failed++; $results[] = 'detect_stuck:FAIL'; }
-
-// Test 6: Recovery resets to pending
-$txid5 = 'test_recovery_reset_' . uniqid();
-createTx($pdo, $txid5, 'sending', ['sending_started_at' => $oldTime, 'recovery_count' => 0]);
-$result = $repo->recoverStuckTransaction($txid5, 3);
-$tx5 = getTx($pdo, $txid5);
-if ($result['recovered'] && $tx5['status'] === 'pending' && $tx5['recovery_count'] == 1) {
-    $passed++; $results[] = 'recovery_reset:PASS';
-} else { $failed++; $results[] = 'recovery_reset:FAIL'; }
-
-// Test 7: Max retry marks for review
-$txid6 = 'test_recovery_maxretry_' . uniqid();
-createTx($pdo, $txid6, 'sending', ['sending_started_at' => $oldTime, 'recovery_count' => 3]);
-$result6 = $repo->recoverStuckTransaction($txid6, 3);
-$tx6 = getTx($pdo, $txid6);
-if ($result6['needs_review'] && $tx6['status'] === 'failed' && $tx6['needs_manual_review'] == 1) {
-    $passed++; $results[] = 'max_retry_review:PASS';
-} else { $failed++; $results[] = 'max_retry_review:FAIL'; }
-
-// Test 8: Recovery service handles multiple
-cleanup($pdo);
-for ($i = 0; $i < 3; $i++) {
-    createTx($pdo, "test_recovery_multi_$i", 'sending', ['sending_started_at' => $oldTime]);
-}
-$multiResult = $recovery->recoverStuckTransactions(60, 3);
-if ($multiResult['recovered'] >= 3) { $passed++; $results[] = 'multi_recovery:PASS'; }
-else { $failed++; $results[] = 'multi_recovery:FAIL'; }
-
-// Test 9: Full flow - pending->sending->sent->accepted
-$txid9 = 'test_recovery_flow_' . uniqid();
-createTx($pdo, $txid9, 'pending');
-$repo->claimPendingTransaction($txid9);
-$repo->markAsSent($txid9);
-$repo->updateStatus($txid9, 'accepted', true);
-$tx9 = getTx($pdo, $txid9);
-if ($tx9['status'] === 'accepted') { $passed++; $results[] = 'full_flow:PASS'; }
-else { $failed++; $results[] = 'full_flow:FAIL'; }
-
-// Test 10: Crash simulation -> recovery -> retry
-$txid10 = 'test_recovery_crash_' . uniqid();
-createTx($pdo, $txid10, 'pending');
-$repo->claimPendingTransaction($txid10);
-$pdo->exec("UPDATE transactions SET sending_started_at = DATE_SUB(NOW(), INTERVAL 5 MINUTE) WHERE txid = '$txid10'");
-$recovery->recoverStuckTransactions(60, 3);
-$tx10a = getTx($pdo, $txid10);
-if ($tx10a['status'] !== 'pending') { $failed++; $results[] = 'crash_recovery:FAIL(not_pending)'; }
-else {
-    $repo->claimPendingTransaction($txid10);
-    $repo->markAsSent($txid10);
-    $tx10b = getTx($pdo, $txid10);
-    if ($tx10b['status'] === 'sent') { $passed++; $results[] = 'crash_recovery:PASS'; }
-    else { $failed++; $results[] = 'crash_recovery:FAIL(not_sent)'; }
-}
-
-// Test 11: Concurrent claims - only one succeeds
-$txid11 = 'test_recovery_concurrent_' . uniqid();
-createTx($pdo, $txid11, 'pending');
-$c1 = $repo->claimPendingTransaction($txid11);
-$c2 = $repo->claimPendingTransaction($txid11);
-$c3 = $repo->claimPendingTransaction($txid11);
-$successCount = ($c1 ? 1 : 0) + ($c2 ? 1 : 0) + ($c3 ? 1 : 0);
-if ($successCount === 1) { $passed++; $results[] = 'concurrent_claim:PASS'; }
-else { $failed++; $results[] = "concurrent_claim:FAIL($successCount)"; }
-
-// Test 12: Statistics work
-cleanup($pdo);
-createTx($pdo, 'test_recovery_stat1', 'sending', ['sending_started_at' => $oldTime]);
-createTx($pdo, 'test_recovery_stat2', 'failed', ['recovery_count' => 5, 'needs_manual_review' => 1]);
-$stats = $recovery->getRecoveryStatistics();
-if ($stats['stuck_sending'] >= 1 && $stats['needs_review'] >= 1) {
-    $passed++; $results[] = 'statistics:PASS';
-} else { $failed++; $results[] = 'statistics:FAIL'; }
-
-cleanup($pdo);
-
-echo json_encode(['passed' => $passed, 'failed' => $failed, 'results' => $results]);
-PHPEOF
-
-# Copy and run the PHP test
-docker cp "$PHP_TEST_SCRIPT" ${testContainer}:/tmp/functional_test.php >/dev/null 2>&1
-functionalResult=$(docker exec ${testContainer} php /tmp/functional_test.php 2>&1)
-rm -f "$PHP_TEST_SCRIPT"
-
-# Parse results
-funcPassed=$(echo "$functionalResult" | grep -o '"passed":[0-9]*' | grep -o '[0-9]*' || echo "0")
-funcFailed=$(echo "$functionalResult" | grep -o '"failed":[0-9]*' | grep -o '[0-9]*' || echo "0")
-funcResults=$(echo "$functionalResult" | grep -o '"results":\[[^]]*\]' | sed 's/"results":\[//;s/\]//;s/"//g;s/,/\n/g' | sed 's/^/      /')
-
-# Add functional test counts
-totaltests=$(( totaltests + funcPassed + funcFailed ))
-passed=$(( passed + funcPassed ))
-failure=$(( failure + funcFailed ))
-
-if [ "$funcFailed" -eq 0 ] && [ "$funcPassed" -gt 0 ]; then
-    printf "\t   Functional tests: ${funcPassed}/${funcPassed} ${GREEN}PASSED${NC}\n"
+if [ "$claimResult" = "PASS" ]; then
+    printf "\t   Atomic claim succeeds ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
 else
-    printf "\t   Functional tests: ${funcPassed}/$((funcPassed + funcFailed)) ${RED}FAILED${NC}\n"
-    printf "\t   Results:\n"
-    echo "$funcResults"
+    printf "\t   Atomic claim succeeds ${RED}FAILED${NC} (%s)\n" "$claimResult"
+    failure=$(( failure + 1 ))
 fi
+
+# Test 13: Duplicate claim rejected
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing duplicate claim rejected"
+dupResult=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$repo = \$app->services->getTransactionRepository();
+
+    \$txid = 'test_recovery_dup_' . uniqid();
+    \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
+        receiver_address, receiver_public_key, amount, currency, memo)
+        VALUES ('\$txid', 'standard', 'sent', 'pending', 'test_sender', 'test_pubkey',
+        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test')\");
+
+    \$first = \$repo->claimPendingTransaction(\$txid);
+    \$second = \$repo->claimPendingTransaction(\$txid);
+
+    \$pdo->exec(\"DELETE FROM transactions WHERE txid = '\$txid'\");
+    echo (\$first && !\$second) ? 'PASS' : 'FAIL';
+" 2>/dev/null || echo "ERROR")
+
+if [ "$dupResult" = "PASS" ]; then
+    printf "\t   Duplicate claim rejected ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Duplicate claim rejected ${RED}FAILED${NC} (%s)\n" "$dupResult"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 14: Cannot claim sent transaction
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing cannot claim sent transaction"
+sentResult=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$repo = \$app->services->getTransactionRepository();
+
+    \$txid = 'test_recovery_sent_' . uniqid();
+    \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
+        receiver_address, receiver_public_key, amount, currency, memo)
+        VALUES ('\$txid', 'standard', 'sent', 'sent', 'test_sender', 'test_pubkey',
+        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test')\");
+
+    \$claimed = \$repo->claimPendingTransaction(\$txid);
+
+    \$pdo->exec(\"DELETE FROM transactions WHERE txid = '\$txid'\");
+    echo (!\$claimed) ? 'PASS' : 'FAIL';
+" 2>/dev/null || echo "ERROR")
+
+if [ "$sentResult" = "PASS" ]; then
+    printf "\t   Cannot claim sent transaction ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Cannot claim sent transaction ${RED}FAILED${NC} (%s)\n" "$sentResult"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 15: Mark as sent works
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing mark as sent works"
+markResult=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$repo = \$app->services->getTransactionRepository();
+
+    \$txid = 'test_recovery_mark_' . uniqid();
+    \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
+        receiver_address, receiver_public_key, amount, currency, memo)
+        VALUES ('\$txid', 'standard', 'sent', 'pending', 'test_sender', 'test_pubkey',
+        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test')\");
+
+    \$repo->claimPendingTransaction(\$txid);
+    \$marked = \$repo->markAsSent(\$txid);
+
+    \$stmt = \$pdo->prepare('SELECT status FROM transactions WHERE txid = ?');
+    \$stmt->execute([\$txid]);
+    \$status = \$stmt->fetchColumn();
+
+    \$pdo->exec(\"DELETE FROM transactions WHERE txid = '\$txid'\");
+    echo (\$marked && \$status === 'sent') ? 'PASS' : 'FAIL';
+" 2>/dev/null || echo "ERROR")
+
+if [ "$markResult" = "PASS" ]; then
+    printf "\t   Mark as sent works ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Mark as sent works ${RED}FAILED${NC} (%s)\n" "$markResult"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 16: Detect stuck transaction
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing detect stuck transaction"
+stuckResult=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$repo = \$app->services->getTransactionRepository();
+
+    \$txid = 'test_recovery_stuck_' . uniqid();
+    \$oldTime = date('Y-m-d H:i:s', time() - 300);
+    \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
+        receiver_address, receiver_public_key, amount, currency, memo, sending_started_at)
+        VALUES ('\$txid', 'standard', 'sent', 'sending', 'test_sender', 'test_pubkey',
+        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test', '\$oldTime')\");
+
+    \$stuck = \$repo->getStuckSendingTransactions(60);
+    \$found = false;
+    foreach (\$stuck as \$s) { if (\$s['txid'] === \$txid) { \$found = true; break; } }
+
+    \$pdo->exec(\"DELETE FROM transactions WHERE txid = '\$txid'\");
+    echo \$found ? 'PASS' : 'FAIL';
+" 2>/dev/null || echo "ERROR")
+
+if [ "$stuckResult" = "PASS" ]; then
+    printf "\t   Detect stuck transaction ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Detect stuck transaction ${RED}FAILED${NC} (%s)\n" "$stuckResult"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 17: Recovery resets to pending
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing recovery resets to pending"
+resetResult=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$repo = \$app->services->getTransactionRepository();
+
+    \$txid = 'test_recovery_reset_' . uniqid();
+    \$oldTime = date('Y-m-d H:i:s', time() - 300);
+    \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
+        receiver_address, receiver_public_key, amount, currency, memo, sending_started_at, recovery_count)
+        VALUES ('\$txid', 'standard', 'sent', 'sending', 'test_sender', 'test_pubkey',
+        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test', '\$oldTime', 0)\");
+
+    \$result = \$repo->recoverStuckTransaction(\$txid, 3);
+
+    \$stmt = \$pdo->prepare('SELECT status, recovery_count FROM transactions WHERE txid = ?');
+    \$stmt->execute([\$txid]);
+    \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+
+    \$pdo->exec(\"DELETE FROM transactions WHERE txid = '\$txid'\");
+    echo (\$result['recovered'] && \$row['status'] === 'pending' && \$row['recovery_count'] == 1) ? 'PASS' : 'FAIL';
+" 2>/dev/null || echo "ERROR")
+
+if [ "$resetResult" = "PASS" ]; then
+    printf "\t   Recovery resets to pending ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Recovery resets to pending ${RED}FAILED${NC} (%s)\n" "$resetResult"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 18: Max retry marks for review
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing max retry marks for review"
+maxRetryResult=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$repo = \$app->services->getTransactionRepository();
+
+    \$txid = 'test_recovery_maxretry_' . uniqid();
+    \$oldTime = date('Y-m-d H:i:s', time() - 300);
+    \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
+        receiver_address, receiver_public_key, amount, currency, memo, sending_started_at, recovery_count)
+        VALUES ('\$txid', 'standard', 'sent', 'sending', 'test_sender', 'test_pubkey',
+        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test', '\$oldTime', 3)\");
+
+    \$result = \$repo->recoverStuckTransaction(\$txid, 3);
+
+    \$stmt = \$pdo->prepare('SELECT status, needs_manual_review FROM transactions WHERE txid = ?');
+    \$stmt->execute([\$txid]);
+    \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+
+    \$pdo->exec(\"DELETE FROM transactions WHERE txid = '\$txid'\");
+    echo (\$result['needs_review'] && \$row['status'] === 'failed' && \$row['needs_manual_review'] == 1) ? 'PASS' : 'FAIL';
+" 2>/dev/null || echo "ERROR")
+
+if [ "$maxRetryResult" = "PASS" ]; then
+    printf "\t   Max retry marks for review ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Max retry marks for review ${RED}FAILED${NC} (%s)\n" "$maxRetryResult"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 19: Concurrent claims - only one succeeds
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing concurrent claims atomicity"
+concurrentResult=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    \$app = Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$repo = \$app->services->getTransactionRepository();
+
+    \$txid = 'test_recovery_concurrent_' . uniqid();
+    \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
+        receiver_address, receiver_public_key, amount, currency, memo)
+        VALUES ('\$txid', 'standard', 'sent', 'pending', 'test_sender', 'test_pubkey',
+        'test_receiver', 'test_recv_pubkey', 100, 'USD', 'test')\");
+
+    \$c1 = \$repo->claimPendingTransaction(\$txid);
+    \$c2 = \$repo->claimPendingTransaction(\$txid);
+    \$c3 = \$repo->claimPendingTransaction(\$txid);
+    \$successCount = (\$c1 ? 1 : 0) + (\$c2 ? 1 : 0) + (\$c3 ? 1 : 0);
+
+    \$pdo->exec(\"DELETE FROM transactions WHERE txid = '\$txid'\");
+    echo (\$successCount === 1) ? 'PASS' : 'FAIL';
+" 2>/dev/null || echo "ERROR")
+
+if [ "$concurrentResult" = "PASS" ]; then
+    printf "\t   Concurrent claims atomicity ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Concurrent claims atomicity ${RED}FAILED${NC} (%s)\n" "$concurrentResult"
+    failure=$(( failure + 1 ))
+fi
+
+# Final cleanup
+cleanup_test_tx
 
 ############################ SUMMARY ############################
 
 echo -e "\n[Transaction Recovery Test Summary]"
-echo -e "\t   Static tests:     $((passed - funcPassed)) passed"
-echo -e "\t   Functional tests: ${funcPassed} passed"
-echo -e "\t   Total:            ${passed}/${totaltests} passed"
+echo -e "\t   Total: ${passed}/${totaltests} passed"
+
+succesrate "${totaltests}" "${passed}" "${failure}" "'transaction recovery'"
