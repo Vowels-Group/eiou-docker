@@ -1080,7 +1080,7 @@ class ContactService {
     /**
      * Lookup contact by address
      *
-     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string $transportIndex Address type, i.e. http, https, tor
      * @param string $address Contact address
      * @return array|null Contact data or null
      */
@@ -1268,7 +1268,7 @@ class ContactService {
             return false;
         }
 
-        // Check if it's a HTTP or Tor address
+        // Check if it's an HTTP, HTTPS, or Tor address
         if ($this->transportUtility->isAddress($addressOrName)) {
             $addressValidation = $this->inputValidator->validateAddress($addressOrName);
             if (!$addressValidation['valid']) {
@@ -1323,7 +1323,7 @@ class ContactService {
             return false;
         }
 
-        // Check if it's a HTTP or Tor address
+        // Check if it's an HTTP, HTTPS, or Tor address
         if ($this->transportUtility->isAddress($addressOrName)) {
             $addressValidation = $this->inputValidator->validateAddress($addressOrName);
             if (!$addressValidation['valid']) {
@@ -1378,7 +1378,7 @@ class ContactService {
             return false;
         }
 
-        // Check if it's a HTTP or Tor address
+        // Check if it's an HTTP, HTTPS, or Tor address
         if ($this->transportUtility->isAddress($addressOrName)) {
             $addressValidation = $this->inputValidator->validateAddress($addressOrName);
             if (!$addressValidation['valid']) {
@@ -1522,7 +1522,7 @@ class ContactService {
     /**
      * Update contact status
      *
-     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string $transportIndex Address type, i.e. http, https, tor
      * @param string $address Contact address
      * @param string $status New status
      * @return bool Success status
@@ -1629,7 +1629,7 @@ class ContactService {
     /**
      * Lookup contact name by address
      *
-     * @param string|null $transportIndex Address type, i.e. http, tor (null returns null gracefully)
+     * @param string|null $transportIndex Address type, i.e. http, https, tor (null returns null gracefully)
      * @param string $address Contact address
      * @return string|null Contact name or null
      */

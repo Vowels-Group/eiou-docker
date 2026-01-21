@@ -200,6 +200,15 @@ class UserContext {
     }
 
     /**
+     * Get HTTPS hostname
+     *
+     * @return string|null
+     */
+    public function getHttpsAddress(): ?string {
+        return $this->get('hostname_secure') ?? null;
+    }
+
+    /**
      * Get Tor address
      *
      * @return string|null
@@ -239,7 +248,7 @@ class UserContext {
     }
 
     /**
-     * Get all user addresses (hostname and tor)
+     * Get all user addresses (hostname, hostname_secure, and tor)
      *
      * @return array
      */
@@ -248,6 +257,9 @@ class UserContext {
         if ($hostname = $this->getHttpAddress()) {
             $addresses[] = $hostname;
         }
+        if ($hostnameSecure = $this->getHttpsAddress()) {
+            $addresses[] = $hostnameSecure;
+        }
         if ($torAddress = $this->getTorAddress()) {
             $addresses[] = $torAddress;
         }
@@ -255,7 +267,7 @@ class UserContext {
     }
 
     /**
-     * Get all user locaters (hostname and tor)
+     * Get all user locaters (hostname, hostname_secure, and tor)
      *
      * @return array
      */
@@ -264,6 +276,8 @@ class UserContext {
         foreach($this->getUserAddresses() as $address){
             if ($this->isTorAddress($address)){
                 $locaters['tor'] = $address;
+            } elseif ($this->isHttpsAddress($address)) {
+                $locaters['https'] = $address;
             } elseif ($this->isHttpAddress($address)) {
                 $locaters['http'] = $address;
             }
@@ -272,23 +286,33 @@ class UserContext {
     }
 
     /**
-     * Determine if adress is HTTP/HTTPS
+     * Check if address is HTTPS
      *
-     * @param string $address The address of the sender
-     * @return bool True if HTTP(S) address, False otherwise
-    */
-    public function isHttpAddress($address): bool {
-        return preg_match('/^https?:\/\//', $address) === 1;
+     * @param string $address
+     * @return bool
+     */
+    public function isHttpsAddress($address): bool {
+        return preg_match('/^https:\/\//', $address) === 1;
     }
 
     /**
-     * Determine if adress is valid HTTP or TOR
+     * Determine if adress is HTTP only (not HTTPS)
      *
      * @param string $address The address of the sender
-     * @return bool True if HTTP(S)/TOR address, False otherwise
+     * @return bool True if HTTP address, False otherwise
+    */
+    public function isHttpAddress($address): bool {
+        return preg_match('/^http:\/\//', $address) === 1 && preg_match('/^https:\/\//', $address) === 0;
+    }
+
+    /**
+     * Determine if adress is valid HTTP, HTTPS, or TOR
+     *
+     * @param string $address The address of the sender
+     * @return bool True if HTTP/HTTPS/TOR address, False otherwise
     */
     public function isAddress($address): bool {
-        return ($this->isHttpAddress($address) || $this->isTorAddress($address));
+        return ($this->isHttpAddress($address) || $this->isHttpsAddress($address) || $this->isTorAddress($address));
     }
 
     /**

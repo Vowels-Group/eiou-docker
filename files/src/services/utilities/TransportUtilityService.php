@@ -59,17 +59,15 @@ class TransportUtilityService
      * @return string|null The type of transport used
     */
     public function determineTransportType(string $address): ?string {
-        // Check if the address is a Tor (.onion) address
         if ($this->isTorAddress($address)) {
             return 'tor';
         }
-        
-        // Check if the address is an HTTP/HTTPS address
+        if ($this->isHttpsAddress($address)) {
+            return 'https';
+        }
         if ($this->isHttpAddress($address)) {
             return 'http';
         }
-        
-        // If neither Tor nor HTTP, return null or a default type
         return null;
     }
 
@@ -151,13 +149,23 @@ class TransportUtilityService
     }
 
     /**
-     * Determine if adress is HTTP/HTTPS
+     * Check if address is HTTPS
+     *
+     * @param string $address
+     * @return bool
+     */
+    public function isHttpsAddress($address): bool {
+        return preg_match('/^https:\/\//', $address) === 1;
+    }
+
+    /**
+     * Determine if adress is HTTP only (not HTTPS)
      *
      * @param string $address The address of the sender
-     * @return bool True if HTTP(S) address, False otherwise
+     * @return bool True if HTTP address, False otherwise
     */
     public function isHttpAddress($address): bool {
-        return preg_match('/^https?:\/\//', $address) === 1;
+        return preg_match('/^http:\/\//', $address) === 1 && preg_match('/^https:\/\//', $address) === 0;
     }
 
     /**
@@ -171,13 +179,13 @@ class TransportUtilityService
     }
 
     /**
-     * Determine if adress is valid HTTP or TOR
+     * Determine if adress is valid HTTP, HTTPS, or TOR
      *
      * @param string $address The address of the sender
-     * @return bool True if HTTP(S)/TOR address, False otherwise
+     * @return bool True if HTTP/HTTPS/TOR address, False otherwise
     */
     public function isAddress($address): bool {
-        return ($this->isHttpAddress($address) || $this->isTorAddress($address));
+        return ($this->isHttpAddress($address) || $this->isHttpsAddress($address) || $this->isTorAddress($address));
     }
 
     /**

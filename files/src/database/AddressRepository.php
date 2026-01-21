@@ -109,7 +109,7 @@ class AddressRepository extends AbstractRepository {
     /**
      * Retrieve all contact addresses
      *
-     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string $transportIndex Address type, i.e. http, https, tor
      * @param string|null $exclude Address to exclude
      * @return array Array of addresses
      */
@@ -137,7 +137,7 @@ class AddressRepository extends AbstractRepository {
     /**
      * Retrieve contact public key hash by address
      *
-     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string $transportIndex Address type, i.e. http, https, tor
      * @param string $address Contact address
      * @return string|null Contact's publice key hash or null
      */

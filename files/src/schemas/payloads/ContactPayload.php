@@ -45,7 +45,7 @@ class ContactPayload extends BasePayload
      * contact transaction, ensuring both parties have matching txids.
      *
      * @param string $address The address to send the acceptance to
-     * @param array|null $knownAddresses All known addresses for the sender (http, tor, etc.)
+     * @param array|null $knownAddresses All known addresses for the sender (http, https, tor, etc.)
      * @param string|null $txid The transaction ID for this contact (for txid synchronization)
      * @return string JSON-encoded contact received payload
      */
@@ -76,7 +76,7 @@ class ContactPayload extends BasePayload
      * Build a contact updated payload
      *
      * @param string $address The address to send the acceptance to
-     * @param array|null $knownAddresses All known addresses for the sender (http, tor, etc.)
+     * @param array|null $knownAddresses All known addresses for the sender (http, https, tor, etc.)
      * @return string JSON-encoded contact updated payload
      */
     public function buildUpdated(string $address, ?array $knownAddresses = null): string
@@ -101,7 +101,7 @@ class ContactPayload extends BasePayload
      * Build a contact already exists warning payload
      *
      * @param string $address The address of the contact request
-     * @param array|null $knownAddresses All known addresses for the sender (http, tor, etc.)
+     * @param array|null $knownAddresses All known addresses for the sender (http, https, tor, etc.)
      * @return string JSON-encoded contact already exists payload
      */
     public function buildAlreadyExists(string $address, ?array $knownAddresses = null): string
@@ -164,7 +164,7 @@ class ContactPayload extends BasePayload
      * (mutual request scenario - both sides sent requests to each other).
      *
      * @param string $address The address to send the acceptance to
-     * @param array|null $knownAddresses All known addresses for the sender (http, tor, etc.)
+     * @param array|null $knownAddresses All known addresses for the sender (http, https, tor, etc.)
      * @return string JSON-encoded contact accepted payload
      */
     public function buildMutuallyAccepted(string $address, ?array $knownAddresses = null): string
