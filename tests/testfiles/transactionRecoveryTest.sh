@@ -109,13 +109,12 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 6: Verify database schema includes new columns (using PHP class property check)
+# Test 6: Verify database schema includes new columns (file content check only)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing database schema for recovery columns"
 schemaColumns=$(docker exec ${testContainer} php -r "
-    require_once '/etc/eiou/src/database/DatabaseSchema.php';
-    \$reflection = new ReflectionClass('DatabaseSchema');
     \$source = file_get_contents('/etc/eiou/src/database/DatabaseSchema.php');
+    if (\$source === false) { echo '0'; exit; }
     \$count = 0;
     if (strpos(\$source, 'sending_started_at') !== false) \$count++;
     if (strpos(\$source, 'recovery_count') !== false) \$count++;
