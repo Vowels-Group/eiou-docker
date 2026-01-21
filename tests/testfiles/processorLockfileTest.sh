@@ -208,37 +208,56 @@ printf "\t   Manual lockfile test:\n"
 docker exec ${testContainer} php -r "file_put_contents('/tmp/test_lock.pid', getmypid()); echo file_exists('/tmp/test_lock.pid') ? 'SUCCESS' : 'FAILED';" 2>/dev/null | sed 's/^/\t      /'
 docker exec ${testContainer} rm -f /tmp/test_lock.pid 2>/dev/null
 
-# Check if AbstractMessageProcessor has lockfile code
-printf "\t   Checking AbstractMessageProcessor lockfile code:\n"
-docker exec ${testContainer} grep -n "file_put_contents.*lockfile" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>/dev/null | sed 's/^/\t      /' || printf "\t      (lockfile code NOT FOUND in AbstractMessageProcessor.php!)\n"
+# Check the actual file structure in the container
+printf "\t   ${YELLOW}Container file structure check:${NC}\n"
+printf "\t     /etc/eiou/ contents:\n"
+docker exec ${testContainer} ls /etc/eiou/ 2>&1 | head -20 | sed 's/^/\t       /'
 
-# Check if AbstractMessageProcessor exists and show checkSingleInstance method
-printf "\t   AbstractMessageProcessor checkSingleInstance exists:\n"
-docker exec ${testContainer} grep -n "function checkSingleInstance" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>/dev/null | sed 's/^/\t      /' || printf "\t      (checkSingleInstance NOT FOUND!)\n"
+printf "\t     /etc/eiou/src/ exists: "
+docker exec ${testContainer} sh -c "[ -d /etc/eiou/src ] && echo 'YES' || echo 'NO'"
 
-# Check the lockfile path being used
+printf "\t     /etc/eiou/src/processors/ exists: "
+docker exec ${testContainer} sh -c "[ -d /etc/eiou/src/processors ] && echo 'YES' || echo 'NO'"
+
+# If processors dir exists, show contents
+printf "\t     Processors directory contents:\n"
+docker exec ${testContainer} ls -la /etc/eiou/src/processors/ 2>&1 | sed 's/^/\t       /'
+
+# Check AbstractMessageProcessor lockfile code with proper error handling
+printf "\t   Checking lockfile code in AbstractMessageProcessor:\n"
+lockfileCode=$(docker exec ${testContainer} grep -n "file_put_contents.*lockfile" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>&1)
+if [ -n "$lockfileCode" ]; then
+    echo "$lockfileCode" | sed 's/^/\t      /'
+else
+    printf "\t      (NOT FOUND - container may have old code!)\n"
+fi
+
+# Check checkSingleInstance exists
+printf "\t   Checking checkSingleInstance method:\n"
+checkMethod=$(docker exec ${testContainer} grep -n "function checkSingleInstance" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>&1)
+if [ -n "$checkMethod" ]; then
+    echo "$checkMethod" | sed 's/^/\t      /'
+else
+    printf "\t      (NOT FOUND - container may have old code!)\n"
+fi
+
+# Check P2pMessageProcessor lockfile path
 printf "\t   Checking P2pMessageProcessor lockfile path:\n"
-docker exec ${testContainer} grep -n "p2pmessages_lock" /etc/eiou/src/processors/P2pMessageProcessor.php 2>/dev/null | sed 's/^/\t      /' || printf "\t      (path NOT FOUND in P2pMessageProcessor.php!)\n"
-
-# Show what initialize() does
-printf "\t   AbstractMessageProcessor initialize method:\n"
-docker exec ${testContainer} grep -A5 "function initialize" /etc/eiou/src/processors/AbstractMessageProcessor.php 2>/dev/null | head -8 | sed 's/^/\t      /' || printf "\t      (initialize NOT FOUND!)\n"
-
-# Check if files even exist at these paths
-printf "\t   Verifying file paths:\n"
-docker exec ${testContainer} ls -la /etc/eiou/src/processors/ 2>/dev/null | sed 's/^/\t      /' || printf "\t      (/etc/eiou/src/processors/ does not exist!)\n"
+p2pPath=$(docker exec ${testContainer} grep -n "p2pmessages_lock" /etc/eiou/src/processors/P2pMessageProcessor.php 2>&1)
+if [ -n "$p2pPath" ]; then
+    echo "$p2pPath" | sed 's/^/\t      /'
+else
+    printf "\t      (NOT FOUND - container may have old code!)\n"
+fi
 
 # List ALL files in /tmp to see what's there
 printf "\t   All /tmp files:\n"
 docker exec ${testContainer} ls -la /tmp/ 2>/dev/null | head -15 | sed 's/^/\t      /'
 
-# Direct lockfile creation test - this will tell us EXACTLY what happens
+# Direct lockfile creation test - verify PHP can create lockfiles
+# NOTE: We do NOT kill processors here because that would delete the lockfiles
+# that Section 1 needs to verify. Instead, we test lockfile creation in isolation.
 printf "\t   ${YELLOW}DIRECT LOCKFILE TEST - Step by step:${NC}\n"
-
-# First ensure no processors are running (watchdog may have restarted them)
-docker exec ${testContainer} pkill -9 -f "Messages.php" 2>/dev/null || true
-sleep 1
-docker exec ${testContainer} rm -f /tmp/*_lock.pid 2>/dev/null || true
 
 docker exec ${testContainer} php -r '
     echo "Step 1: Check lockfile path constant\n";
@@ -264,14 +283,14 @@ docker exec ${testContainer} php -r '
         echo "  File exists: NO - This is the bug!\n";
     }
 
-    echo "Step 4: Test via P2pMessageProcessor (partial init)\n";
+    echo "Step 4: Verify P2pMessageProcessor lockfile configuration\n";
     try {
         // Note: Files are at /etc/eiou/ (copied from files/root/)
         require_once "/etc/eiou/Functions.php";
         require_once "/etc/eiou/SecurityInit.php";
         require_once "/etc/eiou/src/processors/P2pMessageProcessor.php";
 
-        echo "  Creating processor instance...\n";
+        echo "  Creating processor instance (constructor only, no init)...\n";
         $processor = new P2pMessageProcessor();
         echo "  Processor created successfully\n";
 
@@ -281,22 +300,28 @@ docker exec ${testContainer} php -r '
         $lockfilePath = $reflection->getValue($processor);
         echo "  Lockfile property value: $lockfilePath\n";
 
-        // Check if lockfile already exists (should not at this point)
-        echo "  Lockfile exists before init: " . (file_exists($lockfilePath) ? "YES (unexpected!)" : "NO (correct)") . "\n";
+        // Check if lockfile already exists (from watchdog-started processor)
+        echo "  Lockfile exists (from running processor): " . (file_exists($lockfilePath) ? "YES" : "NO") . "\n";
 
-        // Call initialize() directly but NOT run() (run() would loop forever)
-        echo "  Calling initialize()...\n";
-        $processor->initialize();
-        echo "  Initialize completed successfully\n";
-
-        // Check if lockfile was created
         if (file_exists($lockfilePath)) {
-            echo "  LOCKFILE CREATED: YES\n";
-            echo "  Content: " . trim(file_get_contents($lockfilePath)) . "\n";
-            echo "  Current PID: " . getmypid() . "\n";
+            $existingPid = trim(file_get_contents($lockfilePath));
+            echo "  Existing lockfile PID: $existingPid\n";
+
+            // Check if that PID is running
+            $isRunning = posix_kill((int)$existingPid, 0);
+            echo "  PID $existingPid is running: " . ($isRunning ? "YES" : "NO") . "\n";
+
+            if ($isRunning) {
+                echo "  SUCCESS: Lockfile exists with running processor PID\n";
+            }
         } else {
-            echo "  LOCKFILE CREATED: NO - BUG IN PROCESSOR CODE!\n";
+            echo "  WARNING: Expected lockfile to exist from watchdog-started processor\n";
         }
+
+        // Verify checkSingleInstance method exists
+        $hasMethod = method_exists($processor, "initialize");
+        echo "  initialize() method exists: " . ($hasMethod ? "YES" : "NO") . "\n";
+
     } catch (Exception $e) {
         echo "  EXCEPTION: " . $e->getMessage() . "\n";
         echo "  File: " . $e->getFile() . ":" . $e->getLine() . "\n";
