@@ -1123,7 +1123,7 @@ class ContactService {
             } else {
                 echo "Search Results:\n";
                 foreach ($results as $contact) {
-                    echo "\t" . $contact['name'] . " - " . ($contact['http'] ?? $contact['tor'] ?? 'No address') . " (" . $contact['status'] . ")\n";
+                    echo "\t" . $contact['name'] . " - " . ($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? 'No address') . " (" . $contact['status'] . ")\n";
                 }
                 echo "Found " . count($results) . " contact(s)\n";
             }

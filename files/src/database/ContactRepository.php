@@ -481,7 +481,7 @@ class ContactRepository extends AbstractRepository {
         if ($pending_count > 0) {
             echo "\n\nYou have {$pending_count} contact request(s) pending acceptance.\n";
             foreach ($results as $contact) {
-                $contactAddress = $contact['http'] ?? $contact['tor'] ?? 'Unknown';
+                $contactAddress = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? 'Unknown';
                 echo "Pending contact request from: " . $contactAddress . "\n";
                 echo "To accept this contact request, use the command:\n";
                 echo "eiou add " . $contactAddress . " [name] [fee percent] [credit] [currency]\n";

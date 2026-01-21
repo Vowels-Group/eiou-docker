@@ -40,9 +40,11 @@ class ContactDataBuilder
             $addresses[$type] = $contact[$type] ?? '';
         }
 
-        // Set primary address, preferring Tor over HTTP for privacy
+        // Set primary address, preferring security order: Tor > HTTPS > HTTP
         if (!empty($contact['tor'])) {
             $primaryAddress = $contact['tor'];
+        } elseif (!empty($contact['https'])) {
+            $primaryAddress = $contact['https'];
         } elseif (!empty($contact['http'])) {
             $primaryAddress = $contact['http'];
         } else {

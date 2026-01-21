@@ -1038,7 +1038,7 @@ HELP;
                             foreach($contactBalances as $contactBalance){
                                 $balanceData['contacts'][] = [
                                     'name' => $contact['name'],
-                                    'address' => $contact['http'] ?? $contact['tor'],
+                                    'address' => $contact['tor'] ?? $contact['https'] ?? $contact['http'],
                                     'currency' => $contactBalance['currency'],
                                     'received' => number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
                                     'sent' => number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
@@ -1064,7 +1064,7 @@ HELP;
                         foreach($contactBalances as $contactBalance){
                             printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n",
                                 $contactResult['name'],
-                                $contactResult['http'] ?? $contactResult['tor'],
+                                $contactResult['tor'] ?? $contactResult['https'] ?? $contactResult['http'],
                                 'received',
                                 'sent',
                                 number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
@@ -1083,7 +1083,7 @@ HELP;
                                 foreach($contactBalances as $contactBalance){
                                     printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n",
                                         $contact['name'],
-                                        $contact['http'] ?? $contact['tor'],
+                                        $contact['tor'] ?? $contact['https'] ?? $contact['http'],
                                         'received',
                                         'sent',
                                         number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),

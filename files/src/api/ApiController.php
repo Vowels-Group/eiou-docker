@@ -212,7 +212,7 @@ class ApiController {
             $contact = $contactRepo->lookupByPubkeyHash($balance['pubkey_hash']);
             $result[] = [
                 'contact_name' => $contact['name'] ?? 'Unknown',
-                'address' => $contact['http'] ?? $contact['tor'] ?? null,
+                'address' => $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null,
                 'currency' => $balance['currency'],
                 'received' => $balance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
                 'sent' => $balance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
