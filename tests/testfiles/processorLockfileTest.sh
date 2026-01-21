@@ -131,6 +131,17 @@ if [ -n "$startupErrors" ]; then
     echo "$startupErrors" | sed 's/^/\t   /'
 fi
 
+# Debug: Show startup log contents and process status
+printf "\t   ${YELLOW}DEBUG: Checking processor status...${NC}\n"
+printf "\t   Running PHP processes:\n"
+docker exec ${testContainer} pgrep -a -f "Messages.php" 2>/dev/null | sed 's/^/\t      /' || printf "\t      (none found)\n"
+
+printf "\t   Lockfile status:\n"
+docker exec ${testContainer} ls -la /tmp/*_lock.pid 2>/dev/null | sed 's/^/\t      /' || printf "\t      (no lockfiles found)\n"
+
+printf "\t   Startup log (P2p, last 5 lines):\n"
+docker exec ${testContainer} tail -5 /tmp/p2p_startup.log 2>/dev/null | sed 's/^/\t      /' || printf "\t      (empty or missing)\n"
+
 printf "\t   Pre-test cleanup complete\n\n"
 
 ################################################################################
