@@ -142,6 +142,24 @@ docker exec ${testContainer} ls -la /tmp/*_lock.pid 2>/dev/null | sed 's/^/\t   
 printf "\t   Startup log (P2p, last 5 lines):\n"
 docker exec ${testContainer} tail -5 /tmp/p2p_startup.log 2>/dev/null | sed 's/^/\t      /' || printf "\t      (empty or missing)\n"
 
+# Check if /tmp is writable
+printf "\t   Testing /tmp write access:\n"
+docker exec ${testContainer} sh -c "echo test > /tmp/write_test && echo 'writable' && rm /tmp/write_test" 2>/dev/null | sed 's/^/\t      /' || printf "\t      NOT WRITABLE\n"
+
+# Check what a processor is doing (wchan = waiting channel)
+printf "\t   P2p processor state (wchan):\n"
+P2P_PID=$(docker exec ${testContainer} pgrep -f "P2pMessages.php" 2>/dev/null | head -1)
+if [ -n "$P2P_PID" ]; then
+    docker exec ${testContainer} cat /proc/$P2P_PID/wchan 2>/dev/null | sed 's/^/\t      /' || printf "\t      (unknown)\n"
+    printf "\t   P2p processor stack:\n"
+    docker exec ${testContainer} cat /proc/$P2P_PID/stack 2>/dev/null | head -5 | sed 's/^/\t      /' || printf "\t      (no stack info)\n"
+fi
+
+# Try creating a lockfile manually to verify the code works
+printf "\t   Manual lockfile test:\n"
+docker exec ${testContainer} php -r "file_put_contents('/tmp/test_lock.pid', getmypid()); echo file_exists('/tmp/test_lock.pid') ? 'SUCCESS' : 'FAILED';" 2>/dev/null | sed 's/^/\t      /'
+docker exec ${testContainer} rm -f /tmp/test_lock.pid 2>/dev/null
+
 printf "\t   Pre-test cleanup complete\n\n"
 
 ################################################################################
