@@ -16,6 +16,8 @@
  *   send <address> <amount>    - Send an eIOU transaction
  *   viewbalances [contact]     - View balance(s)
  *   history [contact]          - View transaction history
+ *   pending                    - View pending contact requests
+ *   overview [limit]           - View wallet overview dashboard
  *   help [command]             - Display help information
  *   sync [type]                - Synchronize data
  *   ping <contact>             - Check contact online status
@@ -201,6 +203,18 @@ elseif($request === "history"){
   $debugService->output("Executing transaction history request", 'SILENT');
   $cliService = $app->services->getCliService();
   $cliService->viewTransactionHistory($cleanArgv, $output);
+}
+elseif($request === "pending"){
+  // View pending contact requests
+  $debugService->output("Executing pending contacts request", 'SILENT');
+  $cliService = $app->services->getCliService();
+  $cliService->displayPendingContacts($cleanArgv, $output);
+}
+elseif($request === "overview"){
+  // View wallet overview
+  $debugService->output("Executing overview request", 'SILENT');
+  $cliService = $app->services->getCliService();
+  $cliService->displayOverview($cleanArgv, $output);
 }
 // Settings
 elseif($request === "help"){
