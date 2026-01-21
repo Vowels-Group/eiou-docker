@@ -21,110 +21,145 @@ failure=0
 testContainer="${containers[0]}"
 
 ############################ STATIC VERIFICATION TESTS ############################
+# Uses PHP introspection (class_exists, method_exists, defined) instead of grep
+# for reliable verification during container startup
 
 echo -e "\n[Static Verification Tests]"
 
-# Test 1: Verify SENDING status exists in Constants
+# Test 1: Verify SENDING status exists in Constants (using PHP defined())
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing SENDING status constant exists"
-sendingStatus=$(docker exec ${testContainer} grep -c "STATUS_SENDING" /etc/eiou/src/core/Constants.php 2>/dev/null || echo "0")
+sendingStatus=$(docker exec ${testContainer} php -r "
+    require_once '/etc/eiou/src/core/Constants.php';
+    echo defined('Constants::STATUS_SENDING') ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
 
-if [ "$sendingStatus" -ge 1 ]; then
+if [ "$sendingStatus" = "EXISTS" ]; then
     printf "\t   SENDING status constant exists ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   SENDING status constant exists ${RED}FAILED${NC}\n"
+    printf "\t   SENDING status constant exists ${RED}FAILED${NC} (%s)\n" "$sendingStatus"
     failure=$(( failure + 1 ))
 fi
 
-# Test 2: Verify recovery configuration constants
+# Test 2: Verify recovery configuration constants (using PHP defined())
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing recovery configuration constants"
-recoveryConsts=$(docker exec ${testContainer} sh -c "grep -c 'RECOVERY_SENDING_TIMEOUT_SECONDS\|RECOVERY_MAX_RETRY_COUNT' /etc/eiou/src/core/Constants.php" 2>/dev/null)
+recoveryConsts=$(docker exec ${testContainer} php -r "
+    require_once '/etc/eiou/src/core/Constants.php';
+    \$count = 0;
+    if (defined('Constants::RECOVERY_SENDING_TIMEOUT_SECONDS')) \$count++;
+    if (defined('Constants::RECOVERY_MAX_RETRY_COUNT')) \$count++;
+    echo \$count;
+" 2>/dev/null || echo "0")
 
 if [ "$recoveryConsts" -ge 2 ]; then
     printf "\t   Recovery configuration constants exist ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Recovery configuration constants exist ${RED}FAILED${NC}\n"
+    printf "\t   Recovery configuration constants exist ${RED}FAILED${NC} (%s/2)\n" "$recoveryConsts"
     failure=$(( failure + 1 ))
 fi
 
-# Test 3: Verify TransactionRecoveryService exists
+# Test 3: Verify TransactionRecoveryService exists (using PHP class_exists)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing TransactionRecoveryService exists"
-serviceExists=$(docker exec ${testContainer} test -f /etc/eiou/src/services/TransactionRecoveryService.php && echo "1" || echo "0")
+serviceExists=$(docker exec ${testContainer} php -r "
+    require_once '/etc/eiou/src/services/TransactionRecoveryService.php';
+    echo class_exists('TransactionRecoveryService') ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
 
-if [ "$serviceExists" = "1" ]; then
+if [ "$serviceExists" = "EXISTS" ]; then
     printf "\t   TransactionRecoveryService.php exists ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   TransactionRecoveryService.php exists ${RED}FAILED${NC}\n"
+    printf "\t   TransactionRecoveryService.php exists ${RED}FAILED${NC} (%s)\n" "$serviceExists"
     failure=$(( failure + 1 ))
 fi
 
-# Test 4: Verify claimPendingTransaction method exists
+# Test 4: Verify claimPendingTransaction method exists (using PHP method_exists)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing claimPendingTransaction method"
-claimMethod=$(docker exec ${testContainer} grep -c "function claimPendingTransaction" /etc/eiou/src/database/TransactionRepository.php 2>/dev/null || echo "0")
+claimMethod=$(docker exec ${testContainer} php -r "
+    require_once '/etc/eiou/src/database/TransactionRepository.php';
+    echo method_exists('TransactionRepository', 'claimPendingTransaction') ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
 
-if [ "$claimMethod" -ge 1 ]; then
+if [ "$claimMethod" = "EXISTS" ]; then
     printf "\t   claimPendingTransaction method exists ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   claimPendingTransaction method exists ${RED}FAILED${NC}\n"
+    printf "\t   claimPendingTransaction method exists ${RED}FAILED${NC} (%s)\n" "$claimMethod"
     failure=$(( failure + 1 ))
 fi
 
-# Test 5: Verify markAsSent method exists
+# Test 5: Verify markAsSent method exists (using PHP method_exists)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing markAsSent method"
-markMethod=$(docker exec ${testContainer} grep -c "function markAsSent" /etc/eiou/src/database/TransactionRepository.php 2>/dev/null || echo "0")
+markMethod=$(docker exec ${testContainer} php -r "
+    require_once '/etc/eiou/src/database/TransactionRepository.php';
+    echo method_exists('TransactionRepository', 'markAsSent') ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
 
-if [ "$markMethod" -ge 1 ]; then
+if [ "$markMethod" = "EXISTS" ]; then
     printf "\t   markAsSent method exists ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   markAsSent method exists ${RED}FAILED${NC}\n"
+    printf "\t   markAsSent method exists ${RED}FAILED${NC} (%s)\n" "$markMethod"
     failure=$(( failure + 1 ))
 fi
 
-# Test 6: Verify database schema includes new columns
+# Test 6: Verify database schema includes new columns (using PHP class property check)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing database schema for recovery columns"
-schemaColumns=$(docker exec ${testContainer} sh -c "grep -c 'sending_started_at\|recovery_count\|needs_manual_review' /etc/eiou/src/database/DatabaseSchema.php" 2>/dev/null)
+schemaColumns=$(docker exec ${testContainer} php -r "
+    require_once '/etc/eiou/src/database/DatabaseSchema.php';
+    \$reflection = new ReflectionClass('DatabaseSchema');
+    \$source = file_get_contents('/etc/eiou/src/database/DatabaseSchema.php');
+    \$count = 0;
+    if (strpos(\$source, 'sending_started_at') !== false) \$count++;
+    if (strpos(\$source, 'recovery_count') !== false) \$count++;
+    if (strpos(\$source, 'needs_manual_review') !== false) \$count++;
+    echo \$count;
+" 2>/dev/null || echo "0")
 
 if [ "$schemaColumns" -ge 3 ]; then
     printf "\t   Recovery columns in schema ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Recovery columns in schema ${RED}FAILED${NC}\n"
+    printf "\t   Recovery columns in schema ${RED}FAILED${NC} (%s/3)\n" "$schemaColumns"
     failure=$(( failure + 1 ))
 fi
 
-# Test 7: Verify processPendingTransactions uses atomic claiming
+# Test 7: Verify processPendingTransactions uses atomic claiming (using PHP method check)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing processPendingTransactions uses atomic claiming"
-atomicClaim=$(docker exec ${testContainer} grep -c "claimPendingTransaction" /etc/eiou/src/services/TransactionService.php 2>/dev/null || echo "0")
+atomicClaim=$(docker exec ${testContainer} php -r "
+    \$source = file_get_contents('/etc/eiou/src/services/TransactionService.php');
+    echo (strpos(\$source, 'claimPendingTransaction') !== false) ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
 
-if [ "$atomicClaim" -ge 1 ]; then
+if [ "$atomicClaim" = "EXISTS" ]; then
     printf "\t   Atomic claiming in processPendingTransactions ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Atomic claiming in processPendingTransactions ${RED}FAILED${NC}\n"
+    printf "\t   Atomic claiming in processPendingTransactions ${RED}FAILED${NC} (%s)\n" "$atomicClaim"
     failure=$(( failure + 1 ))
 fi
 
-# Test 8: Verify startup integration
+# Test 8: Verify startup integration (using PHP file content check)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing recovery integrated into startup"
-startupIntegration=$(docker exec ${testContainer} grep -c "runTransactionRecovery" /etc/eiou/src/core/Application.php 2>/dev/null || echo "0")
+startupIntegration=$(docker exec ${testContainer} php -r "
+    \$source = file_get_contents('/etc/eiou/src/core/Application.php');
+    echo (strpos(\$source, 'runTransactionRecovery') !== false) ? 'EXISTS' : 'MISSING';
+" 2>/dev/null || echo "ERROR")
 
-if [ "$startupIntegration" -ge 1 ]; then
+if [ "$startupIntegration" = "EXISTS" ]; then
     printf "\t   Transaction recovery in startup ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Transaction recovery in startup ${RED}FAILED${NC}\n"
+    printf "\t   Transaction recovery in startup ${RED}FAILED${NC} (%s)\n" "$startupIntegration"
     failure=$(( failure + 1 ))
 fi
 

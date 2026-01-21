@@ -181,10 +181,23 @@ check_logs_for_message() {
 echo -e "[Section 1: Lockfile Creation Verification]"
 echo -e "Testing that lockfiles are created correctly when processors start...\n"
 
-# Brief wait to allow processors to start and create lockfiles
-# (Tests may run immediately after container startup)
-echo -e "\t   Waiting for processors to initialize (15s)..."
-sleep 15
+# Wait for processors to be running before checking lockfiles
+# The lockfiles are only created after processor initialize() is called
+echo -e "\t   Waiting for processors to start..."
+
+# Wait for all processors to be running (via pgrep)
+for processor in "${!PROCESSORS[@]}"; do
+    printf "\t   Waiting for %s to start..." "$processor"
+    if wait_for_processor_start "$testContainer" "$processor" 60; then
+        printf " ${GREEN}started${NC}\n"
+    else
+        printf " ${YELLOW}not found (may be disabled)${NC}\n"
+    fi
+done
+
+# Additional wait for lockfile creation (happens after process starts)
+echo -e "\t   Waiting for lockfile creation (5s)..."
+sleep 5
 
 for processor in "${!PROCESSORS[@]}"; do
     lockfile="${PROCESSORS[$processor]}"
