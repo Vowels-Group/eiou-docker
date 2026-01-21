@@ -872,6 +872,20 @@ class ContactRepository extends AbstractRepository {
             }
         }
 
+        // Try https address
+        $query = "SELECT *
+                    FROM addresses a JOIN {$this->tableName} c
+                    ON a.pubkey_hash = c.pubkey_hash
+                    WHERE a.https = :identifier
+                    LIMIT 1";
+        $stmt = $this->execute($query, [':identifier' => $identifier]);
+        if ($stmt) {
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($result) {
+                return $result;
+            }
+        }
+
         // Try tor address
         $query = "SELECT *
                     FROM addresses a JOIN {$this->tableName} c
