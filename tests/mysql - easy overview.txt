@@ -8,8 +8,8 @@ SELECT message FROM debug;
 # Contacts - relationship info (excludes pubkey, pubkey_hash)
 SELECT id, name, contact_id, status, fee_percent, credit_limit, currency, online_status, valid_chain, last_ping_at FROM contacts;
 
-# Addresses - network addresses
-SELECT id, http, tor FROM addresses;
+# Addresses - network addresses (http, https, tor)
+SELECT id, http, https, tor FROM addresses;
 
 # Balances - account balances
 SELECT id, received, sent, currency FROM balances;

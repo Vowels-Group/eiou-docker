@@ -119,7 +119,7 @@ class Constants {
 
     // Network
     const DEFAULT_TRANSPORT_MODE = 'tor';
-    const VALID_TRANSPORT_INDICES = ['http', 'tor'];
+    const VALID_TRANSPORT_INDICES = ['http', 'https', 'tor'];
 
     // P2P Network Configuration
     // These constants control the peer-to-peer transaction routing system

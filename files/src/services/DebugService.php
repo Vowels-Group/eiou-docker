@@ -52,7 +52,8 @@ class DebugService {
             $context['user'] = [
                 'public_key' => $this->currentUser->getPublicKey(),
                 'tor' => $this->currentUser->getTorAddress(),
-                'hostname' => $this->currentUser->getHttpAddress()
+                'hostname' => $this->currentUser->getHttpAddress(),
+                'hostname_secure' => $this->currentUser->getHttpsAddress()
             ];
         }
 

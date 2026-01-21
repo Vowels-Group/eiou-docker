@@ -46,6 +46,7 @@ class TransportUtilityService
     public function countTorAndHttpAddresses(array $data): array {
         $result = [
             'tor' => count(array_filter($data, array($this,'isTorAddress'))),
+            'https' => count(array_filter($data, array($this,'isHttpsAddress'))),
             'http' => count(array_filter($data, array($this,'isHttpAddress'))),
             'total' => count($data)
         ];
@@ -59,17 +60,15 @@ class TransportUtilityService
      * @return string|null The type of transport used
     */
     public function determineTransportType(string $address): ?string {
-        // Check if the address is a Tor (.onion) address
         if ($this->isTorAddress($address)) {
             return 'tor';
         }
-        
-        // Check if the address is an HTTP/HTTPS address
+        if ($this->isHttpsAddress($address)) {
+            return 'https';
+        }
         if ($this->isHttpAddress($address)) {
             return 'http';
         }
-        
-        // If neither Tor nor HTTP, return null or a default type
         return null;
     }
 
@@ -84,13 +83,18 @@ class TransportUtilityService
         if ($this->isTorAddress($address)) {
             return ['tor' => $address];
         }
-        
-        // Check if the address is an HTTP/HTTPS address
+
+        // Check if the address is an HTTPS address
+        if ($this->isHttpsAddress($address)) {
+            return ['https' => $address];
+        }
+
+        // Check if the address is an HTTP address
         if ($this->isHttpAddress($address)) {
             return ['http' => $address];
         }
-        
-        // If neither Tor nor HTTP, return null or a default type
+
+        // If neither Tor nor HTTP/HTTPS, return null or a default type
         return null;
     }
 
@@ -151,13 +155,23 @@ class TransportUtilityService
     }
 
     /**
-     * Determine if adress is HTTP/HTTPS
+     * Check if address is HTTPS
+     *
+     * @param string $address
+     * @return bool
+     */
+    public function isHttpsAddress($address): bool {
+        return preg_match('/^https:\/\//', $address) === 1;
+    }
+
+    /**
+     * Determine if adress is HTTP only (not HTTPS)
      *
      * @param string $address The address of the sender
-     * @return bool True if HTTP(S) address, False otherwise
+     * @return bool True if HTTP address, False otherwise
     */
     public function isHttpAddress($address): bool {
-        return preg_match('/^https?:\/\//', $address) === 1;
+        return preg_match('/^http:\/\//', $address) === 1 && preg_match('/^https:\/\//', $address) === 0;
     }
 
     /**
@@ -171,13 +185,13 @@ class TransportUtilityService
     }
 
     /**
-     * Determine if adress is valid HTTP or TOR
+     * Determine if adress is valid HTTP, HTTPS, or TOR
      *
      * @param string $address The address of the sender
-     * @return bool True if HTTP(S)/TOR address, False otherwise
+     * @return bool True if HTTP/HTTPS/TOR address, False otherwise
     */
     public function isAddress($address): bool {
-        return ($this->isHttpAddress($address) || $this->isTorAddress($address));
+        return ($this->isHttpAddress($address) || $this->isHttpsAddress($address) || $this->isTorAddress($address));
     }
 
     /**
@@ -193,25 +207,48 @@ class TransportUtilityService
     /**
      * Figure out the determined transport type for the payload from an address
      *
+     * Security priority for fallback (most secure to least secure):
+     * 1. Tor - End-to-end encrypted, anonymized routing
+     * 2. HTTPS - Encrypted transport layer
+     * 3. HTTP - Unencrypted (least secure, used only as last resort)
+     *
      * @param string $address The address of the sender
-     * @return string The address of the user ofequivalent type
+     * @return string The address of the user of equivalent type
     */
     public function resolveUserAddressForTransport(string $address): string {
         // Check if the address is a Tor (.onion) address
         if ($this->isTorAddress($address)) {
             $torAddress = $this->currentUser->getTorAddress();
-            // Return Tor address or fall back to original address (never downgrade to HTTP)
+            // Return Tor address or fall back to original address (never downgrade)
             return $torAddress ?? $address;
         }
-        // Check if the address is an HTTP/HTTPS address
+        // Check if the address is an HTTPS address
+        elseif ($this->isHttpsAddress($address)) {
+            $httpsAddress = $this->currentUser->getHttpsAddress();
+            if ($httpsAddress !== null) {
+                return $httpsAddress;
+            }
+            // Fallback priority: Tor (more secure) > HTTP (less secure)
+            $torAddress = $this->currentUser->getTorAddress();
+            if ($torAddress !== null) {
+                return $torAddress;
+            }
+            $httpAddress = $this->currentUser->getHttpAddress();
+            return $httpAddress ?? $address;
+        }
+        // Check if the address is an HTTP address
         elseif ($this->isHttpAddress($address)) {
             $httpAddress = $this->currentUser->getHttpAddress();
-            // Fall back to Tor address if HTTP not configured (secure upgrade)
             if ($httpAddress !== null) {
                 return $httpAddress;
             }
+            // Fallback priority: Tor (more secure) > HTTPS (more secure than HTTP)
             $torAddress = $this->currentUser->getTorAddress();
-            return $torAddress ?? $address;
+            if ($torAddress !== null) {
+                return $torAddress;
+            }
+            $httpsAddress = $this->currentUser->getHttpsAddress();
+            return $httpsAddress ?? $address;
         }
         // If no specific transport type is detected, return the original address
         return $address;

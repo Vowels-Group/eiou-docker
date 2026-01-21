@@ -325,7 +325,7 @@ class CliService {
                     break;
 
                 case '9':
-                    echo "Enter new default transport type (e.g. http, tor): ";
+                    echo "Enter new default transport type (e.g. http, https, tor): ";
                     $key = 'defaultTransportMode';
                     $value = strtolower(trim(fgets(STDIN)));
                     break;
@@ -367,12 +367,31 @@ class CliService {
         // Save changes to config file
         if($key == 'hostname'){
             $configFile = 'userconfig.json';
+
+            // Derive hostname_secure from hostname
+            // Convert http:// to https:// or normalize if already https://
+            if (strpos($value, 'http://') === 0) {
+                $hostnameSecure = 'https://' . substr($value, 7);
+            } elseif (strpos($value, 'https://') === 0) {
+                $hostnameSecure = $value;
+                $value = 'http://' . substr($value, 8); // hostname should be http
+            } else {
+                // No protocol prefix, assume http for hostname
+                $hostnameSecure = 'https://' . $value;
+                $value = 'http://' . $value;
+            }
         } else{
             $configFile = 'defaultconfig.json';
         }
 
         $config_content = json_decode(file_get_contents('/etc/eiou/' . $configFile),true);
         $config_content[$key] = $value;
+
+        // Also save hostname_secure when hostname is updated
+        if ($key == 'hostname') {
+            $config_content['hostname_secure'] = $hostnameSecure;
+        }
+
         file_put_contents('/etc/eiou/'. $configFile, json_encode($config_content,true), LOCK_EX);
 
         // Regenerate SSL certificate when hostname changes
@@ -384,7 +403,8 @@ class CliService {
         $output->success('Setting updated successfully.', [
             'setting' => $key,
             'value' => $value,
-            'config_file' => $configFile
+            'config_file' => $configFile,
+            'hostname_secure' => $key == 'hostname' ? $hostnameSecure : null
         ]);
     }
 
@@ -453,7 +473,7 @@ class CliService {
                 'description' => 'Add a new contact',
                 'usage' => 'add [address] [name] [fee] [credit] [currency]',
                 'arguments' => [
-                    'address' => ['type' => 'required', 'description' => 'Contact address (HTTP or Tor)'],
+                    'address' => ['type' => 'required', 'description' => 'Contact address (HTTP, HTTPS, or Tor)'],
                     'name' => ['type' => 'required', 'description' => 'Contact name'],
                     'fee' => ['type' => 'required', 'description' => 'Fee percentage'],
                     'credit' => ['type' => 'required', 'description' => 'Credit limit'],
@@ -555,9 +575,9 @@ class CliService {
                     'maxP2pLevel' => 'Maximum peer-to-peer routing level',
                     'p2pExpiration' => 'Peer-to-peer request expiration time (seconds)',
                     'maxOutput' => 'Maximum lines of output to display (integer or "all")',
-                    'defaultTransportMode' => 'Default transport type (http, tor)',
+                    'defaultTransportMode' => 'Default transport type (http, https, tor)',
                     'autoRefreshEnabled' => 'Enable auto-refresh for pending transactions (true/false)',
-                    'hostname' => 'Node hostname (e.g., http://alice)'
+                    'hostname' => 'Node hostname (e.g., http://alice). Setting this automatically derives hostname_secure (HTTPS version)'
                 ]
             ],
             'generate' => [
@@ -961,7 +981,7 @@ HELP;
         $filterAddress = null;
         if (isset($argv[2])) {
             $filterAddress = $argv[2];
-            // Check if it's a HTTP or Tor address
+            // Check if it's a HTTP, HTTPS, or Tor address
             if ($this->transportUtility->isAddress($argv[2])) {
                 $address = $argv[2];
                 $transportIndex = $this->transportUtility->determineTransportType($address);
@@ -1006,7 +1026,7 @@ HELP;
                         foreach($contactBalances as $contactBalance){
                             $balanceData['contacts'][] = [
                                 'name' => $contactResult['name'],
-                                'address' => $contactResult['http'] ?? $contactResult['tor'],
+                                'address' => $contactResult['tor'] ?? $contactResult['https'] ?? $contactResult['http'],
                                 'currency' => $contactBalance['currency'],
                                 'received' => number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
                                 'sent' => number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
@@ -1018,7 +1038,7 @@ HELP;
                             foreach($contactBalances as $contactBalance){
                                 $balanceData['contacts'][] = [
                                     'name' => $contact['name'],
-                                    'address' => $contact['http'] ?? $contact['tor'],
+                                    'address' => $contact['tor'] ?? $contact['https'] ?? $contact['http'],
                                     'currency' => $contactBalance['currency'],
                                     'received' => number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
                                     'sent' => number_format($contactBalance['sent'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
@@ -1044,7 +1064,7 @@ HELP;
                         foreach($contactBalances as $contactBalance){
                             printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n",
                                 $contactResult['name'],
-                                $contactResult['http'] ?? $contactResult['tor'],
+                                $contactResult['tor'] ?? $contactResult['https'] ?? $contactResult['http'],
                                 'received',
                                 'sent',
                                 number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
@@ -1063,7 +1083,7 @@ HELP;
                                 foreach($contactBalances as $contactBalance){
                                     printf("\t%s (%s), Balance (%s | %s): %.2f | %.2f %s\n",
                                         $contact['name'],
-                                        $contact['http'] ?? $contact['tor'],
+                                        $contact['tor'] ?? $contact['https'] ?? $contact['http'],
                                         'received',
                                         'sent',
                                         number_format($contactBalance['received'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2),
@@ -1105,7 +1125,7 @@ HELP;
 
         // Check if an address or name is provided
         if (isset($argv[2])) {
-            // First if it's an HTTP or Tor address
+            // First check if it's an HTTP, HTTPS, or Tor address
             if ($this->transportUtility->isAddress($argv[2])) {
                 $address = $argv[2];
                 $transportIndex = $this->transportUtility->determineTransportType($address);

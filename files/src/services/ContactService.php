@@ -1056,10 +1056,13 @@ class ContactService {
         }
         if (isset($lookupResult['http'])){
             $data['http'] = $lookupResult['http'];
-        } 
+        }
+        if (isset($lookupResult['https'])){
+            $data['https'] = $lookupResult['https'];
+        }
         if (isset($lookupResult['tor'])){
             $data['tor'] = $lookupResult['tor'];
-        }  
+        }
         if (isset($lookupResult['status'])){
             $data['status'] = $lookupResult['status'];
         }
@@ -1080,7 +1083,7 @@ class ContactService {
     /**
      * Lookup contact by address
      *
-     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string $transportIndex Address type, i.e. http, https, tor
      * @param string $address Contact address
      * @return array|null Contact data or null
      */
@@ -1123,7 +1126,7 @@ class ContactService {
             } else {
                 echo "Search Results:\n";
                 foreach ($results as $contact) {
-                    echo "\t" . $contact['name'] . " - " . ($contact['http'] ?? $contact['tor'] ?? 'No address') . " (" . $contact['status'] . ")\n";
+                    echo "\t" . $contact['name'] . " - " . ($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? 'No address') . " (" . $contact['status'] . ")\n";
                 }
                 echo "Found " . count($results) . " contact(s)\n";
             }
@@ -1268,7 +1271,7 @@ class ContactService {
             return false;
         }
 
-        // Check if it's a HTTP or Tor address
+        // Check if it's an HTTP, HTTPS, or Tor address
         if ($this->transportUtility->isAddress($addressOrName)) {
             $addressValidation = $this->inputValidator->validateAddress($addressOrName);
             if (!$addressValidation['valid']) {
@@ -1323,7 +1326,7 @@ class ContactService {
             return false;
         }
 
-        // Check if it's a HTTP or Tor address
+        // Check if it's an HTTP, HTTPS, or Tor address
         if ($this->transportUtility->isAddress($addressOrName)) {
             $addressValidation = $this->inputValidator->validateAddress($addressOrName);
             if (!$addressValidation['valid']) {
@@ -1378,7 +1381,7 @@ class ContactService {
             return false;
         }
 
-        // Check if it's a HTTP or Tor address
+        // Check if it's an HTTP, HTTPS, or Tor address
         if ($this->transportUtility->isAddress($addressOrName)) {
             $addressValidation = $this->inputValidator->validateAddress($addressOrName);
             if (!$addressValidation['valid']) {
@@ -1522,7 +1525,7 @@ class ContactService {
     /**
      * Update contact status
      *
-     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string $transportIndex Address type, i.e. http, https, tor
      * @param string $address Contact address
      * @param string $status New status
      * @return bool Success status
@@ -1629,7 +1632,7 @@ class ContactService {
     /**
      * Lookup contact name by address
      *
-     * @param string|null $transportIndex Address type, i.e. http, tor (null returns null gracefully)
+     * @param string|null $transportIndex Address type, i.e. http, https, tor (null returns null gracefully)
      * @param string $address Contact address
      * @return string|null Contact name or null
      */

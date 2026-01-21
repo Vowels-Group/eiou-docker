@@ -25,12 +25,13 @@ class AddressRepository extends AbstractRepository {
     /**
      * Validate transport index to prevent SQL injection
      * Uses dynamic column detection via getAllAddressTypes()
+     * Input is lowercased for case-insensitive matching
      *
      * @param string $transportIndex Transport index to validate
      * @return bool True if valid, false otherwise
      */
     private function isValidTransportIndex(string $transportIndex): bool {
-        return in_array($transportIndex, $this->getAllAddressTypes(), true);
+        return in_array(strtolower($transportIndex), $this->getAllAddressTypes(), true);
     }
 
     /**
@@ -109,7 +110,7 @@ class AddressRepository extends AbstractRepository {
     /**
      * Retrieve all contact addresses
      *
-     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string $transportIndex Address type, i.e. http, https, tor
      * @param string|null $exclude Address to exclude
      * @return array Array of addresses
      */
@@ -137,7 +138,7 @@ class AddressRepository extends AbstractRepository {
     /**
      * Retrieve contact public key hash by address
      *
-     * @param string $transportIndex Address type, i.e. http, tor
+     * @param string $transportIndex Address type, i.e. http, https, tor
      * @param string $address Contact address
      * @return string|null Contact's publice key hash or null
      */

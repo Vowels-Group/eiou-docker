@@ -23,7 +23,7 @@ SELECT id, contact_id, name, status, currency, fee_percent, credit_limit, online
 # ADDRESSES TABLE
 # ============================================================
 # Network addresses (excludes pubkey_hash)
-SELECT id, http, tor FROM addresses;
+SELECT id, http, https, tor FROM addresses;
 
 # ============================================================
 # BALANCES TABLE

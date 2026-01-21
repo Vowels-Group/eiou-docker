@@ -128,7 +128,7 @@ class InputValidator {
     }
 
     /**
-     * Validate address format (HTTP or Tor)
+     * Validate address format (HTTP, HTTPS, or Tor)
      *
      * @param string $address Address to validate
      * @return array ['valid' => bool, 'value' => string|null, 'error' => string|null, 'type' => string|null]
@@ -150,7 +150,10 @@ class InputValidator {
         // Check for HTTP/HTTPS address
         if (filter_var($address, FILTER_VALIDATE_URL) !== false) {
             $scheme = parse_url($address, PHP_URL_SCHEME);
-            if (in_array($scheme, ['http', 'https'])) {
+            if ($scheme === 'https') {
+                return ['valid' => true, 'value' => $address, 'error' => null, 'type' => 'https'];
+            }
+            if ($scheme === 'http') {
                 return ['valid' => true, 'value' => $address, 'error' => null, 'type' => 'http'];
             }
         }
@@ -172,7 +175,10 @@ class InputValidator {
         // Check for HTTP/HTTPS address
         if (filter_var($address, FILTER_VALIDATE_URL) !== false) {
             $scheme = parse_url($address, PHP_URL_SCHEME);
-            if (in_array($scheme, ['http', 'https'])) {
+            if ($scheme === 'https') {
+                return ['valid' => true, 'value' => $address, 'error' => null, 'type' => 'https'];
+            }
+            if ($scheme === 'http') {
                 return ['valid' => true, 'value' => $address, 'error' => null, 'type' => 'http'];
             }
         }

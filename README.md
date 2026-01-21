@@ -61,7 +61,7 @@ docker-compose -f <config-file>.yml logs -f
 # Generate Tor address for a specific node
 docker-compose -f docker-compose-4line.yml exec alice eiou generate torAddressOnly
 
-# Generate HTTP address for a specific node
+# Generate HTTP/HTTPS address for a specific node (setting hostname automatically derives hostname_secure)
 docker-compose -f docker-compose-4line.yml exec alice eiou generate http://alice
 
 # Add a contact to a node

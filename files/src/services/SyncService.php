@@ -239,7 +239,7 @@ class SyncService {
         ];
 
         foreach ($contacts as $contact) {
-            $address = $contact['http'] ?? $contact['tor'] ?? null;
+            $address = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null;
             if ($address) {
                 $success = $this->syncSingleContact($address, 'SILENT');
                 if ($success) {
@@ -349,7 +349,7 @@ class SyncService {
         ];
 
         foreach ($contacts as $contact) {
-            $address = $contact['http'] ?? $contact['tor'] ?? null;
+            $address = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null;
             $pubkey = $contact['pubkey'] ?? null;
 
             if (!$address || !$pubkey) {

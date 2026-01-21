@@ -40,9 +40,11 @@ function getAddressTableSchema(){
         id INTEGER PRIMARY KEY AUTO_INCREMENT,
         pubkey_hash TEXT NOT NULL,
         http VARCHAR(255) UNIQUE DEFAULT NULL,
+        https VARCHAR(255) UNIQUE DEFAULT NULL,
         tor VARCHAR(255) UNIQUE DEFAULT NULL,
         INDEX idx_addresses_pubkey (pubkey_hash),
         INDEX idx_addresses_http (http),
+        INDEX idx_addresses_https (https),
         INDEX idx_addresses_tor (tor)
     )";
 }

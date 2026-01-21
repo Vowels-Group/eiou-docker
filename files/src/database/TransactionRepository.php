@@ -29,25 +29,6 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
-     * Calculate total amount sent to a public key
-     *
-     * @param string $publicKey Public key of contact
-     * @return float Total amount sent
-     */
-    public function calculateTotalSentToContact(string $publicKey): float {
-        $query = "SELECT SUM(amount) as total_sent FROM {$this->tableName}
-                  WHERE receiver_public_key = :publicKey";
-        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
-
-        if (!$stmt) {
-            return 0;
-        }
-
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['total_sent'] ?? 0);
-    }
-
-    /**
      * Calculate total amount sent by user
      *
      * @param string $userPublicKey User's public key
@@ -67,25 +48,6 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
-     * Calculate total amount received from a public key
-     *
-     * @param string $publicKey Public key of contact
-     * @return float Total amount received
-     */
-    public function calculateTotalReceivedFromContact(string $publicKey): float {
-        $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
-                  WHERE sender_public_key = :publicKey";
-        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
-
-        if (!$stmt) {
-            return 0;
-        }
-
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['total_received'] ?? 0);
-    }
-
-    /**
      * Calculate total amount received by user (excluding self-sends)
      *
      * @param string $userPublicKey User's public key
@@ -93,8 +55,12 @@ class TransactionRepository extends AbstractRepository {
      */
     public function calculateTotalReceivedByUser(string $publicKey): float {
         $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
-                  WHERE sender_public_key != :publicKey";
-        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
+                  WHERE receiver_public_key = :receiverKey
+                  AND sender_public_key != :senderKey";
+        $stmt = $this->execute($query, [
+            ':receiverKey' => $publicKey,
+            ':senderKey' => $publicKey
+        ]);
 
         if (!$stmt) {
             return 0;
@@ -895,9 +861,9 @@ class TransactionRepository extends AbstractRepository {
                     p2p.amount AS p2p_amount,
                     p2p.my_fee_amount AS p2p_fee
                   FROM {$this->tableName} t
-                  LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.tor)
+                  LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.https OR t.sender_address = sender_addr.tor)
                   LEFT JOIN contacts sender_contact ON sender_addr.pubkey_hash = sender_contact.pubkey_hash
-                  LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.tor)
+                  LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.https OR t.receiver_address = receiver_addr.tor)
                   LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
                   LEFT JOIN p2p ON t.memo = p2p.hash
                   WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders))
@@ -983,9 +949,9 @@ class TransactionRepository extends AbstractRepository {
                     sender_contact.name AS sender_name,
                     receiver_contact.name AS receiver_name
                   FROM {$this->tableName} t
-                  LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.tor)
+                  LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.https OR t.sender_address = sender_addr.tor)
                   LEFT JOIN contacts sender_contact ON sender_addr.pubkey_hash = sender_contact.pubkey_hash
-                  LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.tor)
+                  LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.https OR t.receiver_address = receiver_addr.tor)
                   LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
                   WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders)) AND t.currency = ?
                   ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
@@ -1987,7 +1953,7 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Get recent transactions with a specific contact by their addresses
      *
-     * @param array $contactAddresses Array of contact addresses (http, tor, etc.)
+     * @param array $contactAddresses Array of contact addresses (http, https, tor, etc.)
      * @param int $limit Maximum number of transactions to return
      * @return array Formatted transactions with contact
      */

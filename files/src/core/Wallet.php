@@ -136,9 +136,27 @@ class Wallet{
         // If argv2 is the (http/s) hostname of the container
         if (isset($argv[2])) {
             if (filter_var($argv[2], FILTER_VALIDATE_URL)) {
-                // Save the hostname to the configuration
-                $userconfig['hostname'] = addslashes($argv[2]); // HTTP address
-                $walletData['http_address'] = $argv[2];
+                $hostname = $argv[2];
+
+                // Derive hostname and hostname_secure from the provided URL
+                // Convert http:// to https:// or normalize if already https://
+                if (strpos($hostname, 'http://') === 0) {
+                    $hostnameSecure = 'https://' . substr($hostname, 7);
+                } elseif (strpos($hostname, 'https://') === 0) {
+                    $hostnameSecure = $hostname;
+                    $hostname = 'http://' . substr($hostname, 8); // hostname should be http
+                } else {
+                    // No protocol prefix, assume http for hostname
+                    $hostnameSecure = 'https://' . $hostname;
+                    $hostname = 'http://' . $hostname;
+                }
+
+                // Save both hostname (HTTP) and hostname_secure (HTTPS) to the configuration
+                $userconfig['hostname'] = addslashes($hostname);
+                $userconfig['hostname_secure'] = addslashes($hostnameSecure);
+
+                $walletData['http_address'] = $hostname;
+                $walletData['https_address'] = $hostnameSecure;
             } else {
                 $output->error("Invalid hostname format. Must be a valid URL.", ErrorCodes::INVALID_HOSTNAME, 400, [
                     'provided' => $argv[2]

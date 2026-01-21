@@ -28,7 +28,8 @@
                 <div class="tx-in-progress-info">
                     <div class="tx-in-progress-counterparty">
                         <?php
-                        $ipType = ($ipTx['sender_address'] === ($user->getHttpAddress() ?? '') || $ipTx['sender_address'] === ($user->getTorAddress() ?? '')) ? 'sent' : 'received';
+                        $userAddresses = $user->getUserAddresses();
+                        $ipType = in_array($ipTx['sender_address'], $userAddresses, true) ? 'sent' : 'received';
                         $ipCounterparty = $ipType === 'sent' ? ($ipTx['receiver_address'] ?? 'Unknown') : ($ipTx['sender_address'] ?? 'Unknown');
                         echo $ipType === 'sent' ? 'Sending to' : 'Receiving from';
                         ?> <span class="monospace"><?php echo htmlspecialchars(substr($ipCounterparty, 0, 30) . (strlen($ipCounterparty) > 30 ? '...' : '')); ?></span>
