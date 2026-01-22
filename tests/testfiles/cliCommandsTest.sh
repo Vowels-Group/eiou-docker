@@ -249,6 +249,86 @@ else
     failure=$(( failure + 1 ))
 fi
 
+############################ PENDING COMMAND ############################
+
+echo -e "\n[Pending Command Test]"
+
+# Test: pending (regular output)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'pending' command (regular output)"
+pendingOutput=$(docker exec ${testContainer} eiou pending 2>&1)
+
+# Check for either "Pending Contact Requests" or "No pending" (both are valid)
+if [[ "$pendingOutput" =~ "Pending" ]] || [[ "$pendingOutput" =~ "pending" ]] || [[ "$pendingOutput" =~ "Incoming" ]] || [[ "$pendingOutput" =~ "Outgoing" ]] || [[ "$pendingOutput" =~ "No pending" ]]; then
+    printf "\t   pending command (regular) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   pending command (regular) ${RED}FAILED${NC}\n"
+    printf "\t   Output: ${pendingOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: pending (JSON output)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'pending' command (JSON output)"
+pendingJsonOutput=$(docker exec ${testContainer} eiou pending --json 2>&1)
+
+# Check for success and pending data structure
+if [[ "$pendingJsonOutput" =~ '"success"' ]] && [[ "$pendingJsonOutput" =~ 'true' ]] && [[ "$pendingJsonOutput" =~ '"incoming"' ]] && [[ "$pendingJsonOutput" =~ '"outgoing"' ]]; then
+    printf "\t   pending command (JSON) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   pending command (JSON) ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ OVERVIEW COMMAND ############################
+
+echo -e "\n[Overview Command Test]"
+
+# Test: overview (regular output)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'overview' command (regular output)"
+overviewOutput=$(docker exec ${testContainer} eiou overview 2>&1)
+
+# Check for overview output markers
+if [[ "$overviewOutput" =~ "WALLET OVERVIEW" ]] || [[ "$overviewOutput" =~ "BALANCES" ]] || [[ "$overviewOutput" =~ "RECENT TRANSACTIONS" ]]; then
+    printf "\t   overview command (regular) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   overview command (regular) ${RED}FAILED${NC}\n"
+    printf "\t   Output: ${overviewOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: overview (JSON output)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'overview' command (JSON output)"
+overviewJsonOutput=$(docker exec ${testContainer} eiou overview --json 2>&1)
+
+# Check for success and overview data structure
+if [[ "$overviewJsonOutput" =~ '"success"' ]] && [[ "$overviewJsonOutput" =~ 'true' ]] && [[ "$overviewJsonOutput" =~ '"balances"' ]] && [[ "$overviewJsonOutput" =~ '"recent_transactions"' ]]; then
+    printf "\t   overview command (JSON) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   overview command (JSON) ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: overview with limit parameter (JSON output)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'overview 10' command (JSON output)"
+overviewLimitJsonOutput=$(docker exec ${testContainer} eiou overview 10 --json 2>&1)
+
+# Check for success and transaction_limit field
+if [[ "$overviewLimitJsonOutput" =~ '"success"' ]] && [[ "$overviewLimitJsonOutput" =~ 'true' ]] && [[ "$overviewLimitJsonOutput" =~ '"transaction_limit"' ]]; then
+    printf "\t   overview 10 command (JSON) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   overview 10 command (JSON) ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
 ############################ SEARCH COMMAND ############################
 
 echo -e "\n[Search Command Test]"

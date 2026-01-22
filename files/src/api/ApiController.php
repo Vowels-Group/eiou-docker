@@ -11,9 +11,13 @@
  * - POST /api/v1/wallet/send                 - Send transaction
  * - GET  /api/v1/wallet/transactions         - Get transaction history
  * - GET  /api/v1/wallet/info                 - Get wallet info
+ * - GET  /api/v1/wallet/overview             - Get wallet overview (balance + recent transactions)
  *
  * - GET    /api/v1/contacts                  - List all contacts
  * - POST   /api/v1/contacts                  - Add new contact
+ * - GET    /api/v1/contacts/pending          - Get pending contact requests
+ * - GET    /api/v1/contacts/search           - Search contacts by name
+ * - POST   /api/v1/contacts/ping/:address    - Ping a contact to check online status
  * - GET    /api/v1/contacts/:address         - Get contact details
  * - DELETE /api/v1/contacts/:address         - Delete contact
  * - PUT    /api/v1/contacts/:address         - Update contact
@@ -22,6 +26,7 @@
  *
  * - GET  /api/v1/system/status               - Get system status
  * - GET  /api/v1/system/metrics              - Get system metrics
+ * - GET  /api/v1/system/settings             - Get system settings
  */
 
 class ApiController {
@@ -135,6 +140,7 @@ class ApiController {
             $method === 'POST' && $action === 'send' => $this->sendTransaction($body),
             $method === 'GET' && $action === 'transactions' => $this->getTransactions($params),
             $method === 'GET' && $action === 'info' => $this->getWalletInfo(),
+            $method === 'GET' && $action === 'overview' => $this->getWalletOverview($params),
             default => $this->errorResponse('Unknown wallet action: ' . $action, 404, 'unknown_action')
         };
     }
@@ -145,6 +151,9 @@ class ApiController {
      * Routes:
      * - GET    /api/v1/contacts                  - List all contacts
      * - POST   /api/v1/contacts                  - Add new contact
+     * - GET    /api/v1/contacts/pending          - Get pending contact requests
+     * - GET    /api/v1/contacts/search           - Search contacts by name
+     * - POST   /api/v1/contacts/ping/:address    - Ping a contact
      * - GET    /api/v1/contacts/:address         - Get contact details
      * - DELETE /api/v1/contacts/:address         - Delete contact
      * - PUT    /api/v1/contacts/:address         - Update contact
@@ -155,6 +164,9 @@ class ApiController {
         return match (true) {
             $method === 'GET' && !$action => $this->listContacts($params),
             $method === 'POST' && !$action => $this->addContact($body),
+            $method === 'GET' && $action === 'pending' => $this->listPendingContacts(),
+            $method === 'GET' && $action === 'search' => $this->searchContacts($params),
+            $method === 'POST' && $action === 'ping' && $id => $this->pingContact($id),
             $method === 'POST' && $action === 'block' && $id => $this->blockContact($id),
             $method === 'POST' && $action === 'unblock' && $id => $this->unblockContact($id),
             $method === 'GET' && $action => $this->getContact($action),
@@ -171,6 +183,7 @@ class ApiController {
         return match (true) {
             $method === 'GET' && $action === 'status' => $this->getSystemStatus(),
             $method === 'GET' && $action === 'metrics' => $this->getSystemMetrics(),
+            $method === 'GET' && $action === 'settings' => $this->getSystemSettings(),
             default => $this->errorResponse('Unknown system action: ' . $action, 404, 'unknown_action')
         };
     }
@@ -369,6 +382,64 @@ class ApiController {
         ]);
     }
 
+    /**
+     * GET /api/v1/wallet/overview
+     *
+     * Returns wallet overview for dashboard display:
+     * - Overall balance by currency
+     * - Most recent transactions
+     */
+    private function getWalletOverview(array $params): array {
+        if (!$this->hasPermission('wallet:read')) {
+            return $this->permissionDenied('wallet:read');
+        }
+
+        $balanceRepo = $this->services->getBalanceRepository();
+        $transactionRepo = $this->services->getTransactionRepository();
+
+        // Get transaction limit from params (default 5, max 20 for overview)
+        $transactionLimit = min((int) ($params['transaction_limit'] ?? 5), 20);
+
+        // Get overall balances by currency
+        $balances = $balanceRepo->getUserBalance();
+        $balanceResult = [];
+
+        if ($balances) {
+            foreach ($balances as $balance) {
+                $balanceResult[] = [
+                    'currency' => $balance['currency'],
+                    'total_balance' => $balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR
+                ];
+            }
+        }
+
+        // Get recent transactions
+        $transactions = $transactionRepo->getRecentTransactions($transactionLimit);
+        $transactionResult = [];
+
+        foreach ($transactions as $tx) {
+            $transactionResult[] = [
+                'txid' => $tx['txid'] ?? null,
+                'type' => $tx['direction'] ?? $tx['type'] ?? null,
+                'tx_type' => $tx['tx_type'] ?? null,
+                'status' => $tx['status'] ?? null,
+                'amount' => is_numeric($tx['amount'] ?? null) ? $tx['amount'] : 0,
+                'currency' => $tx['currency'] ?? null,
+                'counterparty_name' => $tx['counterparty_name'] ?? null,
+                'sender_address' => $tx['sender_address'] ?? null,
+                'receiver_address' => $tx['receiver_address'] ?? null,
+                'memo' => $tx['memo'] ?? null,
+                'timestamp' => $tx['timestamp'] ?? $tx['date'] ?? null
+            ];
+        }
+
+        return $this->successResponse([
+            'balances' => $balanceResult,
+            'recent_transactions' => $transactionResult,
+            'transaction_count' => count($transactionResult)
+        ]);
+    }
+
     // ==================== Contact Endpoints ====================
 
     /**
@@ -411,6 +482,158 @@ class ApiController {
         }
 
         return $this->successResponse(['contacts' => $result, 'count' => count($result)]);
+    }
+
+    /**
+     * GET /api/v1/contacts/pending
+     *
+     * Returns all pending contact requests:
+     * - incoming: Requests from others waiting for user to accept
+     * - outgoing: Requests user sent waiting for others to accept
+     */
+    private function listPendingContacts(): array {
+        if (!$this->hasPermission('contacts:read')) {
+            return $this->permissionDenied('contacts:read');
+        }
+
+        $contactRepo = $this->services->getContactRepository();
+        $addressRepo = $this->services->getAddressRepository();
+
+        // Get all address types dynamically for future-proofing
+        $addressTypes = $addressRepo->getAllAddressTypes();
+
+        // Get incoming pending requests (from others, name IS NULL)
+        $incomingPending = $contactRepo->getPendingContactRequests();
+        $incoming = [];
+
+        foreach ($incomingPending as $contact) {
+            // Build addresses array dynamically based on available address types
+            $addresses = [];
+            foreach ($addressTypes as $type) {
+                $addresses[$type] = $contact[$type] ?? null;
+            }
+
+            $incoming[] = [
+                'pubkey_hash' => $contact['pubkey_hash'] ?? null,
+                'status' => $contact['status'] ?? null,
+                'addresses' => $addresses,
+                'created_at' => $contact['created_at'] ?? null
+            ];
+        }
+
+        // Get outgoing pending requests (user initiated, name IS NOT NULL)
+        $outgoingPending = $contactRepo->getUserPendingContactRequests();
+        $outgoing = [];
+
+        foreach ($outgoingPending as $contact) {
+            // Build addresses array dynamically based on available address types
+            $addresses = [];
+            foreach ($addressTypes as $type) {
+                $addresses[$type] = $contact[$type] ?? null;
+            }
+
+            $outgoing[] = [
+                'name' => $contact['name'] ?? null,
+                'pubkey_hash' => $contact['pubkey_hash'] ?? null,
+                'status' => $contact['status'] ?? null,
+                'currency' => $contact['currency'] ?? null,
+                'fee_percent' => $contact['fee_percent'] ?? null,
+                'credit_limit' => $contact['credit_limit'] ?? null,
+                'addresses' => $addresses,
+                'created_at' => $contact['created_at'] ?? null
+            ];
+        }
+
+        return $this->successResponse([
+            'pending' => [
+                'incoming' => $incoming,
+                'outgoing' => $outgoing
+            ],
+            'counts' => [
+                'incoming' => count($incoming),
+                'outgoing' => count($outgoing),
+                'total' => count($incoming) + count($outgoing)
+            ]
+        ]);
+    }
+
+    /**
+     * GET /api/v1/contacts/search
+     *
+     * Search contacts by name
+     */
+    private function searchContacts(array $params): array {
+        if (!$this->hasPermission('contacts:read')) {
+            return $this->permissionDenied('contacts:read');
+        }
+
+        $searchTerm = $params['q'] ?? $params['query'] ?? null;
+        $contactRepo = $this->services->getContactRepository();
+        $addressRepo = $this->services->getAddressRepository();
+
+        // Get all address types dynamically
+        $addressTypes = $addressRepo->getAllAddressTypes();
+
+        $contacts = $contactRepo->searchContacts($searchTerm);
+        $result = [];
+
+        if ($contacts) {
+            foreach ($contacts as $contact) {
+                // Build addresses array dynamically
+                $addresses = [];
+                foreach ($addressTypes as $type) {
+                    $addresses[$type] = $contact[$type] ?? null;
+                }
+
+                $result[] = [
+                    'name' => $contact['name'] ?? null,
+                    'pubkey_hash' => $contact['pubkey_hash'] ?? null,
+                    'status' => $contact['status'] ?? null,
+                    'addresses' => $addresses
+                ];
+            }
+        }
+
+        return $this->successResponse([
+            'search_term' => $searchTerm,
+            'contacts' => $result,
+            'count' => count($result)
+        ]);
+    }
+
+    /**
+     * POST /api/v1/contacts/ping/:address
+     *
+     * Ping a contact to check their online status
+     */
+    private function pingContact(string $address): array {
+        if (!$this->hasPermission('contacts:read')) {
+            return $this->permissionDenied('contacts:read');
+        }
+
+        $address = urldecode($address);
+
+        try {
+            $contactStatusService = $this->services->getContactStatusService();
+            $result = $contactStatusService->pingContact($address);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'contact_name' => $result['contact_name'] ?? null,
+                    'online_status' => $result['online_status'] ?? 'unknown',
+                    'chain_valid' => $result['chain_valid'] ?? null,
+                    'message' => $result['message'] ?? 'Ping complete'
+                ]);
+            } else {
+                return $this->errorResponse(
+                    $result['message'] ?? 'Ping failed',
+                    $result['error'] === 'contact_not_found' ? 404 : 400,
+                    $result['error'] ?? 'ping_failed'
+                );
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Ping failed: ' . $e->getMessage(), 500, 'ping_error');
+        }
     }
 
     /**
@@ -829,6 +1052,34 @@ class ApiController {
             'uptime' => $this->getUptime(),
             'memory_usage' => memory_get_usage(true),
             'timestamp' => date('c')
+        ]);
+    }
+
+    /**
+     * GET /api/v1/system/settings
+     *
+     * Returns current system settings (read-only)
+     */
+    private function getSystemSettings(): array {
+        if (!$this->hasPermission('system:read')) {
+            return $this->permissionDenied('system:read');
+        }
+
+        $currentUser = $this->services->getCurrentUser();
+
+        return $this->successResponse([
+            'settings' => [
+                'default_currency' => $currentUser->getDefaultCurrency(),
+                'minimum_fee_amount' => $currentUser->getMinimumFee(),
+                'default_fee_percent' => $currentUser->getDefaultFee(),
+                'maximum_fee_percent' => $currentUser->getMaxFee(),
+                'default_credit_limit' => $currentUser->getDefaultCreditLimit(),
+                'max_p2p_level' => $currentUser->getMaxP2pLevel(),
+                'p2p_expiration_seconds' => $currentUser->getP2pExpirationTime(),
+                'max_output_lines' => $currentUser->getMaxOutput(),
+                'default_transport_mode' => $currentUser->getDefaultTransportMode(),
+                'auto_refresh_enabled' => $currentUser->getAutoRefreshEnabled()
+            ]
         ]);
     }
 

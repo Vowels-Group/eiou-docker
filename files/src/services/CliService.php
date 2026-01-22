@@ -547,6 +547,18 @@ class CliService {
                     'address/name' => ['type' => 'optional', 'description' => 'Filter by contact address or name']
                 ]
             ],
+            'pending' => [
+                'description' => 'View pending contact requests (incoming and outgoing)',
+                'usage' => 'pending',
+                'arguments' => []
+            ],
+            'overview' => [
+                'description' => 'Display wallet overview (balances + recent transactions)',
+                'usage' => 'overview ([limit])',
+                'arguments' => [
+                    'limit' => ['type' => 'optional', 'description' => 'Number of recent transactions to show (default: 5)']
+                ]
+            ],
             'help' => [
                 'description' => 'Display detailed help information',
                 'usage' => 'help ([command])',
@@ -700,11 +712,16 @@ class CliService {
                     'signature_format' => 'HMAC-SHA256(secret, METHOD + "\\n" + PATH + "\\n" + TIMESTAMP + "\\n" + BODY)',
                     'example_endpoints' => [
                         'GET /api/v1/wallet/balance' => 'Get wallet balances',
+                        'GET /api/v1/wallet/overview' => 'Wallet overview (balance + recent transactions)',
                         'POST /api/v1/wallet/send' => 'Send transaction',
                         'GET /api/v1/wallet/transactions' => 'Transaction history',
                         'GET /api/v1/contacts' => 'List contacts',
+                        'GET /api/v1/contacts/pending' => 'Pending contact requests',
+                        'GET /api/v1/contacts/search' => 'Search contacts by name',
                         'POST /api/v1/contacts' => 'Add contact',
-                        'GET /api/v1/system/status' => 'System status'
+                        'POST /api/v1/contacts/ping/:address' => 'Ping contact',
+                        'GET /api/v1/system/status' => 'System status',
+                        'GET /api/v1/system/settings' => 'System settings'
                     ]
                 ]
             ],
@@ -810,12 +827,17 @@ IMPORTANT: Never send the secret in requests - only the computed HMAC signature.
 The server retrieves and decrypts your secret to verify the signature.
 
 Example endpoints:
-  GET  /api/v1/wallet/balance      - Get wallet balances
-  POST /api/v1/wallet/send         - Send transaction
-  GET  /api/v1/wallet/transactions - Transaction history
-  GET  /api/v1/contacts            - List contacts
-  POST /api/v1/contacts            - Add contact
-  GET  /api/v1/system/status       - System status
+  GET  /api/v1/wallet/balance       - Get wallet balances
+  GET  /api/v1/wallet/overview      - Wallet overview (balance + recent transactions)
+  POST /api/v1/wallet/send          - Send transaction
+  GET  /api/v1/wallet/transactions  - Transaction history
+  GET  /api/v1/contacts             - List contacts
+  GET  /api/v1/contacts/pending     - Pending contact requests
+  GET  /api/v1/contacts/search?q=   - Search contacts by name
+  POST /api/v1/contacts             - Add contact
+  POST /api/v1/contacts/ping/:addr  - Ping contact
+  GET  /api/v1/system/status        - System status
+  GET  /api/v1/system/settings      - System settings
 
 HELP;
 
@@ -929,6 +951,237 @@ HELP;
                     printf("\tNo balances available yet.\n");
                 }
             }
+        }
+    }
+
+    /**
+     * Display pending contact requests (both incoming and outgoing)
+     *
+     * @param array $argv The CLI input data
+     * @param CliOutputManager|null $output Optional output manager for JSON support
+     */
+    public function displayPendingContacts(array $argv, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        // Get incoming pending requests (requests from others - no name set yet)
+        $incomingRequests = $this->contactRepository->getPendingContactRequests();
+
+        // Get outgoing pending requests (requests user initiated - has name set)
+        $outgoingRequests = $this->contactRepository->getUserPendingContactRequests();
+
+        $pendingData = [
+            'incoming' => [],
+            'outgoing' => [],
+            'incoming_count' => count($incomingRequests),
+            'outgoing_count' => count($outgoingRequests),
+            'total_count' => count($incomingRequests) + count($outgoingRequests)
+        ];
+
+        // Format incoming requests
+        foreach ($incomingRequests as $contact) {
+            $contactAddress = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? 'Unknown';
+            $pendingData['incoming'][] = [
+                'address' => $contactAddress,
+                'pubkey_hash' => $contact['pubkey_hash'] ?? null,
+                'created_at' => $contact['created_at'] ?? null,
+                'status' => 'pending'
+            ];
+        }
+
+        // Format outgoing requests
+        foreach ($outgoingRequests as $contact) {
+            $contactAddress = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? 'Unknown';
+            $pendingData['outgoing'][] = [
+                'name' => $contact['name'],
+                'address' => $contactAddress,
+                'pubkey_hash' => $contact['pubkey_hash'] ?? null,
+                'created_at' => $contact['created_at'] ?? null,
+                'status' => 'pending'
+            ];
+        }
+
+        if ($output->isJsonMode()) {
+            $output->success('Pending contact requests retrieved', $pendingData, 'Pending contact requests');
+        } else {
+            $totalCount = $pendingData['total_count'];
+
+            if ($totalCount === 0) {
+                echo "No pending contact requests.\n";
+                return;
+            }
+
+            echo "Pending Contact Requests\n";
+            echo "========================\n\n";
+
+            // Display incoming requests
+            if ($pendingData['incoming_count'] > 0) {
+                echo "Incoming Requests ({$pendingData['incoming_count']}):\n";
+                echo "-------------------------------------------\n";
+                foreach ($pendingData['incoming'] as $contact) {
+                    echo "  From: " . $contact['address'] . "\n";
+                    if ($contact['created_at']) {
+                        echo "  Date: " . $contact['created_at'] . "\n";
+                    }
+                    echo "  To accept: eiou add " . $contact['address'] . " [name] [fee] [credit] [currency]\n";
+                    echo "\n";
+                }
+            } else {
+                echo "Incoming Requests: None\n\n";
+            }
+
+            // Display outgoing requests
+            if ($pendingData['outgoing_count'] > 0) {
+                echo "Outgoing Requests ({$pendingData['outgoing_count']}):\n";
+                echo "-------------------------------------------\n";
+                foreach ($pendingData['outgoing'] as $contact) {
+                    echo "  Name: " . $contact['name'] . "\n";
+                    echo "  Address: " . $contact['address'] . "\n";
+                    if ($contact['created_at']) {
+                        echo "  Date: " . $contact['created_at'] . "\n";
+                    }
+                    echo "  Status: Awaiting acceptance from recipient\n";
+                    echo "\n";
+                }
+            } else {
+                echo "Outgoing Requests: None\n\n";
+            }
+
+            echo "-------------------------------------------\n";
+            echo "Total: {$totalCount} pending request(s)\n";
+        }
+    }
+
+    /**
+     * Display overview dashboard with balances and recent transactions
+     *
+     * @param array $argv The CLI input data
+     * @param CliOutputManager|null $output Optional output manager for JSON support
+     */
+    public function displayOverview(array $argv, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        // Determine limit for recent transactions (default 5)
+        $transactionLimit = 5;
+        if (isset($argv[2]) && is_numeric($argv[2]) && intval($argv[2]) > 0) {
+            $transactionLimit = intval($argv[2]);
+        }
+
+        // Get overall balances
+        $balances = $this->balanceRepository->getUserBalance();
+
+        // Get recent transactions
+        $recentTransactions = $this->transactionRepository->getRecentTransactions($transactionLimit);
+
+        // Get pending contact counts for quick overview
+        $incomingPending = count($this->contactRepository->getPendingContactRequests());
+        $outgoingPending = count($this->contactRepository->getUserPendingContactRequests());
+
+        // Build overview data
+        $overviewData = [
+            'balances' => [],
+            'recent_transactions' => [],
+            'pending_contacts' => [
+                'incoming' => $incomingPending,
+                'outgoing' => $outgoingPending,
+                'total' => $incomingPending + $outgoingPending
+            ],
+            'transaction_count' => count($recentTransactions),
+            'transaction_limit' => $transactionLimit
+        ];
+
+        // Format balances
+        if ($balances) {
+            foreach ($balances as $balance) {
+                $overviewData['balances'][] = [
+                    'currency' => $balance['currency'],
+                    'total_balance' => number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2)
+                ];
+            }
+        }
+
+        // Format recent transactions
+        foreach ($recentTransactions as $tx) {
+            $counterpartyAddress = $tx['counterparty'] ?? $tx['sender_address'] ?? $tx['receiver_address'] ?? 'Unknown';
+            $counterpartyName = $this->contactRepository->lookupNameByAddress(
+                $this->transportUtility->determineTransportType($counterpartyAddress),
+                $counterpartyAddress
+            );
+
+            $overviewData['recent_transactions'][] = [
+                'timestamp' => $tx['date'] ?? $tx['timestamp'] ?? null,
+                'type' => $tx['type'] ?? 'unknown',
+                'direction' => $tx['direction'] ?? $tx['type'] ?? null,
+                'counterparty_name' => $counterpartyName,
+                'counterparty_address' => $this->generalUtility->truncateAddress($counterpartyAddress, 30),
+                'amount' => $tx['amount'] ?? 0,
+                'currency' => $tx['currency'] ?? 'N/A',
+                'status' => $tx['status'] ?? null
+            ];
+        }
+
+        if ($output->isJsonMode()) {
+            $output->success('Overview retrieved', $overviewData, 'Wallet overview');
+        } else {
+            echo "===========================================\n";
+            echo "             WALLET OVERVIEW\n";
+            echo "===========================================\n\n";
+
+            // Display balances
+            echo "BALANCES\n";
+            echo "-------------------------------------------\n";
+            if (empty($overviewData['balances'])) {
+                echo "  No balances available.\n";
+            } else {
+                foreach ($overviewData['balances'] as $balance) {
+                    printf("  %s: %s\n", $balance['currency'], $balance['total_balance']);
+                }
+            }
+            echo "\n";
+
+            // Display pending contacts summary
+            if ($overviewData['pending_contacts']['total'] > 0) {
+                echo "PENDING CONTACTS\n";
+                echo "-------------------------------------------\n";
+                if ($overviewData['pending_contacts']['incoming'] > 0) {
+                    printf("  Incoming requests: %d\n", $overviewData['pending_contacts']['incoming']);
+                }
+                if ($overviewData['pending_contacts']['outgoing'] > 0) {
+                    printf("  Outgoing requests: %d\n", $overviewData['pending_contacts']['outgoing']);
+                }
+                echo "  (Use 'eiou pending' for details)\n";
+                echo "\n";
+            }
+
+            // Display recent transactions
+            echo "RECENT TRANSACTIONS (Last {$transactionLimit})\n";
+            echo "-------------------------------------------\n";
+            if (empty($overviewData['recent_transactions'])) {
+                echo "  No recent transactions.\n";
+            } else {
+                echo str_pad("Date", 20) . " | " .
+                     str_pad("Type", 10) . " | " .
+                     str_pad("Contact", 25) . " | " .
+                     str_pad("Amount", 15) . "\n";
+                echo "-------------------------------------------\n";
+
+                foreach ($overviewData['recent_transactions'] as $tx) {
+                    $date = $tx['timestamp'] ? substr($tx['timestamp'], 0, 19) : 'N/A';
+                    $contactDisplay = $tx['counterparty_name'] ?: $tx['counterparty_address'];
+                    if (strlen($contactDisplay) > 25) {
+                        $contactDisplay = substr($contactDisplay, 0, 22) . '...';
+                    }
+
+                    printf("%s | %s | %s | %s %s\n",
+                        str_pad($date, 20),
+                        str_pad($tx['type'], 10),
+                        str_pad($contactDisplay, 25),
+                        str_pad(number_format($tx['amount'], 2), 10),
+                        $tx['currency']
+                    );
+                }
+            }
+            echo "-------------------------------------------\n";
+            echo "(Use 'eiou history' for full transaction history)\n";
         }
     }
 

@@ -985,6 +985,176 @@ else
     printf "\t   No real contacts found - skipping real contact tests\n"
 fi
 
+############################ WALLET OVERVIEW API TEST ############################
+
+echo -e "\n[Wallet Overview API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing GET /api/v1/wallet/overview"
+
+timestamp=$(date +%s)
+path="/api/v1/wallet/overview"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+overviewResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "${LOCAL_API_BASE}/api/v1/wallet/overview" 2>&1)
+
+if [[ "$overviewResponse" =~ '"success"' ]] && [[ "$overviewResponse" =~ 'true' ]] && [[ "$overviewResponse" =~ '"balances"' ]] && [[ "$overviewResponse" =~ '"recent_transactions"' ]]; then
+    printf "\t   GET /api/v1/wallet/overview ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   GET /api/v1/wallet/overview ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${overviewResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ PENDING CONTACTS API TEST ############################
+
+echo -e "\n[Pending Contacts API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing GET /api/v1/contacts/pending"
+
+timestamp=$(date +%s)
+path="/api/v1/contacts/pending"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+pendingResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "${LOCAL_API_BASE}/api/v1/contacts/pending" 2>&1)
+
+if [[ "$pendingResponse" =~ '"success"' ]] && [[ "$pendingResponse" =~ 'true' ]] && [[ "$pendingResponse" =~ '"pending"' ]] && [[ "$pendingResponse" =~ '"counts"' ]]; then
+    printf "\t   GET /api/v1/contacts/pending ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   GET /api/v1/contacts/pending ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${pendingResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ CONTACTS SEARCH API TEST ############################
+
+echo -e "\n[Contacts Search API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing GET /api/v1/contacts/search"
+
+timestamp=$(date +%s)
+path="/api/v1/contacts/search"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+searchApiResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "${LOCAL_API_BASE}/api/v1/contacts/search" 2>&1)
+
+if [[ "$searchApiResponse" =~ '"success"' ]] && [[ "$searchApiResponse" =~ 'true' ]] && [[ "$searchApiResponse" =~ '"contacts"' ]]; then
+    printf "\t   GET /api/v1/contacts/search ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   GET /api/v1/contacts/search ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${searchApiResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ SYSTEM SETTINGS API TEST ############################
+
+echo -e "\n[System Settings API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing GET /api/v1/system/settings"
+
+timestamp=$(date +%s)
+path="/api/v1/system/settings"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+settingsApiResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "${LOCAL_API_BASE}/api/v1/system/settings" 2>&1)
+
+if [[ "$settingsApiResponse" =~ '"success"' ]] && [[ "$settingsApiResponse" =~ 'true' ]] && [[ "$settingsApiResponse" =~ '"settings"' ]]; then
+    printf "\t   GET /api/v1/system/settings ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   GET /api/v1/system/settings ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${settingsApiResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ CONTACT PING API TEST ############################
+
+echo -e "\n[Contact Ping API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing POST /api/v1/contacts/ping/:address"
+
+pingAddress="${realContactAddress}"
+timestamp=$(date +%s)
+path="/api/v1/contacts/ping/${pingAddress}"
+
+display_api_request "${testContainer}" "POST" "/api/v1/contacts/ping/${pingAddress}" "" "${pingAddress}"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\";
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+pingApiResponseFull=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s -w "\n%{http_code}" \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "${LOCAL_API_BASE}/api/v1/contacts/ping/${pingAddress}" 2>&1)
+
+pingApiCode=$(echo "$pingApiResponseFull" | tail -1)
+pingApiResponse=$(echo "$pingApiResponseFull" | sed '$d')
+
+display_api_response "${pingApiCode}"
+
+# Response should have proper JSON structure with success field
+if [[ "$pingApiResponse" =~ '"success"' ]]; then
+    printf "\t   POST /api/v1/contacts/ping/:address ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   POST /api/v1/contacts/ping/:address ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${pingApiResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
 ############################ API KEY DELETE TEST ############################
 
 echo -e "\n[API Key Delete Test]"
