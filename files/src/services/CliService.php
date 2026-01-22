@@ -712,11 +712,16 @@ class CliService {
                     'signature_format' => 'HMAC-SHA256(secret, METHOD + "\\n" + PATH + "\\n" + TIMESTAMP + "\\n" + BODY)',
                     'example_endpoints' => [
                         'GET /api/v1/wallet/balance' => 'Get wallet balances',
+                        'GET /api/v1/wallet/overview' => 'Wallet overview (balance + recent transactions)',
                         'POST /api/v1/wallet/send' => 'Send transaction',
                         'GET /api/v1/wallet/transactions' => 'Transaction history',
                         'GET /api/v1/contacts' => 'List contacts',
+                        'GET /api/v1/contacts/pending' => 'Pending contact requests',
+                        'GET /api/v1/contacts/search' => 'Search contacts by name',
                         'POST /api/v1/contacts' => 'Add contact',
-                        'GET /api/v1/system/status' => 'System status'
+                        'POST /api/v1/contacts/ping/:address' => 'Ping contact',
+                        'GET /api/v1/system/status' => 'System status',
+                        'GET /api/v1/system/settings' => 'System settings'
                     ]
                 ]
             ],
@@ -822,12 +827,17 @@ IMPORTANT: Never send the secret in requests - only the computed HMAC signature.
 The server retrieves and decrypts your secret to verify the signature.
 
 Example endpoints:
-  GET  /api/v1/wallet/balance      - Get wallet balances
-  POST /api/v1/wallet/send         - Send transaction
-  GET  /api/v1/wallet/transactions - Transaction history
-  GET  /api/v1/contacts            - List contacts
-  POST /api/v1/contacts            - Add contact
-  GET  /api/v1/system/status       - System status
+  GET  /api/v1/wallet/balance       - Get wallet balances
+  GET  /api/v1/wallet/overview      - Wallet overview (balance + recent transactions)
+  POST /api/v1/wallet/send          - Send transaction
+  GET  /api/v1/wallet/transactions  - Transaction history
+  GET  /api/v1/contacts             - List contacts
+  GET  /api/v1/contacts/pending     - Pending contact requests
+  GET  /api/v1/contacts/search?q=   - Search contacts by name
+  POST /api/v1/contacts             - Add contact
+  POST /api/v1/contacts/ping/:addr  - Ping contact
+  GET  /api/v1/system/status        - System status
+  GET  /api/v1/system/settings      - System settings
 
 HELP;
 
