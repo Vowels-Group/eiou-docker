@@ -265,6 +265,8 @@ print(response.json())
 
 Get wallet balances grouped by contact.
 
+**Alias:** `/api/v1/wallet/balances` (plural form also accepted)
+
 **Permission:** `wallet:read`
 
 **Response:**

@@ -1,11 +1,38 @@
    // Copyright 2025-2026 Vowels Group, LLC
 
-// Operation timeout configuration (15 seconds)
+/**
+ * @fileoverview EIOU Wallet GUI JavaScript
+ * @description Main JavaScript file for the EIOU wallet web interface.
+ * Handles wallet operations, contact management, transaction display, and UI interactions.
+ */
+
+/**
+ * Operation timeout in milliseconds.
+ * Used to detect stalled operations and show timeout notifications.
+ * @type {number}
+ * @constant
+ */
 var OPERATION_TIMEOUT_MS = 15000;
+
+/**
+ * ID of the active operation timeout timer.
+ * Set when an operation starts, cleared on completion or timeout.
+ * @type {number|null}
+ */
 var operationTimeoutId = null;
+
+/**
+ * ID of the countdown interval timer for timeout display.
+ * @type {number|null}
+ */
 var countdownIntervalId = null;
 
-// Storage availability check for Tor Browser compatibility
+/**
+ * Flag indicating whether sessionStorage is available.
+ * Set to false in Tor Browser with strict privacy settings.
+ * @type {boolean}
+ * @constant
+ */
 var storageAvailable = (function() {
     try {
         var test = '__storage_test__';
@@ -412,7 +439,13 @@ function openTransactionModal(index) {
     var directionIcon = tx.type === 'sent' ? 'fa-arrow-up' : 'fa-arrow-down';
     var directionText = tx.type === 'sent' ? 'Sent' : 'Received';
 
-    // Truncate long values for display
+    /**
+     * Truncates a string to a specified length with ellipsis.
+     * @param {string|null} str - The string to truncate
+     * @param {number} len - Maximum length before truncation
+     * @returns {string} Truncated string with '...' or 'N/A' if null
+     * @private
+     */
     function truncate(str, len) {
         if (!str) return 'N/A';
         return str.length > len ? str.substring(0, len) + '...' : str;
@@ -1136,7 +1169,11 @@ function showManualCopyModal(text, successMessage) {
     textArea.focus();
     textArea.select();
 
-    // Close handlers
+    /**
+     * Closes the manual copy modal and cleans up event listeners.
+     * Removes the overlay from DOM and detaches keyboard listener.
+     * @private
+     */
     function closeModal() {
         if (document.body.contains(overlay)) {
             document.body.removeChild(overlay);
@@ -1144,6 +1181,11 @@ function showManualCopyModal(text, successMessage) {
         document.removeEventListener('keydown', escHandler);
     }
 
+    /**
+     * Handles Escape key press to close the modal.
+     * @param {KeyboardEvent} e - The keyboard event
+     * @private
+     */
     function escHandler(e) {
         var isEscape = e.key === 'Escape' || e.keyCode === 27;
         if (isEscape) {

@@ -46,6 +46,44 @@ eiou info --json
 eiou viewbalances -j --no-metadata
 ```
 
+### JSON Output Structure
+
+When using `--json`, all commands return a consistent response format:
+
+```json
+{
+    "success": true,
+    "data": {
+        // Command-specific response data
+    },
+    "metadata": {
+        "timestamp": "2026-01-24T17:45:00Z",
+        "node_id": "http://alice",
+        "command": "viewbalances"
+    }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | boolean | Whether the command executed successfully |
+| `data` | object | Command-specific response data |
+| `metadata` | object | Request metadata (excluded with `--no-metadata`) |
+| `metadata.timestamp` | string | ISO 8601 timestamp of the response |
+| `metadata.node_id` | string | Node identifier (hostname/address) |
+| `metadata.command` | string | The command that was executed |
+
+**Error Response:**
+```json
+{
+    "success": false,
+    "error": {
+        "code": "INSUFFICIENT_BALANCE",
+        "message": "Insufficient funds for this transaction"
+    }
+}
+```
+
 ---
 
 ## Wallet Commands
