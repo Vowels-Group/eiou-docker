@@ -3,7 +3,7 @@
 # =============================================================================
 # Purpose: Single container for basic testing and development
 #
-# Topology: Single node (alice)
+# Topology: Single node (eiou-single)
 #
 # Resource Requirements: ~275MB RAM
 #
@@ -11,9 +11,9 @@
 #   docker-compose -f docker-compose-single.yml up -d --build
 #   docker-compose -f docker-compose-single.yml down -v
 #
-# Environment Variables:
-#   EIOU_INIT_TIMEOUT: Initialization timeout in seconds (default: 120)
-#                      Increase for WSL2 or slow environments
+# Documentation:
+#   For complete environment variable and volume documentation, see:
+#   docs/DOCKER_CONFIGURATION.md
 #
 # Note: This compose file creates a standalone container. For multi-node
 # setups, contacts must be established manually after container startup.
@@ -31,24 +31,82 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    # =========================================================================
+    # ENVIRONMENT VARIABLES
+    # =========================================================================
+    # See docs/DOCKER_CONFIGURATION.md for complete documentation
+    # =========================================================================
     environment:
+      # QUICKSTART (required for HTTP/HTTPS mode)
+      # Sets the node's hostname. Node will be reachable at http://<value>
       - QUICKSTART=eiou
-      # WSL2/Slow Environment Timeouts (optional):
-      # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
-      # - EIOU_TOR_TIMEOUT=120              # Tor connection wait (default: 120s)
-      # SSL Configuration (optional):
-      # - SSL_DOMAIN=node.example.com       # Override certificate CN
-      # - SSL_EXTRA_SANS=DNS:alt.local,IP:10.0.0.1  # Additional SANs
-    # For external certificates (Let's Encrypt, etc.), uncomment:
-    # volumes:
-    #   - /path/to/certs:/ssl-certs:ro     # Mount server.crt, server.key
-    # For CA-signed certificates, uncomment:
-    #   - ./ssl-ca:/ssl-ca:ro              # Mount ca.crt, ca.key
+
+      # WALLET RESTORATION (optional - choose one method)
+      # -----------------------------------------------------------------
+      # Method 1 - File-based (RECOMMENDED for security):
+      #   Mount a file containing the 24-word seed phrase
+      # - RESTORE_FILE=/restore/seed
+      #
+      # Method 2 - Environment variable (less secure):
+      #   Seed phrase visible in process listings
+      # - RESTORE=word1 word2 word3 ... word24
+
+      # SSL CERTIFICATE CONFIGURATION (optional)
+      # -----------------------------------------------------------------
+      # Override the certificate Common Name (CN):
+      # - SSL_DOMAIN=node.example.com
+      #
+      # Add Subject Alternative Names (DNS or IP):
+      # - SSL_EXTRA_SANS=DNS:alt.local,IP:10.0.0.1
+
+      # TIMEOUT CONFIGURATION (optional - increase for WSL2/slow environments)
+      # -----------------------------------------------------------------
+      # - EIOU_HS_TIMEOUT=60       # Hidden service wait (default: 60s)
+      # - EIOU_TOR_TIMEOUT=120     # Tor connection wait (default: 120s)
+
+      # FEATURE FLAGS (optional)
+      # -----------------------------------------------------------------
+      # - EIOU_CONTACT_STATUS_ENABLED=true  # Enable contact status pinging
+      # - EIOU_TEST_MODE=true               # Enable manual message processing
+
+    # =========================================================================
+    # VOLUME MOUNTS
+    # =========================================================================
+    # These named volumes persist data across container restarts.
+    # Use 'docker-compose down -v' to remove all data.
+    #
+    # BACKUP PRIORITY:
+    #   CRITICAL: mysql-data (transactions, contacts), files (wallet keys)
+    #   LOW: index, eiou (regenerated on startup)
+    #
+    # See docs/DOCKER_CONFIGURATION.md for backup/restore instructions
+    # =========================================================================
     volumes:
+      # Database: transactions, contacts, balances (CRITICAL - backup this)
       - eiou-mysql-data:/var/lib/mysql
+
+      # Config: wallet keys, userconfig.json, encryption data (CRITICAL)
       - eiou-files:/etc/eiou/
+
+      # Web: GUI and API files (regenerated on build)
       - eiou-index:/var/www/html
+
+      # CLI: eiou command-line tool (regenerated on build)
       - eiou-eiou:/usr/local/bin/
+
+      # OPTIONAL: External SSL certificates (Let's Encrypt, etc.)
+      # Uncomment to use externally-obtained certificates:
+      # - /path/to/certs:/ssl-certs:ro   # Mount server.crt, server.key
+
+      # OPTIONAL: CA-signed certificates
+      # Generate CA with: ./scripts/create-ssl-ca.sh ./ssl-ca
+      # Uncomment to use CA-signed certificates:
+      # - ./ssl-ca:/ssl-ca:ro            # Mount ca.crt, ca.key
+
+      # OPTIONAL: Wallet restoration from seed file
+      # Uncomment with RESTORE_FILE env var:
+      # - /path/to/seed.txt:/restore/seed:ro
+
     restart: unless-stopped
     stop_grace_period: 45s
     healthcheck:
@@ -63,6 +121,12 @@ networks:
     driver: bridge
     name: eiou-network-compose
 
+# =============================================================================
+# NAMED VOLUMES
+# =============================================================================
+# Named volumes persist data independently of container lifecycle.
+# To completely reset: docker-compose -f docker-compose-single.yml down -v
+# =============================================================================
 volumes:
   eiou-mysql-data:
     name: eiou-mysql-data

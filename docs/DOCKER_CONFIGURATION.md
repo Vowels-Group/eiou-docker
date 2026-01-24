@@ -1,0 +1,303 @@
+# Docker Configuration Reference
+
+Complete reference for environment variables and volume mounts used in EIOU Docker containers.
+
+## Table of Contents
+
+1. [Environment Variables](#environment-variables)
+2. [Volume Mounts](#volume-mounts)
+3. [SSL Certificate Configuration](#ssl-certificate-configuration)
+4. [Wallet Restoration](#wallet-restoration)
+5. [Timeout Configuration](#timeout-configuration)
+6. [Backup and Restore](#backup-and-restore)
+
+---
+
+## Environment Variables
+
+### Quick Reference
+
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `QUICKSTART` | (none) | Yes* | Node hostname for HTTP/HTTPS addressing |
+| `RESTORE` | (none) | No | 24-word seed phrase for wallet restoration |
+| `RESTORE_FILE` | (none) | No | Path to file containing seed phrase |
+| `SSL_DOMAIN` | `$QUICKSTART` | No | Primary domain for SSL certificate CN |
+| `SSL_EXTRA_SANS` | (none) | No | Additional Subject Alternative Names |
+| `EIOU_HS_TIMEOUT` | `60` | No | Tor hidden service wait timeout (seconds) |
+| `EIOU_TOR_TIMEOUT` | `120` | No | Tor connectivity timeout (seconds) |
+| `EIOU_TEST_MODE` | `false` | No | Enable manual message processing |
+| `EIOU_CONTACT_STATUS_ENABLED` | `true` | No | Enable contact status pinging |
+
+*Required unless using Tor-only mode
+
+### Detailed Descriptions
+
+#### QUICKSTART
+
+Sets the node's hostname for HTTP/HTTPS addressing. When set, the node generates a self-signed SSL certificate and is reachable at `https://<value>` or `http://<value>`.
+
+```yaml
+environment:
+  - QUICKSTART=alice
+```
+
+The node will be accessible at:
+- `http://alice` (within Docker network)
+- `https://alice` (within Docker network)
+
+#### RESTORE / RESTORE_FILE
+
+Restore a wallet from a BIP39 24-word seed phrase. Two methods are available:
+
+**Method 1: File-based (RECOMMENDED)**
+
+More secure as the seed phrase is not visible in process listings or environment variable dumps.
+
+```yaml
+environment:
+  - RESTORE_FILE=/restore/seed
+volumes:
+  - /path/to/seed.txt:/restore/seed:ro
+```
+
+**Method 2: Environment variable**
+
+Convenient but less secure - the seed phrase may be visible in logs or process listings.
+
+```yaml
+environment:
+  - RESTORE=word1 word2 word3 ... word24
+```
+
+#### SSL_DOMAIN
+
+Override the primary domain used in the SSL certificate's Common Name (CN). Useful when the container hostname differs from the external domain.
+
+```yaml
+environment:
+  - QUICKSTART=internal-name
+  - SSL_DOMAIN=public.example.com
+```
+
+#### SSL_EXTRA_SANS
+
+Add additional Subject Alternative Names (SANs) to the SSL certificate. Format: comma-separated list of `TYPE:value` pairs.
+
+```yaml
+environment:
+  - SSL_EXTRA_SANS=DNS:alt.example.com,IP:192.168.1.100,DNS:node.local
+```
+
+Supported types:
+- `DNS:hostname` - Additional DNS names
+- `IP:address` - IP addresses
+
+---
+
+## Volume Mounts
+
+### Required Volumes
+
+All EIOU containers use four named volumes for data persistence:
+
+| Volume | Container Path | Purpose | Backup Priority |
+|--------|----------------|---------|-----------------|
+| `{node}-mysql-data` | `/var/lib/mysql` | Database: transactions, contacts, balances | **CRITICAL** |
+| `{node}-files` | `/etc/eiou/` | Config: wallet keys, userconfig.json, encryption data | **CRITICAL** |
+| `{node}-index` | `/var/www/html` | Web: GUI and API files | Low (regenerated) |
+| `{node}-eiou` | `/usr/local/bin/` | CLI: eiou command-line tool | Low (regenerated) |
+
+**Example:**
+```yaml
+volumes:
+  - alice-mysql-data:/var/lib/mysql     # Transaction history, contacts
+  - alice-files:/etc/eiou/              # Wallet keys, configuration
+  - alice-index:/var/www/html           # Web interface
+  - alice-eiou:/usr/local/bin/          # CLI tool
+```
+
+### Optional Volumes
+
+#### External SSL Certificates
+
+Mount externally-obtained SSL certificates (Let's Encrypt, commercial CA, etc.):
+
+```yaml
+volumes:
+  - /path/to/certs:/ssl-certs:ro
+```
+
+Required files in the mounted directory:
+- `server.crt` - SSL certificate (PEM format)
+- `server.key` - Private key (PEM format)
+- `ca.crt` (optional) - CA certificate chain
+
+#### CA-Signed Certificates
+
+Mount a local Certificate Authority for signing certificates:
+
+```yaml
+volumes:
+  - ./ssl-ca:/ssl-ca:ro
+```
+
+Required files:
+- `ca.crt` - CA certificate
+- `ca.key` - CA private key
+
+Generate a CA using: `./scripts/create-ssl-ca.sh ./ssl-ca`
+
+---
+
+## SSL Certificate Configuration
+
+### Certificate Priority
+
+The container selects SSL certificates in this order:
+
+1. **External certificates** (`/ssl-certs/server.crt`) - Mounted externally-obtained certs
+2. **CA-signed** (`/ssl-ca/ca.crt`) - Self-generated, signed by mounted CA
+3. **Self-signed** - Generated automatically using SSL_DOMAIN or QUICKSTART
+
+### Let's Encrypt Example
+
+```yaml
+services:
+  eiou:
+    environment:
+      - QUICKSTART=mynode
+      - SSL_DOMAIN=node.example.com
+    volumes:
+      - /etc/letsencrypt/live/node.example.com:/ssl-certs:ro
+```
+
+### Local CA Example
+
+```bash
+# Generate CA once
+./scripts/create-ssl-ca.sh ./ssl-ca
+
+# Install ca.crt in your browser's trust store
+```
+
+```yaml
+services:
+  eiou:
+    environment:
+      - QUICKSTART=alice
+    volumes:
+      - ./ssl-ca:/ssl-ca:ro
+```
+
+---
+
+## Wallet Restoration
+
+### Security Recommendations
+
+1. **Prefer RESTORE_FILE over RESTORE** - File-based restoration is more secure
+2. **Use read-only mounts** - Mount seed files as `:ro`
+3. **Delete seed files after restoration** - Don't leave them mounted permanently
+4. **Use secrets management** - In production, consider Docker secrets or vault
+
+### Restoration Process
+
+1. Create seed file:
+   ```bash
+   echo "word1 word2 ... word24" > /secure/location/seed.txt
+   chmod 600 /secure/location/seed.txt
+   ```
+
+2. Start container with restoration:
+   ```yaml
+   environment:
+     - RESTORE_FILE=/restore/seed
+   volumes:
+     - /secure/location/seed.txt:/restore/seed:ro
+   ```
+
+3. After successful restoration, remove the mount and restart
+
+---
+
+## Timeout Configuration
+
+### Default Timeouts
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `EIOU_HS_TIMEOUT` | 60s | Wait for Tor hidden service to become available |
+| `EIOU_TOR_TIMEOUT` | 120s | Wait for Tor network connectivity |
+| `EIOU_INIT_TIMEOUT` | 120s | Container initialization timeout (test runner) |
+
+### WSL2 / Slow Environments
+
+Increase timeouts for slower environments:
+
+```yaml
+environment:
+  - EIOU_HS_TIMEOUT=120
+  - EIOU_TOR_TIMEOUT=240
+```
+
+### Disabling Tor Wait
+
+For HTTP-only testing, you can reduce Tor timeouts:
+
+```yaml
+environment:
+  - EIOU_HS_TIMEOUT=5
+  - EIOU_TOR_TIMEOUT=10
+```
+
+---
+
+## Backup and Restore
+
+### Critical Data
+
+**Must backup:**
+- `{node}-mysql-data` - Contains all transaction history and contact relationships
+- `{node}-files` - Contains wallet private keys and encryption keys
+
+**Optional backup:**
+- `{node}-index` and `{node}-eiou` - Regenerated on container startup
+
+### Backup Commands
+
+```bash
+# Backup volumes
+docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
+  alpine tar czf /backup/alice-mysql-data.tar.gz -C /data .
+
+docker run --rm -v alice-files:/data -v /backup:/backup \
+  alpine tar czf /backup/alice-files.tar.gz -C /data .
+```
+
+### Restore Commands
+
+```bash
+# Restore volumes
+docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
+  alpine sh -c "cd /data && tar xzf /backup/alice-mysql-data.tar.gz"
+
+docker run --rm -v alice-files:/data -v /backup:/backup \
+  alpine sh -c "cd /data && tar xzf /backup/alice-files.tar.gz"
+```
+
+### Complete Reset
+
+Remove all data and start fresh:
+
+```bash
+docker-compose -f docker-compose-single.yml down -v
+```
+
+---
+
+## See Also
+
+- [CLI Reference](CLI_REFERENCE.md) - Command-line interface documentation
+- [API Reference](API_REFERENCE.md) - REST API documentation
+- [docker-compose-single.yml](../docker-compose-single.yml) - Reference template with inline documentation
