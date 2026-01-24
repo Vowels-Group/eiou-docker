@@ -120,6 +120,39 @@ fetch(`http://localhost:8080${path}`, {
 });
 ```
 
+### Example: Python
+
+```python
+import hashlib
+import hmac
+import time
+import requests
+
+api_key = 'eiou_your_key_id'
+api_secret = 'your_api_secret'
+method = 'GET'
+path = '/api/v1/wallet/balance'
+timestamp = str(int(time.time()))
+body = ''
+
+string_to_sign = f"{method}\n{path}\n{timestamp}\n{body}"
+signature = hmac.new(
+    api_secret.encode(),
+    string_to_sign.encode(),
+    hashlib.sha256
+).hexdigest()
+
+response = requests.get(
+    f"http://localhost:8080{path}",
+    headers={
+        'X-API-Key': api_key,
+        'X-API-Timestamp': timestamp,
+        'X-API-Signature': signature
+    }
+)
+print(response.json())
+```
+
 ---
 
 ## Response Format
@@ -132,6 +165,7 @@ fetch(`http://localhost:8080${path}`, {
     "data": {
         // Response data here
     },
+    "request_id": "req_abc123",
     "timestamp": "2026-01-23T12:00:00Z"
 }
 ```
@@ -145,6 +179,7 @@ fetch(`http://localhost:8080${path}`, {
         "code": "error_code",
         "message": "Human-readable error message"
     },
+    "request_id": "req_abc123",
     "timestamp": "2026-01-23T12:00:00Z"
 }
 ```
@@ -196,6 +231,23 @@ fetch(`http://localhost:8080${path}`, {
 | Code | Description |
 |------|-------------|
 | `rate_limit_exceeded` | Too many requests per minute |
+
+### Operation Errors
+
+| Code | Description |
+|------|-------------|
+| `key_not_found` | API key does not exist |
+| `ping_failed` | Contact ping operation failed |
+| `ping_error` | Error during contact ping |
+| `update_failed` | Contact update operation failed |
+| `update_error` | Error during contact update |
+| `delete_failed` | Contact deletion failed |
+| `delete_error` | Error during contact deletion |
+| `block_failed` | Contact block operation failed |
+| `block_error` | Error during block operation |
+| `unblock_failed` | Contact unblock operation failed |
+| `unblock_error` | Error during unblock operation |
+| `contact_add_failed` | Failed to add contact |
 
 ### Server Errors (500)
 
@@ -982,3 +1034,12 @@ Delete an API key.
 |-------|-------------|
 | `direct` | Direct peer-to-peer transaction |
 | `relay` | Transaction routed through intermediaries |
+
+---
+
+## See Also
+
+- [API Quick Reference](API_QUICK_REFERENCE.md) - Condensed API reference
+- [Error Codes](ERROR_CODES.md) - Complete error code reference
+- [CLI Reference](CLI_REFERENCE.md) - Command-line interface documentation
+- [Docker Configuration](DOCKER_CONFIGURATION.md) - Container configuration

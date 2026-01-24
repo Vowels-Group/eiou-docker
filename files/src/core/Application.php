@@ -116,7 +116,7 @@ class Application {
     /**
      * Create Database
      */
-    private function constructDatabase() {
+    private function constructDatabase(): void {
         require_once '/etc/eiou/src/database/DatabaseSetup.php';
         freshInstall();
     }
@@ -124,9 +124,9 @@ class Application {
     /**
      * Get database connection (lazy loaded)
      *
-     * @return PDO|null
+     * @return void
      */
-    private function getDatabase() {
+    private function getDatabase(): void {
         require_once '/etc/eiou/src/database/Pdo.php';
         try{
             $this->pdo = createPDOConnection();
@@ -225,8 +225,9 @@ class Application {
      * Set database connection (for testing)
      *
      * @param PDO $pdo
+     * @return void
      */
-    public function setDatabase($pdo) {
+    public function setDatabase($pdo): void {
         $this->pdo = $pdo;
     }
 
@@ -241,8 +242,10 @@ class Application {
 
     /**
      * Load current database config
+     *
+     * @return void
      */
-    private function loadCurrentDatabase() {
+    private function loadCurrentDatabase(): void {
         require_once '/etc/eiou/src/core/DatabaseContext.php';
         $this->currentDatabase = DatabaseContext::getInstance();
     }
@@ -259,18 +262,20 @@ class Application {
 
     /**
      * Load current user config
+     *
+     * @return void
      */
-    public function loadCurrentUser() {
+    public function loadCurrentUser(): void {
         require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
     }
 
     /**
      * Get public key from loaded user
-     * 
+     *
      * @return string|null
      */
-    public function getPublicKey() {
+    public function getPublicKey(): ?string {
         if($this->currentUserLoaded()){
             return $this->currentUser->getPublicKey();
         }
@@ -279,10 +284,10 @@ class Application {
 
     /**
      * Get public key hash from loaded user
-     * 
+     *
      * @return string|null
      */
-    public function getPublicKeyHash() {
+    public function getPublicKeyHash(): ?string {
         if($this->currentUserLoaded()){
             return $this->currentUser->getPublicKeyHash();
         }
@@ -315,16 +320,20 @@ class Application {
 
     /**
      * Load services from serviceContainer
+     *
+     * @return void
      */
-    public function loadserviceContainer() {
+    public function loadserviceContainer(): void {
         require_once $this->getRootPath() . '/src/services/ServiceContainer.php';
         $this->services = ServiceContainer::getInstance($this->currentUser, $this->pdo);
     }
 
     /**
      * Load utility services from utilityServiceContainer
+     *
+     * @return void
      */
-    public function loadUtilityServiceContainer() {
+    public function loadUtilityServiceContainer(): void {
         require_once $this->getRootPath() . '/src/services/utilities/UtilityServiceContainer.php';
         $this->utilityServices = UtilityServiceContainer::getInstance($this->services);
     }
@@ -446,8 +455,9 @@ class Application {
      * @deprecated Use ServiceContainer::registerService() instead via $app->services->registerService()
      * @param string $name
      * @param object|callable $service
+     * @return void
      */
-    public function registerService($name, $service) {
+    public function registerService($name, $service): void {
         // Delegate to ServiceContainer
         if ($this->services instanceof ServiceContainer) {
             $this->services->registerService($name, $service);
@@ -461,7 +471,7 @@ class Application {
      * @param string $name
      * @return mixed
      */
-    public function getService($name) {
+    public function getService($name): mixed {
         // Delegate to ServiceContainer
         if ($this->services instanceof ServiceContainer) {
             return $this->services->getService($name);
@@ -474,7 +484,7 @@ class Application {
      *
      * @return bool
      */
-    public function isCli() {
+    public function isCli(): bool {
         return php_sapi_name() === 'cli';
     }
 
@@ -483,7 +493,7 @@ class Application {
      *
      * @return bool
      */
-    public function isDevelopment() {
+    public function isDevelopment(): bool {
         return Constants::APP_ENV === 'development';
     }
 
@@ -492,7 +502,7 @@ class Application {
      *
      * @return bool
      */
-    public function isDebug() {
+    public function isDebug(): bool {
         return Constants::APP_DEBUG === true;
     }
 
@@ -501,7 +511,7 @@ class Application {
      *
      * @return string
      */
-    public function getRootPath() {
+    public function getRootPath(): string {
         return dirname(__DIR__, 2);
     }
 
@@ -510,14 +520,16 @@ class Application {
      *
      * @return string
      */
-    public function getConfigPath() {
+    public function getConfigPath(): string {
         return Constants::PATH_CONFIG_DIR ?: '/etc/eiou';
     }
 
     /**
      * Reload processor configs
+     *
+     * @return void
      */
-    public function reloadProcessors() {
+    public function reloadProcessors(): void {
         $items = glob('/tmp/' . '*.pid');
         foreach ($items as $item) {
             if (is_file($item)) {

@@ -6,10 +6,14 @@ Complete reference for environment variables and volume mounts used in EIOU Dock
 
 1. [Environment Variables](#environment-variables)
 2. [Volume Mounts](#volume-mounts)
-3. [SSL Certificate Configuration](#ssl-certificate-configuration)
-4. [Wallet Restoration](#wallet-restoration)
-5. [Timeout Configuration](#timeout-configuration)
-6. [Backup and Restore](#backup-and-restore)
+3. [Network Configuration](#network-configuration)
+4. [SSL Certificate Configuration](#ssl-certificate-configuration)
+5. [Wallet Restoration](#wallet-restoration)
+6. [Timeout Configuration](#timeout-configuration)
+7. [Healthcheck Configuration](#healthcheck-configuration)
+8. [Security Configuration](#security-configuration)
+9. [Backup and Restore](#backup-and-restore)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -93,6 +97,34 @@ Supported types:
 - `DNS:hostname` - Additional DNS names
 - `IP:address` - IP addresses
 
+#### EIOU_TEST_MODE
+
+Enables test mode for manual message processing. When enabled:
+- Unlocks CLI commands `eiou in` and `eiou out` for manual message queue processing
+- Bypasses rate limiting for automated testing
+- Should only be used in development/testing environments
+
+```yaml
+environment:
+  - EIOU_TEST_MODE=true
+```
+
+**Warning:** Never enable in production - bypasses security rate limiting.
+
+#### EIOU_CONTACT_STATUS_ENABLED
+
+Controls the contact status polling background processor. When enabled (default), the node periodically pings contacts to update their online/offline status.
+
+```yaml
+environment:
+  - EIOU_CONTACT_STATUS_ENABLED=true   # Enable (default)
+  - EIOU_CONTACT_STATUS_ENABLED=false  # Disable
+```
+
+**Use Cases:**
+- Disable during automated tests to prevent interference with sync operations
+- Disable in low-bandwidth environments to reduce network traffic
+
 ---
 
 ## Volume Mounts
@@ -147,6 +179,47 @@ Required files:
 - `ca.key` - CA private key
 
 Generate a CA using: `./scripts/create-ssl-ca.sh ./ssl-ca`
+
+---
+
+## Network Configuration
+
+### Docker Network
+
+EIOU containers communicate over a Docker bridge network. All compose files use a shared network named `eiou-network-compose`.
+
+```yaml
+networks:
+  eiou-network-compose:
+    driver: bridge
+    name: eiou-network-compose
+```
+
+### Port Mappings
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 80   | TCP      | HTTP web interface and API |
+| 443  | TCP      | HTTPS web interface and API (SSL) |
+
+**Note:** Only the first container in multi-node setups should expose ports 80/443 to the host. Other containers communicate internally via the Docker network.
+
+### Container Hostname Resolution
+
+Containers use their service name or container_name as their hostname within the Docker network:
+
+```bash
+# From inside container 'alice', reach 'bob' via:
+curl http://bob/api/status    # Container name
+curl https://bob/api/status   # HTTPS with self-signed cert
+```
+
+### Tor Network
+
+EIOU containers automatically configure Tor hidden services:
+- Hidden service directory: `/var/lib/tor/hidden_service/`
+- Hidden service port: Maps external port 80 to internal Apache
+- Tor SOCKS proxy: Available at `127.0.0.1:9050` inside the container
 
 ---
 
@@ -253,6 +326,76 @@ environment:
 
 ---
 
+## Healthcheck Configuration
+
+Docker healthchecks monitor container readiness. Default configuration:
+
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost/"]
+  interval: 30s        # Check every 30 seconds
+  timeout: 20s         # Timeout per check
+  retries: 5           # Mark unhealthy after 5 failures
+  start_period: 120s   # Grace period for container startup
+```
+
+### Healthcheck Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `test` | `curl -f http://localhost/` | Command to verify health |
+| `interval` | `30s` | Time between health checks |
+| `timeout` | `20s` | Maximum time for health check |
+| `retries` | `5` | Failures before unhealthy |
+| `start_period` | `120s` | Startup grace period |
+
+### Custom Healthcheck for Slow Environments
+
+For WSL2 or limited resources:
+
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost/"]
+  interval: 60s
+  timeout: 30s
+  retries: 10
+  start_period: 180s
+```
+
+---
+
+## Security Configuration
+
+### Container Privilege Model
+
+EIOU containers run as root during initialization, then services drop privileges:
+
+| Service | Runtime User | Purpose |
+|---------|--------------|---------|
+| Apache | `www-data` | Web server and API |
+| MariaDB | `mysql` | Database operations |
+| Tor | `debian-tor` | Tor hidden service |
+| PHP processors | `root` | Background message processing |
+
+### Critical File Permissions
+
+| Path | Permissions | Owner | Purpose |
+|------|-------------|-------|---------|
+| `/etc/eiou/` | 755 (dir) / 644 (files) | www-data | Configuration |
+| `/var/lib/mysql/` | 700 | mysql | Database files |
+| `/var/lib/tor/hidden_service/` | 700 | debian-tor | Tor keys |
+| `/etc/apache2/ssl/server.key` | 600 | root | SSL private key |
+
+### Secure Seed Phrase Handling
+
+**Best Practices:**
+1. Always use `RESTORE_FILE` instead of `RESTORE` environment variable
+2. Mount seed files as read-only (`:ro`)
+3. Delete seed files after successful restoration
+4. Never commit seed phrases to version control
+
+---
+
 ## Backup and Restore
 
 ### Critical Data
@@ -296,8 +439,105 @@ docker-compose -f docker-compose-single.yml down -v
 
 ---
 
+## Troubleshooting
+
+### Container Startup Issues
+
+#### Container Exits Immediately
+
+**Symptoms:** Container starts but exits with code 1
+
+**Solutions:**
+```bash
+# Check container logs
+docker logs <container_name>
+
+# Verify volume permissions
+docker run --rm -v mynode-files:/data alpine ls -la /data
+
+# Reset and rebuild
+docker-compose -f <config>.yml down -v
+docker-compose -f <config>.yml up -d --build
+```
+
+#### Container Stuck at "Waiting for MariaDB"
+
+**Cause:** MariaDB taking too long to initialize (common on first startup)
+
+**Solutions:**
+- Wait longer (up to 2 minutes on first run)
+- Check MariaDB logs: `docker logs <container> 2>&1 | grep -i maria`
+- Ensure sufficient memory (minimum 275MB per container)
+
+### Tor Connectivity Issues
+
+#### Hidden Service Not Ready
+
+**Symptoms:** "Hidden service hostname file not ready" warning
+
+**Solution:** Increase timeout:
+```yaml
+environment:
+  - EIOU_HS_TIMEOUT=120    # Increase from default 60s
+```
+
+#### Tor Connection Timeout
+
+**Symptoms:** "Tor connection could not be verified" warning
+
+**Solution:**
+```yaml
+environment:
+  - EIOU_TOR_TIMEOUT=240   # Increase from default 120s
+```
+
+### SSL Certificate Issues
+
+#### Browser Shows Certificate Warning
+
+**Cause:** Self-signed certificate not trusted by browser
+
+**Solutions:**
+1. Install CA-signed certificates (see SSL Certificate Configuration)
+2. Add exception in browser for development
+3. Use `./scripts/create-ssl-ca.sh` to create local CA
+
+### Performance Issues (WSL2)
+
+**Cause:** WSL2 has slower I/O and network performance
+
+**Solutions:**
+```yaml
+environment:
+  - EIOU_HS_TIMEOUT=120      # Double default
+  - EIOU_TOR_TIMEOUT=240     # Double default
+```
+
+For tests:
+```bash
+EIOU_INIT_TIMEOUT=180 ./run-all-tests.sh http4
+```
+
+### Common Log Locations
+
+| Log | Location | Purpose |
+|-----|----------|---------|
+| Apache access | `/var/log/apache2/access.log` | HTTP requests |
+| Apache error | `/var/log/apache2/error.log` | Web server errors |
+| PHP errors | `/var/log/php_errors.log` | Application errors |
+| Tor | `/var/log/tor/log` | Tor network status |
+
+```bash
+# View logs inside container
+docker exec <container> tail -f /var/log/apache2/error.log
+docker exec <container> tail -f /var/log/php_errors.log
+```
+
+---
+
 ## See Also
 
 - [CLI Reference](CLI_REFERENCE.md) - Command-line interface documentation
 - [API Reference](API_REFERENCE.md) - REST API documentation
+- [Error Codes](ERROR_CODES.md) - Complete error code reference
 - [docker-compose-single.yml](../docker-compose-single.yml) - Reference template with inline documentation
