@@ -107,9 +107,9 @@ class ServiceContainer {
     /**
      * Get database connection (lazy loaded)
      *
-     * @return PDO|null
+     * @return void
      */
-    public function loadDatabase() {
+    public function loadDatabase(): void {
         require_once '/etc/eiou/src/database/Pdo.php';
         try {
             $this->pdo = createPDOConnection();
@@ -658,7 +658,7 @@ class ServiceContainer {
      * @param CliOutputManager $output CLI output manager for formatting
      * @return ApiKeyService
      */
-    public function getApiKeyService($output): ApiKeyService {
+    public function getApiKeyService(CliOutputManager $output): ApiKeyService {
         if (!isset($this->services['ApiKeyService'])) {
             require_once __DIR__ . '/ApiKeyService.php';
             $this->services['ApiKeyService'] = new ApiKeyService(

@@ -274,9 +274,10 @@ class P2pService {
      * Check P2P is possible
      *
      * @param array $request Request data
-     * @return bool True if P2P possible, False otherwise.
+     * @param bool $echo Whether to echo rejection response (default: true)
+     * @return bool True if P2P possible, false otherwise
      */
-    public function checkP2pPossible(array $request, $echo = true) : bool{
+    public function checkP2pPossible(array $request, bool $echo = true): bool {
         $senderAddress = $request['senderAddress'];
         $pubkey = $request['senderPublicKey'];
         // Check if User is not blocked

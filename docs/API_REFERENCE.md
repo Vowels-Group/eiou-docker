@@ -815,17 +815,25 @@ Get system health status.
 {
     "success": true,
     "data": {
-        "status": "healthy",
+        "status": "operational",
         "version": "1.0.0",
-        "uptime": 86400,
-        "database": "connected",
-        "services": {
-            "sync": "running",
-            "message_check": "running"
-        }
-    }
+        "environment": "production",
+        "database": "healthy",
+        "processors": {
+            "p2p": true,
+            "transaction": true,
+            "cleanup": true
+        },
+        "timestamp": "2026-01-24T12:00:00+00:00"
+    },
+    "request_id": "req_abc123"
 }
 ```
+
+**Fields:**
+- `status`: Always `"operational"` when system is running
+- `database`: `"healthy"` or `"unhealthy"` based on database connectivity
+- `processors`: Boolean flags indicating if processor PID files exist
 
 ---
 
@@ -843,23 +851,32 @@ Get system metrics.
     "data": {
         "transactions": {
             "total": 1500,
-            "pending": 5,
-            "completed": 1490,
-            "failed": 5
+            "by_type": {
+                "send": 750,
+                "receive": 745,
+                "fee": 5
+            }
         },
         "contacts": {
-            "total": 25,
-            "active": 20,
-            "pending": 3,
-            "blocked": 2
+            "total_accepted": 25
         },
-        "api": {
-            "requests_today": 450,
-            "avg_response_time_ms": 45
-        }
-    }
+        "p2p": {
+            "queued": 3
+        },
+        "uptime": "5d 12h 30m",
+        "memory_usage": 52428800,
+        "timestamp": "2026-01-24T12:00:00+00:00"
+    },
+    "request_id": "req_abc123"
 }
 ```
+
+**Fields:**
+- `transactions.by_type`: Count of transactions grouped by type (send, receive, fee, etc.)
+- `contacts.total_accepted`: Number of mutually accepted contacts
+- `p2p.queued`: Number of P2P relay messages waiting to be processed
+- `uptime`: Formatted uptime string (days, hours, minutes)
+- `memory_usage`: Current PHP memory usage in bytes
 
 ---
 

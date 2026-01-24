@@ -290,40 +290,40 @@ class UserContext {
     /**
      * Check if address is HTTPS
      *
-     * @param string $address
-     * @return bool
+     * @param string $address The address to check
+     * @return bool True if HTTPS address, false otherwise
      */
-    public function isHttpsAddress($address): bool {
+    public function isHttpsAddress(string $address): bool {
         return AddressValidator::isHttpsAddress($address);
     }
 
     /**
-     * Determine if adress is HTTP only (not HTTPS)
+     * Determine if address is HTTP only (not HTTPS)
      *
      * @param string $address The address of the sender
-     * @return bool True if HTTP address, False otherwise
-    */
-    public function isHttpAddress($address): bool {
+     * @return bool True if HTTP address, false otherwise
+     */
+    public function isHttpAddress(string $address): bool {
         return AddressValidator::isHttpAddress($address);
     }
 
     /**
-     * Determine if adress is valid HTTP, HTTPS, or TOR
+     * Determine if address is valid HTTP, HTTPS, or TOR
      *
      * @param string $address The address of the sender
-     * @return bool True if HTTP/HTTPS/TOR address, False otherwise
-    */
-    public function isAddress($address): bool {
+     * @return bool True if HTTP/HTTPS/TOR address, false otherwise
+     */
+    public function isAddress(string $address): bool {
         return AddressValidator::isAddress($address);
     }
 
     /**
-     * Determine if adress is TOR
+     * Determine if address is TOR
      *
      * @param string $address The address of the sender
-     * @return bool True if Tor address, False otherwise
-    */
-    public function isTorAddress($address): bool {
+     * @return bool True if Tor address, false otherwise
+     */
+    public function isTorAddress(string $address): bool {
         return AddressValidator::isTorAddress($address);
     }
     
@@ -463,8 +463,11 @@ class UserContext {
 
     /**
      * Prevent unserialization of singleton
+     *
+     * @return void
+     * @throws Exception Always throws to prevent unserialization
      */
-    public function __wakeup() {
+    public function __wakeup(): void {
         throw new Exception("Cannot unserialize singleton");
     }
 }

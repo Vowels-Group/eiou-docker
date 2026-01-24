@@ -337,6 +337,7 @@ healthcheck:
   timeout: 20s         # Timeout per check
   retries: 5           # Mark unhealthy after 5 failures
   start_period: 120s   # Grace period for container startup
+stop_grace_period: 45s   # Time allowed for graceful shutdown
 ```
 
 ### Healthcheck Parameters
@@ -348,6 +349,15 @@ healthcheck:
 | `timeout` | `20s` | Maximum time for health check |
 | `retries` | `5` | Failures before unhealthy |
 | `start_period` | `120s` | Startup grace period |
+| `stop_grace_period` | `45s` | Time for graceful shutdown before SIGKILL |
+
+### Graceful Shutdown
+
+The `stop_grace_period` controls how long Docker waits for the container to stop gracefully before sending SIGKILL. The 45-second default allows:
+
+- Background processors (P2P, Transaction, Cleanup) to finish current operations
+- Database connections to close cleanly
+- Pending message queue items to be saved
 
 ### Custom Healthcheck for Slow Environments
 
