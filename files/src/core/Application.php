@@ -49,6 +49,8 @@ class Application {
 
     /**
      * Private constructor for singleton pattern
+     *
+     * @throws RuntimeException If database setup fails during initialization
      */
     private function __construct() {
         // Get logger wrapper
@@ -104,7 +106,7 @@ class Application {
      *
      * @return Application
      */
-    public static function getInstance() {
+    public static function getInstance(): Application {
         if (self::$instance === null) {
             self::$instance = new self();
         }
@@ -213,8 +215,9 @@ class Application {
     /**
      * Check if database connection has been started
      *
+     * @return bool
      */
-    public function currentPdoLoaded() {
+    public function currentPdoLoaded(): bool {
         return(isset($this->pdo) && $this->pdo instanceof PDO);
     }
 
@@ -229,8 +232,10 @@ class Application {
 
     /**
      * Check if DatabaseContext has been loaded
+     *
+     * @return bool
      */
-    public function currentDatabaseLoaded() {
+    public function currentDatabaseLoaded(): bool {
         return(isset($this->currentDatabase) && $this->currentDatabase !== []);
     }
 
@@ -245,8 +250,10 @@ class Application {
 
     /**
      * Check if userContext has been loaded
+     *
+     * @return bool
      */
-    public function currentUserLoaded() {
+    public function currentUserLoaded(): bool {
         return(isset($this->currentUser) && $this->currentUser !== []);
     }
 
@@ -347,8 +354,10 @@ class Application {
 
     /**
      * Check if SecureLogger has been loaded
+     *
+     * @return bool
      */
-    public function secureLoggerLoaded() {
+    public function secureLoggerLoaded(): bool {
         return isset($this->utils['SecureLogger']);
     }
 
@@ -558,13 +567,17 @@ class Application {
 
     /**
      * Prevent cloning (singleton pattern)
+     *
+     * @return void
      */
-    private function __clone() {}
+    private function __clone(): void {}
 
     /**
      * Prevent unserialization (singleton pattern)
+     *
+     * @throws Exception Always throws to prevent unserialization
      */
-    public function __wakeup() {
+    public function __wakeup(): void {
         throw new Exception("Cannot unserialize singleton");
     }
 }

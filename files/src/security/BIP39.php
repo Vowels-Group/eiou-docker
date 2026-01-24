@@ -251,6 +251,7 @@ class BIP39 {
      * Checks if secp256k1 is available, otherwise falls back to prime256v1
      *
      * @return string The curve name to use
+     * @throws RuntimeException If no supported EC curve is available
      */
     public static function getPreferredCurve(): string {
         $curves = openssl_get_curve_names();
@@ -290,6 +291,7 @@ class BIP39 {
      * @param string $privateKeyBytes 32-byte private key
      * @param string $curveName The EC curve name
      * @return string PEM-encoded private key
+     * @throws RuntimeException If curve is unsupported or public key computation fails
      */
     private static function ecPrivateKeyToPem(string $privateKeyBytes, string $curveName): string {
         // OID for the curve
@@ -347,6 +349,7 @@ class BIP39 {
      * @param string $privateKeyBytes 32-byte private key
      * @param string $curveName The EC curve name
      * @return string Uncompressed public key (65 bytes: 0x04 + 32-byte X + 32-byte Y)
+     * @throws RuntimeException If public key computation fails
      */
     private static function computePublicKey(string $privateKeyBytes, string $curveName): string {
         // Use OpenSSL to compute the public key by creating a temporary key
@@ -412,6 +415,7 @@ class BIP39 {
      * Get the BIP39 English wordlist
      *
      * @return array 2048 words
+     * @throws RuntimeException If wordlist file not found or invalid
      */
     public static function getWordlist(): array {
         if (self::$wordlist !== null) {

@@ -255,12 +255,12 @@ class P2pService {
     }
 
     /**
-     * Caculate total amount required for p2p (amount + fee)
+     * Calculate total amount required for p2p (amount + fee)
      *
      * @param array $request The P2P request data
      * @return int Total amount needed for p2p transaction
      */
-    public function calculateRequestedAmount($request): int {
+    public function calculateRequestedAmount(array $request): int {
          // Calculate total amount needed for p2p through user
         $address = $request['senderAddress'];
         $transportIndex = $this->transportUtility->determineTransportType($address);
@@ -437,10 +437,10 @@ class P2pService {
      * Check if the P2P's end-recipient is user
      *
      * @param array $request Request data
-     * @param string $address Address 
-     * @return bool True if user corresponds, False otherwise.
+     * @param string $address Address
+     * @return bool True if user corresponds, false otherwise
      */
-    public function matchYourselfP2P($request, $address){
+    public function matchYourselfP2P(array $request, string $address): bool {
         // Check if p2p end recipient is user
         // First check the provided address (most likely match)
         if (hash(Constants::HASH_ALGORITHM, $address . $request['salt'] . $request['time']) === $request['hash']) {
@@ -793,9 +793,9 @@ class P2pService {
     /**
      * Get users total earnings
      *
-     * @return string Earnings Balance 
+     * @return string Earnings Balance
      */
-    public function getUserTotalEarnings() {
+    public function getUserTotalEarnings(): string {
         return $this->p2pRepository->getUserTotalEarnings();
     }
     

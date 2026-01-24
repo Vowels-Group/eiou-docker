@@ -67,9 +67,11 @@ class ServiceContainer {
     /**
      * Get singleton instance
      *
+     * @param UserContext|null $currentUser Current user context (optional)
+     * @param PDO|null $pdo Database connection (optional)
      * @return ServiceContainer
      */
-    public static function getInstance(?UserContext $currentUser, ?PDO $pdo): ServiceContainer {
+    public static function getInstance(?UserContext $currentUser = null, ?PDO $pdo = null): ServiceContainer {
         if (self::$instance === null) {
             self::$instance = new self($currentUser, $pdo);
         }
@@ -894,13 +896,17 @@ class ServiceContainer {
 
     /**
      * Prevent cloning of singleton
+     *
+     * @return void
      */
-    private function __clone() {}
+    private function __clone(): void {}
 
     /**
      * Prevent unserialization of singleton
+     *
+     * @throws Exception Always throws to prevent unserialization
      */
-    public function __wakeup() {
+    public function __wakeup(): void {
         throw new Exception("Cannot unserialize singleton");
     }
 }

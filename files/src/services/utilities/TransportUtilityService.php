@@ -102,10 +102,10 @@ class TransportUtilityService
      * Determine a possible fallback transport type
      *
      * @param string $info The address/name of the receiver
-     * @param string $contactInfo The Contact Info
+     * @param array $contactInfo The Contact Info
      * @return string|null The type of database index
-    */
-    public function fallbackTransportType($info, $contactInfo){
+     */
+    public function fallbackTransportType(string $info, array $contactInfo): ?string {
         $transportIndex = $this->determineTransportType($info) ?? Constants::DEFAULT_TRANSPORT_MODE;
         if(isset($contactInfo[$transportIndex])){
             return $transportIndex;
@@ -128,10 +128,10 @@ class TransportUtilityService
     /**
      * Determine a possible fallback contact address
      *
-     * @param string $contactInfo The Contact Info (with addresses)
+     * @param array $contactInfo The Contact Info (with addresses)
      * @return string|null The fallback address
-    */
-    public function fallbackTransportAddress($contactInfo){
+     */
+    public function fallbackTransportAddress(array $contactInfo): ?string {
         $transportModes = $this->container->getAddressRepository()->getAllAddressTypes();
         if($transportModes){
             while($transportModes !== []){
@@ -157,40 +157,40 @@ class TransportUtilityService
     /**
      * Check if address is HTTPS
      *
-     * @param string $address
-     * @return bool
+     * @param string $address The address to check
+     * @return bool True if HTTPS address, false otherwise
      */
-    public function isHttpsAddress($address): bool {
+    public function isHttpsAddress(string $address): bool {
         return preg_match('/^https:\/\//', $address) === 1;
     }
 
     /**
-     * Determine if adress is HTTP only (not HTTPS)
+     * Determine if address is HTTP only (not HTTPS)
      *
      * @param string $address The address of the sender
-     * @return bool True if HTTP address, False otherwise
-    */
-    public function isHttpAddress($address): bool {
+     * @return bool True if HTTP address, false otherwise
+     */
+    public function isHttpAddress(string $address): bool {
         return preg_match('/^http:\/\//', $address) === 1 && preg_match('/^https:\/\//', $address) === 0;
     }
 
     /**
-     * Determine if adress is TOR
+     * Determine if address is TOR
      *
      * @param string $address The address of the sender
-     * @return bool True if Tor address, False otherwise
-    */
-    public function isTorAddress($address): bool {
+     * @return bool True if Tor address, false otherwise
+     */
+    public function isTorAddress(string $address): bool {
         return preg_match('/\.onion$/', $address) === 1;
     }
 
     /**
-     * Determine if adress is valid HTTP, HTTPS, or TOR
+     * Determine if address is valid HTTP, HTTPS, or TOR
      *
      * @param string $address The address of the sender
-     * @return bool True if HTTP/HTTPS/TOR address, False otherwise
-    */
-    public function isAddress($address): bool {
+     * @return bool True if HTTP/HTTPS/TOR address, false otherwise
+     */
+    public function isAddress(string $address): bool {
         return ($this->isHttpAddress($address) || $this->isHttpsAddress($address) || $this->isTorAddress($address));
     }
 
