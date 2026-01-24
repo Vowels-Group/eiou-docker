@@ -24,6 +24,7 @@
  *   shutdown                   - Graceful shutdown
  *
  * Output Flags:
+ *   --help, -h     - Display help information (general or command-specific)
  *   --json, -j     - Output in JSON format
  *   --no-metadata  - Exclude metadata from JSON output
  *
@@ -55,6 +56,21 @@ $request = isset($cleanArgv[1]) ? strtolower($cleanArgv[1]) : '';
 
 // Set command in output manager
 $output->setCommand($request);
+
+// Handle --help/-h flag early (before wallet check, so help works without a wallet)
+if ($output->isHelpRequested()) {
+    // Build argv for displayHelp - if a command was specified, get help for that command
+    $helpArgv = ['eiou', 'help'];
+    if ($request !== '' && $request !== 'help') {
+        $helpArgv[] = $request;
+    }
+
+    // Display help and exit (no wallet required for help)
+    require_once '/etc/eiou/src/services/CliService.php';
+    $cliService = new CliService($app);
+    $cliService->displayHelp($helpArgv, $output);
+    exit(0);
+}
 
 if (!$app->currentUserLoaded()) {
   // Generate Wallet
