@@ -11,6 +11,7 @@
 
 require_once __DIR__ . '/../../core/Constants.php';
 require_once __DIR__ . '/../../utils/SecureLogger.php';
+require_once __DIR__ . '/../../utils/AddressValidator.php';
 
 class TransportUtilityService
 {
@@ -161,7 +162,7 @@ class TransportUtilityService
      * @return bool True if HTTPS address, false otherwise
      */
     public function isHttpsAddress(string $address): bool {
-        return preg_match('/^https:\/\//', $address) === 1;
+        return AddressValidator::isHttpsAddress($address);
     }
 
     /**
@@ -171,7 +172,7 @@ class TransportUtilityService
      * @return bool True if HTTP address, false otherwise
      */
     public function isHttpAddress(string $address): bool {
-        return preg_match('/^http:\/\//', $address) === 1 && preg_match('/^https:\/\//', $address) === 0;
+        return AddressValidator::isHttpAddress($address);
     }
 
     /**
@@ -181,7 +182,7 @@ class TransportUtilityService
      * @return bool True if Tor address, false otherwise
      */
     public function isTorAddress(string $address): bool {
-        return preg_match('/\.onion$/', $address) === 1;
+        return AddressValidator::isTorAddress($address);
     }
 
     /**
@@ -191,7 +192,7 @@ class TransportUtilityService
      * @return bool True if HTTP/HTTPS/TOR address, false otherwise
      */
     public function isAddress(string $address): bool {
-        return ($this->isHttpAddress($address) || $this->isHttpsAddress($address) || $this->isTorAddress($address));
+        return AddressValidator::isAddress($address);
     }
 
     /**

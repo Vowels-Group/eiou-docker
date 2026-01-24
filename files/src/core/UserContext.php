@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+require_once __DIR__ . '/../utils/AddressValidator.php';
+
 /**
  * UserContext - Singleton wrapper for user configuration
  *
@@ -292,7 +294,7 @@ class UserContext {
      * @return bool
      */
     public function isHttpsAddress($address): bool {
-        return preg_match('/^https:\/\//', $address) === 1;
+        return AddressValidator::isHttpsAddress($address);
     }
 
     /**
@@ -302,7 +304,7 @@ class UserContext {
      * @return bool True if HTTP address, False otherwise
     */
     public function isHttpAddress($address): bool {
-        return preg_match('/^http:\/\//', $address) === 1 && preg_match('/^https:\/\//', $address) === 0;
+        return AddressValidator::isHttpAddress($address);
     }
 
     /**
@@ -312,7 +314,7 @@ class UserContext {
      * @return bool True if HTTP/HTTPS/TOR address, False otherwise
     */
     public function isAddress($address): bool {
-        return ($this->isHttpAddress($address) || $this->isHttpsAddress($address) || $this->isTorAddress($address));
+        return AddressValidator::isAddress($address);
     }
 
     /**
@@ -322,7 +324,7 @@ class UserContext {
      * @return bool True if Tor address, False otherwise
     */
     public function isTorAddress($address): bool {
-        return preg_match('/\.onion$/', $address) === 1;
+        return AddressValidator::isTorAddress($address);
     }
     
     /**
