@@ -733,7 +733,6 @@ class CliService {
             'global_options' => [
                 'description' => 'Global options available for all commands',
                 'options' => [
-                    '--help, -h' => 'Display help information (general or command-specific)',
                     '--json, -j' => 'Output results in JSON format for scripting/automation',
                     '--no-metadata' => 'Exclude metadata (timestamp, node_id) from JSON output'
                 ]

@@ -92,9 +92,6 @@ class CliOutputManager
             if ($arg === '--no-metadata') {
                 $this->includeMetadata = false;
             }
-            if ($arg === '--help' || $arg === '-h') {
-                $this->helpRequested = true;
-            }
         }
     }
 
@@ -118,16 +115,6 @@ class CliOutputManager
     {
         $this->jsonMode = $enabled;
         return $this;
-    }
-
-    /**
-     * Check if help flag was requested
-     *
-     * @return bool True if --help or -h was passed
-     */
-    public function isHelpRequested(): bool
-    {
-        return $this->helpRequested;
     }
 
     /**
@@ -544,7 +531,7 @@ class CliOutputManager
     public static function cleanArgv(array $argv): array
     {
         return array_values(array_filter($argv, function ($arg) {
-            return !in_array($arg, ['--json', '-j', '--no-metadata', '--help', '-h']);
+            return !in_array($arg, ['--json', '-j', '--no-metadata']);
         }));
     }
 }

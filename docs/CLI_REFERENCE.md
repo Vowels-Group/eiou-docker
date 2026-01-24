@@ -37,18 +37,13 @@ These options are available for all commands:
 
 | Option | Description |
 |--------|-------------|
-| `--help`, `-h` | Display help information (general or command-specific) |
 | `--json`, `-j` | Output results in JSON format for scripting/automation |
 | `--no-metadata` | Exclude metadata (timestamp, node_id) from JSON output |
 
 **Example:**
 ```bash
-eiou --help                    # General help
-eiou send --help               # Help for send command
-eiou -h                        # Short form general help
-eiou info --json               # JSON output
+eiou info --json
 eiou viewbalances -j --no-metadata
-eiou send --help --json        # Help in JSON format
 ```
 
 ---
