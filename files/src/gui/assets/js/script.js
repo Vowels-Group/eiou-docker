@@ -18,6 +18,23 @@ var storageAvailable = (function() {
 })();
 
 // Safe storage functions with URL parameter fallback
+
+/**
+ * Safely stores a value in sessionStorage with error handling.
+ *
+ * Provides a wrapper around sessionStorage.setItem that gracefully handles
+ * storage unavailability (common in Tor Browser with strict privacy settings).
+ * Falls back silently if storage is not available.
+ *
+ * @param {string} key - The storage key to set
+ * @param {string} value - The value to store
+ * @returns {boolean} True if the value was successfully stored, false otherwise
+ * @example
+ * // Store a value
+ * if (safeStorageSet('user_preference', 'dark_mode')) {
+ *     console.log('Preference saved');
+ * }
+ */
 function safeStorageSet(key, value) {
     if (storageAvailable) {
         try {
@@ -28,6 +45,20 @@ function safeStorageSet(key, value) {
     return false;
 }
 
+/**
+ * Safely retrieves a value from sessionStorage with error handling.
+ *
+ * Provides a wrapper around sessionStorage.getItem that gracefully handles
+ * storage unavailability (common in Tor Browser with strict privacy settings).
+ *
+ * @param {string} key - The storage key to retrieve
+ * @returns {string|null} The stored value, or null if not found or storage unavailable
+ * @example
+ * var preference = safeStorageGet('user_preference');
+ * if (preference) {
+ *     applyPreference(preference);
+ * }
+ */
 function safeStorageGet(key) {
     if (storageAvailable) {
         try {
@@ -37,6 +68,18 @@ function safeStorageGet(key) {
     return null;
 }
 
+/**
+ * Safely removes a value from sessionStorage with error handling.
+ *
+ * Provides a wrapper around sessionStorage.removeItem that gracefully handles
+ * storage unavailability (common in Tor Browser with strict privacy settings).
+ *
+ * @param {string} key - The storage key to remove
+ * @returns {void}
+ * @example
+ * // Clean up stored data
+ * safeStorageRemove('temporary_data');
+ */
 function safeStorageRemove(key) {
     if (storageAvailable) {
         try {
@@ -45,7 +88,23 @@ function safeStorageRemove(key) {
     }
 }
 
-// HTML escape function to prevent XSS attacks when inserting user data into DOM
+/**
+ * Escapes HTML special characters to prevent XSS attacks.
+ *
+ * Uses the DOM's textContent property to safely escape any HTML entities
+ * in user-provided data before inserting into the DOM. This is a defense-in-depth
+ * measure to prevent cross-site scripting attacks.
+ *
+ * @param {*} text - The text to escape (will be converted to string)
+ * @returns {string} The escaped HTML-safe string, or empty string if null/undefined
+ * @example
+ * // Safely display user input
+ * element.innerHTML = '<span>' + escapeHtml(userInput) + '</span>';
+ *
+ * // Handles null/undefined gracefully
+ * escapeHtml(null);  // returns ''
+ * escapeHtml('<script>alert("xss")</script>');  // returns '&lt;script&gt;...'
+ */
 function escapeHtml(text) {
     if (text === null || text === undefined) {
         return '';
@@ -76,7 +135,21 @@ function escapeHtml(text) {
         }
     });
 
-// Manual refresh function (Tor Browser compatible)
+/**
+ * Manually refreshes wallet data by reloading the page.
+ *
+ * Stops any auto-refresh processes, shows a loading spinner on the refresh button,
+ * and reloads the page to fetch fresh wallet data. This is Tor Browser compatible
+ * and uses a simple page reload for consistency with auto-refresh behavior.
+ *
+ * The function sets a global `window.isRefreshing` flag to prevent race conditions
+ * with auto-refresh functionality.
+ *
+ * @returns {void}
+ * @example
+ * // Called from manual refresh button onclick
+ * <button id="manualRefresh" onclick="refreshWalletData()">Refresh</button>
+ */
 function refreshWalletData() {
     // Set global flag FIRST to prevent race conditions with auto-refresh
     window.isRefreshing = true;
@@ -99,7 +172,26 @@ function refreshWalletData() {
     window.location.reload();
 }
 
-// Send eIOU form handling
+/**
+ * Initializes the Send eIOU form with dynamic transaction type detection.
+ *
+ * Sets up event listeners on the recipient select dropdown and manual address input
+ * to dynamically show/hide form fields and update the transaction type indicator.
+ * Handles two transaction modes:
+ * - Direct Transaction: When a contact is selected from the dropdown
+ * - P2P Transaction: When a manual address is entered (routed through contacts)
+ *
+ * The function manages form validation by toggling required attributes on fields
+ * based on the selected transaction mode. It also dynamically populates the
+ * address type dropdown when a contact with multiple addresses is selected.
+ *
+ * @returns {void}
+ * @example
+ * // Called automatically on DOMContentLoaded
+ * document.addEventListener('DOMContentLoaded', function() {
+ *     initializeSendForm();
+ * });
+ */
 function initializeSendForm() {
     var recipientSelect = document.getElementById('recipient');
     var manualAddressGroup = document.getElementById('manual-address-group');
@@ -210,6 +302,24 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Edit contact modal functions
+
+/**
+ * Opens the edit contact modal with pre-populated form fields.
+ *
+ * Populates the edit form with the contact's current information and displays
+ * the modal for editing. This is a simple modal used for quick contact edits
+ * from the contact list view.
+ *
+ * @param {string} address - The contact's node address (HTTP, HTTPS, or Tor)
+ * @param {string} name - The contact's display name
+ * @param {number|string} fee - The transaction fee percentage for this contact
+ * @param {number|string} credit - The credit limit set for this contact
+ * @param {string} currency - The currency code (e.g., 'USD', 'EUR')
+ * @returns {void}
+ * @example
+ * // Open edit modal for a contact
+ * openEditContactModal('http://bob:8080', 'Bob', 1.0, 100, 'USD');
+ */
 function openEditContactModal(address, name, fee, credit, currency) {
     // Populate the form fields
     document.getElementById('edit_contact_address').value = address;
@@ -222,11 +332,41 @@ function openEditContactModal(address, name, fee, credit, currency) {
     document.getElementById('editContactModal').style.display = 'flex';
 }
 
+/**
+ * Closes the edit contact modal.
+ *
+ * Hides the edit contact modal by setting its display style to 'none'.
+ * Called when the user clicks the close button, clicks outside the modal,
+ * or presses the Escape key.
+ *
+ * @returns {void}
+ */
 function closeEditContactModal() {
     document.getElementById('editContactModal').style.display = 'none';
 }
 
-// Transaction detail modal functions
+/**
+ * Opens the transaction detail modal for a specific transaction.
+ *
+ * Retrieves transaction data from the global `transactionData` array using the provided
+ * index and renders a detailed view including amount, status badges, transaction type,
+ * counterparty information, and P2P routing details if applicable.
+ *
+ * The modal displays different badge styles based on:
+ * - Transaction status: completed, pending, failed, syncing
+ * - Transaction type: contact (request), p2p (routed), direct
+ * - Direction: sent, received, relay
+ *
+ * @param {number} index - Zero-based index into the global `transactionData` array.
+ *                         The transactionData array is populated by PHP and contains
+ *                         transaction objects with properties like amount, status,
+ *                         type, tx_type, counterparty_address, etc.
+ * @returns {void}
+ * @requires transactionData - Global array of transaction objects (set by PHP)
+ * @example
+ * // Called from transaction list item onclick
+ * <div onclick="openTransactionModal(0)">Transaction 1</div>
+ */
 function openTransactionModal(index) {
     if (typeof transactionData === 'undefined' || !transactionData[index]) {
         return;
@@ -371,6 +511,15 @@ function openTransactionModal(index) {
     modal.style.display = 'flex';
 }
 
+/**
+ * Closes the transaction detail modal.
+ *
+ * Hides the transaction modal by setting its display style to 'none'.
+ * Called when the user clicks the close button, clicks outside the modal,
+ * or presses the Escape key.
+ *
+ * @returns {void}
+ */
 function closeTransactionModal() {
     var modal = document.getElementById('transactionModal');
     if (modal) {
@@ -401,7 +550,32 @@ document.addEventListener('keydown', function(event) {
     }
 });
 
-// Toast Notification System
+/**
+ * Displays a toast notification message to the user.
+ *
+ * Creates and appends a styled toast notification element to the toast container.
+ * The toast includes an icon based on the type, title, message, and a close button.
+ * Toasts automatically dismiss after 5 seconds with a fade-out animation.
+ *
+ * @param {string} title - The bold title text displayed at the top of the toast
+ * @param {string} message - The descriptive message text displayed below the title
+ * @param {string} [type='info'] - The toast type which determines styling and icon.
+ *                                 Available types:
+ *                                 - 'success' - Green styling with check-circle icon
+ *                                 - 'error' - Red styling with exclamation-circle icon
+ *                                 - 'warning' - Yellow/orange styling with exclamation-triangle icon
+ *                                 - 'info' - Blue styling with info-circle icon (default)
+ * @returns {void}
+ * @example
+ * // Show a success notification
+ * showToast('Success', 'Transaction completed successfully!', 'success');
+ *
+ * // Show an error notification
+ * showToast('Error', 'Failed to connect to server', 'error');
+ *
+ * // Show an info notification (default type)
+ * showToast('Processing', 'Your request is being processed...');
+ */
 function showToast(title, message, type) {
     type = type || 'info';
 
@@ -450,7 +624,20 @@ function showToast(title, message, type) {
     }, 5000);
 }
 
-// Show toast when sending transaction
+/**
+ * Initializes the transaction toast notification on form submission.
+ *
+ * Attaches a submit event listener to the send form that displays an info toast
+ * notification when a transaction is initiated. The toast shows the transaction
+ * type (P2P or Direct), amount, currency, and recipient.
+ *
+ * @returns {void}
+ * @example
+ * // Called automatically on DOMContentLoaded
+ * document.addEventListener('DOMContentLoaded', function() {
+ *     initializeTransactionToast();
+ * });
+ */
 function initializeTransactionToast() {
     var sendForm = document.querySelector('#send-form form');
     if (sendForm) {
@@ -492,6 +679,23 @@ document.addEventListener('DOMContentLoaded', function() {
 var loaderTimerInterval = null;
 var loaderStartTime = null;
 
+/**
+ * Displays the loading overlay with a message and optional subtext.
+ *
+ * Shows a full-screen loading overlay with a spinner, message text, optional
+ * subtext for additional context, and an elapsed time counter. The timer
+ * updates every second to show how long the operation has been running.
+ *
+ * @param {string} [message='Loading...'] - The main loading message to display
+ * @param {string} [subtext] - Optional secondary text for additional context
+ * @returns {void}
+ * @example
+ * // Show basic loading message
+ * showLoader('Processing...');
+ *
+ * // Show loading with context
+ * showLoader('Sending transaction...', 'This may take a moment over Tor.');
+ */
 function showLoader(message, subtext) {
     message = message || 'Loading...';
     var overlay = document.getElementById('loadingOverlay');
@@ -530,6 +734,20 @@ function showLoader(message, subtext) {
     }
 }
 
+/**
+ * Hides the loading overlay and stops the elapsed timer.
+ *
+ * Removes the loading overlay from view and cleans up the timer interval
+ * that was tracking elapsed time. Should be called when the loading
+ * operation completes or is cancelled.
+ *
+ * @returns {void}
+ * @example
+ * // Hide loader after operation completes
+ * performOperation().then(function() {
+ *     hideLoader();
+ * });
+ */
 function hideLoader() {
     var overlay = document.getElementById('loadingOverlay');
     if (overlay) {
@@ -544,7 +762,22 @@ function hideLoader() {
     loaderStartTime = null;
 }
 
-// Operation Timeout Functions for 15-second reload
+/**
+ * Starts a 15-second timeout that auto-reloads the page if an operation takes too long.
+ *
+ * Shows a countdown in the loading overlay and automatically reloads the page
+ * after 15 seconds (OPERATION_TIMEOUT_MS). On reload, stores the timeout message
+ * in sessionStorage (or URL parameter for Tor Browser) to display a toast
+ * notification informing the user the operation is continuing in the background.
+ *
+ * @param {string} operationType - Identifier for the operation type (e.g., 'sendTransaction')
+ * @param {string} timeoutMessage - Message to display in toast after page reload
+ * @returns {void}
+ * @example
+ * // Start timeout for a send operation
+ * startOperationTimeout('sendTransaction',
+ *     'Still waiting for response. The transaction is being retried in the background.');
+ */
 function startOperationTimeout(operationType, timeoutMessage) {
     // Clear any existing timeout and countdown
     if (operationTimeoutId) {
@@ -594,6 +827,22 @@ function startOperationTimeout(operationType, timeoutMessage) {
     }, OPERATION_TIMEOUT_MS);
 }
 
+/**
+ * Clears the operation timeout and hides the countdown display.
+ *
+ * Cancels any pending timeout and countdown interval, hides the countdown
+ * element in the loading overlay, and removes stored timeout messages from
+ * sessionStorage. Should be called when an operation completes successfully
+ * before the timeout fires.
+ *
+ * @returns {void}
+ * @example
+ * // Clear timeout after successful operation
+ * operationComplete().then(function() {
+ *     clearOperationTimeout();
+ *     hideLoader();
+ * });
+ */
 function clearOperationTimeout() {
     if (operationTimeoutId) {
         clearTimeout(operationTimeoutId);
@@ -612,6 +861,21 @@ function clearOperationTimeout() {
     safeStorageRemove('eiou_timeout_message');
 }
 
+/**
+ * Checks for and displays a timeout toast notification after page reload.
+ *
+ * Called on DOMContentLoaded to check if the page was reloaded due to an
+ * operation timeout. Retrieves the stored timeout message from sessionStorage
+ * or URL parameters (for Tor Browser) and displays it as an info toast.
+ * Cleans up the stored/URL data after displaying.
+ *
+ * @returns {void}
+ * @example
+ * // Called automatically on page load
+ * document.addEventListener('DOMContentLoaded', function() {
+ *     checkForTimeoutToast();
+ * });
+ */
 function checkForTimeoutToast() {
     var timeoutMessage = safeStorageGet('eiou_timeout_message');
 
@@ -645,7 +909,21 @@ document.addEventListener('DOMContentLoaded', function() {
     checkForTimeoutToast();
 });
 
-// Form loaders initialization
+/**
+ * Initializes loading overlays for all form submissions.
+ *
+ * Attaches submit event listeners to various forms (add contact, edit contact,
+ * accept/block/unblock/delete contact, auth, send transaction) to display
+ * appropriate loading messages when forms are submitted. Also starts operation
+ * timeouts for long-running operations like adding contacts and sending transactions.
+ *
+ * @returns {void}
+ * @example
+ * // Called automatically on DOMContentLoaded
+ * window.addEventListener('DOMContentLoaded', function() {
+ *     initializeFormLoaders();
+ * });
+ */
 function initializeFormLoaders() {
     // Retry info text for contact operations
     var retryInfoText = 'Connecting to contact server. The message processor will continue retrying in the background.';
@@ -735,7 +1013,27 @@ window.addEventListener('DOMContentLoaded', function() {
     initializeFormLoaders();
 });
 
-// Copy to clipboard function - tries execCommand first for Tor Browser compatibility
+/**
+ * Copies text to the clipboard with multiple fallback strategies for browser compatibility.
+ *
+ * This function implements a progressive fallback approach to maximize compatibility,
+ * especially with privacy-focused browsers like Tor Browser:
+ *
+ * 1. First attempts document.execCommand('copy') - most reliable in restrictive environments
+ * 2. Falls back to the modern Clipboard API (navigator.clipboard.writeText)
+ * 3. If both methods fail, shows a manual copy modal where users can select and copy text
+ *
+ * @param {string} text - The text content to copy to the clipboard
+ * @param {string} [successMessage='Copied to clipboard!'] - Custom message to display in the
+ *                                                           success toast notification
+ * @returns {void}
+ * @example
+ * // Copy an address with default success message
+ * copyToClipboard('http://example.onion/api');
+ *
+ * // Copy with custom success message
+ * copyToClipboard(contact.pubkey, 'Public key copied!');
+ */
 function copyToClipboard(text, successMessage) {
     successMessage = successMessage || 'Copied to clipboard!';
 
@@ -761,7 +1059,21 @@ function copyToClipboard(text, successMessage) {
     }
 }
 
-// Try copying using execCommand (synchronous, Tor Browser compatible)
+/**
+ * Attempts to copy text using the legacy execCommand method.
+ *
+ * Creates a temporary hidden textarea, populates it with the text,
+ * selects the content, and executes the copy command. This synchronous
+ * method is more reliable in Tor Browser and other restrictive environments
+ * that may block the modern Clipboard API.
+ *
+ * @param {string} text - The text to copy to clipboard
+ * @returns {boolean} True if the copy was successful, false otherwise
+ * @example
+ * if (tryExecCommandCopy('Hello World')) {
+ *     console.log('Copy succeeded');
+ * }
+ */
 function tryExecCommandCopy(text) {
     var tempTextarea = document.createElement('textarea');
     tempTextarea.value = text;
@@ -785,8 +1097,21 @@ function tryExecCommandCopy(text) {
     return successful;
 }
 
-// Manual copy modal for Tor Browser compatibility
-// Shows a visible textarea with the text pre-selected so user can manually copy
+/**
+ * Shows a modal for manual text copying when programmatic copy fails.
+ *
+ * Creates a modal overlay with a visible, pre-selected textarea containing
+ * the text to copy. The user can then use Ctrl+C/Cmd+C to manually copy.
+ * This is the last-resort fallback for browsers that block all clipboard APIs.
+ * Listens for the copy event to automatically close the modal and show success.
+ *
+ * @param {string} text - The text to display for manual copying
+ * @param {string} successMessage - The message to display in the success toast after copying
+ * @returns {void}
+ * @example
+ * // Show manual copy modal as fallback
+ * showManualCopyModal('http://example.onion', 'Address copied!');
+ */
 function showManualCopyModal(text, successMessage) {
     // Create overlay
     var overlay = document.createElement('div');
@@ -851,7 +1176,25 @@ var contactTransactionData = [];
 var contactsShowAll = false;
 var CONTACTS_DEFAULT_LIMIT = 16;
 
-// Filter contacts by search term (Tor Browser compatible)
+/**
+ * Filters the contact list based on a search term entered by the user.
+ *
+ * Performs case-insensitive substring matching against contact names and addresses.
+ * When searching, all matching contacts are displayed regardless of the pagination limit.
+ * When the search is cleared, the display respects the current show all/limited state.
+ *
+ * The function updates:
+ * - Contact card visibility (display: '' or display: 'none')
+ * - Search status indicator showing match count
+ * - Show more button visibility (hidden during active search)
+ *
+ * Uses Tor Browser compatible code (var declarations, indexOf instead of includes).
+ *
+ * @returns {void}
+ * @example
+ * // Called from search input oninput event
+ * <input type="text" id="contact-search-input" oninput="filterContacts()">
+ */
 function filterContacts() {
     var searchInput = document.getElementById('contact-search-input');
     var searchStatus = document.getElementById('contact-search-status');
@@ -906,7 +1249,18 @@ function filterContacts() {
     }
 }
 
-// Toggle showing all contacts or limited (Tor Browser compatible)
+/**
+ * Toggles between showing all contacts and showing only the first 16.
+ *
+ * When collapsed, only the first 16 contacts (CONTACTS_DEFAULT_LIMIT) are visible.
+ * When expanded, all contacts are shown. Updates the button text to reflect
+ * the current state. Uses Tor Browser compatible code (var declarations, for loops).
+ *
+ * @returns {void}
+ * @example
+ * // Called from "Show All" button onclick
+ * <button id="show-more-btn" onclick="toggleShowAllContacts()">Show All</button>
+ */
 function toggleShowAllContacts() {
     contactsShowAll = !contactsShowAll;
 
@@ -938,7 +1292,20 @@ function toggleShowAllContacts() {
     }
 }
 
-// Initialize contacts display limit on page load (Tor Browser compatible)
+/**
+ * Initializes the contact list display with pagination limit.
+ *
+ * Hides all contact cards beyond the first 16 (CONTACTS_DEFAULT_LIMIT) on page load.
+ * This improves initial page performance for users with many contacts and provides
+ * a cleaner UI. Users can click "Show All" to see the remaining contacts.
+ *
+ * @returns {void}
+ * @example
+ * // Called automatically on DOMContentLoaded
+ * window.addEventListener('DOMContentLoaded', function() {
+ *     initContactsDisplay();
+ * });
+ */
 function initContactsDisplay() {
     var contactCards = document.querySelectorAll('.contact-card');
     if (contactCards.length > CONTACTS_DEFAULT_LIMIT) {
@@ -948,6 +1315,38 @@ function initContactsDisplay() {
     }
 }
 
+/**
+ * Opens the contact detail modal with all contact information and transaction history.
+ *
+ * This function populates the modal with contact details including addresses (HTTP, HTTPS, TOR),
+ * balance information, credit limits, status badges, and recent transactions. It also sets up
+ * the edit form and action buttons based on the contact's current status.
+ *
+ * @param {Object} contact - The contact data object containing all contact information
+ * @param {string} contact.contact_id - Unique identifier for the contact
+ * @param {string} contact.name - Display name of the contact
+ * @param {string} [contact.http] - HTTP address of the contact
+ * @param {string} [contact.https] - HTTPS address of the contact
+ * @param {string} [contact.tor] - TOR (.onion) address of the contact
+ * @param {string} [contact.pubkey] - Public key of the contact
+ * @param {string} contact.address - Primary address used for form actions
+ * @param {number|string} [contact.balance=0] - Current balance with this contact
+ * @param {number|string} [contact.credit_limit=0] - Credit limit set for this contact
+ * @param {number|string} [contact.fee=0] - Transaction fee percentage for this contact
+ * @param {string} [contact.currency='USD'] - Currency code for balance display
+ * @param {string} contact.status - Contact status ('accepted', 'pending', 'blocked')
+ * @param {string} [contact.online_status] - Online status ('online', 'offline', 'unknown')
+ * @param {boolean|number} [contact.valid_chain] - Chain validation status (true/1=valid, false/0=invalid, null=not checked)
+ * @param {Array<Object>} [contact.transactions=[]] - Array of recent transactions with this contact
+ * @param {string} [openTab='info-tab'] - ID of the tab to open initially ('info-tab', 'transactions-tab', 'edit-tab', 'actions-tab')
+ * @returns {void}
+ * @example
+ * // Open contact modal to info tab (default)
+ * openContactModal(contactData);
+ *
+ * // Open contact modal directly to transactions tab
+ * openContactModal(contactData, 'transactions-tab');
+ */
 function openContactModal(contact, openTab) {
     // Store current contact ID for refresh
     currentContactId = contact.contact_id;
@@ -1125,6 +1524,15 @@ function openContactModal(contact, openTab) {
     document.getElementById('contactModal').style.display = 'flex';
 }
 
+/**
+ * Closes the contact detail modal.
+ *
+ * Hides the contact modal by setting its display style to 'none'.
+ * Called when the user clicks the close button, clicks outside the modal,
+ * or presses the Escape key.
+ *
+ * @returns {void}
+ */
 function closeContactModal() {
     document.getElementById('contactModal').style.display = 'none';
 }
@@ -1132,7 +1540,31 @@ function closeContactModal() {
 // Track current contact address for ping
 var currentContactAddress = null;
 
-// Ping contact to check online status (Tor Browser compatible)
+/**
+ * Pings a contact to check their online status and chain validity.
+ *
+ * Sends an AJAX POST request to the server with the 'pingContact' action.
+ * The server attempts to connect to the contact's address and returns
+ * their online status and chain validation state.
+ *
+ * The function flow:
+ * 1. Validates that a contact address is available
+ * 2. Disables the ping button and shows loading state
+ * 3. Retrieves the CSRF token from the page
+ * 4. Sends XMLHttpRequest POST to current page with form data
+ * 5. Updates the online status badge (online/offline/unknown)
+ * 6. Updates the chain status badge (Valid/Needs Sync/Not Checked)
+ * 7. Displays result message and resets button state
+ *
+ * Uses Tor Browser compatible XMLHttpRequest with 60 second timeout
+ * to account for slow Tor network connections.
+ *
+ * @returns {void}
+ * @requires currentContactAddress - Global variable set by openContactModal
+ * @example
+ * // Called from ping button onclick
+ * <button id="ping_contact_btn" onclick="pingContact()">Check Status</button>
+ */
 function pingContact() {
     var btn = document.getElementById('ping_contact_btn');
     var icon = document.getElementById('ping_icon');
@@ -1262,6 +1694,15 @@ function pingContact() {
     xhr.send(formData);
 }
 
+/**
+ * Resets the ping button to its default state.
+ *
+ * Re-enables the ping button and resets its icon and text from the loading
+ * state back to the default "Check Status" state with wifi icon. Called
+ * after a ping request completes (success, error, or timeout).
+ *
+ * @returns {void}
+ */
 function resetPingButton() {
     var btn = document.getElementById('ping_contact_btn');
     var icon = document.getElementById('ping_icon');
@@ -1272,7 +1713,18 @@ function resetPingButton() {
     if (btnText) btnText.textContent = 'Check Status';
 }
 
-// Refresh contact modal and reopen on transactions tab (Tor Browser compatible)
+/**
+ * Refreshes the page and reopens the contact modal on the transactions tab.
+ *
+ * Stores the current contact ID and target tab in sessionStorage (or URL hash
+ * for Tor Browser) before reloading the page. After reload, checkReopenContactModal()
+ * retrieves these values and reopens the modal to the transactions tab.
+ *
+ * @returns {void}
+ * @example
+ * // Called from "Refresh Transactions" button in contact modal
+ * <button onclick="refreshContactModalTransactions()">Refresh</button>
+ */
 function refreshContactModalTransactions() {
     // Store the current contact ID to reopen after refresh
     if (currentContactId) {
@@ -1294,7 +1746,21 @@ function refreshContactModalTransactions() {
     }
 }
 
-// Check if we need to reopen contact modal after refresh (Tor Browser compatible)
+/**
+ * Checks if a contact modal should be reopened after page refresh.
+ *
+ * Retrieves the stored contact ID and tab from sessionStorage or URL hash
+ * (Tor Browser fallback). If found, locates the matching contact card,
+ * clicks it to open the modal, and switches to the appropriate tab.
+ * Cleans up the stored data after processing.
+ *
+ * @returns {void}
+ * @example
+ * // Called automatically on DOMContentLoaded
+ * window.addEventListener('DOMContentLoaded', function() {
+ *     checkReopenContactModal();
+ * });
+ */
 function checkReopenContactModal() {
     try {
         var reopenContactId = safeStorageGet('eiou_reopen_contact_id');
@@ -1350,6 +1816,23 @@ function checkReopenContactModal() {
     }
 }
 
+/**
+ * Switches to a specific tab within a modal.
+ *
+ * Hides all tab contents, deactivates all tab buttons, then shows the
+ * selected tab content and activates the corresponding button. If no
+ * button is provided, finds and activates the button that matches the tab ID.
+ *
+ * @param {string} tabId - The ID of the tab content element to show
+ * @param {HTMLElement|null} button - The tab button that was clicked, or null to auto-find
+ * @returns {void}
+ * @example
+ * // Switch to transactions tab via button click
+ * showModalTab('transactions-tab', this);
+ *
+ * // Switch to tab programmatically
+ * showModalTab('info-tab', null);
+ */
 function showModalTab(tabId, button) {
     // Hide all tab contents
     var tabContents = document.querySelectorAll('.modal-tab-content');
@@ -1386,7 +1869,21 @@ function showModalTab(tabId, button) {
     }
 }
 
-// Show transaction detail view (Tor Browser compatible)
+/**
+ * Shows the detailed view for a specific transaction within the contact modal.
+ *
+ * Retrieves transaction data from the contactTransactionData array and renders
+ * a detailed view with amount, status badges, transaction type, counterparty
+ * address, description, date, and routing information for P2P transactions.
+ * Hides the transaction list and shows the detail view.
+ *
+ * @param {number} index - Zero-based index into the contactTransactionData array
+ * @returns {void}
+ * @requires contactTransactionData - Global array set by openContactModal
+ * @example
+ * // Called from transaction item onclick in contact modal
+ * <div onclick="showContactTxDetail(0)">Transaction 1</div>
+ */
 function showContactTxDetail(index) {
     if (!contactTransactionData || !contactTransactionData[index]) {
         return;
@@ -1489,13 +1986,34 @@ function showContactTxDetail(index) {
     document.getElementById('tx-detail-view').style.display = 'block';
 }
 
-// Hide transaction detail view and show list (Tor Browser compatible)
+/**
+ * Hides the transaction detail view and shows the transaction list.
+ *
+ * Switches the contact modal's transactions tab from the detailed single
+ * transaction view back to the list of all transactions with this contact.
+ *
+ * @returns {void}
+ * @example
+ * // Called from "Back to list" button in transaction detail view
+ * <button onclick="hideContactTxDetail()">Back to list</button>
+ */
 function hideContactTxDetail() {
     document.getElementById('tx-detail-view').style.display = 'none';
     document.getElementById('tx-list-view').style.display = 'block';
 }
 
-// Show selected contact address from dropdown (Tor Browser compatible)
+/**
+ * Updates the displayed contact address when the address type dropdown changes.
+ *
+ * Reads the selected option from the address type dropdown and updates
+ * the address display element with the corresponding address stored in
+ * the option's data-address attribute.
+ *
+ * @returns {void}
+ * @example
+ * // Called from address selector onchange
+ * <select id="modal_address_selector" onchange="showSelectedContactAddress()">
+ */
 function showSelectedContactAddress() {
     var select = document.getElementById('modal_address_selector');
     var selectedOption = select.options[select.selectedIndex];
@@ -1526,7 +2044,20 @@ window.addEventListener('DOMContentLoaded', function() {
 // SETTINGS SECTION FUNCTIONS
 // ============================================================================
 
-// Debug tab switching (Tor Browser compatible - uses var and for loops)
+/**
+ * Switches between debug tabs in the settings debug section.
+ *
+ * Hides all debug content sections, deactivates all tab buttons, then
+ * shows the selected content and activates the clicked button. Uses
+ * Tor Browser compatible code (var declarations, for loops).
+ *
+ * @param {string} tabId - The ID of the debug content element to show
+ * @param {HTMLElement} button - The tab button that was clicked
+ * @returns {void}
+ * @example
+ * // Called from debug tab button onclick
+ * <button class="debug-tab" onclick="showDebugTab('debug-logs', this)">Logs</button>
+ */
 function showDebugTab(tabId, button) {
     // Hide all content
     var contents = document.querySelectorAll('.debug-content');
@@ -1550,7 +2081,21 @@ function showDebugTab(tabId, button) {
     }
 }
 
-// Toggle config section visibility (Tor Browser compatible)
+/**
+ * Toggles the visibility of a collapsible configuration section.
+ *
+ * Shows or hides the content element and rotates the arrow indicator
+ * to reflect the current expanded/collapsed state.
+ *
+ * @param {string} contentId - The ID of the content element to toggle
+ * @param {string} arrowId - The ID of the arrow icon element to rotate
+ * @returns {void}
+ * @example
+ * // Called from section header onclick
+ * <div onclick="toggleConfigSection('section-content', 'section-arrow')">
+ *     <i id="section-arrow">▼</i> Section Title
+ * </div>
+ */
 function toggleConfigSection(contentId, arrowId) {
     var content = document.getElementById(contentId);
     var arrow = document.getElementById(arrowId);
@@ -1566,8 +2111,21 @@ function toggleConfigSection(contentId, arrowId) {
     }
 }
 
-// Filter debug log entries based on search input (Tor Browser compatible)
-// Works for both structured entries (.debug-entry) and pre-formatted text (.debug-pre)
+/**
+ * Filters debug log entries based on search input.
+ *
+ * Performs case-insensitive substring matching on debug entries or pre-formatted
+ * text lines. For structured entries (.debug-entry), shows/hides individual entries.
+ * For pre-formatted text (.debug-pre), filters and rewrites the text content.
+ * Updates the search info message and shows/hides the "no results" message.
+ *
+ * @param {HTMLInputElement} inputElement - The search input element
+ * @param {string} containerId - The ID of the container element with debug content
+ * @returns {void}
+ * @example
+ * // Called from search input oninput
+ * <input type="text" oninput="filterDebugLogs(this, 'debug-logs-container')">
+ */
 function filterDebugLogs(inputElement, containerId) {
     var searchTerm = inputElement.value.toLowerCase();
     var container = document.getElementById(containerId);
@@ -1646,7 +2204,19 @@ function filterDebugLogs(inputElement, containerId) {
     }
 }
 
-// Clear debug search input and reset filter (Tor Browser compatible)
+/**
+ * Clears the debug search input and resets the filter.
+ *
+ * Empties the search input field and calls filterDebugLogs to reset
+ * the display to show all entries.
+ *
+ * @param {string} inputId - The ID of the search input element
+ * @param {string} containerId - The ID of the container element with debug content
+ * @returns {void}
+ * @example
+ * // Called from clear button onclick
+ * <button onclick="clearDebugSearch('debug-search', 'debug-logs-container')">Clear</button>
+ */
 function clearDebugSearch(inputId, containerId) {
     var input = document.getElementById(inputId);
     if (input) {
@@ -1659,8 +2229,24 @@ function clearDebugSearch(inputId, containerId) {
 var lastDebugReport = null;
 var lastDebugFilename = null;
 
-// Fetch debug report data from server (shared by download functions)
-// reportMode: 'full' for complete logs, 'limited' for GUI-displayed data
+/**
+ * Fetches debug report data from the server via AJAX.
+ *
+ * Sends a POST request to retrieve debug logs and system information.
+ * Shows a toast notification while fetching and handles timeouts appropriate
+ * for the report type (3 minutes for full reports, 1 minute for limited).
+ * Generates a timestamped filename and passes the data to the callback.
+ *
+ * @param {Function} callback - Function to call with (jsonData, filename, description)
+ * @param {string} [reportMode='full'] - Report type: 'full' for complete logs,
+ *                                       'limited' for GUI-displayed data only
+ * @returns {void}
+ * @example
+ * // Fetch full report and download
+ * fetchDebugReport(function(jsonData, filename) {
+ *     downloadDebugFile(jsonData, filename);
+ * }, 'full');
+ */
 function fetchDebugReport(callback, reportMode) {
     reportMode = reportMode || 'full';
     var isFullReport = (reportMode === 'full');
@@ -1742,7 +2328,18 @@ function fetchDebugReport(callback, reportMode) {
     xhr.send(formData);
 }
 
-// Download full debug report (complete logs)
+/**
+ * Downloads a full debug report containing complete system logs.
+ *
+ * Fetches the full debug report from the server and triggers a download
+ * with a '-full' suffix in the filename. This report contains all available
+ * debug data and may be large.
+ *
+ * @returns {void}
+ * @example
+ * // Called from "Download Full Report" button onclick
+ * <button onclick="downloadFullDebugReport()">Download Full Report</button>
+ */
 function downloadFullDebugReport() {
     fetchDebugReport(function(jsonData, filename, description) {
         // Add '-full' suffix to filename
@@ -1752,7 +2349,18 @@ function downloadFullDebugReport() {
     }, 'full');
 }
 
-// Download limited debug report (same as GUI display)
+/**
+ * Downloads a limited debug report matching the GUI display.
+ *
+ * Fetches a limited debug report from the server (same data shown in the GUI)
+ * and triggers a download with a '-limited' suffix in the filename.
+ * This is faster to generate than the full report.
+ *
+ * @returns {void}
+ * @example
+ * // Called from "Download Limited Report" button onclick
+ * <button onclick="downloadLimitedDebugReport()">Download Limited Report</button>
+ */
 function downloadLimitedDebugReport() {
     fetchDebugReport(function(jsonData, filename, description) {
         // Add '-limited' suffix to filename
@@ -1762,16 +2370,37 @@ function downloadLimitedDebugReport() {
     }, 'limited');
 }
 
-// Legacy function names for backwards compatibility
+/**
+ * Legacy function that redirects to downloadFullDebugReport.
+ * @deprecated Use downloadFullDebugReport() instead
+ * @returns {void}
+ */
 function emailDebugReport() {
     downloadFullDebugReport();
 }
 
+/**
+ * Legacy function that redirects to downloadFullDebugReport.
+ * @deprecated Use downloadFullDebugReport() instead
+ * @returns {void}
+ */
 function sendDebugReport() {
     downloadFullDebugReport();
 }
 
-// Download debug file (Tor Browser compatible - uses Blob and createObjectURL)
+/**
+ * Triggers a browser download of the debug report JSON file.
+ *
+ * Creates a Blob from the JSON data, generates a download link, clicks it
+ * to trigger the download, then cleans up. Uses URL.createObjectURL which
+ * is compatible with Tor Browser.
+ *
+ * @param {string} jsonData - The JSON string to download
+ * @param {string} filename - The filename for the downloaded file
+ * @returns {void}
+ * @example
+ * downloadDebugFile('{"debug": true}', 'eiou-debug-2024-01-15.json');
+ */
 function downloadDebugFile(jsonData, filename) {
     // Create blob from JSON data
     var blob = new Blob([jsonData], { type: 'application/json' });
@@ -1796,7 +2425,18 @@ function downloadDebugFile(jsonData, filename) {
 // WALLET INFORMATION FUNCTIONS
 // ============================================================================
 
-// Show selected user address from dropdown (Tor Browser compatible)
+/**
+ * Updates the displayed user address when the address type dropdown changes.
+ *
+ * Reads the selected option from the user address type dropdown and updates
+ * the address display element with the corresponding address stored in
+ * the option's data-address attribute.
+ *
+ * @returns {void}
+ * @example
+ * // Called from address selector onchange
+ * <select id="user-address-selector" onchange="showSelectedUserAddress()">
+ */
 function showSelectedUserAddress() {
     var select = document.getElementById('user-address-selector');
     var selectedOption = select.options[select.selectedIndex];
@@ -1808,8 +2448,19 @@ function showSelectedUserAddress() {
 // SYNCING TRANSACTION NOTIFICATION FUNCTIONS
 // ============================================================================
 
-// Show toast notifications for in-progress and syncing transactions
-// Note: syncingTransactionCount is defined inline in transactionHistory.html (PHP-generated)
+/**
+ * Shows toast notifications for in-progress and syncing transactions.
+ *
+ * Checks for transactions that are currently being processed or are on hold
+ * due to chain synchronization. Shows appropriate warning/info toasts to
+ * inform the user of the current state.
+ *
+ * @returns {void}
+ * @requires syncingTransactionCount - Global variable set by PHP in transactionHistory.html
+ * @example
+ * // Called from transaction history page
+ * showInProgressToasts();
+ */
 function showInProgressToasts() {
     if (typeof showToast !== 'function') {
         return;
@@ -1841,8 +2492,21 @@ function showInProgressToasts() {
 // DEAD LETTER QUEUE NOTIFICATION FUNCTIONS
 // ============================================================================
 
-// Show toast notifications for messages newly added to the Dead Letter Queue (Tor Browser compatible)
-// Note: dlqNotifications is defined inline in notifications.html (PHP-generated)
+/**
+ * Shows toast notifications for messages added to the Dead Letter Queue.
+ *
+ * Iterates through the dlqNotifications array (set by PHP) and displays
+ * a warning toast for each new DLQ entry. This alerts users when messages
+ * have failed to process after multiple retry attempts.
+ *
+ * @returns {void}
+ * @requires dlqNotifications - Global array of {type, title, message} objects set by PHP
+ * @example
+ * // Called automatically on DOMContentLoaded
+ * document.addEventListener('DOMContentLoaded', function() {
+ *     showDlqToasts();
+ * });
+ */
 function showDlqToasts() {
     if (typeof showToast !== 'function') {
         return;
