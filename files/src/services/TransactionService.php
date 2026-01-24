@@ -1730,18 +1730,12 @@ class TransactionService {
     /**
      * Send eIOU
      *
-     * @param array|null $request Request data
+     * @param array $request Request data (argv-style array with recipient, amount, currency)
      * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function sendEiou(?array $request = null, ?CliOutputManager $output = null): void {
+    public function sendEiou(array $request, ?CliOutputManager $output = null): void {
         $output = $output ?? CliOutputManager::getInstance();
-
-        // Handler for sending eIOU through user Input
-        if ($request === null) {
-            global $data;
-            $request = $data;
-        }
 
         // Build transaction data for JSON response
         $txData = [
