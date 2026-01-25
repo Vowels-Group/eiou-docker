@@ -54,6 +54,20 @@ All requests require HMAC-SHA256 authentication:
 | `GET` | `/api/v1/system/metrics` | `system:read` | System metrics |
 | `GET` | `/api/v1/system/settings` | `system:read` | System settings |
 
+### Backup Endpoints
+
+| Method | Endpoint | Permission | Description |
+|--------|----------|------------|-------------|
+| `GET` | `/api/v1/backup/status` | `backup:read` | Get backup status and settings |
+| `GET` | `/api/v1/backup/list` | `backup:read` | List all backup files |
+| `POST` | `/api/v1/backup/create` | `backup:write` | Create encrypted backup |
+| `POST` | `/api/v1/backup/restore` | `backup:write` | Restore from backup (requires confirm) |
+| `POST` | `/api/v1/backup/verify` | `backup:read` | Verify backup integrity |
+| `DELETE` | `/api/v1/backup/:filename` | `backup:write` | Delete a backup file |
+| `POST` | `/api/v1/backup/enable` | `backup:write` | Enable automatic backups |
+| `POST` | `/api/v1/backup/disable` | `backup:write` | Disable automatic backups |
+| `POST` | `/api/v1/backup/cleanup` | `backup:write` | Remove old backups |
+
 ### API Key Management (Admin)
 
 | Method | Endpoint | Permission | Description |
@@ -75,6 +89,9 @@ All requests require HMAC-SHA256 authentication:
 | `contacts:write` | Add, update, delete contacts |
 | `contacts:*` | All contact permissions |
 | `system:read` | Read system status and metrics |
+| `backup:read` | Read backup status/list, verify backups |
+| `backup:write` | Create, restore, delete, enable/disable backups |
+| `backup:*` | All backup permissions |
 | `admin` | Full administrative access |
 | `all` | All permissions |
 
@@ -143,6 +160,31 @@ All requests require HMAC-SHA256 authentication:
     "permissions": ["wallet:read", "contacts:read"],
     "rate_limit_per_minute": 100,
     "expires_at": "2027-01-01T00:00:00Z"
+}
+```
+
+### POST /api/v1/backup/create
+
+```json
+{
+    "name": "pre_upgrade_backup"
+}
+```
+
+### POST /api/v1/backup/restore
+
+```json
+{
+    "filename": "backup_20260124_030000.eiou.enc",
+    "confirm": true
+}
+```
+
+### POST /api/v1/backup/verify
+
+```json
+{
+    "filename": "backup_20260124_030000.eiou.enc"
 }
 ```
 

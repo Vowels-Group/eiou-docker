@@ -10,7 +10,8 @@ Complete API documentation for the EIOU Docker node REST API.
 4. [Wallet Endpoints](#wallet-endpoints)
 5. [Contact Endpoints](#contact-endpoints)
 6. [System Endpoints](#system-endpoints)
-7. [API Key Management](#api-key-management)
+7. [Backup Endpoints](#backup-endpoints)
+8. [API Key Management](#api-key-management)
 
 ---
 
@@ -906,6 +907,276 @@ Get system settings.
 
 ---
 
+## Backup Endpoints
+
+Manage encrypted database backups.
+
+### GET /api/v1/backup/status
+
+Get backup system status and settings.
+
+**Permission:** `backup:read` or `admin`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "enabled": true,
+        "backup_count": 3,
+        "retention_count": 3,
+        "last_backup": "2026-01-24T03:00:00+00:00",
+        "last_backup_file": "backup_20260124_030000.eiou.enc",
+        "backup_directory": "/var/lib/eiou/backups",
+        "next_scheduled": "2026-01-25T03:00:00+00:00"
+    }
+}
+```
+
+**Fields:**
+- `enabled`: Whether automatic daily backups are enabled
+- `backup_count`: Number of existing backup files
+- `retention_count`: Maximum backups to retain (default: 3)
+- `next_scheduled`: Next scheduled backup time (null if disabled)
+
+---
+
+### GET /api/v1/backup/list
+
+List all available backup files.
+
+**Permission:** `backup:read` or `admin`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "backups": [
+            {
+                "filename": "backup_20260124_030000.eiou.enc",
+                "size": 524288,
+                "size_human": "512 KB",
+                "created_at": "2026-01-24T03:00:00+00:00"
+            },
+            {
+                "filename": "backup_20260123_030000.eiou.enc",
+                "size": 520192,
+                "size_human": "508 KB",
+                "created_at": "2026-01-23T03:00:00+00:00"
+            }
+        ],
+        "count": 2
+    }
+}
+```
+
+---
+
+### POST /api/v1/backup/create
+
+Create a new encrypted backup.
+
+**Permission:** `backup:write` or `admin`
+
+**Request Body (optional):**
+
+```json
+{
+    "name": "pre_upgrade_backup"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | No | Custom name for backup (alphanumeric, underscore, hyphen only) |
+
+**Response (201 Created):**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Backup created successfully",
+        "filename": "pre_upgrade_backup.eiou.enc",
+        "size": 524288,
+        "path": "/var/lib/eiou/backups/pre_upgrade_backup.eiou.enc"
+    }
+}
+```
+
+---
+
+### POST /api/v1/backup/restore
+
+Restore database from a backup file.
+
+**Permission:** `backup:write` or `admin`
+
+**Request Body:**
+
+```json
+{
+    "filename": "backup_20260124_030000.eiou.enc",
+    "confirm": true
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `filename` | string | Yes | Name of backup file to restore |
+| `confirm` | boolean | Yes | Must be `true` to proceed (safety check) |
+
+> **Warning:** This operation will overwrite all current database data!
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Backup restored successfully",
+        "filename": "backup_20260124_030000.eiou.enc",
+        "restored_at": "2026-01-24T15:30:00+00:00"
+    }
+}
+```
+
+**Error Response (confirmation required):**
+
+```json
+{
+    "success": false,
+    "error": {
+        "code": "confirmation_required",
+        "message": "Must set confirm: true to restore backup. This will overwrite all current database data!"
+    }
+}
+```
+
+---
+
+### POST /api/v1/backup/verify
+
+Verify backup file integrity and decryption.
+
+**Permission:** `backup:read` or `admin`
+
+**Request Body:**
+
+```json
+{
+    "filename": "backup_20260124_030000.eiou.enc"
+}
+```
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "filename": "backup_20260124_030000.eiou.enc",
+        "valid": true,
+        "version": "1.0",
+        "created_at": "2026-01-24T03:00:00+00:00"
+    }
+}
+```
+
+**Fields:**
+- `valid`: `true` if backup can be decrypted and contains valid SQL
+- `version`: Backup format version
+- `created_at`: Timestamp when backup was created
+
+---
+
+### DELETE /api/v1/backup/:filename
+
+Delete a backup file.
+
+**Permission:** `backup:write` or `admin`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Backup deleted successfully",
+        "filename": "backup_20260124_030000.eiou.enc"
+    }
+}
+```
+
+---
+
+### POST /api/v1/backup/enable
+
+Enable automatic daily backups.
+
+**Permission:** `backup:write` or `admin`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Automatic backups enabled",
+        "enabled": true
+    }
+}
+```
+
+---
+
+### POST /api/v1/backup/disable
+
+Disable automatic daily backups.
+
+**Permission:** `backup:write` or `admin`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Automatic backups disabled",
+        "enabled": false
+    }
+}
+```
+
+---
+
+### POST /api/v1/backup/cleanup
+
+Remove old backup files, keeping only the most recent (default: 3).
+
+**Permission:** `backup:write` or `admin`
+
+**Response:**
+
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Backup cleanup completed",
+        "deleted_count": 2,
+        "deleted_files": [
+            "backup_20260120_030000.eiou.enc",
+            "backup_20260119_030000.eiou.enc"
+        ]
+    }
+}
+```
+
+---
+
 ## API Key Management
 
 These endpoints require `admin` permission.
@@ -975,6 +1246,9 @@ Create a new API key.
 | `contacts:write` | Add, update, delete contacts |
 | `contacts:*` | All contact permissions |
 | `system:read` | Read system status and metrics |
+| `backup:read` | Read backup status and list, verify backups |
+| `backup:write` | Create, restore, delete backups, enable/disable auto-backup |
+| `backup:*` | All backup permissions |
 | `admin` | Full administrative access |
 | `all` | All permissions |
 
