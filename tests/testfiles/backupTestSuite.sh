@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 # Test backup functionality for EIOU Docker containers
-# Verifies backup creation, listing, verification, and cleanup
+# Verifies backup creation, listing, verification, restore, delete, and cleanup
 
 echo -e "\nTesting Backup Functionality..."
 
@@ -13,6 +13,9 @@ failure=0
 
 # Use first container for testing
 testContainer="${containers[0]}"
+
+# Correct backup directory path (from Constants.php)
+BACKUP_DIR="/var/lib/eiou/backups"
 
 ############################ SERVICE AVAILABILITY TESTS ############################
 
@@ -53,8 +56,8 @@ echo -e "\n[Backup Directory Tests]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing backup directory exists with correct permissions"
 dirCheck=$(docker exec ${testContainer} sh -c "
-    if [ -d /var/backups/eiou ]; then
-        perms=\$(stat -c '%a' /var/backups/eiou 2>/dev/null)
+    if [ -d ${BACKUP_DIR} ]; then
+        perms=\$(stat -c '%a' ${BACKUP_DIR} 2>/dev/null)
         if [ \"\$perms\" = '700' ]; then
             echo 'DIR_OK'
         else
@@ -83,7 +86,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'eiou backup create' command"
 
 # Get backup count before
-backupCountBefore=$(docker exec ${testContainer} sh -c "ls /var/backups/eiou/*.enc 2>/dev/null | wc -l" 2>&1)
+backupCountBefore=$(docker exec ${testContainer} sh -c "ls ${BACKUP_DIR}/*.eiou.enc 2>/dev/null | wc -l" 2>&1)
 
 # Create backup
 createOutput=$(docker exec ${testContainer} eiou backup create 2>&1)
@@ -92,7 +95,7 @@ createOutput=$(docker exec ${testContainer} eiou backup create 2>&1)
 sleep 2
 
 # Get backup count after
-backupCountAfter=$(docker exec ${testContainer} sh -c "ls /var/backups/eiou/*.enc 2>/dev/null | wc -l" 2>&1)
+backupCountAfter=$(docker exec ${testContainer} sh -c "ls ${BACKUP_DIR}/*.eiou.enc 2>/dev/null | wc -l" 2>&1)
 
 if [ "$backupCountAfter" -gt "$backupCountBefore" ]; then
     printf "\t   eiou backup create ${GREEN}PASSED${NC}\n"
@@ -113,15 +116,9 @@ echo -e "\n\t-> Testing 'eiou backup list' shows backups"
 listOutput=$(docker exec ${testContainer} eiou backup list 2>&1)
 
 # Check if list output contains backup files or indicates backups exist
-if echo "$listOutput" | grep -qE '\.enc|backup.*[0-9]|No backups'; then
-    if echo "$listOutput" | grep -q '\.enc'; then
-        printf "\t   eiou backup list shows backups ${GREEN}PASSED${NC}\n"
-        passed=$(( passed + 1 ))
-    else
-        printf "\t   eiou backup list shows no backups ${RED}FAILED${NC}\n"
-        printf "\t   Output: ${listOutput}\n"
-        failure=$(( failure + 1 ))
-    fi
+if echo "$listOutput" | grep -qE '\.eiou\.enc|backup.*[0-9]|Found'; then
+    printf "\t   eiou backup list shows backups ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
 else
     printf "\t   eiou backup list ${RED}FAILED${NC}\n"
     printf "\t   Output: ${listOutput}\n"
@@ -137,7 +134,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'eiou backup verify' command"
 
 # Get the most recent backup filename
-latestBackup=$(docker exec ${testContainer} sh -c "ls -t /var/backups/eiou/*.enc 2>/dev/null | head -1 | xargs basename" 2>&1)
+latestBackup=$(docker exec ${testContainer} sh -c "ls -t ${BACKUP_DIR}/*.eiou.enc 2>/dev/null | head -1 | xargs basename" 2>&1)
 
 if [ -n "$latestBackup" ] && [ "$latestBackup" != "" ]; then
     verifyOutput=$(docker exec ${testContainer} eiou backup verify "$latestBackup" 2>&1)
@@ -219,7 +216,7 @@ echo -e "\n\t-> Testing backup files are encrypted"
 if [ -n "$latestBackup" ] && [ "$latestBackup" != "" ]; then
     # Check file content - encrypted files should not contain plain SQL keywords
     encryptionCheck=$(docker exec ${testContainer} sh -c "
-        head -c 100 /var/backups/eiou/${latestBackup} 2>/dev/null | strings | grep -iE 'CREATE TABLE|INSERT INTO|DROP TABLE|SELECT' | wc -l
+        head -c 100 ${BACKUP_DIR}/${latestBackup} 2>/dev/null | strings | grep -iE 'CREATE TABLE|INSERT INTO|DROP TABLE|SELECT' | wc -l
     " 2>&1)
 
     if [ "$encryptionCheck" -eq 0 ]; then
@@ -234,54 +231,216 @@ else
     failure=$(( failure + 1 ))
 fi
 
+############################ BACKUP RESTORE TESTS ############################
+
+echo -e "\n[Backup Restore Tests]"
+
+# Test 10: Test 'eiou backup restore' requires --confirm flag
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'eiou backup restore' requires --confirm"
+
+if [ -n "$latestBackup" ] && [ "$latestBackup" != "" ]; then
+    restoreNoConfirm=$(docker exec ${testContainer} eiou backup restore "$latestBackup" 2>&1)
+
+    if echo "$restoreNoConfirm" | grep -qiE 'confirm|warning|overwrite'; then
+        printf "\t   eiou backup restore requires --confirm ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   eiou backup restore requires --confirm ${RED}FAILED${NC}\n"
+        printf "\t   Output: ${restoreNoConfirm}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   eiou backup restore requires --confirm ${RED}FAILED${NC} (no backup file found)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 11: Test 'eiou backup restore <file> --confirm' actually restores
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'eiou backup restore --confirm' works"
+
+if [ -n "$latestBackup" ] && [ "$latestBackup" != "" ]; then
+    # First, record a known contact count before restore
+    contactCountBefore=$(docker exec ${testContainer} php -r "
+        require_once('${REL_APPLICATION}');
+        try {
+            \$app = Application::getInstance();
+            \$pdo = \$app->services->getPdo();
+            \$stmt = \$pdo->query('SELECT COUNT(*) as cnt FROM eiou_contacts');
+            \$row = \$stmt->fetch();
+            echo \$row['cnt'];
+        } catch (Exception \$e) {
+            echo '0';
+        }
+    " 2>&1)
+
+    # Perform the restore
+    restoreOutput=$(docker exec ${testContainer} eiou backup restore "$latestBackup" --confirm 2>&1)
+
+    if echo "$restoreOutput" | grep -qiE 'success|restored|complete'; then
+        # Verify data is intact by checking contact count
+        contactCountAfter=$(docker exec ${testContainer} php -r "
+            require_once('${REL_APPLICATION}');
+            try {
+                \$app = Application::getInstance();
+                \$pdo = \$app->services->getPdo();
+                \$stmt = \$pdo->query('SELECT COUNT(*) as cnt FROM eiou_contacts');
+                \$row = \$stmt->fetch();
+                echo \$row['cnt'];
+            } catch (Exception \$e) {
+                echo '-1';
+            }
+        " 2>&1)
+
+        if [ "$contactCountAfter" -ge 0 ] && [ "$contactCountAfter" != "-1" ]; then
+            printf "\t   eiou backup restore --confirm ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   eiou backup restore --confirm ${RED}FAILED${NC} (data not restored)\n"
+            printf "\t   Contacts before: ${contactCountBefore}, after: ${contactCountAfter}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   eiou backup restore --confirm ${RED}FAILED${NC}\n"
+        printf "\t   Output: ${restoreOutput}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   eiou backup restore --confirm ${RED}FAILED${NC} (no backup file found)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 12: Test data integrity after restore (tables exist)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing data integrity after restore"
+
+tableCheck=$(docker exec ${testContainer} php -r "
+    require_once('${REL_APPLICATION}');
+    try {
+        \$app = Application::getInstance();
+        \$pdo = \$app->services->getPdo();
+
+        // Check essential tables exist
+        \$tables = ['eiou_contacts', 'eiou_transactions', 'eiou_balances', 'eiou_messages', 'eiou_debug'];
+        \$missing = [];
+
+        foreach (\$tables as \$table) {
+            \$stmt = \$pdo->query(\"SHOW TABLES LIKE '\$table'\");
+            if (\$stmt->rowCount() == 0) {
+                \$missing[] = \$table;
+            }
+        }
+
+        if (empty(\$missing)) {
+            echo 'TABLES_OK';
+        } else {
+            echo 'MISSING: ' . implode(', ', \$missing);
+        }
+    } catch (Exception \$e) {
+        echo 'ERROR: ' . \$e->getMessage();
+    }
+" 2>&1)
+
+if [[ "$tableCheck" == "TABLES_OK" ]]; then
+    printf "\t   Data integrity after restore ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Data integrity after restore ${RED}FAILED${NC}\n"
+    printf "\t   Result: ${tableCheck}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ BACKUP DELETE TESTS ############################
+
+echo -e "\n[Backup Delete Tests]"
+
+# Test 13: Create a test backup to delete
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'eiou backup delete' command"
+
+# Create a backup specifically for deletion test
+docker exec ${testContainer} eiou backup create >/dev/null 2>&1
+sleep 1
+
+# Get the newest backup
+deleteTestBackup=$(docker exec ${testContainer} sh -c "ls -t ${BACKUP_DIR}/*.eiou.enc 2>/dev/null | head -1 | xargs basename" 2>&1)
+
+if [ -n "$deleteTestBackup" ] && [ "$deleteTestBackup" != "" ]; then
+    deleteOutput=$(docker exec ${testContainer} eiou backup delete "$deleteTestBackup" 2>&1)
+
+    # Verify file is actually deleted
+    fileExists=$(docker exec ${testContainer} sh -c "[ -f ${BACKUP_DIR}/${deleteTestBackup} ] && echo 'EXISTS' || echo 'DELETED'" 2>&1)
+
+    if echo "$deleteOutput" | grep -qiE 'deleted|success|removed' && [ "$fileExists" == "DELETED" ]; then
+        printf "\t   eiou backup delete ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   eiou backup delete ${RED}FAILED${NC}\n"
+        printf "\t   Output: ${deleteOutput}, File status: ${fileExists}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   eiou backup delete ${RED}FAILED${NC} (no backup file found)\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ BACKUP HELP TESTS ############################
+
+echo -e "\n[Backup Help Tests]"
+
+# Test 14: Test 'eiou backup help' shows available commands
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'eiou backup help' command"
+helpOutput=$(docker exec ${testContainer} eiou backup help 2>&1)
+
+if echo "$helpOutput" | grep -qiE 'create|restore|list|delete|verify|enable|disable|status|cleanup'; then
+    printf "\t   eiou backup help ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   eiou backup help ${RED}FAILED${NC}\n"
+    printf "\t   Output: ${helpOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
 ############################ BACKUP CLEANUP TESTS ############################
 
 echo -e "\n[Backup Cleanup Tests]"
 
-# Test 10: Verify backup cleanup removes old files when over retention limit
+# Test 15: Test 'eiou backup cleanup' command
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Testing backup cleanup mechanism"
+echo -e "\n\t-> Testing 'eiou backup cleanup' command"
 
-# Create multiple backups to trigger cleanup
-for i in 1 2 3; do
+# Create multiple backups to ensure cleanup has something to work with
+for i in 1 2 3 4; do
     docker exec ${testContainer} eiou backup create >/dev/null 2>&1
     sleep 1
 done
 
-# Trigger cleanup (if separate command exists) or check automatic cleanup
-cleanupCheck=$(docker exec ${testContainer} sh -c "
-    # Count backup files
-    backupCount=\$(ls /var/backups/eiou/*.enc 2>/dev/null | wc -l)
+cleanupOutput=$(docker exec ${testContainer} eiou backup cleanup 2>&1)
 
-    # Get retention limit from config if possible
-    retentionLimit=\$(php -r \"
-        require_once('${REL_APPLICATION}');
-        try {
-            \\\$app = Application::getInstance();
-            \\\$backupService = \\\$app->services->getBackupService();
-            if (method_exists(\\\$backupService, 'getRetentionLimit')) {
-                echo \\\$backupService->getRetentionLimit();
-            } else {
-                echo '7';
-            }
-        } catch (Exception \\\$e) {
-            echo '7';
-        }
-    \" 2>/dev/null)
-
-    if [ \"\$backupCount\" -le \"\$retentionLimit\" ] || [ \"\$backupCount\" -le 10 ]; then
-        echo 'CLEANUP_OK'
-    else
-        echo \"CLEANUP_EXCEEDED: \$backupCount backups (limit: \$retentionLimit)\"
-    fi
-" 2>&1)
-
-if [[ "$cleanupCheck" == "CLEANUP_OK" ]]; then
-    printf "\t   Backup cleanup mechanism ${GREEN}PASSED${NC}\n"
+if echo "$cleanupOutput" | grep -qiE 'cleaned|success|deleted|removed'; then
+    printf "\t   eiou backup cleanup ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Backup cleanup mechanism ${RED}FAILED${NC}\n"
-    printf "\t   Result: ${cleanupCheck}\n"
+    printf "\t   eiou backup cleanup ${RED}FAILED${NC}\n"
+    printf "\t   Output: ${cleanupOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 16: Verify backup count is within retention limit after cleanup
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing backup count respects retention limit"
+
+# Get retention limit (default is 3)
+retentionLimit=3
+backupCount=$(docker exec ${testContainer} sh -c "ls ${BACKUP_DIR}/*.eiou.enc 2>/dev/null | wc -l" 2>&1)
+
+if [ "$backupCount" -le "$retentionLimit" ] || [ "$backupCount" -le 5 ]; then
+    printf "\t   Backup count within retention limit ${GREEN}PASSED${NC} (${backupCount} backups)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Backup count within retention limit ${RED}FAILED${NC}\n"
+    printf "\t   Count: ${backupCount}, Limit: ${retentionLimit}\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -289,13 +448,13 @@ fi
 
 echo -e "\n[Multi-Container Backup Consistency Test]"
 
-# Test 11: Verify all containers have working backup mechanism
+# Test: Verify all containers have working backup mechanism
 for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
     echo -e "\n\t-> Testing backup mechanism on ${container}"
 
     # Check if eiou backup command exists and works
-    backupExists=$(docker exec ${container} sh -c "eiou help backup 2>&1" | grep -c "backup")
+    backupExists=$(docker exec ${container} sh -c "eiou backup help 2>&1" | grep -c "create")
 
     if [ "$backupExists" -ge 1 ]; then
         printf "\t   backup command available on %s ${GREEN}PASSED${NC}\n" ${container}

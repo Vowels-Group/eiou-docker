@@ -76,7 +76,7 @@ class BackupService implements BackupServiceInterface
             $backupData = [
                 'version' => '1.0',
                 'created_at' => date('c'),
-                'hostname' => $this->currentUser->getHostname() ?? 'unknown',
+                'hostname' => $this->currentUser->getHttpAddress() ?? $this->currentUser->getTorAddress() ?? 'unknown',
                 'database' => $dbName,
                 'encrypted' => $encrypted
             ];
@@ -261,8 +261,19 @@ class BackupService implements BackupServiceInterface
     public function setAutoBackupEnabled(bool $enabled): array
     {
         try {
+            // Update in-memory setting
             $this->currentUser->set('autoBackupEnabled', $enabled);
-            $this->currentUser->saveConfig();
+
+            // Persist to config file
+            $configFile = '/etc/eiou/defaultconfig.json';
+            $config = [];
+            if (file_exists($configFile)) {
+                $config = json_decode(file_get_contents($configFile), true) ?? [];
+            }
+            $config['autoBackupEnabled'] = $enabled;
+            if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
+                throw new Exception('Failed to write configuration file');
+            }
 
             SecureLogger::info("Auto backup " . ($enabled ? 'enabled' : 'disabled'));
 
@@ -323,14 +334,17 @@ class BackupService implements BackupServiceInterface
                 $customName = $args[1] ?? null;
                 $result = $this->createBackup($customName);
                 if ($result['success']) {
-                    $output->output([
-                        'status' => 'success',
-                        'message' => 'Backup created successfully',
-                        'filename' => $result['filename'],
-                        'size' => $result['size']
-                    ]);
+                    $output->success(
+                        "Backup created: {$result['filename']} ({$this->formatBytes($result['size'])})",
+                        [
+                            'filename' => $result['filename'],
+                            'size' => $result['size'],
+                            'size_human' => $this->formatBytes($result['size'])
+                        ],
+                        'Backup created successfully'
+                    );
                 } else {
-                    $output->output(['status' => 'error', 'message' => $result['error']]);
+                    $output->error($result['error']);
                 }
                 break;
 
@@ -339,98 +353,128 @@ class BackupService implements BackupServiceInterface
                 $confirm = ($args[2] ?? '') === '--confirm';
 
                 if (!$filename) {
-                    $output->output(['status' => 'error', 'message' => 'Usage: backup restore <filename> --confirm']);
+                    $output->error('Usage: backup restore <filename> --confirm');
                     return;
                 }
 
                 if (!$confirm) {
-                    $output->output([
-                        'status' => 'warning',
-                        'message' => 'WARNING: This will overwrite all current database data! Add --confirm to proceed.'
-                    ]);
+                    $output->info(
+                        'WARNING: This will overwrite all current database data! Add --confirm to proceed.',
+                        ['requires_confirmation' => true]
+                    );
                     return;
                 }
 
                 $result = $this->restoreBackup($filename, true);
-                $output->output($result['success']
-                    ? ['status' => 'success', 'message' => 'Backup restored successfully']
-                    : ['status' => 'error', 'message' => $result['error']]);
+                if ($result['success']) {
+                    $output->success('Backup restored successfully', $result);
+                } else {
+                    $output->error($result['error']);
+                }
                 break;
 
             case 'list':
                 $backups = $this->listBackups();
-                $output->output([
-                    'status' => 'success',
-                    'count' => count($backups),
-                    'backups' => $backups
-                ]);
+                if (empty($backups)) {
+                    $output->info('No backups found.', ['count' => 0, 'backups' => []]);
+                } else {
+                    $output->success(
+                        "Found " . count($backups) . " backup(s):",
+                        ['count' => count($backups), 'backups' => $backups],
+                        'Backups listed'
+                    );
+                    if (!$output->isJsonMode()) {
+                        foreach ($backups as $backup) {
+                            echo "  {$backup['filename']} - {$backup['size_human']} - {$backup['created_at']}\n";
+                        }
+                    }
+                }
                 break;
 
             case 'delete':
                 $filename = $args[1] ?? null;
                 if (!$filename) {
-                    $output->output(['status' => 'error', 'message' => 'Usage: backup delete <filename>']);
+                    $output->error('Usage: backup delete <filename>');
                     return;
                 }
                 $result = $this->deleteBackup($filename);
-                $output->output($result['success']
-                    ? ['status' => 'success', 'message' => 'Backup deleted']
-                    : ['status' => 'error', 'message' => $result['error']]);
+                if ($result['success']) {
+                    $output->success("Backup deleted: {$filename}", $result);
+                } else {
+                    $output->error($result['error']);
+                }
                 break;
 
             case 'verify':
                 $filename = $args[1] ?? null;
                 if (!$filename) {
-                    $output->output(['status' => 'error', 'message' => 'Usage: backup verify <filename>']);
+                    $output->error('Usage: backup verify <filename>');
                     return;
                 }
                 $result = $this->verifyBackup($filename);
-                $output->output($result);
+                if ($result['success'] && $result['valid']) {
+                    $output->success("Backup verified: {$filename} is valid", $result);
+                } elseif ($result['success'] && !$result['valid']) {
+                    $output->info("Backup verification failed: {$filename} appears corrupted", $result);
+                } else {
+                    $output->error($result['error'] ?? 'Verification failed');
+                }
                 break;
 
             case 'enable':
                 $result = $this->setAutoBackupEnabled(true);
-                $output->output($result['success']
-                    ? ['status' => 'success', 'message' => 'Automatic backups enabled']
-                    : ['status' => 'error', 'message' => $result['error']]);
+                if ($result['success']) {
+                    $output->success('Automatic backups enabled', $result);
+                } else {
+                    $output->error($result['error']);
+                }
                 break;
 
             case 'disable':
                 $result = $this->setAutoBackupEnabled(false);
-                $output->output($result['success']
-                    ? ['status' => 'success', 'message' => 'Automatic backups disabled']
-                    : ['status' => 'error', 'message' => $result['error']]);
+                if ($result['success']) {
+                    $output->success('Automatic backups disabled', $result);
+                } else {
+                    $output->error($result['error']);
+                }
                 break;
 
             case 'status':
-                $output->output($this->getBackupStatus());
+                $status = $this->getBackupStatus();
+                $output->success(
+                    "Backup Status:\n" .
+                    "  Enabled: " . ($status['enabled'] ? 'Yes' : 'No') . "\n" .
+                    "  Backup count: {$status['backup_count']}\n" .
+                    "  Retention: {$status['retention_count']} backups\n" .
+                    "  Last backup: " . ($status['last_backup'] ?? 'Never') . "\n" .
+                    "  Next scheduled: " . ($status['next_scheduled'] ?? 'N/A'),
+                    $status,
+                    'Backup status retrieved'
+                );
                 break;
 
             case 'cleanup':
                 $result = $this->cleanupOldBackups();
-                $output->output([
-                    'status' => 'success',
-                    'message' => "Cleaned up {$result['deleted_count']} old backup(s)",
-                    'deleted_files' => $result['deleted_files']
-                ]);
+                $output->success(
+                    "Cleaned up {$result['deleted_count']} old backup(s)",
+                    $result
+                );
                 break;
 
             case 'help':
             default:
-                $output->output([
-                    'status' => 'help',
-                    'commands' => [
-                        'backup create [name]' => 'Create a new backup (optional custom name)',
-                        'backup restore <file> --confirm' => 'Restore from backup (requires --confirm)',
-                        'backup list' => 'List all backups',
-                        'backup delete <file>' => 'Delete a backup',
-                        'backup verify <file>' => 'Verify backup integrity',
-                        'backup enable' => 'Enable automatic daily backups',
-                        'backup disable' => 'Disable automatic daily backups',
-                        'backup status' => 'Show backup status and settings',
-                        'backup cleanup' => 'Remove old backups (keep 3 most recent)'
-                    ]
-                ]);
+                $commands = [
+                    'backup create [name]' => ['description' => 'Create a new backup (optional custom name)'],
+                    'backup restore <file> --confirm' => ['description' => 'Restore from backup (requires --confirm)'],
+                    'backup list' => ['description' => 'List all backups'],
+                    'backup delete <file>' => ['description' => 'Delete a backup'],
+                    'backup verify <file>' => ['description' => 'Verify backup integrity'],
+                    'backup enable' => ['description' => 'Enable automatic daily backups'],
+                    'backup disable' => ['description' => 'Disable automatic daily backups'],
+                    'backup status' => ['description' => 'Show backup status and settings'],
+                    'backup cleanup' => ['description' => 'Remove old backups (keep 3 most recent)']
+                ];
+                $output->help($commands);
                 break;
         }
     }

@@ -136,6 +136,10 @@ class SettingsController
         // Checkbox only posts value when checked, so we need to handle both cases
         $settings['autoRefreshEnabled'] = isset($_POST['autoRefreshEnabled']) && $_POST['autoRefreshEnabled'] === '1';
 
+        // Auto-Backup Enabled (boolean toggle, default: true/on)
+        // Checkbox only posts value when checked, so we need to handle both cases
+        $settings['autoBackupEnabled'] = isset($_POST['autoBackupEnabled']) && $_POST['autoBackupEnabled'] === '1';
+
         // Check for errors
         if (!empty($errors)) {
             MessageHelper::redirectMessage(implode('; ', $errors), 'error');

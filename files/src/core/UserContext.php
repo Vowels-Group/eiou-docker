@@ -429,6 +429,15 @@ class UserContext {
     }
 
     /**
+     * Get auto-backup enabled status for daily database backups
+     *
+     * @return bool
+     */
+    public function getAutoBackupEnabled(): bool {
+        return (bool) ($this->get('autoBackupEnabled') ?? Constants::BACKUP_AUTO_ENABLED);
+    }
+
+    /**
      * Get all user data as array
      *
      * @return array

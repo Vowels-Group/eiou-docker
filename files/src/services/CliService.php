@@ -447,7 +447,7 @@ class CliService implements CliServiceInterface {
             'max_output_lines' => $this->currentUser->getMaxOutput(),
             'default_transport_mode' => $this->currentUser->getDefaultTransportMode(),
             'auto_refresh_enabled' => $this->currentUser->getAutoRefreshEnabled(),
-            'auto_backup_enabled' => $this->currentUser->get('autoBackupEnabled', Constants::BACKUP_AUTO_ENABLED)
+            'auto_backup_enabled' => $this->currentUser->getAutoBackupEnabled()
         ];
 
         if ($output->isJsonMode()) {

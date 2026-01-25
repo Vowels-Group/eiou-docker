@@ -455,8 +455,8 @@ docker exec <container> eiou backup create
 # List available backups
 docker exec <container> eiou backup list
 
-# Restore from a specific backup
-docker exec <container> eiou backup restore <backup-file>
+# Restore from a specific backup (requires --confirm flag)
+docker exec <container> eiou backup restore <backup-file> --confirm
 
 # Delete old backups (keeps most recent 3)
 docker exec <container> eiou backup prune
@@ -519,7 +519,7 @@ To restore from an encrypted backup file:
 2. **Start container and restore backup**:
    ```bash
    docker exec <container> eiou backup list
-   docker exec <container> eiou backup restore backup-20240115-000000.enc
+   docker exec <container> eiou backup restore backup-20240115-000000.enc --confirm
    ```
 
 ### Complete Reset

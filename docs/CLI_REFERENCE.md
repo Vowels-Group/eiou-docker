@@ -750,7 +750,7 @@ eiou backup <action> [args...]
 | Action | Syntax | Description |
 |--------|--------|-------------|
 | `create` | `backup create` | Create a new encrypted backup |
-| `restore` | `backup restore <filename>` | Restore database from backup |
+| `restore` | `backup restore <filename> --confirm` | Restore database from backup |
 | `list` | `backup list` | List all available backups |
 | `verify` | `backup verify <filename>` | Verify backup integrity |
 | `delete` | `backup delete <filename>` | Delete a specific backup |
@@ -771,8 +771,8 @@ eiou backup list
 # Verify a specific backup
 eiou backup verify backup_20260125_120000.eiou.enc
 
-# Restore from a backup (requires confirmation)
-eiou backup restore backup_20260125_120000.eiou.enc
+# Restore from a backup (requires --confirm flag)
+eiou backup restore backup_20260125_120000.eiou.enc --confirm
 
 # Check backup status
 eiou backup status
