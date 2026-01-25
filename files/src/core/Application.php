@@ -91,6 +91,8 @@ class Application {
             // Get ServiceContainer instance
             $this->loadserviceContainer();
             $this->loadUtilityServiceContainer();
+            // Wire circular dependencies between services
+            $this->services->wireAllServices();
 
             // Run transaction recovery only for CLI/daemon processes (not HTTP API requests)
             // This prevents unnecessary recovery runs and potential race conditions on every API call

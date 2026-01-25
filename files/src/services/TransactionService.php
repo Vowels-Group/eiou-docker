@@ -151,13 +151,14 @@ class TransactionService {
     }
 
     /**
-     * Get the sync service with fallback to Application singleton
+     * Get the sync service (must be injected via setSyncService)
      *
      * @return SyncService
+     * @throws RuntimeException If sync service was not injected
      */
     private function getSyncService(): SyncService {
         if ($this->syncService === null) {
-            $this->syncService = Application::getInstance()->services->getSyncService();
+            throw new RuntimeException('SyncService not injected. Call setSyncService() or ensure ServiceContainer::wireCircularDependencies() is called.');
         }
         return $this->syncService;
     }
@@ -172,13 +173,14 @@ class TransactionService {
     }
 
     /**
-     * Get the P2P service with fallback to Application singleton
+     * Get the P2P service (must be injected via setP2pService)
      *
      * @return P2pService
+     * @throws RuntimeException If P2P service was not injected
      */
     private function getP2pService(): P2pService {
         if ($this->p2pService === null) {
-            $this->p2pService = Application::getInstance()->services->getP2pService();
+            throw new RuntimeException('P2pService not injected. Call setP2pService() or ensure ServiceContainer::wireCircularDependencies() is called.');
         }
         return $this->p2pService;
     }
@@ -193,13 +195,14 @@ class TransactionService {
     }
 
     /**
-     * Get the contact service with fallback to Application singleton
+     * Get the contact service (must be injected via setContactService)
      *
      * @return ContactService
+     * @throws RuntimeException If contact service was not injected
      */
     private function getContactService(): ContactService {
         if ($this->contactService === null) {
-            $this->contactService = Application::getInstance()->services->getContactService();
+            throw new RuntimeException('ContactService not injected. Call setContactService() or ensure ServiceContainer::wireCircularDependencies() is called.');
         }
         return $this->contactService;
     }

@@ -815,8 +815,9 @@ class ServiceContainer {
      * their circular dependencies. Call this when you want to ensure all services
      * are ready and properly connected before processing requests.
      *
-     * Note: This is optional. Services will still work without calling this method
-     * due to the fallback to Application::getInstance() in each getter.
+     * IMPORTANT: This method MUST be called before using services with circular
+     * dependencies. Services no longer fall back to Application::getInstance()
+     * and will throw RuntimeException if dependencies are not wired.
      */
     public function wireAllServices(): void {
         // Initialize core services (order matters for some dependencies)

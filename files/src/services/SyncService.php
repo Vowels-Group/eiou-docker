@@ -103,13 +103,14 @@ class SyncService {
     }
 
     /**
-     * Get the held transaction service with fallback to Application singleton
+     * Get the held transaction service (must be injected via setHeldTransactionService)
      *
      * @return HeldTransactionService
+     * @throws RuntimeException If held transaction service was not injected
      */
     private function getHeldTransactionService(): HeldTransactionService {
         if ($this->heldTransactionService === null) {
-            $this->heldTransactionService = Application::getInstance()->services->getHeldTransactionService();
+            throw new RuntimeException('HeldTransactionService not injected. Call setHeldTransactionService() or ensure ServiceContainer::wireCircularDependencies() is called.');
         }
         return $this->heldTransactionService;
     }
