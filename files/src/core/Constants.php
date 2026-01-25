@@ -230,6 +230,28 @@ class Constants {
     const LOG_LEVEL = 'INFO';
     const LOG_MAX_ENTRIES = 100;
 
+    // Backup configuration
+    const BACKUP_AUTO_ENABLED = true;        // Whether automated daily backups are enabled by default
+    const BACKUP_RETENTION_COUNT = 3;         // Number of backups to keep (3 most recent)
+    const BACKUP_DIRECTORY = '/var/lib/eiou/backups';
+    const BACKUP_FILE_EXTENSION = '.eiou.enc';
+    const BACKUP_CRON_HOUR = 0;              // Hour to run backup (0 = midnight)
+    const BACKUP_CRON_MINUTE = 0;            // Minute to run backup
+
+    /**
+     * Check if automatic backups are enabled
+     * Supports runtime override via EIOU_BACKUP_AUTO_ENABLED env variable
+     *
+     * @return bool Whether automatic backups are enabled
+     */
+    public static function isAutoBackupEnabled(): bool {
+        $envValue = getenv('EIOU_BACKUP_AUTO_ENABLED');
+        if ($envValue !== false) {
+            return filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+        }
+        return self::BACKUP_AUTO_ENABLED;
+    }
+
     /**
      * Get a constant value with optional default
      *

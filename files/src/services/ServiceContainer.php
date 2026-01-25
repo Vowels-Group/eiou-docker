@@ -668,6 +668,24 @@ class ServiceContainer {
     }
 
     /**
+     * Get BackupService instance
+     *
+     * Provides database backup and restore functionality with encryption.
+     *
+     * @return BackupServiceInterface
+     */
+    public function getBackupService(): BackupServiceInterface {
+        if (!isset($this->services['BackupService'])) {
+            require_once __DIR__ . '/BackupService.php';
+            $this->services['BackupService'] = new BackupService(
+                $this->currentUser,
+                $this->pdo
+            );
+        }
+        return $this->services['BackupService'];
+    }
+
+    /**
      * Get UtilityServiceContainer instance
      *
      *

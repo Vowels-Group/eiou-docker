@@ -87,6 +87,7 @@ if ($app->currentPdoLoaded()) {
         'send' => ['max' => 30, 'window' => 60, 'block' => 300],      // 30 transactions per minute
         'add' => ['max' => 20, 'window' => 60, 'block' => 300],       // 20 contact additions per minute
         'generate' => ['max' => 5, 'window' => 300, 'block' => 900],  // 5 wallet generations per 5 minutes
+        'backup' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 backup operations per minute
         'default' => ['max' => 100, 'window' => 60, 'block' => 300]   // Default for other commands
     ];
 
@@ -288,6 +289,12 @@ elseif($request === "apikey"){
   $debugService->output("Executing API key management request", 'SILENT');
   $apiKeyService = $app->services->getApiKeyService($output);
   $apiKeyService->handleCommand($cleanArgv);
+}
+// Backup Management
+elseif($request === "backup"){
+  $debugService->output("Executing backup request", 'SILENT');
+  $backupService = $app->services->getBackupService();
+  $backupService->handleBackupCommand($cleanArgv, $output);
 }
 else{
   // If no known input, display commands possible for input
