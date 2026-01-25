@@ -43,7 +43,7 @@ for container in "${containers[@]}"; do
             \$total_string = '';
             foreach (\$balances as \$balance) {
                 \$contactResult = \$app->services->getContactRepository()->lookupByPubkeyHash(\$balance['pubkey_hash']);
-                \$total_string .= '\t   ' . \$contactResult['name'] . ' (' . (\$contactResult['tor'] ?? \$contactResult['http']) . ') (received | sent): ' . \$balance['received']/Constants::TRANSACTION_USD_CONVERSION_FACTOR  . ' | ' . \$balance['sent']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . ' ' . \$balance['currency'] . '\n';
+                \$total_string .= '\t   ' . \$contactResult['name'] . ' (' . (\$contactResult['tor'] ?? \$contactResult['http'] ?? \$contactResult['https']) . ') (received | sent): ' . \$balance['received']/Constants::TRANSACTION_USD_CONVERSION_FACTOR  . ' | ' . \$balance['sent']/Constants::TRANSACTION_USD_CONVERSION_FACTOR . ' ' . \$balance['currency'] . '\n';
             }
             echo \$total_string;
         } else {
