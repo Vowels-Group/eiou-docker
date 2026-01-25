@@ -45,31 +45,31 @@ class BackupService implements BackupServiceInterface
 
             $filepath = $this->backupDirectory . '/' . $filename;
 
-            // Get database credentials from environment
-            $dbHost = getenv('MYSQL_HOST') ?: 'localhost';
-            $dbName = getenv('MYSQL_DATABASE') ?: 'eiou';
-            $dbUser = getenv('MYSQL_USER') ?: 'eiou';
-            $dbPass = getenv('MYSQL_PASSWORD') ?: '';
+            // Get database credentials from config file
+            $dbConfig = $this->getDatabaseCredentials();
+            if (!$dbConfig) {
+                return ['success' => false, 'error' => 'Database configuration not found'];
+            }
+            $dbHost = $dbConfig['dbHost'];
+            $dbName = $dbConfig['dbName'];
+            $dbUser = $dbConfig['dbUser'];
+            $dbPass = $dbConfig['dbPass'];
 
-            // Execute mysqldump using MYSQL_PWD env var for password (safest method)
-            $originalPwd = getenv('MYSQL_PWD');
-            putenv("MYSQL_PWD=" . $dbPass);
+            // Create temporary MySQL config file for secure password passing
+            $tempCnf = tempnam('/tmp', 'mysql_');
+            chmod($tempCnf, 0600);
+            file_put_contents($tempCnf, "[client]\nuser={$dbUser}\npassword={$dbPass}\nhost={$dbHost}\n");
 
             $cmd = sprintf(
-                'mysqldump --single-transaction --routines --triggers --quick -h %s -u %s %s 2>&1',
-                escapeshellarg($dbHost),
-                escapeshellarg($dbUser),
+                'mysqldump --defaults-extra-file=%s --single-transaction --routines --triggers --quick %s 2>&1',
+                escapeshellarg($tempCnf),
                 escapeshellarg($dbName)
             );
 
             $sqlDump = shell_exec($cmd);
 
-            // Clear the password from environment
-            if ($originalPwd !== false) {
-                putenv("MYSQL_PWD=" . $originalPwd);
-            } else {
-                putenv("MYSQL_PWD");
-            }
+            // Securely remove temp config file
+            unlink($tempCnf);
 
             // Better error diagnostics
             if (empty($sqlDump)) {
@@ -163,37 +163,37 @@ class BackupService implements BackupServiceInterface
             // Decrypt the SQL dump
             $sqlDump = KeyEncryption::decrypt($backupData['encrypted']);
 
-            // Get database credentials
-            $dbHost = getenv('MYSQL_HOST') ?: 'localhost';
-            $dbName = getenv('MYSQL_DATABASE') ?: 'eiou';
-            $dbUser = getenv('MYSQL_USER') ?: 'eiou';
-            $dbPass = getenv('MYSQL_PASSWORD') ?: '';
+            // Get database credentials from config file
+            $dbConfig = $this->getDatabaseCredentials();
+            if (!$dbConfig) {
+                return ['success' => false, 'error' => 'Database configuration not found'];
+            }
+            $dbHost = $dbConfig['dbHost'];
+            $dbName = $dbConfig['dbName'];
+            $dbUser = $dbConfig['dbUser'];
+            $dbPass = $dbConfig['dbPass'];
 
             // Write SQL to temp file for mysql import
             $tempFile = tempnam('/tmp', 'eiou_restore_');
             file_put_contents($tempFile, $sqlDump);
             KeyEncryption::secureClear($sqlDump);
 
-            // Execute mysql import using MYSQL_PWD env var for password (safest method)
-            $originalPwd = getenv('MYSQL_PWD');
-            putenv("MYSQL_PWD=" . $dbPass);
+            // Create temporary MySQL config file for secure password passing
+            $tempCnf = tempnam('/tmp', 'mysql_');
+            chmod($tempCnf, 0600);
+            file_put_contents($tempCnf, "[client]\nuser={$dbUser}\npassword={$dbPass}\nhost={$dbHost}\n");
 
             $cmd = sprintf(
-                'mysql -h %s -u %s %s < %s 2>&1',
-                escapeshellarg($dbHost),
-                escapeshellarg($dbUser),
+                'mysql --defaults-extra-file=%s %s < %s 2>&1',
+                escapeshellarg($tempCnf),
                 escapeshellarg($dbName),
                 escapeshellarg($tempFile)
             );
 
             $output = shell_exec($cmd);
 
-            // Clear the password from environment
-            if ($originalPwd !== false) {
-                putenv("MYSQL_PWD=" . $originalPwd);
-            } else {
-                putenv("MYSQL_PWD");
-            }
+            // Securely remove temp config file
+            unlink($tempCnf);
 
             unlink($tempFile);
 
@@ -549,5 +549,22 @@ class BackupService implements BackupServiceInterface
         }
 
         return $next->format('c');
+    }
+
+    private function getDatabaseCredentials(): ?array
+    {
+        $configFile = '/etc/eiou/dbconfig.json';
+        if (!file_exists($configFile)) {
+            SecureLogger::error("Database config file not found", ['path' => $configFile]);
+            return null;
+        }
+
+        $config = json_decode(file_get_contents($configFile), true);
+        if (!$config || !isset($config['dbHost'], $config['dbName'], $config['dbUser'], $config['dbPass'])) {
+            SecureLogger::error("Invalid database config", ['path' => $configFile]);
+            return null;
+        }
+
+        return $config;
     }
 }
