@@ -195,6 +195,7 @@ Handles settings and debug operations.
 | `maxOutput` | int | Max display lines |
 | `defaultTransportMode` | string | Preferred transport (http/https/tor) |
 | `autoRefreshEnabled` | bool | Auto-refresh when transactions pending |
+| `autoBackupEnabled` | bool | Enable automatic daily database backups |
 
 ---
 

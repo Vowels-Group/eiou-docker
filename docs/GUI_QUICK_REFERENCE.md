@@ -66,7 +66,7 @@ Optional: `address_type` (when contact selected), `description`
 
 | Action | Required Fields | Response |
 |--------|-----------------|----------|
-| `updateSettings` | Any of: `defaultCurrency`, `defaultFee`, `minFee`, `maxFee`, `defaultCreditLimit`, `maxP2pLevel`, `p2pExpiration`, `maxOutput`, `defaultTransportMode`, `autoRefreshEnabled` | Redirect with message |
+| `updateSettings` | Any of: `defaultCurrency`, `defaultFee`, `minFee`, `maxFee`, `defaultCreditLimit`, `maxP2pLevel`, `p2pExpiration`, `maxOutput`, `defaultTransportMode`, `autoRefreshEnabled`, `autoBackupEnabled` | Redirect with message |
 | `clearDebugLogs` | (none) | Redirect with message |
 | `sendDebugReport` | `description` (optional) | Redirect with message |
 | `getDebugReportJson` | `description` (optional), `report_mode` (full/limited) | JSON (AJAX) |
