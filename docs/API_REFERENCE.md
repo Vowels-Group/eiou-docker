@@ -352,7 +352,7 @@ Get dashboard summary with balances and recent transactions.
             {
                 "txid": "tx_abc123",
                 "type": "sent",
-                "tx_type": "direct",
+                "tx_type": "standard",
                 "status": "completed",
                 "amount": 25.00,
                 "currency": "USD",
@@ -392,7 +392,7 @@ Get paginated transaction history.
             {
                 "txid": "tx_abc123",
                 "type": "sent",
-                "tx_type": "direct",
+                "tx_type": "standard",
                 "status": "completed",
                 "amount": 25.00,
                 "currency": "USD",
@@ -451,7 +451,7 @@ Send a transaction to a contact.
         "amount": 25.00,
         "currency": "USD",
         "txid": "tx_abc123",
-        "type": "direct"
+        "type": "standard"
     }
 }
 ```
@@ -1051,8 +1051,9 @@ Delete an API key.
 
 | Value | Description |
 |-------|-------------|
-| `direct` | Direct peer-to-peer transaction |
-| `relay` | Transaction routed through intermediaries |
+| `standard` | Direct transaction to known contact |
+| `p2p` | P2P transaction to unknown contact (or part of P2P chain) |
+| `contact` | Contact request transaction (amount=0, establishes contact) |
 
 ---
 
