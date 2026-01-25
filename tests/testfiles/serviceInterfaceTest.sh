@@ -77,7 +77,7 @@ printf "\n${YELLOW}Test 2: Verifying services implement their interfaces${NC}\n"
 # Test all services via ServiceContainer (services are loaded via require_once, not autoload)
 # Map: interface => getter expression
 declare -A SERVICE_GETTERS
-SERVICE_GETTERS["TransportServiceInterface"]="\$app->services->utilities->getTransportUtility()"
+SERVICE_GETTERS["TransportServiceInterface"]="\$app->services->getUtilityContainer()->getTransportUtility()"
 SERVICE_GETTERS["ContactServiceInterface"]="\$app->services->getContactService()"
 SERVICE_GETTERS["TransactionServiceInterface"]="\$app->services->getTransactionService()"
 SERVICE_GETTERS["SyncServiceInterface"]="\$app->services->getSyncService()"
@@ -95,10 +95,10 @@ SERVICE_GETTERS["DebugServiceInterface"]="\$app->services->getDebugService()"
 SERVICE_GETTERS["ApiAuthServiceInterface"]="\$app->services->getApiAuthService()"
 SERVICE_GETTERS["HeldTransactionServiceInterface"]="\$app->services->getHeldTransactionService()"
 SERVICE_GETTERS["TransactionRecoveryServiceInterface"]="\$app->services->getTransactionRecoveryService()"
-SERVICE_GETTERS["TimeUtilityServiceInterface"]="\$app->services->utilities->getTimeUtility()"
-SERVICE_GETTERS["ValidationUtilityServiceInterface"]="\$app->services->utilities->getValidationUtility()"
-SERVICE_GETTERS["GeneralUtilityServiceInterface"]="\$app->services->utilities->getGeneralUtility()"
-SERVICE_GETTERS["CurrencyUtilityServiceInterface"]="\$app->services->utilities->getCurrencyUtility()"
+SERVICE_GETTERS["TimeUtilityServiceInterface"]="\$app->services->getUtilityContainer()->getTimeUtility()"
+SERVICE_GETTERS["ValidationUtilityServiceInterface"]="\$app->services->getUtilityContainer()->getValidationUtility()"
+SERVICE_GETTERS["GeneralUtilityServiceInterface"]="\$app->services->getUtilityContainer()->getGeneralUtility()"
+SERVICE_GETTERS["CurrencyUtilityServiceInterface"]="\$app->services->getUtilityContainer()->getCurrencyUtility()"
 
 for interface in "${!INTERFACE_MAP[@]}"; do
     totaltests=$((totaltests + 1))
@@ -188,7 +188,7 @@ mock_test=$(docker exec $test_container php -r "
 
     // Get actual service from container
     \$app = Application::getInstance();
-    \$transport = \$app->services->utilities->getTransportUtility();
+    \$transport = \$app->services->getUtilityContainer()->getTransportUtility();
 
     // This will fail if the service doesn't implement the interface
     try {
