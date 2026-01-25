@@ -81,34 +81,34 @@ for interface in "${!INTERFACE_MAP[@]}"; do
     implements_interface=$(docker exec $test_container php -r "
         require_once('${REL_APPLICATION}');
 
-        // Map service names to their full class paths
+        // Map service names to their class names (no namespaces - using require_once pattern)
         \$serviceClassMap = [
-            'TransportUtilityService' => 'Eiou\\\Services\\\Utilities\\\TransportUtilityService',
-            'ContactService' => 'Eiou\\\Services\\\ContactService',
-            'TransactionService' => 'Eiou\\\Services\\\TransactionService',
+            'TransportUtilityService' => 'TransportUtilityService',
+            'ContactService' => 'ContactService',
+            'TransactionService' => 'TransactionService',
             'SyncService' => 'SyncService',
-            'P2pService' => 'Eiou\\\Services\\\P2pService',
-            'ApiKeyService' => 'Eiou\\\Services\\\ApiKeyService',
-            'MessageService' => 'Eiou\\\Services\\\MessageService',
-            'CliService' => 'Eiou\\\Services\\\CliService',
-            'CleanupService' => 'Eiou\\\Services\\\CleanupService',
-            'WalletService' => 'Eiou\\\Services\\\WalletService',
-            'RP2pService' => 'Eiou\\\Services\\\RP2pService',
-            'RateLimiterService' => 'Eiou\\\Services\\\RateLimiterService',
-            'ContactStatusService' => 'Eiou\\\Services\\\ContactStatusService',
-            'MessageDeliveryService' => 'Eiou\\\Services\\\MessageDeliveryService',
-            'DebugService' => 'Eiou\\\Services\\\DebugService',
-            'ApiAuthService' => 'Eiou\\\Services\\\ApiAuthService',
-            'HeldTransactionService' => 'Eiou\\\Services\\\HeldTransactionService',
-            'TransactionRecoveryService' => 'Eiou\\\Services\\\TransactionRecoveryService',
-            'TimeUtilityService' => 'Eiou\\\Services\\\Utilities\\\TimeUtilityService',
-            'ValidationUtilityService' => 'Eiou\\\Services\\\Utilities\\\ValidationUtilityService',
-            'GeneralUtilityService' => 'Eiou\\\Services\\\Utilities\\\GeneralUtilityService',
-            'CurrencyUtilityService' => 'Eiou\\\Services\\\Utilities\\\CurrencyUtilityService',
+            'P2pService' => 'P2pService',
+            'ApiKeyService' => 'ApiKeyService',
+            'MessageService' => 'MessageService',
+            'CliService' => 'CliService',
+            'CleanupService' => 'CleanupService',
+            'WalletService' => 'WalletService',
+            'RP2pService' => 'Rp2pService',
+            'RateLimiterService' => 'RateLimiterService',
+            'ContactStatusService' => 'ContactStatusService',
+            'MessageDeliveryService' => 'MessageDeliveryService',
+            'DebugService' => 'DebugService',
+            'ApiAuthService' => 'ApiAuthService',
+            'HeldTransactionService' => 'HeldTransactionService',
+            'TransactionRecoveryService' => 'TransactionRecoveryService',
+            'TimeUtilityService' => 'TimeUtilityService',
+            'ValidationUtilityService' => 'ValidationUtilityService',
+            'GeneralUtilityService' => 'GeneralUtilityService',
+            'CurrencyUtilityService' => 'CurrencyUtilityService',
         ];
 
         \$serviceClass = \$serviceClassMap['${service}'] ?? '${service}';
-        \$interfaceClass = 'Eiou\\\Contracts\\\${interface}';
+        \$interfaceClass = '${interface}';
 
         if (class_exists(\$serviceClass) && interface_exists(\$interfaceClass)) {
             \$reflection = new ReflectionClass(\$serviceClass);
@@ -154,7 +154,7 @@ for getter_pair in "${service_getters[@]}"; do
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
         \$service = \$app->services->${getter}();
-        \$interfaceClass = 'Eiou\\\Contracts\\\${expected_interface}';
+        \$interfaceClass = '${expected_interface}';
         echo (\$service instanceof \$interfaceClass) ? 'yes' : 'no';
     " 2>/dev/null || echo "error")
 
@@ -175,8 +175,8 @@ totaltests=$((totaltests + 1))
 mock_test=$(docker exec $test_container php -r "
     require_once('${REL_APPLICATION}');
 
-    // Create a test function that accepts interface type
-    function testTransportInterface(Eiou\Contracts\TransportServiceInterface \$transport): bool {
+    // Create a test function that accepts interface type (no namespace)
+    function testTransportInterface(TransportServiceInterface \$transport): bool {
         return \$transport->isAddress('http://test');
     }
 
@@ -209,11 +209,11 @@ totaltests=$((totaltests + 1))
 di_test=$(docker exec $test_container php -r "
     require_once('${REL_APPLICATION}');
 
-    // A class that depends on interface, not concrete implementation
+    // A class that depends on interface, not concrete implementation (no namespace)
     class TestConsumer {
-        private Eiou\Contracts\ContactServiceInterface \$contactService;
+        private ContactServiceInterface \$contactService;
 
-        public function __construct(Eiou\Contracts\ContactServiceInterface \$contactService) {
+        public function __construct(ContactServiceInterface \$contactService) {
             \$this->contactService = \$contactService;
         }
 
