@@ -454,8 +454,8 @@ check_contact_status_with_retry() {
         echo -e "\t   Status is '${status}', waiting ${retry_delay}s for retry..." >&2
         sleep "$retry_delay"
         # Process message queues during retry
-        docker exec ${container} eiou out 2>/dev/null || true
-        docker exec ${container} eiou in 2>/dev/null || true
+        docker exec -e EIOU_TEST_MODE=true ${container} eiou out 2>/dev/null || true
+        docker exec -e EIOU_TEST_MODE=true ${container} eiou in 2>/dev/null || true
         # Retry check
         status=$(docker exec ${container} php -r "
             require_once('${REL_APPLICATION}');

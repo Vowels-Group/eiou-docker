@@ -56,8 +56,8 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     if [[ "$contactData" == "NOT_FOUND" ]]; then
         echo -e "\t   Contact not found, waiting 10s for sync retry..."
         sleep 10
-        docker exec ${containerKeys[0]} eiou out 2>/dev/null || true
-        docker exec ${containerKeys[0]} eiou in 2>/dev/null || true
+        docker exec -e EIOU_TEST_MODE=true ${containerKeys[0]} eiou out 2>/dev/null || true
+        docker exec -e EIOU_TEST_MODE=true ${containerKeys[0]} eiou in 2>/dev/null || true
         contactData=$(docker exec ${containerKeys[0]} php -r "
             require_once('${REL_APPLICATION}');
             \$contact = Application::getInstance()->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
@@ -162,10 +162,10 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     if [[ "$forwardExists" != "1" ]] || [[ "$reverseExists" != "1" ]]; then
         echo -e "\t   Relationship incomplete (Forward: ${forwardExists}, Reverse: ${reverseExists}), waiting 10s for sync retry..."
         sleep 10
-        docker exec ${containerKeys[0]} eiou out 2>/dev/null || true
-        docker exec ${containerKeys[0]} eiou in 2>/dev/null || true
-        docker exec ${containerKeys[1]} eiou out 2>/dev/null || true
-        docker exec ${containerKeys[1]} eiou in 2>/dev/null || true
+        docker exec -e EIOU_TEST_MODE=true ${containerKeys[0]} eiou out 2>/dev/null || true
+        docker exec -e EIOU_TEST_MODE=true ${containerKeys[0]} eiou in 2>/dev/null || true
+        docker exec -e EIOU_TEST_MODE=true ${containerKeys[1]} eiou out 2>/dev/null || true
+        docker exec -e EIOU_TEST_MODE=true ${containerKeys[1]} eiou in 2>/dev/null || true
 
         # Retry checks
         forwardExists=$(docker exec ${containerKeys[0]} php -r "
