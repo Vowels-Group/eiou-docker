@@ -94,6 +94,9 @@ services:
       # CLI: eiou command-line tool (regenerated on build)
       - eiou-eiou:/usr/local/bin/
 
+      # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
+      - eiou-backups:/var/lib/eiou/backups
+
       # OPTIONAL: External SSL certificates (Let's Encrypt, etc.)
       # Uncomment to use externally-obtained certificates:
       # - /path/to/certs:/ssl-certs:ro   # Mount server.crt, server.key
@@ -136,3 +139,6 @@ volumes:
     name: eiou-index
   eiou-eiou:
     name: eiou-eiou
+  # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
+  eiou-backups:
+    name: eiou-backups

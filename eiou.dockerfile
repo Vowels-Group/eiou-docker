@@ -153,7 +153,8 @@ RUN touch /var/log/php_errors.log && \
 # - /etc/eiou: Wallet configuration and encryption keys
 # - /usr/local/bin: CLI tools
 # - /var/www/html: Web interface files
-VOLUME ["/var/lib/mysql", "/etc/eiou", "/usr/local/bin/", "/var/www/html/"]
+# - /var/lib/eiou/backups: Encrypted database backups
+VOLUME ["/var/lib/mysql", "/etc/eiou", "/usr/local/bin/", "/var/www/html/", "/var/lib/eiou/backups"]
 
 # Copy scripts directory (includes banner.sh for warning messages)
 COPY scripts/ /app/scripts/

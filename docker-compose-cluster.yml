@@ -62,6 +62,7 @@ services:
       - cluster-a-files:/etc/eiou/
       - cluster-a-index:/var/www/html
       - cluster-a-eiou:/usr/local/bin/
+      - cluster-a-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -86,6 +87,7 @@ services:
       - cluster-a1-files:/etc/eiou/
       - cluster-a1-index:/var/www/html
       - cluster-a1-eiou:/usr/local/bin/
+      - cluster-a1-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -109,6 +111,7 @@ services:
       - cluster-a2-files:/etc/eiou/
       - cluster-a2-index:/var/www/html
       - cluster-a2-eiou:/usr/local/bin/
+      - cluster-a2-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -132,6 +135,7 @@ services:
       - cluster-a3-files:/etc/eiou/
       - cluster-a3-index:/var/www/html
       - cluster-a3-eiou:/usr/local/bin/
+      - cluster-a3-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -155,6 +159,7 @@ services:
       - cluster-a4-files:/etc/eiou/
       - cluster-a4-index:/var/www/html
       - cluster-a4-eiou:/usr/local/bin/
+      - cluster-a4-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -179,6 +184,7 @@ services:
       - cluster-a11-files:/etc/eiou/
       - cluster-a11-index:/var/www/html
       - cluster-a11-eiou:/usr/local/bin/
+      - cluster-a11-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -202,6 +208,7 @@ services:
       - cluster-a12-files:/etc/eiou/
       - cluster-a12-index:/var/www/html
       - cluster-a12-eiou:/usr/local/bin/
+      - cluster-a12-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -225,6 +232,7 @@ services:
       - cluster-a21-files:/etc/eiou/
       - cluster-a21-index:/var/www/html
       - cluster-a21-eiou:/usr/local/bin/
+      - cluster-a21-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -248,6 +256,7 @@ services:
       - cluster-a22-files:/etc/eiou/
       - cluster-a22-index:/var/www/html
       - cluster-a22-eiou:/usr/local/bin/
+      - cluster-a22-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -271,6 +280,7 @@ services:
       - cluster-a31-files:/etc/eiou/
       - cluster-a31-index:/var/www/html
       - cluster-a31-eiou:/usr/local/bin/
+      - cluster-a31-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -294,6 +304,7 @@ services:
       - cluster-a32-files:/etc/eiou/
       - cluster-a32-index:/var/www/html
       - cluster-a32-eiou:/usr/local/bin/
+      - cluster-a32-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -317,6 +328,7 @@ services:
       - cluster-a41-files:/etc/eiou/
       - cluster-a41-index:/var/www/html
       - cluster-a41-eiou:/usr/local/bin/
+      - cluster-a41-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -340,6 +352,7 @@ services:
       - cluster-a42-files:/etc/eiou/
       - cluster-a42-index:/var/www/html
       - cluster-a42-eiou:/usr/local/bin/
+      - cluster-a42-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -363,6 +376,8 @@ volumes:
     name: cluster-a-index
   cluster-a-eiou:
     name: cluster-a-eiou
+  cluster-a-backups:
+    name: cluster-a-backups
 
   cluster-a1-mysql-data:
     name: cluster-a1-mysql-data
@@ -372,6 +387,8 @@ volumes:
     name: cluster-a1-index
   cluster-a1-eiou:
     name: cluster-a1-eiou
+  cluster-a1-backups:
+    name: cluster-a1-backups
 
   cluster-a2-mysql-data:
     name: cluster-a2-mysql-data
@@ -381,6 +398,8 @@ volumes:
     name: cluster-a2-index
   cluster-a2-eiou:
     name: cluster-a2-eiou
+  cluster-a2-backups:
+    name: cluster-a2-backups
 
   cluster-a3-mysql-data:
     name: cluster-a3-mysql-data
@@ -390,6 +409,8 @@ volumes:
     name: cluster-a3-index
   cluster-a3-eiou:
     name: cluster-a3-eiou
+  cluster-a3-backups:
+    name: cluster-a3-backups
 
   cluster-a4-mysql-data:
     name: cluster-a4-mysql-data
@@ -399,6 +420,8 @@ volumes:
     name: cluster-a4-index
   cluster-a4-eiou:
     name: cluster-a4-eiou
+  cluster-a4-backups:
+    name: cluster-a4-backups
 
   cluster-a11-mysql-data:
     name: cluster-a11-mysql-data
@@ -408,6 +431,8 @@ volumes:
     name: cluster-a11-index
   cluster-a11-eiou:
     name: cluster-a11-eiou
+  cluster-a11-backups:
+    name: cluster-a11-backups
 
   cluster-a12-mysql-data:
     name: cluster-a12-mysql-data
@@ -417,6 +442,8 @@ volumes:
     name: cluster-a12-index
   cluster-a12-eiou:
     name: cluster-a12-eiou
+  cluster-a12-backups:
+    name: cluster-a12-backups
 
   cluster-a21-mysql-data:
     name: cluster-a21-mysql-data
@@ -426,6 +453,8 @@ volumes:
     name: cluster-a21-index
   cluster-a21-eiou:
     name: cluster-a21-eiou
+  cluster-a21-backups:
+    name: cluster-a21-backups
 
   cluster-a22-mysql-data:
     name: cluster-a22-mysql-data
@@ -435,6 +464,8 @@ volumes:
     name: cluster-a22-index
   cluster-a22-eiou:
     name: cluster-a22-eiou
+  cluster-a22-backups:
+    name: cluster-a22-backups
 
   cluster-a31-mysql-data:
     name: cluster-a31-mysql-data
@@ -444,6 +475,8 @@ volumes:
     name: cluster-a31-index
   cluster-a31-eiou:
     name: cluster-a31-eiou
+  cluster-a31-backups:
+    name: cluster-a31-backups
 
   cluster-a32-mysql-data:
     name: cluster-a32-mysql-data
@@ -453,6 +486,8 @@ volumes:
     name: cluster-a32-index
   cluster-a32-eiou:
     name: cluster-a32-eiou
+  cluster-a32-backups:
+    name: cluster-a32-backups
 
   cluster-a41-mysql-data:
     name: cluster-a41-mysql-data
@@ -462,6 +497,8 @@ volumes:
     name:  cluster-a41-index
   cluster-a41-eiou:
     name:  cluster-a41-eiou
+  cluster-a41-backups:
+    name: cluster-a41-backups
 
   cluster-a42-mysql-data:
     name: cluster-a42-mysql-data
@@ -471,3 +508,5 @@ volumes:
     name: cluster-a42-index
   cluster-a42-eiou:
     name: cluster-a42-eiou
+  cluster-a42-backups:
+    name: cluster-a42-backups
