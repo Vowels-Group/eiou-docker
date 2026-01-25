@@ -369,6 +369,7 @@ transactionRecoveryTest
 seedphraseTestSuite
 processorLockfileTest
 pingTestSuite
+serviceInterfaceTest
 "
 
 # Quick validation (fast smoke tests)
