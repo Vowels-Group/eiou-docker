@@ -8,16 +8,16 @@ powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else {
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d  --network=demo-net --name httpA -e QUICKSTART=httpA eiou/eiou
-docker run -d  --network=demo-net --name httpB -e QUICKSTART=httpB eiou/eiou
-docker run -d  --network=demo-net --name httpC -e QUICKSTART=httpC eiou/eiou
-docker run -d  --network=demo-net --name httpD -e QUICKSTART=httpD eiou/eiou
-docker run -d  --network=demo-net --name httpE -e QUICKSTART=httpE eiou/eiou
-docker run -d  --network=demo-net --name httpF -e QUICKSTART=httpF eiou/eiou
-docker run -d  --network=demo-net --name httpG -e QUICKSTART=httpG eiou/eiou
-docker run -d  --network=demo-net --name httpH -e QUICKSTART=httpH eiou/eiou
-docker run -d  --network=demo-net --name httpI -e QUICKSTART=httpI eiou/eiou
-docker run -d  --network=demo-net --name httpJ -e QUICKSTART=httpJ eiou/eiou
+docker run -d  --network=demo-net --name httpA -v "httpA-mysql-data:/var/lib/mysql" -v "httpA-files:/etc/eiou/" -v "httpA-index:/var/www/html" -v "httpA-eiou:/usr/local/bin/" -e QUICKSTART=httpA eiou/eiou
+docker run -d  --network=demo-net --name httpB -v "httpB-mysql-data:/var/lib/mysql" -v "httpB-files:/etc/eiou/" -v "httpB-index:/var/www/html" -v "httpB-eiou:/usr/local/bin/" -e QUICKSTART=httpB eiou/eiou
+docker run -d  --network=demo-net --name httpC -v "httpC-mysql-data:/var/lib/mysql" -v "httpC-files:/etc/eiou/" -v "httpC-index:/var/www/html" -v "httpC-eiou:/usr/local/bin/" -e QUICKSTART=httpC eiou/eiou
+docker run -d  --network=demo-net --name httpD -v "httpD-mysql-data:/var/lib/mysql" -v "httpD-files:/etc/eiou/" -v "httpD-index:/var/www/html" -v "httpD-eiou:/usr/local/bin/" -e QUICKSTART=httpD eiou/eiou
+docker run -d  --network=demo-net --name httpE -v "httpE-mysql-data:/var/lib/mysql" -v "httpE-files:/etc/eiou/" -v "httpE-index:/var/www/html" -v "httpE-eiou:/usr/local/bin/" -e QUICKSTART=httpE eiou/eiou
+docker run -d  --network=demo-net --name httpF -v "httpF-mysql-data:/var/lib/mysql" -v "httpF-files:/etc/eiou/" -v "httpF-index:/var/www/html" -v "httpF-eiou:/usr/local/bin/" -e QUICKSTART=httpF eiou/eiou
+docker run -d  --network=demo-net --name httpG -v "httpG-mysql-data:/var/lib/mysql" -v "httpG-files:/etc/eiou/" -v "httpG-index:/var/www/html" -v "httpG-eiou:/usr/local/bin/" -e QUICKSTART=httpG eiou/eiou
+docker run -d  --network=demo-net --name httpH -v "httpH-mysql-data:/var/lib/mysql" -v "httpH-files:/etc/eiou/" -v "httpH-index:/var/www/html" -v "httpH-eiou:/usr/local/bin/" -e QUICKSTART=httpH eiou/eiou
+docker run -d  --network=demo-net --name httpI -v "httpI-mysql-data:/var/lib/mysql" -v "httpI-files:/etc/eiou/" -v "httpI-index:/var/www/html" -v "httpI-eiou:/usr/local/bin/" -e QUICKSTART=httpI eiou/eiou
+docker run -d  --network=demo-net --name httpJ -v "httpJ-mysql-data:/var/lib/mysql" -v "httpJ-files:/etc/eiou/" -v "httpJ-index:/var/www/html" -v "httpJ-eiou:/usr/local/bin/" -e QUICKSTART=httpJ eiou/eiou
 sleep 5
 
 # add contacts
