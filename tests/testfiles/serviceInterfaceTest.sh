@@ -38,7 +38,7 @@ INTERFACE_MAP["MessageServiceInterface"]="MessageService"
 INTERFACE_MAP["CliServiceInterface"]="CliService"
 INTERFACE_MAP["CleanupServiceInterface"]="CleanupService"
 INTERFACE_MAP["WalletServiceInterface"]="WalletService"
-INTERFACE_MAP["Rp2pServiceInterface"]="RP2pService"
+INTERFACE_MAP["Rp2pServiceInterface"]="Rp2pService"
 INTERFACE_MAP["RateLimiterServiceInterface"]="RateLimiterService"
 INTERFACE_MAP["ContactStatusServiceInterface"]="ContactStatusService"
 INTERFACE_MAP["MessageDeliveryServiceInterface"]="MessageDeliveryService"
@@ -74,55 +74,59 @@ done
 ############################ Test 2: Services Implement Interfaces ############################
 printf "\n${YELLOW}Test 2: Verifying services implement their interfaces${NC}\n"
 
+# Test all services via ServiceContainer (services are loaded via require_once, not autoload)
+# Map: interface => getter expression
+declare -A SERVICE_GETTERS
+SERVICE_GETTERS["TransportServiceInterface"]="\$app->services->utilities->getTransportUtility()"
+SERVICE_GETTERS["ContactServiceInterface"]="\$app->services->getContactService()"
+SERVICE_GETTERS["TransactionServiceInterface"]="\$app->services->getTransactionService()"
+SERVICE_GETTERS["SyncServiceInterface"]="\$app->services->getSyncService()"
+SERVICE_GETTERS["P2pServiceInterface"]="\$app->services->getP2pService()"
+SERVICE_GETTERS["ApiKeyServiceInterface"]="\$app->services->getApiKeyService(new CliOutputManager())"
+SERVICE_GETTERS["MessageServiceInterface"]="\$app->services->getMessageService()"
+SERVICE_GETTERS["CliServiceInterface"]="\$app->services->getCliService()"
+SERVICE_GETTERS["CleanupServiceInterface"]="\$app->services->getCleanupService()"
+SERVICE_GETTERS["WalletServiceInterface"]="\$app->services->getWalletService()"
+SERVICE_GETTERS["Rp2pServiceInterface"]="\$app->services->getRp2pService()"
+SERVICE_GETTERS["RateLimiterServiceInterface"]="\$app->services->getRateLimiterService()"
+SERVICE_GETTERS["ContactStatusServiceInterface"]="\$app->services->getContactStatusService()"
+SERVICE_GETTERS["MessageDeliveryServiceInterface"]="\$app->services->getMessageDeliveryService()"
+SERVICE_GETTERS["DebugServiceInterface"]="\$app->services->getDebugService()"
+SERVICE_GETTERS["ApiAuthServiceInterface"]="\$app->services->getApiAuthService()"
+SERVICE_GETTERS["HeldTransactionServiceInterface"]="\$app->services->getHeldTransactionService()"
+SERVICE_GETTERS["TransactionRecoveryServiceInterface"]="\$app->services->getTransactionRecoveryService()"
+SERVICE_GETTERS["TimeUtilityServiceInterface"]="\$app->services->utilities->getTimeUtility()"
+SERVICE_GETTERS["ValidationUtilityServiceInterface"]="\$app->services->utilities->getValidationUtility()"
+SERVICE_GETTERS["GeneralUtilityServiceInterface"]="\$app->services->utilities->getGeneralUtility()"
+SERVICE_GETTERS["CurrencyUtilityServiceInterface"]="\$app->services->utilities->getCurrencyUtility()"
+
 for interface in "${!INTERFACE_MAP[@]}"; do
     totaltests=$((totaltests + 1))
     service="${INTERFACE_MAP[$interface]}"
+    getter="${SERVICE_GETTERS[$interface]}"
+
+    if [ -z "$getter" ]; then
+        printf "\t   ${service} implements ${interface} ${RED}NO GETTER DEFINED${NC}\n"
+        failure=$((failure + 1))
+        continue
+    fi
 
     implements_interface=$(docker exec $test_container php -r "
         require_once('${REL_APPLICATION}');
-
-        // Map service names to their class names (no namespaces - using require_once pattern)
-        \$serviceClassMap = [
-            'TransportUtilityService' => 'TransportUtilityService',
-            'ContactService' => 'ContactService',
-            'TransactionService' => 'TransactionService',
-            'SyncService' => 'SyncService',
-            'P2pService' => 'P2pService',
-            'ApiKeyService' => 'ApiKeyService',
-            'MessageService' => 'MessageService',
-            'CliService' => 'CliService',
-            'CleanupService' => 'CleanupService',
-            'WalletService' => 'WalletService',
-            'RP2pService' => 'Rp2pService',
-            'RateLimiterService' => 'RateLimiterService',
-            'ContactStatusService' => 'ContactStatusService',
-            'MessageDeliveryService' => 'MessageDeliveryService',
-            'DebugService' => 'DebugService',
-            'ApiAuthService' => 'ApiAuthService',
-            'HeldTransactionService' => 'HeldTransactionService',
-            'TransactionRecoveryService' => 'TransactionRecoveryService',
-            'TimeUtilityService' => 'TimeUtilityService',
-            'ValidationUtilityService' => 'ValidationUtilityService',
-            'GeneralUtilityService' => 'GeneralUtilityService',
-            'CurrencyUtilityService' => 'CurrencyUtilityService',
-        ];
-
-        \$serviceClass = \$serviceClassMap['${service}'] ?? '${service}';
-        \$interfaceClass = '${interface}';
-
-        if (class_exists(\$serviceClass) && interface_exists(\$interfaceClass)) {
-            \$reflection = new ReflectionClass(\$serviceClass);
-            echo \$reflection->implementsInterface(\$interfaceClass) ? 'yes' : 'no';
-        } else {
-            echo 'missing';
+        \$app = Application::getInstance();
+        try {
+            \$service = ${getter};
+            echo (\$service instanceof ${interface}) ? 'yes' : 'no';
+        } catch (Exception \$e) {
+            echo 'error:' . \$e->getMessage();
         }
     " 2>/dev/null || echo "error")
 
     if [ "$implements_interface" = "yes" ]; then
         printf "\t   ${service} implements ${interface} ${GREEN}PASSED${NC}\n"
         passed=$((passed + 1))
-    elif [ "$implements_interface" = "missing" ]; then
-        printf "\t   ${service} or ${interface} ${RED}CLASS NOT FOUND${NC}\n"
+    elif [[ "$implements_interface" == error* ]]; then
+        printf "\t   ${service} implements ${interface} ${RED}ERROR: ${implements_interface}${NC}\n"
         failure=$((failure + 1))
     else
         printf "\t   ${service} implements ${interface} ${RED}FAILED${NC}\n"
@@ -174,8 +178,10 @@ totaltests=$((totaltests + 1))
 # Test that a function with interface type hint accepts the concrete implementation
 mock_test=$(docker exec $test_container php -r "
     require_once('${REL_APPLICATION}');
+    // Must require interface before defining function with it as type hint
+    require_once('${EIOU_DIR}/src/contracts/TransportServiceInterface.php');
 
-    // Create a test function that accepts interface type (no namespace)
+    // Create a test function that accepts interface type
     function testTransportInterface(TransportServiceInterface \$transport): bool {
         return \$transport->isAddress('http://test');
     }
@@ -208,8 +214,10 @@ totaltests=$((totaltests + 1))
 # Test that code can depend on abstractions (interfaces) not concretions
 di_test=$(docker exec $test_container php -r "
     require_once('${REL_APPLICATION}');
+    // Must require interface before defining class with it as type hint
+    require_once('${EIOU_DIR}/src/contracts/ContactServiceInterface.php');
 
-    // A class that depends on interface, not concrete implementation (no namespace)
+    // A class that depends on interface, not concrete implementation
     class TestConsumer {
         private ContactServiceInterface \$contactService;
 
