@@ -184,9 +184,9 @@ fi
 printf "${GREEN}${CHECK} Build completed successfully${NC}\n"
 
 # Wait for containers to be fully initialized
-printf "\n${GREEN}Waiting for containers to initialize...${NC}\n"
 # WSL2 environments have slower I/O; use EIOU_INIT_TIMEOUT env var to override
 MAX_WAIT=${EIOU_INIT_TIMEOUT:-90}  # Maximum wait time per container in seconds
+printf "\n${GREEN}Waiting for containers to initialize (timeout: ${MAX_WAIT}s per container)...${NC}\n"
 
 # Get list of eiou containers from docker
 CONTAINER_LIST=$(docker ps --filter "ancestor=eiou/eiou" --format "{{.Names}}" 2>/dev/null)
