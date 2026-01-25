@@ -344,13 +344,14 @@ class BackupService implements BackupServiceInterface
         ];
     }
 
-    public function handleBackupCommand(array $args, $output): void
+    public function handleBackupCommand(array $argv, $output): void
     {
-        $subcommand = $args[0] ?? 'help';
+        // argv format: ['eiou', 'backup', 'subcommand', 'arg1', 'arg2', ...]
+        $subcommand = $argv[2] ?? 'help';
 
         switch ($subcommand) {
             case 'create':
-                $customName = $args[1] ?? null;
+                $customName = $argv[3] ?? null;
                 $result = $this->createBackup($customName);
                 if ($result['success']) {
                     $output->success(
@@ -368,8 +369,8 @@ class BackupService implements BackupServiceInterface
                 break;
 
             case 'restore':
-                $filename = $args[1] ?? null;
-                $confirm = ($args[2] ?? '') === '--confirm';
+                $filename = $argv[3] ?? null;
+                $confirm = ($argv[4] ?? '') === '--confirm';
 
                 if (!$filename) {
                     $output->error('Usage: backup restore <filename> --confirm');
@@ -411,7 +412,7 @@ class BackupService implements BackupServiceInterface
                 break;
 
             case 'delete':
-                $filename = $args[1] ?? null;
+                $filename = $argv[3] ?? null;
                 if (!$filename) {
                     $output->error('Usage: backup delete <filename>');
                     return;
@@ -425,7 +426,7 @@ class BackupService implements BackupServiceInterface
                 break;
 
             case 'verify':
-                $filename = $args[1] ?? null;
+                $filename = $argv[3] ?? null;
                 if (!$filename) {
                     $output->error('Usage: backup verify <filename>');
                     return;
