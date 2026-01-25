@@ -75,8 +75,8 @@ if (!$app->currentUserLoaded()) {
 // Get Debug Service Instance
 $debugService = $app->services->getDebugService();
 
-// Apply rate limiting for CLI commands (if database is available)
-if ($app->currentPdoLoaded()) {
+// Apply rate limiting for CLI commands (if database is available and not in test mode)
+if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
     $rateLimiter = $app->getRateLimiter();
 
     // Get CLI identifier (user + command for more granular limiting)

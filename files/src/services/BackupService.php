@@ -71,8 +71,34 @@ class BackupService implements BackupServiceInterface
                 putenv("MYSQL_PWD");
             }
 
-            if (empty($sqlDump) || strpos($sqlDump, 'CREATE TABLE') === false) {
-                return ['success' => false, 'error' => 'mysqldump failed or returned empty result'];
+            // Better error diagnostics
+            if (empty($sqlDump)) {
+                return [
+                    'success' => false,
+                    'error' => 'mysqldump returned empty result',
+                    'debug' => [
+                        'host' => $dbHost,
+                        'database' => $dbName,
+                        'user' => $dbUser,
+                        'password_set' => !empty($dbPass)
+                    ]
+                ];
+            }
+
+            // Check if output is an error message rather than SQL
+            if (strpos($sqlDump, 'CREATE TABLE') === false) {
+                // Truncate potential error message for logging
+                $errorPreview = substr(trim($sqlDump), 0, 500);
+                return [
+                    'success' => false,
+                    'error' => 'mysqldump failed: ' . $errorPreview,
+                    'debug' => [
+                        'host' => $dbHost,
+                        'database' => $dbName,
+                        'user' => $dbUser,
+                        'password_set' => !empty($dbPass)
+                    ]
+                ];
             }
 
             // Encrypt the SQL dump
