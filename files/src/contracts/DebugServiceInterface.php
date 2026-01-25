@@ -5,8 +5,6 @@
  * Debug Service Interface
  *
  * Defines the contract for debug management services.
- *
- * @package Eiou\Contracts
  */
 interface DebugServiceInterface
 {

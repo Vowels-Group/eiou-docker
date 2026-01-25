@@ -1,12 +1,12 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+require_once __DIR__ . '/../../contracts/TransportServiceInterface.php';
+
 /**
  * Transport Utility Service
  *
  * Handles Transport
- *
- * @package Services\Utilities
  */
 
 require_once __DIR__ . '/../../core/Constants.php';

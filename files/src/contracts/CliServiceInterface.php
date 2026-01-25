@@ -7,8 +7,6 @@
  * Defines the contract for CLI management operations.
  * Handles settings management, help display, user information,
  * balance operations, transaction history, and SSL certificate management.
- *
- * @package Eiou\Contracts
  */
 interface CliServiceInterface
 {

@@ -14,8 +14,6 @@
  * 4. onSyncComplete() triggers processHeldTransactionsAfterSync()
  * 5. updatePreviousTxid() updates the transaction's previous_txid to the expected value
  * 6. resumeTransaction() sets status back to pending for reprocessing
- *
- * @package Eiou\Contracts
  */
 interface HeldTransactionServiceInterface
 {

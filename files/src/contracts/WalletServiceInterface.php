@@ -6,8 +6,6 @@
  *
  * Defines the contract for wallet management operations.
  * Handles wallet existence checks and related wallet business logic.
- *
- * @package Eiou\Contracts
  */
 interface WalletServiceInterface
 {

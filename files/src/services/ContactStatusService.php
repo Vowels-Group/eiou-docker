@@ -2,6 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
+require_once __DIR__ . '/../contracts/ContactStatusServiceInterface.php';
 
 
 /**
@@ -9,8 +10,6 @@ require_once __DIR__ . '/../utils/SecureLogger.php';
  *
  * Handles incoming ping requests from other nodes and outgoing manual pings.
  * Responds with pong containing local chain state for comparison.
- *
- * @package Services
  */
 class ContactStatusService implements ContactStatusServiceInterface {
     /**

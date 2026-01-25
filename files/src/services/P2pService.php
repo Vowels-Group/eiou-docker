@@ -4,7 +4,7 @@
 require_once __DIR__ . '/../utils/InputValidator.php';
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
-
+require_once __DIR__ . '/../contracts/P2pServiceInterface.php';
 
 /**
  * P2P Service
@@ -12,8 +12,6 @@ require_once __DIR__ . '/MessageDeliveryService.php';
  * Handles all business logic for peer-to-peer payment routing.
  * Integrates with MessageDeliveryService for reliable message delivery
  * with tracking, retry logic, and dead letter queue support.
- *
- * @package Services
  */
 class P2pService implements P2pServiceInterface {
     /**

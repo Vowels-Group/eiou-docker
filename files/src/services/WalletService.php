@@ -1,13 +1,13 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+require_once __DIR__ . '/../contracts/WalletServiceInterface.php';
+
 
 /**
  * Wallet Service
  *
  * Handles all business logic for wallet management.
- *
- * @package Services
  */
 class WalletService implements WalletServiceInterface {
     /**

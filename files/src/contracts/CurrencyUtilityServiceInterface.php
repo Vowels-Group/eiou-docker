@@ -4,8 +4,6 @@
  * Currency Utility Service Interface
  *
  * Defines the contract for currency formatting, conversion, and calculations.
- *
- * @package Eiou\Contracts
  */
 interface CurrencyUtilityServiceInterface
 {

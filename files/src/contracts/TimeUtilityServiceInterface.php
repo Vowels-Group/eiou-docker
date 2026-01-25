@@ -4,8 +4,6 @@
  * Time Utility Service Interface
  *
  * Defines the contract for time-related utility functions.
- *
- * @package Eiou\Contracts
  */
 interface TimeUtilityServiceInterface
 {

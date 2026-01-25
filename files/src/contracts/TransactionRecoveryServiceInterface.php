@@ -13,8 +13,6 @@
  *    a. If recovery_count < max_retries: Reset to 'pending' for retry
  *    b. If recovery_count >= max_retries: Mark for manual review
  * 4. Logs all recovery actions for audit trail
- *
- * @package Eiou\Contracts
  */
 interface TransactionRecoveryServiceInterface
 {

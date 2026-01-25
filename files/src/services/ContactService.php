@@ -4,6 +4,7 @@
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
+require_once __DIR__ . '/../contracts/ContactServiceInterface.php';
 
 
 /**
@@ -12,8 +13,6 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * Handles all business logic for contact management.
  * Integrates with MessageDeliveryService for reliable message delivery
  * with tracking, retry logic, and dead letter queue support.
- *
- * @package Services
  *
  * SECTION INDEX:
  * - Properties & Constructor............. Line ~20

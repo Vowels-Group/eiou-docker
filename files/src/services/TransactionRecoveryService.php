@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';
+require_once __DIR__ . '/../contracts/TransactionRecoveryServiceInterface.php';
 
 
 /**
@@ -23,8 +24,6 @@ require_once __DIR__ . '/../core/Constants.php';
  * The 'sending' status is a transient state indicating the transaction
  * processor has claimed the transaction and is actively sending it.
  * If the process crashes during this window, recovery handles cleanup.
- *
- * @package Services
  */
 class TransactionRecoveryService implements TransactionRecoveryServiceInterface {
     /**

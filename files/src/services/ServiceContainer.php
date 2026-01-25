@@ -7,8 +7,6 @@ require_once __DIR__ . '/../utils/SecureLogger.php';
  * Service Container
  *
  * Centralized dependency injection container for managing service instances.
- *
- * @package Services
  */
 
 class ServiceContainer {

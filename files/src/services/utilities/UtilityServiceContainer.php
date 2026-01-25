@@ -9,8 +9,6 @@
  *
  * This class is managed by ServiceContainer and should be obtained via:
  * ServiceContainer::getUtilityContainer()
- *
- * @package Services\Utilities
  */
 
 require_once __DIR__ . '/../ServiceContainer.php';

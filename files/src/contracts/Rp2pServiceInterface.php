@@ -8,8 +8,6 @@
  * Defines the contract for RP2P (Relay Peer-to-Peer) payment routing services.
  * Handles business logic for R peer-to-peer payment routing with reliable
  * message delivery, tracking, retry logic, and dead letter queue support.
- *
- * @package Eiou\Contracts
  */
 interface Rp2pServiceInterface
 {

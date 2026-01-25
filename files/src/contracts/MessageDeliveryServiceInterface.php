@@ -8,8 +8,6 @@
  * exponential backoff retry, and dead letter queue integration.
  *
  * Implements the Transaction Reliability & Message Handling System.
- *
- * @package Eiou\Contracts
  */
 interface MessageDeliveryServiceInterface
 {

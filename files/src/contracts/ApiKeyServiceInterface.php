@@ -6,8 +6,6 @@
  *
  * Defines the contract for CLI management of API keys.
  * Provides commands for creating, listing, deleting, disabling, and enabling API keys.
- *
- * @package Eiou\Contracts
  */
 interface ApiKeyServiceInterface
 {

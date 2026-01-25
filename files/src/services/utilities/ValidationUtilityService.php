@@ -1,12 +1,12 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+require_once __DIR__ . '/../../contracts/ValidationUtilityServiceInterface.php';
+
 /**
  * Validation Utility Service
  *
  * Handles validation logic for requests and data structures.
- *
- * @package Services\Utilities
  */
 
 require_once __DIR__ . '/../ServiceContainer.php';

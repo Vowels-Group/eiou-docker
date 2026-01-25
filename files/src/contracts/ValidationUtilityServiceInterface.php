@@ -4,8 +4,6 @@
  * Validation Utility Service Interface
  *
  * Defines the contract for validation logic for requests and data structures.
- *
- * @package Eiou\Contracts
  */
 interface ValidationUtilityServiceInterface
 {

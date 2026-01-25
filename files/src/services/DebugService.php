@@ -1,13 +1,12 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+require_once __DIR__ . '/../contracts/DebugServiceInterface.php';
 
 /**
  * Debug Service
  *
  * Handles all business logic for debug management.
- *
- * @package Services
  */
 class DebugService implements DebugServiceInterface {
     /**

@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
+require_once __DIR__ . '/../contracts/Rp2pServiceInterface.php';
 
 
 /**
@@ -11,8 +12,6 @@ require_once __DIR__ . '/MessageDeliveryService.php';
  * Handles all business logic for R peer-to-peer payment routing.
  * Integrates with MessageDeliveryService for reliable message delivery
  * with tracking, retry logic, and dead letter queue support.
- *
- * @package Services
  */
 class RP2pService implements Rp2pServiceInterface {
     /**

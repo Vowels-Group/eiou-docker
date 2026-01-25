@@ -7,8 +7,6 @@
  * Defines the contract for cleanup management operations.
  * Handles processing of expired messages, P2P chain completion checks,
  * and transaction cancellation.
- *
- * @package Eiou\Contracts
  */
 interface CleanupServiceInterface
 {

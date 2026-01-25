@@ -8,8 +8,6 @@
  * Defines the contract for handling contact status operations including
  * incoming ping requests from other nodes and outgoing manual pings.
  * Responds with pong containing local chain state for comparison.
- *
- * @package Eiou\Contracts
  */
 interface ContactStatusServiceInterface
 {

@@ -4,8 +4,6 @@
  * General Utility Service Interface
  *
  * Defines the contract for general utility functions.
- *
- * @package Eiou\Contracts
  */
 interface GeneralUtilityServiceInterface
 {

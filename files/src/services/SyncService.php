@@ -3,14 +3,13 @@
 
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
+require_once __DIR__ . '/../contracts/SyncServiceInterface.php';
 
 
 /**
  * Sync Service
  *
  * Handles all business logic for sync management.
- *
- * @package Services
  *
  * SECTION INDEX:
  * - Properties & Constructor............. Line ~14

@@ -1,19 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+require_once __DIR__ . '/../core/ErrorCodes.php';
+require_once __DIR__ . '/../core/Constants.php';
+require_once __DIR__ . '/../contracts/RateLimiterServiceInterface.php';
+
 /**
  * Rate Limiter Service
  *
  * Business logic for rate limiting functionality.
  * Prevents abuse and brute force attacks.
- *
- * @package Services
  */
-
-require_once __DIR__ . '/../core/ErrorCodes.php';
-require_once __DIR__ . '/../core/Constants.php';
-
-
 class RateLimiterService implements RateLimiterServiceInterface {
     private RateLimiterRepository $repository;
 

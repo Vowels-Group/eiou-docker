@@ -7,8 +7,6 @@
  * Defines the contract for message processing and validation.
  * Handles all business logic for message processing including
  * transaction messages, contact messages, P2P status messages, and sync messages.
- *
- * @package Eiou\Contracts
  */
 interface MessageServiceInterface
 {
