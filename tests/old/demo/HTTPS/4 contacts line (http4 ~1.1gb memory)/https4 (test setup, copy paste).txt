@@ -4,6 +4,12 @@ docker network create -d bridge demo-net
 # Remove any existing containers
 powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
 
+# Remove associated volumes (if any)
+docker volume rm https0-mysql-data https0-files https0-index https0-eiou 2>/dev/null || echo "https0 volumes not found"
+docker volume rm https1-mysql-data https1-files https1-index https1-eiou 2>/dev/null || echo "https1 volumes not found"
+docker volume rm https2-mysql-data https2-files https2-index https2-eiou 2>/dev/null || echo "https2 volumes not found"
+docker volume rm https3-mysql-data https3-files https3-index https3-eiou 2>/dev/null || echo "https3 volumes not found"
+
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
 

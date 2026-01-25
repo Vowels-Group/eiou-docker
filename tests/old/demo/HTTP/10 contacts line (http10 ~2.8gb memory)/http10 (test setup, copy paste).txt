@@ -4,6 +4,18 @@ docker network create -d bridge demo-net
 # Remove any existing containers
 powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
 
+# Remove associated volumes (if any)
+docker volume rm httpA-mysql-data httpA-files httpA-index httpA-eiou 2>/dev/null || echo "httpA volumes not found"
+docker volume rm httpB-mysql-data httpB-files httpB-index httpB-eiou 2>/dev/null || echo "httpB volumes not found"
+docker volume rm httpC-mysql-data httpC-files httpC-index httpC-eiou 2>/dev/null || echo "httpC volumes not found"
+docker volume rm httpD-mysql-data httpD-files httpD-index httpD-eiou 2>/dev/null || echo "httpD volumes not found"
+docker volume rm httpE-mysql-data httpE-files httpE-index httpE-eiou 2>/dev/null || echo "httpE volumes not found"
+docker volume rm httpF-mysql-data httpF-files httpF-index httpF-eiou 2>/dev/null || echo "httpF volumes not found"
+docker volume rm httpG-mysql-data httpG-files httpG-index httpG-eiou 2>/dev/null || echo "httpG volumes not found"
+docker volume rm httpH-mysql-data httpH-files httpH-index httpH-eiou 2>/dev/null || echo "httpH volumes not found"
+docker volume rm httpI-mysql-data httpI-files httpI-index httpI-eiou 2>/dev/null || echo "httpI volumes not found"
+docker volume rm httpJ-mysql-data httpJ-files httpJ-index httpJ-eiou 2>/dev/null || echo "httpJ volumes not found"
+
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
 
