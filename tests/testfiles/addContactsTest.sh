@@ -37,7 +37,7 @@ while [ $wait_elapsed -lt 10 ]; do
     statusCheck=$(docker exec ${first_keys[0]} php -r "
         require_once('${REL_APPLICATION}');
         echo Application::getInstance()->services->getContactRepository()->getContactStatus(
-            '""${transportCheck}""','""${containerAddresses[${first_keys[1]}]}""'
+            '${transportCheck}','${containerAddresses[${first_keys[1]}]}'
         );
     " 2>/dev/null || echo "pending")
 

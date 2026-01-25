@@ -445,7 +445,7 @@ check_contact_status_with_retry() {
     local status=$(docker exec ${container} php -r "
         require_once('${REL_APPLICATION}');
         echo Application::getInstance()->services->getContactRepository()->getContactStatus(
-            '""${transport_type}""','""${address}""'
+            '${transport_type}','${address}'
         );
     " 2>/dev/null || echo "error")
 
@@ -460,7 +460,7 @@ check_contact_status_with_retry() {
         status=$(docker exec ${container} php -r "
             require_once('${REL_APPLICATION}');
             echo Application::getInstance()->services->getContactRepository()->getContactStatus(
-                '""${transport_type}""','""${address}""'
+                '${transport_type}','${address}'
             );
         " 2>/dev/null || echo "error")
     fi

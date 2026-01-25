@@ -225,7 +225,7 @@ function wait_for_contact(){
         local contact_exists=$(docker exec $container php -r "
             require_once('${REL_APPLICATION}');
             \$app = Application::getInstance();
-            \$contact = \$app->services->getContactRepository()->getContactByAddress('""${transportCheck}""','$address');
+            \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportCheck}','$address');
             echo \$contact ? 'yes' : 'no';
         " 2>/dev/null || echo "no")
 
