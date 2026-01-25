@@ -11,6 +11,7 @@
 
 require_once __DIR__ . '/../../core/Constants.php';
 require_once __DIR__ . '/../../utils/SecureLogger.php';
+require_once __DIR__ . '/../../utils/AddressValidator.php';
 
 class TransportUtilityService
 {
@@ -57,55 +58,30 @@ class TransportUtilityService
      * Return the determined transport type from an address
      *
      * @param string $address The address of the sender
-     * @return string|null The type of transport used
-    */
+     * @return string|null The type of transport used ('tor', 'https', 'http', or null)
+     */
     public function determineTransportType(string $address): ?string {
-        if ($this->isTorAddress($address)) {
-            return 'tor';
-        }
-        if ($this->isHttpsAddress($address)) {
-            return 'https';
-        }
-        if ($this->isHttpAddress($address)) {
-            return 'http';
-        }
-        return null;
+        return AddressValidator::getTransportType($address);
     }
 
     /**
-     * Return the an associative array of the determined address
+     * Return an associative array of the determined address
      *
      * @param string $address The address of the sender
-     * @return array|null The associative array of the transport type
-    */
+     * @return array|null The associative array of the transport type (e.g., ['tor' => $address])
+     */
     public function determineTransportTypeAssociative(string $address): ?array {
-        // Check if the address is a Tor (.onion) address
-        if ($this->isTorAddress($address)) {
-            return ['tor' => $address];
-        }
-
-        // Check if the address is an HTTPS address
-        if ($this->isHttpsAddress($address)) {
-            return ['https' => $address];
-        }
-
-        // Check if the address is an HTTP address
-        if ($this->isHttpAddress($address)) {
-            return ['http' => $address];
-        }
-
-        // If neither Tor nor HTTP/HTTPS, return null or a default type
-        return null;
+        return AddressValidator::categorizeAddress($address);
     }
 
     /**
      * Determine a possible fallback transport type
      *
      * @param string $info The address/name of the receiver
-     * @param string $contactInfo The Contact Info
+     * @param array $contactInfo The Contact Info
      * @return string|null The type of database index
-    */
-    public function fallbackTransportType($info, $contactInfo){
+     */
+    public function fallbackTransportType(string $info, array $contactInfo): ?string {
         $transportIndex = $this->determineTransportType($info) ?? Constants::DEFAULT_TRANSPORT_MODE;
         if(isset($contactInfo[$transportIndex])){
             return $transportIndex;
@@ -128,10 +104,10 @@ class TransportUtilityService
     /**
      * Determine a possible fallback contact address
      *
-     * @param string $contactInfo The Contact Info (with addresses)
+     * @param array $contactInfo The Contact Info (with addresses)
      * @return string|null The fallback address
-    */
-    public function fallbackTransportAddress($contactInfo){
+     */
+    public function fallbackTransportAddress(array $contactInfo): ?string {
         $transportModes = $this->container->getAddressRepository()->getAllAddressTypes();
         if($transportModes){
             while($transportModes !== []){
@@ -157,41 +133,41 @@ class TransportUtilityService
     /**
      * Check if address is HTTPS
      *
-     * @param string $address
-     * @return bool
+     * @param string $address The address to check
+     * @return bool True if HTTPS address, false otherwise
      */
-    public function isHttpsAddress($address): bool {
-        return preg_match('/^https:\/\//', $address) === 1;
+    public function isHttpsAddress(string $address): bool {
+        return AddressValidator::isHttpsAddress($address);
     }
 
     /**
-     * Determine if adress is HTTP only (not HTTPS)
+     * Determine if address is HTTP only (not HTTPS)
      *
      * @param string $address The address of the sender
-     * @return bool True if HTTP address, False otherwise
-    */
-    public function isHttpAddress($address): bool {
-        return preg_match('/^http:\/\//', $address) === 1 && preg_match('/^https:\/\//', $address) === 0;
+     * @return bool True if HTTP address, false otherwise
+     */
+    public function isHttpAddress(string $address): bool {
+        return AddressValidator::isHttpAddress($address);
     }
 
     /**
-     * Determine if adress is TOR
+     * Determine if address is TOR
      *
      * @param string $address The address of the sender
-     * @return bool True if Tor address, False otherwise
-    */
-    public function isTorAddress($address): bool {
-        return preg_match('/\.onion$/', $address) === 1;
+     * @return bool True if Tor address, false otherwise
+     */
+    public function isTorAddress(string $address): bool {
+        return AddressValidator::isTorAddress($address);
     }
 
     /**
-     * Determine if adress is valid HTTP, HTTPS, or TOR
+     * Determine if address is valid HTTP, HTTPS, or TOR
      *
      * @param string $address The address of the sender
-     * @return bool True if HTTP/HTTPS/TOR address, False otherwise
-    */
-    public function isAddress($address): bool {
-        return ($this->isHttpAddress($address) || $this->isHttpsAddress($address) || $this->isTorAddress($address));
+     * @return bool True if HTTP/HTTPS/TOR address, false otherwise
+     */
+    public function isAddress(string $address): bool {
+        return AddressValidator::isAddress($address);
     }
 
     /**
@@ -261,8 +237,8 @@ class TransportUtilityService
      * @param array $payload The payload to send
      * @param bool $returnSigningData If true, returns array with response and signing data
      * @return string|array The response from the recipient, or array with response and signing data if $returnSigningData is true
-    */
-    public function send(string $recipient, array $payload, bool $returnSigningData = false){
+     */
+    public function send(string $recipient, array $payload, bool $returnSigningData = false): string|array {
         $signingResult = $this->signWithCapture($payload);
         $signedPayload = json_encode($signingResult['envelope']);
 
@@ -407,9 +383,9 @@ class TransportUtilityService
      * and the signature/nonce used for storage purposes.
      *
      * @param array $payload The payload to sign
-     * @return array Array with 'envelope', 'signature', and 'nonce' keys, or false on failure
+     * @return array|false Array with 'envelope', 'signature', and 'nonce' keys, or false on failure
      */
-    public function signWithCapture(array $payload) {
+    public function signWithCapture(array $payload): array|false {
         // Remove transport metadata from payload content (will be at top level)
         $messageContent = $payload;
         unset($messageContent['senderAddress']);
@@ -442,7 +418,9 @@ class TransportUtilityService
         // Sign the message
         $signature = '';
         if (!openssl_sign($message, $signature, openssl_pkey_get_private($this->currentUser->getPrivateKey()))) {
-            echo "Failed to sign the message.\n";
+            SecureLogger::error("Failed to sign message", [
+                'txid' => $messageContent['txid'] ?? 'unknown'
+            ]);
             return false;
         }
 
@@ -481,8 +459,8 @@ class TransportUtilityService
      *
      * @param array $payload The payload to sign
      * @return array|false The signed payload with clean structure, or false on failure
-    */
-    public function sign(array $payload) {
+     */
+    public function sign(array $payload): array|false {
         $result = $this->signWithCapture($payload);
         return $result ? $result['envelope'] : false;
     }

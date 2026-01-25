@@ -23,12 +23,22 @@ failure=0
 
 for container in "${containers[@]}"; do
     # Get hostname from container's userconfig.json
-    containerAddresses[$container]=$(docker exec $container php -r '
-        $json = json_decode(file_get_contents("'"${USERCONFIG}"'"),true);
-        if (isset($json["hostname"])) {
-            echo $json["hostname"];
-        }
-    ')
+    # Use hostname_secure for HTTPS mode, hostname for HTTP mode
+    if [ "$MODE" == 'https' ]; then
+        containerAddresses[$container]=$(docker exec $container php -r '
+            $json = json_decode(file_get_contents("'"${USERCONFIG}"'"),true);
+            if (isset($json["hostname_secure"])) {
+                echo $json["hostname_secure"];
+            }
+        ')
+    else
+        containerAddresses[$container]=$(docker exec $container php -r '
+            $json = json_decode(file_get_contents("'"${USERCONFIG}"'"),true);
+            if (isset($json["hostname"])) {
+                echo $json["hostname"];
+            }
+        ')
+    fi
 
     actualHostname="${containerAddresses[${container}]}"
     testPassed=false

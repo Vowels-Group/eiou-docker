@@ -146,9 +146,10 @@ class MessageHelper
     public static function getMessageFromUrl(): ?array
     {
         if (isset($_GET['message']) && isset($_GET['type'])) {
+            // Sanitize user input to prevent XSS attacks
             return [
-                'message' => $_GET['message'],
-                'type' => $_GET['type']
+                'message' => htmlspecialchars($_GET['message'], ENT_QUOTES, 'UTF-8'),
+                'type' => htmlspecialchars($_GET['type'], ENT_QUOTES, 'UTF-8')
             ];
         }
         return null;

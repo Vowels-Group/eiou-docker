@@ -214,7 +214,7 @@ class CliService {
             // Prompt user for which setting they want to change
             echo "Select the setting you want to change:\n";
             echo "\t1. Default currency\n";
-            echo "\t2. Minimum ree amount\n";
+            echo "\t2. Minimum fee amount\n";
             echo "\t3. Default fee percentage\n";
             echo "\t4. Maximum fee percentage\n";
             echo "\t5. Default credit limit\n";

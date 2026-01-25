@@ -18,7 +18,7 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  */
 
 class ApiAuthService {
-    private $apiKeyRepository;
+    private ApiKeyRepository $apiKeyRepository;
     private $logger;
 
     /**

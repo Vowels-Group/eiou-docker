@@ -28,6 +28,11 @@
 #   docker-compose -f docker-compose-cluster.yml up -d --build
 #   docker-compose -f docker-compose-cluster.yml down -v
 #
+# Documentation:
+#   For complete environment variable and volume documentation, see:
+#   - docs/DOCKER_CONFIGURATION.md (comprehensive reference)
+#   - docker-compose-single.yml (reference template with inline docs)
+#
 # Note: This compose file creates standalone containers without contact
 # interconnections. Node contacts must be established manually after
 # startup. The topology diagram above is a suggested configuration;

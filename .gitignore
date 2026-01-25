@@ -3,5 +3,7 @@ yarn.lock
 .swarm/*
 .hive-mind/*
 .claude-flow/*
+# Ignore generated docs but track API documentation
 docs/*
+!docs/*.md
 memory/*

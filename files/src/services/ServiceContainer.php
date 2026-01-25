@@ -67,9 +67,11 @@ class ServiceContainer {
     /**
      * Get singleton instance
      *
+     * @param UserContext|null $currentUser Current user context (optional)
+     * @param PDO|null $pdo Database connection (optional)
      * @return ServiceContainer
      */
-    public static function getInstance(?UserContext $currentUser, ?PDO $pdo): ServiceContainer {
+    public static function getInstance(?UserContext $currentUser = null, ?PDO $pdo = null): ServiceContainer {
         if (self::$instance === null) {
             self::$instance = new self($currentUser, $pdo);
         }
@@ -105,9 +107,9 @@ class ServiceContainer {
     /**
      * Get database connection (lazy loaded)
      *
-     * @return PDO|null
+     * @return void
      */
-    public function loadDatabase() {
+    public function loadDatabase(): void {
         require_once '/etc/eiou/src/database/Pdo.php';
         try {
             $this->pdo = createPDOConnection();
@@ -656,7 +658,7 @@ class ServiceContainer {
      * @param CliOutputManager $output CLI output manager for formatting
      * @return ApiKeyService
      */
-    public function getApiKeyService($output): ApiKeyService {
+    public function getApiKeyService(CliOutputManager $output): ApiKeyService {
         if (!isset($this->services['ApiKeyService'])) {
             require_once __DIR__ . '/ApiKeyService.php';
             $this->services['ApiKeyService'] = new ApiKeyService(
@@ -894,13 +896,17 @@ class ServiceContainer {
 
     /**
      * Prevent cloning of singleton
+     *
+     * @return void
      */
-    private function __clone() {}
+    private function __clone(): void {}
 
     /**
      * Prevent unserialization of singleton
+     *
+     * @throws Exception Always throws to prevent unserialization
      */
-    public function __wakeup() {
+    public function __wakeup(): void {
         throw new Exception("Cannot unserialize singleton");
     }
 }

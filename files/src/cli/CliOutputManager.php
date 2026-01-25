@@ -31,6 +31,9 @@ class CliOutputManager
     /** @var bool Whether to include metadata in JSON output */
     private bool $includeMetadata = true;
 
+    /** @var bool Whether help flag was requested */
+    private bool $helpRequested = false;
+
     /** @var self|null Singleton instance */
     private static ?self $instance = null;
 

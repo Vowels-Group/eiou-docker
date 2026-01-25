@@ -42,6 +42,16 @@ docker-compose -f docker-compose-cluster.yml up -d --build
 | [`docker-compose-10line.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-10line.yml) | 10 | ~2.8GB | Extended 10-node line topology |
 | [`docker-compose-cluster.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-cluster.yml) | 13 | ~3.5GB | Cluster topology with hierarchical structure |
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Docker Configuration Reference](docs/DOCKER_CONFIGURATION.md) | Complete guide to environment variables and volume mounts |
+| [CLI Reference](docs/CLI_REFERENCE.md) | Command-line interface documentation |
+| [API Reference](docs/API_REFERENCE.md) | REST API documentation |
+| [API Quick Reference](docs/API_QUICK_REFERENCE.md) | API endpoint summary |
+| [Error Codes](docs/ERROR_CODES.md) | Error codes and troubleshooting |
+
 ## Container Management
 
 ### View Running Containers

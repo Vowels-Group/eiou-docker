@@ -215,6 +215,7 @@ class P2pService {
      *
      * @param array $request The P2P request data
      * @return bool True if funds are available, false otherwise
+     * @throws PDOException When database query fails
      */
     public function checkAvailableFunds(array $request): bool {
         try {
@@ -255,12 +256,12 @@ class P2pService {
     }
 
     /**
-     * Caculate total amount required for p2p (amount + fee)
+     * Calculate total amount required for p2p (amount + fee)
      *
      * @param array $request The P2P request data
      * @return int Total amount needed for p2p transaction
      */
-    public function calculateRequestedAmount($request): int {
+    public function calculateRequestedAmount(array $request): int {
          // Calculate total amount needed for p2p through user
         $address = $request['senderAddress'];
         $transportIndex = $this->transportUtility->determineTransportType($address);
@@ -273,9 +274,10 @@ class P2pService {
      * Check P2P is possible
      *
      * @param array $request Request data
-     * @return bool True if P2P possible, False otherwise.
+     * @param bool $echo Whether to echo rejection response (default: true)
+     * @return bool True if P2P possible, false otherwise
      */
-    public function checkP2pPossible(array $request, $echo = true) : bool{
+    public function checkP2pPossible(array $request, bool $echo = true): bool {
         $senderAddress = $request['senderAddress'];
         $pubkey = $request['senderPublicKey'];
         // Check if User is not blocked
@@ -350,6 +352,9 @@ class P2pService {
      *
      * @param array $request The P2P request data
      * @return void
+     * @throws InvalidArgumentException When required fields are missing in P2P request
+     * @throws PDOException When database operation fails
+     * @throws Exception When general processing error occurs
      */
     public function handleP2pRequest(array $request): void {
         try {
@@ -437,10 +442,10 @@ class P2pService {
      * Check if the P2P's end-recipient is user
      *
      * @param array $request Request data
-     * @param string $address Address 
-     * @return bool True if user corresponds, False otherwise.
+     * @param string $address Address
+     * @return bool True if user corresponds, false otherwise
      */
-    public function matchYourselfP2P($request, $address){
+    public function matchYourselfP2P(array $request, string $address): bool {
         // Check if p2p end recipient is user
         // First check the provided address (most likely match)
         if (hash(Constants::HASH_ALGORITHM, $address . $request['salt'] . $request['time']) === $request['hash']) {
@@ -470,6 +475,8 @@ class P2pService {
      *
      * @param array $request The request array from user input
      * @return array Prepared P2P request data
+     * @throws InvalidArgumentException When receiver address is not set, amount is missing, or amount is invalid
+     * @throws RuntimeException When secure random data generation fails
      */
     public function prepareP2pRequestData(array $request): array {
         // Build initial p2p request payload
@@ -530,6 +537,7 @@ class P2pService {
      *
      * @param array $message Transaction message
      * @return array Prepared P2P request data
+     * @throws RuntimeException When secure random data generation fails
      */
     public function prepareP2pRequestFromFailedTransactionData(array $message): array {
         // Build initial p2p payload from failed direct Transaction
@@ -695,6 +703,7 @@ class P2pService {
      *
      * @param array $data Request data
      * @return void
+     * @throws InvalidArgumentException When address is invalid and no matching contact exists
      */
     public function sendP2pRequest(array $data): void {
         // Check if a valid address format was supplied, if not look up the address in the case of a contact re-routing
@@ -793,9 +802,9 @@ class P2pService {
     /**
      * Get users total earnings
      *
-     * @return string Earnings Balance 
+     * @return string Earnings Balance
      */
-    public function getUserTotalEarnings() {
+    public function getUserTotalEarnings(): string {
         return $this->p2pRepository->getUserTotalEarnings();
     }
     

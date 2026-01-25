@@ -81,9 +81,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_updates'])) {
 }
 
 // Get message from URL parameters (for redirects)
+// Sanitize user input to prevent XSS attacks
 if (isset($_GET['message']) && isset($_GET['type'])) {
-    $messageForDisplay = $_GET['message'];
-    $messageTypeForDisplay = $_GET['type'];
+    $messageForDisplay = htmlspecialchars($_GET['message'], ENT_QUOTES, 'UTF-8');
+    $messageTypeForDisplay = htmlspecialchars($_GET['type'], ENT_QUOTES, 'UTF-8');
 } else {
     $messageForDisplay = '';
     $messageTypeForDisplay = '';

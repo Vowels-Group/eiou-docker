@@ -88,7 +88,7 @@ class BalanceRepository extends AbstractRepository {
      *
      * @param string $pubkey Contact pubkey
      * @param string $currency currency
-     * @return iny Balance
+     * @return int Balance
      */
     public function getCurrentContactBalance(string $pubkey, string $currency): int{
         return $this->getContactReceivedBalance($pubkey, $currency) - $this->getContactSentBalance($pubkey, $currency);
