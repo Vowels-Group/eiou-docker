@@ -1,8 +1,6 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-use MessageDeliveryService;
-use TransactionService;
 
 /**
  * RP2P Service Interface

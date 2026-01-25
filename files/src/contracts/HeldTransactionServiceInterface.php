@@ -1,7 +1,6 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-use SyncService;
 
 /**
  * Held Transaction Service Interface

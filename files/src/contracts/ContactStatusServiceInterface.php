@@ -1,9 +1,6 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-use ContactRepository;
-use RateLimiterService;
-use SyncService;
 
 /**
  * Contact Status Service Interface

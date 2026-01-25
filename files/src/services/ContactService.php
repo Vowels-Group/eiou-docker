@@ -1590,7 +1590,7 @@ class ContactService implements ContactServiceInterface {
      *
      * @return array Array of accepted contacts
      */
-    public function getAcceptedContacts(){
+    public function getAcceptedContacts(): array {
         return $this->contactRepository->getAcceptedContacts();
     }
 
