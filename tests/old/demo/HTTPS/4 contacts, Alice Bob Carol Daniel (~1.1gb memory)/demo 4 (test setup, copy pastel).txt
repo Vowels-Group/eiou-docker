@@ -2,16 +2,16 @@
 docker network create -d bridge demo-net
 
 # Remove any existing containers
-powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+docker rm -f Alice Bob Carol Daniel
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d  --network=demo-net --name Alice -e QUICKSTART=Alice eiou/eiou
-docker run -d  --network=demo-net --name Bob -e QUICKSTART=Bob eiou/eiou
-docker run -d  --network=demo-net --name Carol -e QUICKSTART=Carol eiou/eiou
-docker run -d  --network=demo-net --name Daniel -e QUICKSTART=Daniel eiou/eiou
+docker run -d  --network=demo-net --name Alice -v "Alice-mysql-data:/var/lib/mysql" -v "Alice-files:/etc/eiou/" -v "Alice-index:/var/www/html" -v "Alice-eiou:/usr/local/bin/" -e QUICKSTART=Alice eiou/eiou
+docker run -d  --network=demo-net --name Bob -v "Bob-mysql-data:/var/lib/mysql" -v "Bob-files:/etc/eiou/" -v "Bob-index:/var/www/html" -v "Bob-eiou:/usr/local/bin/" -e QUICKSTART=Bob eiou/eiou
+docker run -d  --network=demo-net --name Carol -v "Carol-mysql-data:/var/lib/mysql" -v "Carol-files:/etc/eiou/" -v "Carol-index:/var/www/html" -v "Carol-eiou:/usr/local/bin/" -e QUICKSTART=Carol eiou/eiou
+docker run -d  --network=demo-net --name Daniel -v "Daniel-mysql-data:/var/lib/mysql" -v "Daniel-files:/etc/eiou/" -v "Daniel-index:/var/www/html" -v "Daniel-eiou:/usr/local/bin/" -e QUICKSTART=Daniel eiou/eiou
 sleep 5
 
 # add contacts

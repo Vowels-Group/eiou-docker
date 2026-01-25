@@ -20,6 +20,15 @@ remove_container_if_exists() {
     fi
 }
 
+# Function to remove a volume if it exists
+remove_volume_if_exists() {
+    local volume_name=$1
+    if docker volume ls --format '{{.Name}}' | grep -q "^$volume_name$"; then
+        echo -e "\tRemoving existing volume: $volume_name..."
+        docker volume rm "$volume_name"
+    fi
+}
+
 declare -A containerAddresses
 
 declare -a containers=(
@@ -68,12 +77,20 @@ for container in "${containers[@]}"; do
     remove_container_if_exists $container
 done
 
+echo "Removing associated volumes (if any)..."
+for container in "${containers[@]}"; do
+    remove_volume_if_exists "${container}-mysql-data"
+    remove_volume_if_exists "${container}-files"
+    remove_volume_if_exists "${container}-index"
+    remove_volume_if_exists "${container}-eiou"
+done
+
 echo "Building base image..."
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
-    docker run -d --network=eiou-network --name $container -e QUICKSTART=$container eiou/eiou
+    docker run -d --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-files:/etc/eiou/" -v "${container}-index:/var/www/html" -v "${container}-eiou:/usr/local/bin/" -e QUICKSTART=$container eiou/eiou
 done
 
 # Save container Addresses in the associative array containerAddresses

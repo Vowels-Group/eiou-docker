@@ -2,25 +2,40 @@
 docker network create -d bridge demo-net
 
 # Remove any existing containers
-powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+docker rm -f A0 A1 A11 A12 A2 A21 A22 A3 A31 A32 A4 A41 A42
+
+# Remove associated volumes (if any)
+docker volume rm A0-mysql-data A0-files A0-index A0-eiou
+docker volume rm A1-mysql-data A1-files A1-index A1-eiou
+docker volume rm A11-mysql-data A11-files A11-index A11-eiou
+docker volume rm A12-mysql-data A12-files A12-index A12-eiou
+docker volume rm A2-mysql-data A2-files A2-index A2-eiou
+docker volume rm A21-mysql-data A21-files A21-index A21-eiou
+docker volume rm A22-mysql-data A22-files A22-index A22-eiou
+docker volume rm A3-mysql-data A3-files A3-index A3-eiou
+docker volume rm A31-mysql-data A31-files A31-index A31-eiou
+docker volume rm A32-mysql-data A32-files A32-index A32-eiou
+docker volume rm A4-mysql-data A4-files A4-index A4-eiou
+docker volume rm A41-mysql-data A41-files A41-index A41-eiou
+docker volume rm A42-mysql-data A42-files A42-index A42-eiou
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --network=demo-net --name A0 -e QUICKSTART=A0 eiou/eiou
-docker run -d --network=demo-net --name A1 -e QUICKSTART=A1 eiou/eiou
-docker run -d --network=demo-net --name A11 -e QUICKSTART=A11 eiou/eiou
-docker run -d --network=demo-net --name A12 -e QUICKSTART=A12 eiou/eiou
-docker run -d --network=demo-net --name A2 -e QUICKSTART=A2 eiou/eiou
-docker run -d --network=demo-net --name A21 -e QUICKSTART=A21 eiou/eiou
-docker run -d --network=demo-net --name A22 -e QUICKSTART=A22 eiou/eiou
-docker run -d --network=demo-net --name A3 -e QUICKSTART=A3 eiou/eiou
-docker run -d --network=demo-net --name A31 -e QUICKSTART=A31 eiou/eiou
-docker run -d --network=demo-net --name A32 -e QUICKSTART=A32 eiou/eiou
-docker run -d --network=demo-net --name A4 -e QUICKSTART=A4 eiou/eiou
-docker run -d --network=demo-net --name A41 -e QUICKSTART=A41 eiou/eiou
-docker run -d --network=demo-net --name A42 -e QUICKSTART=A42 eiou/eiou
+docker run -d --network=demo-net --name A0 -v "A0-mysql-data:/var/lib/mysql" -v "A0-files:/etc/eiou/" -v "A0-index:/var/www/html" -v "A0-eiou:/usr/local/bin/" -e QUICKSTART=A0 eiou/eiou
+docker run -d --network=demo-net --name A1 -v "A1-mysql-data:/var/lib/mysql" -v "A1-files:/etc/eiou/" -v "A1-index:/var/www/html" -v "A1-eiou:/usr/local/bin/" -e QUICKSTART=A1 eiou/eiou
+docker run -d --network=demo-net --name A11 -v "A11-mysql-data:/var/lib/mysql" -v "A11-files:/etc/eiou/" -v "A11-index:/var/www/html" -v "A11-eiou:/usr/local/bin/" -e QUICKSTART=A11 eiou/eiou
+docker run -d --network=demo-net --name A12 -v "A12-mysql-data:/var/lib/mysql" -v "A12-files:/etc/eiou/" -v "A12-index:/var/www/html" -v "A12-eiou:/usr/local/bin/" -e QUICKSTART=A12 eiou/eiou
+docker run -d --network=demo-net --name A2 -v "A2-mysql-data:/var/lib/mysql" -v "A2-files:/etc/eiou/" -v "A2-index:/var/www/html" -v "A2-eiou:/usr/local/bin/" -e QUICKSTART=A2 eiou/eiou
+docker run -d --network=demo-net --name A21 -v "A21-mysql-data:/var/lib/mysql" -v "A21-files:/etc/eiou/" -v "A21-index:/var/www/html" -v "A21-eiou:/usr/local/bin/" -e QUICKSTART=A21 eiou/eiou
+docker run -d --network=demo-net --name A22 -v "A22-mysql-data:/var/lib/mysql" -v "A22-files:/etc/eiou/" -v "A22-index:/var/www/html" -v "A22-eiou:/usr/local/bin/" -e QUICKSTART=A22 eiou/eiou
+docker run -d --network=demo-net --name A3 -v "A3-mysql-data:/var/lib/mysql" -v "A3-files:/etc/eiou/" -v "A3-index:/var/www/html" -v "A3-eiou:/usr/local/bin/" -e QUICKSTART=A3 eiou/eiou
+docker run -d --network=demo-net --name A31 -v "A31-mysql-data:/var/lib/mysql" -v "A31-files:/etc/eiou/" -v "A31-index:/var/www/html" -v "A31-eiou:/usr/local/bin/" -e QUICKSTART=A31 eiou/eiou
+docker run -d --network=demo-net --name A32 -v "A32-mysql-data:/var/lib/mysql" -v "A32-files:/etc/eiou/" -v "A32-index:/var/www/html" -v "A32-eiou:/usr/local/bin/" -e QUICKSTART=A32 eiou/eiou
+docker run -d --network=demo-net --name A4 -v "A4-mysql-data:/var/lib/mysql" -v "A4-files:/etc/eiou/" -v "A4-index:/var/www/html" -v "A4-eiou:/usr/local/bin/" -e QUICKSTART=A4 eiou/eiou
+docker run -d --network=demo-net --name A41 -v "A41-mysql-data:/var/lib/mysql" -v "A41-files:/etc/eiou/" -v "A41-index:/var/www/html" -v "A41-eiou:/usr/local/bin/" -e QUICKSTART=A41 eiou/eiou
+docker run -d --network=demo-net --name A42 -v "A42-mysql-data:/var/lib/mysql" -v "A42-files:/etc/eiou/" -v "A42-index:/var/www/html" -v "A42-eiou:/usr/local/bin/" -e QUICKSTART=A42 eiou/eiou
 sleep 5
 
 # Add friends (NOTE that names are NOT arbitrary)

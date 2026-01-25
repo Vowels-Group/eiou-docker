@@ -2,16 +2,22 @@
 docker network create -d bridge demo-net
 
 # Remove any existing containers
-powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+docker rm -f http0 http1 http2 http3
+
+# Remove associated volumes (if any)
+docker volume rm http0-mysql-data http0-files http0-index http0-eiou
+docker volume rm http1-mysql-data http1-files http1-index http1-eiou
+docker volume rm http2-mysql-data http2-files http2-index http2-eiou
+docker volume rm http3-mysql-data http3-files http3-index http3-eiou
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d  --network=demo-net --name http0 -e QUICKSTART=http0 eiou/eiou
-docker run -d  --network=demo-net --name http1 -e QUICKSTART=http1 eiou/eiou
-docker run -d  --network=demo-net --name http2 -e QUICKSTART=http2 eiou/eiou
-docker run -d  --network=demo-net --name http3 -e QUICKSTART=http3 eiou/eiou
+docker run -d  --network=demo-net --name http0 -v "http0-mysql-data:/var/lib/mysql" -v "http0-files:/etc/eiou/" -v "http0-index:/var/www/html" -v "http0-eiou:/usr/local/bin/" -e QUICKSTART=http0 eiou/eiou
+docker run -d  --network=demo-net --name http1 -v "http1-mysql-data:/var/lib/mysql" -v "http1-files:/etc/eiou/" -v "http1-index:/var/www/html" -v "http1-eiou:/usr/local/bin/" -e QUICKSTART=http1 eiou/eiou
+docker run -d  --network=demo-net --name http2 -v "http2-mysql-data:/var/lib/mysql" -v "http2-files:/etc/eiou/" -v "http2-index:/var/www/html" -v "http2-eiou:/usr/local/bin/" -e QUICKSTART=http2 eiou/eiou
+docker run -d  --network=demo-net --name http3 -v "http3-mysql-data:/var/lib/mysql" -v "http3-files:/etc/eiou/" -v "http3-index:/var/www/html" -v "http3-eiou:/usr/local/bin/" -e QUICKSTART=http3 eiou/eiou
 sleep 5
 
 # add contacts
