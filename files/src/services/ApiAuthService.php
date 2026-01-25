@@ -3,7 +3,6 @@
 
 require_once __DIR__ . '/../core/ErrorCodes.php';
 
-use Eiou\Contracts\ApiAuthServiceInterface;
 
 /**
  * API Authentication Service with HMAC Signature Verification

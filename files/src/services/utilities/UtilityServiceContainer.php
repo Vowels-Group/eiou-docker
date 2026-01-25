@@ -1,12 +1,6 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-use Eiou\Contracts\TransportServiceInterface;
-use Eiou\Contracts\TimeUtilityServiceInterface;
-use Eiou\Contracts\ValidationUtilityServiceInterface;
-use Eiou\Contracts\GeneralUtilityServiceInterface;
-use Eiou\Contracts\CurrencyUtilityServiceInterface;
-
 /**
  * Utility Service Container
  *

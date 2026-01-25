@@ -5,7 +5,6 @@ require_once __DIR__ . '/../utils/InputValidator.php';
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 
-use Eiou\Contracts\P2pServiceInterface;
 
 /**
  * P2P Service

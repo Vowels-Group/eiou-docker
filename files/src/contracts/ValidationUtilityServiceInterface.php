@@ -1,11 +1,5 @@
 <?php
-
-declare(strict_types=1);
-
 # Copyright 2025-2026 Vowels Group, LLC
-
-namespace Eiou\Contracts;
-
 /**
  * Validation Utility Service Interface
  *

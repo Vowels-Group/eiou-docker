@@ -1,11 +1,4 @@
 <?php
-
-declare(strict_types=1);
-
-namespace Eiou\Contracts;
-
-use Eiou\Cli\CliOutputManager;
-
 /**
  * Interface for contact management services.
  *

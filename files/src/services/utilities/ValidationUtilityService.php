@@ -11,7 +11,6 @@
 
 require_once __DIR__ . '/../ServiceContainer.php';
 
-use Eiou\Contracts\ValidationUtilityServiceInterface;
 
 class ValidationUtilityService implements ValidationUtilityServiceInterface
 {

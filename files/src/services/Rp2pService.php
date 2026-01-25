@@ -4,7 +4,6 @@
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 
-use Eiou\Contracts\Rp2pServiceInterface;
 
 /**
  * RP2P Service

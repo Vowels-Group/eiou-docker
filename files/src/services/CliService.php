@@ -5,7 +5,6 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
 require_once __DIR__ . '/../utils/InputValidator.php';
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 
-use Eiou\Contracts\CliServiceInterface;
 
 /**
  * Cli Service

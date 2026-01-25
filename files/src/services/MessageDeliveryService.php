@@ -5,7 +5,6 @@ require_once __DIR__ . '/../database/MessageDeliveryRepository.php';
 require_once __DIR__ . '/../database/DeadLetterQueueRepository.php';
 require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
 
-use Eiou\Contracts\MessageDeliveryServiceInterface;
 
 /**
  * Message Delivery Service

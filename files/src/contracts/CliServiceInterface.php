@@ -1,10 +1,6 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-declare(strict_types=1);
-
-namespace Eiou\Contracts;
-
 /**
  * CLI Service Interface
  *

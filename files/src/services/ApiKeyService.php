@@ -3,7 +3,6 @@
 
 require_once __DIR__ . '/../core/ErrorCodes.php';
 
-use Eiou\Contracts\ApiKeyServiceInterface;
 
 /**
  * API Key Service for CLI management

@@ -3,25 +3,6 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 
-use Eiou\Contracts\TransportServiceInterface;
-use Eiou\Contracts\ContactServiceInterface;
-use Eiou\Contracts\TransactionServiceInterface;
-use Eiou\Contracts\SyncServiceInterface;
-use Eiou\Contracts\P2pServiceInterface;
-use Eiou\Contracts\ApiKeyServiceInterface;
-use Eiou\Contracts\MessageServiceInterface;
-use Eiou\Contracts\CliServiceInterface;
-use Eiou\Contracts\CleanupServiceInterface;
-use Eiou\Contracts\WalletServiceInterface;
-use Eiou\Contracts\Rp2pServiceInterface;
-use Eiou\Contracts\RateLimiterServiceInterface;
-use Eiou\Contracts\ContactStatusServiceInterface;
-use Eiou\Contracts\MessageDeliveryServiceInterface;
-use Eiou\Contracts\DebugServiceInterface;
-use Eiou\Contracts\ApiAuthServiceInterface;
-use Eiou\Contracts\HeldTransactionServiceInterface;
-use Eiou\Contracts\TransactionRecoveryServiceInterface;
-
 /**
  * Service Container
  *

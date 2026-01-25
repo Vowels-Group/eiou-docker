@@ -4,7 +4,6 @@
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';
 
-use Eiou\Contracts\HeldTransactionServiceInterface;
 
 /**
  * Held Transaction Service

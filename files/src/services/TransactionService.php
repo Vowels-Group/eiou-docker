@@ -6,7 +6,6 @@ require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
 
-use Eiou\Contracts\TransactionServiceInterface;
 
 /**
  * Transaction Service

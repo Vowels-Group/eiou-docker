@@ -3,7 +3,6 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 
-use Eiou\Contracts\ContactStatusServiceInterface;
 
 /**
  * Contact Status Service

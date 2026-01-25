@@ -11,7 +11,6 @@
 
 require_once __DIR__ . '/../../core/Constants.php';
 
-use Eiou\Contracts\GeneralUtilityServiceInterface;
 
 class GeneralUtilityService implements GeneralUtilityServiceInterface
 {
