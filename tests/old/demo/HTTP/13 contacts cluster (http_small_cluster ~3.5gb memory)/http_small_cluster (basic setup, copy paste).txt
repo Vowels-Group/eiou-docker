@@ -2,22 +2,22 @@
 docker network create -d bridge demo-net
 
 # Remove any existing containers
-docker rm -f A0 A1 A11 A12 A2 A21 A22 A3 A31 A32 A4 A41 A42 2>/dev/null || echo "No containers to remove"
+docker rm -f A0 A1 A11 A12 A2 A21 A22 A3 A31 A32 A4 A41 A42
 
 # Remove associated volumes (if any)
-docker volume rm A0-mysql-data A0-files A0-index A0-eiou 2>/dev/null || echo "A0 volumes not found"
-docker volume rm A1-mysql-data A1-files A1-index A1-eiou 2>/dev/null || echo "A1 volumes not found"
-docker volume rm A11-mysql-data A11-files A11-index A11-eiou 2>/dev/null || echo "A11 volumes not found"
-docker volume rm A12-mysql-data A12-files A12-index A12-eiou 2>/dev/null || echo "A12 volumes not found"
-docker volume rm A2-mysql-data A2-files A2-index A2-eiou 2>/dev/null || echo "A2 volumes not found"
-docker volume rm A21-mysql-data A21-files A21-index A21-eiou 2>/dev/null || echo "A21 volumes not found"
-docker volume rm A22-mysql-data A22-files A22-index A22-eiou 2>/dev/null || echo "A22 volumes not found"
-docker volume rm A3-mysql-data A3-files A3-index A3-eiou 2>/dev/null || echo "A3 volumes not found"
-docker volume rm A31-mysql-data A31-files A31-index A31-eiou 2>/dev/null || echo "A31 volumes not found"
-docker volume rm A32-mysql-data A32-files A32-index A32-eiou 2>/dev/null || echo "A32 volumes not found"
-docker volume rm A4-mysql-data A4-files A4-index A4-eiou 2>/dev/null || echo "A4 volumes not found"
-docker volume rm A41-mysql-data A41-files A41-index A41-eiou 2>/dev/null || echo "A41 volumes not found"
-docker volume rm A42-mysql-data A42-files A42-index A42-eiou 2>/dev/null || echo "A42 volumes not found"
+docker volume rm A0-mysql-data A0-files A0-index A0-eiou
+docker volume rm A1-mysql-data A1-files A1-index A1-eiou
+docker volume rm A11-mysql-data A11-files A11-index A11-eiou
+docker volume rm A12-mysql-data A12-files A12-index A12-eiou
+docker volume rm A2-mysql-data A2-files A2-index A2-eiou
+docker volume rm A21-mysql-data A21-files A21-index A21-eiou
+docker volume rm A22-mysql-data A22-files A22-index A22-eiou
+docker volume rm A3-mysql-data A3-files A3-index A3-eiou
+docker volume rm A31-mysql-data A31-files A31-index A31-eiou
+docker volume rm A32-mysql-data A32-files A32-index A32-eiou
+docker volume rm A4-mysql-data A4-files A4-index A4-eiou
+docker volume rm A41-mysql-data A41-files A41-index A41-eiou
+docker volume rm A42-mysql-data A42-files A42-index A42-eiou
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .

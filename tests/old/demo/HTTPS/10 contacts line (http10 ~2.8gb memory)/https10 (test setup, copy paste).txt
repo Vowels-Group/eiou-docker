@@ -2,19 +2,19 @@
 docker network create -d bridge demo-net
 
 # Remove any existing containers
-docker rm -f httpsA httpsB httpsC httpsD httpsE httpsF httpsG httpsH httpsI httpsJ 2>/dev/null || echo "No containers to remove"
+docker rm -f httpsA httpsB httpsC httpsD httpsE httpsF httpsG httpsH httpsI httpsJ
 
 # Remove associated volumes (if any)
-docker volume rm httpsA-mysql-data httpsA-files httpsA-index httpsA-eiou 2>/dev/null || echo "httpsA volumes not found"
-docker volume rm httpsB-mysql-data httpsB-files httpsB-index httpsB-eiou 2>/dev/null || echo "httpsB volumes not found"
-docker volume rm httpsC-mysql-data httpsC-files httpsC-index httpsC-eiou 2>/dev/null || echo "httpsC volumes not found"
-docker volume rm httpsD-mysql-data httpsD-files httpsD-index httpsD-eiou 2>/dev/null || echo "httpsD volumes not found"
-docker volume rm httpsE-mysql-data httpsE-files httpsE-index httpsE-eiou 2>/dev/null || echo "httpsE volumes not found"
-docker volume rm httpsF-mysql-data httpsF-files httpsF-index httpsF-eiou 2>/dev/null || echo "httpsF volumes not found"
-docker volume rm httpsG-mysql-data httpsG-files httpsG-index httpsG-eiou 2>/dev/null || echo "httpsG volumes not found"
-docker volume rm httpsH-mysql-data httpsH-files httpsH-index httpsH-eiou 2>/dev/null || echo "httpsH volumes not found"
-docker volume rm httpsI-mysql-data httpsI-files httpsI-index httpsI-eiou 2>/dev/null || echo "httpsI volumes not found"
-docker volume rm httpsJ-mysql-data httpsJ-files httpsJ-index httpsJ-eiou 2>/dev/null || echo "httpsJ volumes not found"
+docker volume rm httpsA-mysql-data httpsA-files httpsA-index httpsA-eiou
+docker volume rm httpsB-mysql-data httpsB-files httpsB-index httpsB-eiou
+docker volume rm httpsC-mysql-data httpsC-files httpsC-index httpsC-eiou
+docker volume rm httpsD-mysql-data httpsD-files httpsD-index httpsD-eiou
+docker volume rm httpsE-mysql-data httpsE-files httpsE-index httpsE-eiou
+docker volume rm httpsF-mysql-data httpsF-files httpsF-index httpsF-eiou
+docker volume rm httpsG-mysql-data httpsG-files httpsG-index httpsG-eiou
+docker volume rm httpsH-mysql-data httpsH-files httpsH-index httpsH-eiou
+docker volume rm httpsI-mysql-data httpsI-files httpsI-index httpsI-eiou
+docker volume rm httpsJ-mysql-data httpsJ-files httpsJ-index httpsJ-eiou
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .

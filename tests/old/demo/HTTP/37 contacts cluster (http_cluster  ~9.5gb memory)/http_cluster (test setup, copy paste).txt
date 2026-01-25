@@ -2,46 +2,46 @@
 docker network create -d bridge demo-net
 
 # Remove any existing containers
-docker rm -f A0 A1 A11 A111 A112 A113 A12 A121 A122 A123 A2 A21 A211 A212 A213 A22 A221 A222 A223 A3 A31 A311 A312 A313 A32 A321 A322 A323 A4 A41 A411 A412 A413 A42 A421 A422 A423 2>/dev/null || echo "No containers to remove"
+docker rm -f A0 A1 A11 A111 A112 A113 A12 A121 A122 A123 A2 A21 A211 A212 A213 A22 A221 A222 A223 A3 A31 A311 A312 A313 A32 A321 A322 A323 A4 A41 A411 A412 A413 A42 A421 A422 A423
 
 # Remove associated volumes (if any)
-docker volume rm A0-mysql-data A0-files A0-index A0-eiou 2>/dev/null || echo "A0 volumes not found"
-docker volume rm A1-mysql-data A1-files A1-index A1-eiou 2>/dev/null || echo "A1 volumes not found"
-docker volume rm A11-mysql-data A11-files A11-index A11-eiou 2>/dev/null || echo "A11 volumes not found"
-docker volume rm A111-mysql-data A111-files A111-index A111-eiou 2>/dev/null || echo "A111 volumes not found"
-docker volume rm A112-mysql-data A112-files A112-index A112-eiou 2>/dev/null || echo "A112 volumes not found"
-docker volume rm A113-mysql-data A113-files A113-index A113-eiou 2>/dev/null || echo "A113 volumes not found"
-docker volume rm A12-mysql-data A12-files A12-index A12-eiou 2>/dev/null || echo "A12 volumes not found"
-docker volume rm A121-mysql-data A121-files A121-index A121-eiou 2>/dev/null || echo "A121 volumes not found"
-docker volume rm A122-mysql-data A122-files A122-index A122-eiou 2>/dev/null || echo "A122 volumes not found"
-docker volume rm A123-mysql-data A123-files A123-index A123-eiou 2>/dev/null || echo "A123 volumes not found"
-docker volume rm A2-mysql-data A2-files A2-index A2-eiou 2>/dev/null || echo "A2 volumes not found"
-docker volume rm A21-mysql-data A21-files A21-index A21-eiou 2>/dev/null || echo "A21 volumes not found"
-docker volume rm A211-mysql-data A211-files A211-index A211-eiou 2>/dev/null || echo "A211 volumes not found"
-docker volume rm A212-mysql-data A212-files A212-index A212-eiou 2>/dev/null || echo "A212 volumes not found"
-docker volume rm A213-mysql-data A213-files A213-index A213-eiou 2>/dev/null || echo "A213 volumes not found"
-docker volume rm A22-mysql-data A22-files A22-index A22-eiou 2>/dev/null || echo "A22 volumes not found"
-docker volume rm A221-mysql-data A221-files A221-index A221-eiou 2>/dev/null || echo "A221 volumes not found"
-docker volume rm A222-mysql-data A222-files A222-index A222-eiou 2>/dev/null || echo "A222 volumes not found"
-docker volume rm A223-mysql-data A223-files A223-index A223-eiou 2>/dev/null || echo "A223 volumes not found"
-docker volume rm A3-mysql-data A3-files A3-index A3-eiou 2>/dev/null || echo "A3 volumes not found"
-docker volume rm A31-mysql-data A31-files A31-index A31-eiou 2>/dev/null || echo "A31 volumes not found"
-docker volume rm A311-mysql-data A311-files A311-index A311-eiou 2>/dev/null || echo "A311 volumes not found"
-docker volume rm A312-mysql-data A312-files A312-index A312-eiou 2>/dev/null || echo "A312 volumes not found"
-docker volume rm A313-mysql-data A313-files A313-index A313-eiou 2>/dev/null || echo "A313 volumes not found"
-docker volume rm A32-mysql-data A32-files A32-index A32-eiou 2>/dev/null || echo "A32 volumes not found"
-docker volume rm A321-mysql-data A321-files A321-index A321-eiou 2>/dev/null || echo "A321 volumes not found"
-docker volume rm A322-mysql-data A322-files A322-index A322-eiou 2>/dev/null || echo "A322 volumes not found"
-docker volume rm A323-mysql-data A323-files A323-index A323-eiou 2>/dev/null || echo "A323 volumes not found"
-docker volume rm A4-mysql-data A4-files A4-index A4-eiou 2>/dev/null || echo "A4 volumes not found"
-docker volume rm A41-mysql-data A41-files A41-index A41-eiou 2>/dev/null || echo "A41 volumes not found"
-docker volume rm A411-mysql-data A411-files A411-index A411-eiou 2>/dev/null || echo "A411 volumes not found"
-docker volume rm A412-mysql-data A412-files A412-index A412-eiou 2>/dev/null || echo "A412 volumes not found"
-docker volume rm A413-mysql-data A413-files A413-index A413-eiou 2>/dev/null || echo "A413 volumes not found"
-docker volume rm A42-mysql-data A42-files A42-index A42-eiou 2>/dev/null || echo "A42 volumes not found"
-docker volume rm A421-mysql-data A421-files A421-index A421-eiou 2>/dev/null || echo "A421 volumes not found"
-docker volume rm A422-mysql-data A422-files A422-index A422-eiou 2>/dev/null || echo "A422 volumes not found"
-docker volume rm A423-mysql-data A423-files A423-index A423-eiou 2>/dev/null || echo "A423 volumes not found"
+docker volume rm A0-mysql-data A0-files A0-index A0-eiou
+docker volume rm A1-mysql-data A1-files A1-index A1-eiou
+docker volume rm A11-mysql-data A11-files A11-index A11-eiou
+docker volume rm A111-mysql-data A111-files A111-index A111-eiou
+docker volume rm A112-mysql-data A112-files A112-index A112-eiou
+docker volume rm A113-mysql-data A113-files A113-index A113-eiou
+docker volume rm A12-mysql-data A12-files A12-index A12-eiou
+docker volume rm A121-mysql-data A121-files A121-index A121-eiou
+docker volume rm A122-mysql-data A122-files A122-index A122-eiou
+docker volume rm A123-mysql-data A123-files A123-index A123-eiou
+docker volume rm A2-mysql-data A2-files A2-index A2-eiou
+docker volume rm A21-mysql-data A21-files A21-index A21-eiou
+docker volume rm A211-mysql-data A211-files A211-index A211-eiou
+docker volume rm A212-mysql-data A212-files A212-index A212-eiou
+docker volume rm A213-mysql-data A213-files A213-index A213-eiou
+docker volume rm A22-mysql-data A22-files A22-index A22-eiou
+docker volume rm A221-mysql-data A221-files A221-index A221-eiou
+docker volume rm A222-mysql-data A222-files A222-index A222-eiou
+docker volume rm A223-mysql-data A223-files A223-index A223-eiou
+docker volume rm A3-mysql-data A3-files A3-index A3-eiou
+docker volume rm A31-mysql-data A31-files A31-index A31-eiou
+docker volume rm A311-mysql-data A311-files A311-index A311-eiou
+docker volume rm A312-mysql-data A312-files A312-index A312-eiou
+docker volume rm A313-mysql-data A313-files A313-index A313-eiou
+docker volume rm A32-mysql-data A32-files A32-index A32-eiou
+docker volume rm A321-mysql-data A321-files A321-index A321-eiou
+docker volume rm A322-mysql-data A322-files A322-index A322-eiou
+docker volume rm A323-mysql-data A323-files A323-index A323-eiou
+docker volume rm A4-mysql-data A4-files A4-index A4-eiou
+docker volume rm A41-mysql-data A41-files A41-index A41-eiou
+docker volume rm A411-mysql-data A411-files A411-index A411-eiou
+docker volume rm A412-mysql-data A412-files A412-index A412-eiou
+docker volume rm A413-mysql-data A413-files A413-index A413-eiou
+docker volume rm A42-mysql-data A42-files A42-index A42-eiou
+docker volume rm A421-mysql-data A421-files A421-index A421-eiou
+docker volume rm A422-mysql-data A422-files A422-index A422-eiou
+docker volume rm A423-mysql-data A423-files A423-index A423-eiou
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .

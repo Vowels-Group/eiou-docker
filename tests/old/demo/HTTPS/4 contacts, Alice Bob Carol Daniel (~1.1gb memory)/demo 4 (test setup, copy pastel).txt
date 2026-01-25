@@ -2,7 +2,7 @@
 docker network create -d bridge demo-net
 
 # Remove any existing containers
-docker rm -f Alice Bob Carol Daniel 2>/dev/null || echo "No containers to remove"
+docker rm -f Alice Bob Carol Daniel
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
