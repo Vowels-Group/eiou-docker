@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright 2025-2026 Vowels Group, LLC
 
 # Test backup functionality for EIOU Docker containers
@@ -214,16 +214,31 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing backup files are encrypted"
 
 if [ -n "$latestBackup" ] && [ "$latestBackup" != "" ]; then
-    # Check file content - encrypted files should not contain plain SQL keywords
-    encryptionCheck=$(docker exec ${testContainer} sh -c "
-        head -c 100 ${BACKUP_DIR}/${latestBackup} 2>/dev/null | strings | grep -iE 'CREATE TABLE|INSERT INTO|DROP TABLE|SELECT' | wc -l
+    # Check file content - backup is JSON with encrypted SQL in 'encrypted' field
+    # Verify: 1) file is valid JSON 2) has 'encrypted' key 3) encrypted value is base64 (not plain SQL)
+    encryptionCheck=$(docker exec ${testContainer} php -r "
+        \$content = file_get_contents('${BACKUP_DIR}/${latestBackup}');
+        \$data = json_decode(\$content, true);
+        if (!\$data || !isset(\$data['encrypted'])) {
+            echo 'INVALID_FORMAT';
+            exit;
+        }
+        // Check that encrypted field doesn't contain plain SQL (it should be base64)
+        if (preg_match('/CREATE TABLE|INSERT INTO|DROP TABLE/i', \$data['encrypted'])) {
+            echo 'PLAIN_SQL';
+        } else {
+            echo 'ENCRYPTED_OK';
+        }
     " 2>&1)
 
-    if [ "$encryptionCheck" -eq 0 ]; then
+    if [ "$encryptionCheck" = "ENCRYPTED_OK" ]; then
         printf "\t   Backup file is encrypted ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
-    else
+    elif [ "$encryptionCheck" = "PLAIN_SQL" ]; then
         printf "\t   Backup file is encrypted ${RED}FAILED${NC} (plain SQL detected)\n"
+        failure=$(( failure + 1 ))
+    else
+        printf "\t   Backup file is encrypted ${RED}FAILED${NC} (${encryptionCheck})\n"
         failure=$(( failure + 1 ))
     fi
 else
@@ -266,7 +281,7 @@ if [ -n "$latestBackup" ] && [ "$latestBackup" != "" ]; then
         try {
             \$app = Application::getInstance();
             \$pdo = \$app->services->getPdo();
-            \$stmt = \$pdo->query('SELECT COUNT(*) as cnt FROM eiou_contacts');
+            \$stmt = \$pdo->query('SELECT COUNT(*) as cnt FROM contacts');
             \$row = \$stmt->fetch();
             echo \$row['cnt'];
         } catch (Exception \$e) {
@@ -284,7 +299,7 @@ if [ -n "$latestBackup" ] && [ "$latestBackup" != "" ]; then
             try {
                 \$app = Application::getInstance();
                 \$pdo = \$app->services->getPdo();
-                \$stmt = \$pdo->query('SELECT COUNT(*) as cnt FROM eiou_contacts');
+                \$stmt = \$pdo->query('SELECT COUNT(*) as cnt FROM contacts');
                 \$row = \$stmt->fetch();
                 echo \$row['cnt'];
             } catch (Exception \$e) {
@@ -320,8 +335,8 @@ tableCheck=$(docker exec ${testContainer} php -r "
         \$app = Application::getInstance();
         \$pdo = \$app->services->getPdo();
 
-        // Check essential tables exist
-        \$tables = ['eiou_contacts', 'eiou_transactions', 'eiou_balances', 'eiou_messages', 'eiou_debug'];
+        // Check essential tables exist (no eiou_ prefix)
+        \$tables = ['contacts', 'transactions', 'balances', 'message_delivery', 'debug'];
         \$missing = [];
 
         foreach (\$tables as \$table) {
