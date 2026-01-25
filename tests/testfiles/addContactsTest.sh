@@ -66,7 +66,7 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Use retry helper: check status, if not accepted wait 10s, process queues, retry once
     statusContact1=$(check_contact_status_with_retry ${containerKeys[0]} ${transportType1} "${containerAddresses[${containerKeys[1]}]}" 10)
 
-    printf "\n\t   %s has status %s with %s\n" ${containerKeys[1]} ${statusContact1} ${containerKeys[0]}
+    printf "\n\t   %s has status %s with %s\n" "${containerKeys[1]}" "${statusContact1}" "${containerKeys[0]}"
     if [[ "${statusContact1}" == "accepted" ]]; then
         printf "\t   ${testname} for %s ${GREEN}PASSED${NC}\n" ${containerKeys[0]}
         passed=$(( passed + 1 ))
