@@ -1026,18 +1026,27 @@ Delete an API key.
 | `pending` | Contact request awaiting acceptance |
 | `accepted` | Contact is active and can transact |
 | `blocked` | Contact is blocked |
-| `rejected` | Contact request was rejected |
+
+### Contact Online Status
+
+| Value | Description |
+|-------|-------------|
+| `online` | Contact responded to ping |
+| `offline` | Contact did not respond to ping |
+| `unknown` | Ping not performed (default or feature disabled) |
 
 ### Transaction Status
 
 | Value | Description |
 |-------|-------------|
-| `pending` | Transaction is being processed |
-| `sent` | Transaction sent, awaiting confirmation |
-| `completed` | Transaction completed successfully |
-| `failed` | Transaction failed |
-| `cancelled` | Transaction was cancelled |
-| `rejected` | Transaction was rejected |
+| `pending` | Transaction has been created |
+| `sending` | Transaction claimed for processing |
+| `sent` | Transaction has been sent onwards |
+| `accepted` | Transaction accepted by peer |
+| `rejected` | Transaction rejected by peer |
+| `cancelled` | Transaction not received by peer in time |
+| `completed` | Transaction accepted by final recipient |
+| `failed` | Transaction failed after max recovery attempts |
 
 ### Transaction Type
 
