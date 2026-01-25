@@ -8,21 +8,21 @@
 interface TransactionServiceInterface
 {
     /**
-     * Send a transaction.
+     * Send EIOU transaction.
      *
-     * @param array $data The transaction data
+     * @param array $request The transaction request data
      * @param CliOutputManager|null $output Optional CLI output manager for feedback
      * @return void
      */
-    public function sendTransaction(array $data, ?CliOutputManager $output = null): void;
+    public function sendEiou(array $request, ?CliOutputManager $output = null): void;
 
     /**
-     * Handle an incoming transaction request.
+     * Process a transaction.
      *
      * @param array $request The transaction request data
-     * @return string The response message or transaction ID
+     * @return void
      */
-    public function handleTransaction(array $request): string;
+    public function processTransaction(array $request): void;
 
     /**
      * Check if a transaction is possible.
@@ -34,10 +34,10 @@ interface TransactionServiceInterface
     public function checkTransactionPossible(array $request, bool $echo = true): bool;
 
     /**
-     * Verify a transaction signature using the public key.
+     * Get transaction by txid.
      *
-     * @param array $tx The transaction data including signature
-     * @return bool True if the signature is valid
+     * @param string $txid The transaction ID
+     * @return array|null The transaction data or null if not found
      */
-    public function verifyTransactionSignaturePublic(array $tx): bool;
+    public function getByTxid(string $txid): ?array;
 }
