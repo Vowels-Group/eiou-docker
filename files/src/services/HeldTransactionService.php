@@ -4,6 +4,8 @@
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';
 
+use Eiou\Contracts\HeldTransactionServiceInterface;
+
 /**
  * Held Transaction Service
  *
@@ -22,7 +24,7 @@ require_once __DIR__ . '/../core/Constants.php';
  *
  * @package Services
  */
-class HeldTransactionService {
+class HeldTransactionService implements HeldTransactionServiceInterface {
     /**
      * @var HeldTransactionRepository Held transaction repository
      */

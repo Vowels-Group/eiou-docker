@@ -3,6 +3,8 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 
+use Eiou\Contracts\CleanupServiceInterface;
+
 /**
  * Cleanup Service
  *
@@ -10,7 +12,7 @@ require_once __DIR__ . '/../utils/SecureLogger.php';
  *
  * @package Services
  */
-class CleanupService {
+class CleanupService implements CleanupServiceInterface {
     /**
      * @var P2pRepository P2P repository instance
      */

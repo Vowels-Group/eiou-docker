@@ -5,6 +5,8 @@ require_once __DIR__ . '/../database/MessageDeliveryRepository.php';
 require_once __DIR__ . '/../database/DeadLetterQueueRepository.php';
 require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
 
+use Eiou\Contracts\MessageDeliveryServiceInterface;
+
 /**
  * Message Delivery Service
  *
@@ -28,7 +30,7 @@ require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
  * - Acknowledgment Building.............. Line ~1256
  * - Maintenance & Stage Updates.......... Line ~1322
  */
-class MessageDeliveryService {
+class MessageDeliveryService implements MessageDeliveryServiceInterface {
 
     // =========================================================================
     // CONSTANTS & PROPERTIES

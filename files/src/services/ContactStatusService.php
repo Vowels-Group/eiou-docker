@@ -3,6 +3,8 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 
+use Eiou\Contracts\ContactStatusServiceInterface;
+
 /**
  * Contact Status Service
  *
@@ -11,7 +13,7 @@ require_once __DIR__ . '/../utils/SecureLogger.php';
  *
  * @package Services
  */
-class ContactStatusService {
+class ContactStatusService implements ContactStatusServiceInterface {
     /**
      * @var ContactRepository Contact repository instance
      */

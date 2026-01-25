@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Contracts\WalletServiceInterface;
+
 /**
  * Wallet Service
  *
@@ -8,7 +10,7 @@
  *
  * @package Services
  */
-class WalletService {
+class WalletService implements WalletServiceInterface {
     /**
      * @var UserContext Current user data
      */

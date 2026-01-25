@@ -11,7 +11,9 @@
 
 require_once __DIR__ . '/../../core/Constants.php';
 
-class CurrencyUtilityService
+use Eiou\Contracts\CurrencyUtilityServiceInterface;
+
+class CurrencyUtilityService implements CurrencyUtilityServiceInterface
 {
     /**
      * Constructor

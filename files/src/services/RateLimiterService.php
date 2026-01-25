@@ -13,7 +13,9 @@
 require_once __DIR__ . '/../core/ErrorCodes.php';
 require_once __DIR__ . '/../core/Constants.php';
 
-class RateLimiterService {
+use Eiou\Contracts\RateLimiterServiceInterface;
+
+class RateLimiterService implements RateLimiterServiceInterface {
     private RateLimiterRepository $repository;
 
     /**

@@ -9,7 +9,9 @@
  * @package Services\Utilities
  */
 
-class TimeUtilityService
+use Eiou\Contracts\TimeUtilityServiceInterface;
+
+class TimeUtilityService implements TimeUtilityServiceInterface
 {
     /**
      * Constructor

@@ -4,6 +4,8 @@
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';
 
+use Eiou\Contracts\TransactionRecoveryServiceInterface;
+
 /**
  * Transaction Recovery Service
  *
@@ -25,7 +27,7 @@ require_once __DIR__ . '/../core/Constants.php';
  *
  * @package Services
  */
-class TransactionRecoveryService {
+class TransactionRecoveryService implements TransactionRecoveryServiceInterface {
     /**
      * @var TransactionRepository Transaction repository
      */

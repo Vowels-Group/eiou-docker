@@ -3,6 +3,8 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 
+use Eiou\Contracts\MessageServiceInterface;
+
 /**
  * Message Service
  *
@@ -11,7 +13,7 @@ require_once __DIR__ . '/../utils/SecureLogger.php';
  *
  * @package Services
  */
-class MessageService {
+class MessageService implements MessageServiceInterface {
     /**
      * @var ContactRepository Contact repository instance
      */

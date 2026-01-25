@@ -3,6 +3,8 @@
 
 require_once __DIR__ . '/../core/ErrorCodes.php';
 
+use Eiou\Contracts\ApiKeyServiceInterface;
+
 /**
  * API Key Service for CLI management
  *
@@ -14,7 +16,7 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * - eiou apikey enable <key_id>
  */
 
-class ApiKeyService {
+class ApiKeyService implements ApiKeyServiceInterface {
     private $repository;
     private $output;
 

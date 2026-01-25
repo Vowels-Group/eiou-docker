@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Contracts\DebugServiceInterface;
+
 /**
  * Debug Service
  *
@@ -8,7 +10,7 @@
  *
  * @package Services
  */
-class DebugService {
+class DebugService implements DebugServiceInterface {
     /**
      * @var DebugRepository Debug repository instance
      */
