@@ -51,16 +51,25 @@ class BackupService implements BackupServiceInterface
             $dbUser = getenv('MYSQL_USER') ?: 'eiou';
             $dbPass = getenv('MYSQL_PASSWORD') ?: '';
 
-            // Execute mysqldump
+            // Execute mysqldump using MYSQL_PWD env var for password (safest method)
+            $originalPwd = getenv('MYSQL_PWD');
+            putenv("MYSQL_PWD=" . $dbPass);
+
             $cmd = sprintf(
-                'mysqldump --single-transaction --routines --triggers --quick -h%s -u%s -p%s %s 2>&1',
+                'mysqldump --single-transaction --routines --triggers --quick -h %s -u %s %s 2>&1',
                 escapeshellarg($dbHost),
                 escapeshellarg($dbUser),
-                escapeshellarg($dbPass),
                 escapeshellarg($dbName)
             );
 
             $sqlDump = shell_exec($cmd);
+
+            // Clear the password from environment
+            if ($originalPwd !== false) {
+                putenv("MYSQL_PWD=" . $originalPwd);
+            } else {
+                putenv("MYSQL_PWD");
+            }
 
             if (empty($sqlDump) || strpos($sqlDump, 'CREATE TABLE') === false) {
                 return ['success' => false, 'error' => 'mysqldump failed or returned empty result'];
@@ -139,17 +148,27 @@ class BackupService implements BackupServiceInterface
             file_put_contents($tempFile, $sqlDump);
             KeyEncryption::secureClear($sqlDump);
 
-            // Execute mysql import
+            // Execute mysql import using MYSQL_PWD env var for password (safest method)
+            $originalPwd = getenv('MYSQL_PWD');
+            putenv("MYSQL_PWD=" . $dbPass);
+
             $cmd = sprintf(
-                'mysql -h%s -u%s -p%s %s < %s 2>&1',
+                'mysql -h %s -u %s %s < %s 2>&1',
                 escapeshellarg($dbHost),
                 escapeshellarg($dbUser),
-                escapeshellarg($dbPass),
                 escapeshellarg($dbName),
                 escapeshellarg($tempFile)
             );
 
             $output = shell_exec($cmd);
+
+            // Clear the password from environment
+            if ($originalPwd !== false) {
+                putenv("MYSQL_PWD=" . $originalPwd);
+            } else {
+                putenv("MYSQL_PWD");
+            }
+
             unlink($tempFile);
 
             // Check for errors (mysql doesn't always return proper exit codes via shell_exec)
