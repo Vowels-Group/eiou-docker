@@ -115,16 +115,11 @@ function getExpectedProtocol(){
 }
 
 # Get PHP-compatible transport type from address
-# PHP's determineTransportType returns 'http' for both http:// and https://
 # Use this when passing transport type to PHP functions
 function getPhpTransportType(){
     local address="$1"
     local transport=$(determineTransport "$address")
-    if [[ "$transport" == "https" ]]; then
-        echo 'http'  # PHP expects 'http' for both protocols
-    else
-        echo "$transport"
-    fi
+    echo "$transport"
 }
 
 # Wait for a condition to be met with polling
