@@ -211,24 +211,34 @@ for container in $CONTAINER_LIST; do
 
         # Verify if userconfig.json exists, it's valid JSON and has required fields
         if [ "$MODE" == 'http' ] || [ "$MODE" == 'https' ]; then
-            # First check hostname is set
+            # First check hostname is set (use hostname_secure for https mode, hostname for http mode)
             if [ "$hostname_ready" != "true" ]; then
-                httpAddress=$(docker exec "$container" php -r '
-                    if (file_exists("/etc/eiou/userconfig.json")) {
-                        $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
-                        if (isset($json["hostname"])){
-                            echo $json["hostname"];
-                        }
-                    }')
-                if [[ ! -z ${httpAddress} ]]; then
-                    # Validate protocol matches MODE for explicit protocol modes
-                    if [ "$MODE" == 'https' ] && [[ ${httpAddress} == https://* ]]; then
+                if [ "$MODE" == 'https' ]; then
+                    # HTTPS mode: check hostname_secure field
+                    httpAddress=$(docker exec "$container" php -r '
+                        if (file_exists("/etc/eiou/userconfig.json")) {
+                            $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                            if (isset($json["hostname_secure"])){
+                                echo $json["hostname_secure"];
+                            }
+                        }')
+                    if [[ ! -z ${httpAddress} ]] && [[ ${httpAddress} == https://* ]]; then
                         hostname_ready=true
-                    elif [ "$MODE" == 'http' ] && [[ ${httpAddress} == http://* ]]; then
-                        hostname_ready=true
-                    elif [ "$MODE" == 'http' ]; then
-                        # For backward compatibility: http mode accepts https:// addresses
-                        hostname_ready=true
+                    fi
+                else
+                    # HTTP mode: check hostname field
+                    httpAddress=$(docker exec "$container" php -r '
+                        if (file_exists("/etc/eiou/userconfig.json")) {
+                            $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                            if (isset($json["hostname"])){
+                                echo $json["hostname"];
+                            }
+                        }')
+                    if [[ ! -z ${httpAddress} ]]; then
+                        # HTTP mode accepts both http:// and https:// addresses for backward compatibility
+                        if [[ ${httpAddress} == http://* ]] || [[ ${httpAddress} == https://* ]]; then
+                            hostname_ready=true
+                        fi
                     fi
                 fi
             fi
