@@ -7,6 +7,9 @@
  * Centralized container for utility services.
  * Provides lazy loading and dependency injection for utilities.
  *
+ * This class is managed by ServiceContainer and should be obtained via:
+ * ServiceContainer::getUtilityContainer()
+ *
  * @package Services\Utilities
  */
 
@@ -18,11 +21,6 @@ require_once __DIR__ . '/ValidationUtilityService.php';
 class UtilityServiceContainer
 {
     /**
-     * @var UtilityServiceContainer|null Singleton instance
-     */
-    private static ?UtilityServiceContainer $instance = null;
-
-    /**
      * @var array Cached utility service instances
      */
     private array $utilities = [];
@@ -33,25 +31,13 @@ class UtilityServiceContainer
     private ServiceContainer $mainContainer;
 
     /**
-     * Private constructor for singleton
+     * Constructor
+     *
+     * @param ServiceContainer $mainContainer Main service container for dependency injection
      */
     public function __construct(ServiceContainer $mainContainer)
     {
         $this->mainContainer = $mainContainer;
-    }
-
-    /**
-     * Get singleton instance
-     *
-     * @param ServiceContainer $container Main service container
-     * @return UtilityServiceContainer
-     */
-    public static function getInstance(ServiceContainer $container): UtilityServiceContainer
-    {
-        if (self::$instance === null) {
-            self::$instance = new self($container);
-        }
-        return self::$instance;
     }
 
     /**
@@ -136,17 +122,5 @@ class UtilityServiceContainer
     public function clearUtilities(): void
     {
         $this->utilities = [];
-    }
-
-    /**
-     * Prevent cloning of singleton
-     */
-    private function __clone() {}
-
-    /**
-     * Prevent unserialization of singleton
-     */
-    public function __wakeup() {
-        throw new Exception("Cannot unserialize singleton");
     }
 }
