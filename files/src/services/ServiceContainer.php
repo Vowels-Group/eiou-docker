@@ -3,6 +3,12 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 
+use Eiou\Contracts\TransportServiceInterface;
+use Eiou\Contracts\ContactServiceInterface;
+use Eiou\Contracts\TransactionServiceInterface;
+use Eiou\Contracts\SyncServiceInterface;
+use Eiou\Contracts\P2pServiceInterface;
+
 /**
  * Service Container
  *
@@ -334,9 +340,9 @@ class ServiceContainer {
      * Integrates MessageDeliveryService for reliable contact message delivery
      * with retry logic and dead letter queue support.
      *
-     * @return ContactService
+     * @return ContactServiceInterface
      */
-    public function getContactService(): ContactService {
+    public function getContactService(): ContactServiceInterface {
         if (!isset($this->services['ContactService'])) {
             require_once __DIR__ . '/ContactService.php';
             $this->services['ContactService'] = new ContactService(
@@ -360,9 +366,9 @@ class ServiceContainer {
      * Integrates MessageDeliveryService for reliable transaction message delivery
      * with retry logic and dead letter queue support.
      *
-     * @return TransactionService
+     * @return TransactionServiceInterface
      */
-    public function getTransactionService(): TransactionService {
+    public function getTransactionService(): TransactionServiceInterface {
         if (!isset($this->services['TransactionService'])) {
             require_once __DIR__ . '/TransactionService.php';
             $this->services['TransactionService'] = new TransactionService(
@@ -389,9 +395,9 @@ class ServiceContainer {
      * Integrates MessageDeliveryService for reliable P2P message delivery
      * with retry logic and dead letter queue support.
      *
-     * @return P2pService
+     * @return P2pServiceInterface
      */
-    public function getP2pService(): P2pService {
+    public function getP2pService(): P2pServiceInterface {
         if (!isset($this->services['P2pService'])) {
             require_once __DIR__ . '/P2pService.php';
             $this->services['P2pService'] = new P2pService(
@@ -490,9 +496,9 @@ class ServiceContainer {
     /**
      * Get SyncService instance
      *
-     * @return SyncService
+     * @return SyncServiceInterface
      */
-    public function getSyncService(): SyncService {
+    public function getSyncService(): SyncServiceInterface {
         if (!isset($this->services['SyncService'])) {
             require_once __DIR__ . '/SyncService.php';
             $this->services['SyncService'] = new SyncService(

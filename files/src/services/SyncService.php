@@ -4,6 +4,8 @@
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
 
+use Eiou\Contracts\SyncServiceInterface;
+
 /**
  * Sync Service
  *
@@ -22,7 +24,7 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * - Balance Sync Operations.............. Line ~1177
  * - Bidirectional Sync................... Line ~1444
  */
-class SyncService {
+class SyncService implements SyncServiceInterface {
 
     // =========================================================================
     // PROPERTIES

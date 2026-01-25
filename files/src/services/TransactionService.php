@@ -6,6 +6,8 @@ require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
 
+use Eiou\Contracts\TransactionServiceInterface;
+
 /**
  * Transaction Service
  *
@@ -30,7 +32,7 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * - Balance & Contact Operations........ Line ~1863
  * - Repository Wrappers................. Line ~1923
  */
-class TransactionService {
+class TransactionService implements TransactionServiceInterface {
 
     // =========================================================================
     // PROPERTIES

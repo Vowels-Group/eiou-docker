@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Contracts\TransportServiceInterface;
+
 /**
  * Utility Service Container
  *
@@ -87,9 +89,9 @@ class UtilityServiceContainer
     /**
      * Get TransportUtilityService
      *
-     * @return TransportUtilityService
+     * @return TransportServiceInterface
      */
-    public function getTransportUtility(): TransportUtilityService
+    public function getTransportUtility(): TransportServiceInterface
     {
         if (!isset($this->utilities['TransportUtilityService'])) {
              require_once __DIR__ . '/TransportUtilityService.php';
