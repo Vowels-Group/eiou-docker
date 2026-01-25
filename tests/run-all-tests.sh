@@ -428,6 +428,7 @@ TESTS_SYSTEM="
 gracefulShutdownTest
 seedphraseTestSuite
 processorLockfileTest
+serviceInterfaceTest
 "
 
 # Select test order based on subset
