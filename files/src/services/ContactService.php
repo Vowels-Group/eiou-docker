@@ -113,13 +113,14 @@ class ContactService {
     }
 
     /**
-     * Get the sync service with fallback to Application singleton
+     * Get the sync service (must be injected via setSyncService)
      *
      * @return SyncService
+     * @throws RuntimeException If sync service was not injected
      */
     private function getSyncService(): SyncService {
         if ($this->syncService === null) {
-            $this->syncService = Application::getInstance()->services->getSyncService();
+            throw new RuntimeException('SyncService not injected. Call setSyncService() or ensure ServiceContainer::wireCircularDependencies() is called.');
         }
         return $this->syncService;
     }

@@ -84,13 +84,14 @@ class RP2pService {
     }
 
     /**
-     * Get the transaction service with fallback to Application singleton
+     * Get the transaction service (must be injected via setTransactionService)
      *
      * @return TransactionService
+     * @throws RuntimeException If transaction service was not injected
      */
     private function getTransactionService(): TransactionService {
         if ($this->transactionService === null) {
-            $this->transactionService = Application::getInstance()->services->getTransactionService();
+            throw new RuntimeException('TransactionService not injected. Call setTransactionService() or ensure ServiceContainer::wireCircularDependencies() is called.');
         }
         return $this->transactionService;
     }
