@@ -429,7 +429,9 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
         RESTORE_TEMP_FILE="/dev/shm/.eiou_restore_$$"
 
         # Write seedphrase to temp file
-        echo "$RESTORE" > "$RESTORE_TEMP_FILE"
+        # Use printf instead of echo for consistent behavior across shells
+        # echo can have issues with special characters or leading dashes
+        printf '%s\n' "$RESTORE" > "$RESTORE_TEMP_FILE"
 
         # Verify file was created successfully
         if [ ! -f "$RESTORE_TEMP_FILE" ]; then

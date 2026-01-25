@@ -34,7 +34,7 @@
 #   system       - System tests: shutdown, lockfiles, seedphrase
 #
 # Environment Variables (for WSL2/slow environments):
-#   EIOU_INIT_TIMEOUT  - Container initialization wait in seconds (default: 90)
+#   EIOU_INIT_TIMEOUT  - Container initialization wait in seconds (default: 120)
 
 set -e  # Exit on error
 
@@ -185,7 +185,7 @@ printf "${GREEN}${CHECK} Build completed successfully${NC}\n"
 
 # Wait for containers to be fully initialized
 # WSL2 environments have slower I/O; use EIOU_INIT_TIMEOUT env var to override
-MAX_WAIT=${EIOU_INIT_TIMEOUT:-90}  # Maximum wait time per container in seconds
+MAX_WAIT=${EIOU_INIT_TIMEOUT:-120}  # Maximum wait time per container in seconds (matches EIOU_TOR_TIMEOUT in startup.sh)
 printf "\n${GREEN}Waiting for containers to initialize (timeout: ${MAX_WAIT}s per container)...${NC}\n"
 
 # Get list of eiou containers from docker

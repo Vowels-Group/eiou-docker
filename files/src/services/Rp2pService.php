@@ -13,7 +13,7 @@ require_once __DIR__ . '/../contracts/Rp2pServiceInterface.php';
  * Integrates with MessageDeliveryService for reliable message delivery
  * with tracking, retry logic, and dead letter queue support.
  */
-class RP2pService implements Rp2pServiceInterface {
+class Rp2pService implements Rp2pServiceInterface {
     /**
      * @var ContactRepository Contact repository instance
      */

@@ -339,8 +339,9 @@ echo -e "\n\t-> Step 1.12: Restoring wallet with 'docker run -d ... -e RESTORE=<
 restoreContainer="httpRestoreSeedTest"
 restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-files:/etc/eiou/" -v "${restoreContainer}-index:/var/www/html" -v "${restoreContainer}-eiou:/usr/local/bin/" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
 
-# Small delay to ensure file system sync (and bootup container)
-sleep 5
+# Wait for container to fully initialize and process RESTORE env var
+# Container needs time for: MariaDB startup, startup.sh execution, wallet restoration
+sleep 25
 
 # Check if restore was successful by verifying userconfig.json was created
 verifyRestoredContainer=$(docker exec ${restoreContainer} test -f ${USERCONFIG} && echo "CREATED" || echo "NOT_CREATED")
@@ -1222,7 +1223,8 @@ echo -e "\n\t-> Step 3.11: Testing authcode restoration in new container"
 authcodeRestoreContainer="httpAuthcodeRestoreTest"
 authcodeContainerHash=$(docker run -d --network="${network}" --name "${authcodeRestoreContainer}" -v "${authcodeRestoreContainer}-mysql-data:/var/lib/mysql" -v "${authcodeRestoreContainer}-files:/etc/eiou/" -v "${authcodeRestoreContainer}-index:/var/www/html" -v "${authcodeRestoreContainer}-eiou:/usr/local/bin/" -e RESTORE="${seedPhraseAuth}" eiou/eiou 2>&1)
 
-sleep 5
+# Wait for container to fully initialize and process RESTORE env var
+sleep 25
 
 newContainerAuthCode=$(docker exec ${authcodeRestoreContainer} php -r '
     require_once "/etc/eiou/src/security/KeyEncryption.php";
