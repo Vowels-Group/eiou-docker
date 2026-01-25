@@ -1,19 +1,20 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+require_once __DIR__ . '/../../contracts/TransportServiceInterface.php';
+
 /**
  * Transport Utility Service
  *
  * Handles Transport
- *
- * @package Services\Utilities
  */
 
 require_once __DIR__ . '/../../core/Constants.php';
 require_once __DIR__ . '/../../utils/SecureLogger.php';
 require_once __DIR__ . '/../../utils/AddressValidator.php';
 
-class TransportUtilityService
+
+class TransportUtilityService implements TransportServiceInterface
 {
     /**
      * @var ServiceContainer Service container for accessing repositories

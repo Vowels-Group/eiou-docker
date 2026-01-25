@@ -369,6 +369,7 @@ transactionRecoveryTest
 seedphraseTestSuite
 processorLockfileTest
 pingTestSuite
+serviceInterfaceTest
 "
 
 # Quick validation (fast smoke tests)
@@ -428,6 +429,7 @@ TESTS_SYSTEM="
 gracefulShutdownTest
 seedphraseTestSuite
 processorLockfileTest
+serviceInterfaceTest
 "
 
 # Select test order based on subset

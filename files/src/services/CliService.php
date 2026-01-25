@@ -4,13 +4,13 @@
 require_once __DIR__ . '/../core/ErrorCodes.php';
 require_once __DIR__ . '/../utils/InputValidator.php';
 require_once __DIR__ . '/../cli/CliOutputManager.php';
+require_once __DIR__ . '/../contracts/CliServiceInterface.php';
+
 
 /**
  * Cli Service
  *
  * Handles all business logic for cli management.
- *
- * @package Services
  *
  * SECTION INDEX:
  * - Properties & Constructor............. Line ~26
@@ -21,7 +21,7 @@ require_once __DIR__ . '/../cli/CliOutputManager.php';
  * - Transaction History.................. Line ~1055
  * - SSL Certificate Management........... Line ~1187
  */
-class CliService {
+class CliService implements CliServiceInterface {
 
     // =========================================================================
     // PROPERTIES & CONSTRUCTOR

@@ -9,8 +9,6 @@
  *
  * This class is managed by ServiceContainer and should be obtained via:
  * ServiceContainer::getUtilityContainer()
- *
- * @package Services\Utilities
  */
 
 require_once __DIR__ . '/../ServiceContainer.php';
@@ -43,9 +41,9 @@ class UtilityServiceContainer
     /**
      * Get TimeUtilityService
      *
-     * @return TimeUtilityService
+     * @return TimeUtilityServiceInterface
      */
-    public function getTimeUtility(): TimeUtilityService
+    public function getTimeUtility(): TimeUtilityServiceInterface
     {
         if (!isset($this->utilities['TimeUtilityService'])) {
              require_once __DIR__ . '/TimeUtilityService.php';
@@ -57,9 +55,9 @@ class UtilityServiceContainer
     /**
      * Get CurrencyUtilityService
      *
-     * @return CurrencyUtilityService
+     * @return CurrencyUtilityServiceInterface
      */
-    public function getCurrencyUtility(): CurrencyUtilityService
+    public function getCurrencyUtility(): CurrencyUtilityServiceInterface
     {
         if (!isset($this->utilities['CurrencyUtilityService'])) {
              require_once __DIR__ . '/CurrencyUtilityService.php';
@@ -71,9 +69,9 @@ class UtilityServiceContainer
     /**
      * Get ValidationUtilityService
      *
-     * @return ValidationUtilityService
+     * @return ValidationUtilityServiceInterface
      */
-    public function getValidationUtility(): ValidationUtilityService
+    public function getValidationUtility(): ValidationUtilityServiceInterface
     {
         if (!isset($this->utilities['ValidationUtilityService'])) {
              require_once __DIR__ . '/ValidationUtilityService.php';
@@ -87,9 +85,9 @@ class UtilityServiceContainer
     /**
      * Get TransportUtilityService
      *
-     * @return TransportUtilityService
+     * @return TransportServiceInterface
      */
-    public function getTransportUtility(): TransportUtilityService
+    public function getTransportUtility(): TransportServiceInterface
     {
         if (!isset($this->utilities['TransportUtilityService'])) {
              require_once __DIR__ . '/TransportUtilityService.php';
@@ -103,9 +101,9 @@ class UtilityServiceContainer
     /**
      * Get GeneralUtilityService
      *
-     * @return GeneralUtilityService
+     * @return GeneralUtilityServiceInterface
      */
-    public function getGeneralUtility(): GeneralUtilityService
+    public function getGeneralUtility(): GeneralUtilityServiceInterface
     {
         if (!isset($this->utilities['GeneralUtilityService'])) {
              require_once __DIR__ . '/GeneralUtilityService.php';

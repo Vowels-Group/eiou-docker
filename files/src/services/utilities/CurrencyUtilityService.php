@@ -1,17 +1,18 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+require_once __DIR__ . '/../../contracts/CurrencyUtilityServiceInterface.php';
+
 /**
  * Currency Utility Service
  *
  * Handles currency formatting, conversion, and calculations.
- *
- * @package Services\Utilities
  */
 
 require_once __DIR__ . '/../../core/Constants.php';
 
-class CurrencyUtilityService
+
+class CurrencyUtilityService implements CurrencyUtilityServiceInterface
 {
     /**
      * Constructor

@@ -2,16 +2,15 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
+require_once __DIR__ . '/../contracts/MessageServiceInterface.php';
 
 /**
  * Message Service
  *
  * Handles all business logic for message processing and validation.
  * Replaces procedural functions from src/functions/message.php
- *
- * @package Services
  */
-class MessageService {
+class MessageService implements MessageServiceInterface {
     /**
      * @var ContactRepository Contact repository instance
      */

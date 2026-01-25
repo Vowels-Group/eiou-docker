@@ -4,6 +4,8 @@
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
+require_once __DIR__ . '/../contracts/ContactServiceInterface.php';
+
 
 /**
  * Contact Service
@@ -11,8 +13,6 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * Handles all business logic for contact management.
  * Integrates with MessageDeliveryService for reliable message delivery
  * with tracking, retry logic, and dead letter queue support.
- *
- * @package Services
  *
  * SECTION INDEX:
  * - Properties & Constructor............. Line ~20
@@ -27,7 +27,7 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * - Contact Updates...................... Line ~1354
  * - Repository Wrappers.................. Line ~1437
  */
-class ContactService {
+class ContactService implements ContactServiceInterface {
 
     // =========================================================================
     // PROPERTIES
@@ -1589,7 +1589,7 @@ class ContactService {
      *
      * @return array Array of accepted contacts
      */
-    public function getAcceptedContacts(){
+    public function getAcceptedContacts(): array {
         return $this->contactRepository->getAcceptedContacts();
     }
 

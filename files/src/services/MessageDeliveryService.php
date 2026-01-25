@@ -4,6 +4,7 @@
 require_once __DIR__ . '/../database/MessageDeliveryRepository.php';
 require_once __DIR__ . '/../database/DeadLetterQueueRepository.php';
 require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
+require_once __DIR__ . '/../contracts/MessageDeliveryServiceInterface.php';
 
 /**
  * Message Delivery Service
@@ -12,8 +13,6 @@ require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
  * exponential backoff retry, and dead letter queue integration.
  *
  * Implements the Transaction Reliability & Message Handling System.
- *
- * @package Services
  *
  * SECTION INDEX:
  * - Constants & Properties............... Line ~33
@@ -28,7 +27,7 @@ require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
  * - Acknowledgment Building.............. Line ~1256
  * - Maintenance & Stage Updates.......... Line ~1322
  */
-class MessageDeliveryService {
+class MessageDeliveryService implements MessageDeliveryServiceInterface {
 
     // =========================================================================
     // CONSTANTS & PROPERTIES

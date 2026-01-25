@@ -2,6 +2,8 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 require_once __DIR__ . '/../core/ErrorCodes.php';
+require_once __DIR__ . '/../contracts/ApiKeyServiceInterface.php';
+
 
 /**
  * API Key Service for CLI management
@@ -14,7 +16,7 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * - eiou apikey enable <key_id>
  */
 
-class ApiKeyService {
+class ApiKeyService implements ApiKeyServiceInterface {
     private $repository;
     private $output;
 

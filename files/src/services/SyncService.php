@@ -3,13 +3,13 @@
 
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
+require_once __DIR__ . '/../contracts/SyncServiceInterface.php';
+
 
 /**
  * Sync Service
  *
  * Handles all business logic for sync management.
- *
- * @package Services
  *
  * SECTION INDEX:
  * - Properties & Constructor............. Line ~14
@@ -22,7 +22,7 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * - Balance Sync Operations.............. Line ~1177
  * - Bidirectional Sync................... Line ~1444
  */
-class SyncService {
+class SyncService implements SyncServiceInterface {
 
     // =========================================================================
     // PROPERTIES

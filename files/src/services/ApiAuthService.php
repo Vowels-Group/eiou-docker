@@ -2,6 +2,8 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 require_once __DIR__ . '/../core/ErrorCodes.php';
+require_once __DIR__ . '/../contracts/ApiAuthServiceInterface.php';
+
 
 /**
  * API Authentication Service with HMAC Signature Verification
@@ -17,7 +19,7 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * in requests - only the computed HMAC signature.
  */
 
-class ApiAuthService {
+class ApiAuthService implements ApiAuthServiceInterface {
     private ApiKeyRepository $apiKeyRepository;
     private $logger;
 

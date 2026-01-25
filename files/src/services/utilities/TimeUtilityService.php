@@ -1,15 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+require_once __DIR__ . '/../../contracts/TimeUtilityServiceInterface.php';
+
 /**
  * Time Utility Service
  *
  * Handles all time-related utility functions.
- *
- * @package Services\Utilities
  */
 
-class TimeUtilityService
+
+class TimeUtilityService implements TimeUtilityServiceInterface
 {
     /**
      * Constructor

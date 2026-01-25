@@ -7,8 +7,6 @@
  * This file contains the remaining wrapper function that is extensively used
  * throughout the codebase. The output() function will be gradually migrated
  * in a separate refactoring effort.
- *
- * @package Services
  */
 
 require_once __DIR__ . '/ServiceContainer.php';

@@ -2,15 +2,15 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
+require_once __DIR__ . '/../contracts/CleanupServiceInterface.php';
+
 
 /**
  * Cleanup Service
  *
  * Handles all business logic for cleanup management.
- *
- * @package Services
  */
-class CleanupService {
+class CleanupService implements CleanupServiceInterface {
     /**
      * @var P2pRepository P2P repository instance
      */

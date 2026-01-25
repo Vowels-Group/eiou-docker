@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';
+require_once __DIR__ . '/../contracts/HeldTransactionServiceInterface.php';
 
 /**
  * Held Transaction Service
@@ -19,10 +20,8 @@ require_once __DIR__ . '/../core/Constants.php';
  * 4. onSyncComplete() triggers processHeldTransactionsAfterSync()
  * 5. updatePreviousTxid() updates the transaction's previous_txid to the expected value
  * 6. resumeTransaction() sets status back to pending for reprocessing
- *
- * @package Services
  */
-class HeldTransactionService {
+class HeldTransactionService implements HeldTransactionServiceInterface {
     /**
      * @var HeldTransactionRepository Held transaction repository
      */

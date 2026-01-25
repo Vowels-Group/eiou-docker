@@ -5,6 +5,8 @@ require_once __DIR__ . '/../utils/InputValidator.php';
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
+require_once __DIR__ . '/../contracts/TransactionServiceInterface.php';
+
 
 /**
  * Transaction Service
@@ -12,8 +14,6 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * Handles all business logic for transaction management.
  * Integrates with MessageDeliveryService for reliable message delivery
  * with tracking, retry logic, and dead letter queue support.
- *
- * @package Services
  *
  * SECTION INDEX:
  * - Properties.......................... Line ~20
@@ -30,7 +30,7 @@ require_once __DIR__ . '/../core/ErrorCodes.php';
  * - Balance & Contact Operations........ Line ~1863
  * - Repository Wrappers................. Line ~1923
  */
-class TransactionService {
+class TransactionService implements TransactionServiceInterface {
 
     // =========================================================================
     // PROPERTIES

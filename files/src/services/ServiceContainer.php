@@ -7,8 +7,6 @@ require_once __DIR__ . '/../utils/SecureLogger.php';
  * Service Container
  *
  * Centralized dependency injection container for managing service instances.
- *
- * @package Services
  */
 
 class ServiceContainer {
@@ -334,9 +332,9 @@ class ServiceContainer {
      * Integrates MessageDeliveryService for reliable contact message delivery
      * with retry logic and dead letter queue support.
      *
-     * @return ContactService
+     * @return ContactServiceInterface
      */
-    public function getContactService(): ContactService {
+    public function getContactService(): ContactServiceInterface {
         if (!isset($this->services['ContactService'])) {
             require_once __DIR__ . '/ContactService.php';
             $this->services['ContactService'] = new ContactService(
@@ -360,9 +358,9 @@ class ServiceContainer {
      * Integrates MessageDeliveryService for reliable transaction message delivery
      * with retry logic and dead letter queue support.
      *
-     * @return TransactionService
+     * @return TransactionServiceInterface
      */
-    public function getTransactionService(): TransactionService {
+    public function getTransactionService(): TransactionServiceInterface {
         if (!isset($this->services['TransactionService'])) {
             require_once __DIR__ . '/TransactionService.php';
             $this->services['TransactionService'] = new TransactionService(
@@ -389,9 +387,9 @@ class ServiceContainer {
      * Integrates MessageDeliveryService for reliable P2P message delivery
      * with retry logic and dead letter queue support.
      *
-     * @return P2pService
+     * @return P2pServiceInterface
      */
-    public function getP2pService(): P2pService {
+    public function getP2pService(): P2pServiceInterface {
         if (!isset($this->services['P2pService'])) {
             require_once __DIR__ . '/P2pService.php';
             $this->services['P2pService'] = new P2pService(
@@ -415,7 +413,7 @@ class ServiceContainer {
      *
      * @return Rp2pService
      */
-    public function getRp2pService(): Rp2pService {
+    public function getRp2pService(): Rp2pServiceInterface {
         if (!isset($this->services['Rp2pService'])) {
             require_once __DIR__ . '/Rp2pService.php';
             $this->services['Rp2pService'] = new Rp2pService(
@@ -436,7 +434,7 @@ class ServiceContainer {
      *
      * @return WalletService
      */
-    public function getWalletService(): WalletService {
+    public function getWalletService(): WalletServiceInterface {
         if (!isset($this->services['WalletService'])) {
             require_once __DIR__ . '/WalletService.php';
             $this->services['WalletService'] = new WalletService(
@@ -451,7 +449,7 @@ class ServiceContainer {
      *
      * @return MessageService
      */
-    public function getMessageService(): MessageService {
+    public function getMessageService(): MessageServiceInterface {
         if (!isset($this->services['MessageService'])) {
             require_once __DIR__ . '/MessageService.php';
             $this->services['MessageService'] = new MessageService(
@@ -472,7 +470,7 @@ class ServiceContainer {
      *
      * @return CleanupService
      */
-    public function getCleanupService(): CleanupService {
+    public function getCleanupService(): CleanupServiceInterface {
         if (!isset($this->services['CleanupService'])) {
             require_once __DIR__ . '/CleanupService.php';
             $this->services['CleanupService'] = new CleanupService(
@@ -490,9 +488,9 @@ class ServiceContainer {
     /**
      * Get SyncService instance
      *
-     * @return SyncService
+     * @return SyncServiceInterface
      */
-    public function getSyncService(): SyncService {
+    public function getSyncService(): SyncServiceInterface {
         if (!isset($this->services['SyncService'])) {
             require_once __DIR__ . '/SyncService.php';
             $this->services['SyncService'] = new SyncService(
@@ -514,7 +512,7 @@ class ServiceContainer {
      *
      * @return DebugService
      */
-    public function getDebugService(): DebugService {
+    public function getDebugService(): DebugServiceInterface {
         if (!isset($this->services['DebugService'])) {
             require_once __DIR__ . '/DebugService.php';
             $this->services['DebugService'] = new DebugService(
@@ -530,7 +528,7 @@ class ServiceContainer {
      *
      * @return MessageDeliveryService
      */
-    public function getMessageDeliveryService(): MessageDeliveryService {
+    public function getMessageDeliveryService(): MessageDeliveryServiceInterface {
         if (!isset($this->services['MessageDeliveryService'])) {
             require_once __DIR__ . '/MessageDeliveryService.php';
             $this->services['MessageDeliveryService'] = new MessageDeliveryService(
@@ -550,7 +548,7 @@ class ServiceContainer {
      *
      * @return HeldTransactionService
      */
-    public function getHeldTransactionService(): HeldTransactionService {
+    public function getHeldTransactionService(): HeldTransactionServiceInterface {
         if (!isset($this->services['HeldTransactionService'])) {
             require_once __DIR__ . '/HeldTransactionService.php';
             $this->services['HeldTransactionService'] = new HeldTransactionService(
@@ -568,7 +566,7 @@ class ServiceContainer {
      *
      * @return TransactionRecoveryService
      */
-    public function getTransactionRecoveryService(): TransactionRecoveryService {
+    public function getTransactionRecoveryService(): TransactionRecoveryServiceInterface {
         if (!isset($this->services['TransactionRecoveryService'])) {
             require_once __DIR__ . '/TransactionRecoveryService.php';
             $this->services['TransactionRecoveryService'] = new TransactionRecoveryService(
@@ -583,7 +581,7 @@ class ServiceContainer {
      *
      * @return CliService
      */
-    public function getCliService(): CliService {
+    public function getCliService(): CliServiceInterface {
         if (!isset($this->services['CliService'])) {
             require_once __DIR__ . '/CliService.php';
             $this->services['CliService'] = new CliService(
@@ -602,7 +600,7 @@ class ServiceContainer {
      *
      * @return RateLimiterService
      */
-    public function getRateLimiterService(): RateLimiterService {
+    public function getRateLimiterService(): RateLimiterServiceInterface {
         if (!isset($this->services['RateLimiterService'])) {
             require_once __DIR__ . '/RateLimiterService.php';
             $this->services['RateLimiterService'] = new RateLimiterService(
@@ -619,7 +617,7 @@ class ServiceContainer {
      *
      * @return ContactStatusService
      */
-    public function getContactStatusService(): ContactStatusService {
+    public function getContactStatusService(): ContactStatusServiceInterface {
         if (!isset($this->services['ContactStatusService'])) {
             require_once __DIR__ . '/ContactStatusService.php';
             $this->services['ContactStatusService'] = new ContactStatusService(
@@ -639,7 +637,7 @@ class ServiceContainer {
      *
      * @return ApiAuthService
      */
-    public function getApiAuthService(): ApiAuthService {
+    public function getApiAuthService(): ApiAuthServiceInterface {
         if (!isset($this->services['ApiAuthService'])) {
             require_once __DIR__ . '/ApiAuthService.php';
             $this->services['ApiAuthService'] = new ApiAuthService(
@@ -658,7 +656,7 @@ class ServiceContainer {
      * @param CliOutputManager $output CLI output manager for formatting
      * @return ApiKeyService
      */
-    public function getApiKeyService(CliOutputManager $output): ApiKeyService {
+    public function getApiKeyService(CliOutputManager $output): ApiKeyServiceInterface {
         if (!isset($this->services['ApiKeyService'])) {
             require_once __DIR__ . '/ApiKeyService.php';
             $this->services['ApiKeyService'] = new ApiKeyService(
