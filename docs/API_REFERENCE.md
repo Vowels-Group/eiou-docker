@@ -357,7 +357,7 @@ Get dashboard summary with balances and recent transactions.
                 "amount": 25.00,
                 "currency": "USD",
                 "counterparty_name": "Bob",
-                "memo": "Payment for services",
+                "description": "Payment for services",
                 "timestamp": "2026-01-23T12:00:00Z"
             }
         ],
@@ -398,8 +398,8 @@ Get paginated transaction history.
                 "currency": "USD",
                 "sender_address": "http://alice.local:8080",
                 "receiver_address": "http://bob.local:8080",
-                "description": "Payment",
-                "memo": "Invoice #123",
+                "description": "Invoice #123",
+                "memo": "standard",
                 "timestamp": "2026-01-23T12:00:00Z"
             }
         ],
@@ -427,7 +427,7 @@ Send a transaction to a contact.
     "address": "http://bob.local:8080",
     "amount": 25.00,
     "currency": "USD",
-    "memo": "Payment for services"
+    "description": "Payment for services"
 }
 ```
 
@@ -436,7 +436,7 @@ Send a transaction to a contact.
 | `address` | string | Yes | Recipient address (HTTP, HTTPS, or Tor) |
 | `amount` | number | Yes | Amount to send (must be > 0) |
 | `currency` | string | Yes | Currency code (e.g., USD) |
-| `memo` | string | No | Optional memo/description |
+| `description` | string | No | Optional transaction description |
 
 **Response:**
 
