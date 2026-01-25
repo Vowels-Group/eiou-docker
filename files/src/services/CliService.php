@@ -224,6 +224,7 @@ class CliService implements CliServiceInterface {
             echo "\t9. Default transport type\n";
             echo "\t10. Hostname\n";
             echo "\t11. Auto-refresh transactions\n";
+            echo "\t12. Auto-backup database\n";
             echo "\t0. Cancel\n";
 
             // Read user input
@@ -355,6 +356,20 @@ class CliService implements CliServiceInterface {
                     }
                     break;
 
+                case '12':
+                    echo "Enable automatic daily database backups? (yes/no): ";
+                    $key = 'autoBackupEnabled';
+                    $inputValue = strtolower(trim(fgets(STDIN)));
+                    if ($inputValue === 'yes' || $inputValue === 'y' || $inputValue === 'true' || $inputValue === '1' || $inputValue === 'on') {
+                        $value = true;
+                    } elseif ($inputValue === 'no' || $inputValue === 'n' || $inputValue === 'false' || $inputValue === '0' || $inputValue === 'off') {
+                        $value = false;
+                    } else {
+                        echo "Error: Please enter yes or no\n";
+                        return;
+                    }
+                    break;
+
                 case '0':
                     echo "Setting change cancelled.\n";
                     return;
@@ -431,7 +446,8 @@ class CliService implements CliServiceInterface {
             'p2p_expiration_seconds' => $this->currentUser->getP2pExpirationTime(),
             'max_output_lines' => $this->currentUser->getMaxOutput(),
             'default_transport_mode' => $this->currentUser->getDefaultTransportMode(),
-            'auto_refresh_enabled' => $this->currentUser->getAutoRefreshEnabled()
+            'auto_refresh_enabled' => $this->currentUser->getAutoRefreshEnabled(),
+            'auto_backup_enabled' => $this->currentUser->get('autoBackupEnabled', Constants::BACKUP_AUTO_ENABLED)
         ];
 
         if ($output->isJsonMode()) {
@@ -448,6 +464,7 @@ class CliService implements CliServiceInterface {
             echo "\tDefault maximum lines of balance output: " .  $settings['max_output_lines'] . "\n";
             echo "\tDefault transport mode: " . $settings['default_transport_mode'] . "\n";
             echo "\tAuto-refresh transactions: " . ($settings['auto_refresh_enabled'] ? 'enabled' : 'disabled') . "\n";
+            echo "\tAuto-backup database: " . ($settings['auto_backup_enabled'] ? 'enabled' : 'disabled') . "\n";
         }
     }
 

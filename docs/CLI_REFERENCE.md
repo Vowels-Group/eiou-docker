@@ -582,6 +582,7 @@ eiou changesettings [setting] [value]
 | `maxOutput` | Max display lines (integer or "all") | `50` |
 | `defaultTransportMode` | Preferred transport | `http`, `https`, `tor` |
 | `autoRefreshEnabled` | Auto-refresh transactions | `true`, `false` |
+| `autoBackupEnabled` | Auto-backup database daily | `true`, `false` |
 | `hostname` | Node hostname (regenerates SSL cert) | `http://alice` |
 
 **Examples:**
@@ -593,6 +594,7 @@ eiou changesettings
 eiou changesettings defaultCurrency EUR
 eiou changesettings maxP2pLevel 5
 eiou changesettings autoRefreshEnabled true
+eiou changesettings autoBackupEnabled false
 
 # JSON output
 eiou changesettings defaultFee 1.5 --json
