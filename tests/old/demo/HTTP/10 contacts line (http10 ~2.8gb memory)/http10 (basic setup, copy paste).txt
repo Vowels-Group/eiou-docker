@@ -2,7 +2,7 @@
 docker network create -d bridge demo-net
 
 # Remove any existing containers
-powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+docker rm -f httpA httpB httpC httpD httpE httpF httpG httpH httpI httpJ 2>/dev/null || echo "No containers to remove"
 
 # Remove associated volumes (if any)
 docker volume rm httpA-mysql-data httpA-files httpA-index httpA-eiou 2>/dev/null || echo "httpA volumes not found"

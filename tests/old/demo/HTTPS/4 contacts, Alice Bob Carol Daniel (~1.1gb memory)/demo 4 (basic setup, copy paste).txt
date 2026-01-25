@@ -2,7 +2,7 @@
 docker network create -d bridge demo-net
 
 # Remove any existing containers
-powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+docker rm -f Alice Bob Carol Daniel 2>/dev/null || echo "No containers to remove"
 
 # Remove associated volumes (if any)
 docker volume rm Alice-mysql-data Alice-files Alice-index Alice-eiou 2>/dev/null || echo "Alice volumes not found"

@@ -2,7 +2,7 @@
 docker network create -d bridge demo-net
 
 # Remove any existing containers
-powershell -Command "if (docker ps -aq) { docker rm -f $(docker ps -aq) } else { echo 'No containers to remove' }"
+docker rm -f Alice Bob Carol Daniel 2>/dev/null || echo "No containers to remove"
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
