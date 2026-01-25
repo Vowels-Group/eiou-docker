@@ -331,13 +331,12 @@ class Application {
     }
 
     /**
-     * Load utility services from utilityServiceContainer
+     * Load utility services from ServiceContainer
      *
      * @return void
      */
     public function loadUtilityServiceContainer(): void {
-        require_once $this->getRootPath() . '/src/services/utilities/UtilityServiceContainer.php';
-        $this->utilityServices = UtilityServiceContainer::getInstance($this->services);
+        $this->utilityServices = $this->services->getUtilityContainer();
     }
 
     /**
