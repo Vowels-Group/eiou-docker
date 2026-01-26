@@ -481,8 +481,8 @@ docker exec alice eiou changesettings hostname http://alice
 | `defaultFee` | Default fee percentage for transactions | Decimal (e.g., `1.0`) |
 | `defaultCreditLimit` | Default credit limit for new contacts | Integer (e.g., `100`) |
 | `defaultCurrency` | Default currency code | `USD` (only USD currently supported) |
-| `minFee` | Minimum fee amount | Decimal |
-| `maxFee` | Maximum fee percentage | Decimal |
+| `minFee` | Minimum fee amount | Decimal (e.g., `0.01`) |
+| `maxFee` | Maximum fee percentage | Decimal (e.g., `5.0`) |
 | `maxP2pLevel` | Maximum P2P routing hops | Integer 1-10 |
 | `p2pExpiration` | P2P request expiration time (seconds) | Integer (e.g., `300`) |
 | `maxOutput` | Maximum lines of output to display | Integer or `all` |
