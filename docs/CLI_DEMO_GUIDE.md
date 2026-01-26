@@ -1048,6 +1048,61 @@ docker exec alice eiou backup restore backup_20260126_030000.eiou.enc --confirm
 
 ---
 
+### 7.3 apikey - API Key Management
+
+API keys allow external applications to interact with your EIOU wallet programmatically.
+
+#### Creating an API Key
+
+```bash
+# Create with default permissions
+docker exec alice eiou apikey create myapp
+
+# Create with specific permissions
+docker exec alice eiou apikey create myapp read,send
+```
+
+**Available permissions:**
+- `read` - View balances and transaction history
+- `send` - Execute transactions
+- `contacts` - Manage contacts
+
+#### Listing API Keys
+
+```bash
+docker exec alice eiou apikey list
+```
+
+#### Disabling/Enabling an API Key
+
+```bash
+# Disable (key remains but cannot be used)
+docker exec alice eiou apikey disable <key_id>
+
+# Re-enable a disabled key
+docker exec alice eiou apikey enable <key_id>
+```
+
+#### Deleting an API Key
+
+```bash
+docker exec alice eiou apikey delete <key_id>
+```
+
+#### API Key Help
+
+```bash
+docker exec alice eiou apikey help
+```
+
+**Security Notes:**
+- Store API keys securely - they provide access to wallet functions
+- Use minimal permissions for each application
+- Disable keys when not in active use
+- Delete keys for applications no longer needed
+
+---
+
 ## Section 8: Cleanup
 
 ### Stopping Containers (Preserving Data)
