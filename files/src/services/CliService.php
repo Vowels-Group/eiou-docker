@@ -887,11 +887,37 @@ HELP;
         // Locators array
         $locators = $this->currentUser->getUserLocaters();
 
+        // Handle authcode securely - never expose directly in output
+        // SECURITY: Authentication code is stored in a secure temp file to prevent exposure in logs
+        $authcodeInfo = ['status' => '[REDACTED]'];
+        if ($showAuth) {
+            require_once '/etc/eiou/src/utils/SecureSeedphraseDisplay.php';
+            $authcode = $this->currentUser->getAuthCode();
+            if ($authcode) {
+                $displayResult = SecureSeedphraseDisplay::displayAuthcode($authcode);
+                if ($displayResult['success']) {
+                    $authcodeInfo = [
+                        'status' => 'stored_securely',
+                        'method' => $displayResult['method'],
+                        'filepath' => $displayResult['filepath'] ?? null,
+                        'ttl_seconds' => $displayResult['ttl'] ?? null,
+                        'message' => $displayResult['message']
+                    ];
+                } else {
+                    $authcodeInfo = [
+                        'status' => 'display_failed',
+                        'reason' => $displayResult['reason'] ?? 'Unknown error'
+                    ];
+                }
+            } else {
+                $authcodeInfo = ['status' => 'not_available'];
+            }
+        }
+
         // Build user info data structure
-        // SECURITY: Authentication code is redacted by default to prevent exposure in logs/output
         $userInfo = [
             'locators' => $locators,
-            'authentication_code' => $showAuth ? $this->currentUser->getAuthCode() : '[REDACTED]',
+            'authentication_code' => $authcodeInfo,
             'public_key' => $this->currentUser->getPublicKey()
         ];
 
@@ -953,10 +979,25 @@ HELP;
 
             // Authentication code - redacted by default for security
             if ($showAuth) {
-                echo "\tAuthentication Code: " . $this->currentUser->getAuthCode() . "\n";
-                echo "\t\t⚠ WARNING: This is a sensitive credential. Do not share or log this value.\n";
+                // Authcode was displayed via SecureSeedphraseDisplay above
+                if ($authcodeInfo['status'] === 'stored_securely') {
+                    if ($authcodeInfo['method'] === 'tty') {
+                        echo "\tAuthentication Code: [Displayed securely above - not logged]\n";
+                    } else {
+                        echo "\tAuthentication Code: [Stored in secure temp file]\n";
+                        if (!empty($authcodeInfo['filepath'])) {
+                            $containerName = gethostname() ?: '<container>';
+                            echo "\t\tTo view: docker exec $containerName cat " . $authcodeInfo['filepath'] . "\n";
+                            echo "\t\tAuto-deletes in " . ($authcodeInfo['ttl_seconds'] ?? 300) . " seconds\n";
+                        }
+                    }
+                } elseif ($authcodeInfo['status'] === 'not_available') {
+                    echo "\tAuthentication Code: [Not available]\n";
+                } else {
+                    echo "\tAuthentication Code: [Display failed: " . ($authcodeInfo['reason'] ?? 'unknown') . "]\n";
+                }
             } else {
-                echo "\tAuthentication Code: [REDACTED - use --show-auth to display]\n";
+                echo "\tAuthentication Code: [REDACTED - use --show-auth to display securely]\n";
             }
 
             $pubkey = $this->currentUser->getPublicKey();
