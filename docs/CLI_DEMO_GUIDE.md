@@ -805,6 +805,8 @@ docker exec alice eiou delete OldContact
 
 ### 6.1 send - Sending Transactions
 
+**Prerequisite:** Ensure contacts have been added as described in [Section 5.1](#51-add---adding-contacts). The A<->B<->C<->D chain must be established before sending transactions.
+
 **Syntax:**
 ```bash
 eiou send <address|name> <amount> <currency>
@@ -824,9 +826,6 @@ docker exec alice eiou viewbalances
 ```
 
 **Note:** Tor transport is slower than HTTP/HTTPS. If a transaction or balance doesn't appear immediately, wait a few more seconds and re-check. Results may take longer to propagate over Tor.
-
-```bash
-```
 
 **Expected output:**
 ```
@@ -876,6 +875,8 @@ docker exec alice eiou history all
 ### 6.4 Multi-Hop P2P Routing
 
 This demonstrates EIOU's key feature: sending transactions to contacts you don't directly know.
+
+**Prerequisite:** The full A<->B<->C<->D contact chain from [Section 5.1](#51-add---adding-contacts) must be established for P2P routing to work.
 
 #### How P2P Routing Works
 
