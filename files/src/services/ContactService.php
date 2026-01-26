@@ -1410,6 +1410,11 @@ class ContactService implements ContactServiceInterface {
 
         $pubkey = $this->getContactPubkey($address);
 
+        if ($pubkey === null) {
+            $output->error("Contact not found for address: " . $address, ErrorCodes::CONTACT_NOT_FOUND, 404);
+            return false;
+        }
+
         if ($this->contactRepository->deleteContact($pubkey) && $this->addressRepository->deleteByPubkey($pubkey) && $this->balanceRepository->deleteByPubkey($pubkey)) {
             $output->success("Contact deleted successfully", [
                 'address' => $address,
@@ -1441,15 +1446,23 @@ class ContactService implements ContactServiceInterface {
         $value2 = $argv[5] ?? null;
         $value3 = $argv[6] ?? null;
 
-        // Validate address
+        // Validate address or name
         if (!$address) {
-            $output->error("Address is required", ErrorCodes::MISSING_ADDRESS, 400);
+            $output->error("Address or name is required", ErrorCodes::MISSING_ADDRESS, 400);
             return;
         }
+
+        // Try to determine if input is an address (http/https/tor) or a name
         $transportIndex = $this->transportUtility->determineTransportType($address);
-        $contact = $this->contactRepository->lookupByAddress($transportIndex,$address);
+        $contact = null;
+
+        // Only lookup by address if we have a valid transport type
+        if ($transportIndex !== null) {
+            $contact = $this->contactRepository->lookupByAddress($transportIndex, $address);
+        }
+
         if (!$contact) {
-            // Try by name
+            // Try by name (input was either a name or address lookup returned no result)
             $contact = $this->contactRepository->lookupByName($address);
         }
 
@@ -1526,13 +1539,16 @@ class ContactService implements ContactServiceInterface {
     /**
      * Update contact status
      *
-     * @param string $transportIndex Address type, i.e. http, https, tor
      * @param string $address Contact address
      * @param string $status New status
      * @return bool Success status
      */
     public function updateStatus(string $address, string $status): bool {
-        return $this->contactRepository->updateStatus($this->getContactPubkey($address), $status);
+        $pubkey = $this->getContactPubkey($address);
+        if ($pubkey === null) {
+            return false;
+        }
+        return $this->contactRepository->updateStatus($pubkey, $status);
     }
 
     /**
@@ -1549,10 +1565,13 @@ class ContactService implements ContactServiceInterface {
      * Get contact public key
      *
      * @param string $address Contact address
-     * @return string|null Array with pubkey or null
+     * @return string|null Contact pubkey or null
      */
     public function getContactPubkey(string $address): ?string {
         $transportIndex = $this->transportUtility->determineTransportType($address);
+        if ($transportIndex === null) {
+            return null;
+        }
         return $this->contactRepository->getContactPubkey($transportIndex, $address);
     }
 
