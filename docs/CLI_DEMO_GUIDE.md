@@ -252,13 +252,17 @@ docker logs -f alice
 
 The CLI is accessed via `docker exec <container> eiou <command>`:
 ```bash
-# Show available commands
-docker exec alice eiou help
-
-# Run a specific command
+# Check wallet info
 docker exec alice eiou info
+
+# View settings
 docker exec alice eiou viewsettings
+
+# List contacts
+docker exec alice eiou search
 ```
+
+**Note:** Running `eiou` or `eiou help` currently produces a PHP warning - this is a known issue. Use specific commands as shown above.
 
 ---
 
@@ -493,13 +497,12 @@ docker exec alice eiou changesettings autoBackupEnabled false
 ### 3.5 help - Getting Help
 
 ```bash
-# General help
-docker exec alice eiou help
-
 # Help for specific command
 docker exec alice eiou help send
 docker exec alice eiou help add
 ```
+
+**Note:** `eiou help` (without a command) currently produces a PHP warning. Use `eiou help <command>` for specific command help.
 
 ---
 
