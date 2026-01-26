@@ -78,6 +78,69 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     fi
 done
 
+############################ SEND BY NAME TEST ############################
+
+echo -e "\n[Send by Contact Name Test]"
+
+# Test sending using contact NAME instead of address
+# Use the first link pair for this test
+if [ ${#containersLinkKeys[@]} -gt 0 ]; then
+    firstLink="${containersLinkKeys[0]}"
+    linkPair=(${firstLink//,/ })
+    senderContainer="${linkPair[0]}"
+    receiverContainer="${linkPair[1]}"
+    receiverAddress="${containerAddresses[$receiverContainer]}"
+
+    # Get contact name from sender's perspective
+    contactName=$(docker exec ${senderContainer} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}', '${receiverAddress}');
+        echo \$contact['name'] ?? '';
+    " 2>/dev/null || echo "")
+
+    if [[ -n "$contactName" ]]; then
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\t-> ${senderContainer} sending 3 USD to '${contactName}' (by name)"
+
+        # Get initial balance of recipient
+        initialBalanceByName=$(docker exec ${receiverContainer} php -r "
+            require_once('${REL_APPLICATION}');
+            \$app = Application::getInstance();
+            \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
+            \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+            echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+        " 2>/dev/null || echo "0")
+
+        # Send using NAME instead of address
+        sendByNameResult=$(docker exec ${senderContainer} eiou send "${contactName}" 3 USD 2>&1)
+
+        # Wait for balance change with polling
+        echo -e "\t   Waiting for balance change (timeout: 20s)..."
+        balance_cmd_name="php -r \"
+            require_once('${REL_APPLICATION}');
+            \\\$app = Application::getInstance();
+            \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
+            \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
+            echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+        \""
+        newBalanceByName=$(wait_for_balance_change "${receiverContainer}" "$initialBalanceByName" "$balance_cmd_name" 20 "send by name")
+
+        # Verify send by name succeeded
+        balanceIncreasedByName=$(awk "BEGIN {print ($newBalanceByName > $initialBalanceByName) ? 1 : 0}")
+        if [[ "$sendByNameResult" =~ "success" ]] || [[ "$sendByNameResult" =~ "sent" ]] || [[ "$balanceIncreasedByName" -eq 1 ]]; then
+            printf "\t   send by name ${GREEN}PASSED${NC} (Balance: %s -> %s)\n" ${initialBalanceByName} ${newBalanceByName}
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   send by name ${RED}FAILED${NC} (Balance unchanged: %s)\n" ${initialBalanceByName}
+            printf "\t   Send result: %s\n" "${sendByNameResult}"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        echo -e "\t   send by name ${YELLOW}SKIPPED${NC} (no contact name found for ${receiverContainer})"
+    fi
+fi
+
 # Test multi-hop routing (A->D requires routing through B and C)
 echo -e "\t-> Testing multi-hop: httpA sending to httpD (should route through httpB and httpC)"
 if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]]; then

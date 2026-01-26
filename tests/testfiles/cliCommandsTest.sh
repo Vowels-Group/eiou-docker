@@ -464,6 +464,173 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
         printf "\t   viewcontact command (JSON) ${RED}FAILED${NC}\n"
         failure=$(( failure + 1 ))
     fi
+
+    # Get contact name for name-based tests
+    contactName=$(docker exec ${sourceContainer} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}', '${targetAddress}');
+        echo \$contact['name'] ?? '';
+    " 2>/dev/null || echo "")
+
+    # Test: viewcontact by NAME (regular output)
+    if [[ -n "$contactName" ]]; then
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'viewcontact ${contactName}' command by NAME (regular output)"
+        viewContactByNameOutput=$(docker exec ${sourceContainer} eiou viewcontact "${contactName}" 2>&1)
+
+        if [[ "$viewContactByNameOutput" =~ "Contact" ]] || [[ "$viewContactByNameOutput" =~ "Name" ]] || [[ "$viewContactByNameOutput" =~ "Address" ]]; then
+            printf "\t   viewcontact by name (regular) ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   viewcontact by name (regular) ${RED}FAILED${NC}\n"
+            printf "\t   Output: ${viewContactByNameOutput}\n"
+            failure=$(( failure + 1 ))
+        fi
+
+        # Test: viewcontact by NAME (JSON output)
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'viewcontact ${contactName}' command by NAME (JSON output)"
+        viewContactByNameJsonOutput=$(docker exec ${sourceContainer} eiou viewcontact "${contactName}" --json 2>&1)
+
+        if [[ "$viewContactByNameJsonOutput" =~ '"success"' ]] && [[ "$viewContactByNameJsonOutput" =~ 'true' ]] && [[ "$viewContactByNameJsonOutput" =~ '"contact"' ]]; then
+            printf "\t   viewcontact by name (JSON) ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   viewcontact by name (JSON) ${RED}FAILED${NC}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   viewcontact by name ${YELLOW}SKIPPED${NC} (no contact name found)\n"
+    fi
+
+    ############################ VIEWBALANCES WITH CONTACT TEST ############################
+
+    echo -e "\n[ViewBalances with Contact Filter Test]"
+
+    # Test: viewbalances with ADDRESS filter
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing 'viewbalances ${targetAddress}' command (address filter)"
+    viewBalancesAddrOutput=$(docker exec ${sourceContainer} eiou viewbalances ${targetAddress} --json 2>&1)
+
+    if [[ "$viewBalancesAddrOutput" =~ '"success"' ]] && [[ "$viewBalancesAddrOutput" =~ 'true' ]]; then
+        printf "\t   viewbalances by address ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   viewbalances by address ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+
+    # Test: viewbalances with NAME filter
+    if [[ -n "$contactName" ]]; then
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'viewbalances ${contactName}' command (name filter)"
+        viewBalancesNameOutput=$(docker exec ${sourceContainer} eiou viewbalances "${contactName}" --json 2>&1)
+
+        if [[ "$viewBalancesNameOutput" =~ '"success"' ]] && [[ "$viewBalancesNameOutput" =~ 'true' ]]; then
+            printf "\t   viewbalances by name ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   viewbalances by name ${RED}FAILED${NC}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   viewbalances by name ${YELLOW}SKIPPED${NC} (no contact name found)\n"
+    fi
+
+    ############################ HISTORY WITH CONTACT TEST ############################
+
+    echo -e "\n[History with Contact Filter Test]"
+
+    # Test: history with ADDRESS filter
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing 'history ${targetAddress}' command (address filter)"
+    historyAddrOutput=$(docker exec ${sourceContainer} eiou history ${targetAddress} --json 2>&1)
+
+    if [[ "$historyAddrOutput" =~ '"success"' ]] && [[ "$historyAddrOutput" =~ 'true' ]]; then
+        printf "\t   history by address ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   history by address ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+
+    # Test: history with NAME filter
+    if [[ -n "$contactName" ]]; then
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'history ${contactName}' command (name filter)"
+        historyNameOutput=$(docker exec ${sourceContainer} eiou history "${contactName}" --json 2>&1)
+
+        if [[ "$historyNameOutput" =~ '"success"' ]] && [[ "$historyNameOutput" =~ 'true' ]]; then
+            printf "\t   history by name ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   history by name ${RED}FAILED${NC}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   history by name ${YELLOW}SKIPPED${NC} (no contact name found)\n"
+    fi
+
+    ############################ BLOCK/UNBLOCK COMMAND TEST ############################
+
+    echo -e "\n[Block/Unblock Command Test - Address and Name Variants]"
+
+    # Test: block by ADDRESS
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing 'block ${targetAddress}' command (address)"
+    blockAddrOutput=$(docker exec ${sourceContainer} eiou block ${targetAddress} --json 2>&1)
+
+    if [[ "$blockAddrOutput" =~ '"success"' ]] && [[ "$blockAddrOutput" =~ 'true' ]]; then
+        printf "\t   block by address ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+
+        # Test: unblock by ADDRESS (to restore state)
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'unblock ${targetAddress}' command (address)"
+        unblockAddrOutput=$(docker exec ${sourceContainer} eiou unblock ${targetAddress} --json 2>&1)
+
+        if [[ "$unblockAddrOutput" =~ '"success"' ]] && [[ "$unblockAddrOutput" =~ 'true' ]]; then
+            printf "\t   unblock by address ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   unblock by address ${RED}FAILED${NC}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   block by address ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+
+    # Test: block by NAME
+    if [[ -n "$contactName" ]]; then
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'block ${contactName}' command (name)"
+        blockNameOutput=$(docker exec ${sourceContainer} eiou block "${contactName}" --json 2>&1)
+
+        if [[ "$blockNameOutput" =~ '"success"' ]] && [[ "$blockNameOutput" =~ 'true' ]]; then
+            printf "\t   block by name ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+
+            # Test: unblock by NAME (to restore state)
+            totaltests=$(( totaltests + 1 ))
+            echo -e "\n\t-> Testing 'unblock ${contactName}' command (name)"
+            unblockNameOutput=$(docker exec ${sourceContainer} eiou unblock "${contactName}" --json 2>&1)
+
+            if [[ "$unblockNameOutput" =~ '"success"' ]] && [[ "$unblockNameOutput" =~ 'true' ]]; then
+                printf "\t   unblock by name ${GREEN}PASSED${NC}\n"
+                passed=$(( passed + 1 ))
+            else
+                printf "\t   unblock by name ${RED}FAILED${NC}\n"
+                failure=$(( failure + 1 ))
+            fi
+        else
+            printf "\t   block by name ${RED}FAILED${NC}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   block/unblock by name ${YELLOW}SKIPPED${NC} (no contact name found)\n"
+    fi
 fi
 
 ############################ ERROR HANDLING TEST ############################
