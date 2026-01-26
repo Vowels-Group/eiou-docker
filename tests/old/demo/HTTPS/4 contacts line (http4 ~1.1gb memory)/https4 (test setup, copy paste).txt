@@ -5,19 +5,19 @@ docker network create -d bridge demo-net
 docker rm -f https0 https1 https2 https3
 
 # Remove associated volumes (if any)
-docker volume rm https0-mysql-data https0-files https0-index https0-eiou
-docker volume rm https1-mysql-data https1-files https1-index https1-eiou
-docker volume rm https2-mysql-data https2-files https2-index https2-eiou
-docker volume rm https3-mysql-data https3-files https3-index https3-eiou
+docker volume rm https0-mysql-data https0-files https0-index https0-eiou https0-backups
+docker volume rm https1-mysql-data https1-files https1-index https1-eiou https1-backups
+docker volume rm https2-mysql-data https2-files https2-index https2-eiou https2-backups
+docker volume rm https3-mysql-data https3-files https3-index https3-eiou https3-backups
 
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d  --network=demo-net --name https0 -v "https0-mysql-data:/var/lib/mysql" -v "https0-files:/etc/eiou/" -v "https0-index:/var/www/html" -v "https0-eiou:/usr/local/bin/" -e QUICKSTART=https0 eiou/eiou
-docker run -d  --network=demo-net --name https1 -v "https1-mysql-data:/var/lib/mysql" -v "https1-files:/etc/eiou/" -v "https1-index:/var/www/html" -v "https1-eiou:/usr/local/bin/" -e QUICKSTART=https1 eiou/eiou
-docker run -d  --network=demo-net --name https2 -v "https2-mysql-data:/var/lib/mysql" -v "https2-files:/etc/eiou/" -v "https2-index:/var/www/html" -v "https2-eiou:/usr/local/bin/" -e QUICKSTART=https2 eiou/eiou
-docker run -d  --network=demo-net --name https3 -v "https3-mysql-data:/var/lib/mysql" -v "https3-files:/etc/eiou/" -v "https3-index:/var/www/html" -v "https3-eiou:/usr/local/bin/" -e QUICKSTART=https3 eiou/eiou
+docker run -d  --network=demo-net --name https0 -v "https0-mysql-data:/var/lib/mysql" -v "https0-files:/etc/eiou/" -v "https0-index:/var/www/html" -v "https0-eiou:/usr/local/bin/" -v "https0-backups:/var/lib/eiou/backups" -e QUICKSTART=https0 eiou/eiou
+docker run -d  --network=demo-net --name https1 -v "https1-mysql-data:/var/lib/mysql" -v "https1-files:/etc/eiou/" -v "https1-index:/var/www/html" -v "https1-eiou:/usr/local/bin/" -v "https1-backups:/var/lib/eiou/backups" -e QUICKSTART=https1 eiou/eiou
+docker run -d  --network=demo-net --name https2 -v "https2-mysql-data:/var/lib/mysql" -v "https2-files:/etc/eiou/" -v "https2-index:/var/www/html" -v "https2-eiou:/usr/local/bin/" -v "https2-backups:/var/lib/eiou/backups" -e QUICKSTART=https2 eiou/eiou
+docker run -d  --network=demo-net --name https3 -v "https3-mysql-data:/var/lib/mysql" -v "https3-files:/etc/eiou/" -v "https3-index:/var/www/html" -v "https3-eiou:/usr/local/bin/" -v "https3-backups:/var/lib/eiou/backups" -e QUICKSTART=https3 eiou/eiou
 sleep 5
 
 # add contacts
