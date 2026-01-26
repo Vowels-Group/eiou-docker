@@ -137,7 +137,7 @@ Display wallet information including addresses and public key.
 
 **Syntax:**
 ```bash
-eiou info [detail]
+eiou info [detail] [--show-auth]
 ```
 
 **Arguments:**
@@ -145,25 +145,66 @@ eiou info [detail]
 | Argument | Type | Description |
 |----------|------|-------------|
 | `detail` | optional | Show detailed balance information with transaction breakdowns |
+| `--show-auth` | optional | Securely display the authentication code via temp file |
 
 **Examples:**
 ```bash
-# Basic wallet info
+# Basic wallet info (auth code redacted)
 eiou info
+
+# Show authentication code securely
+eiou info --show-auth
 
 # Detailed info with balances
 eiou info detail
 
-# JSON output
-eiou info --json
-eiou info detail --json
+# JSON output with auth code file path
+eiou info --show-auth --json
 ```
 
 **Output includes:**
 - HTTP, HTTPS, and Tor addresses (locators)
-- Authentication code
+- Authentication code status (redacted by default)
 - Public key
 - (With `detail`) Total balances by currency with sent/received breakdown
+
+**Security: Authentication Code Handling**
+
+The authentication code is a sensitive credential that is **never** exposed directly in command output. This prevents accidental exposure through:
+- Docker logs (`docker logs <container>`)
+- Shell history and command output redirection
+- Log aggregation systems
+- Screenshots or screen sharing
+
+When `--show-auth` is used, the code is stored in a secure temporary file:
+
+1. **TTY Mode** (interactive terminal): Displays directly to terminal, bypassing Docker's log capture
+2. **Non-TTY/JSON Mode**: Stores in `/dev/shm/` (memory-only tmpfs) with auto-deletion after 5 minutes
+
+**Retrieving the authentication code:**
+```bash
+# The command outputs the file path
+docker exec alice eiou info --show-auth
+
+# Then retrieve it manually
+docker exec alice cat /dev/shm/eiou_authcode_<random>
+
+# Delete after use (or wait for auto-deletion)
+docker exec alice rm /dev/shm/eiou_authcode_<random>
+```
+
+**JSON response format with `--show-auth`:**
+```json
+{
+  "authentication_code": {
+    "status": "stored_securely",
+    "method": "file",
+    "filepath": "/dev/shm/eiou_authcode_abc123...",
+    "ttl_seconds": 300,
+    "message": "Authentication code stored in secure temp file"
+  }
+}
+```
 
 ---
 

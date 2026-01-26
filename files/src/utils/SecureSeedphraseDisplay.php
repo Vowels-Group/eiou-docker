@@ -379,4 +379,149 @@ class SecureSeedphraseDisplay
 
         return $count;
     }
+
+    /**
+     * Display an authentication code securely (without seedphrase)
+     *
+     * Used by eiou info --show-auth to display the authcode without
+     * exposing it in Docker logs.
+     *
+     * @param string $authcode The authentication code to display
+     * @return array Result with method used and file path if applicable
+     */
+    public static function displayAuthcode(string $authcode): array
+    {
+        // Try TTY first (most secure - not logged by Docker)
+        $ttyResult = self::displayAuthcodeViaTTY($authcode);
+        if ($ttyResult['success']) {
+            return $ttyResult;
+        }
+
+        // Fallback to secure temp file
+        return self::displayAuthcodeViaSecureFile($authcode);
+    }
+
+    /**
+     * Display authcode via TTY
+     *
+     * @param string $authcode The authentication code
+     * @return array Result array
+     */
+    private static function displayAuthcodeViaTTY(string $authcode): array
+    {
+        // Check if we have a TTY
+        if (!function_exists('posix_isatty') || !posix_isatty(STDOUT)) {
+            return ['success' => false, 'method' => 'tty', 'reason' => 'No TTY available'];
+        }
+
+        // Try to open /dev/tty directly
+        $tty = @fopen('/dev/tty', 'w');
+        if (!$tty) {
+            return ['success' => false, 'method' => 'tty', 'reason' => 'Cannot open /dev/tty'];
+        }
+
+        // Display authcode securely
+        fwrite($tty, "\n");
+        fwrite($tty, "\033[1;33m"); // Bold yellow
+        fwrite($tty, "╔═══════════════════════════════════════════════════════════════╗\n");
+        fwrite($tty, "║              AUTHENTICATION CODE (SENSITIVE)                  ║\n");
+        fwrite($tty, "╠═══════════════════════════════════════════════════════════════╣\n");
+        fwrite($tty, "\033[0m"); // Reset color
+        fwrite($tty, "║ This is a sensitive credential. Do not share or log it.       ║\n");
+        fwrite($tty, "\033[1;31m"); // Bold red
+        fwrite($tty, "║ THIS MESSAGE WILL NOT APPEAR IN DOCKER LOGS FOR SECURITY      ║\n");
+        fwrite($tty, "\033[0m"); // Reset
+        fwrite($tty, "╠═══════════════════════════════════════════════════════════════╣\n");
+        fwrite($tty, "║                                                               ║\n");
+        fwrite($tty, "\033[1;36m"); // Bold cyan
+        $authcodeLine = "  " . $authcode;
+        $padded = str_pad($authcodeLine, 61);
+        fwrite($tty, "║ " . $padded . " ║\n");
+        fwrite($tty, "\033[0m"); // Reset
+        fwrite($tty, "║                                                               ║\n");
+        fwrite($tty, "╚═══════════════════════════════════════════════════════════════╝\n");
+        fwrite($tty, "\n");
+        fclose($tty);
+
+        return [
+            'success' => true,
+            'method' => 'tty',
+            'message' => 'Authentication code displayed securely via TTY (not logged)'
+        ];
+    }
+
+    /**
+     * Display authcode via secure temp file
+     *
+     * @param string $authcode The authentication code
+     * @return array Result with instructions for retrieval
+     */
+    private static function displayAuthcodeViaSecureFile(string $authcode): array
+    {
+        // Verify tmpfs is available
+        $dir = self::TEMP_DIR;
+        if (!is_dir($dir) || !is_writable($dir)) {
+            $dir = '/tmp';
+            $warning = 'WARNING: /dev/shm not available, using /tmp (less secure)';
+        } else {
+            $warning = null;
+        }
+
+        // Generate unique filename
+        $filename = $dir . '/' . 'eiou_authcode_' . bin2hex(random_bytes(16));
+
+        // Build file content
+        $content = "═══════════════════════════════════════════════════════════════\n";
+        $content .= "              AUTHENTICATION CODE (SENSITIVE)\n";
+        $content .= "═══════════════════════════════════════════════════════════════\n";
+        $content .= " This is a sensitive credential. Do not share or log it.\n";
+        $content .= "═══════════════════════════════════════════════════════════════\n\n";
+        $content .= "  " . $authcode . "\n\n";
+        $content .= "═══════════════════════════════════════════════════════════════\n";
+        $content .= " This file will be automatically deleted in " . self::FILE_TTL . " seconds.\n";
+        $content .= " Delete it immediately after use: rm $filename\n";
+        $content .= "═══════════════════════════════════════════════════════════════\n";
+
+        // Write with restrictive permissions
+        $oldUmask = umask(0077);
+        $written = @file_put_contents($filename, $content, LOCK_EX);
+        umask($oldUmask);
+
+        if ($written === false) {
+            return [
+                'success' => false,
+                'method' => 'file',
+                'message' => 'Failed to write secure temp file'
+            ];
+        }
+
+        // Set restrictive permissions (owner read only)
+        chmod($filename, 0400);
+
+        // Schedule deletion
+        self::scheduleFileDeletion($filename, self::FILE_TTL);
+
+        // Get container name for instructions
+        $containerName = gethostname() ?: '<container>';
+
+        return [
+            'success' => true,
+            'method' => 'file',
+            'message' => 'Authentication code stored in secure temp file',
+            'filepath' => $filename,
+            'ttl' => self::FILE_TTL,
+            'warning' => $warning,
+            'instructions' => [
+                "Your authentication code has been stored securely in a temporary file.",
+                "",
+                "To view it, run:",
+                "  docker exec $containerName cat $filename",
+                "",
+                "The file will be automatically deleted in " . self::FILE_TTL . " seconds.",
+                "",
+                "To delete manually:",
+                "  docker exec $containerName rm $filename"
+            ]
+        ];
+    }
 }
