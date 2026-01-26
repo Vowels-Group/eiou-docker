@@ -785,7 +785,9 @@ class CliService implements CliServiceInterface {
             } else {
                 echo "Available commands:\n";
                 foreach ($commands as $name => $cmd) {
-                    echo "\t" . $cmd['usage'] . " - " . $cmd['description'] . "\n";
+                    if (isset($cmd['usage'])) {
+                        echo "\t" . $cmd['usage'] . " - " . $cmd['description'] . "\n";
+                    }
                 }
             }
         }
