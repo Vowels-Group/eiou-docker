@@ -14,9 +14,10 @@ Complete reference of all error codes used in the EIOU system, with HTTP status 
 8. [Transport Errors](#transport-errors)
 9. [Validation Errors](#validation-errors)
 10. [File Errors](#file-errors)
-11. [Command Errors](#command-errors)
-12. [Connection Errors](#connection-errors)
-13. [HTTP Status Code Reference](#http-status-code-reference)
+11. [Backup Errors](#backup-errors)
+12. [Command Errors](#command-errors)
+13. [Connection Errors](#connection-errors)
+14. [HTTP Status Code Reference](#http-status-code-reference)
 
 ---
 
@@ -211,6 +212,21 @@ Complete reference of all error codes used in the EIOU system, with HTTP status 
 |------|------|-------|-------------|-----------------|
 | `FILE_NOT_FOUND` | 404 | File Not Found | Specified file does not exist | Verify file path is correct |
 | `FILE_NOT_READABLE` | 403 | File Not Readable | Cannot read the file | Check file permissions |
+
+---
+
+## Backup Errors
+
+| Code | HTTP | Title | Description | Troubleshooting |
+|------|------|-------|-------------|-----------------|
+| `BACKUP_FAILED` | 500 | Backup Failed | Database backup operation failed | Check database connectivity and disk space |
+| `BACKUP_NOT_FOUND` | 404 | Backup Not Found | Specified backup file does not exist | Run `eiou backup list` to see available backups |
+| `BACKUP_INVALID` | 400 | Invalid Backup | Backup file is corrupted or invalid format | Verify backup with `eiou backup verify <file>` |
+| `BACKUP_DECRYPT_FAILED` | 500 | Decryption Failed | Cannot decrypt backup file | Ensure wallet is restored with correct seed phrase |
+| `RESTORE_FAILED` | 500 | Restore Failed | Database restore operation failed | Check database connectivity; verify backup integrity |
+| `RESTORE_CONFIRM_REQUIRED` | 400 | Confirmation Required | Restore requires --confirm flag | Add `--confirm` flag to acknowledge data overwrite |
+| `DB_CONFIG_NOT_FOUND` | 500 | Database Config Not Found | Database configuration file missing | Ensure `/etc/eiou/dbconfig.json` exists |
+| `MYSQLDUMP_FAILED` | 500 | MySQL Dump Failed | mysqldump command failed | Check MariaDB service is running |
 
 ---
 

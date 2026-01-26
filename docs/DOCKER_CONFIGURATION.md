@@ -442,7 +442,7 @@ environment:
 - Stored in `/var/lib/eiou/backups/` (persisted via `{node}-backups` volume)
 - Encrypted with AES-256-GCM using the wallet's master key
 - Only the 3 most recent backups are retained by default
-- Backup files are named with timestamps: `backup-YYYYMMDD-HHMMSS.enc`
+- Backup files are named with timestamps: `backup_YYYYMMDD_HHmmss.eiou.enc`
 
 ### CLI Backup Commands
 
@@ -459,7 +459,7 @@ docker exec <container> eiou backup list
 docker exec <container> eiou backup restore <backup-file> --confirm
 
 # Delete old backups (keeps most recent 3)
-docker exec <container> eiou backup prune
+docker exec <container> eiou backup cleanup
 ```
 
 **Important:** Restore operations require the wallet to be restored first, as backups are encrypted with the master key derived from the seed phrase.
@@ -519,7 +519,7 @@ To restore from an encrypted backup file:
 2. **Start container and restore backup**:
    ```bash
    docker exec <container> eiou backup list
-   docker exec <container> eiou backup restore backup-20240115-000000.enc --confirm
+   docker exec <container> eiou backup restore backup_20260115_000000.eiou.enc --confirm
    ```
 
 ### Complete Reset
