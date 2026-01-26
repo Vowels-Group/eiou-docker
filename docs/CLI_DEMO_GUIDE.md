@@ -939,17 +939,17 @@ Fees are **added to the sender's amount**, not deducted from the recipient. The 
 
 With 0.1% fee per hop, when Alice sends 100 USD to Daniel:
 
-| Hop | Node | Fee (0.1%) |
-|-----|------|------------|
-| 1 | Bob (relay) | 0.10 |
-| 2 | Carol (relay) | 0.10 |
-| 3 | Daniel (recipient) | 0.10 |
-| | **Total fees** | **0.30** |
+| Step | Description | Fee (0.1%) |
+|------|-------------|------------|
+| Alice -> Bob | Direct send (no relay fee) | 0.00 |
+| Bob -> Carol | Bob relays | 0.10 |
+| Carol -> Daniel | Carol relays | 0.10 |
+| | **Total fees** | **0.20** |
 
-**Alice sends: 100.30 USD** (100 + fees)
+**Alice sends: 100.20 USD** (100 + relay fees)
 **Daniel receives: 100.00 USD**
 
-The sender always pays the routing fees, ensuring the recipient gets the exact amount requested.
+Only relay nodes charge fees. The sender's direct contact (Bob) and the recipient (Daniel) do not add relay fees.
 
 ---
 
