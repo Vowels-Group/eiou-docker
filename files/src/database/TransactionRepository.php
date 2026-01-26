@@ -31,13 +31,20 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Calculate total amount sent by user
      *
-     * @param string $userPublicKey User's public key
-     * @return float Total amount sent by user
+     * Only counts completed transactions to ensure accuracy.
+     * Pending, in-progress, or failed transactions are excluded.
+     *
+     * @param string $publicKey User's public key
+     * @return float Total amount sent by user (completed transactions only)
      */
     public function calculateTotalSentByUser(string $publicKey): float {
         $query = "SELECT SUM(amount) as total_sent FROM {$this->tableName}
-                  WHERE sender_public_key = :publicKey";
-        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
+                  WHERE sender_public_key = :publicKey
+                  AND status = :status";
+        $stmt = $this->execute($query, [
+            ':publicKey' => $publicKey,
+            ':status' => Constants::STATUS_COMPLETED
+        ]);
 
         if (!$stmt) {
             return 0;
@@ -50,16 +57,23 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Calculate total amount received by user (excluding self-sends)
      *
-     * @param string $userPublicKey User's public key
-     * @return float Total amount received by user
+     * Only counts completed transactions to ensure accuracy.
+     * Pending, in-progress, or failed transactions are excluded.
+     * Excludes relay transactions where user is just an intermediary.
+     *
+     * @param string $publicKey User's public key
+     * @return float Total amount received by user (completed transactions only)
      */
     public function calculateTotalReceivedByUser(string $publicKey): float {
         $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
                   WHERE receiver_public_key = :receiverKey
-                  AND sender_public_key != :senderKey";
+                  AND sender_public_key != :senderKey
+                  AND status = :status
+                  AND type != 'relay'";
         $stmt = $this->execute($query, [
             ':receiverKey' => $publicKey,
-            ':senderKey' => $publicKey
+            ':senderKey' => $publicKey,
+            ':status' => Constants::STATUS_COMPLETED
         ]);
 
         if (!$stmt) {
@@ -305,11 +319,19 @@ class TransactionRepository extends AbstractRepository {
     } 
 
     /**
-     * Get users current balance
+     * Get users current balance calculated from transaction history
      *
-     * @return string Balance 
+     * DEPRECATED: Prefer using BalanceRepository->getUserBalance() or
+     * TransactionService->getUserTotalBalance() which use the authoritative
+     * balances table that's updated only on transaction completion.
+     *
+     * This method calculates balance from completed transactions only.
+     * Pending, in-progress, and failed transactions are excluded.
+     * Relay transactions where user is intermediary are also excluded.
+     *
+     * @return string Balance formatted as dollars (e.g., "10.50")
      */
-    function getUserTotalBalance() {
+    public function getUserTotalBalance(): string {
         $app = Application::getInstance();
         $currencyUtility = $app->utilityServices->getCurrencyUtility();
         $totalReceived = $this->calculateTotalReceivedByUser($this->currentUser->getPublicKey());

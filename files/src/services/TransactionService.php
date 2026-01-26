@@ -2167,10 +2167,27 @@ class TransactionService implements TransactionServiceInterface {
     /**
      * Get users current balance
      *
-     * @return string Balance 
+     * Uses BalanceRepository which correctly tracks only completed transactions.
+     * This ensures consistency with transaction validation and prevents counting
+     * pending/in-progress transactions as available funds.
+     *
+     * @return string Balance formatted as dollars (e.g., "10.50")
      */
-    public function getUserTotalBalance() {
-          return $this->transactionRepository->getUserTotalBalance();
+    public function getUserTotalBalance(): string {
+        $balances = $this->balanceRepository->getUserBalance();
+
+        if ($balances === null || empty($balances)) {
+            return "0.00";
+        }
+
+        // Sum all currency balances (typically just USD)
+        // Balance is already in cents from BalanceRepository
+        $totalCents = 0;
+        foreach ($balances as $balance) {
+            $totalCents += (int) ($balance['total_balance'] ?? 0);
+        }
+
+        return $this->currencyUtility->convertCentsToDollars($totalCents);
     }
     
     /**
