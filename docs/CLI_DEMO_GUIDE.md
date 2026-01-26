@@ -461,7 +461,7 @@ Automation:
 Change wallet configuration directly or interactively.
 
 ```bash
-# View current default currency
+# View current settings
 docker exec alice eiou viewsettings
 
 # Change P2P routing level
@@ -470,20 +470,25 @@ docker exec alice eiou changesettings maxP2pLevel 5
 # Change default fee
 docker exec alice eiou changesettings defaultFee 1.5
 
-# Enable/disable auto-backup
-docker exec alice eiou changesettings autoBackupEnabled false
+# Change hostname (derives HTTPS automatically)
+docker exec alice eiou changesettings hostname http://alice
 ```
 
 **Available Settings:**
 
 | Setting | Description | Valid Values |
 |---------|-------------|--------------|
+| `defaultFee` | Default fee percentage for transactions | Decimal (e.g., `1.0`) |
+| `defaultCreditLimit` | Default credit limit for new contacts | Integer (e.g., `100`) |
 | `defaultCurrency` | Default currency code | `USD` (only USD currently supported) |
-| `defaultFee` | Default fee percentage | Decimal (e.g., `1.0`) |
-| `defaultCreditLimit` | Default credit for new contacts | Integer (e.g., `100`) |
+| `minFee` | Minimum fee amount | Decimal |
+| `maxFee` | Maximum fee percentage | Decimal |
 | `maxP2pLevel` | Maximum P2P routing hops | Integer 1-10 |
-| `p2pExpiration` | P2P request timeout (seconds) | Integer (e.g., `300`) |
-| `autoBackupEnabled` | Auto-backup daily | `true`, `false` |
+| `p2pExpiration` | P2P request expiration time (seconds) | Integer (e.g., `300`) |
+| `maxOutput` | Maximum lines of output to display | Integer or `all` |
+| `defaultTransportMode` | Default transport type | `http`, `https`, `tor` |
+| `autoRefreshEnabled` | Enable auto-refresh for pending transactions | `true`, `false` |
+| `hostname` | Node hostname (derives HTTPS automatically) | URL (e.g., `http://alice`) |
 
 ---
 
