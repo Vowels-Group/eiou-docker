@@ -3,27 +3,26 @@
 This repository provides Docker Compose configurations for running EIOU nodes in various network topologies. Each configuration includes named volumes for persistent data storage and automatic network setup.
 
 ## Key Features
-
-- **Web GUI Dashboard**: Full-featured web interface for node management and monitoring
-- **P2P Transactions**: Automatic multi-hop payment routing through trust networks
-- **Encrypted Backups**: Automatic daily database backups encrypted with AES-256-GCM
 - **Contact Management**: Build and manage trust networks with configurable fees and credit limits
+- **P2P Transactions**: Automatic multi-hop payment routing through trust networks
 - **Multi-Transport**: HTTP, HTTPS, and Tor network support
 - **REST API**: Full API with HMAC-SHA256 authentication
+- **Web GUI Dashboard**: Full-featured web interface for node management and monitoring
 - **CLI Interface**: Complete command-line management tools
+- **Encrypted Backups**: Automatic daily database backups encrypted with AES-256-GCM
 - **Persistent Storage**: Named volumes for MySQL data, configuration, and backups
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
+| [Architecture](docs/ARCHITECTURE.md) | System architecture and design |
+| [Docker Configuration](docs/DOCKER_CONFIGURATION.md) | Environment variables and volume mounts |
+| [API Reference](docs/API_REFERENCE.md) | REST API documentation |
+| [API Quick Reference](docs/API_QUICK_REFERENCE.md) | API endpoint summary |
 | [GUI Reference](docs/GUI_REFERENCE.md) | Web interface documentation |
 | [GUI Quick Reference](docs/GUI_QUICK_REFERENCE.md) | GUI feature summary |
 | [CLI Reference](docs/CLI_REFERENCE.md) | Command-line interface documentation |
-| [API Reference](docs/API_REFERENCE.md) | REST API documentation |
-| [API Quick Reference](docs/API_QUICK_REFERENCE.md) | API endpoint summary |
-| [Docker Configuration](docs/DOCKER_CONFIGURATION.md) | Environment variables and volume mounts |
-| [Architecture](docs/ARCHITECTURE.md) | System architecture and design |
 | [Error Codes](docs/ERROR_CODES.md) | Error codes and troubleshooting |
 
 ## Prerequisites
