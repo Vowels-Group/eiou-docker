@@ -9,6 +9,7 @@ A step-by-step walkthrough for demonstrating EIOU CLI commands.
    - [System Requirements](#system-requirements)
    - [Pulling the EIOU Image](#pulling-the-eiou-image)
    - [Building from Source](#building-from-source-alternative)
+   - [Loading from a .tar File](#loading-from-a-tar-file)
 3. [Creating Containers](#section-2-creating-containers)
    - [Method 1: QUICKSTART (Automatic Setup)](#method-1-quickstart-automatic-setup)
    - [Method 2: Manual Wallet Generation](#method-2-manual-wallet-generation)
@@ -149,6 +150,42 @@ docker build -f eiou.dockerfile -t eiou/eiou .
 **Verify the build:**
 ```bash
 docker images | grep eiou
+```
+
+---
+
+### Loading from a .tar File
+
+If you have a pre-built image as a `.tar` archive (e.g., for offline installation or air-gapped environments):
+
+**Load the image:**
+```bash
+# Load from a .tar file
+docker load -i eiou-image.tar
+
+# Or load from a compressed .tar.gz file
+docker load -i eiou-image.tar.gz
+```
+
+**Expected output:**
+```
+Loaded image: eiou/eiou:latest
+```
+
+**Verify the image was loaded:**
+```bash
+docker images | grep eiou
+```
+
+**Creating a .tar file (for distribution):**
+
+If you need to export an image to share with others:
+```bash
+# Save image to .tar file
+docker save -o eiou-image.tar eiou/eiou:latest
+
+# Or save with compression
+docker save eiou/eiou:latest | gzip > eiou-image.tar.gz
 ```
 
 ---
