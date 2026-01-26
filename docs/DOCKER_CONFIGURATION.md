@@ -72,8 +72,16 @@ Convenient but less secure - the seed phrase may be visible in logs or process l
 
 ```yaml
 environment:
-  - RESTORE=word1 word2 word3 ... word24
+  - "RESTORE=word1 word2 word3 ... word24"
 ```
+
+Or using Docker CLI:
+
+```bash
+docker run -e "RESTORE=word1 word2 word3 ... word24" ...
+```
+
+> **Important:** The seed phrase value must be quoted because it contains spaces. Without quotes, only the first word would be captured.
 
 #### SSL_DOMAIN
 
