@@ -221,9 +221,16 @@ docker logs -f alice
 
 **Important:** The seed phrase is displayed in the logs only once during initial generation. Copy and store it securely before the container restarts.
 
-**Access the CLI inside the container:**
+**Accessing the CLI:**
+
+The CLI is accessed via `docker exec <container> eiou`:
 ```bash
+# Access the CLI (shows help/usage)
+docker exec alice eiou
+
+# Run a specific command
 docker exec alice eiou info
+docker exec alice eiou help
 ```
 
 ---
