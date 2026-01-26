@@ -11,9 +11,9 @@ A step-by-step walkthrough for demonstrating EIOU CLI commands.
    - [Building from Source](#building-from-source-alternative)
    - [Loading from a .tar File](#loading-from-a-tar-file)
 3. [Creating Containers](#section-2-creating-containers)
-   - [Method 1: QUICKSTART (Automatic Setup)](#method-1-quickstart-automatic-setup)
-   - [Method 2: Manual Wallet Generation](#method-2-manual-wallet-generation)
-   - [Key Differences Summary](#key-differences-summary)
+   - [Creating a New Wallet (QUICKSTART)](#creating-a-new-wallet-quickstart)
+   - [Restoring an Existing Wallet](#restoring-an-existing-wallet)
+   - [Changing Hostname After Creation](#changing-hostname-after-creation)
 4. [Basic Wallet Commands](#section-3-basic-wallet-commands)
    - [info](#31-info---wallet-information)
    - [overview](#32-overview---dashboard-summary)
@@ -192,20 +192,16 @@ docker save eiou/eiou:latest | gzip > eiou-image.tar.gz
 
 ## Section 2: Creating Containers
 
-EIOU containers can be created using two methods:
-1. **QUICKSTART** - Automatic wallet generation (recommended for demos)
-2. **Manual** - Step-by-step wallet generation (required for restoration)
+EIOU wallet generation and restoration happens at container startup via environment variables. There are two scenarios:
 
-Choose based on your use case:
-- **New wallet for testing/demos** - Use QUICKSTART
-- **Restoring an existing wallet** - Use Manual with seed phrase
-- **Custom hostname requirements** - Use Manual
+1. **New wallet** - Use `QUICKSTART` to generate a new wallet
+2. **Restore existing wallet** - Use `RESTORE` or `RESTORE_FILE` to restore from seed phrase
 
 ---
 
-### Method 1: QUICKSTART (Automatic Setup)
+### Creating a New Wallet (QUICKSTART)
 
-The QUICKSTART environment variable triggers automatic wallet initialization when the container starts.
+The `QUICKSTART` environment variable generates a new wallet when the container starts.
 
 **What QUICKSTART does automatically:**
 1. Generates a new BIP39 seed phrase (24 words)
@@ -216,29 +212,14 @@ The QUICKSTART environment variable triggers automatic wallet initialization whe
 6. Initializes the database
 7. Starts all background processors
 
-**Basic QUICKSTART command:**
+**Basic command:**
 ```bash
-docker run -d \
-  --name alice \
-  -p 80:80 \
-  -p 443:443 \
-  -e QUICKSTART=alice \
-  eiou/eiou
+docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice eiou/eiou
 ```
 
-**QUICKSTART with persistent volumes (recommended):**
+**With persistent volumes (recommended):**
 ```bash
-docker run -d \
-  --name alice \
-  -p 80:80 \
-  -p 443:443 \
-  -e QUICKSTART=alice \
-  -v alice-mysql-data:/var/lib/mysql \
-  -v alice-files:/etc/eiou/ \
-  -v alice-index:/var/www/html \
-  -v alice-eiou:/usr/local/bin/ \
-  -v alice-backups:/var/lib/eiou/backups \
-  eiou/eiou
+docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-eiou:/usr/local/bin/ -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
 **Volume descriptions:**
@@ -272,82 +253,66 @@ docker exec alice eiou help
 
 ---
 
-### Method 2: Manual Wallet Generation
+### Restoring an Existing Wallet
 
-Use manual generation when you need:
-- To restore a wallet from an existing seed phrase
-- A custom hostname configuration
-- Tor-only operation (no HTTP hostname)
+To restore a wallet from an existing seed phrase, use the `RESTORE` or `RESTORE_FILE` environment variables at container startup.
 
-**Step 1: Start the container without QUICKSTART:**
+**Method 1: RESTORE_FILE (Recommended - more secure):**
+
+Create a file containing your 24-word seed phrase, then mount it:
 ```bash
-docker run -d \
-  --name bob \
-  -p 8080:80 \
-  -p 8443:443 \
-  -v bob-mysql-data:/var/lib/mysql \
-  -v bob-files:/etc/eiou/ \
-  -v bob-index:/var/www/html \
-  -v bob-eiou:/usr/local/bin/ \
-  -v bob-backups:/var/lib/eiou/backups \
-  eiou/eiou
+echo "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24" > /tmp/seed.txt
 ```
 
-**Step 2: Generate a new wallet:**
 ```bash
-# Generate with HTTP hostname
-docker exec bob eiou generate http://bob:8080
-
-# Generate with HTTPS hostname
-docker exec bob eiou generate https://bob:8443
-
-# Generate Tor-only (no HTTP hostname)
-docker exec bob eiou generate
+docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e RESTORE_FILE=/restore/seed -v /tmp/seed.txt:/restore/seed:ro -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
-**Step 3 (Alternative): Restore from seed phrase:**
-
-**Option A - Restore via file (more secure):**
+After successful restoration, delete the seed file:
 ```bash
-# Create a seed file on the host
-echo "word1 word2 word3 ... word24" > /tmp/seed.txt
-
-# Copy to container
-docker cp /tmp/seed.txt bob:/tmp/seed.txt
-
-# Restore from file
-docker exec bob eiou generate restore-file /tmp/seed.txt
-
-# Securely delete the seed file
-docker exec bob rm /tmp/seed.txt
 rm /tmp/seed.txt
 ```
 
-**Option B - Restore via command line:**
+**Why RESTORE_FILE is more secure:**
+- Seed phrase does not appear in `docker inspect` output
+- Seed phrase does not appear in environment variable listings
+- File can be deleted after container starts
+
+**Method 2: RESTORE (Convenient but less secure):**
+
+Pass the seed phrase directly as an environment variable:
 ```bash
-docker exec bob eiou generate restore word1 word2 word3 word4 word5 word6 \
-  word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 \
-  word17 word18 word19 word20 word21 word22 word23 word24
+docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e "RESTORE=word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24" -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ eiou/eiou
 ```
 
-**Why use restore-file?**
-- Seed phrase does not appear in process listings (`ps aux`)
-- Seed phrase does not appear in shell history
-- More secure for production environments
+**Warning:** The `RESTORE` environment variable remains visible via `docker inspect`. Use `RESTORE_FILE` for production.
 
 ---
 
-### Key Differences Summary
+### Changing Hostname After Creation
 
-| Aspect | QUICKSTART | Manual |
-|--------|------------|--------|
-| **Setup complexity** | Single command | Multiple steps |
-| **Best for** | Demos, testing, new wallets | Restoration, custom config |
-| **Seed phrase display** | In container logs | In CLI output |
-| **Hostname configuration** | Via QUICKSTART env var | Via `eiou generate` argument |
-| **Wallet restoration** | Via RESTORE/RESTORE_FILE env vars | Via `eiou generate restore` command |
-| **Tor-only mode** | Not directly supported | Supported (omit hostname) |
-| **Automation friendly** | Yes (single docker run) | Requires scripting |
+If you need to add or change the HTTP/HTTPS hostname after the wallet is already created, use `changesettings`:
+
+```bash
+# Add or change hostname
+docker exec alice eiou changesettings hostname http://alice
+
+# Change to HTTPS
+docker exec alice eiou changesettings hostname https://alice
+```
+
+**Note:** Changing the hostname regenerates the SSL certificate.
+
+---
+
+### Summary
+
+| Scenario | Environment Variables |
+|----------|----------------------|
+| New wallet | `QUICKSTART=<hostname>` |
+| Restore wallet (secure) | `QUICKSTART=<hostname>` + `RESTORE_FILE=/restore/seed` |
+| Restore wallet (simple) | `QUICKSTART=<hostname>` + `RESTORE="24 word phrase"` |
+| Change hostname later | Use `eiou changesettings hostname <url>` |
 
 ---
 
@@ -1071,8 +1036,7 @@ docker volume rm demo-mysql-data demo-files demo-index demo-eiou demo-backups
 
 | Category | Command | Description |
 |----------|---------|-------------|
-| **Wallet** | `eiou generate` | Generate/restore wallet |
-| | `eiou info` | Wallet information |
+| **Wallet** | `eiou info` | Wallet information |
 | | `eiou overview` | Dashboard summary |
 | **Contacts** | `eiou add <addr> <name> <fee> <credit> <currency>` | Add contact |
 | | `eiou search [name]` | Search contacts |
