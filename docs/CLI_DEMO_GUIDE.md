@@ -305,12 +305,9 @@ If you need to add or change the HTTP/HTTPS hostname after the wallet is already
 ```bash
 # Add or change hostname
 docker exec alice eiou changesettings hostname http://alice
-
-# Change to HTTPS
-docker exec alice eiou changesettings hostname https://alice
 ```
 
-**Note:** Changing the hostname regenerates the SSL certificate.
+Setting the HTTP hostname automatically derives the HTTPS version (e.g., `http://alice` also configures `https://alice`). The SSL certificate is regenerated when the hostname changes.
 
 ---
 
