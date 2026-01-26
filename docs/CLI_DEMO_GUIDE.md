@@ -934,15 +934,21 @@ docker exec daniel eiou history
 
 #### Understanding P2P Fees
 
-Each intermediary node charges a fee. With 0.1% fee per hop:
+Fees are **added to the sender's amount**, not deducted from the recipient. The P2P request travels forward to find a route, then on the return path (rp2p) the fees are calculated and communicated back to the sender.
 
-| Hop | Node | Amount In | Fee | Amount Out |
-|-----|------|-----------|-----|------------|
-| 1 | Alice -> Bob | 100.00 | 0.10 | 99.90 |
-| 2 | Bob -> Carol | 99.90 | 0.10 | 99.80 |
-| 3 | Carol -> Daniel | 99.80 | 0.10 | 99.70 |
+With 0.1% fee per hop, when Alice sends 100 USD to Daniel:
 
-**Daniel receives: 99.70 USD**
+| Hop | Node | Fee (0.1%) |
+|-----|------|------------|
+| 1 | Bob (relay) | 0.10 |
+| 2 | Carol (relay) | 0.10 |
+| 3 | Daniel (recipient) | 0.10 |
+| | **Total fees** | **0.30** |
+
+**Alice sends: 100.30 USD** (100 + fees)
+**Daniel receives: 100.00 USD**
+
+The sender always pays the routing fees, ensuring the recipient gets the exact amount requested.
 
 ---
 
