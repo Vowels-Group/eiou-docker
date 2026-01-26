@@ -703,6 +703,20 @@ Get contact details by address or name.
 }
 ```
 
+**Error Response (404):**
+
+```json
+{
+    "success": false,
+    "data": null,
+    "error": {
+        "message": "Contact not found",
+        "code": "contact_not_found"
+    },
+    "status_code": 404
+}
+```
+
 ---
 
 ### PUT /api/v1/contacts/:address
@@ -742,6 +756,20 @@ All fields are optional. Only provided fields will be updated.
 }
 ```
 
+**Error Response (404):**
+
+```json
+{
+    "success": false,
+    "data": null,
+    "error": {
+        "message": "Contact not found for address: http://unknown:8080",
+        "code": "contact_not_found"
+    },
+    "status_code": 404
+}
+```
+
 ---
 
 ### DELETE /api/v1/contacts/:address
@@ -759,6 +787,20 @@ Delete a contact.
         "message": "Contact deleted successfully",
         "address": "http://bob.local:8080"
     }
+}
+```
+
+**Error Response (404):**
+
+```json
+{
+    "success": false,
+    "data": null,
+    "error": {
+        "message": "Contact not found for address: http://unknown:8080",
+        "code": "contact_not_found"
+    },
+    "status_code": 404
 }
 ```
 
@@ -782,6 +824,20 @@ Block a contact.
 }
 ```
 
+**Error Response (404):**
+
+```json
+{
+    "success": false,
+    "data": null,
+    "error": {
+        "message": "Contact not found for address: http://unknown:8080",
+        "code": "contact_not_found"
+    },
+    "status_code": 404
+}
+```
+
 ---
 
 ### POST /api/v1/contacts/unblock/:address
@@ -799,6 +855,20 @@ Unblock a contact.
         "message": "Contact unblocked successfully",
         "address": "http://bob.local:8080"
     }
+}
+```
+
+**Error Response (404):**
+
+```json
+{
+    "success": false,
+    "data": null,
+    "error": {
+        "message": "Contact not found for address: http://unknown:8080",
+        "code": "contact_not_found"
+    },
+    "status_code": 404
 }
 ```
 

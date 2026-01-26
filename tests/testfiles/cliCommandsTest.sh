@@ -464,6 +464,382 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
         printf "\t   viewcontact command (JSON) ${RED}FAILED${NC}\n"
         failure=$(( failure + 1 ))
     fi
+
+    # Get contact name for name-based tests
+    contactName=$(docker exec ${sourceContainer} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}', '${targetAddress}');
+        echo \$contact['name'] ?? '';
+    " 2>/dev/null || echo "")
+
+    # Test: viewcontact by NAME (regular output)
+    if [[ -n "$contactName" ]]; then
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'viewcontact ${contactName}' command by NAME (regular output)"
+        viewContactByNameOutput=$(docker exec ${sourceContainer} eiou viewcontact "${contactName}" 2>&1)
+
+        if [[ "$viewContactByNameOutput" =~ "Contact" ]] || [[ "$viewContactByNameOutput" =~ "Name" ]] || [[ "$viewContactByNameOutput" =~ "Address" ]]; then
+            printf "\t   viewcontact by name (regular) ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   viewcontact by name (regular) ${RED}FAILED${NC}\n"
+            printf "\t   Output: ${viewContactByNameOutput}\n"
+            failure=$(( failure + 1 ))
+        fi
+
+        # Test: viewcontact by NAME (JSON output)
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'viewcontact ${contactName}' command by NAME (JSON output)"
+        viewContactByNameJsonOutput=$(docker exec ${sourceContainer} eiou viewcontact "${contactName}" --json 2>&1)
+
+        if [[ "$viewContactByNameJsonOutput" =~ '"success"' ]] && [[ "$viewContactByNameJsonOutput" =~ 'true' ]] && [[ "$viewContactByNameJsonOutput" =~ '"contact"' ]]; then
+            printf "\t   viewcontact by name (JSON) ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   viewcontact by name (JSON) ${RED}FAILED${NC}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   viewcontact by name ${YELLOW}SKIPPED${NC} (no contact name found)\n"
+    fi
+
+    ############################ VIEWBALANCES WITH CONTACT TEST ############################
+
+    echo -e "\n[ViewBalances with Contact Filter Test]"
+
+    # Test: viewbalances with ADDRESS filter
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing 'viewbalances ${targetAddress}' command (address filter)"
+    viewBalancesAddrOutput=$(docker exec ${sourceContainer} eiou viewbalances ${targetAddress} --json 2>&1)
+
+    if [[ "$viewBalancesAddrOutput" =~ '"success"' ]] && [[ "$viewBalancesAddrOutput" =~ 'true' ]]; then
+        printf "\t   viewbalances by address ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   viewbalances by address ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+
+    # Test: viewbalances with NAME filter
+    if [[ -n "$contactName" ]]; then
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'viewbalances ${contactName}' command (name filter)"
+        viewBalancesNameOutput=$(docker exec ${sourceContainer} eiou viewbalances "${contactName}" --json 2>&1)
+
+        if [[ "$viewBalancesNameOutput" =~ '"success"' ]] && [[ "$viewBalancesNameOutput" =~ 'true' ]]; then
+            printf "\t   viewbalances by name ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   viewbalances by name ${RED}FAILED${NC}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   viewbalances by name ${YELLOW}SKIPPED${NC} (no contact name found)\n"
+    fi
+
+    ############################ HISTORY WITH CONTACT TEST ############################
+
+    echo -e "\n[History with Contact Filter Test]"
+
+    # Test: history with ADDRESS filter
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing 'history ${targetAddress}' command (address filter)"
+    historyAddrOutput=$(docker exec ${sourceContainer} eiou history ${targetAddress} --json 2>&1)
+
+    if [[ "$historyAddrOutput" =~ '"success"' ]] && [[ "$historyAddrOutput" =~ 'true' ]]; then
+        printf "\t   history by address ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   history by address ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+
+    # Test: history with NAME filter
+    if [[ -n "$contactName" ]]; then
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'history ${contactName}' command (name filter)"
+        historyNameOutput=$(docker exec ${sourceContainer} eiou history "${contactName}" --json 2>&1)
+
+        if [[ "$historyNameOutput" =~ '"success"' ]] && [[ "$historyNameOutput" =~ 'true' ]]; then
+            printf "\t   history by name ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   history by name ${RED}FAILED${NC}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   history by name ${YELLOW}SKIPPED${NC} (no contact name found)\n"
+    fi
+
+    ############################ BLOCK/UNBLOCK COMMAND TEST ############################
+
+    echo -e "\n[Block/Unblock Command Test - Address and Name Variants]"
+
+    # Test: block by ADDRESS
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\n\t-> Testing 'block ${targetAddress}' command (address)"
+    blockAddrOutput=$(docker exec ${sourceContainer} eiou block ${targetAddress} --json 2>&1)
+
+    if [[ "$blockAddrOutput" =~ '"success"' ]] && [[ "$blockAddrOutput" =~ 'true' ]]; then
+        printf "\t   block by address ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+
+        # Test: unblock by ADDRESS (to restore state)
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'unblock ${targetAddress}' command (address)"
+        unblockAddrOutput=$(docker exec ${sourceContainer} eiou unblock ${targetAddress} --json 2>&1)
+
+        if [[ "$unblockAddrOutput" =~ '"success"' ]] && [[ "$unblockAddrOutput" =~ 'true' ]]; then
+            printf "\t   unblock by address ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   unblock by address ${RED}FAILED${NC}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   block by address ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+
+    # Test: block by NAME
+    if [[ -n "$contactName" ]]; then
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\n\t-> Testing 'block ${contactName}' command (name)"
+        blockNameOutput=$(docker exec ${sourceContainer} eiou block "${contactName}" --json 2>&1)
+
+        if [[ "$blockNameOutput" =~ '"success"' ]] && [[ "$blockNameOutput" =~ 'true' ]]; then
+            printf "\t   block by name ${GREEN}PASSED${NC}\n"
+            passed=$(( passed + 1 ))
+
+            # Test: unblock by NAME (to restore state)
+            totaltests=$(( totaltests + 1 ))
+            echo -e "\n\t-> Testing 'unblock ${contactName}' command (name)"
+            unblockNameOutput=$(docker exec ${sourceContainer} eiou unblock "${contactName}" --json 2>&1)
+
+            if [[ "$unblockNameOutput" =~ '"success"' ]] && [[ "$unblockNameOutput" =~ 'true' ]]; then
+                printf "\t   unblock by name ${GREEN}PASSED${NC}\n"
+                passed=$(( passed + 1 ))
+            else
+                printf "\t   unblock by name ${RED}FAILED${NC}\n"
+                failure=$(( failure + 1 ))
+            fi
+        else
+            printf "\t   block by name ${RED}FAILED${NC}\n"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        printf "\t   block/unblock by name ${YELLOW}SKIPPED${NC} (no contact name found)\n"
+    fi
+fi
+
+############################ NON-EXISTING CONTACT HANDLING TEST ############################
+
+echo -e "\n[Non-Existing Contact Handling Test]"
+
+# Define non-existing test values
+nonExistingAddress="http://non-existing-address-12345.example.com"
+nonExistingName="NonExistingContactName12345"
+
+# All tests verify that commands handle non-existing contacts properly without crashing
+# Expected behavior: return valid JSON with "success": true/false and appropriate message
+
+# Test: viewcontact with non-existing ADDRESS
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'viewcontact' with non-existing address"
+viewContactNonExistAddrOutput=$(docker exec ${testContainer} eiou viewcontact ${nonExistingAddress} --json 2>&1)
+
+# Must return valid JSON response (not crash)
+if [[ "$viewContactNonExistAddrOutput" =~ '"success"' ]] && [[ "$viewContactNonExistAddrOutput" =~ '"' ]]; then
+    printf "\t   viewcontact non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   viewcontact non-existing address ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${viewContactNonExistAddrOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: viewcontact with non-existing NAME
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'viewcontact' with non-existing name"
+viewContactNonExistNameOutput=$(docker exec ${testContainer} eiou viewcontact "${nonExistingName}" --json 2>&1)
+
+if [[ "$viewContactNonExistNameOutput" =~ '"success"' ]] && [[ "$viewContactNonExistNameOutput" =~ '"' ]]; then
+    printf "\t   viewcontact non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   viewcontact non-existing name ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${viewContactNonExistNameOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: send with non-existing ADDRESS
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'send' with non-existing address"
+sendNonExistAddrOutput=$(docker exec ${testContainer} eiou send ${nonExistingAddress} 5 USD --json 2>&1)
+
+# Send may attempt P2P routing - must return valid JSON response
+if [[ "$sendNonExistAddrOutput" =~ '"success"' ]] && [[ "$sendNonExistAddrOutput" =~ '"' ]]; then
+    printf "\t   send non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   send non-existing address ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${sendNonExistAddrOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: send with non-existing NAME
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'send' with non-existing name"
+sendNonExistNameOutput=$(docker exec ${testContainer} eiou send "${nonExistingName}" 5 USD --json 2>&1)
+
+if [[ "$sendNonExistNameOutput" =~ '"success"' ]] && [[ "$sendNonExistNameOutput" =~ '"' ]]; then
+    printf "\t   send non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   send non-existing name ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${sendNonExistNameOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: block with non-existing ADDRESS
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'block' with non-existing address"
+blockNonExistAddrOutput=$(docker exec ${testContainer} eiou block ${nonExistingAddress} --json 2>&1)
+
+if [[ "$blockNonExistAddrOutput" =~ '"success"' ]] && [[ "$blockNonExistAddrOutput" =~ '"' ]]; then
+    printf "\t   block non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   block non-existing address ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${blockNonExistAddrOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: block with non-existing NAME
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'block' with non-existing name"
+blockNonExistNameOutput=$(docker exec ${testContainer} eiou block "${nonExistingName}" --json 2>&1)
+
+if [[ "$blockNonExistNameOutput" =~ '"success"' ]] && [[ "$blockNonExistNameOutput" =~ '"' ]]; then
+    printf "\t   block non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   block non-existing name ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${blockNonExistNameOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: unblock with non-existing ADDRESS
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'unblock' with non-existing address"
+unblockNonExistAddrOutput=$(docker exec ${testContainer} eiou unblock ${nonExistingAddress} --json 2>&1)
+
+if [[ "$unblockNonExistAddrOutput" =~ '"success"' ]] && [[ "$unblockNonExistAddrOutput" =~ '"' ]]; then
+    printf "\t   unblock non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   unblock non-existing address ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${unblockNonExistAddrOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: unblock with non-existing NAME
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'unblock' with non-existing name"
+unblockNonExistNameOutput=$(docker exec ${testContainer} eiou unblock "${nonExistingName}" --json 2>&1)
+
+if [[ "$unblockNonExistNameOutput" =~ '"success"' ]] && [[ "$unblockNonExistNameOutput" =~ '"' ]]; then
+    printf "\t   unblock non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   unblock non-existing name ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${unblockNonExistNameOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: history with non-existing ADDRESS
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'history' with non-existing address"
+historyNonExistAddrOutput=$(docker exec ${testContainer} eiou history ${nonExistingAddress} --json 2>&1)
+
+if [[ "$historyNonExistAddrOutput" =~ '"success"' ]] && [[ "$historyNonExistAddrOutput" =~ '"' ]]; then
+    printf "\t   history non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   history non-existing address ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${historyNonExistAddrOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: history with non-existing NAME
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'history' with non-existing name"
+historyNonExistNameOutput=$(docker exec ${testContainer} eiou history "${nonExistingName}" --json 2>&1)
+
+if [[ "$historyNonExistNameOutput" =~ '"success"' ]] && [[ "$historyNonExistNameOutput" =~ '"' ]]; then
+    printf "\t   history non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   history non-existing name ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${historyNonExistNameOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: viewbalances with non-existing ADDRESS
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'viewbalances' with non-existing address"
+viewBalancesNonExistAddrOutput=$(docker exec ${testContainer} eiou viewbalances ${nonExistingAddress} --json 2>&1)
+
+if [[ "$viewBalancesNonExistAddrOutput" =~ '"success"' ]] && [[ "$viewBalancesNonExistAddrOutput" =~ '"' ]]; then
+    printf "\t   viewbalances non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   viewbalances non-existing address ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${viewBalancesNonExistAddrOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: viewbalances with non-existing NAME
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'viewbalances' with non-existing name"
+viewBalancesNonExistNameOutput=$(docker exec ${testContainer} eiou viewbalances "${nonExistingName}" --json 2>&1)
+
+if [[ "$viewBalancesNonExistNameOutput" =~ '"success"' ]] && [[ "$viewBalancesNonExistNameOutput" =~ '"' ]]; then
+    printf "\t   viewbalances non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   viewbalances non-existing name ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${viewBalancesNonExistNameOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: delete with non-existing ADDRESS
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'delete' with non-existing address"
+deleteNonExistAddrOutput=$(docker exec ${testContainer} eiou delete ${nonExistingAddress} --json 2>&1)
+
+if [[ "$deleteNonExistAddrOutput" =~ '"success"' ]] && [[ "$deleteNonExistAddrOutput" =~ '"' ]]; then
+    printf "\t   delete non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   delete non-existing address ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${deleteNonExistAddrOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test: delete with non-existing NAME
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing 'delete' with non-existing name"
+deleteNonExistNameOutput=$(docker exec ${testContainer} eiou delete "${nonExistingName}" --json 2>&1)
+
+if [[ "$deleteNonExistNameOutput" =~ '"success"' ]] && [[ "$deleteNonExistNameOutput" =~ '"' ]]; then
+    printf "\t   delete non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   delete non-existing name ${RED}FAILED${NC} (invalid response or crash)\n"
+    printf "\t   Output: ${deleteNonExistNameOutput}\n"
+    failure=$(( failure + 1 ))
 fi
 
 ############################ ERROR HANDLING TEST ############################

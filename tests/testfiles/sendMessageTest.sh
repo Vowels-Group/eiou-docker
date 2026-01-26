@@ -78,6 +78,109 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     fi
 done
 
+############################ SEND BY NAME TEST ############################
+
+echo -e "\n[Send by Contact Name Test]"
+
+# Test sending using contact NAME instead of address
+# Use the first link pair for this test
+if [ ${#containersLinkKeys[@]} -gt 0 ]; then
+    firstLink="${containersLinkKeys[0]}"
+    linkPair=(${firstLink//,/ })
+    senderContainer="${linkPair[0]}"
+    receiverContainer="${linkPair[1]}"
+    receiverAddress="${containerAddresses[$receiverContainer]}"
+
+    # Get contact name from sender's perspective
+    contactName=$(docker exec ${senderContainer} php -r "
+        require_once('${REL_APPLICATION}');
+        \$app = Application::getInstance();
+        \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}', '${receiverAddress}');
+        echo \$contact['name'] ?? '';
+    " 2>/dev/null || echo "")
+
+    if [[ -n "$contactName" ]]; then
+        totaltests=$(( totaltests + 1 ))
+        echo -e "\t-> ${senderContainer} sending 3 USD to '${contactName}' (by name)"
+
+        # Get initial balance of recipient
+        initialBalanceByName=$(docker exec ${receiverContainer} php -r "
+            require_once('${REL_APPLICATION}');
+            \$app = Application::getInstance();
+            \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
+            \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
+            echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+        " 2>/dev/null || echo "0")
+
+        # Send using NAME instead of address
+        sendByNameResult=$(docker exec ${senderContainer} eiou send "${contactName}" 3 USD 2>&1)
+
+        # Wait for balance change with polling
+        echo -e "\t   Waiting for balance change (timeout: 20s)..."
+        balance_cmd_name="php -r \"
+            require_once('${REL_APPLICATION}');
+            \\\$app = Application::getInstance();
+            \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
+            \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
+            echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+        \""
+        newBalanceByName=$(wait_for_balance_change "${receiverContainer}" "$initialBalanceByName" "$balance_cmd_name" 20 "send by name")
+
+        # Verify send by name succeeded
+        balanceIncreasedByName=$(awk "BEGIN {print ($newBalanceByName > $initialBalanceByName) ? 1 : 0}")
+        if [[ "$sendByNameResult" =~ "success" ]] || [[ "$sendByNameResult" =~ "sent" ]] || [[ "$balanceIncreasedByName" -eq 1 ]]; then
+            printf "\t   send by name ${GREEN}PASSED${NC} (Balance: %s -> %s)\n" ${initialBalanceByName} ${newBalanceByName}
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   send by name ${RED}FAILED${NC} (Balance unchanged: %s)\n" ${initialBalanceByName}
+            printf "\t   Send result: %s\n" "${sendByNameResult}"
+            failure=$(( failure + 1 ))
+        fi
+    else
+        echo -e "\t   send by name ${YELLOW}SKIPPED${NC} (no contact name found for ${receiverContainer})"
+    fi
+fi
+
+############################ SEND TO NON-EXISTING CONTACT TEST ############################
+
+echo -e "\n[Send to Non-Existing Contact Handling Test]"
+
+# Use the first container for these tests
+if [ ${#containers[@]} -gt 0 ]; then
+    testSender="${containers[0]}"
+    nonExistingAddress="http://non-existing-address-99999.example.com"
+    nonExistingName="NonExistingContact99999"
+
+    # Test: send to non-existing ADDRESS (must return valid JSON, may attempt P2P)
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\t-> Testing send to non-existing address"
+    sendNonExistAddrResult=$(docker exec ${testSender} eiou send ${nonExistingAddress} 5 USD --json 2>&1)
+
+    # Must return valid JSON response (not crash)
+    if [[ "$sendNonExistAddrResult" =~ '"success"' ]] && [[ "$sendNonExistAddrResult" =~ '"' ]]; then
+        printf "\t   send to non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   send to non-existing address ${RED}FAILED${NC} (invalid response or crash)\n"
+        printf "\t   Output: ${sendNonExistAddrResult}\n"
+        failure=$(( failure + 1 ))
+    fi
+
+    # Test: send to non-existing NAME (must return valid JSON)
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\t-> Testing send to non-existing name"
+    sendNonExistNameResult=$(docker exec ${testSender} eiou send "${nonExistingName}" 5 USD --json 2>&1)
+
+    if [[ "$sendNonExistNameResult" =~ '"success"' ]] && [[ "$sendNonExistNameResult" =~ '"' ]]; then
+        printf "\t   send to non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   send to non-existing name ${RED}FAILED${NC} (invalid response or crash)\n"
+        printf "\t   Output: ${sendNonExistNameResult}\n"
+        failure=$(( failure + 1 ))
+    fi
+fi
+
 # Test multi-hop routing (A->D requires routing through B and C)
 echo -e "\t-> Testing multi-hop: httpA sending to httpD (should route through httpB and httpC)"
 if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]]; then

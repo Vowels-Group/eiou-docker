@@ -299,6 +299,20 @@ eiou viewcontact http://bob:8080
 eiou viewcontact --json Bob
 ```
 
+**On Failure (JSON):**
+```json
+{
+    "success": false,
+    "error": {
+        "code": "CONTACT_NOT_FOUND",
+        "title": "Contact Not Found",
+        "status": 404,
+        "detail": "Contact not found",
+        "query": "NonExistentContact"
+    }
+}
+```
+
 ---
 
 ### update
@@ -406,6 +420,20 @@ eiou block <address|name>
 ```bash
 eiou block SpamUser
 eiou block http://badactor:8080
+eiou block http://badactor:8080 --json
+```
+
+**On Failure (JSON):**
+```json
+{
+    "success": false,
+    "error": {
+        "code": "CONTACT_NOT_FOUND",
+        "title": "Contact Not Found",
+        "status": 404,
+        "detail": "Contact not found for address: http://badactor:8080"
+    }
+}
 ```
 
 ---
@@ -422,6 +450,20 @@ eiou unblock <address|name>
 **Examples:**
 ```bash
 eiou unblock SpamUser
+eiou unblock http://user:8080 --json
+```
+
+**On Failure (JSON):**
+```json
+{
+    "success": false,
+    "error": {
+        "code": "CONTACT_NOT_FOUND",
+        "title": "Contact Not Found",
+        "status": 404,
+        "detail": "Contact not found for address: http://user:8080"
+    }
+}
 ```
 
 ---
@@ -439,6 +481,20 @@ eiou delete <address|name>
 ```bash
 eiou delete OldContact
 eiou delete http://old:8080
+eiou delete OldContact --json
+```
+
+**On Failure (JSON):**
+```json
+{
+    "success": false,
+    "error": {
+        "code": "CONTACT_NOT_FOUND",
+        "title": "Contact Not Found",
+        "status": 404,
+        "detail": "Contact not found with name: OldContact"
+    }
+}
 ```
 
 ---
@@ -499,6 +555,37 @@ eiou send Alice 25.50 USD --json
 **Notes:**
 - Transaction may be direct or routed through intermediaries (P2P relay)
 - Rate limited: 30 transactions per minute
+
+**On Failure (JSON):**
+
+Contact not found:
+```json
+{
+    "success": false,
+    "error": {
+        "code": "NO_CONTACTS",
+        "title": "No Contacts Available",
+        "status": 400,
+        "detail": "No contacts available for transaction",
+        "recipient": "http://unknown:8080",
+        "amount": 50,
+        "currency": "USD"
+    }
+}
+```
+
+Insufficient balance:
+```json
+{
+    "success": false,
+    "error": {
+        "code": "INSUFFICIENT_FUNDS",
+        "title": "Insufficient Funds",
+        "status": 403,
+        "detail": "Insufficient balance for this transaction"
+    }
+}
+```
 
 ---
 
