@@ -495,12 +495,35 @@ docker exec alice eiou changesettings hostname http://alice
 ### 3.5 help - Getting Help
 
 ```bash
-# General help
+# General help (lists all commands)
 docker exec alice eiou help
 
-# Help for specific command
-docker exec alice eiou help send
+# Help for specific commands
+docker exec alice eiou help info
 docker exec alice eiou help add
+docker exec alice eiou help search
+docker exec alice eiou help viewcontact
+docker exec alice eiou help update
+docker exec alice eiou help block
+docker exec alice eiou help unblock
+docker exec alice eiou help delete
+docker exec alice eiou help send
+docker exec alice eiou help viewbalances
+docker exec alice eiou help history
+docker exec alice eiou help pending
+docker exec alice eiou help overview
+docker exec alice eiou help viewsettings
+docker exec alice eiou help changesettings
+docker exec alice eiou help sync
+docker exec alice eiou help ping
+docker exec alice eiou help backup
+docker exec alice eiou help apikey
+```
+
+**Test mode commands** (require `EIOU_TEST_MODE=true`):
+```bash
+docker exec alice eiou help out
+docker exec alice eiou help in
 ```
 
 ---
