@@ -137,7 +137,7 @@ Display wallet information including addresses and public key.
 
 **Syntax:**
 ```bash
-eiou info [detail]
+eiou info [detail] [--show-auth]
 ```
 
 **Arguments:**
@@ -145,25 +145,38 @@ eiou info [detail]
 | Argument | Type | Description |
 |----------|------|-------------|
 | `detail` | optional | Show detailed balance information with transaction breakdowns |
+| `--show-auth` | optional | Display the authentication code (redacted by default for security) |
 
 **Examples:**
 ```bash
-# Basic wallet info
+# Basic wallet info (auth code redacted)
 eiou info
+
+# Show authentication code (with security warning)
+eiou info --show-auth
 
 # Detailed info with balances
 eiou info detail
 
-# JSON output
+# JSON output (auth code redacted unless --show-auth used)
 eiou info --json
-eiou info detail --json
+eiou info --show-auth --json
 ```
 
 **Output includes:**
 - HTTP, HTTPS, and Tor addresses (locators)
-- Authentication code
+- Authentication code (redacted by default - use `--show-auth` to display)
 - Public key
 - (With `detail`) Total balances by currency with sent/received breakdown
+
+**Security Note:**
+The authentication code is a sensitive credential and is redacted by default to prevent accidental exposure in:
+- Docker logs and container output
+- Shell history when using `--json` output
+- Log aggregation systems
+- Screenshots or screen sharing
+
+Only use `--show-auth` when you specifically need the authentication code, and avoid logging or storing the output.
 
 ---
 

@@ -881,13 +881,17 @@ HELP;
             $displayLimit = $this->currentUser->getMaxOutput();
         }
 
+        // Check for --show-auth flag (security: authcode is redacted by default)
+        $showAuth = in_array('--show-auth', $argv, true);
+
         // Locators array
         $locators = $this->currentUser->getUserLocaters();
 
         // Build user info data structure
+        // SECURITY: Authentication code is redacted by default to prevent exposure in logs/output
         $userInfo = [
             'locators' => $locators,
-            'authentication_code' => $this->currentUser->getAuthCode(),
+            'authentication_code' => $showAuth ? $this->currentUser->getAuthCode() : '[REDACTED]',
             'public_key' => $this->currentUser->getPublicKey()
         ];
 
@@ -947,8 +951,13 @@ HELP;
                 printf("\t\t• %-5s: %s\n",$type,$address);
             }
 
-            // Authentication code is from the config file
-            echo "\tAuthentication Code: " . $this->currentUser->getAuthCode() . "\n";
+            // Authentication code - redacted by default for security
+            if ($showAuth) {
+                echo "\tAuthentication Code: " . $this->currentUser->getAuthCode() . "\n";
+                echo "\t\t⚠ WARNING: This is a sensitive credential. Do not share or log this value.\n";
+            } else {
+                echo "\tAuthentication Code: [REDACTED - use --show-auth to display]\n";
+            }
 
             $pubkey = $this->currentUser->getPublicKey();
             // Public key is from the config file
