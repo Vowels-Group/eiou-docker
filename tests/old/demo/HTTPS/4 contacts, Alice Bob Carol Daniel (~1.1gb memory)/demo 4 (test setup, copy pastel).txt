@@ -4,6 +4,12 @@ docker network create -d bridge demo-net
 # Remove any existing containers
 docker rm -f Alice Bob Carol Daniel
 
+# Remove associated volumes (if any)
+docker volume rm Alice-mysql-data Alice-files Alice-index Alice-eiou Alice-backups
+docker volume rm Bob-mysql-data Bob-files Bob-index Bob-eiou Bob-backups
+docker volume rm Carol-mysql-data Carol-files Carol-index Carol-eiou Carol-backups
+docker volume rm Daniel-mysql-data Daniel-files Daniel-index Daniel-eiou Daniel-backups
+
 # Build base image
 docker build -f eiou.dockerfile -t eiou/eiou .
 
