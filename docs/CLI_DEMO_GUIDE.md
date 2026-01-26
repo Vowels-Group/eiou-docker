@@ -11,9 +11,11 @@ A step-by-step walkthrough for demonstrating EIOU CLI commands.
    - [Building from Source](#building-from-source-alternative)
    - [Loading from a .tar File](#loading-from-a-tar-file)
 3. [Creating Containers](#section-2-creating-containers)
+   - [QUICKSTART vs No QUICKSTART](#quickstart-vs-no-quickstart)
    - [Creating a New Wallet (QUICKSTART)](#creating-a-new-wallet-quickstart)
    - [Restoring an Existing Wallet](#restoring-an-existing-wallet)
    - [Changing Hostname After Creation](#changing-hostname-after-creation)
+   - [Tor-Only Mode](#tor-only-mode-no-quickstart)
 4. [Basic Wallet Commands](#section-3-basic-wallet-commands)
    - [info](#31-info---wallet-information)
    - [overview](#32-overview---dashboard-summary)
@@ -192,21 +194,28 @@ docker save eiou/eiou:latest | gzip > eiou-image.tar.gz
 
 ## Section 2: Creating Containers
 
-EIOU wallet generation and restoration happens at container startup via environment variables. There are two scenarios:
+EIOU wallet generation and restoration happens at container startup via environment variables.
 
-1. **New wallet** - Use `QUICKSTART` to generate a new wallet
-2. **Restore existing wallet** - Use `RESTORE` or `RESTORE_FILE` to restore from seed phrase
+### QUICKSTART vs No QUICKSTART
+
+| Mode | Transport | Use Case |
+|------|-----------|----------|
+| With `QUICKSTART=<hostname>` | HTTP + HTTPS + Tor | Standard usage, demos, most deployments |
+| Without `QUICKSTART` | Tor only | Privacy-focused, no HTTP/HTTPS exposure |
+
+- **With QUICKSTART**: The container starts with HTTP, HTTPS, and Tor addresses. The hostname you provide becomes the HTTP/HTTPS address.
+- **Without QUICKSTART**: The container starts with only a Tor (.onion) address. No HTTP or HTTPS is configured.
 
 ---
 
 ### Creating a New Wallet (QUICKSTART)
 
-The `QUICKSTART` environment variable generates a new wallet when the container starts.
+The `QUICKSTART` environment variable generates a new wallet with HTTP/HTTPS when the container starts.
 
 **What QUICKSTART does automatically:**
 1. Generates a new BIP39 seed phrase (24 words)
 2. Creates wallet keys from the seed phrase
-3. Configures the node hostname (HTTP/HTTPS)
+3. Configures the node hostname for HTTP and HTTPS
 4. Generates SSL certificates for HTTPS
 5. Starts Tor and generates .onion address
 6. Initializes the database
@@ -265,7 +274,7 @@ echo "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12
 ```
 
 ```bash
-docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e RESTORE_FILE=/restore/seed -v /tmp/seed.txt:/restore/seed:ro -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-backups:/var/lib/eiou/backups eiou/eiou
+docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e RESTORE_FILE=/restore/seed -v /tmp/seed.txt:/restore/seed:ro -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-eiou:/usr/local/bin/ -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
 After successful restoration, delete the seed file:
@@ -282,7 +291,7 @@ rm /tmp/seed.txt
 
 Pass the seed phrase directly as an environment variable:
 ```bash
-docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e "RESTORE=word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24" -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ eiou/eiou
+docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e "RESTORE=word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24" -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-eiou:/usr/local/bin/ -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
 **Warning:** The `RESTORE` environment variable remains visible via `docker inspect`. Use `RESTORE_FILE` for production.
@@ -305,11 +314,29 @@ docker exec alice eiou changesettings hostname https://alice
 
 ---
 
+### Tor-Only Mode (No QUICKSTART)
+
+For privacy-focused deployments with only Tor access (no HTTP/HTTPS), omit the `QUICKSTART` variable:
+
+```bash
+docker run -d --name alice-tor -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-eiou:/usr/local/bin/ -v alice-backups:/var/lib/eiou/backups eiou/eiou
+```
+
+**Note:** Without `QUICKSTART`, the container:
+- Generates a wallet with only a Tor (.onion) address
+- Has no HTTP or HTTPS hostname configured
+- Is only accessible via the Tor network
+
+You can add an HTTP/HTTPS hostname later using `eiou changesettings hostname`.
+
+---
+
 ### Summary
 
 | Scenario | Environment Variables |
 |----------|----------------------|
-| New wallet | `QUICKSTART=<hostname>` |
+| New wallet (HTTP/HTTPS + Tor) | `QUICKSTART=<hostname>` |
+| New wallet (Tor only) | No `QUICKSTART` |
 | Restore wallet (secure) | `QUICKSTART=<hostname>` + `RESTORE_FILE=/restore/seed` |
 | Restore wallet (simple) | `QUICKSTART=<hostname>` + `RESTORE="24 word phrase"` |
 | Change hostname later | Use `eiou changesettings hostname <url>` |
