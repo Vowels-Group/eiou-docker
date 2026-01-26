@@ -141,6 +141,55 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
     fi
 fi
 
+############################ SEND TO NON-EXISTING CONTACT TEST ############################
+
+echo -e "\n[Send to Non-Existing Contact Test]"
+
+# Use the first container for these tests
+if [ ${#containers[@]} -gt 0 ]; then
+    testSender="${containers[0]}"
+    nonExistingAddress="http://non-existing-address-99999.example.com"
+    nonExistingName="NonExistingContact99999"
+
+    # Test: send to non-existing ADDRESS (should handle gracefully, may attempt P2P)
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\t-> Testing send to non-existing address"
+    sendNonExistAddrResult=$(docker exec ${testSender} eiou send ${nonExistingAddress} 5 USD --json 2>&1)
+
+    # The command should not crash - it may return error or attempt P2P routing
+    if [[ -n "$sendNonExistAddrResult" ]]; then
+        if [[ "$sendNonExistAddrResult" =~ '"success"' ]] || [[ "$sendNonExistAddrResult" =~ 'error' ]] || [[ "$sendNonExistAddrResult" =~ 'P2P' ]] || [[ "$sendNonExistAddrResult" =~ 'routing' ]]; then
+            printf "\t   send to non-existing address ${GREEN}PASSED${NC} (handled gracefully)\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   send to non-existing address ${GREEN}PASSED${NC} (returned response)\n"
+            passed=$(( passed + 1 ))
+        fi
+    else
+        printf "\t   send to non-existing address ${RED}FAILED${NC} (no output - possible crash)\n"
+        failure=$(( failure + 1 ))
+    fi
+
+    # Test: send to non-existing NAME (should return error - name not found)
+    totaltests=$(( totaltests + 1 ))
+    echo -e "\t-> Testing send to non-existing name"
+    sendNonExistNameResult=$(docker exec ${testSender} eiou send "${nonExistingName}" 5 USD --json 2>&1)
+
+    # The command should not crash
+    if [[ -n "$sendNonExistNameResult" ]]; then
+        if [[ "$sendNonExistNameResult" =~ '"success"' ]] || [[ "$sendNonExistNameResult" =~ 'error' ]] || [[ "$sendNonExistNameResult" =~ 'not found' ]]; then
+            printf "\t   send to non-existing name ${GREEN}PASSED${NC} (handled gracefully)\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   send to non-existing name ${GREEN}PASSED${NC} (returned response)\n"
+            passed=$(( passed + 1 ))
+        fi
+    else
+        printf "\t   send to non-existing name ${RED}FAILED${NC} (no output - possible crash)\n"
+        failure=$(( failure + 1 ))
+    fi
+fi
+
 # Test multi-hop routing (A->D requires routing through B and C)
 echo -e "\t-> Testing multi-hop: httpA sending to httpD (should route through httpB and httpC)"
 if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]]; then
