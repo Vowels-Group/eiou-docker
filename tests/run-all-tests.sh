@@ -430,6 +430,7 @@ gracefulShutdownTest
 seedphraseTestSuite
 processorLockfileTest
 serviceInterfaceTest
+backupTestSuite
 "
 
 # Select test order based on subset

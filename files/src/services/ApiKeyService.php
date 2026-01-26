@@ -29,6 +29,8 @@ class ApiKeyService implements ApiKeyServiceInterface {
         'contacts:read',
         'contacts:write',
         'system:read',
+        'backup:read',
+        'backup:write',
         'admin',
         'all'
     ];
@@ -283,6 +285,8 @@ Create a new API key:
     - contacts:read   List and view contacts
     - contacts:write  Add, update, delete contacts
     - system:read     View system status and metrics
+    - backup:read     Read backup status and list, verify backups
+    - backup:write    Create, restore, delete backups
     - admin           Full administrative access
     - all             All permissions (same as admin)
 
@@ -327,6 +331,10 @@ Example endpoints:
   POST /api/v1/contacts/ping/:addr  - Ping contact
   GET  /api/v1/system/status        - System status
   GET  /api/v1/system/settings      - System settings
+  GET  /api/v1/backup/status        - Backup status and settings
+  GET  /api/v1/backup/list          - List all backups
+  POST /api/v1/backup/create        - Create encrypted backup
+  POST /api/v1/backup/restore       - Restore from backup
 
 HELP;
 

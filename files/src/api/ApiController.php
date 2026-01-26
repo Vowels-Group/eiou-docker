@@ -27,6 +27,16 @@
  * - GET  /api/v1/system/status               - Get system status
  * - GET  /api/v1/system/metrics              - Get system metrics
  * - GET  /api/v1/system/settings             - Get system settings
+ *
+ * - GET    /api/v1/backup/status             - Get backup status and settings
+ * - GET    /api/v1/backup/list               - List all backups
+ * - POST   /api/v1/backup/create             - Create a new backup
+ * - POST   /api/v1/backup/restore            - Restore from backup (requires confirm: true)
+ * - POST   /api/v1/backup/verify             - Verify backup integrity
+ * - DELETE /api/v1/backup/:filename          - Delete a backup
+ * - POST   /api/v1/backup/enable             - Enable automatic backups
+ * - POST   /api/v1/backup/disable            - Disable automatic backups
+ * - POST   /api/v1/backup/cleanup            - Cleanup old backups
  */
 
 class ApiController {
@@ -109,6 +119,7 @@ class ApiController {
                 'contacts' => $this->handleContacts($method, $action, $id, $params, $body),
                 'system' => $this->handleSystem($method, $action, $params),
                 'keys' => $this->handleKeys($method, $action, $params, $body),
+                'backup' => $this->handleBackup($method, $action, $params, $body),
                 default => $this->errorResponse('Unknown resource: ' . $resource, 404, 'unknown_resource')
             };
         } catch (Exception $e) {
@@ -202,6 +213,35 @@ class ApiController {
             $method === 'POST' && !$action => $this->createApiKey($body),
             $method === 'DELETE' && $action => $this->deleteApiKey($action),
             default => $this->errorResponse('Unknown keys action', 404, 'unknown_action')
+        };
+    }
+
+    /**
+     * Handle backup endpoints
+     *
+     * Routes:
+     * - GET    /api/v1/backup/status             - Get backup status
+     * - GET    /api/v1/backup/list               - List all backups
+     * - POST   /api/v1/backup/create             - Create a new backup
+     * - POST   /api/v1/backup/restore            - Restore from backup
+     * - POST   /api/v1/backup/verify             - Verify backup integrity
+     * - DELETE /api/v1/backup/:filename          - Delete a backup
+     * - POST   /api/v1/backup/enable             - Enable automatic backups
+     * - POST   /api/v1/backup/disable            - Disable automatic backups
+     * - POST   /api/v1/backup/cleanup            - Cleanup old backups
+     */
+    private function handleBackup(string $method, ?string $action, array $params, string $body): array {
+        return match (true) {
+            $method === 'GET' && $action === 'status' => $this->getBackupStatus(),
+            $method === 'GET' && $action === 'list' => $this->listBackups(),
+            $method === 'POST' && $action === 'create' => $this->createBackup($body),
+            $method === 'POST' && $action === 'restore' => $this->restoreBackup($body),
+            $method === 'POST' && $action === 'verify' => $this->verifyBackup($body),
+            $method === 'DELETE' && $action => $this->deleteBackup($action),
+            $method === 'POST' && $action === 'enable' => $this->enableAutoBackup(),
+            $method === 'POST' && $action === 'disable' => $this->disableAutoBackup(),
+            $method === 'POST' && $action === 'cleanup' => $this->cleanupBackups(),
+            default => $this->errorResponse('Unknown backup action: ' . $action, 404, 'unknown_action')
         };
     }
 
@@ -1081,6 +1121,255 @@ class ApiController {
                 'auto_refresh_enabled' => $currentUser->getAutoRefreshEnabled()
             ]
         ]);
+    }
+
+    // ==================== Backup Endpoints ====================
+
+    /**
+     * GET /api/v1/backup/status
+     */
+    private function getBackupStatus(): array {
+        if (!$this->hasPermission('backup:read') && !$this->hasPermission('admin')) {
+            return $this->permissionDenied('backup:read');
+        }
+
+        try {
+            $backupService = $this->services->getBackupService();
+            $status = $backupService->getBackupStatus();
+
+            return $this->successResponse([
+                'enabled' => $status['enabled'],
+                'backup_count' => $status['backup_count'],
+                'retention_count' => $status['retention_count'],
+                'last_backup' => $status['last_backup'],
+                'last_backup_file' => $status['last_backup_file'],
+                'backup_directory' => $status['backup_directory'],
+                'next_scheduled' => $status['next_scheduled']
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to get backup status: ' . $e->getMessage(), 500, 'backup_error');
+        }
+    }
+
+    /**
+     * GET /api/v1/backup/list
+     */
+    private function listBackups(): array {
+        if (!$this->hasPermission('backup:read') && !$this->hasPermission('admin')) {
+            return $this->permissionDenied('backup:read');
+        }
+
+        try {
+            $backupService = $this->services->getBackupService();
+            $backups = $backupService->listBackups();
+
+            return $this->successResponse([
+                'backups' => $backups,
+                'count' => count($backups)
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to list backups: ' . $e->getMessage(), 500, 'backup_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/backup/create
+     */
+    private function createBackup(string $body): array {
+        if (!$this->hasPermission('backup:write') && !$this->hasPermission('admin')) {
+            return $this->permissionDenied('backup:write');
+        }
+
+        try {
+            $data = json_decode($body, true) ?? [];
+            $customName = $data['name'] ?? null;
+
+            $backupService = $this->services->getBackupService();
+            $result = $backupService->createBackup($customName);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'message' => 'Backup created successfully',
+                    'filename' => $result['filename'],
+                    'size' => $result['size'],
+                    'path' => $result['path']
+                ], 201);
+            } else {
+                return $this->errorResponse($result['error'], 400, 'backup_failed');
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to create backup: ' . $e->getMessage(), 500, 'backup_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/backup/restore
+     */
+    private function restoreBackup(string $body): array {
+        if (!$this->hasPermission('backup:write') && !$this->hasPermission('admin')) {
+            return $this->permissionDenied('backup:write');
+        }
+
+        $data = json_decode($body, true);
+        if (!$data || empty($data['filename'])) {
+            return $this->errorResponse('Missing required field: filename', 400, 'missing_field');
+        }
+
+        if (empty($data['confirm']) || $data['confirm'] !== true) {
+            return $this->errorResponse(
+                'Must set confirm: true to restore backup. This will overwrite all current database data!',
+                400,
+                'confirmation_required'
+            );
+        }
+
+        try {
+            $backupService = $this->services->getBackupService();
+            $result = $backupService->restoreBackup($data['filename'], true);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'message' => 'Backup restored successfully',
+                    'filename' => $result['filename'],
+                    'restored_at' => $result['restored_at']
+                ]);
+            } else {
+                return $this->errorResponse($result['error'], 400, 'restore_failed');
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to restore backup: ' . $e->getMessage(), 500, 'backup_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/backup/verify
+     */
+    private function verifyBackup(string $body): array {
+        if (!$this->hasPermission('backup:read') && !$this->hasPermission('admin')) {
+            return $this->permissionDenied('backup:read');
+        }
+
+        $data = json_decode($body, true);
+        if (!$data || empty($data['filename'])) {
+            return $this->errorResponse('Missing required field: filename', 400, 'missing_field');
+        }
+
+        try {
+            $backupService = $this->services->getBackupService();
+            $result = $backupService->verifyBackup($data['filename']);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'filename' => $data['filename'],
+                    'valid' => $result['valid'],
+                    'version' => $result['version'],
+                    'created_at' => $result['created_at']
+                ]);
+            } else {
+                return $this->errorResponse($result['error'], 400, 'verify_failed');
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to verify backup: ' . $e->getMessage(), 500, 'backup_error');
+        }
+    }
+
+    /**
+     * DELETE /api/v1/backup/:filename
+     */
+    private function deleteBackup(string $filename): array {
+        if (!$this->hasPermission('backup:write') && !$this->hasPermission('admin')) {
+            return $this->permissionDenied('backup:write');
+        }
+
+        $filename = urldecode($filename);
+
+        try {
+            $backupService = $this->services->getBackupService();
+            $result = $backupService->deleteBackup($filename);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'message' => 'Backup deleted successfully',
+                    'filename' => $filename
+                ]);
+            } else {
+                return $this->errorResponse($result['error'], 404, 'backup_not_found');
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to delete backup: ' . $e->getMessage(), 500, 'backup_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/backup/enable
+     */
+    private function enableAutoBackup(): array {
+        if (!$this->hasPermission('backup:write') && !$this->hasPermission('admin')) {
+            return $this->permissionDenied('backup:write');
+        }
+
+        try {
+            $backupService = $this->services->getBackupService();
+            $result = $backupService->setAutoBackupEnabled(true);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'message' => 'Automatic backups enabled',
+                    'enabled' => true
+                ]);
+            } else {
+                return $this->errorResponse($result['error'], 400, 'enable_failed');
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to enable auto backup: ' . $e->getMessage(), 500, 'backup_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/backup/disable
+     */
+    private function disableAutoBackup(): array {
+        if (!$this->hasPermission('backup:write') && !$this->hasPermission('admin')) {
+            return $this->permissionDenied('backup:write');
+        }
+
+        try {
+            $backupService = $this->services->getBackupService();
+            $result = $backupService->setAutoBackupEnabled(false);
+
+            if ($result['success']) {
+                return $this->successResponse([
+                    'message' => 'Automatic backups disabled',
+                    'enabled' => false
+                ]);
+            } else {
+                return $this->errorResponse($result['error'], 400, 'disable_failed');
+            }
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to disable auto backup: ' . $e->getMessage(), 500, 'backup_error');
+        }
+    }
+
+    /**
+     * POST /api/v1/backup/cleanup
+     */
+    private function cleanupBackups(): array {
+        if (!$this->hasPermission('backup:write') && !$this->hasPermission('admin')) {
+            return $this->permissionDenied('backup:write');
+        }
+
+        try {
+            $backupService = $this->services->getBackupService();
+            $result = $backupService->cleanupOldBackups();
+
+            return $this->successResponse([
+                'message' => 'Backup cleanup completed',
+                'deleted_count' => $result['deleted_count'],
+                'deleted_files' => $result['deleted_files']
+            ]);
+        } catch (Exception $e) {
+            return $this->errorResponse('Failed to cleanup backups: ' . $e->getMessage(), 500, 'backup_error');
+        }
     }
 
     // ==================== API Key Management ====================

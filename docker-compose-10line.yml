@@ -49,6 +49,7 @@ services:
       - node-a-files:/etc/eiou/
       - node-a-index:/var/www/html
       - node-a-eiou:/usr/local/bin/
+      - node-a-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -72,6 +73,7 @@ services:
       - node-b-files:/etc/eiou/
       - node-b-index:/var/www/html
       - node-b-eiou:/usr/local/bin/
+      - node-b-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -95,6 +97,7 @@ services:
       - node-c-files:/etc/eiou/
       - node-c-index:/var/www/html
       - node-c-eiou:/usr/local/bin/
+      - node-c-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -118,6 +121,7 @@ services:
       - node-d-files:/etc/eiou/
       - node-d-index:/var/www/html
       - node-d-eiou:/usr/local/bin/
+      - node-d-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -141,6 +145,7 @@ services:
       - node-e-files:/etc/eiou/
       - node-e-index:/var/www/html
       - node-e-eiou:/usr/local/bin/
+      - node-e-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -164,6 +169,7 @@ services:
       - node-f-files:/etc/eiou/
       - node-f-index:/var/www/html
       - node-f-eiou:/usr/local/bin/
+      - node-f-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -187,6 +193,7 @@ services:
       - node-g-files:/etc/eiou/
       - node-g-index:/var/www/html
       - node-g-eiou:/usr/local/bin/
+      - node-g-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -210,6 +217,7 @@ services:
       - node-h-files:/etc/eiou/
       - node-h-index:/var/www/html
       - node-h-eiou:/usr/local/bin/
+      - node-h-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -233,6 +241,7 @@ services:
       - node-i-files:/etc/eiou/
       - node-i-index:/var/www/html
       - node-i-eiou:/usr/local/bin/
+      - node-i-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -256,6 +265,7 @@ services:
       - node-j-files:/etc/eiou/
       - node-j-index:/var/www/html
       - node-j-eiou:/usr/local/bin/
+      - node-j-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
@@ -279,6 +289,8 @@ volumes:
     name: node-a-index
   node-a-eiou:
     name: node-a-eiou
+  node-a-backups:
+    name: node-a-backups
 
   node-b-mysql-data:
     name: node-b-mysql-data
@@ -288,6 +300,8 @@ volumes:
     name: node-b-index
   node-b-eiou:
     name: node-b-eiou
+  node-b-backups:
+    name: node-b-backups
 
   node-c-mysql-data:
     name: node-c-mysql-data
@@ -297,7 +311,9 @@ volumes:
     name: node-c-index
   node-c-eiou:
     name: node-c-eiou
-    
+  node-c-backups:
+    name: node-c-backups
+
   node-d-mysql-data:
     name: node-d-mysql-data
   node-d-files:
@@ -306,6 +322,8 @@ volumes:
     name: node-d-index
   node-d-eiou:
     name: node-d-eiou
+  node-d-backups:
+    name: node-d-backups
 
   node-e-mysql-data:
     name: node-e-mysql-data
@@ -315,6 +333,8 @@ volumes:
     name: node-e-index
   node-e-eiou:
     name: node-e-eiou
+  node-e-backups:
+    name: node-e-backups
 
   node-f-mysql-data:
     name: node-f-mysql-data
@@ -324,6 +344,8 @@ volumes:
     name: node-f-index
   node-f-eiou:
     name: node-f-eiou
+  node-f-backups:
+    name: node-f-backups
 
   node-g-mysql-data:
     name: node-g-mysql-data
@@ -333,6 +355,8 @@ volumes:
     name: node-g-index
   node-g-eiou:
     name: node-g-eiou
+  node-g-backups:
+    name: node-g-backups
 
   node-h-mysql-data:
     name: node-h-mysql-data
@@ -342,6 +366,8 @@ volumes:
     name: node-h-index
   node-h-eiou:
     name: node-h-eiou
+  node-h-backups:
+    name: node-h-backups
 
   node-i-mysql-data:
     name: node-i-mysql-data
@@ -351,6 +377,8 @@ volumes:
     name: node-i-index
   node-i-eiou:
     name: node-i-eiou
+  node-i-backups:
+    name: node-i-backups
 
   node-j-mysql-data:
     name: node-j-mysql-data
@@ -360,3 +388,5 @@ volumes:
     name: node-j-index
   node-j-eiou:
     name: node-j-eiou
+  node-j-backups:
+    name: node-j-backups

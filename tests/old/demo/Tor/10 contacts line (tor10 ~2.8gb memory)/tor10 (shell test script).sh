@@ -83,6 +83,7 @@ for container in "${containers[@]}"; do
     remove_volume_if_exists "${container}-files"
     remove_volume_if_exists "${container}-index"
     remove_volume_if_exists "${container}-eiou"
+    remove_volume_if_exists "${container}-backups"
 done
 
 echo "Building base image..."
@@ -90,7 +91,7 @@ docker build -f eiou.dockerfile -t eiou/eiou .
 
 echo -e "\nCreating containers..."
 for container in "${containers[@]}"; do
-    docker run -d --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-files:/etc/eiou/" -v "${container}-index:/var/www/html" -v "${container}-eiou:/usr/local/bin/" eiou/eiou
+    docker run -d --network=eiou-network --name $container -v "${container}-mysql-data:/var/lib/mysql" -v "${container}-files:/etc/eiou/" -v "${container}-index:/var/www/html" -v "${container}-eiou:/usr/local/bin/" -v "${container}-backups:/var/lib/eiou/backups" eiou/eiou
 done
 
 echo -e "\nWaiting for 5 seconds for proper container startup..."

@@ -32,6 +32,7 @@ Complete reference for environment variables and volume mounts used in EIOU Dock
 | `EIOU_TOR_TIMEOUT` | `120` | No | Tor connectivity timeout (seconds) |
 | `EIOU_TEST_MODE` | `false` | No | Enable manual message processing |
 | `EIOU_CONTACT_STATUS_ENABLED` | `true` | No | Enable contact status pinging |
+| `EIOU_BACKUP_AUTO_ENABLED` | `true` | No | Enable/disable automatic daily backups |
 
 *Required unless using Tor-only mode
 
@@ -125,6 +126,22 @@ environment:
 - Disable during automated tests to prevent interference with sync operations
 - Disable in low-bandwidth environments to reduce network traffic
 
+#### EIOU_BACKUP_AUTO_ENABLED
+
+Controls automatic daily database backups at midnight. Backups are encrypted using the user's master key.
+
+```yaml
+environment:
+  - EIOU_BACKUP_AUTO_ENABLED=true   # Enable (default)
+  - EIOU_BACKUP_AUTO_ENABLED=false  # Disable
+```
+
+**Notes:**
+- Backups are stored in `/var/lib/eiou/backups/`
+- Only the 3 most recent backups are retained (configurable)
+- Backups are encrypted with AES-256-GCM
+- Restore requires wallet restoration first (master key dependency)
+
 ---
 
 ## Volume Mounts
@@ -137,6 +154,7 @@ All EIOU containers use four named volumes for data persistence:
 |--------|----------------|---------|-----------------|
 | `{node}-mysql-data` | `/var/lib/mysql` | Database: transactions, contacts, balances | **CRITICAL** |
 | `{node}-files` | `/etc/eiou/` | Config: wallet keys, userconfig.json, encryption data | **CRITICAL** |
+| `{node}-backups` | `/var/lib/eiou/backups` | Encrypted database backups | **CRITICAL** |
 | `{node}-index` | `/var/www/html` | Web: GUI and API files | Low (regenerated) |
 | `{node}-eiou` | `/usr/local/bin/` | CLI: eiou command-line tool | Low (regenerated) |
 
@@ -408,16 +426,57 @@ EIOU containers run as root during initialization, then services drop privileges
 
 ## Backup and Restore
 
+### Automated Backup System
+
+EIOU includes an automated backup system that creates encrypted database backups daily at midnight.
+
+**Configuration:**
+```yaml
+environment:
+  - EIOU_BACKUP_AUTO_ENABLED=true   # Enable automatic backups (default)
+  - EIOU_BACKUP_AUTO_ENABLED=false  # Disable automatic backups
+```
+
+**Backup Details:**
+- Backups run automatically at midnight (container local time)
+- Stored in `/var/lib/eiou/backups/` (persisted via `{node}-backups` volume)
+- Encrypted with AES-256-GCM using the wallet's master key
+- Only the 3 most recent backups are retained by default
+- Backup files are named with timestamps: `backup_YYYYMMDD_HHmmss.eiou.enc`
+
+### CLI Backup Commands
+
+The `eiou` CLI provides commands for manual backup and restore operations:
+
+```bash
+# Create a manual backup
+docker exec <container> eiou backup create
+
+# List available backups
+docker exec <container> eiou backup list
+
+# Restore from a specific backup (requires --confirm flag)
+docker exec <container> eiou backup restore <backup-file> --confirm
+
+# Delete old backups (keeps most recent 3)
+docker exec <container> eiou backup cleanup
+```
+
+**Important:** Restore operations require the wallet to be restored first, as backups are encrypted with the master key derived from the seed phrase.
+
 ### Critical Data
 
 **Must backup:**
 - `{node}-mysql-data` - Contains all transaction history and contact relationships
 - `{node}-files` - Contains wallet private keys and encryption keys
+- `{node}-backups` - Contains encrypted database backups
 
 **Optional backup:**
 - `{node}-index` and `{node}-eiou` - Regenerated on container startup
 
-### Backup Commands
+### Manual Volume Backup
+
+For complete disaster recovery, back up Docker volumes directly:
 
 ```bash
 # Backup volumes
@@ -426,6 +485,9 @@ docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
 
 docker run --rm -v alice-files:/data -v /backup:/backup \
   alpine tar czf /backup/alice-files.tar.gz -C /data .
+
+docker run --rm -v alice-backups:/data -v /backup:/backup \
+  alpine tar czf /backup/alice-backups.tar.gz -C /data .
 ```
 
 ### Restore Commands
@@ -437,7 +499,28 @@ docker run --rm -v alice-mysql-data:/data -v /backup:/backup \
 
 docker run --rm -v alice-files:/data -v /backup:/backup \
   alpine sh -c "cd /data && tar xzf /backup/alice-files.tar.gz"
+
+docker run --rm -v alice-backups:/data -v /backup:/backup \
+  alpine sh -c "cd /data && tar xzf /backup/alice-backups.tar.gz"
 ```
+
+### Restore from Encrypted Backup
+
+To restore from an encrypted backup file:
+
+1. **Restore wallet first** (required for decryption):
+   ```yaml
+   environment:
+     - RESTORE_FILE=/restore/seed
+   volumes:
+     - /path/to/seed.txt:/restore/seed:ro
+   ```
+
+2. **Start container and restore backup**:
+   ```bash
+   docker exec <container> eiou backup list
+   docker exec <container> eiou backup restore backup_20260115_000000.eiou.enc --confirm
+   ```
 
 ### Complete Reset
 

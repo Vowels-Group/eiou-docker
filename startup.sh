@@ -650,6 +650,36 @@ readable="${pubkey//$'\n'/$'\n\t\t'}"
 echo -e "\t Public Key: \n\t\t $readable"
 echo -e "\t Authentication Code: (see secure temp file)"
 
+# ========================
+# Backup System Setup
+# ========================
+echo "Setting up backup system..."
+
+# Create log directory if it doesn't exist
+mkdir -p /var/log/eiou
+chown www-data:www-data /var/log/eiou
+chmod 755 /var/log/eiou
+
+# Create backup directory with proper permissions
+mkdir -p /var/lib/eiou/backups
+chown www-data:www-data /var/lib/eiou/backups
+chmod 700 /var/lib/eiou/backups
+
+# Set up cron for daily backups at midnight (if auto backup is enabled by default)
+if [ "${EIOU_BACKUP_AUTO_ENABLED:-true}" = "true" ]; then
+    # Ensure cron service is running
+    service cron start 2>/dev/null || true
+
+    # Install backup cron job (daily at midnight)
+    CRON_JOB="0 0 * * * /usr/bin/php /etc/eiou/scripts/backup-cron.php >> /var/log/eiou/backup.log 2>&1"
+
+    # Remove existing backup cron entry and add new one
+    (crontab -l 2>/dev/null | grep -v "backup-cron.php"; echo "$CRON_JOB") | crontab -
+
+    echo "Backup cron job installed (daily at midnight)"
+else
+    echo "Automatic backups disabled via EIOU_BACKUP_AUTO_ENABLED"
+fi
 
 # Start p2p message processing in background
 nohup php /etc/eiou/P2pMessages.php > /dev/null 2>&1 &

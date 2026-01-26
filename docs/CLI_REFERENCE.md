@@ -12,9 +12,10 @@ Complete command-line interface documentation for the EIOU Docker node.
 6. [Settings Commands](#settings-commands)
 7. [System Commands](#system-commands)
 8. [API Key Management](#api-key-management)
-9. [Test Mode Commands](#test-mode-commands)
-10. [Exit Codes](#exit-codes)
-11. [Rate Limiting](#rate-limiting)
+9. [Backup Commands](#backup-commands)
+10. [Test Mode Commands](#test-mode-commands)
+11. [Exit Codes](#exit-codes)
+12. [Rate Limiting](#rate-limiting)
 
 ---
 
@@ -581,6 +582,7 @@ eiou changesettings [setting] [value]
 | `maxOutput` | Max display lines (integer or "all") | `50` |
 | `defaultTransportMode` | Preferred transport | `http`, `https`, `tor` |
 | `autoRefreshEnabled` | Auto-refresh transactions | `true`, `false` |
+| `autoBackupEnabled` | Auto-backup database daily | `true`, `false` |
 | `hostname` | Node hostname (regenerates SSL cert) | `http://alice` |
 
 **Examples:**
@@ -592,6 +594,7 @@ eiou changesettings
 eiou changesettings defaultCurrency EUR
 eiou changesettings maxP2pLevel 5
 eiou changesettings autoRefreshEnabled true
+eiou changesettings autoBackupEnabled false
 
 # JSON output
 eiou changesettings defaultFee 1.5 --json
@@ -731,6 +734,71 @@ eiou apikey enable eiou_abc123
 
 ---
 
+## Backup Commands
+
+### backup
+
+Manage encrypted database backups.
+
+**Syntax:**
+```bash
+eiou backup <action> [args...]
+```
+
+**Actions:**
+
+| Action | Syntax | Description |
+|--------|--------|-------------|
+| `create` | `backup create` | Create a new encrypted backup |
+| `restore` | `backup restore <filename> --confirm` | Restore database from backup |
+| `list` | `backup list` | List all available backups |
+| `verify` | `backup verify <filename>` | Verify backup integrity |
+| `delete` | `backup delete <filename>` | Delete a specific backup |
+| `enable` | `backup enable` | Enable automatic daily backups |
+| `disable` | `backup disable` | Disable automatic daily backups |
+| `status` | `backup status` | Show backup system status |
+| `cleanup` | `backup cleanup` | Remove old backups (keep 3 most recent) |
+| `help` | `backup help` | Show backup help |
+
+**Examples:**
+```bash
+# Create a new backup
+eiou backup create
+
+# List all backups
+eiou backup list
+
+# Verify a specific backup
+eiou backup verify backup_20260125_120000.eiou.enc
+
+# Restore from a backup (requires --confirm flag)
+eiou backup restore backup_20260125_120000.eiou.enc --confirm
+
+# Check backup status
+eiou backup status
+
+# Enable/disable automatic backups
+eiou backup enable
+eiou backup disable
+
+# JSON output
+eiou backup list --json
+eiou backup status --json
+```
+
+**Security Notes:**
+- Backups are encrypted with AES-256-GCM using your master key
+- Restore is only possible after wallet restoration (key dependency)
+- Backup directory has restricted permissions (700)
+- Rate limited: 10 backup operations per minute
+
+**Backup Storage:**
+- Location: `/var/lib/eiou/backups/`
+- Filename format: `backup_YYYYMMDD_HHmmss.eiou.enc`
+- Retention: 3 most recent backups (configurable)
+
+---
+
 ## Test Mode Commands
 
 These commands are only available when `EIOU_TEST_MODE=true`.
@@ -785,6 +853,7 @@ CLI commands are rate-limited per wallet to prevent abuse:
 | `send` | 30 | 60 seconds | 5 minutes |
 | `add` | 20 | 60 seconds | 5 minutes |
 | `generate` | 5 | 5 minutes | 15 minutes |
+| `backup` | 10 | 60 seconds | 5 minutes |
 | All others | 100 | 60 seconds | 5 minutes |
 
 When rate limited, you'll see an error with a retry-after time.

@@ -89,7 +89,7 @@ echo -e "\n[API Key Setup]"
 
 # Create API key via CLI
 echo -e "\n\t-> Creating API key for testing"
-apiKeyOutput=$(docker exec ${testContainer} eiou apikey create "TestAPIKey" "wallet:read,wallet:send,contacts:read,contacts:write,system:read" --json 2>&1)
+apiKeyOutput=$(docker exec ${testContainer} eiou apikey create "TestAPIKey" "wallet:read,wallet:send,contacts:read,contacts:write,system:read,backup:read,backup:write" --json 2>&1)
 
 # Extract API key ID and secret from the output
 apiKeyId=$(echo "$apiKeyOutput" | grep -o '"key_id"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"key_id"[[:space:]]*:[[:space:]]*"//;s/"$//' | head -1)
@@ -1152,6 +1152,330 @@ if [[ "$pingApiResponse" =~ '"success"' ]]; then
 else
     printf "\t   POST /api/v1/contacts/ping/:address ${RED}FAILED${NC}\n"
     printf "\t   Response: ${pingApiResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ BACKUP STATUS API TEST ############################
+
+echo -e "\n[Backup Status API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing GET /api/v1/backup/status"
+
+timestamp=$(date +%s)
+path="/api/v1/backup/status"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+backupStatusResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "${LOCAL_API_BASE}/api/v1/backup/status" 2>&1)
+
+if [[ "$backupStatusResponse" =~ '"success"' ]] && [[ "$backupStatusResponse" =~ 'true' ]] && [[ "$backupStatusResponse" =~ '"enabled"' ]]; then
+    printf "\t   GET /api/v1/backup/status ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   GET /api/v1/backup/status ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${backupStatusResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ BACKUP LIST API TEST ############################
+
+echo -e "\n[Backup List API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing GET /api/v1/backup/list"
+
+timestamp=$(date +%s)
+path="/api/v1/backup/list"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"GET\\n${path}\\n${timestamp}\\n\";
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+backupListResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "${LOCAL_API_BASE}/api/v1/backup/list" 2>&1)
+
+if [[ "$backupListResponse" =~ '"success"' ]] && [[ "$backupListResponse" =~ 'true' ]] && [[ "$backupListResponse" =~ '"backups"' ]]; then
+    printf "\t   GET /api/v1/backup/list ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   GET /api/v1/backup/list ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${backupListResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ BACKUP CREATE API TEST ############################
+
+echo -e "\n[Backup Create API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing POST /api/v1/backup/create"
+
+timestamp=$(date +%s)
+path="/api/v1/backup/create"
+backupCreateBody='{"name":"api_test_backup"}'
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$body = '${backupCreateBody}';
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+backupCreateResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    -d "${backupCreateBody}" \
+    "${LOCAL_API_BASE}/api/v1/backup/create" 2>&1)
+
+# Extract filename for later tests
+backupFilename=$(echo "$backupCreateResponse" | grep -o '"filename"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"filename"[[:space:]]*:[[:space:]]*"//;s/"$//' | head -1)
+
+if [[ "$backupCreateResponse" =~ '"success"' ]] && [[ "$backupCreateResponse" =~ 'true' ]] && [[ "$backupCreateResponse" =~ '"filename"' ]]; then
+    printf "\t   POST /api/v1/backup/create ${GREEN}PASSED${NC}\n"
+    printf "\t   Created backup: ${backupFilename}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   POST /api/v1/backup/create ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${backupCreateResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ BACKUP VERIFY API TEST ############################
+
+echo -e "\n[Backup Verify API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing POST /api/v1/backup/verify"
+
+if [[ -n "$backupFilename" ]]; then
+    timestamp=$(date +%s)
+    path="/api/v1/backup/verify"
+    backupVerifyBody="{\"filename\":\"${backupFilename}\"}"
+
+    signature=$(docker exec ${testContainer} php -r "
+        \$secret = '${apiSecret}';
+        \$body = '${backupVerifyBody}';
+        \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+        echo hash_hmac('sha256', \$message, \$secret);
+    " 2>/dev/null)
+
+    backupVerifyResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+        -X POST \
+        -H "X-API-Key: ${apiKeyId}" \
+        -H "X-API-Timestamp: ${timestamp}" \
+        -H "X-API-Signature: ${signature}" \
+        -H "Content-Type: application/json" \
+        -d "${backupVerifyBody}" \
+        "${LOCAL_API_BASE}/api/v1/backup/verify" 2>&1)
+
+    if [[ "$backupVerifyResponse" =~ '"success"' ]] && [[ "$backupVerifyResponse" =~ 'true' ]] && [[ "$backupVerifyResponse" =~ '"valid"' ]]; then
+        printf "\t   POST /api/v1/backup/verify ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   POST /api/v1/backup/verify ${RED}FAILED${NC}\n"
+        printf "\t   Response: ${backupVerifyResponse}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   POST /api/v1/backup/verify ${YELLOW}SKIPPED${NC} (no backup file)\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ BACKUP RESTORE NO CONFIRM TEST ############################
+
+echo -e "\n[Backup Restore (No Confirm) API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing POST /api/v1/backup/restore (without confirm)"
+
+if [[ -n "$backupFilename" ]]; then
+    timestamp=$(date +%s)
+    path="/api/v1/backup/restore"
+    backupRestoreNoConfirmBody="{\"filename\":\"${backupFilename}\"}"
+
+    signature=$(docker exec ${testContainer} php -r "
+        \$secret = '${apiSecret}';
+        \$body = '${backupRestoreNoConfirmBody}';
+        \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
+        echo hash_hmac('sha256', \$message, \$secret);
+    " 2>/dev/null)
+
+    backupRestoreNoConfirmResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+        -X POST \
+        -H "X-API-Key: ${apiKeyId}" \
+        -H "X-API-Timestamp: ${timestamp}" \
+        -H "X-API-Signature: ${signature}" \
+        -H "Content-Type: application/json" \
+        -d "${backupRestoreNoConfirmBody}" \
+        "${LOCAL_API_BASE}/api/v1/backup/restore" 2>&1)
+
+    # Should fail with confirmation_required error
+    if [[ "$backupRestoreNoConfirmResponse" =~ '"success"' ]] && [[ "$backupRestoreNoConfirmResponse" =~ 'false' ]] && [[ "$backupRestoreNoConfirmResponse" =~ 'confirmation_required' ]]; then
+        printf "\t   POST /api/v1/backup/restore (no confirm) ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   POST /api/v1/backup/restore (no confirm) ${RED}FAILED${NC}\n"
+        printf "\t   Response: ${backupRestoreNoConfirmResponse}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   POST /api/v1/backup/restore (no confirm) ${YELLOW}SKIPPED${NC} (no backup file)\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ BACKUP ENABLE API TEST ############################
+
+echo -e "\n[Backup Enable API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing POST /api/v1/backup/enable"
+
+timestamp=$(date +%s)
+path="/api/v1/backup/enable"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\";
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+backupEnableResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "${LOCAL_API_BASE}/api/v1/backup/enable" 2>&1)
+
+if [[ "$backupEnableResponse" =~ '"success"' ]] && [[ "$backupEnableResponse" =~ 'true' ]] && [[ "$backupEnableResponse" =~ '"enabled"' ]]; then
+    printf "\t   POST /api/v1/backup/enable ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   POST /api/v1/backup/enable ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${backupEnableResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ BACKUP DISABLE API TEST ############################
+
+echo -e "\n[Backup Disable API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing POST /api/v1/backup/disable"
+
+timestamp=$(date +%s)
+path="/api/v1/backup/disable"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\";
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+backupDisableResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "${LOCAL_API_BASE}/api/v1/backup/disable" 2>&1)
+
+if [[ "$backupDisableResponse" =~ '"success"' ]] && [[ "$backupDisableResponse" =~ 'true' ]] && [[ "$backupDisableResponse" =~ '"enabled"' ]]; then
+    printf "\t   POST /api/v1/backup/disable ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   POST /api/v1/backup/disable ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${backupDisableResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ BACKUP CLEANUP API TEST ############################
+
+echo -e "\n[Backup Cleanup API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing POST /api/v1/backup/cleanup"
+
+timestamp=$(date +%s)
+path="/api/v1/backup/cleanup"
+
+signature=$(docker exec ${testContainer} php -r "
+    \$secret = '${apiSecret}';
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\";
+    echo hash_hmac('sha256', \$message, \$secret);
+" 2>/dev/null)
+
+backupCleanupResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+    -X POST \
+    -H "X-API-Key: ${apiKeyId}" \
+    -H "X-API-Timestamp: ${timestamp}" \
+    -H "X-API-Signature: ${signature}" \
+    -H "Content-Type: application/json" \
+    "${LOCAL_API_BASE}/api/v1/backup/cleanup" 2>&1)
+
+if [[ "$backupCleanupResponse" =~ '"success"' ]] && [[ "$backupCleanupResponse" =~ 'true' ]] && [[ "$backupCleanupResponse" =~ '"deleted_count"' ]]; then
+    printf "\t   POST /api/v1/backup/cleanup ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   POST /api/v1/backup/cleanup ${RED}FAILED${NC}\n"
+    printf "\t   Response: ${backupCleanupResponse}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ BACKUP DELETE API TEST ############################
+
+echo -e "\n[Backup Delete API Test]"
+totaltests=$(( totaltests + 1 ))
+
+echo -e "\n\t-> Testing DELETE /api/v1/backup/:filename"
+
+if [[ -n "$backupFilename" ]]; then
+    timestamp=$(date +%s)
+    path="/api/v1/backup/${backupFilename}"
+
+    signature=$(docker exec ${testContainer} php -r "
+        \$secret = '${apiSecret}';
+        \$message = \"DELETE\\n${path}\\n${timestamp}\\n\";
+        echo hash_hmac('sha256', \$message, \$secret);
+    " 2>/dev/null)
+
+    backupDeleteResponse=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
+        -X DELETE \
+        -H "X-API-Key: ${apiKeyId}" \
+        -H "X-API-Timestamp: ${timestamp}" \
+        -H "X-API-Signature: ${signature}" \
+        -H "Content-Type: application/json" \
+        "${LOCAL_API_BASE}/api/v1/backup/${backupFilename}" 2>&1)
+
+    if [[ "$backupDeleteResponse" =~ '"success"' ]] && [[ "$backupDeleteResponse" =~ 'true' ]]; then
+        printf "\t   DELETE /api/v1/backup/:filename ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   DELETE /api/v1/backup/:filename ${RED}FAILED${NC}\n"
+        printf "\t   Response: ${backupDeleteResponse}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   DELETE /api/v1/backup/:filename ${YELLOW}SKIPPED${NC} (no backup file)\n"
     failure=$(( failure + 1 ))
 fi
 

@@ -33,6 +33,13 @@ docker-compose -f docker-compose-10line.yml up -d --build
 docker-compose -f docker-compose-cluster.yml up -d --build
 ```
 
+## Key Features
+
+- **Encrypted Backups**: Automatic daily database backups encrypted with AES-256-GCM
+- **Multi-Transport**: HTTP, HTTPS, and Tor network support
+- **REST API**: Full API with HMAC-SHA256 authentication
+- **CLI Interface**: Complete command-line management tools
+
 ## Available Configurations (pre-made)
 
 | Configuration | Nodes | Memory Usage | Description |

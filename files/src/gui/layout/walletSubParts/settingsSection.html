@@ -130,6 +130,26 @@
                     Automatically refresh transaction list when transactions are pending
                 </small>
             </div>
+
+            <!-- Auto-Backup Toggle -->
+            <div class="form-group">
+                <label for="autoBackupEnabled" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span>Auto-Backup Database:</span>
+                </label>
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <label class="toggle-switch" style="position: relative; display: inline-block; width: 50px; height: 26px;">
+                        <input type="checkbox" id="autoBackupEnabled" name="autoBackupEnabled" value="1" <?php echo $user->getAutoBackupEnabled() ? 'checked' : ''; ?> style="opacity: 0; width: 0; height: 0;">
+                        <span class="toggle-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #6c757d; transition: 0.3s; border-radius: 26px;"></span>
+                    </label>
+                    <span id="autoBackupStatus" style="color: <?php echo $user->getAutoBackupEnabled() ? '#28a745' : '#6c757d'; ?>; font-weight: 500;">
+                        <?php echo $user->getAutoBackupEnabled() ? 'Enabled' : 'Disabled'; ?>
+                    </span>
+                </div>
+                <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                    <i class="fas fa-info-circle"></i>
+                    Automatically backup database daily at midnight (encrypted with wallet key)
+                </small>
+            </div>
         </div>
 
         <style>
@@ -155,6 +175,16 @@
         <script>
             document.getElementById('autoRefreshEnabled').addEventListener('change', function() {
                 var statusEl = document.getElementById('autoRefreshStatus');
+                if (this.checked) {
+                    statusEl.textContent = 'Enabled';
+                    statusEl.style.color = '#28a745';
+                } else {
+                    statusEl.textContent = 'Disabled';
+                    statusEl.style.color = '#6c757d';
+                }
+            });
+            document.getElementById('autoBackupEnabled').addEventListener('change', function() {
+                var statusEl = document.getElementById('autoBackupStatus');
                 if (this.checked) {
                     statusEl.textContent = 'Enabled';
                     statusEl.style.color = '#28a745';
