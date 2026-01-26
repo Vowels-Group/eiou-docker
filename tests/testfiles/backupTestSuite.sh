@@ -214,8 +214,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing backup files are encrypted"
 
 if [ -n "$latestBackup" ] && [ "$latestBackup" != "" ]; then
-    # Check file content - backup is JSON with encrypted SQL in 'encrypted' field
-    # Verify: 1) file is valid JSON 2) has 'encrypted' key 3) encrypted value is base64 (not plain SQL)
+    # Check file content - backup is JSON with encrypted SQL data
+    # Structure: {encrypted: {ciphertext, iv, tag}} - AES-256-GCM format
     encryptionCheck=$(docker exec ${testContainer} php -r "
         \$content = file_get_contents('${BACKUP_DIR}/${latestBackup}');
         \$data = json_decode(\$content, true);
@@ -223,8 +223,17 @@ if [ -n "$latestBackup" ] && [ "$latestBackup" != "" ]; then
             echo 'INVALID_FORMAT';
             exit;
         }
-        // Check that encrypted field doesn't contain plain SQL (it should be base64)
-        if (preg_match('/CREATE TABLE|INSERT INTO|DROP TABLE/i', \$data['encrypted'])) {
+        // Encrypted field should be an array with ciphertext, iv, tag (AES-256-GCM)
+        if (!is_array(\$data['encrypted'])) {
+            echo 'NOT_ENCRYPTED_ARRAY';
+            exit;
+        }
+        if (!isset(\$data['encrypted']['ciphertext']) || !isset(\$data['encrypted']['iv']) || !isset(\$data['encrypted']['tag'])) {
+            echo 'MISSING_ENCRYPTION_FIELDS';
+            exit;
+        }
+        // Check that ciphertext doesn't contain plain SQL
+        if (preg_match('/CREATE TABLE|INSERT INTO|DROP TABLE/i', \$data['encrypted']['ciphertext'])) {
             echo 'PLAIN_SQL';
         } else {
             echo 'ENCRYPTED_OK';
