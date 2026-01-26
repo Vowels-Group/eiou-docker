@@ -250,14 +250,14 @@ docker logs -f alice
 
 **Accessing the CLI:**
 
-The CLI is accessed via `docker exec <container> eiou <command>`:
+The CLI is accessed via `docker exec <container> eiou`:
 ```bash
-# Show available commands
-docker exec alice eiou help
+# Access the CLI (shows help/usage)
+docker exec alice eiou
 
 # Run a specific command
 docker exec alice eiou info
-docker exec alice eiou viewsettings
+docker exec alice eiou help
 ```
 
 ---
