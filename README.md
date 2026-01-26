@@ -2,6 +2,30 @@
 
 This repository provides Docker Compose configurations for running EIOU nodes in various network topologies. Each configuration includes named volumes for persistent data storage and automatic network setup.
 
+## Key Features
+
+- **Web GUI Dashboard**: Full-featured web interface for node management and monitoring
+- **P2P Transactions**: Automatic multi-hop payment routing through trust networks
+- **Encrypted Backups**: Automatic daily database backups encrypted with AES-256-GCM
+- **Contact Management**: Build and manage trust networks with configurable fees and credit limits
+- **Multi-Transport**: HTTP, HTTPS, and Tor network support
+- **REST API**: Full API with HMAC-SHA256 authentication
+- **CLI Interface**: Complete command-line management tools
+- **Persistent Storage**: Named volumes for MySQL data, configuration, and backups
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [GUI Reference](docs/GUI_REFERENCE.md) | Web interface documentation |
+| [GUI Quick Reference](docs/GUI_QUICK_REFERENCE.md) | GUI feature summary |
+| [CLI Reference](docs/CLI_REFERENCE.md) | Command-line interface documentation |
+| [API Reference](docs/API_REFERENCE.md) | REST API documentation |
+| [API Quick Reference](docs/API_QUICK_REFERENCE.md) | API endpoint summary |
+| [Docker Configuration](docs/DOCKER_CONFIGURATION.md) | Environment variables and volume mounts |
+| [Architecture](docs/ARCHITECTURE.md) | System architecture and design |
+| [Error Codes](docs/ERROR_CODES.md) | Error codes and troubleshooting |
+
 ## Prerequisites
 
 - Docker
@@ -33,13 +57,6 @@ docker-compose -f docker-compose-10line.yml up -d --build
 docker-compose -f docker-compose-cluster.yml up -d --build
 ```
 
-## Key Features
-
-- **Encrypted Backups**: Automatic daily database backups encrypted with AES-256-GCM
-- **Multi-Transport**: HTTP, HTTPS, and Tor network support
-- **REST API**: Full API with HMAC-SHA256 authentication
-- **CLI Interface**: Complete command-line management tools
-
 ## Available Configurations (pre-made)
 
 | Configuration | Nodes | Memory Usage | Description |
@@ -48,16 +65,6 @@ docker-compose -f docker-compose-cluster.yml up -d --build
 | [`docker-compose-4line.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-4line.yml) | 4 | ~1.1GB | Basic 4-node line topology |
 | [`docker-compose-10line.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-10line.yml) | 10 | ~2.8GB | Extended 10-node line topology |
 | [`docker-compose-cluster.yml`](https://github.com/eiou-org/eiou-docker/blob/main/docker-compose-cluster.yml) | 13 | ~3.5GB | Cluster topology with hierarchical structure |
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Docker Configuration Reference](docs/DOCKER_CONFIGURATION.md) | Complete guide to environment variables and volume mounts |
-| [CLI Reference](docs/CLI_REFERENCE.md) | Command-line interface documentation |
-| [API Reference](docs/API_REFERENCE.md) | REST API documentation |
-| [API Quick Reference](docs/API_QUICK_REFERENCE.md) | API endpoint summary |
-| [Error Codes](docs/ERROR_CODES.md) | Error codes and troubleshooting |
 
 ## Container Management
 
@@ -102,7 +109,7 @@ docker-compose -f docker-compose-4line.yml restart alice
 
 ## Network Topologies (conceptuals)
 
-### Pre-made test topologies 
+### Pre-made test topologies
 Under [tests/old/demo](https://github.com/eiou-org/eiou-docker/tree/main/tests/old/demo) are three folders containing pre-made topologies for HTTP, HTTPS, and TOR. These topologies come with an overview image depicting the topology and several files, either in .txt format (for easy copy-pasting) and/or .sh format for running through bash.
 
 Below are all the .sh files listed for easy access, note the two versions of each file. The 'basic setup' and 'basic test setup', the former sets up the topology as described in the image in the folder. The later does the same as the former but also runs a few functions, like sending some transactions and checking contact information.
