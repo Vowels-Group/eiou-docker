@@ -385,7 +385,6 @@ docker exec alice eiou overview 10
 
 Total Balances:
   USD: 150.00
-  EUR: 75.50
 
 Active Contacts: 3
 Pending Requests: 1
@@ -436,8 +435,8 @@ Automation:
 Change wallet configuration directly or interactively.
 
 ```bash
-# Change default currency
-docker exec alice eiou changesettings defaultCurrency EUR
+# View current default currency
+docker exec alice eiou viewsettings
 
 # Change P2P routing level
 docker exec alice eiou changesettings maxP2pLevel 5
@@ -453,7 +452,7 @@ docker exec alice eiou changesettings autoBackupEnabled false
 
 | Setting | Description | Valid Values |
 |---------|-------------|--------------|
-| `defaultCurrency` | Default currency code | `USD`, `EUR`, `GBP`, etc. |
+| `defaultCurrency` | Default currency code | `USD` (only USD currently supported) |
 | `defaultFee` | Default fee percentage | Decimal (e.g., `1.0`) |
 | `defaultCreditLimit` | Default credit for new contacts | Integer (e.g., `100`) |
 | `maxP2pLevel` | Maximum P2P routing hops | Integer 1-10 |
