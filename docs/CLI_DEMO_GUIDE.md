@@ -817,10 +817,15 @@ eiou send <address|name> <amount> <currency>
 docker exec alice eiou send Bob 100 USD
 
 # Wait for processing
-sleep 3
+sleep 5
 
 # Verify with balance check
 docker exec alice eiou viewbalances
+```
+
+**Note:** Tor transport is slower than HTTP/HTTPS. If a transaction or balance doesn't appear immediately, wait a few more seconds and re-check. Results may take longer to propagate over Tor.
+
+```bash
 ```
 
 **Expected output:**
@@ -911,6 +916,8 @@ Transaction sent via P2P routing.
 ```bash
 sleep 15
 ```
+
+**Note:** P2P routing takes longer than direct transactions. Over Tor, this can take significantly longer. If balances don't appear immediately, wait and re-check.
 
 **Step 4: Verify balances across all nodes**
 ```bash
