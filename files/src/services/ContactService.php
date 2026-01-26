@@ -1289,6 +1289,11 @@ class ContactService implements ContactServiceInterface {
             }
             $address = $addressValidation['value'];
             $transportIndex = $this->transportUtility->determineTransportType($address);
+            // Check if contact exists before attempting to block
+            if (!$this->contactRepository->contactExists($transportIndex, $address)) {
+                $output->error("Contact not found for address: " . $address, ErrorCodes::CONTACT_NOT_FOUND, 404);
+                return false;
+            }
         } else {
             // Check if the name yields an address
             $contact = $this->contactRepository->lookupByName($addressOrName);
@@ -1343,6 +1348,12 @@ class ContactService implements ContactServiceInterface {
                 return false;
             }
             $address = $addressValidation['value'];
+            $transportIndex = $this->transportUtility->determineTransportType($address);
+            // Check if contact exists before attempting to unblock
+            if (!$this->contactRepository->contactExists($transportIndex, $address)) {
+                $output->error("Contact not found for address: " . $address, ErrorCodes::CONTACT_NOT_FOUND, 404);
+                return false;
+            }
         } else {
             // Check if the name yields an address
             $contact = $this->contactRepository->lookupByName($addressOrName);
@@ -1355,9 +1366,8 @@ class ContactService implements ContactServiceInterface {
                 $output->error("Contact has no valid address", ErrorCodes::NO_ADDRESS, 500);
                 return false;
             }
+            $transportIndex = $this->transportUtility->determineTransportType($address);
         }
-
-        $transportIndex = $this->transportUtility->determineTransportType($address);
 
         if ($this->contactRepository->unblockContact($transportIndex, $address)) {
             $output->success("Contact unblocked successfully", [
@@ -1398,6 +1408,12 @@ class ContactService implements ContactServiceInterface {
                 return false;
             }
             $address = $addressValidation['value'];
+            $transportIndex = $this->transportUtility->determineTransportType($address);
+            // Check if contact exists before attempting to delete
+            if (!$this->contactRepository->contactExists($transportIndex, $address)) {
+                $output->error("Contact not found for address: " . $address, ErrorCodes::CONTACT_NOT_FOUND, 404);
+                return false;
+            }
         } else {
             // Check if the name yields an address
             $contact = $this->contactRepository->lookupByName($addressOrName);

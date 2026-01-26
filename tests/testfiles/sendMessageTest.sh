@@ -143,7 +143,7 @@ fi
 
 ############################ SEND TO NON-EXISTING CONTACT TEST ############################
 
-echo -e "\n[Send to Non-Existing Contact Test]"
+echo -e "\n[Send to Non-Existing Contact Handling Test]"
 
 # Use the first container for these tests
 if [ ${#containers[@]} -gt 0 ]; then
@@ -151,41 +151,32 @@ if [ ${#containers[@]} -gt 0 ]; then
     nonExistingAddress="http://non-existing-address-99999.example.com"
     nonExistingName="NonExistingContact99999"
 
-    # Test: send to non-existing ADDRESS (should handle gracefully, may attempt P2P)
+    # Test: send to non-existing ADDRESS (must return valid JSON, may attempt P2P)
     totaltests=$(( totaltests + 1 ))
     echo -e "\t-> Testing send to non-existing address"
     sendNonExistAddrResult=$(docker exec ${testSender} eiou send ${nonExistingAddress} 5 USD --json 2>&1)
 
-    # The command should not crash - it may return error or attempt P2P routing
-    if [[ -n "$sendNonExistAddrResult" ]]; then
-        if [[ "$sendNonExistAddrResult" =~ '"success"' ]] || [[ "$sendNonExistAddrResult" =~ 'error' ]] || [[ "$sendNonExistAddrResult" =~ 'P2P' ]] || [[ "$sendNonExistAddrResult" =~ 'routing' ]]; then
-            printf "\t   send to non-existing address ${GREEN}PASSED${NC} (handled gracefully)\n"
-            passed=$(( passed + 1 ))
-        else
-            printf "\t   send to non-existing address ${GREEN}PASSED${NC} (returned response)\n"
-            passed=$(( passed + 1 ))
-        fi
+    # Must return valid JSON response (not crash)
+    if [[ "$sendNonExistAddrResult" =~ '"success"' ]] && [[ "$sendNonExistAddrResult" =~ '"' ]]; then
+        printf "\t   send to non-existing address ${GREEN}PASSED${NC} (handled properly)\n"
+        passed=$(( passed + 1 ))
     else
-        printf "\t   send to non-existing address ${RED}FAILED${NC} (no output - possible crash)\n"
+        printf "\t   send to non-existing address ${RED}FAILED${NC} (invalid response or crash)\n"
+        printf "\t   Output: ${sendNonExistAddrResult}\n"
         failure=$(( failure + 1 ))
     fi
 
-    # Test: send to non-existing NAME (should return error - name not found)
+    # Test: send to non-existing NAME (must return valid JSON)
     totaltests=$(( totaltests + 1 ))
     echo -e "\t-> Testing send to non-existing name"
     sendNonExistNameResult=$(docker exec ${testSender} eiou send "${nonExistingName}" 5 USD --json 2>&1)
 
-    # The command should not crash
-    if [[ -n "$sendNonExistNameResult" ]]; then
-        if [[ "$sendNonExistNameResult" =~ '"success"' ]] || [[ "$sendNonExistNameResult" =~ 'error' ]] || [[ "$sendNonExistNameResult" =~ 'not found' ]]; then
-            printf "\t   send to non-existing name ${GREEN}PASSED${NC} (handled gracefully)\n"
-            passed=$(( passed + 1 ))
-        else
-            printf "\t   send to non-existing name ${GREEN}PASSED${NC} (returned response)\n"
-            passed=$(( passed + 1 ))
-        fi
+    if [[ "$sendNonExistNameResult" =~ '"success"' ]] && [[ "$sendNonExistNameResult" =~ '"' ]]; then
+        printf "\t   send to non-existing name ${GREEN}PASSED${NC} (handled properly)\n"
+        passed=$(( passed + 1 ))
     else
-        printf "\t   send to non-existing name ${RED}FAILED${NC} (no output - possible crash)\n"
+        printf "\t   send to non-existing name ${RED}FAILED${NC} (invalid response or crash)\n"
+        printf "\t   Output: ${sendNonExistNameResult}\n"
         failure=$(( failure + 1 ))
     fi
 fi
