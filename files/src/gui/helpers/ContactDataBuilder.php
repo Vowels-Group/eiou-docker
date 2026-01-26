@@ -82,6 +82,16 @@ class ContactDataBuilder
      */
     public function buildEncodedContactData(array $contact, string $status): string
     {
-        return htmlspecialchars(json_encode($this->buildContactData($contact, $status)), ENT_QUOTES, 'UTF-8');
+        // Use JSON_HEX_* flags to encode special characters as Unicode escapes
+        // This prevents any issues with HTML/JS parsing when the JSON is embedded
+        // in onclick attributes or other JavaScript contexts
+        return htmlspecialchars(
+            json_encode(
+                $this->buildContactData($contact, $status),
+                JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
+            ),
+            ENT_QUOTES,
+            'UTF-8'
+        );
     }
 }

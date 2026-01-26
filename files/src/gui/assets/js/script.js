@@ -130,7 +130,7 @@ function safeStorageRemove(key) {
  *
  * // Handles null/undefined gracefully
  * escapeHtml(null);  // returns ''
- * escapeHtml('<script>alert("xss")</script>');  // returns '&lt;script&gt;...'
+ * escapeHtml('User input with special chars');  // safely escapes HTML entities
  */
 function escapeHtml(text) {
     if (text === null || text === undefined) {

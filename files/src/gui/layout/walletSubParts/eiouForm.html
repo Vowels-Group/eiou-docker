@@ -23,7 +23,7 @@
         
         <div class="form-group">
             <label for="recipient">Recipient:</label>
-            <select id="recipient" name="recipient" data-address-types='<?php echo htmlspecialchars(json_encode($addressTypes)); ?>'>
+            <select id="recipient" name="recipient" data-address-types='<?php echo htmlspecialchars(json_encode($addressTypes, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
                 <option value="">Or select from contacts below</option>
                 <?php foreach ($acceptedContacts as $contact): ?>
                     <?php
@@ -36,7 +36,7 @@
                     }
                     ?>
                     <option value="<?php echo htmlspecialchars($contact['name']); ?>"
-                            data-addresses='<?php echo htmlspecialchars(json_encode($addressData)); ?>'>
+                            data-addresses='<?php echo htmlspecialchars(json_encode($addressData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
                         <?php echo htmlspecialchars($contact['name']); ?> (Contact)
                     </option>
                 <?php endforeach; ?>
