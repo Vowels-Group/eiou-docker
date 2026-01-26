@@ -189,7 +189,7 @@
             'p2p_amount' => $tx['p2p_amount'] ?? null,
             'p2p_fee' => $tx['p2p_fee'] ?? null
         ];
-    }, $transactions ?? [])); ?>;
+    }, $transactions ?? []), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 
     // Auto-refresh for in-progress transactions
     var hasInProgressTx = <?php echo !empty($inProgressTransactions) ? 'true' : 'false'; ?>;

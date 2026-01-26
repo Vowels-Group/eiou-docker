@@ -4,8 +4,8 @@
 <?php if (!empty($messageForDisplay)): ?>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        var msgType = <?php echo json_encode($messageTypeForDisplay); ?>;
-        var msg = <?php echo json_encode($messageForDisplay); ?>;
+        var msgType = <?php echo json_encode($messageTypeForDisplay, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+        var msg = <?php echo json_encode($messageForDisplay, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 
         // Map message types to toast types
         var toastType = 'info';
@@ -143,7 +143,7 @@ var dlqNotifications = [
                 $title = 'Message Delivery Failed';
                 $message = 'A message could not be delivered after multiple attempts.';
         }
-        $dlqNotificationItems[] = json_encode(['type' => $msgType, 'title' => $title, 'message' => $message]);
+        $dlqNotificationItems[] = json_encode(['type' => $msgType, 'title' => $title, 'message' => $message], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
     }
     echo implode(",\n    ", $dlqNotificationItems);
 ?>
