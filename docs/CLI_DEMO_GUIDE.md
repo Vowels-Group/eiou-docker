@@ -43,6 +43,7 @@ A step-by-step walkthrough for demonstrating EIOU CLI commands.
 8. [System & Utility Commands](#section-7-system--utility-commands)
    - [sync](#71-sync---synchronizing-data)
    - [backup](#72-backup---backup-management)
+   - [apikey](#73-apikey---api-key-management)
 9. [Cleanup](#section-8-cleanup)
    - [Stopping Containers](#stopping-containers-preserving-data)
    - [Complete Cleanup](#complete-cleanup-remove-all-data)
@@ -1059,13 +1060,17 @@ API keys allow external applications to interact with your EIOU wallet programma
 docker exec alice eiou apikey create myapp
 
 # Create with specific permissions
-docker exec alice eiou apikey create myapp read,send
+docker exec alice eiou apikey create myapp wallet:read,contacts:read
 ```
 
 **Available permissions:**
-- `read` - View balances and transaction history
-- `send` - Execute transactions
-- `contacts` - Manage contacts
+- `wallet:read` - Read wallet balance and transactions
+- `wallet:send` - Send transactions
+- `contacts:read` - List and view contacts
+- `contacts:write` - Add, update, delete contacts
+- `system:read` - View system status and metrics
+- `admin` - Full administrative access
+- `all` - All permissions (same as admin)
 
 #### Listing API Keys
 
