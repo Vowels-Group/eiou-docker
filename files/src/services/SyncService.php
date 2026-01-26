@@ -266,8 +266,12 @@ class SyncService implements SyncServiceInterface {
     public function syncSingleContact($contactAddress, $echo='SILENT'): bool{
         // Sync specific contact based on address
         $transportIndex = $this->transportUtility->determineTransportType($contactAddress);
+        if ($transportIndex === null) {
+            output("Invalid contact address format: $contactAddress", $echo);
+            return false;
+        }
         $contact = $this->contactRepository->getContactByAddress($transportIndex, $contactAddress); // Get contact from database
-        if($contact['status'] === Constants::CONTACT_STATUS_PENDING){
+        if (!$contact || $contact['status'] === Constants::CONTACT_STATUS_PENDING){
             output(outputSyncContactDueToPendingStatus($contactAddress),$echo);
             // If the contact is still pending then inquire with contact
             $messagePayload = $this->messagePayload->buildContactIsAcceptedInquiry($contactAddress);
