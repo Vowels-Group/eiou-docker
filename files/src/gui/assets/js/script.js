@@ -2522,9 +2522,13 @@ function showInProgressToasts() {
     // Show general in-progress toast for other transactions
     var otherInProgress = inProgressCount - (typeof syncingTransactionCount !== 'undefined' ? syncingTransactionCount : 0);
     if (otherInProgress > 0) {
+        // Check if auto-refresh is enabled to show appropriate message
+        var refreshMessage = (typeof autoRefreshEnabled !== 'undefined' && autoRefreshEnabled)
+            ? 'Page will refresh automatically.'
+            : 'Refresh the page manually to see updates.';
         showToast(
             'Transactions In Progress',
-            otherInProgress + ' transaction' + (otherInProgress > 1 ? 's are' : ' is') + ' being processed. Page will refresh automatically.',
+            otherInProgress + ' transaction' + (otherInProgress > 1 ? 's are' : ' is') + ' being processed. ' + refreshMessage,
             'info'
         );
     }
