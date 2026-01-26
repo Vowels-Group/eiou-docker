@@ -481,9 +481,10 @@ class CliService implements CliServiceInterface {
         $commands = [
             'info' => [
                 'description' => 'Display user information',
-                'usage' => 'info ([detail])',
+                'usage' => 'info ([detail]) ([--show-auth])',
                 'arguments' => [
-                    'detail' => ['type' => 'optional', 'description' => 'Show detailed balance information']
+                    'detail' => ['type' => 'optional', 'description' => 'Show detailed balance information'],
+                    '--show-auth' => ['type' => 'optional', 'description' => 'Securely display auth code via temp file']
                 ]
             ],
             'add' => [

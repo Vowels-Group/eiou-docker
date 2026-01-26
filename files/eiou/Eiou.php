@@ -11,7 +11,7 @@
  *
  * Commands:
  *   generate [restore <seed>]  - Generate new wallet or restore from seed
- *   info [detail]              - Display wallet information
+ *   info [detail] [--show-auth] - Display wallet information
  *   add <address> <name> ...   - Add a new contact
  *   send <address> <amount>    - Send an eIOU transaction
  *   viewbalances [contact]     - View balance(s)
