@@ -264,8 +264,11 @@ class P2pService implements P2pServiceInterface {
          // Calculate total amount needed for p2p through user
         $address = $request['senderAddress'];
         $transportIndex = $this->transportUtility->determineTransportType($address);
-        $senderContact = $this->contactRepository->lookupByAddress($transportIndex, $address);
-        $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee()); 
+        $senderContact = null;
+        if ($transportIndex !== null) {
+            $senderContact = $this->contactRepository->lookupByAddress($transportIndex, $address);
+        }
+        $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee());
         return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'], $fee, $this->currentUser->getMinimumFee());
     }
 

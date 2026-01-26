@@ -950,7 +950,8 @@ class ContactService implements ContactServiceInterface {
         if ($this->contactRepository->contactExistsPubkey($senderPublicKey)) {
             $contactAddresses = $this->addressRepository->lookupByPubkeyHash($senderPublicKeyHash);
             $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
-            if($contactAddresses[$transportIndex] === $senderAddress){
+            // Check if we have a valid transport type and the address matches
+            if($transportIndex !== null && isset($contactAddresses[$transportIndex]) && $contactAddresses[$transportIndex] === $senderAddress){
                 // Address already exists - check contact status for re-add scenario
                 // When a deleted contact re-adds us, we may have them as 'pending'
                 // (they added us before but we never accepted, then they deleted and re-added)
@@ -1220,6 +1221,9 @@ class ContactService implements ContactServiceInterface {
      */
     public function contactExists(string $address): bool {
         $transportIndex = $this->transportUtility->determineTransportType($address);
+        if ($transportIndex === null) {
+            return false;
+        }
         return $this->contactRepository->contactExists($transportIndex, $address);
     }
 
