@@ -27,63 +27,6 @@ class TransactionRepository extends AbstractRepository {
         $this->tableName = 'transactions';
         $this->primaryKey = 'id';
     }
-
-    /**
-     * Calculate total amount sent by user
-     *
-     * Only counts completed transactions to ensure accuracy.
-     * Pending, in-progress, or failed transactions are excluded.
-     *
-     * @param string $publicKey User's public key
-     * @return float Total amount sent by user (completed transactions only)
-     */
-    public function calculateTotalSentByUser(string $publicKey): float {
-        $query = "SELECT SUM(amount) as total_sent FROM {$this->tableName}
-                  WHERE sender_public_key = :publicKey
-                  AND status = :status";
-        $stmt = $this->execute($query, [
-            ':publicKey' => $publicKey,
-            ':status' => Constants::STATUS_COMPLETED
-        ]);
-
-        if (!$stmt) {
-            return 0;
-        }
-
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['total_sent'] ?? 0);
-    }
-
-    /**
-     * Calculate total amount received by user (excluding self-sends)
-     *
-     * Only counts completed transactions to ensure accuracy.
-     * Pending, in-progress, or failed transactions are excluded.
-     * Excludes relay transactions where user is just an intermediary.
-     *
-     * @param string $publicKey User's public key
-     * @return float Total amount received by user (completed transactions only)
-     */
-    public function calculateTotalReceivedByUser(string $publicKey): float {
-        $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
-                  WHERE receiver_public_key = :receiverKey
-                  AND sender_public_key != :senderKey
-                  AND status = :status
-                  AND type != 'relay'";
-        $stmt = $this->execute($query, [
-            ':receiverKey' => $publicKey,
-            ':senderKey' => $publicKey,
-            ':status' => Constants::STATUS_COMPLETED
-        ]);
-
-        if (!$stmt) {
-            return 0;
-        }
-
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['total_received'] ?? 0);
-    }
-
     /**
      * Check if transaction is completed by memo
      *
@@ -316,28 +259,6 @@ class TransactionRepository extends AbstractRepository {
             }
         }
         return $balances;
-    } 
-
-    /**
-     * Get users current balance calculated from transaction history
-     *
-     * DEPRECATED: Prefer using BalanceRepository->getUserBalance() or
-     * TransactionService->getUserTotalBalance() which use the authoritative
-     * balances table that's updated only on transaction completion.
-     *
-     * This method calculates balance from completed transactions only.
-     * Pending, in-progress, and failed transactions are excluded.
-     * Relay transactions where user is intermediary are also excluded.
-     *
-     * @return string Balance formatted as dollars (e.g., "10.50")
-     */
-    public function getUserTotalBalance(): string {
-        $app = Application::getInstance();
-        $currencyUtility = $app->utilityServices->getCurrencyUtility();
-        $totalReceived = $this->calculateTotalReceivedByUser($this->currentUser->getPublicKey());
-        $totalSent = $this->calculateTotalSentByUser($this->currentUser->getPublicKey());
-        $balance = (string) $currencyUtility->convertCentsToDollars($totalReceived - $totalSent);
-        return $balance ?? "0.00";
     }
 
     /**
