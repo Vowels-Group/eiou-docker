@@ -27,49 +27,6 @@ class TransactionRepository extends AbstractRepository {
         $this->tableName = 'transactions';
         $this->primaryKey = 'id';
     }
-
-    /**
-     * Calculate total amount sent by user
-     *
-     * @param string $userPublicKey User's public key
-     * @return float Total amount sent by user
-     */
-    public function calculateTotalSentByUser(string $publicKey): float {
-        $query = "SELECT SUM(amount) as total_sent FROM {$this->tableName}
-                  WHERE sender_public_key = :publicKey";
-        $stmt = $this->execute($query, [':publicKey' => $publicKey]);
-
-        if (!$stmt) {
-            return 0;
-        }
-
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['total_sent'] ?? 0);
-    }
-
-    /**
-     * Calculate total amount received by user (excluding self-sends)
-     *
-     * @param string $userPublicKey User's public key
-     * @return float Total amount received by user
-     */
-    public function calculateTotalReceivedByUser(string $publicKey): float {
-        $query = "SELECT SUM(amount) as total_received FROM {$this->tableName}
-                  WHERE receiver_public_key = :receiverKey
-                  AND sender_public_key != :senderKey";
-        $stmt = $this->execute($query, [
-            ':receiverKey' => $publicKey,
-            ':senderKey' => $publicKey
-        ]);
-
-        if (!$stmt) {
-            return 0;
-        }
-
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (float) ($result['total_received'] ?? 0);
-    }
-
     /**
      * Check if transaction is completed by memo
      *
@@ -302,20 +259,6 @@ class TransactionRepository extends AbstractRepository {
             }
         }
         return $balances;
-    } 
-
-    /**
-     * Get users current balance
-     *
-     * @return string Balance 
-     */
-    function getUserTotalBalance() {
-        $app = Application::getInstance();
-        $currencyUtility = $app->utilityServices->getCurrencyUtility();
-        $totalReceived = $this->calculateTotalReceivedByUser($this->currentUser->getPublicKey());
-        $totalSent = $this->calculateTotalSentByUser($this->currentUser->getPublicKey());
-        $balance = (string) $currencyUtility->convertCentsToDollars($totalReceived - $totalSent);
-        return $balance ?? "0.00";
     }
 
     /**
