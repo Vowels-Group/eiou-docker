@@ -82,8 +82,10 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing 'eiou shutdown' command"
 shutdownOutput=$(docker exec ${testContainer} eiou shutdown 2>&1)
 
-# Give processors time to handle shutdown (longer wait to ensure watchdog doesn't restart them)
-sleep 10
+# Wait for processors to stop (poll instead of fixed sleep)
+wait_for_condition \
+    "docker exec ${testContainer} sh -c \"ps aux | grep -E 'P2pMessages|TransactionMessages|CleanupMessages' | grep -v grep | wc -l\" | grep -q '^0$'" \
+    15 2 "processors to stop"
 
 # Verify processors stopped
 processCheckAfter=$(docker exec ${testContainer} sh -c "ps aux | grep -E 'P2pMessages|TransactionMessages|CleanupMessages' | grep -v grep | wc -l" 2>&1)
@@ -219,8 +221,10 @@ docker exec ${testContainer} sh -c "nohup php /etc/eiou/P2pMessages.php > /dev/n
 docker exec ${testContainer} sh -c "nohup php /etc/eiou/TransactionMessages.php > /dev/null 2>&1 &" 2>/dev/null
 docker exec ${testContainer} sh -c "nohup php /etc/eiou/CleanupMessages.php > /dev/null 2>&1 &" 2>/dev/null
 
-# Wait for processors to start
-sleep 3
+# Wait for processors to start (poll instead of fixed sleep)
+wait_for_condition \
+    "[ \$(docker exec ${testContainer} sh -c \"ps aux | grep -E 'P2pMessages|TransactionMessages|CleanupMessages' | grep -v grep | wc -l\") -ge 3 ]" \
+    10 1 "processors to start"
 
 processCheckRestart=$(docker exec ${testContainer} sh -c "ps aux | grep -E 'P2pMessages|TransactionMessages|CleanupMessages' | grep -v grep | wc -l" 2>&1)
 

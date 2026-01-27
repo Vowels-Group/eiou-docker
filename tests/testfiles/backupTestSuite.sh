@@ -91,8 +91,10 @@ backupCountBefore=$(docker exec ${testContainer} sh -c "ls ${BACKUP_DIR}/*.eiou.
 # Create backup
 createOutput=$(docker exec ${testContainer} eiou backup create 2>&1)
 
-# Give time for backup to complete
-sleep 2
+# Wait for backup file to appear (poll instead of fixed sleep)
+wait_for_condition \
+    "[ \$(docker exec ${testContainer} sh -c 'ls ${BACKUP_DIR}/*.eiou.enc 2>/dev/null | wc -l') -gt $backupCountBefore ]" \
+    10 1 "backup file creation"
 
 # Get backup count after
 backupCountAfter=$(docker exec ${testContainer} sh -c "ls ${BACKUP_DIR}/*.eiou.enc 2>/dev/null | wc -l" 2>&1)
@@ -384,7 +386,10 @@ echo -e "\n\t-> Testing 'eiou backup delete' command"
 
 # Create a backup specifically for deletion test
 docker exec ${testContainer} eiou backup create >/dev/null 2>&1
-sleep 1
+# Brief pause for file system sync
+wait_for_condition \
+    "docker exec ${testContainer} sh -c 'ls ${BACKUP_DIR}/*.eiou.enc 2>/dev/null | wc -l' | grep -qE '^[1-9]'" \
+    5 1 "backup creation"
 
 # Get the newest backup
 deleteTestBackup=$(docker exec ${testContainer} sh -c "ls -t ${BACKUP_DIR}/*.eiou.enc 2>/dev/null | head -1 | xargs basename" 2>&1)
@@ -437,8 +442,11 @@ echo -e "\n\t-> Testing 'eiou backup cleanup' command"
 # Create multiple backups to ensure cleanup has something to work with
 for i in 1 2 3 4; do
     docker exec ${testContainer} eiou backup create >/dev/null 2>&1
-    sleep 1
 done
+# Brief pause for file system sync
+wait_for_condition \
+    "[ \$(docker exec ${testContainer} sh -c 'ls ${BACKUP_DIR}/*.eiou.enc 2>/dev/null | wc -l') -ge 4 ]" \
+    10 1 "backup files creation"
 
 cleanupOutput=$(docker exec ${testContainer} eiou backup cleanup 2>&1)
 

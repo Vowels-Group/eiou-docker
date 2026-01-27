@@ -140,7 +140,10 @@ docker exec ${containerB} eiou add ${addressC} ${containerC} 0.1 1000 USD 2>&1 >
 docker exec ${containerC} eiou add ${addressA} ${containerA} 0.1 1000 USD 2>&1 > /dev/null || true
 docker exec ${containerC} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
 
-sleep 5
+# Process queues to initiate contact exchange
+wait_for_queue_processed ${containerA}
+wait_for_queue_processed ${containerB}
+wait_for_queue_processed ${containerC}
 
 # Wait for contacts to be accepted
 waitElapsed=0
@@ -187,13 +190,16 @@ echo -e "\n[1.4 Send transactions between A, B and B, C for chain validation]"
 
 # Send transactions to establish chains
 txResult1=$(docker exec ${containerA} eiou send ${addressB} 0.01 USD "ping-test-1" 2>&1)
-sleep 2
+wait_for_queue_processed ${containerA}
 txResult2=$(docker exec ${containerB} eiou send ${addressA} 0.01 USD "ping-test-2" 2>&1)
-sleep 2
+wait_for_queue_processed ${containerB}
 txResult3=$(docker exec ${containerB} eiou send ${addressC} 0.01 USD "ping-test-3" 2>&1)
-sleep 2
+wait_for_queue_processed ${containerB}
 txResult4=$(docker exec ${containerC} eiou send ${addressB} 0.01 USD "ping-test-4" 2>&1)
-sleep 5
+# Process all queues to ensure transactions are delivered
+wait_for_queue_processed ${containerA}
+wait_for_queue_processed ${containerB}
+wait_for_queue_processed ${containerC}
 
 # Verify transactions were created
 txCountA=$(docker exec ${containerA} php -r "
@@ -581,7 +587,8 @@ echo -e "\n[3.5 Restore B from seedphrase]"
 
 # Restore B's wallet
 restoreOutput=$(docker exec ${containerB} eiou generate restore ${seedPhraseB} 2>&1)
-sleep 2
+# Allow wallet restoration to complete
+wait_for_condition "docker exec ${containerB} php -r \"echo file_exists('${USERCONFIG}') ? 'OK' : '';\"" 10 1 "wallet config"
 
 # Verify restoration
 restoredPubkeyB=$(docker exec ${containerB} php -r "
@@ -610,7 +617,8 @@ docker exec ${containerB} php -r "
     require_once('/etc/eiou/Functions.php');
     \$app = Application::getInstance();
 " 2>/dev/null
-sleep 1
+# Brief pause for database initialization
+wait_for_condition "docker exec ${containerB} php -r 'require_once(\"${REL_APPLICATION}\"); echo \"OK\";'" 5 1 "database init"
 
 restoredContactCountB=$(docker exec ${containerB} php -r "
     require_once('${REL_APPLICATION}');
@@ -644,7 +652,9 @@ echo -e "\n[3.7 Trigger sync from A to B (simulating ping-triggered sync)]"
 
 # First A needs to re-add B as a contact (B's address is deterministic from seedphrase)
 docker exec ${containerA} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
-sleep 3
+# Process queues for contact exchange
+wait_for_queue_processed ${containerA}
+wait_for_queue_processed ${containerB}
 
 # Get B's pubkey for sync
 pubkeyBfromAforSync=$(docker exec ${containerA} php -r "
@@ -677,7 +687,9 @@ echo -e "\n[3.8 Trigger sync from C to B]"
 
 # C re-adds B
 docker exec ${containerC} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
-sleep 3
+# Process queues for contact exchange
+wait_for_queue_processed ${containerC}
+wait_for_queue_processed ${containerB}
 
 # Get B's pubkey from C's perspective
 pubkeyBfromCforSync=$(docker exec ${containerC} php -r "
@@ -708,7 +720,10 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n[3.9 Verify B has contacts restored after sync]"
 
-sleep 5  # Wait for sync to complete
+# Process all queues to ensure sync completes
+wait_for_queue_processed ${containerA}
+wait_for_queue_processed ${containerB}
+wait_for_queue_processed ${containerC}
 
 finalContactCountB=$(docker exec ${containerB} php -r "
     require_once('${REL_APPLICATION}');

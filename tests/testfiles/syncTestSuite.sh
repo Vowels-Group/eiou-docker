@@ -87,9 +87,10 @@ echo -e "\t   Receiver: ${receiver} (${receiverAddress})"
 # Use same format as addContactsTest: eiou add <address> <name> <fee> <credit> <currency>
 # Credit must be > 0 to allow transactions (1000 matches http4 topology default)
 docker exec ${sender} eiou add ${receiverAddress} ${receiver} 0.1 1000 USD 2>&1 > /dev/null || true
-sleep 1
 docker exec ${receiver} eiou add ${senderAddress} ${sender} 0.1 1000 USD 2>&1 > /dev/null || true
-sleep 2
+# Process queues for contact exchange
+wait_for_queue_processed ${sender}
+wait_for_queue_processed ${receiver}
 
 # Wait for contacts to be accepted (pubkeys only available after acceptance)
 # Get PHP-compatible transport type based on address protocol
@@ -394,17 +395,12 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending 3 transactions from sender to receiver"
 
 docker exec ${sender} eiou send ${receiverAddress} 1 USD "chain-sync-test-tx1-${timestamp}" 2>&1 > /dev/null
-sleep 1
 docker exec ${sender} eiou send ${receiverAddress} 2 USD "chain-sync-test-tx2-${timestamp}" 2>&1 > /dev/null
-sleep 1
 docker exec ${sender} eiou send ${receiverAddress} 3 USD "chain-sync-test-tx3-${timestamp}" 2>&1 > /dev/null
-sleep 2
 
 # Process messages: sender sends outgoing, receiver receives incoming
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
-sleep 2
-docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
-sleep 2
+wait_for_queue_processed ${sender}
+wait_for_queue_processed ${receiver}
 
 senderTxCount=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
@@ -423,10 +419,8 @@ receiverTxCount=$(docker exec ${receiver} php -r "
 
 # Retry if receiver hasn't received transactions yet (time-dependent)
 if [[ "$receiverTxCount" -lt 3 ]]; then
-    sleep 10
-    docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
-    docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
-    sleep 2
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
     receiverTxCount=$(docker exec ${receiver} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
@@ -517,11 +511,9 @@ senderTxCountAfterSync=$(docker exec ${sender} php -r "
 
 # Retry if sync hasn't completed yet
 if [[ "$senderTxCountAfterSync" -lt 3 ]]; then
-    sleep 10
     # Process queues again
-    docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
-    docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
-    sleep 2
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
     senderTxCountAfterSync=$(docker exec ${sender} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
