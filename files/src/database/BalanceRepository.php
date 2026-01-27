@@ -12,6 +12,13 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class BalanceRepository extends AbstractRepository {
     /**
+     * @var array Allowed column names for SQL injection prevention
+     */
+    protected array $allowedColumns = [
+        'id', 'pubkey_hash', 'received', 'sent', 'currency'
+    ];
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection

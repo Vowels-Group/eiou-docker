@@ -12,6 +12,13 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class DebugRepository extends AbstractRepository {
     /**
+     * @var array Allowed column names for SQL injection prevention
+     */
+    protected array $allowedColumns = [
+        'id', 'timestamp', 'level', 'message', 'context', 'file', 'line', 'trace'
+    ];
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection

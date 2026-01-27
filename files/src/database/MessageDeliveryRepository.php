@@ -13,6 +13,15 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class MessageDeliveryRepository extends AbstractRepository {
     /**
+     * @var array Allowed column names for SQL injection prevention
+     */
+    protected array $allowedColumns = [
+        'id', 'message_type', 'message_id', 'recipient_address', 'payload',
+        'delivery_stage', 'retry_count', 'max_retries', 'next_retry_at',
+        'last_error', 'last_response', 'created_at', 'updated_at'
+    ];
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection

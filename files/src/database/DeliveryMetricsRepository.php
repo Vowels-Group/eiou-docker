@@ -13,6 +13,15 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class DeliveryMetricsRepository extends AbstractRepository {
     /**
+     * @var array Allowed column names for SQL injection prevention
+     */
+    protected array $allowedColumns = [
+        'id', 'period_start', 'period_end', 'message_type', 'total_sent',
+        'total_delivered', 'total_failed', 'avg_delivery_time_ms',
+        'avg_retry_count', 'created_at'
+    ];
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection
