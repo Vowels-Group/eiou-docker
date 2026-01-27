@@ -33,8 +33,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
+      - "8443:443"
     environment:
       - QUICKSTART=alice
       # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
@@ -54,6 +54,13 @@ services:
       - alice-backups:/var/lib/eiou/backups
     restart: unless-stopped
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
@@ -68,6 +75,9 @@ services:
     container_name: bob
     networks:
       - eiou-network-compose
+    ports:
+      - "8081:80"
+      - "8444:443"
     environment:
       - QUICKSTART=bob
     volumes:
@@ -78,6 +88,13 @@ services:
       - bob-backups:/var/lib/eiou/backups
     restart: unless-stopped
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
@@ -92,6 +109,9 @@ services:
     container_name: carol
     networks:
       - eiou-network-compose
+    ports:
+      - "8082:80"
+      - "8445:443"
     environment:
       - QUICKSTART=carol
     volumes:
@@ -102,6 +122,13 @@ services:
       - carol-backups:/var/lib/eiou/backups
     restart: unless-stopped
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s
@@ -116,6 +143,9 @@ services:
     container_name: daniel
     networks:
       - eiou-network-compose
+    ports:
+      - "8083:80"
+      - "8446:443"
     environment:
       - QUICKSTART=daniel
     volumes:
@@ -126,6 +156,13 @@ services:
       - daniel-backups:/var/lib/eiou/backups
     restart: unless-stopped
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s

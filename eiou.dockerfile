@@ -164,5 +164,13 @@ RUN chmod +x /app/scripts/*.sh
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh
 
+# Health check to verify Apache is responding
+# - interval: Check every 30 seconds
+# - timeout: Allow 20 seconds for check to complete
+# - start-period: Wait 120 seconds before first check (MariaDB needs 30-60s to initialize)
+# - retries: Mark unhealthy after 5 consecutive failures
+HEALTHCHECK --interval=30s --timeout=20s --start-period=120s --retries=5 \
+    CMD curl -f http://localhost/ || exit 1
+
 # Start services using the startup script
 ENTRYPOINT ["/startup.sh"]

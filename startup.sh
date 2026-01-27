@@ -420,9 +420,21 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
     elif [ "$RESTORE" != "false" ]; then
         # Method 2: Environment variable restore (convenient but less secure)
         # Warning: Seedphrase remains visible in docker inspect and container env
+        echo ""
+        echo "========================================================================"
+        echo "WARNING: RESTORE environment variable detected."
+        echo "For better security, use RESTORE_FILE instead."
+        echo ""
+        echo "RESTORE_FILE method:"
+        echo "  docker run -v /host/path/seed.txt:/restore/seed:ro \\"
+        echo "             -e RESTORE_FILE=/restore/seed ..."
+        echo ""
+        echo "The seed phrase in RESTORE is visible via 'docker inspect' and may"
+        echo "appear in shell history. RESTORE_FILE keeps the seed phrase in a file"
+        echo "that can be securely deleted after container startup."
+        echo "========================================================================"
+        echo ""
         echo "Restore mode enabled (env var). Restoring wallet from environment variable..."
-        echo "WARNING: Seedphrase remains visible in container environment. For production,"
-        echo "         consider using RESTORE_FILE with a mounted file instead."
 
         # SECURITY: Write seedphrase to temp file instead of passing via command line
         # This prevents the seedphrase from appearing in process lists (ps aux)
@@ -441,9 +453,6 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
 
         chmod 600 "$RESTORE_TEMP_FILE"
 
-        # Clear the local environment variable (note: doesn't affect container's env)
-        unset RESTORE
-
         # Pass seedphrase via file to eiou command
         # The restore-file flag reads the seedphrase from file instead of args
         RESTORE_RESULT=$(eiou generate restore-file "$RESTORE_TEMP_FILE" 2>&1)
@@ -451,6 +460,13 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
 
         # Securely delete the temp file
         shred -u "$RESTORE_TEMP_FILE" 2>/dev/null || rm -f "$RESTORE_TEMP_FILE"
+
+        # SECURITY: Clear the RESTORE environment variable immediately after use
+        # This removes the seed phrase from the shell environment, reducing exposure
+        # Note: This does not clear the variable from /proc/<pid>/environ or docker inspect
+        # For complete security, use RESTORE_FILE method instead
+        unset RESTORE
+        export RESTORE=""
 
         # Check if restore was successful
         if [ $RESTORE_EXIT_CODE -ne 0 ]; then
@@ -465,6 +481,7 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
 
         echo "$RESTORE_RESULT"
         echo "Wallet restore completed."
+        echo "NOTE: RESTORE environment variable has been cleared from this shell."
     elif [ "$QUICKSTART" != "false" ]; then
         echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
         # Use HTTPS for secure P2P communication (SSL certificates are auto-generated)

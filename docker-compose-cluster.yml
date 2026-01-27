@@ -50,8 +50,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
+      - "8443:443"
     environment:
       - QUICKSTART=cluster-a
       # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
@@ -71,6 +71,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   # Level 1 nodes
   cluster-a1:
@@ -80,6 +87,9 @@ services:
     container_name: cluster-a1
     networks:
       - eiou-network-compose
+    ports:
+      - "8081:80"
+      - "8444:443"
     environment:
       - QUICKSTART=cluster-a1
     volumes:
@@ -96,6 +106,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   cluster-a2:
     build:
@@ -104,6 +121,9 @@ services:
     container_name: cluster-a2
     networks:
       - eiou-network-compose
+    ports:
+      - "8082:80"
+      - "8445:443"
     environment:
       - QUICKSTART=cluster-a2
     volumes:
@@ -120,6 +140,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   cluster-a3:
     build:
@@ -128,6 +155,9 @@ services:
     container_name: cluster-a3
     networks:
       - eiou-network-compose
+    ports:
+      - "8083:80"
+      - "8446:443"
     environment:
       - QUICKSTART=cluster-a3
     volumes:
@@ -144,6 +174,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   cluster-a4:
     build:
@@ -152,6 +189,9 @@ services:
     container_name: cluster-a4
     networks:
       - eiou-network-compose
+    ports:
+      - "8084:80"
+      - "8447:443"
     environment:
       - QUICKSTART=cluster-a4
     volumes:
@@ -168,6 +208,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   # Level 2 nodes
   cluster-a11:
@@ -177,6 +224,9 @@ services:
     container_name: cluster-a11
     networks:
       - eiou-network-compose
+    ports:
+      - "8085:80"
+      - "8448:443"
     environment:
       - QUICKSTART=cluster-a11
     volumes:
@@ -193,6 +243,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   cluster-a12:
     build:
@@ -201,6 +258,9 @@ services:
     container_name: cluster-a12
     networks:
       - eiou-network-compose
+    ports:
+      - "8086:80"
+      - "8449:443"
     environment:
       - QUICKSTART=cluster-a12
     volumes:
@@ -217,6 +277,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   cluster-a21:
     build:
@@ -225,6 +292,9 @@ services:
     container_name: cluster-a21
     networks:
       - eiou-network-compose
+    ports:
+      - "8087:80"
+      - "8450:443"
     environment:
       - QUICKSTART=cluster-a21
     volumes:
@@ -241,6 +311,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   cluster-a22:
     build:
@@ -249,6 +326,9 @@ services:
     container_name: cluster-a22
     networks:
       - eiou-network-compose
+    ports:
+      - "8088:80"
+      - "8451:443"
     environment:
       - QUICKSTART=cluster-a22
     volumes:
@@ -265,6 +345,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   cluster-a31:
     build:
@@ -273,6 +360,9 @@ services:
     container_name: cluster-a31
     networks:
       - eiou-network-compose
+    ports:
+      - "8089:80"
+      - "8452:443"
     environment:
       - QUICKSTART=cluster-a31
     volumes:
@@ -289,6 +379,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   cluster-a32:
     build:
@@ -297,6 +394,9 @@ services:
     container_name: cluster-a32
     networks:
       - eiou-network-compose
+    ports:
+      - "8090:80"
+      - "8453:443"
     environment:
       - QUICKSTART=cluster-a32
     volumes:
@@ -313,6 +413,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   cluster-a41:
     build:
@@ -321,6 +428,9 @@ services:
     container_name: cluster-a41
     networks:
       - eiou-network-compose
+    ports:
+      - "8091:80"
+      - "8454:443"
     environment:
       - QUICKSTART=cluster-a41
     volumes:
@@ -337,6 +447,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   cluster-a42:
     build:
@@ -345,6 +462,9 @@ services:
     container_name: cluster-a42
     networks:
       - eiou-network-compose
+    ports:
+      - "8092:80"
+      - "8455:443"
     environment:
       - QUICKSTART=cluster-a42
     volumes:
@@ -361,6 +481,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
 networks:
   eiou-network-compose:
