@@ -138,6 +138,16 @@ class ErrorCodes
     public const CONNECTION_FAILED = 'CONNECTION_FAILED';
     public const NETWORK_ERROR = 'NETWORK_ERROR';
 
+    // Backup errors
+    public const BACKUP_FAILED = 'BACKUP_FAILED';
+    public const BACKUP_NOT_FOUND = 'BACKUP_NOT_FOUND';
+    public const BACKUP_INVALID = 'BACKUP_INVALID';
+    public const BACKUP_DECRYPT_FAILED = 'BACKUP_DECRYPT_FAILED';
+    public const RESTORE_FAILED = 'RESTORE_FAILED';
+    public const RESTORE_CONFIRM_REQUIRED = 'RESTORE_CONFIRM_REQUIRED';
+    public const DB_CONFIG_NOT_FOUND = 'DB_CONFIG_NOT_FOUND';
+    public const MYSQLDUMP_FAILED = 'MYSQLDUMP_FAILED';
+
     // HTTP Status Codes
     public const HTTP_OK = 200;
     public const HTTP_BAD_REQUEST = 400;
@@ -193,6 +203,8 @@ class ErrorCodes
             self::NO_CONTACTS => 400,
             self::INTERACTIVE_NOT_SUPPORTED => 400,
             self::INVALID_ARGUMENT => 400,
+            self::BACKUP_INVALID => 400,
+            self::RESTORE_CONFIRM_REQUIRED => 400,
 
             // 401 Unauthorized
             self::AUTHENTICATION_ERROR => 401,
@@ -231,6 +243,7 @@ class ErrorCodes
             self::API_KEY_NOT_FOUND => 404,
             self::COMMAND_NOT_FOUND => 404,
             self::FILE_NOT_FOUND => 404,
+            self::BACKUP_NOT_FOUND => 404,
 
             // 409 Conflict
             self::WALLET_EXISTS => 409,
@@ -261,6 +274,11 @@ class ErrorCodes
             self::SEED_RESTORE_FAILED => 500,
             self::CONNECTION_FAILED => 500,
             self::NETWORK_ERROR => 500,
+            self::BACKUP_FAILED => 500,
+            self::BACKUP_DECRYPT_FAILED => 500,
+            self::RESTORE_FAILED => 500,
+            self::DB_CONFIG_NOT_FOUND => 500,
+            self::MYSQLDUMP_FAILED => 500,
 
             // 503 Service Unavailable
             self::CONTACT_UNREACHABLE => 503,
@@ -381,6 +399,15 @@ class ErrorCodes
             self::NO_VIABLE_TRANSPORT => 'No Viable Transport',
             self::NO_VIABLE_ROUTE => 'No Viable Route',
             self::P2P_CANCELLED => 'P2P Route Cancelled',
+
+            self::BACKUP_FAILED => 'Backup Failed',
+            self::BACKUP_NOT_FOUND => 'Backup Not Found',
+            self::BACKUP_INVALID => 'Invalid Backup',
+            self::BACKUP_DECRYPT_FAILED => 'Backup Decryption Failed',
+            self::RESTORE_FAILED => 'Restore Failed',
+            self::RESTORE_CONFIRM_REQUIRED => 'Restore Confirmation Required',
+            self::DB_CONFIG_NOT_FOUND => 'Database Config Not Found',
+            self::MYSQLDUMP_FAILED => 'MySQL Dump Failed',
         ];
 
         return $titles[$code] ?? ucwords(strtolower(str_replace('_', ' ', $code)));
