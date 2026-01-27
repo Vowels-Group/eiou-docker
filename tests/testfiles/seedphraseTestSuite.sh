@@ -229,8 +229,8 @@ echo -e "\n\t-> Step 1.7: Restoring wallet with 'eiou generate restore <seed_phr
 # Run the restore command with the seed phrase
 restoreOutput=$(docker exec ${testContainer} eiou generate restore ${seedPhrase} 2>&1)
 
-# Small delay to ensure file system sync
-sleep 1
+# Wait for file system sync using polling
+wait_for_file ${testContainer} "${USERCONFIG}" 10 || true
 
 # Check if restore was successful by verifying userconfig.json was created
 verifyRestored=$(docker exec ${testContainer} test -f ${USERCONFIG} && echo "CREATED" || echo "NOT_CREATED")
@@ -341,7 +341,8 @@ restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreCo
 
 # Wait for container to fully initialize and process RESTORE env var
 # Container needs time for: MariaDB startup, startup.sh execution, wallet restoration
-sleep 25
+echo -e "\t   Waiting for container initialization..."
+wait_for_container_initialized ${restoreContainer} 60 || true
 
 # Check if restore was successful by verifying userconfig.json was created
 verifyRestoredContainer=$(docker exec ${restoreContainer} test -f ${USERCONFIG} && echo "CREATED" || echo "NOT_CREATED")
@@ -818,7 +819,8 @@ MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileCon
     -v "${restoreFileContainer}-eiou:/usr/local/bin/" \
     eiou/eiou > /dev/null 2>&1
 
-sleep 30
+echo -e "\t   Waiting for container initialization..."
+wait_for_container_initialized ${restoreFileContainer} 60 || true
 
 # Extract first 3 words from seedphrase for checking
 firstThreeWordsFile=$(cat "${hostSeedFile}" | awk '{print $1" "$2" "$3}')
@@ -897,7 +899,8 @@ docker run -d --network="${network}" --name "${restoreEnvContainer}" \
     -v "${restoreEnvContainer}-eiou:/usr/local/bin/" \
     eiou/eiou > /dev/null 2>&1
 
-sleep 25
+echo -e "\t   Waiting for container initialization..."
+wait_for_container_initialized ${restoreEnvContainer} 60 || true
 
 # Get restored public key
 restoredPubKeyRestoreEnv=$(docker exec ${restoreEnvContainer} php -r '
@@ -1060,7 +1063,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3.5: Restoring wallet with 'eiou generate restore <seed_phrase>'"
 
 restoreOutputAuth=$(docker exec ${testContainer} eiou generate restore ${seedPhraseAuth} 2>&1)
-sleep 1
+wait_for_file ${testContainer} "${USERCONFIG}" 10 || true
 
 verifyRestoredAuth=$(docker exec ${testContainer} test -f ${USERCONFIG} && echo "CREATED" || echo "NOT_CREATED")
 
@@ -1170,7 +1173,7 @@ iteration1AuthCode="$restoredAuthCode"
 # Delete and restore again
 docker exec ${testContainer} rm -f ${USERCONFIG} ${TOR_SECRET_KEY} ${TOR_PUBLIC_KEY} ${TOR_HOSTNAME} 2>&1
 docker exec ${testContainer} eiou generate restore ${seedPhraseAuth} 2>&1
-sleep 1
+wait_for_file ${testContainer} "${USERCONFIG}" 10 || true
 
 iteration2AuthCode=$(docker exec ${testContainer} php -r '
     require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
@@ -1186,7 +1189,7 @@ iteration2AuthCode=$(docker exec ${testContainer} php -r '
 # Delete and restore a third time
 docker exec ${testContainer} rm -f ${USERCONFIG} ${TOR_SECRET_KEY} ${TOR_PUBLIC_KEY} ${TOR_HOSTNAME} 2>&1
 docker exec ${testContainer} eiou generate restore ${seedPhraseAuth} 2>&1
-sleep 1
+wait_for_file ${testContainer} "${USERCONFIG}" 10 || true
 
 iteration3AuthCode=$(docker exec ${testContainer} php -r '
     require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
@@ -1224,7 +1227,8 @@ authcodeRestoreContainer="httpAuthcodeRestoreTest"
 authcodeContainerHash=$(docker run -d --network="${network}" --name "${authcodeRestoreContainer}" -v "${authcodeRestoreContainer}-mysql-data:/var/lib/mysql" -v "${authcodeRestoreContainer}-files:/etc/eiou/" -v "${authcodeRestoreContainer}-index:/var/www/html" -v "${authcodeRestoreContainer}-eiou:/usr/local/bin/" -e RESTORE="${seedPhraseAuth}" eiou/eiou 2>&1)
 
 # Wait for container to fully initialize and process RESTORE env var
-sleep 25
+echo -e "\t   Waiting for container initialization..."
+wait_for_container_initialized ${authcodeRestoreContainer} 60 || true
 
 newContainerAuthCode=$(docker exec ${authcodeRestoreContainer} php -r '
     require_once "/etc/eiou/src/security/KeyEncryption.php";

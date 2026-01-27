@@ -54,6 +54,107 @@ wait_for_container_health() {
         "container ${container} health"
 }
 
+# Wait for a newly created container to be fully initialized
+# This includes: container running, MariaDB ready, PHP working, userconfig created
+# Usage: wait_for_container_initialized <container> [timeout]
+# Returns: 0 if initialized, 1 if timeout
+wait_for_container_initialized() {
+    local container="$1"
+    local timeout="${2:-60}"
+    local interval=3
+    local elapsed=0
+
+    while [ $elapsed -lt $timeout ]; do
+        # Check if container is running
+        if ! docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+            sleep $interval
+            elapsed=$((elapsed + interval))
+            continue
+        fi
+
+        # Check if PHP is working and userconfig exists
+        local ready=$(docker exec ${container} php -r "
+            if (file_exists('${USERCONFIG}')) {
+                \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+                echo isset(\$json['public']) ? 'READY' : 'WAITING';
+            } else {
+                echo 'WAITING';
+            }
+        " 2>/dev/null || echo "WAITING")
+
+        if [ "$ready" = "READY" ]; then
+            return 0
+        fi
+
+        sleep $interval
+        elapsed=$((elapsed + interval))
+    done
+
+    echo "Timeout after ${timeout}s waiting for container ${container} initialization" >&2
+    return 1
+}
+
+# Wait for file to exist in container
+# Usage: wait_for_file <container> <filepath> [timeout]
+# Returns: 0 if file exists, 1 if timeout
+wait_for_file() {
+    local container="$1"
+    local filepath="$2"
+    local timeout="${3:-$TEST_TIMEOUT}"
+
+    wait_for_condition \
+        "docker exec ${container} test -f '${filepath}'" \
+        "$timeout" \
+        1 \
+        "file ${filepath}"
+}
+
+# Wait for process to stop
+# Usage: wait_for_process_stop <container> <process_pattern> [timeout]
+# Returns: 0 if stopped, 1 if timeout
+wait_for_process_stop() {
+    local container="$1"
+    local pattern="$2"
+    local timeout="${3:-$TEST_TIMEOUT}"
+    local interval=1
+    local elapsed=0
+
+    while [ $elapsed -lt $timeout ]; do
+        local count=$(docker exec ${container} pgrep -c -f "$pattern" 2>/dev/null || echo "0")
+        if [ "$count" -eq 0 ]; then
+            return 0
+        fi
+        sleep $interval
+        elapsed=$((elapsed + interval))
+    done
+
+    echo "Timeout: process '$pattern' still running after ${timeout}s" >&2
+    return 1
+}
+
+# Wait for process to start
+# Usage: wait_for_process_start <container> <process_pattern> [timeout]
+# Returns: 0 if started, 1 if timeout
+wait_for_process_start() {
+    local container="$1"
+    local pattern="$2"
+    local timeout="${3:-$TEST_TIMEOUT}"
+    local interval=1
+    local elapsed=0
+
+    while [ $elapsed -lt $timeout ]; do
+        local count=$(docker exec ${container} pgrep -c -f "$pattern" 2>/dev/null || echo "0")
+        if [ "$count" -gt 0 ]; then
+            return 0
+        fi
+        sleep $interval
+        elapsed=$((elapsed + interval))
+    done
+
+    echo "Timeout: process '$pattern' not started after ${timeout}s" >&2
+    return 1
+}
+
 # Wait for message queue processing to complete
 # Usage: wait_for_queue_processed <container> [timeout]
 # Checks that both in and out queues have been processed

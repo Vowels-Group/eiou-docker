@@ -119,8 +119,10 @@ while [ $waitElapsed -lt 15 ]; do
         break
     fi
 
-    sleep 1
-    waitElapsed=$((waitElapsed + 1))
+    # Process queues to speed up contact exchange
+    wait_for_queue_processed ${sender} 2
+    wait_for_queue_processed ${receiver} 2
+    waitElapsed=$((waitElapsed + 2))
 done
 
 if [[ "$senderStatus" != "accepted" ]] || [[ "$receiverStatus" != "accepted" ]]; then
@@ -620,15 +622,12 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Sending initial transactions"
 
 docker exec ${sender} eiou send ${receiverAddress} 1 USD "cycle-test-1-${timestamp2}" 2>&1 > /dev/null
-sleep 2
+wait_for_queue_processed ${sender} 5
 docker exec ${sender} eiou send ${receiverAddress} 2 USD "cycle-test-2-${timestamp2}" 2>&1 > /dev/null
-sleep 2
 
 # Process messages: sender sends outgoing, receiver receives incoming
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
-sleep 2
-docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
-sleep 2
+wait_for_queue_processed ${sender} 5
+wait_for_queue_processed ${receiver} 5
 
 initialCountSender=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
@@ -647,10 +646,11 @@ initialCountReceiver=$(docker exec ${receiver} php -r "
 
 # Retry if transactions haven't been received yet (time-dependent)
 if [[ "$initialCountReceiver" -lt 2 ]]; then
-    sleep 10
-    docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
-    docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
-    sleep 2
+    # Process queues multiple times to ensure delivery
+    for retry in 1 2 3; do
+        wait_for_queue_processed ${sender} 5
+        wait_for_queue_processed ${receiver} 5
+    done
     initialCountReceiver=$(docker exec ${receiver} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
@@ -684,24 +684,17 @@ docker exec ${sender} php -r "
 
 # Send new transaction (triggers resync due to previous_txid mismatch)
 docker exec ${sender} eiou send ${receiverAddress} 10 USD "cycle-test-3-${timestamp2}" 2>&1 > /dev/null
-sleep 2
-# Sender processes outgoing
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
-sleep 3
-# Receiver processes incoming - may detect mismatch and request sync
-docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
-sleep 2
-# Receiver sends sync request/response
-docker exec -e EIOU_TEST_MODE=true ${receiver} eiou out 2>&1 > /dev/null
-sleep 3
-# Sender receives sync data
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou in 2>&1 > /dev/null
-sleep 3
-# Additional round to ensure full sync
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
-sleep 2
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou in 2>&1 > /dev/null
-sleep 2
+
+# Process full sync cycle using queue processing
+# Round 1: Sender sends, receiver receives
+wait_for_queue_processed ${sender} 5
+wait_for_queue_processed ${receiver} 5
+# Round 2: Receiver responds with sync request
+wait_for_queue_processed ${receiver} 5
+wait_for_queue_processed ${sender} 5
+# Round 3: Final sync completion
+wait_for_queue_processed ${sender} 5
+wait_for_queue_processed ${receiver} 5
 
 countAfterCycle=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
@@ -713,12 +706,11 @@ countAfterCycle=$(docker exec ${sender} php -r "
 
 # Retry if sync cycle hasn't completed yet (time-dependent)
 if [[ "$countAfterCycle" -lt 2 ]]; then
-    sleep 10
-    docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
-    docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
-    docker exec -e EIOU_TEST_MODE=true ${receiver} eiou out 2>&1 > /dev/null
-    docker exec -e EIOU_TEST_MODE=true ${sender} eiou in 2>&1 > /dev/null
-    sleep 2
+    # Additional sync rounds
+    for retry in 1 2 3; do
+        wait_for_queue_processed ${sender} 5
+        wait_for_queue_processed ${receiver} 5
+    done
     countAfterCycle=$(docker exec ${sender} php -r "
         require_once('${REL_APPLICATION}');
         \$app = Application::getInstance();
@@ -1371,11 +1363,8 @@ timestamp408=$(date +%s%N)
 
 # Step 1: Send an initial transaction to establish a chain
 docker exec ${sender} eiou send ${receiverAddress} 1 USD "fork-test-base-${timestamp408}" 2>&1 > /dev/null
-sleep 2
-docker exec -e EIOU_TEST_MODE=true ${sender} eiou out 2>&1 > /dev/null
-sleep 2
-docker exec -e EIOU_TEST_MODE=true ${receiver} eiou in 2>&1 > /dev/null
-sleep 2
+wait_for_queue_processed ${sender} 5
+wait_for_queue_processed ${receiver} 5
 
 # Get the base transaction's txid (this will be the shared previous_txid)
 baseTxid=$(docker exec ${sender} php -r "
@@ -1570,17 +1559,12 @@ setup_ab_chain() {
     # AB0 is the contact transaction (already exists from test setup)
     # Send AB1, AB2, AB3 (use EIOU_TEST_MODE to bypass rate limiter)
     docker exec -e EIOU_TEST_MODE=true ${contactA} eiou send ${addressB} 1 USD "AB1-${ts}" 2>&1 > /dev/null
-    sleep 1
     docker exec -e EIOU_TEST_MODE=true ${contactA} eiou send ${addressB} 2 USD "AB2-${ts}" 2>&1 > /dev/null
-    sleep 1
     docker exec -e EIOU_TEST_MODE=true ${contactA} eiou send ${addressB} 3 USD "AB3-${ts}" 2>&1 > /dev/null
-    sleep 2
 
     # Process transactions
-    docker exec -e EIOU_TEST_MODE=true ${contactA} eiou out 2>&1 > /dev/null
-    sleep 2
-    docker exec -e EIOU_TEST_MODE=true ${contactB} eiou in 2>&1 > /dev/null
-    sleep 2
+    wait_for_queue_processed ${contactA} 5
+    wait_for_queue_processed ${contactB} 5
 }
 
 # Helper function to setup CB chain
@@ -1590,16 +1574,11 @@ setup_cb_chain() {
 
     # Use EIOU_TEST_MODE to bypass rate limiter
     docker exec -e EIOU_TEST_MODE=true ${contactC} eiou send ${addressB} 1 USD "CB1-${ts}" 2>&1 > /dev/null
-    sleep 1
     docker exec -e EIOU_TEST_MODE=true ${contactC} eiou send ${addressB} 2 USD "CB2-${ts}" 2>&1 > /dev/null
-    sleep 1
     docker exec -e EIOU_TEST_MODE=true ${contactC} eiou send ${addressB} 3 USD "CB3-${ts}" 2>&1 > /dev/null
-    sleep 2
 
-    docker exec -e EIOU_TEST_MODE=true ${contactC} eiou out 2>&1 > /dev/null
-    sleep 2
-    docker exec -e EIOU_TEST_MODE=true ${contactB} eiou in 2>&1 > /dev/null
-    sleep 2
+    wait_for_queue_processed ${contactC} 5
+    wait_for_queue_processed ${contactB} 5
 }
 
 # Helper function to delete all transactions for a contact pair on one side
@@ -1699,12 +1678,12 @@ process_all_queues() {
     docker exec -e EIOU_TEST_MODE=true ${contactB} eiou out 2>&1 > /dev/null &
     docker exec -e EIOU_TEST_MODE=true ${contactC} eiou out 2>&1 > /dev/null &
     wait
-    sleep 2
+    sleep ${TEST_POLL_INTERVAL:-1}
     docker exec -e EIOU_TEST_MODE=true ${contactA} eiou in 2>&1 > /dev/null &
     docker exec -e EIOU_TEST_MODE=true ${contactB} eiou in 2>&1 > /dev/null &
     docker exec -e EIOU_TEST_MODE=true ${contactC} eiou in 2>&1 > /dev/null &
     wait
-    sleep 2
+    sleep ${TEST_POLL_INTERVAL:-1}
 }
 
 # Cleanup function for test transactions
@@ -1898,7 +1877,6 @@ delete_all_transactions ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp4}"
 # B sends transactions to A (acts as new contact request in a way)
 echo -e "\t   B sending BA1 to A..."
 docker exec ${contactB} eiou send ${addressA} 1 USD "BA1-${timestamp4}" 2>&1 > /dev/null
-sleep 1
 
 # Process queues
 echo -e "\t   Processing message queues..."

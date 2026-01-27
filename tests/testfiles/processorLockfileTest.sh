@@ -107,7 +107,7 @@ printf "\t   Stopping existing processors...\n"
 docker exec ${testContainer} pkill -f "P2pMessages.php" 2>/dev/null || true
 docker exec ${testContainer} pkill -f "TransactionMessages.php" 2>/dev/null || true
 docker exec ${testContainer} pkill -f "CleanupMessages.php" 2>/dev/null || true
-sleep 2
+wait_for_process_stop ${testContainer} "Messages.php" 10 || true
 
 # Remove lockfiles again after kill (in case they were created during shutdown)
 docker exec ${testContainer} rm -f /tmp/p2pmessages_lock.pid 2>/dev/null
@@ -124,7 +124,7 @@ printf "\t   Cleaning up for watchdog-based restart...\n"
 
 # Kill all processors (watchdog will restart them)
 docker exec ${testContainer} pkill -9 -f "Messages.php" 2>/dev/null || true
-sleep 1
+wait_for_process_stop ${testContainer} "Messages.php" 5 || true
 
 # Remove lockfiles so new processors must create fresh ones
 docker exec ${testContainer} rm -f /tmp/*_lock.pid 2>/dev/null || true
@@ -157,14 +157,14 @@ if [ "$runningCount" -lt 3 ] || [ "$lockfileCount" -lt 3 ]; then
     # Kill any partial restarts
     docker exec ${testContainer} pkill -9 -f "Messages.php" 2>/dev/null || true
     docker exec ${testContainer} rm -f /tmp/*_lock.pid 2>/dev/null || true
-    sleep 1
+    wait_for_process_stop ${testContainer} "Messages.php" 5 || true
 
     docker exec ${testContainer} sh -c "nohup php /etc/eiou/P2pMessages.php > /tmp/p2p_startup.log 2>&1 &"
     docker exec ${testContainer} sh -c "nohup php /etc/eiou/TransactionMessages.php > /tmp/transaction_startup.log 2>&1 &"
     docker exec ${testContainer} sh -c "nohup php /etc/eiou/CleanupMessages.php > /tmp/cleanup_startup.log 2>&1 &"
 
-    # Wait for manual start
-    sleep 5
+    # Wait for manual start using polling
+    wait_for_process_start ${testContainer} "Messages.php" 15 || true
 
     # Check results
     runningCount=$(docker exec ${testContainer} pgrep -c -f "Messages.php" 2>/dev/null | tr -d '\n' || echo "0")
@@ -288,8 +288,8 @@ for processor in "${!PROCESSORS[@]}"; do
 done
 
 # Additional wait for lockfile creation (happens after process starts)
-echo -e "\t   Waiting for lockfile creation (5s)..."
-sleep 5
+echo -e "\t   Waiting for lockfile creation..."
+wait_for_file ${testContainer} "/tmp/p2pmessages_lock.pid" 15 || true
 
 for processor in "${!PROCESSORS[@]}"; do
     lockfile="${PROCESSORS[$processor]}"
@@ -451,8 +451,8 @@ else
     printf "\t   Killing processor...\n"
     kill_processor "$testContainer" "$WATCHDOG_TEST_PROCESSOR"
 
-    # Wait a moment for the process to die
-    sleep 2
+    # Wait for the process to die using polling
+    wait_for_process_stop "$testContainer" "$WATCHDOG_TEST_PROCESSOR" 10 || true
 
     # Verify it's dead
     killedPid=$(get_processor_pid_by_name "$testContainer" "$WATCHDOG_TEST_PROCESSOR")
@@ -470,7 +470,7 @@ else
             passed=$(( passed + 1 ))
 
             # Wait for lockfile to be recreated after restart
-            sleep 3
+            wait_for_file "$testContainer" "$WATCHDOG_TEST_LOCKFILE" 10 || true
         else
             # Watchdog didn't restart in time - this is expected if watchdog interval is long
             printf "\t   Watchdog test ${YELLOW}SKIPPED${NC} - Watchdog did not restart within %ss\n" "$WATCHDOG_TIMEOUT"
