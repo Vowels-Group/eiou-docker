@@ -110,10 +110,12 @@ echo -e "\n\t-> Testing SQL injection in JSON body"
 timestamp=$(date +%s)
 path="/api/v1/contacts"
 body="{\"name\":\"Test'; DELETE FROM contacts; --\",\"address\":\"http://test.example.com\"}"
+bodyB64=$(printf '%s' "$body" | base64 -w 0)
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n${body}\";
+    \$body = base64_decode('${bodyB64}');
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -156,10 +158,12 @@ xssPayload="<script>alert('xss')</script>"
 timestamp=$(date +%s)
 path="/api/v1/contacts"
 body="{\"name\":\"${xssPayload}\",\"address\":\"http://xss-test.example.com\"}"
+bodyB64=$(printf '%s' "$body" | base64 -w 0)
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n${body}\";
+    \$body = base64_decode('${bodyB64}');
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -380,10 +384,12 @@ echo -e "\n\t-> Testing invalid amount format rejection"
 timestamp=$(date +%s)
 path="/api/v1/wallet/send"
 body="{\"address\":\"http://test.example.com\",\"amount\":\"not_a_number\",\"currency\":\"USD\"}"
+bodyB64=$(printf '%s' "$body" | base64 -w 0)
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n${body}\";
+    \$body = base64_decode('${bodyB64}');
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -412,10 +418,12 @@ echo -e "\n\t-> Testing negative amount rejection"
 timestamp=$(date +%s)
 path="/api/v1/wallet/send"
 body="{\"address\":\"http://test.example.com\",\"amount\":\"-100\",\"currency\":\"USD\"}"
+bodyB64=$(printf '%s' "$body" | base64 -w 0)
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n${body}\";
+    \$body = base64_decode('${bodyB64}');
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
@@ -444,10 +452,12 @@ echo -e "\n\t-> Testing excessive amount rejection (>max)"
 timestamp=$(date +%s)
 path="/api/v1/wallet/send"
 body="{\"address\":\"http://test.example.com\",\"amount\":\"9999999999999\",\"currency\":\"USD\"}"
+bodyB64=$(printf '%s' "$body" | base64 -w 0)
 
 signature=$(docker exec ${testContainer} php -r "
     \$secret = '${apiSecret}';
-    \$message = \"POST\\n${path}\\n${timestamp}\\n${body}\";
+    \$body = base64_decode('${bodyB64}');
+    \$message = \"POST\\n${path}\\n${timestamp}\\n\" . \$body;
     echo hash_hmac('sha256', \$message, \$secret);
 " 2>/dev/null)
 
