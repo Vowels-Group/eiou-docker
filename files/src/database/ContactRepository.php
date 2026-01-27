@@ -12,6 +12,15 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class ContactRepository extends AbstractRepository {
     /**
+     * @var array Allowed column names for SQL injection prevention
+     */
+    protected array $allowedColumns = [
+        'id', 'contact_id', 'pubkey', 'pubkey_hash', 'name', 'status',
+        'online_status', 'valid_chain', 'currency', 'fee_percent',
+        'credit_limit', 'created_at', 'last_ping_at'
+    ];
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection

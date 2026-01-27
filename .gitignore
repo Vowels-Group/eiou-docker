@@ -7,3 +7,12 @@ yarn.lock
 docs/*
 !docs/*.md
 memory/*
+
+# Test credentials (credentials.example.sh should be committed as template)
+tests/baseconfig/credentials.sh
+
+# Any local credential files
+*.credentials
+*.secrets
+.env.local
+.env.test.local

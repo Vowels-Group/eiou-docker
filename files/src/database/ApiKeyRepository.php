@@ -12,6 +12,13 @@ require_once dirname(__DIR__) . '/database/AbstractRepository.php';
 require_once dirname(__DIR__) . '/security/KeyEncryption.php';
 
 class ApiKeyRepository extends AbstractRepository {
+    /**
+     * @var array Allowed column names for SQL injection prevention
+     */
+    protected array $allowedColumns = [
+        'id', 'key_id', 'encrypted_secret', 'name', 'permissions',
+        'rate_limit_per_minute', 'enabled', 'created_at', 'last_used_at', 'expires_at'
+    ];
 
     /**
      * Generate a new API key

@@ -36,6 +36,12 @@ abstract class AbstractRepository {
     protected $primaryKey = 'id';
 
     /**
+     * @var array Whitelist of allowed column names for this repository
+     * Child classes MUST define this to enable column validation
+     */
+    protected array $allowedColumns = [];
+
+    /**
      * @var UserContext object of user data
      */
     protected $currentUser;
@@ -76,11 +82,59 @@ abstract class AbstractRepository {
     }
 
     /**
-     * Load current user 
+     * Load current user
      */
     private function loadCurrentUser(): void {
         require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
+    }
+
+    /**
+     * Validate that a column name is in the allowed whitelist
+     *
+     * @param string $column Column name to validate
+     * @return bool True if column is allowed
+     */
+    protected function isValidColumn(string $column): bool {
+        // If no whitelist defined, warn but allow (backwards compatibility)
+        if (empty($this->allowedColumns)) {
+            SecureLogger::warning("[" . static::class . "] No column whitelist defined - column validation skipped", [
+                'column' => $column
+            ]);
+            return true;
+        }
+
+        // Check if column is in whitelist (case-insensitive)
+        return in_array(strtolower($column), array_map('strtolower', $this->allowedColumns), true);
+    }
+
+    /**
+     * Validate column and throw exception if invalid
+     *
+     * @param string $column Column name to validate
+     * @throws InvalidArgumentException If column is not in whitelist
+     */
+    protected function validateColumn(string $column): void {
+        if (!$this->isValidColumn($column)) {
+            $error = "Invalid column name: '$column' not in whitelist for " . static::class;
+            SecureLogger::warning($error, [
+                'column' => $column,
+                'allowed' => $this->allowedColumns
+            ]);
+            throw new InvalidArgumentException($error);
+        }
+    }
+
+    /**
+     * Validate multiple columns at once
+     *
+     * @param array $columns Array of column names to validate
+     * @throws InvalidArgumentException If any column is not in whitelist
+     */
+    protected function validateColumns(array $columns): void {
+        foreach ($columns as $column) {
+            $this->validateColumn($column);
+        }
     }
 
     /**
@@ -130,8 +184,10 @@ abstract class AbstractRepository {
      * @param string $column Column name
      * @param mixed $value Column value
      * @return array|null Row data or null if not found
+     * @throws InvalidArgumentException If column is not in whitelist
      */
     protected function findByColumn(string $column, $value): ?array {
+        $this->validateColumn($column);
         $query = "SELECT * FROM {$this->tableName} WHERE {$column} = :value LIMIT 1";
         $stmt = $this->execute($query, [':value' => $value]);
 
@@ -150,8 +206,10 @@ abstract class AbstractRepository {
      * @param mixed $value Column value
      * @param int $limit Maximum number of rows (0 = no limit)
      * @return array Array of rows
+     * @throws InvalidArgumentException If column is not in whitelist
      */
     protected function findManyByColumn(string $column, $value, int $limit = 0): array {
+        $this->validateColumn($column);
         $query = "SELECT * FROM {$this->tableName} WHERE {$column} = :value";
 
         if ($limit > 0) {
@@ -209,9 +267,11 @@ abstract class AbstractRepository {
      *
      * @param array $data Associative array of column => value
      * @return string|false Last insert ID or false on failure
+     * @throws InvalidArgumentException If any column is not in whitelist
      */
     protected function insert(array $data) {
         $columns = array_keys($data);
+        $this->validateColumns($columns);
         $placeholders = array_map(fn($col) => ":$col", $columns);
 
         $query = sprintf(
@@ -242,8 +302,11 @@ abstract class AbstractRepository {
      * @param string $whereColumn WHERE condition column
      * @param mixed $whereValue WHERE condition value
      * @return int Number of affected rows, -1 on error
+     * @throws InvalidArgumentException If any column is not in whitelist
      */
     protected function update(array $data, string $whereColumn, $whereValue): int {
+        $this->validateColumn($whereColumn);
+        $this->validateColumns(array_keys($data));
         $setParts = array_map(fn($col) => "$col = :$col", array_keys($data));
 
         $query = sprintf(
@@ -274,8 +337,10 @@ abstract class AbstractRepository {
      * @param string $column Column name for WHERE clause
      * @param mixed $value Column value
      * @return int Number of deleted rows, -1 on error
+     * @throws InvalidArgumentException If column is not in whitelist
      */
     protected function delete(string $column, $value): int {
+        $this->validateColumn($column);
         $query = "DELETE FROM {$this->tableName} WHERE {$column} = :value";
         $stmt = $this->execute($query, [':value' => $value]);
 
@@ -292,12 +357,14 @@ abstract class AbstractRepository {
      * @param string|null $column Column name (null for count all)
      * @param mixed|null $value Column value
      * @return int Row count
+     * @throws InvalidArgumentException If column is not in whitelist
      */
     protected function count(?string $column = null, $value = null): int {
         if ($column === null) {
             $query = "SELECT COUNT(*) as count FROM {$this->tableName}";
             $params = [];
         } else {
+            $this->validateColumn($column);
             $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE {$column} = :value";
             $params = [':value' => $value];
         }
@@ -318,8 +385,10 @@ abstract class AbstractRepository {
      * @param string $column Column name
      * @param mixed $value Column value
      * @return bool True if exists
+     * @throws InvalidArgumentException If column is not in whitelist
      */
     protected function exists(string $column, $value): bool {
+        // Note: validateColumn is called in count()
         return $this->count($column, $value) > 0;
     }
 

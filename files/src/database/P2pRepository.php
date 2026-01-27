@@ -12,6 +12,18 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class P2pRepository extends AbstractRepository {
     /**
+     * @var array Allowed column names for SQL injection prevention
+     */
+    protected array $allowedColumns = [
+        'id', 'hash', 'salt', 'time', 'expiration', 'currency', 'amount',
+        'my_fee_amount', 'destination_address', 'destination_pubkey',
+        'destination_signature', 'request_level', 'max_request_level',
+        'sender_public_key', 'sender_address', 'sender_signature',
+        'description', 'status', 'created_at', 'incoming_txid',
+        'outgoing_txid', 'completed_at'
+    ];
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection

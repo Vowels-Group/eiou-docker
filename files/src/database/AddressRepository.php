@@ -12,6 +12,13 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class AddressRepository extends AbstractRepository {
     /**
+     * @var array Allowed column names for SQL injection prevention
+     */
+    protected array $allowedColumns = [
+        'id', 'pubkey_hash', 'http', 'https', 'tor'
+    ];
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection

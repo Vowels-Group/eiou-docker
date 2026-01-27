@@ -13,6 +13,15 @@ require_once __DIR__ . '/AbstractRepository.php';
  */
 class DeadLetterQueueRepository extends AbstractRepository {
     /**
+     * @var array Allowed column names for SQL injection prevention
+     */
+    protected array $allowedColumns = [
+        'id', 'message_type', 'message_id', 'payload', 'recipient_address',
+        'retry_count', 'last_retry_at', 'failure_reason', 'status',
+        'created_at', 'resolved_at'
+    ];
+
+    /**
      * Constructor
      *
      * @param PDO|null $pdo Optional PDO instance for dependency injection

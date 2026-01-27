@@ -38,6 +38,15 @@ require_once __DIR__ . '/../utils/SecureLogger.php';
  * 7. releaseTransaction() removes them after successful reprocessing
  */
 class HeldTransactionRepository extends AbstractRepository {
+    /**
+     * @var array Allowed column names for SQL injection prevention
+     */
+    protected array $allowedColumns = [
+        'id', 'contact_pubkey_hash', 'txid', 'original_previous_txid',
+        'expected_previous_txid', 'transaction_type', 'hold_reason',
+        'sync_status', 'retry_count', 'max_retries', 'held_at',
+        'last_sync_attempt', 'next_retry_at', 'resolved_at'
+    ];
 
     /**
      * Constructor

@@ -409,6 +409,7 @@ addContactsTest
 curlErrorHandlingTest
 cliCommandsTest
 apiEndpointsTest
+securityTestSuite
 "
 
 # Sync tests (requires contacts and transactions)

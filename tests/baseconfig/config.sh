@@ -273,3 +273,15 @@ elif [ -f "./tests/baseconfig/testHelpers.sh" ]; then
 fi
 
 #############################################################################
+# CREDENTIAL LOADING (optional)
+# Source credentials.sh if it exists for custom environment configuration
+#############################################################################
+
+# Source credentials file if it exists
+if [ -f "${SCRIPT_DIR}/credentials.sh" ]; then
+    . "${SCRIPT_DIR}/credentials.sh"
+elif [ -f "./tests/baseconfig/credentials.sh" ]; then
+    . "./tests/baseconfig/credentials.sh"
+fi
+
+#############################################################################
