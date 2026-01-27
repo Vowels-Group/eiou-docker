@@ -965,15 +965,33 @@ Get system settings.
 {
     "success": true,
     "data": {
-        "node_name": "Alice's Node",
-        "default_currency": "USD",
-        "default_fee_percent": 1.0,
-        "default_credit_limit": 100.00,
-        "sync_interval_seconds": 60,
-        "message_check_interval_seconds": 30
+        "settings": {
+            "default_currency": "USD",
+            "minimum_fee_amount": 0.01,
+            "default_fee_percent": 1.0,
+            "maximum_fee_percent": 5.0,
+            "default_credit_limit": 100.00,
+            "max_p2p_level": 3,
+            "p2p_expiration_seconds": 3600,
+            "max_output_lines": 100,
+            "default_transport_mode": "http",
+            "auto_refresh_enabled": true
+        }
     }
 }
 ```
+
+**Fields:**
+- `default_currency`: Default currency code for transactions (e.g., "USD")
+- `minimum_fee_amount`: Minimum fee amount for transactions
+- `default_fee_percent`: Default fee percentage for new contacts
+- `maximum_fee_percent`: Maximum allowed fee percentage
+- `default_credit_limit`: Default credit limit for new contacts
+- `max_p2p_level`: Maximum P2P relay depth level
+- `p2p_expiration_seconds`: Time in seconds before P2P requests expire
+- `max_output_lines`: Maximum output lines for CLI commands
+- `default_transport_mode`: Default transport protocol ("http", "https", or "tor")
+- `auto_refresh_enabled`: Whether auto-refresh is enabled for transaction history
 
 ---
 
@@ -1332,10 +1350,19 @@ Create a new API key.
         "secret": "sk_live_abc123...",
         "name": "New Integration",
         "permissions": ["wallet:read", "contacts:read"],
-        "message": "Store the secret securely - it cannot be retrieved again"
+        "rate_limit_per_minute": 100,
+        "warning": "Save this secret now! It will not be shown again."
     }
 }
 ```
+
+**Fields:**
+- `key_id`: Unique identifier for the API key
+- `secret`: The API secret (only shown once at creation)
+- `name`: Human-readable name for the key
+- `permissions`: Array of granted permissions
+- `rate_limit_per_minute`: Maximum API calls per minute for this key
+- `warning`: Security reminder to save the secret immediately
 
 > **Important:** The `secret` is only returned once at creation time. Store it securely.
 
