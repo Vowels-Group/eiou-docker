@@ -133,7 +133,7 @@ queryResult=$(docker exec ${testContainer} php -r "
     echo \$elapsed_ms;
 " 2>/dev/null)
 
-if [[ -n "$queryResult" ]] && [[ $(echo "$queryResult < $MAX_DB_QUERY_TIME_MS" | bc -l) -eq 1 ]]; then
+if [[ -n "$queryResult" ]] && [[ $(awk "BEGIN {print ($queryResult < $MAX_DB_QUERY_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   Simple SELECT query (${queryResult}ms < ${MAX_DB_QUERY_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -160,7 +160,7 @@ indexedQueryResult=$(docker exec ${testContainer} php -r "
     echo \$elapsed_ms;
 " 2>/dev/null)
 
-if [[ -n "$indexedQueryResult" ]] && [[ $(echo "$indexedQueryResult < $MAX_DB_QUERY_TIME_MS" | bc -l) -eq 1 ]]; then
+if [[ -n "$indexedQueryResult" ]] && [[ $(awk "BEGIN {print ($indexedQueryResult < $MAX_DB_QUERY_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   Indexed query (${indexedQueryResult}ms < ${MAX_DB_QUERY_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -186,7 +186,7 @@ joinQueryResult=$(docker exec ${testContainer} php -r "
     echo \$elapsed_ms;
 " 2>/dev/null)
 
-if [[ -n "$joinQueryResult" ]] && [[ $(echo "$joinQueryResult < $MAX_DB_QUERY_TIME_MS" | bc -l) -eq 1 ]]; then
+if [[ -n "$joinQueryResult" ]] && [[ $(awk "BEGIN {print ($joinQueryResult < $MAX_DB_QUERY_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   Join/complex query (${joinQueryResult}ms < ${MAX_DB_QUERY_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -233,7 +233,7 @@ statusTimeResult=$(docker exec ${testContainer} php -r "
     echo \$elapsed_ms;
 " 2>/dev/null)
 
-if [[ -n "$statusTimeResult" ]] && [[ $(echo "$statusTimeResult < $MAX_API_RESPONSE_TIME_MS" | bc -l) -eq 1 ]]; then
+if [[ -n "$statusTimeResult" ]] && [[ $(awk "BEGIN {print ($statusTimeResult < $MAX_API_RESPONSE_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   /api/v1/system/status (${statusTimeResult}ms < ${MAX_API_RESPONSE_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -276,7 +276,7 @@ balanceTimeResult=$(docker exec ${testContainer} php -r "
     echo \$elapsed_ms;
 " 2>/dev/null)
 
-if [[ -n "$balanceTimeResult" ]] && [[ $(echo "$balanceTimeResult < $MAX_API_RESPONSE_TIME_MS" | bc -l) -eq 1 ]]; then
+if [[ -n "$balanceTimeResult" ]] && [[ $(awk "BEGIN {print ($balanceTimeResult < $MAX_API_RESPONSE_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   /api/v1/wallet/balance (${balanceTimeResult}ms < ${MAX_API_RESPONSE_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -319,7 +319,7 @@ contactsTimeResult=$(docker exec ${testContainer} php -r "
     echo \$elapsed_ms;
 " 2>/dev/null)
 
-if [[ -n "$contactsTimeResult" ]] && [[ $(echo "$contactsTimeResult < $MAX_API_RESPONSE_TIME_MS" | bc -l) -eq 1 ]]; then
+if [[ -n "$contactsTimeResult" ]] && [[ $(awk "BEGIN {print ($contactsTimeResult < $MAX_API_RESPONSE_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   /api/v1/contacts (${contactsTimeResult}ms < ${MAX_API_RESPONSE_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -353,7 +353,7 @@ signatureTimeResult=$(docker exec ${testContainer} php -r "
     echo \$elapsed_ms;
 " 2>/dev/null)
 
-if [[ -n "$signatureTimeResult" ]] && [[ $(echo "$signatureTimeResult < $MAX_SIGNATURE_TIME_MS" | bc -l) -eq 1 ]]; then
+if [[ -n "$signatureTimeResult" ]] && [[ $(awk "BEGIN {print ($signatureTimeResult < $MAX_SIGNATURE_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   Signature generation (${signatureTimeResult}ms < ${MAX_SIGNATURE_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -384,7 +384,7 @@ verificationTimeResult=$(docker exec ${testContainer} php -r "
     echo \$elapsed_ms;
 " 2>/dev/null)
 
-if [[ -n "$verificationTimeResult" ]] && [[ $(echo "$verificationTimeResult < $MAX_SIGNATURE_TIME_MS" | bc -l) -eq 1 ]]; then
+if [[ -n "$verificationTimeResult" ]] && [[ $(awk "BEGIN {print ($verificationTimeResult < $MAX_SIGNATURE_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   Signature verification (${verificationTimeResult}ms < ${MAX_SIGNATURE_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -412,7 +412,7 @@ hmacTimeResult=$(docker exec ${testContainer} php -r "
 " 2>/dev/null)
 
 # HMAC should be very fast (< 1ms typically)
-if [[ -n "$hmacTimeResult" ]] && [[ $(echo "$hmacTimeResult < 10" | bc -l) -eq 1 ]]; then
+if [[ -n "$hmacTimeResult" ]] && [[ $(awk "BEGIN {print ($hmacTimeResult < 10) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   HMAC generation (${hmacTimeResult}ms per op, < 10ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -450,7 +450,7 @@ if [[ -n "$realContactAddress" ]]; then
         }
     " 2>/dev/null)
 
-    if [[ "$singleTxTimeResult" != ERROR:* ]] && [[ -n "$singleTxTimeResult" ]] && [[ $(echo "$singleTxTimeResult < $MAX_SINGLE_TX_TIME_MS" | bc -l) -eq 1 ]]; then
+    if [[ "$singleTxTimeResult" != ERROR:* ]] && [[ -n "$singleTxTimeResult" ]] && [[ $(awk "BEGIN {print ($singleTxTimeResult < $MAX_SINGLE_TX_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
         printf "\t   Single transaction (${singleTxTimeResult}ms < ${MAX_SINGLE_TX_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     elif [[ "$singleTxTimeResult" == ERROR:* ]]; then
@@ -489,7 +489,7 @@ if [[ -n "$realContactAddress" ]]; then
     batchSuccessCount=$(echo "$batchTxTimeResult" | cut -d: -f1)
     batchTime=$(echo "$batchTxTimeResult" | cut -d: -f2)
 
-    if [[ "$batchSuccessCount" -ge 8 ]] && [[ $(echo "$batchTime < $MAX_BATCH_TX_TOTAL_TIME_MS" | bc -l) -eq 1 ]]; then
+    if [[ "$batchSuccessCount" -ge 8 ]] && [[ $(awk "BEGIN {print ($batchTime < $MAX_BATCH_TX_TOTAL_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
         printf "\t   Batch transactions (${batchSuccessCount}/10 succeeded, ${batchTime}ms < ${MAX_BATCH_TX_TOTAL_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     else
@@ -523,7 +523,7 @@ historyTimeResult=$(docker exec ${testContainer} php -r "
     echo \$elapsed_ms;
 " 2>/dev/null)
 
-if [[ -n "$historyTimeResult" ]] && [[ $(echo "$historyTimeResult < $MAX_DB_QUERY_TIME_MS" | bc -l) -eq 1 ]]; then
+if [[ -n "$historyTimeResult" ]] && [[ $(awk "BEGIN {print ($historyTimeResult < $MAX_DB_QUERY_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   Transaction history retrieval (${historyTimeResult}ms < ${MAX_DB_QUERY_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -549,7 +549,7 @@ contactSearchTimeResult=$(docker exec ${testContainer} php -r "
     echo \$elapsed_ms;
 " 2>/dev/null)
 
-if [[ -n "$contactSearchTimeResult" ]] && [[ $(echo "$contactSearchTimeResult < $MAX_DB_QUERY_TIME_MS" | bc -l) -eq 1 ]]; then
+if [[ -n "$contactSearchTimeResult" ]] && [[ $(awk "BEGIN {print ($contactSearchTimeResult < $MAX_DB_QUERY_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   Contact search (${contactSearchTimeResult}ms < ${MAX_DB_QUERY_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -575,7 +575,7 @@ balanceCalcTimeResult=$(docker exec ${testContainer} php -r "
     echo \$elapsed_ms;
 " 2>/dev/null)
 
-if [[ -n "$balanceCalcTimeResult" ]] && [[ $(echo "$balanceCalcTimeResult < $MAX_DB_QUERY_TIME_MS" | bc -l) -eq 1 ]]; then
+if [[ -n "$balanceCalcTimeResult" ]] && [[ $(awk "BEGIN {print ($balanceCalcTimeResult < $MAX_DB_QUERY_TIME_MS) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   Balance calculation (${balanceCalcTimeResult}ms < ${MAX_DB_QUERY_TIME_MS}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -603,7 +603,7 @@ appInitTimeResult=$(docker exec ${testContainer} php -r "
 
 # Application init can take longer, use 2x the DB query threshold
 APP_INIT_THRESHOLD=$((MAX_DB_QUERY_TIME_MS * 2))
-if [[ -n "$appInitTimeResult" ]] && [[ $(echo "$appInitTimeResult < $APP_INIT_THRESHOLD" | bc -l) -eq 1 ]]; then
+if [[ -n "$appInitTimeResult" ]] && [[ $(awk "BEGIN {print ($appInitTimeResult < $APP_INIT_THRESHOLD) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   Application init (${appInitTimeResult}ms < ${APP_INIT_THRESHOLD}ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -636,7 +636,7 @@ serviceAccessTimeResult=$(docker exec ${testContainer} php -r "
 " 2>/dev/null)
 
 # Service access should be very fast (singleton pattern)
-if [[ -n "$serviceAccessTimeResult" ]] && [[ $(echo "$serviceAccessTimeResult < 5" | bc -l) -eq 1 ]]; then
+if [[ -n "$serviceAccessTimeResult" ]] && [[ $(awk "BEGIN {print ($serviceAccessTimeResult < 5) ? 1 : 0}") -eq 1 ]]; then
     printf "\t   Service container access (${serviceAccessTimeResult}ms per access, < 5ms) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else

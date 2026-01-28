@@ -120,7 +120,8 @@ wait_for_process_stop() {
     local elapsed=0
 
     while [ $elapsed -lt $timeout ]; do
-        local count=$(docker exec ${container} pgrep -c -f "$pattern" 2>/dev/null || echo "0")
+        local count=$(docker exec ${container} pgrep -c -f "$pattern" 2>/dev/null | tr -d '\n ' || true)
+        count=${count:-0}
         if [ "$count" -eq 0 ]; then
             return 0
         fi
@@ -143,7 +144,8 @@ wait_for_process_start() {
     local elapsed=0
 
     while [ $elapsed -lt $timeout ]; do
-        local count=$(docker exec ${container} pgrep -c -f "$pattern" 2>/dev/null || echo "0")
+        local count=$(docker exec ${container} pgrep -c -f "$pattern" 2>/dev/null | tr -d '\n ' || true)
+        count=${count:-0}
         if [ "$count" -gt 0 ]; then
             return 0
         fi
