@@ -10,12 +10,13 @@ require_once __DIR__ . '/../contracts/SendOperationServiceInterface.php';
 require_once __DIR__ . '/../contracts/LockingServiceInterface.php';
 require_once __DIR__ . '/../contracts/ContactServiceInterface.php';
 require_once __DIR__ . '/../contracts/P2pServiceInterface.php';
+require_once __DIR__ . '/../contracts/P2pTransactionSenderInterface.php';
 
 /**
  * Send Operation Service - High-level send orchestration for eIOU transactions.
  * Part of TransactionService refactoring.
  */
-class SendOperationService implements SendOperationServiceInterface
+class SendOperationService implements SendOperationServiceInterface, P2pTransactionSenderInterface
 {
     private TransactionRepository $transactionRepository;
     private AddressRepository $addressRepository;
@@ -304,7 +305,16 @@ class SendOperationService implements SendOperationServiceInterface
         }
     }
 
-    /** Send P2P eIOU after route discovery */
+    /**
+     * Send a P2P EIOU transaction after route discovery.
+     *
+     * Implements P2pTransactionSenderInterface::sendP2pEiou().
+     * This allows Rp2pService to depend on this interface instead of
+     * the full TransactionService, breaking circular dependencies.
+     *
+     * @param array $request The P2P request data containing transaction details
+     * @return void
+     */
     public function sendP2pEiou(array $request): void {
         output(outputP2pEiouSend($request), 'SILENT');
         $p2p = $this->p2pRepository->getByHash($request['hash']);

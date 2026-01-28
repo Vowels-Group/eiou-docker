@@ -4,8 +4,11 @@
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
 require_once __DIR__ . '/../contracts/SyncServiceInterface.php';
+require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
 require_once __DIR__ . '/../database/TransactionChainRepository.php';
 require_once __DIR__ . '/../database/TransactionContactRepository.php';
+require_once __DIR__ . '/../events/EventDispatcher.php';
+require_once __DIR__ . '/../events/SyncEvents.php';
 
 
 /**
@@ -24,7 +27,7 @@ require_once __DIR__ . '/../database/TransactionContactRepository.php';
  * - Balance Sync Operations.............. Line ~1177
  * - Bidirectional Sync................... Line ~1444
  */
-class SyncService implements SyncServiceInterface {
+class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
     // =========================================================================
     // PROPERTIES
@@ -309,6 +312,15 @@ class SyncService implements SyncServiceInterface {
                 $this->transactionContactRepository->completeContactTransaction($senderPublicKey);
 
                 output(outputContactSuccesfullySynced($contactAddress),$echo);
+
+                // Dispatch contact synced event
+                EventDispatcher::getInstance()->dispatch(SyncEvents::CONTACT_SYNCED, [
+                    'contact_pubkey' => $senderPublicKey,
+                    'contact_address' => $contactAddress,
+                    'status' => $status,
+                    'was_pending' => true
+                ]);
+
                 return true;
             } elseif($status === Constants::STATUS_REJECTED && $reason === 'unknown'){
 
@@ -324,6 +336,15 @@ class SyncService implements SyncServiceInterface {
                     if($status === Constants::STATUS_ACCEPTED){
                         $this->contactRepository->updateStatus($transportIndex, $contactAddress, $status);
                         output(outputContactSuccesfullySynced($contactAddress),$echo);
+
+                        // Dispatch contact synced event
+                        EventDispatcher::getInstance()->dispatch(SyncEvents::CONTACT_SYNCED, [
+                            'contact_pubkey' => $senderPublicKey ?? null,
+                            'contact_address' => $contactAddress,
+                            'status' => $status,
+                            'was_pending' => true
+                        ]);
+
                         return true;
                     }
                 }
@@ -485,16 +506,34 @@ class SyncService implements SyncServiceInterface {
 
             if (!$syncResponse || !isset($syncResponse['status'])) {
                 $result['error'] = 'Invalid sync response';
+                EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
+                    'contact_pubkey' => $contactPublicKey,
+                    'contact_address' => $contactAddress,
+                    'error' => 'Invalid sync response',
+                    'error_code' => 'invalid_response'
+                ]);
                 return $result;
             }
 
             if ($syncResponse['status'] === Constants::STATUS_REJECTED) {
                 $result['error'] = $syncResponse['reason'] ?? 'Sync rejected';
+                EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
+                    'contact_pubkey' => $contactPublicKey,
+                    'contact_address' => $contactAddress,
+                    'error' => $result['error'],
+                    'error_code' => 'sync_rejected'
+                ]);
                 return $result;
             }
 
             if ($syncResponse['status'] !== Constants::STATUS_ACCEPTED || !isset($syncResponse['transactions'])) {
                 $result['error'] = 'Unexpected sync response';
+                EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
+                    'contact_pubkey' => $contactPublicKey,
+                    'contact_address' => $contactAddress,
+                    'error' => 'Unexpected sync response',
+                    'error_code' => 'unexpected_response'
+                ]);
                 return $result;
             }
 
@@ -532,6 +571,15 @@ class SyncService implements SyncServiceInterface {
 
                         if ($conflictResult['resolved']) {
                             $conflictsResolved++;
+
+                            // Dispatch chain conflict resolved event
+                            EventDispatcher::getInstance()->dispatch(SyncEvents::CHAIN_CONFLICT_RESOLVED, [
+                                'contact_pubkey' => $contactPublicKey,
+                                'local_txid' => $localConflict['txid'],
+                                'remote_txid' => $tx['txid'],
+                                'winner' => $conflictResult['winner'],
+                                'previous_txid' => $remotePreviousTxid
+                            ]);
 
                             if ($conflictResult['winner'] === 'remote') {
                                 // Remote transaction wins - we need to re-sign our local loser
@@ -672,11 +720,27 @@ class SyncService implements SyncServiceInterface {
 
             output("Transaction chain sync completed: {$syncedCount} transactions synced, {$conflictsResolved} conflicts resolved", 'SILENT');
 
+            // Dispatch sync completed event
+            EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_COMPLETED, [
+                'contact_pubkey' => $contactPublicKey,
+                'contact_address' => $contactAddress,
+                'synced_count' => $syncedCount,
+                'success' => true
+            ]);
+
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
             SecureLogger::logException($e, [
                 'method' => 'syncTransactionChain',
                 'contact' => $contactAddress
+            ]);
+
+            // Dispatch sync failed event
+            EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_FAILED, [
+                'contact_pubkey' => $contactPublicKey,
+                'contact_address' => $contactAddress,
+                'error' => $e->getMessage(),
+                'error_code' => 'sync_exception'
             ]);
         }
 
@@ -1404,11 +1468,26 @@ class SyncService implements SyncServiceInterface {
 
             output("Contact balance sync completed for " . count($balancesByCurrency) . " currency(ies)", 'SILENT');
 
+            // Dispatch balance synced event
+            EventDispatcher::getInstance()->dispatch(SyncEvents::BALANCE_SYNCED, [
+                'contact_pubkey' => $contactPubkey,
+                'currencies' => array_keys($balancesByCurrency),
+                'success' => true
+            ]);
+
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
             SecureLogger::logException($e, [
                 'method' => 'syncContactBalance',
                 'contact_pubkey_hash' => hash(Constants::HASH_ALGORITHM, $contactPubkey)
+            ]);
+
+            // Dispatch balance sync failed event
+            EventDispatcher::getInstance()->dispatch(SyncEvents::BALANCE_SYNCED, [
+                'contact_pubkey' => $contactPubkey,
+                'currencies' => [],
+                'success' => false,
+                'error' => $e->getMessage()
             ]);
         }
 
