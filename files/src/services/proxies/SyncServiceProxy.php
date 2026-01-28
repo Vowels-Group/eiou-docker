@@ -128,6 +128,17 @@ class SyncServiceProxy implements SyncTriggerInterface
     }
 
     /**
+     * Handle incoming transaction sync request from a contact
+     *
+     * @param array $request The sync request data
+     * @return void
+     */
+    public function handleTransactionSyncRequest(array $request): void
+    {
+        $this->getService()->handleTransactionSyncRequest($request);
+    }
+
+    /**
      * Check if the actual SyncService has been resolved
      *
      * Useful for debugging and testing to verify lazy loading behavior.

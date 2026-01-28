@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../contracts/MessageServiceInterface.php';
+require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
 require_once __DIR__ . '/../database/TransactionContactRepository.php';
 
 /**
@@ -78,9 +79,9 @@ class MessageService implements MessageServiceInterface {
     private ?MessageDeliveryService $messageDeliveryService = null;
 
     /**
-     * @var SyncService|null Sync service for handling sync requests
+     * @var SyncTriggerInterface|null Sync trigger for handling sync requests
      */
-    private ?SyncService $syncService = null;
+    private ?SyncTriggerInterface $syncTrigger = null;
 
     /**
      * @var TransactionContactRepository Transaction contact repository for contact transaction operations
@@ -88,25 +89,25 @@ class MessageService implements MessageServiceInterface {
     private TransactionContactRepository $transactionContactRepository;
 
     /**
-     * Set the sync service (setter injection for circular dependency)
+     * Set the sync trigger (accepts interface for loose coupling)
      *
-     * @param SyncService $service Sync service
+     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
      */
-    public function setSyncService(SyncService $service): void {
-        $this->syncService = $service;
+    public function setSyncTrigger(SyncTriggerInterface $sync): void {
+        $this->syncTrigger = $sync;
     }
 
     /**
-     * Get the sync service (must be injected via setSyncService)
+     * Get the sync trigger (must be injected via setSyncTrigger)
      *
-     * @return SyncService
-     * @throws RuntimeException If sync service was not injected
+     * @return SyncTriggerInterface
+     * @throws RuntimeException If sync trigger was not injected
      */
-    private function getSyncService(): SyncService {
-        if ($this->syncService === null) {
-            throw new RuntimeException('SyncService not injected. Call setSyncService() or ensure ServiceContainer::wireCircularDependencies() is called.');
+    private function getSyncTrigger(): SyncTriggerInterface {
+        if ($this->syncTrigger === null) {
+            throw new RuntimeException('SyncTrigger not injected. Call setSyncTrigger() or ensure ServiceContainer properly injects the dependency.');
         }
-        return $this->syncService;
+        return $this->syncTrigger;
     }
 
     /**
@@ -658,9 +659,9 @@ class MessageService implements MessageServiceInterface {
 
         if ($syncType === 'transaction_chain') {
             if (isset($request['inquiry']) && $request['inquiry']) {
-                // This is a sync request - delegate to SyncService
-                $syncService = $this->getSyncService();
-                $syncService->handleTransactionSyncRequest($request);
+                // This is a sync request - delegate to SyncTrigger
+                $syncTrigger = $this->getSyncTrigger();
+                $syncTrigger->handleTransactionSyncRequest($request);
             } else {
                 // This is a sync response - should be handled by the requester
                 // Log unexpected sync response

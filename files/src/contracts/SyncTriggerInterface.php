@@ -75,4 +75,15 @@ interface SyncTriggerInterface
      * @return array Result with success status and sync details
      */
     public function syncReaddedContact(string $contactAddress, string $contactPublicKey): array;
+
+    /**
+     * Handle incoming transaction sync request from a contact
+     *
+     * Called by MessageService when receiving a sync request. Processes the
+     * request and outputs JSON response to the contact.
+     *
+     * @param array $request The sync request data containing contact info and sync parameters
+     * @return void Outputs JSON response directly
+     */
+    public function handleTransactionSyncRequest(array $request): void;
 }

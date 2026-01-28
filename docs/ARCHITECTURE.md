@@ -527,11 +527,13 @@ Legend:
 ### Why Setter Injection Exists
 
 Some services have dependencies that require setter injection due to initialization
-order constraints. Many former circular dependencies have been eliminated:
+order constraints. Most circular dependencies have been eliminated:
 
 | Dependency | Pattern | Notes |
 |------------|---------|-------|
-| TransactionService -> SyncService | Setter injection | Transactions trigger sync before sending |
+| TransactionService -> SyncService | **ELIMINATED** | Now uses SyncTriggerInterface via proxy |
+| ContactService -> SyncService | **ELIMINATED** | Now uses SyncTriggerInterface via proxy |
+| MessageService -> SyncService | **ELIMINATED** | Now uses SyncTriggerInterface via proxy |
 | SyncService -> HeldTransactionService | Setter injection | Sync notifies held transaction service |
 | HeldTransactionService -> SyncService | **ELIMINATED** | Now uses EventDispatcher (SyncEvents::SYNC_COMPLETED) |
 | Rp2pService -> TransactionService | **ELIMINATED** | Now uses P2pTransactionSenderInterface |
@@ -543,19 +545,19 @@ constructed to wire up setter-injected dependencies:
 
 ```php
 public function wireCircularDependencies(): void {
-    // Core sync-related dependencies
-    $this->services['TransactionService']->setSyncService($this->services['SyncService']);
+    // Core sync-related dependencies - now use SyncTriggerInterface via proxy
+    $this->services['TransactionService']->setSyncTrigger($this->getSyncServiceProxy());
     $this->services['SyncService']->setHeldTransactionService($this->services['HeldTransactionService']);
     // Note: HeldTransactionService uses EventDispatcher for sync notifications (no setter injection)
 
-    // Contact and message service dependencies
-    $this->services['ContactService']->setSyncService($this->services['SyncService']);
-    $this->services['MessageService']->setSyncService($this->services['SyncService']);
+    // Contact and message service dependencies - use SyncTriggerInterface via proxy
+    $this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
+    $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
 
     // RP2P uses interface-based injection (breaks circular dependency)
     $this->services['Rp2pService']->setP2pTransactionSender($this->services['SendOperationService']);
 
-    // Refactored service dependencies
+    // Refactored service dependencies (still use direct SyncService for specialized needs)
     $this->services['ChainVerificationService']->setSyncService($this->services['SyncService']);
     $this->services['TransactionProcessingService']->setSyncService($this->services['SyncService']);
     $this->services['SendOperationService']->setContactService($this->services['ContactService']);
@@ -589,12 +591,17 @@ The codebase has significantly reduced circular dependencies:
 
 - ✅ `HeldTransactionService <-> SyncService` - Now uses EventDispatcher
 - ✅ `Rp2pService <-> TransactionService` - Now uses P2pTransactionSenderInterface
+- ✅ `ContactService <-> SyncService` - Now uses SyncTriggerInterface via proxy
+- ✅ `MessageService <-> SyncService` - Now uses SyncTriggerInterface via proxy
+- ✅ `TransactionService <-> SyncService` - Now uses SyncTriggerInterface via proxy
 
-**Remaining TODOs:**
+**Remaining Setter Injections:**
 
-- ContactService could use SyncServiceProxy instead of setter injection
-- MessageService could use SyncServiceProxy for loose coupling
-- Consider expanding event-driven patterns to other services
+- ContactStatusService -> SyncService (specialized validation needs)
+- ChainVerificationService -> SyncService (chain repair)
+- TransactionValidationService -> SyncService (proactive sync)
+- TransactionProcessingService -> SyncService (conflict resolution)
+- SendOperationService -> SyncService (pre-send sync)
 
 ### CI Script for Cycle Detection
 
@@ -634,16 +641,12 @@ Found 25 service files
 
 Detecting cycles...
 
-Found 1 circular dependency chain(s):
+No circular dependencies detected in core services.
 
-  1. TransactionService -> SyncService -> TransactionService
-
-Note: These are managed via setter injection to break the cycle.
-      See ServiceContainer::wireCircularDependencies() for the wiring logic.
-
-Eliminated cycles (now use alternative patterns):
-  - HeldTransactionService <-> SyncService: Uses EventDispatcher
-  - Rp2pService <-> TransactionService: Uses P2pTransactionSenderInterface
+All major cycles have been eliminated using:
+  - SyncTriggerInterface + SyncServiceProxy (ContactService, MessageService, TransactionService)
+  - P2pTransactionSenderInterface (Rp2pService)
+  - EventDispatcher + SyncEvents (HeldTransactionService)
 ```
 
 ---

@@ -11,12 +11,15 @@
 interface MessageServiceInterface
 {
     /**
-     * Set the sync service (setter injection for circular dependency)
+     * Set the sync trigger (accepts interface for loose coupling)
      *
-     * @param \SyncService $service Sync service instance
+     * Uses SyncTriggerInterface instead of concrete SyncService to break
+     * circular dependencies. Can be satisfied by SyncServiceProxy or SyncService.
+     *
+     * @param \SyncTriggerInterface $sync Sync trigger instance
      * @return void
      */
-    public function setSyncService(\SyncService $service): void;
+    public function setSyncTrigger(\SyncTriggerInterface $sync): void;
 
     /**
      * Set the message delivery service (for lazy initialization)
