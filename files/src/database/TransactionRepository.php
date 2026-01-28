@@ -2,6 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 require_once __DIR__ . '/AbstractRepository.php';
+require_once __DIR__ . '/../formatters/TransactionFormatter.php';
 
 /**
  * Transaction Repository
@@ -10,11 +11,14 @@ require_once __DIR__ . '/AbstractRepository.php';
  *
  * @package Database\Repository
  *
- * TECH DEBT: Many methods contain redundant `if (!$stmt)` checks after execute().
- * Since PDO is configured with ERRMODE_EXCEPTION (see Pdo.php), the execute() method
- * will throw an exception on failure rather than returning false. These checks are
- * vestigial from defensive coding practices but can be safely removed in a future
- * refactoring pass. The checks don't cause harm, just unnecessary branches.
+ * NOTE: Many methods contain `if (!$stmt)` checks after execute(). While PDO is
+ * configured with ERRMODE_EXCEPTION, the AbstractRepository::execute() method
+ * catches PDOException and returns false (see AbstractRepository.php lines 147-160).
+ * These checks ARE required to handle query failures gracefully. To remove them,
+ * AbstractRepository::execute() would need to be refactored to throw exceptions
+ * instead of returning false, and all callers updated to use try/catch.
+ *
+ * @see AbstractRepository::execute() for the error handling implementation
  */
 class TransactionRepository extends AbstractRepository {
     /**
@@ -405,20 +409,9 @@ class TransactionRepository extends AbstractRepository {
         if(!$stmt){
             return [];
         }
-       
+
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $formattedTransactions = [];
-        
-        foreach ($transactions as $tx) {
-            $formattedTransactions[] = [
-                'date' => $tx['timestamp'],
-                'type' => Constants::TX_TYPE_SENT,
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
-                'currency' => $tx['currency'],
-                'counterparty' =>  $tx['receiver_address']
-            ];
-        }
-        return $formattedTransactions;
+        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
     }
 
     /**
@@ -448,20 +441,9 @@ class TransactionRepository extends AbstractRepository {
         if(!$stmt){
             return [];
         }
-       
+
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $formattedTransactions = [];
-        
-        foreach ($transactions as $tx) {
-            $formattedTransactions[] = [
-                'date' => $tx['timestamp'],
-                'type' => Constants::TX_TYPE_SENT,
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
-                'currency' => $tx['currency'],
-                'counterparty' =>  $tx['receiver_address']
-            ];
-        }
-        return $formattedTransactions;
+        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
     }
 
     /**
@@ -512,17 +494,7 @@ class TransactionRepository extends AbstractRepository {
         }
         
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $formattedTransactions = [];
-        foreach ($transactions as $tx) {
-            $formattedTransactions[] = [
-                'date' => $tx['timestamp'],
-                'type' => Constants::TX_TYPE_RECEIVED,
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
-                'currency' => $tx['currency'],
-                'counterparty' =>  $tx['sender_address']
-            ];
-        }
-        return $formattedTransactions;
+        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
     }
 
     /**
@@ -553,17 +525,7 @@ class TransactionRepository extends AbstractRepository {
         }
         
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $formattedTransactions = [];
-        foreach ($transactions as $tx) {
-            $formattedTransactions[] = [
-                'date' => $tx['timestamp'],
-                'type' => Constants::TX_TYPE_RECEIVED,
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
-                'currency' => $tx['currency'],
-                'counterparty' =>  $tx['sender_address']
-            ];
-        }
-        return $formattedTransactions;
+        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
     }
 
 
@@ -595,17 +557,7 @@ class TransactionRepository extends AbstractRepository {
         }
         
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $formattedTransactions = [];
-        foreach ($transactions as $tx) {
-            $formattedTransactions[] = [
-                'date' => $tx['timestamp'],
-                'type' => Constants::TX_TYPE_RECEIVED,
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
-                'currency' => $tx['currency'],
-                'counterparty' =>  $tx['sender_address']
-            ];
-        }
-        return $formattedTransactions;
+        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
     }
 
     /**
@@ -637,17 +589,7 @@ class TransactionRepository extends AbstractRepository {
         }
         
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $formattedTransactions = [];
-        foreach ($transactions as $tx) {
-            $formattedTransactions[] = [
-                'date' => $tx['timestamp'],
-                'type' => Constants::TX_TYPE_RECEIVED,
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
-                'currency' => $tx['currency'],
-                'counterparty' =>  $tx['sender_address']
-            ];
-        }
-        return $formattedTransactions;
+        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
     }
 
 
@@ -682,18 +624,7 @@ class TransactionRepository extends AbstractRepository {
         }
        
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $formattedTransactions = [];
-        
-        foreach ($transactions as $tx) {
-            $formattedTransactions[] = [
-                'date' => $tx['timestamp'],
-                'type' => Constants::TX_TYPE_SENT,
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
-                'currency' => $tx['currency'],
-                'counterparty' =>  $tx['receiver_address']
-            ];
-        }
-        return $formattedTransactions;
+        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
     }
 
     /**
@@ -726,18 +657,7 @@ class TransactionRepository extends AbstractRepository {
         }
        
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $formattedTransactions = [];
-        
-        foreach ($transactions as $tx) {
-            $formattedTransactions[] = [
-                'date' => $tx['timestamp'],
-                'type' => Constants::TX_TYPE_SENT,
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
-                'currency' => $tx['currency'],
-                'counterparty' =>  $tx['receiver_address']
-            ];
-        }
-        return $formattedTransactions;
+        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
     }
 
     /**
@@ -833,46 +753,7 @@ class TransactionRepository extends AbstractRepository {
         }
 
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $formattedTransactions = [];
-
-        foreach ($transactions as $tx) {
-            $isSent = in_array($tx['sender_address'], $userAddresses);
-            $counterpartyAddress = $isSent ? $tx['receiver_address'] : $tx['sender_address'];
-            $counterpartyName = $isSent ? $tx['receiver_name'] : $tx['sender_name'];
-
-            // Build display string: "Name (address)" or just "address" if no name
-            $counterpartyDisplay = $counterpartyName
-                ? $counterpartyName . ' (' . $counterpartyAddress . ')'
-                : $counterpartyAddress;
-
-            $formattedTransactions[] = [
-                'id' => $tx['id'],
-                'txid' => $tx['txid'],
-                'tx_type' => $tx['tx_type'],
-                'direction' => $tx['direction'],
-                'status' => $tx['status'],
-                'date' => $tx['timestamp'],
-                'type' => $isSent ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED,
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
-                'currency' => $tx['currency'],
-                'counterparty' => $counterpartyDisplay,
-                'counterparty_address' => $counterpartyAddress,
-                'counterparty_name' => $counterpartyName,
-                'sender_address' => $tx['sender_address'],
-                'receiver_address' => $tx['receiver_address'],
-                'sender_public_key' => $tx['sender_public_key'],
-                'receiver_public_key' => $tx['receiver_public_key'],
-                'memo' => $tx['memo'],
-                'description' => $tx['description'],
-                'previous_txid' => $tx['previous_txid'],
-                'end_recipient_address' => $tx['end_recipient_address'] ?? null,
-                'initial_sender_address' => $tx['initial_sender_address'] ?? null,
-                'p2p_destination' => $tx['p2p_destination'] ?? null,
-                'p2p_amount' => isset($tx['p2p_amount']) ? $tx['p2p_amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR : null,
-                'p2p_fee' => isset($tx['p2p_fee']) ? $tx['p2p_fee'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR : null
-            ];
-        }
-        return $formattedTransactions;
+        return TransactionFormatter::formatHistoryMany($transactions, $userAddresses);
     }
 
      /**
@@ -920,27 +801,7 @@ class TransactionRepository extends AbstractRepository {
         }
 
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $formattedTransactions = [];
-
-        foreach ($transactions as $tx) {
-            $isSent = in_array($tx['sender_address'], $userAddresses);
-            $counterpartyAddress = $isSent ? $tx['receiver_address'] : $tx['sender_address'];
-            $counterpartyName = $isSent ? $tx['receiver_name'] : $tx['sender_name'];
-
-            // Build display string: "Name (address)" or just "address" if no name
-            $counterpartyDisplay = $counterpartyName
-                ? $counterpartyName . ' (' . $counterpartyAddress . ')'
-                : $counterpartyAddress;
-
-            $formattedTransactions[] = [
-                'date' => $tx['timestamp'],
-                'type' => $isSent ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED,
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, // Convert from cents
-                'currency' => $tx['currency'],
-                'counterparty' => $counterpartyDisplay
-            ];
-        }
-        return $formattedTransactions;
+        return TransactionFormatter::formatHistoryMany($transactions, $userAddresses);
     }
 
 
@@ -1953,27 +1814,7 @@ class TransactionRepository extends AbstractRepository {
         }
 
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $formattedTransactions = [];
-
-        foreach ($transactions as $tx) {
-            $isSent = in_array($tx['sender_address'], $userAddresses);
-
-            $formattedTransactions[] = [
-                'txid' => $tx['txid'] ?? '',
-                'tx_type' => $tx['tx_type'] ?? 'standard',
-                'status' => $tx['status'] ?? Constants::STATUS_COMPLETED,
-                'date' => $tx['timestamp'],
-                'type' => $isSent ? Constants::TX_TYPE_SENT : Constants::TX_TYPE_RECEIVED,
-                'amount' => $tx['amount'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR,
-                'currency' => $tx['currency'],
-                'sender_address' => $tx['sender_address'] ?? '',
-                'receiver_address' => $tx['receiver_address'] ?? '',
-                'memo' => $tx['memo'] ?? '',
-                'description' => $tx['description'] ?? ''
-            ];
-        }
-
-        return $formattedTransactions;
+        return TransactionFormatter::formatContactMany($transactions, $userAddresses);
     }
 
     /**
