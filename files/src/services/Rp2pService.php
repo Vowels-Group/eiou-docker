@@ -80,17 +80,10 @@ class Rp2pService implements Rp2pServiceInterface {
     private ?P2pTransactionSenderInterface $p2pTransactionSender = null;
 
     /**
-     * @var TransactionService|null Transaction service for sending P2P transactions
-     * @deprecated Use setP2pTransactionSender() with P2pTransactionSenderInterface instead.
-     *             Kept for backwards compatibility during migration.
-     */
-    private ?TransactionService $transactionService = null;
-
-    /**
      * Set the P2P transaction sender (setter injection to break circular dependency)
      *
      * This method accepts P2pTransactionSenderInterface, which breaks the circular
-     * dependency between Rp2pService and TransactionService. TransactionService
+     * dependency between Rp2pService and TransactionService. SendOperationService
      * implements P2pTransactionSenderInterface, so it can be passed here.
      *
      * @param P2pTransactionSenderInterface $sender P2P transaction sender
@@ -100,47 +93,16 @@ class Rp2pService implements Rp2pServiceInterface {
     }
 
     /**
-     * Set the transaction service (setter injection for circular dependency)
-     *
-     * @param TransactionService $service Transaction service
-     * @deprecated Use setP2pTransactionSender() with P2pTransactionSenderInterface instead.
-     *             Kept for backwards compatibility during migration.
-     */
-    public function setTransactionService(TransactionService $service): void {
-        $this->transactionService = $service;
-        // Also set the interface-based property for forward compatibility
-        $this->p2pTransactionSender = $service;
-    }
-
-    /**
-     * Get the P2P transaction sender (must be injected via setP2pTransactionSender or setTransactionService)
+     * Get the P2P transaction sender (must be injected via setP2pTransactionSender)
      *
      * @return P2pTransactionSenderInterface
      * @throws RuntimeException If P2P transaction sender was not injected
      */
     private function getP2pTransactionSender(): P2pTransactionSenderInterface {
-        if ($this->p2pTransactionSender !== null) {
-            return $this->p2pTransactionSender;
+        if ($this->p2pTransactionSender === null) {
+            throw new RuntimeException('P2pTransactionSender not injected. Call setP2pTransactionSender() or ensure ServiceContainer::wireCircularDependencies() is called.');
         }
-        // Fallback to transactionService for backwards compatibility
-        if ($this->transactionService !== null) {
-            return $this->transactionService;
-        }
-        throw new RuntimeException('P2pTransactionSender not injected. Call setP2pTransactionSender() or setTransactionService(), or ensure ServiceContainer::wireCircularDependencies() is called.');
-    }
-
-    /**
-     * Get the transaction service (must be injected via setTransactionService)
-     *
-     * @return TransactionService
-     * @throws RuntimeException If transaction service was not injected
-     * @deprecated Use getP2pTransactionSender() instead
-     */
-    private function getTransactionService(): TransactionService {
-        if ($this->transactionService === null) {
-            throw new RuntimeException('TransactionService not injected. Call setTransactionService() or ensure ServiceContainer::wireCircularDependencies() is called.');
-        }
-        return $this->transactionService;
+        return $this->p2pTransactionSender;
     }
 
     /**

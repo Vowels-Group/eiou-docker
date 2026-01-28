@@ -51,50 +51,9 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
     private $transactionPayload;
 
     /**
-     * @var SyncService|null Sync service for transaction chain sync
-     */
-    private ?SyncService $syncService = null;
-
-    /**
      * @var TransactionChainRepository Transaction chain repository
      */
     private TransactionChainRepository $transactionChainRepository;
-
-    /**
-     * Set the sync service (setter injection for circular dependency)
-     *
-     * @deprecated Use event-driven communication instead. Subscribe to SyncEvents::SYNC_COMPLETED
-     *             via EventDispatcher. This method is kept for backwards compatibility but will
-     *             be removed in a future version. The service now subscribes to sync events
-     *             automatically in the constructor.
-     *
-     * @param SyncService $service Sync service
-     */
-    public function setSyncService(SyncService $service): void {
-        $this->syncService = $service;
-    }
-
-    /**
-     * Get the sync service (must be injected via setSyncService)
-     *
-     * @return SyncService
-     * @throws RuntimeException If sync service was not injected
-     */
-    private function getSyncService(): SyncService {
-        if ($this->syncService === null) {
-            throw new RuntimeException('SyncService not injected. Call setSyncService() or ensure ServiceContainer::wireCircularDependencies() is called.');
-        }
-        return $this->syncService;
-    }
-
-    /**
-     * Check if sync service is available
-     *
-     * @return bool True if sync service has been injected
-     */
-    private function hasSyncService(): bool {
-        return $this->syncService !== null;
-    }
 
     /**
      * Constructor
@@ -207,56 +166,18 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             }
 
             // Update sync status to in_progress
-            $started = $this->heldRepository->markSyncStarted($contactPubkeyHash);
+            $this->heldRepository->markSyncStarted($contactPubkeyHash);
 
-            // Check if sync service is available before initiating sync
-            // With event-driven communication, sync may be triggered externally
-            if (!$this->hasSyncService()) {
-                SecureLogger::info("SyncService not available, transaction held pending external sync trigger", [
-                    'txid' => $txid,
-                    'contact_hash' => $contactPubkeyHash
-                ]);
-                // Transaction is held, sync will be triggered externally or via events
-                // The onSyncCompleted event handler will process when sync completes
-                return $result;
-            }
-
-            // Initiate sync through SyncService (backwards compatibility path)
-            $syncService = $this->getSyncService();
-            $contactAddress = $transaction['receiver_address'] ?? null;
-
-            if (!$contactAddress) {
-                SecureLogger::error("Cannot initiate sync: missing receiver_address", [
-                    'txid' => $txid,
-                    'contact_hash' => $contactPubkeyHash
-                ]);
-                $this->heldRepository->markSyncFailed($contactPubkeyHash);
-                $result['error'] = 'Missing receiver address for sync';
-                return $result;
-            }
-
-            $syncResult = $syncService->syncTransactionChain($contactAddress, $contactPubkey, $expectedTxid);
-
-            if ($syncResult['success']) {
-                SecureLogger::info("Sync initiated successfully", [
-                    'contact_hash' => $contactPubkeyHash,
-                    'synced_count' => $syncResult['synced_count']
-                ]);
-                $result['sync_initiated'] = true;
-
-                // Mark sync as completed if successful
-                // Note: With event-driven communication, this may also be triggered
-                // via the onSyncCompleted event handler when SyncService dispatches
-                // the SYNC_COMPLETED event
-                $this->onSyncComplete($contactPubkey, true, $syncResult['synced_count']);
-            } else {
-                SecureLogger::warning("Sync initiation failed", [
-                    'contact_hash' => $contactPubkeyHash,
-                    'error' => $syncResult['error']
-                ]);
-                $this->heldRepository->markSyncFailed($contactPubkeyHash);
-                $result['error'] = $syncResult['error'];
-            }
+            // Transaction is held and sync status marked as in_progress.
+            // The actual sync will be triggered by the caller (e.g., TransactionProcessingService)
+            // which has access to SyncService. When sync completes, SyncService dispatches
+            // SyncEvents::SYNC_COMPLETED which this service listens to via the constructor's
+            // EventDispatcher subscription. The onSyncCompleted() handler will then process
+            // the held transactions.
+            SecureLogger::info("Transaction held, awaiting sync completion via events", [
+                'txid' => $txid,
+                'contact_hash' => $contactPubkeyHash
+            ]);
 
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();

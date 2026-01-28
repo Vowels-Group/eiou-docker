@@ -1070,18 +1070,17 @@ class ServiceContainer {
      *
      * Circular dependencies handled:
      * - TransactionService <--> SyncService
-     * - SyncService <--> HeldTransactionService
+     * - SyncService --> HeldTransactionService (reverse uses events via EventDispatcher)
      * - ContactService --> SyncService
      * - ContactStatusService --> SyncService, RateLimiterService
      * - MessageService --> SyncService
-     * - HeldTransactionService --> SyncService
-     * - Rp2pService --> TransactionService
+     * - Rp2pService --> SendOperationService (via P2pTransactionSenderInterface)
      * - TransactionService --> P2pService, ContactService
      * - ChainVerificationService --> SyncService
      * - TransactionValidationService --> SyncService, TransactionService
      * - TransactionProcessingService --> SyncService, P2pService, HeldTransactionService
      * - SendOperationService --> ContactService, P2pService, SyncService, TransactionService
-     * - ChainOperationsService --> SyncService (NEW: for chain repair coordination)
+     * - ChainOperationsService --> SyncService (for chain repair coordination)
      *
      * Future improvements (to reduce circular dependencies):
      * - Services can use SyncServiceProxy instead of direct SyncService injection
@@ -1107,16 +1106,12 @@ class ServiceContainer {
             $this->services['TransactionService']->setSyncService($this->services['SyncService']);
         }
 
-        // Wire SyncService <-> HeldTransactionService
-        // Reason: SyncService creates held transactions, HeldTransactionService needs sync to process them
+        // Wire SyncService <-> HeldTransactionService (one-way now - event-driven in reverse)
+        // Reason: SyncService creates held transactions and notifies HeldTransactionService via events
+        // Note: HeldTransactionService no longer has setSyncService() - it uses EventDispatcher
+        //       to listen for SyncEvents::SYNC_COMPLETED instead of direct dependency
         if (isset($this->services['SyncService']) && isset($this->services['HeldTransactionService'])) {
             $this->services['SyncService']->setHeldTransactionService($this->services['HeldTransactionService']);
-        }
-
-        // Wire HeldTransactionService -> SyncService
-        // Reason: HeldTransactionService needs to trigger chain sync when processing held transactions
-        if (isset($this->services['HeldTransactionService']) && isset($this->services['SyncService'])) {
-            $this->services['HeldTransactionService']->setSyncService($this->services['SyncService']);
         }
 
         // =========================================================================
@@ -1153,10 +1148,11 @@ class ServiceContainer {
         // Transaction-related circular dependencies
         // =========================================================================
 
-        // Wire Rp2pService -> TransactionService
-        // Reason: RP2P operations complete transaction flows
-        if (isset($this->services['Rp2pService']) && isset($this->services['TransactionService'])) {
-            $this->services['Rp2pService']->setTransactionService($this->services['TransactionService']);
+        // Wire Rp2pService -> SendOperationService (via P2pTransactionSenderInterface)
+        // Reason: RP2P operations complete transaction flows by calling sendP2pEiou()
+        // Note: Uses P2pTransactionSenderInterface to break circular dependency with TransactionService
+        if (isset($this->services['Rp2pService']) && isset($this->services['SendOperationService'])) {
+            $this->services['Rp2pService']->setP2pTransactionSender($this->services['SendOperationService']);
         }
 
         // Wire TransactionService -> P2pService, ContactService, and new refactored services
