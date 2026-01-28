@@ -340,13 +340,12 @@ signatureTimeResult=$(docker exec ${testContainer} php -r "
 
     \$app = Application::getInstance();
     \$user = \$app->services->getCurrentUser();
-    \$utilContainer = \$app->services->getUtilityContainer();
-    \$signer = \$utilContainer->getSigner();
+    \$privateKey = \$user->getPrivateKey();
 
     \$testData = 'This is test data for signature benchmark ' . time();
 
     \$start = microtime(true);
-    \$signature = \$signer->sign(\$testData, \$user->getPrivateKey());
+    openssl_sign(\$testData, \$signature, \$privateKey, OPENSSL_ALGO_SHA256);
     \$end = microtime(true);
 
     \$elapsed_ms = round((\$end - \$start) * 1000, 2);
@@ -370,14 +369,14 @@ verificationTimeResult=$(docker exec ${testContainer} php -r "
 
     \$app = Application::getInstance();
     \$user = \$app->services->getCurrentUser();
-    \$utilContainer = \$app->services->getUtilityContainer();
-    \$signer = \$utilContainer->getSigner();
+    \$privateKey = \$user->getPrivateKey();
+    \$publicKey = \$user->getPublicKey();
 
     \$testData = 'This is test data for verification benchmark ' . time();
-    \$signature = \$signer->sign(\$testData, \$user->getPrivateKey());
+    openssl_sign(\$testData, \$signature, \$privateKey, OPENSSL_ALGO_SHA256);
 
     \$start = microtime(true);
-    \$valid = \$signer->verify(\$testData, \$signature, \$user->getPublicKey());
+    \$valid = openssl_verify(\$testData, \$signature, \$publicKey, OPENSSL_ALGO_SHA256);
     \$end = microtime(true);
 
     \$elapsed_ms = round((\$end - \$start) * 1000, 2);
@@ -565,10 +564,10 @@ balanceCalcTimeResult=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
 
     \$app = Application::getInstance();
-    \$balanceService = \$app->services->getBalanceService();
+    \$balanceRepository = \$app->services->getBalanceRepository();
 
     \$start = microtime(true);
-    \$balances = \$balanceService->getBalances();
+    \$balances = \$balanceRepository->getUserBalance();
     \$end = microtime(true);
 
     \$elapsed_ms = round((\$end - \$start) * 1000, 2);
