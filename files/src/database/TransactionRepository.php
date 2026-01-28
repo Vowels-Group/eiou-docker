@@ -206,7 +206,7 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getTransactionsByType(string $type): array
     {
-        $allTransactions = $this->getAllTransactions();
+        $allTransactions = $this->getTransactionHistory(PHP_INT_MAX);
         $filtered = [];
 
         foreach ($allTransactions as $transaction) {
@@ -227,49 +227,6 @@ class TransactionRepository extends AbstractRepository {
     public function getRecentTransactions(int $limit = 5): array
     {
         return $this->getTransactionHistory($limit);
-    }
-
-    /**
-     * Get all transactions
-     *
-     * @return array
-     */
-    public function getAllTransactions(): array
-    {
-        return $this->getTransactionHistory(PHP_INT_MAX); // Get a large number
-    }
-    
-    /**
-     * Get all transactions (subsetted on currency)
-     *
-     * @param string $currency Currency of transaction
-     * @return array
-     */
-    public function getAllTransactionsCurrency(string $currency): array
-    {
-        return $this->getTransactionHistory(PHP_INT_MAX, $currency); // Get a large number
-    }
-
-
-    /**
-     * Get all sent transactions
-     *
-     * @return array
-     */
-    public function getAllSentUserTransactions(): array
-    {
-        return $this->getSentUserTransactions(PHP_INT_MAX); // Get a large number
-    }
-
-    /**
-     * Get all sent transactions (subsetted on currency)
-     *
-     * @param string $currency Currency of transaction
-     * @return array
-     */
-    public function getAllSentUserTransactionsCurrency(string $currency): array
-    {
-        return $this->getSentUserTransactions(PHP_INT_MAX, $currency); // Get a large number
     }
 
     /**
@@ -311,39 +268,6 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
-     * Get transactions sent by user (subsetted on currency)
-     *
-     * @deprecated Use getSentUserTransactions($limit, $currency) instead
-     * @param string $currency Currency of transaction
-     * @param int $limit
-     * @return array
-     */
-    public function getSentUserTransactionsCurrency(string $currency, int $limit = 10): array {
-        return $this->getSentUserTransactions($limit, $currency);
-    }
-
-    /**
-     * Get all received transactions
-     *
-     * @return array
-     */
-    public function getAllReceivedUserTransactions(): array
-    {
-        return $this->getReceivedUserTransactions(PHP_INT_MAX); // Get a large number
-    }
-
-    /**
-     * Get all received transactions (subsetted on currency)
-     *
-     * @param string $currency Currency of transaction
-     * @return array
-     */
-    public function getAllReceivedUserTransactionsCurrency(string $currency): array
-    {
-        return $this->getReceivedUserTransactions(PHP_INT_MAX, $currency); // Get a large number
-    }
-
-    /**
      * Get transactions received by user
      *
      * @param int $limit Maximum number of transactions to return
@@ -380,19 +304,6 @@ class TransactionRepository extends AbstractRepository {
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
     }
-
-    /**
-     * Get transactions received by user (subsetted on currency)
-     *
-     * @deprecated Use getReceivedUserTransactions($limit, $currency) instead
-     * @param string $currency Currency of transaction
-     * @param int $limit
-     * @return array
-     */
-    public function getReceivedUserTransactionsCurrency(string $currency, int $limit = 10): array{
-        return $this->getReceivedUserTransactions($limit, $currency);
-    }
-
 
     /**
      * Get transactions received by user from specific address
@@ -435,22 +346,6 @@ class TransactionRepository extends AbstractRepository {
     }
 
     /**
-     * Get transactions received by user from specific address (subsetted on currency)
-     *
-     * @deprecated Use getReceivedUserTransactionsAddress($senderAddress, $limit, $currency) instead
-     * @param string $senderAddress Address of transaction sender
-     * @param string $currency Currency of transaction
-     * @param int $limit
-     * @return array
-     */
-    public function getReceivedUserTransactionsAddressCurrency(string $senderAddress, string $currency, int $limit = 10): array{
-        return $this->getReceivedUserTransactionsAddress($senderAddress, $limit, $currency);
-    }
-
-
-
-
-    /**
      * Get transactions sent by user to specific address
      *
      * @param string $receiverAddress Address of transaction receiver
@@ -489,19 +384,6 @@ class TransactionRepository extends AbstractRepository {
 
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
-    }
-
-    /**
-     * Get transactions sent by user to specific address (subsetted on currency)
-     *
-     * @deprecated Use getSentUserTransactionsAddress($receiverAddress, $limit, $currency) instead
-     * @param string $receiverAddress Address of transaction receiver
-     * @param string $currency Currency of transaction
-     * @param int $limit
-     * @return array
-     */
-    public function getSentUserTransactionsAddressCurrency(string $receiverAddress, string $currency, int $limit = 10): array {
-        return $this->getSentUserTransactionsAddress($receiverAddress, $limit, $currency);
     }
 
     /**
@@ -607,20 +489,6 @@ class TransactionRepository extends AbstractRepository {
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return TransactionFormatter::formatHistoryMany($transactions, $userAddresses);
     }
-
-     /**
-     * Get transaction history with limit (subsetted on currency)
-     *
-     * @deprecated Use getTransactionHistory($limit, $currency) instead
-     * @param string $currency Currency of transaction
-     * @param int $limit
-     * @return array
-     */
-    public function getTransactionHistoryCurrency(string $currency, int $limit = 10): array
-    {
-        return $this->getTransactionHistory($limit, $currency);
-    }
-
 
     /**
      * Check if Transaction exists by memo
