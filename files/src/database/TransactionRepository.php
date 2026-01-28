@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/AbstractRepository.php';
 require_once __DIR__ . '/../formatters/TransactionFormatter.php';
+require_once __DIR__ . '/traits/QueryHelper.php';
 
 /**
  * Transaction Repository
@@ -21,6 +22,8 @@ require_once __DIR__ . '/../formatters/TransactionFormatter.php';
  * @see AbstractRepository::execute() for the error handling implementation
  */
 class TransactionRepository extends AbstractRepository {
+    use QueryHelper;
+
     /**
      * @var array Allowed column names for SQL injection prevention
      */
@@ -208,8 +211,12 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getAllContactBalances(string $userPubkey, array $contactPubkeys): array
     {
+        if (empty($contactPubkeys)) {
+            return [];
+        }
+
         $userHash = hash(Constants::HASH_ALGORITHM, $userPubkey);
-        $contactHashes = array_map(function($pubkey) {
+        $contactHashes = array_map(function ($pubkey) {
             return hash(Constants::HASH_ALGORITHM, $pubkey);
         }, $contactPubkeys);
 
@@ -217,7 +224,7 @@ class TransactionRepository extends AbstractRepository {
         $hashToPubkey = array_combine($contactHashes, $contactPubkeys);
 
         // Build placeholders for IN clause
-        $placeholders = str_repeat('?,', count($contactHashes) - 1) . '?';
+        $placeholders = $this->createPlaceholders($contactHashes);
 
         // Single query to get all balances using UNION
         $query = "
@@ -285,21 +292,18 @@ class TransactionRepository extends AbstractRepository {
      */
     public function checkForNewTransactions(int $lastCheckTime): bool
     {
-        $userAddresses = $this->currentUser->getUserAddresses();
-
-        if (empty($userAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null) {
             return false;
         }
 
-        // Create placeholders for IN clause
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $placeholders = $this->createPlaceholders($userAddresses);
 
         $query = "SELECT COUNT(*) as count FROM {$this->tableName}
                     WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
                     AND timestamp > ?";
 
-        // Bind parameters - addresses twice for both IN clauses, then timestamp
-        $params = array_merge($userAddresses, $userAddresses, [date(Constants::DISPLAY_DATE_FORMAT, $lastCheckTime)]);
+        $params = $this->buildInClauseParams($userAddresses, 2, [date(Constants::DISPLAY_DATE_FORMAT, $lastCheckTime)]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         if(!$stmt){
@@ -390,22 +394,21 @@ class TransactionRepository extends AbstractRepository {
      * @return array
      */
     public function getSentUserTransactions(int $limit = 10): array {
-        $userAddresses = $this->currentUser->getUserAddresses();
-        
-        if (empty($userAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null) {
             return [];
         }
 
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions 
-                    WHERE sender_address IN ($placeholders) 
+        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions
+                    WHERE sender_address IN ($placeholders)
                     ORDER BY timestamp DESC LIMIT ?";
-        
-        $params = array_merge($userAddresses, [$limit]);
+
+        $params = $this->buildInClauseParams($userAddresses, 1, [$limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
-        
+
         if(!$stmt){
             return [];
         }
@@ -422,22 +425,21 @@ class TransactionRepository extends AbstractRepository {
      * @return array
      */
     public function getSentUserTransactionsCurrency(string $currency, int $limit = 10): array {
-        $userAddresses = $this->currentUser->getUserAddresses();
-        
-        if (empty($userAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null) {
             return [];
         }
 
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions 
+        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions
                     WHERE sender_address IN ($placeholders) AND currency = ?
                     ORDER BY timestamp DESC LIMIT ?";
-        
-        $params = array_merge($userAddresses, [$currency, $limit]);
+
+        $params = $this->buildInClauseParams($userAddresses, 1, [$currency, $limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
-        
+
         if(!$stmt){
             return [];
         }
@@ -474,18 +476,18 @@ class TransactionRepository extends AbstractRepository {
      * @return array
      */
     public function getReceivedUserTransactions(int $limit = 10): array{
-        $userAddresses = $this->currentUser->getUserAddresses();
-        
-        if (empty($userAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null) {
             return [];
         }
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
 
-        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions 
-                    WHERE receiver_address IN ($placeholders) 
+        $placeholders = $this->createPlaceholders($userAddresses);
+
+        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions
+                    WHERE receiver_address IN ($placeholders)
                     ORDER BY timestamp DESC LIMIT ?";
-        
-        $params = array_merge($userAddresses, [$limit]);
+
+        $params = $this->buildInClauseParams($userAddresses, 1, [$limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         
@@ -505,18 +507,18 @@ class TransactionRepository extends AbstractRepository {
      * @return array
      */
     public function getReceivedUserTransactionsCurrency(string $currency, int $limit = 10): array{
-        $userAddresses = $this->currentUser->getUserAddresses();
-        
-        if (empty($userAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null) {
             return [];
         }
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
 
-        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions 
+        $placeholders = $this->createPlaceholders($userAddresses);
+
+        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions
                     WHERE receiver_address IN ($placeholders) AND currency = ?
                     ORDER BY timestamp DESC LIMIT ?";
-        
-        $params = array_merge($userAddresses, [$currency, $limit]);
+
+        $params = $this->buildInClauseParams($userAddresses, 1, [$currency, $limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         
@@ -537,18 +539,18 @@ class TransactionRepository extends AbstractRepository {
      * @return array
      */
     public function getReceivedUserTransactionsAddress(string $senderAddress, int $limit = 10): array{
-        $userAddresses = $this->currentUser->getUserAddresses();
-        
-        if (empty($userAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null) {
             return [];
         }
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
 
-        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions 
+        $placeholders = $this->createPlaceholders($userAddresses);
+
+        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions
                     WHERE receiver_address IN ($placeholders) AND sender_address = ?
                     ORDER BY timestamp DESC LIMIT ?";
-        
-        $params = array_merge($userAddresses, [$senderAddress], [$limit]);
+
+        $params = $this->buildInClauseParams($userAddresses, 1, [$senderAddress, $limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         
@@ -569,18 +571,18 @@ class TransactionRepository extends AbstractRepository {
      * @return array
      */
     public function getReceivedUserTransactionsAddressCurrency(string $senderAddress, string $currency, int $limit = 10): array{
-        $userAddresses = $this->currentUser->getUserAddresses();
-        
-        if (empty($userAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null) {
             return [];
         }
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
 
-        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions 
-                    WHERE receiver_address IN ($placeholders) AND sender_address = ?
+        $placeholders = $this->createPlaceholders($userAddresses);
+
+        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions
+                    WHERE receiver_address IN ($placeholders) AND sender_address = ? AND currency = ?
                     ORDER BY timestamp DESC LIMIT ?";
-        
-        $params = array_merge($userAddresses, [$senderAddress], [$limit]);
+
+        $params = $this->buildInClauseParams($userAddresses, 1, [$senderAddress, $currency, $limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         
@@ -603,19 +605,19 @@ class TransactionRepository extends AbstractRepository {
      * @return array
      */
     public function getSentUserTransactionsAddress(string $senderAddress, int $limit = 10): array {
-        $userAddresses = $this->currentUser->getUserAddresses();
-        
-        if (empty($userAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+
+        if ($userAddresses === null) {
             return [];
         }
 
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions 
+        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions
                     WHERE sender_address IN ($placeholders) AND receiver_address = ?
                     ORDER BY timestamp DESC LIMIT ?";
-        
-        $params = array_merge($userAddresses, [$senderAddress, $limit]);
+
+        $params = $this->buildInClauseParams($userAddresses, 1, [$senderAddress, $limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         
@@ -636,19 +638,19 @@ class TransactionRepository extends AbstractRepository {
      * @return array
      */
     public function getSentUserTransactionsAddressCurrency(string $senderAddress, string $currency, int $limit = 10): array {
-        $userAddresses = $this->currentUser->getUserAddresses();
-        
-        if (empty($userAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+
+        if ($userAddresses === null) {
             return [];
         }
 
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $placeholders = $this->createPlaceholders($userAddresses);
 
-        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions 
+        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions
                     WHERE sender_address IN ($placeholders) AND receiver_address = ? AND currency = ?
                     ORDER BY timestamp DESC LIMIT ?";
-        
-        $params = array_merge($userAddresses, [$senderAddress, $currency, $limit]);
+
+        $params = $this->buildInClauseParams($userAddresses, 1, [$senderAddress, $currency, $limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         
@@ -668,21 +670,21 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getTransactions(int $limit = 10): array
     {
-        $userAddresses = $this->currentUser->getUserAddresses();
-        
-        if (empty($userAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+
+        if ($userAddresses === null) {
             return [];
         }
 
         // Create placeholders for IN clause
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $placeholders = $this->createPlaceholders($userAddresses);
 
         $query = "SELECT * FROM {$this->tableName}
                     WHERE (sender_address IN ($placeholders) OR receiver_address IN ($placeholders))
                     ORDER BY timestamp DESC LIMIT ?";
 
         // Bind parameters - addresses twice for both IN clauses, then limit
-        $params = array_merge($userAddresses, $userAddresses, [$limit]);
+        $params = $this->buildInClauseParams($userAddresses, 2, [$limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         if(!$stmt){
@@ -701,15 +703,14 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getTransactionHistory(int $limit = 10): array
     {
-        $userAddresses = $this->currentUser->getUserAddresses();
+        $userAddresses = $this->getUserAddressesOrNull();
 
-
-        if (empty($userAddresses)) {
+        if ($userAddresses === null) {
             return [];
         }
 
         // Create placeholders for IN clause
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $placeholders = $this->createPlaceholders($userAddresses);
 
         // Query with LEFT JOINs to get contact names, p2p details, and full transaction details
         $query = "SELECT
@@ -745,7 +746,7 @@ class TransactionRepository extends AbstractRepository {
                   ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
 
         // Bind parameters - addresses twice for both IN clauses, then limit
-        $params = array_merge($userAddresses, $userAddresses, [$limit]);
+        $params = $this->buildInClauseParams($userAddresses, 2, [$limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         if(!$stmt){
@@ -765,15 +766,14 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getTransactionHistoryCurrency(string $currency, int $limit = 10): array
     {
-        $userAddresses = $this->currentUser->getUserAddresses();
+        $userAddresses = $this->getUserAddressesOrNull();
 
-
-        if (empty($userAddresses)) {
+        if ($userAddresses === null) {
             return [];
         }
 
         // Create placeholders for IN clause
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $placeholders = $this->createPlaceholders($userAddresses);
 
         // Query with LEFT JOINs to get contact names for both sender and receiver
         $query = "SELECT
@@ -793,7 +793,7 @@ class TransactionRepository extends AbstractRepository {
                   ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
 
         // Bind parameters - addresses twice for both IN clauses, then currency, then limit
-        $params = array_merge($userAddresses, $userAddresses, [$currency, $limit]);
+        $params = $this->buildInClauseParams($userAddresses, 2, [$currency, $limit]);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         if(!$stmt){
@@ -1250,14 +1250,13 @@ class TransactionRepository extends AbstractRepository {
      * @return array Array of in-progress transactions
      */
     public function getInProgressTransactions(int $limit = 10): array {
-        $userAddresses = $this->currentUser->getUserAddresses();
-
-        if (empty($userAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null) {
             return [];
         }
 
         // Create placeholders for IN clause
-        $placeholders = str_repeat('?,', count($userAddresses) - 1) . '?';
+        $placeholders = $this->createPlaceholders($userAddresses);
 
         // Current microtime for expiration check (P2P expiration is stored as microtime * TIME_MICROSECONDS_TO_INT)
         $currentMicrotime = (int)(microtime(true) * Constants::TIME_MICROSECONDS_TO_INT);
@@ -1774,9 +1773,8 @@ class TransactionRepository extends AbstractRepository {
      * @return array Formatted transactions with contact
      */
     public function getTransactionsWithContact(array $contactAddresses, int $limit = 5): array {
-        $userAddresses = $this->currentUser->getUserAddresses();
-
-        if (empty($userAddresses) || empty($contactAddresses)) {
+        $userAddresses = $this->getUserAddressesOrNull();
+        if ($userAddresses === null || empty($contactAddresses)) {
             return [];
         }
 
@@ -1787,8 +1785,8 @@ class TransactionRepository extends AbstractRepository {
         }
 
         // Create placeholders for IN clauses
-        $userPlaceholders = str_repeat('?,', count($userAddresses) - 1) . '?';
-        $contactPlaceholders = str_repeat('?,', count($contactAddresses) - 1) . '?';
+        $userPlaceholders = $this->createPlaceholders($userAddresses);
+        $contactPlaceholders = $this->createPlaceholders($contactAddresses);
 
         // Get transactions where user sent to contact OR user received from contact
         $query = "SELECT txid, tx_type, status, sender_address, receiver_address, amount, currency, timestamp, memo, description
