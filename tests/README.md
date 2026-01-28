@@ -34,14 +34,17 @@ tests/
 │   ├── http10.sh             # 10-node linear topology
 │   └── http13.sh             # 13-node hierarchical cluster
 └── testfiles/
-    ├── hostnameTest.sh       # HTTP/HTTPS prerequisite test
-    ├── addContactsTest.sh    # Contact addition workflow
-    ├── sendMessageTest.sh    # Basic messaging
-    ├── balanceTest.sh        # Balance operations
+    ├── hostnameTest.sh           # HTTP/HTTPS prerequisite test
+    ├── addContactsTest.sh        # Contact addition workflow
+    ├── sendMessageTest.sh        # Basic messaging
+    ├── balanceTest.sh            # Balance operations
     ├── transactionTestSuite.sh   # Transaction tests
-    ├── syncTestSuite.sh      # Chain synchronization
-    ├── torTestSuite.sh       # Tor network tests
-    ├── sslCertificateTest.sh # SSL certificate validation
+    ├── syncTestSuite.sh          # Chain synchronization
+    ├── torTestSuite.sh           # Tor network tests
+    ├── sslCertificateTest.sh     # SSL certificate validation
+    ├── apiInputValidationTest.sh # API input validation (15+ test cases)
+    ├── negativeFinancialTest.sh  # Financial error scenarios (14+ test cases)
+    ├── performanceBaseline.sh    # Performance benchmarks
     └── ... (additional test files)
 ```
 
@@ -92,10 +95,11 @@ tests/
 | `contacts`    | Contact management | addContactsTest, contactListTest, pingTestSuite |
 | `transactions`| Transaction operations | addContactsTest, balanceTest, transactionTestSuite, transactionRecoveryTest |
 | `messaging`   | Message delivery and routing | addContactsTest, sendMessageTest, sendAllPeersTest, routingTest, messageDeliveryTest |
-| `api`         | API endpoints and CLI | addContactsTest, curlErrorHandlingTest, cliCommandsTest, apiEndpointsTest |
+| `api`         | API endpoints and CLI | addContactsTest, curlErrorHandlingTest, cliCommandsTest, apiEndpointsTest, apiInputValidationTest |
 | `sync`        | Chain synchronization | addContactsTest, sendMessageTest, syncTestSuite |
 | `connections` | SSL and Tor connectivity | sslCertificateTest, torTestSuite |
 | `system`      | System-level operations | gracefulShutdownTest, seedphraseTestSuite, processorLockfileTest |
+| `performance` | Performance benchmarks | performanceBaseline (DB queries, API response times, crypto operations) |
 
 **Note:** Many subsets automatically include `addContactsTest` as a prerequisite since contacts must exist before other operations can be tested.
 
@@ -118,10 +122,12 @@ The test runner handles this automatically - you do not need to manually manage 
 |----------|---------|-------------|
 | `EIOU_INIT_TIMEOUT` | 90 | Container initialization timeout in seconds |
 | `EIOU_CONTACT_STATUS_ENABLED` | false (during tests) | Contact status pinging (disabled to prevent interference with sync tests) |
+| `TEST_TIMEOUT` | 30 | Default timeout for adaptive polling functions (seconds) |
+| `TEST_POLL_INTERVAL` | 1 | Default polling interval for wait functions (seconds) |
 
-**WSL2/Slow Environment Tip:** If tests timeout waiting for containers, increase the init timeout:
+**WSL2/Slow Environment Tip:** If tests timeout waiting for containers or conditions, increase the timeouts:
 ```bash
-EIOU_INIT_TIMEOUT=180 ./run-all-tests.sh http4
+EIOU_INIT_TIMEOUT=180 TEST_TIMEOUT=60 ./run-all-tests.sh http4
 ```
 
 ## Adding New Tests
@@ -197,11 +203,20 @@ Common helpers from `testHelpers.sh`:
 |----------|---------|
 | `validate_test_prerequisites` | Verify containers are running |
 | `get_container_pair` | Get sender/receiver for tests |
-| `wait_for_condition` | Poll until condition met |
-| `wait_for_balance_change` | Wait for balance update |
+| `wait_for_condition` | Poll until condition met (configurable timeout/interval) |
+| `wait_for_container_health` | Wait for container PHP readiness |
+| `wait_for_container_initialized` | Wait for full container startup including MariaDB |
+| `wait_for_file` | Wait for file to exist in container |
+| `wait_for_process_stop` | Wait for process to terminate |
+| `wait_for_process_start` | Wait for process to start |
+| `wait_for_queue_processed` | Process message queues and wait |
+| `wait_for_contact_status` | Wait for contact status to reach expected value |
+| `wait_for_tx_count_reached` | Wait for transaction count threshold |
 | `ensure_contacts` | Add bidirectional contacts |
 | `check_tor_running` | Verify Tor service status |
 | `verify_chain_integrity` | Validate transaction chain |
+
+**Adaptive Polling:** All `wait_for_*` functions use adaptive polling instead of fixed sleeps. Configure timeouts via `TEST_TIMEOUT` and `TEST_POLL_INTERVAL` environment variables.
 
 ## Troubleshooting
 
