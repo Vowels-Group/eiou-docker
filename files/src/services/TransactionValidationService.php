@@ -17,7 +17,7 @@ require_once __DIR__ . '/../contracts/SyncServiceInterface.php';
  * - Full transaction possibility validation with proactive sync
  *
  * This service is extracted from TransactionService as part of the God Class
- * refactoring effort (Issue #512).
+ * refactoring effort.
  *
  * SECTION INDEX:
  * - Properties.......................... Line ~30

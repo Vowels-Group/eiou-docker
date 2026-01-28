@@ -13,7 +13,7 @@ require_once __DIR__ . '/../contracts/P2pServiceInterface.php';
 
 /**
  * Send Operation Service - High-level send orchestration for eIOU transactions.
- * Part of TransactionService refactoring (Issue #512).
+ * Part of TransactionService refactoring.
  */
 class SendOperationService implements SendOperationServiceInterface
 {

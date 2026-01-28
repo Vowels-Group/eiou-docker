@@ -8,7 +8,7 @@
  * Handles direct sends, P2P routing, and transaction message delivery
  * with distributed locking support for concurrent send prevention.
  *
- * This interface is part of the TransactionService refactoring (Issue #512)
+ * This interface is part of the TransactionService refactoring
  * to split the God Class into focused, single-responsibility services.
  *
  * @package Contracts

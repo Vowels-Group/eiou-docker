@@ -13,7 +13,7 @@ require_once __DIR__ . '/../contracts/HeldTransactionServiceInterface.php';
  *
  * Handles core transaction processing logic including incoming transactions,
  * pending transactions, and P2P transactions. Extracted from TransactionService
- * as part of the God Class refactoring (Issue #512).
+ * as part of the God Class refactoring.
  *
  * Atomic Claiming Pattern:
  * Uses TransactionRecoveryRepository->claimPendingTransaction() for atomic

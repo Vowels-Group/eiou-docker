@@ -779,7 +779,7 @@ class ServiceContainer {
      *
      * Handles balance-related operations including user balance retrieval,
      * contact balance calculations, and contact information conversion.
-     * Extracted from TransactionService as part of God Class refactoring (Issue #512).
+     * Extracted from TransactionService as part of God Class refactoring.
      *
      * @return BalanceServiceInterface
      */
@@ -802,7 +802,7 @@ class ServiceContainer {
      *
      * Handles verification of transaction chain integrity before new transactions
      * are created. Coordinates with SyncService to repair chains when gaps exist.
-     * Extracted from TransactionService as part of God Class refactoring (Issue #512).
+     * Extracted from TransactionService as part of God Class refactoring.
      *
      * @return ChainVerificationServiceInterface
      */
@@ -824,7 +824,7 @@ class ServiceContainer {
      * Handles all validation logic for transaction processing including
      * previous transaction ID validation, funds checking, and full
      * transaction possibility validation with proactive sync.
-     * Extracted from TransactionService as part of God Class refactoring (Issue #512).
+     * Extracted from TransactionService as part of God Class refactoring.
      *
      * @return TransactionValidationServiceInterface
      */
@@ -849,7 +849,7 @@ class ServiceContainer {
      *
      * Handles core transaction processing logic including incoming transactions,
      * pending transactions, and P2P transactions.
-     * Extracted from TransactionService as part of God Class refactoring (Issue #512).
+     * Extracted from TransactionService as part of God Class refactoring.
      *
      * @return TransactionProcessingServiceInterface
      */
@@ -879,7 +879,7 @@ class ServiceContainer {
      * Handles high-level send operation orchestration for eIOU transactions.
      * Manages direct sends, P2P routing, transaction message delivery,
      * and distributed locking for concurrent send prevention.
-     * Extracted from TransactionService as part of God Class refactoring (Issue #512).
+     * Extracted from TransactionService as part of God Class refactoring.
      *
      * @return SendOperationServiceInterface
      */
@@ -1118,7 +1118,7 @@ class ServiceContainer {
         $this->getRateLimiterService();
         $this->getTransactionRecoveryService();
 
-        // Initialize new refactored services (Issue #512)
+        // Initialize new refactored services
         $this->getBalanceService();
         $this->getChainVerificationService();
         $this->getTransactionValidationService();
