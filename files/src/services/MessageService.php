@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../contracts/MessageServiceInterface.php';
+require_once __DIR__ . '/../database/TransactionContactRepository.php';
 
 /**
  * Message Service
@@ -82,6 +83,11 @@ class MessageService implements MessageServiceInterface {
     private ?SyncService $syncService = null;
 
     /**
+     * @var TransactionContactRepository Transaction contact repository for contact transaction operations
+     */
+    private TransactionContactRepository $transactionContactRepository;
+
+    /**
      * Set the sync service (setter injection for circular dependency)
      *
      * @param SyncService $service Sync service
@@ -110,6 +116,7 @@ class MessageService implements MessageServiceInterface {
      * @param BalanceRepository $balanceRepository Balance repository
      * @param P2pRepository $p2pRepository P2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param TransactionContactRepository $transactionContactRepository Transaction contact repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
@@ -119,6 +126,7 @@ class MessageService implements MessageServiceInterface {
         BalanceRepository $balanceRepository,
         P2pRepository $p2pRepository,
         TransactionRepository $transactionRepository,
+        TransactionContactRepository $transactionContactRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser,
         ?MessageDeliveryService $messageDeliveryService = null
@@ -127,21 +135,22 @@ class MessageService implements MessageServiceInterface {
         $this->balanceRepository = $balanceRepository;
         $this->p2pRepository = $p2pRepository;
         $this->transactionRepository = $transactionRepository;
+        $this->transactionContactRepository = $transactionContactRepository;
         $this->utilityContainer = $utilityContainer;
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
-       
+
         require_once '/etc/eiou/src/schemas/payloads/ContactPayload.php';
         $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
-        
+
         require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
-        
+
         require_once '/etc/eiou/src/schemas/payloads/UtilPayload.php';
         $this->utilPayload = new UtilPayload($this->currentUser,$this->utilityContainer);
-       
+
         require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
         $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
     }
@@ -399,7 +408,7 @@ class MessageService implements MessageServiceInterface {
             }
 
             // Complete the contact transaction (update status from 'sent' to 'completed')
-            $this->transactionRepository->completeContactTransaction($senderPublicKey);
+            $this->transactionContactRepository->completeContactTransaction($senderPublicKey);
 
             // Return acknowledgment for delivery tracking
             // This confirms the acceptance message was received and processed

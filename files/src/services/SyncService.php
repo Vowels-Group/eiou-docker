@@ -4,6 +4,8 @@
 require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
 require_once __DIR__ . '/../contracts/SyncServiceInterface.php';
+require_once __DIR__ . '/../database/TransactionChainRepository.php';
+require_once __DIR__ . '/../database/TransactionContactRepository.php';
 
 
 /**
@@ -94,6 +96,16 @@ class SyncService implements SyncServiceInterface {
     private ?HeldTransactionService $heldTransactionService = null;
 
     /**
+     * @var TransactionChainRepository Transaction chain repository instance
+     */
+    private TransactionChainRepository $transactionChainRepository;
+
+    /**
+     * @var TransactionContactRepository Transaction contact repository instance
+     */
+    private TransactionContactRepository $transactionContactRepository;
+
+    /**
      * Set the held transaction service (setter injection for circular dependency)
      *
      * @param HeldTransactionService $service Held transaction service
@@ -122,16 +134,20 @@ class SyncService implements SyncServiceInterface {
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param TransactionChainRepository $transactionChainRepository Transaction chain repository
+     * @param TransactionContactRepository $transactionContactRepository Transaction contact repository
      * @param BalanceRepository $balanceRepository Balance repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         ContactRepository $contactRepository,
-         AddressRepository $addressRepository,
+        AddressRepository $addressRepository,
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
+        TransactionChainRepository $transactionChainRepository,
+        TransactionContactRepository $transactionContactRepository,
         BalanceRepository $balanceRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
@@ -141,17 +157,19 @@ class SyncService implements SyncServiceInterface {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
+        $this->transactionChainRepository = $transactionChainRepository;
+        $this->transactionContactRepository = $transactionContactRepository;
         $this->balanceRepository = $balanceRepository;
         $this->utilityContainer = $utilityContainer;
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
-       
+
         require_once '/etc/eiou/src/schemas/payloads/ContactPayload.php';
         $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
-       
+
         require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
-      
+
         require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
         $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
     }
@@ -288,7 +306,7 @@ class SyncService implements SyncServiceInterface {
                 $this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative);
 
                 // Complete the contact transaction (update status from 'sent' to 'completed')
-                $this->transactionRepository->completeContactTransaction($senderPublicKey);
+                $this->transactionContactRepository->completeContactTransaction($senderPublicKey);
 
                 output(outputContactSuccesfullySynced($contactAddress),$echo);
                 return true;
@@ -502,7 +520,7 @@ class SyncService implements SyncServiceInterface {
                 $localLoserToResign = null;  // Track local transaction that needs re-signing
 
                 if ($remotePreviousTxid !== null) {
-                    $localConflict = $this->transactionRepository->getLocalTransactionByPreviousTxid(
+                    $localConflict = $this->transactionChainRepository->getLocalTransactionByPreviousTxid(
                         $remotePreviousTxid,
                         $userPubkeyHash,
                         $contactPubkeyHash
@@ -769,7 +787,7 @@ class SyncService implements SyncServiceInterface {
     private function resignLocalTransaction(array $localTx, string $newPreviousTxid): bool {
         try {
             // Update the local transaction's previous_txid in database first
-            $updated = $this->transactionRepository->updatePreviousTxid($localTx['txid'], $newPreviousTxid);
+            $updated = $this->transactionChainRepository->updatePreviousTxid($localTx['txid'], $newPreviousTxid);
 
             if (!$updated) {
                 SecureLogger::warning("Failed to update previous_txid for local transaction", [
@@ -1604,7 +1622,7 @@ class SyncService implements SyncServiceInterface {
 
         try {
             // Step 1: Get local chain state summary
-            $localState = $this->transactionRepository->getChainStateSummary(
+            $localState = $this->transactionChainRepository->getChainStateSummary(
                 $this->currentUser->getPublicKey(),
                 $contactPublicKey
             );
@@ -1744,7 +1762,7 @@ class SyncService implements SyncServiceInterface {
 
         try {
             // Get our local chain state
-            $localState = $this->transactionRepository->getChainStateSummary(
+            $localState = $this->transactionChainRepository->getChainStateSummary(
                 $this->currentUser->getPublicKey(),
                 $senderPublicKey
             );

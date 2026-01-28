@@ -327,6 +327,66 @@ class ServiceContainer {
     }
 
     /**
+     * Get TransactionStatisticsRepository instance
+     *
+     * @return TransactionStatisticsRepository
+     */
+    public function getTransactionStatisticsRepository(): TransactionStatisticsRepository {
+        if (!isset($this->repositories['TransactionStatisticsRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/TransactionStatisticsRepository.php';
+            $this->repositories['TransactionStatisticsRepository'] = new TransactionStatisticsRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['TransactionStatisticsRepository'];
+    }
+
+    /**
+     * Get TransactionChainRepository instance
+     *
+     * @return TransactionChainRepository
+     */
+    public function getTransactionChainRepository(): TransactionChainRepository {
+        if (!isset($this->repositories['TransactionChainRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/TransactionChainRepository.php';
+            $this->repositories['TransactionChainRepository'] = new TransactionChainRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['TransactionChainRepository'];
+    }
+
+    /**
+     * Get TransactionRecoveryRepository instance
+     *
+     * @return TransactionRecoveryRepository
+     */
+    public function getTransactionRecoveryRepository(): TransactionRecoveryRepository {
+        if (!isset($this->repositories['TransactionRecoveryRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/TransactionRecoveryRepository.php';
+            $this->repositories['TransactionRecoveryRepository'] = new TransactionRecoveryRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['TransactionRecoveryRepository'];
+    }
+
+    /**
+     * Get TransactionContactRepository instance
+     *
+     * @return TransactionContactRepository
+     */
+    public function getTransactionContactRepository(): TransactionContactRepository {
+        if (!isset($this->repositories['TransactionContactRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/TransactionContactRepository.php';
+            $this->repositories['TransactionContactRepository'] = new TransactionContactRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['TransactionContactRepository'];
+    }
+
+    /**
      * Get ContactService instance
      *
      * Integrates MessageDeliveryService for reliable contact message delivery
@@ -346,6 +406,7 @@ class ServiceContainer {
                 $this->getLogger(),
                 $this->currentUser,
                 $this->getTransactionRepository(),
+                $this->getTransactionContactRepository(),
                 $this->getMessageDeliveryService()
             );
         }
@@ -370,6 +431,10 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
+                $this->getTransactionChainRepository(),
+                $this->getTransactionRecoveryRepository(),
+                $this->getTransactionContactRepository(),
+                $this->getTransactionStatisticsRepository(),
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->getLogger(),
@@ -459,6 +524,7 @@ class ServiceContainer {
                 $this->getBalanceRepository(),
                 $this->getP2pRepository(),
                 $this->getTransactionRepository(),
+                $this->getTransactionContactRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser,
                 $this->getMessageDeliveryService()
@@ -501,6 +567,8 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
+                $this->getTransactionChainRepository(),
+                $this->getTransactionContactRepository(),
                 $this->getBalanceRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser
@@ -556,6 +624,7 @@ class ServiceContainer {
             $this->services['HeldTransactionService'] = new HeldTransactionService(
                 $this->getHeldTransactionRepository(),
                 $this->getTransactionRepository(),
+                $this->getTransactionChainRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser
             );
@@ -572,7 +641,8 @@ class ServiceContainer {
         if (!isset($this->services['TransactionRecoveryService'])) {
             require_once __DIR__ . '/TransactionRecoveryService.php';
             $this->services['TransactionRecoveryService'] = new TransactionRecoveryService(
-                $this->getTransactionRepository()
+                $this->getTransactionRepository(),
+                $this->getTransactionRecoveryRepository()
             );
         }
         return $this->services['TransactionRecoveryService'];
@@ -623,8 +693,7 @@ class ServiceContainer {
         if (!isset($this->services['LockingService'])) {
             require_once __DIR__ . '/DatabaseLockingService.php';
             $this->services['LockingService'] = new DatabaseLockingService(
-                $this->getPdo(),
-                $this->getLogger()
+                $this->getPdo()
             );
         }
         return $this->services['LockingService'];
@@ -791,6 +860,8 @@ class ServiceContainer {
      * - HeldTransactionService --> SyncService
      * - Rp2pService --> TransactionService
      * - TransactionService --> P2pService, ContactService
+     *
+     * Note: Repositories are now passed via constructor injection, not setter injection.
      */
     public function wireCircularDependencies(): void {
         // Wire TransactionService <-> SyncService
@@ -866,6 +937,7 @@ class ServiceContainer {
         $this->getMessageService();
         $this->getContactStatusService();
         $this->getRateLimiterService();
+        $this->getTransactionRecoveryService();
 
         // Wire circular dependencies
         $this->wireCircularDependencies();

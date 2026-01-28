@@ -4,6 +4,7 @@
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';
 require_once __DIR__ . '/../contracts/TransactionRecoveryServiceInterface.php';
+require_once __DIR__ . '/../database/TransactionRecoveryRepository.php';
 
 
 /**
@@ -32,6 +33,11 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
     private $transactionRepository;
 
     /**
+     * @var TransactionRecoveryRepository Transaction recovery repository
+     */
+    private TransactionRecoveryRepository $transactionRecoveryRepository;
+
+    /**
      * @var SecureLogger Logger instance
      */
     private $logger;
@@ -40,9 +46,11 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
      * Constructor
      *
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param TransactionRecoveryRepository $transactionRecoveryRepository Transaction recovery repository
      */
-    public function __construct($transactionRepository) {
+    public function __construct($transactionRepository, TransactionRecoveryRepository $transactionRecoveryRepository) {
         $this->transactionRepository = $transactionRepository;
+        $this->transactionRecoveryRepository = $transactionRecoveryRepository;
     }
 
     /**
@@ -71,7 +79,7 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
 
         try {
             // Get all transactions stuck in 'sending' status
-            $stuckTransactions = $this->transactionRepository->getStuckSendingTransactions($timeoutSeconds);
+            $stuckTransactions = $this->transactionRecoveryRepository->getStuckSendingTransactions($timeoutSeconds);
 
             if (empty($stuckTransactions)) {
                 SecureLogger::info("No stuck transactions found during recovery");
@@ -87,7 +95,7 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
                 $sendingStartedAt = $transaction['sending_started_at'] ?? 'unknown';
 
                 try {
-                    $recoveryResult = $this->transactionRepository->recoverStuckTransaction($txid, $maxRetries);
+                    $recoveryResult = $this->transactionRecoveryRepository->recoverStuckTransaction($txid, $maxRetries);
 
                     $txResult = [
                         'txid' => $txid,
@@ -158,7 +166,7 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
      */
     public function getTransactionsNeedingReview(): array {
         try {
-            return $this->transactionRepository->getTransactionsNeedingReview();
+            return $this->transactionRecoveryRepository->getTransactionsNeedingReview();
         } catch (Exception $e) {
             SecureLogger::logException($e, [
                 'context' => 'get_transactions_needing_review'
@@ -251,7 +259,7 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
     public function isRecoveryNeeded(): bool {
         try {
             // Use a minimal timeout check (e.g., 0 seconds) to find any transactions in 'sending' status
-            $stuckTransactions = $this->transactionRepository->getStuckSendingTransactions(0);
+            $stuckTransactions = $this->transactionRecoveryRepository->getStuckSendingTransactions(0);
             return !empty($stuckTransactions);
         } catch (Exception $e) {
             SecureLogger::logException($e, [
@@ -272,8 +280,8 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
     public function getRecoveryStatistics(): array {
         try {
             $stats = [
-                'stuck_sending' => count($this->transactionRepository->getStuckSendingTransactions()),
-                'needs_review' => count($this->transactionRepository->getTransactionsNeedingReview()),
+                'stuck_sending' => count($this->transactionRecoveryRepository->getStuckSendingTransactions()),
+                'needs_review' => count($this->transactionRecoveryRepository->getTransactionsNeedingReview()),
                 'timestamp' => date('Y-m-d H:i:s')
             ];
 

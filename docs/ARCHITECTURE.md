@@ -268,22 +268,22 @@ Application::getInstance()
 
 | Service | Purpose | Key Dependencies |
 |---------|---------|------------------|
-| `TransactionService` | Transaction creation, validation, processing | ContactRepo, BalanceRepo, TransactionRepo, P2pService, SyncService |
+| `TransactionService` | Transaction creation, validation, processing | ContactRepo, BalanceRepo, TransactionRepo, TransactionChainRepo, TransactionContactRepo, TransactionStatisticsRepo, P2pService, SyncService |
 | `P2pService` | Peer-to-peer message routing | ContactRepo, P2pRepo, TransportUtility, MessageDeliveryService |
 | `Rp2pService` | Return P2P (response) message handling | ContactRepo, Rp2pRepo, TransactionService |
-| `ContactService` | Contact management and messaging | ContactRepo, AddressRepo, SyncService, MessageDeliveryService |
-| `SyncService` | Transaction chain synchronization | ContactRepo, TransactionRepo, HeldTransactionService |
+| `ContactService` | Contact management and messaging | ContactRepo, AddressRepo, TransactionContactRepo, SyncService, MessageDeliveryService |
+| `SyncService` | Transaction chain synchronization | ContactRepo, TransactionRepo, TransactionChainRepo, HeldTransactionService |
 | `MessageDeliveryService` | Reliable delivery with retry/DLQ | MessageDeliveryRepo, DeadLetterQueueRepo, TransportUtility |
-| `HeldTransactionService` | Pending transaction queue for sync | HeldTransactionRepo, TransactionRepo, SyncService |
+| `HeldTransactionService` | Pending transaction queue for sync | HeldTransactionRepo, TransactionRepo, TransactionChainRepo, SyncService |
 | `CleanupService` | Expired message cleanup | P2pRepo, Rp2pRepo, TransactionRepo |
 | `WalletService` | Wallet information access | UserContext |
-| `MessageService` | Incoming message handling | ContactRepo, P2pRepo, TransactionRepo, SyncService |
+| `MessageService` | Incoming message handling | ContactRepo, P2pRepo, TransactionRepo, TransactionContactRepo, SyncService |
 | `ContactStatusService` | Contact ping/status checking | ContactRepo, TransactionRepo, SyncService |
 | `ApiAuthService` | API authentication (HMAC-SHA256) | ApiKeyRepo |
 | `ApiKeyService` | API key management | ApiKeyRepo |
-| `TransactionRecoveryService` | Stuck transaction recovery | TransactionRepo |
+| `TransactionRecoveryService` | Stuck transaction recovery | TransactionRecoveryRepo |
 | `RateLimiterService` | Request rate limiting | RateLimiterRepo |
-| `CliService` | CLI output formatting | ContactRepo, BalanceRepo |
+| `CliService` | CLI output formatting | ContactRepo, BalanceRepo, TransactionRepo |
 | `DebugService` | Debug logging and diagnostics | DebugRepo |
 
 ### Utility Services
@@ -486,7 +486,12 @@ AbstractRepository
     +-- AddressRepository
     +-- BalanceRepository
     +-- ContactRepository
-    +-- TransactionRepository
+    +-- TransactionRepository (core CRUD operations)
+    |       |
+    |       +-- TransactionStatisticsRepository (aggregations, statistics)
+    |       +-- TransactionChainRepository (chain navigation, conflict resolution)
+    |       +-- TransactionRecoveryRepository (stuck transaction recovery)
+    |       +-- TransactionContactRepository (contact-based queries)
     +-- P2pRepository
     +-- Rp2pRepository
     +-- MessageDeliveryRepository
@@ -495,6 +500,27 @@ AbstractRepository
     +-- ApiKeyRepository
     +-- RateLimiterRepository
 ```
+
+**Transaction Repository Specialization:**
+
+The transaction data access layer is split into specialized repositories for maintainability:
+
+| Repository | Responsibility |
+|------------|----------------|
+| `TransactionRepository` | Core CRUD, basic queries, transaction creation |
+| `TransactionStatisticsRepository` | Balance aggregations, transaction counts, statistics |
+| `TransactionChainRepository` | Chain traversal, prev_txid lookups, conflict resolution |
+| `TransactionRecoveryRepository` | Finding/updating stuck transactions for recovery |
+| `TransactionContactRepository` | Queries filtered by contact relationships |
+
+All specialized repositories use the `QueryHelper` trait for shared query building functionality.
+
+**Supporting Classes:**
+
+| Class | Location | Purpose |
+|-------|----------|---------|
+| `TransactionFormatter` | `/src/formatters/` | Output formatting for CLI and API responses |
+| `QueryHelper` | `/src/database/traits/` | Shared SQL building and parameter handling |
 
 **AbstractRepository Features:**
 
@@ -902,7 +928,9 @@ RATE_LIMIT_ENABLED = true  // Always true in production
 | ServiceContainer | `/etc/eiou/src/services/ServiceContainer.php` |
 | Processors | `/etc/eiou/src/processors/` |
 | Repositories | `/etc/eiou/src/database/` |
+| Repository Traits | `/etc/eiou/src/database/traits/` |
 | Services | `/etc/eiou/src/services/` |
+| Formatters | `/etc/eiou/src/formatters/` |
 | Utilities | `/etc/eiou/src/services/utilities/` |
 
 ---

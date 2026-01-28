@@ -4,6 +4,7 @@
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';
 require_once __DIR__ . '/../contracts/HeldTransactionServiceInterface.php';
+require_once __DIR__ . '/../database/TransactionChainRepository.php';
 
 /**
  * Held Transaction Service
@@ -53,6 +54,11 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
     private ?SyncService $syncService = null;
 
     /**
+     * @var TransactionChainRepository Transaction chain repository
+     */
+    private TransactionChainRepository $transactionChainRepository;
+
+    /**
      * Set the sync service (setter injection for circular dependency)
      *
      * @param SyncService $service Sync service
@@ -79,17 +85,20 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
      *
      * @param HeldTransactionRepository $heldRepository Held transaction repository
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param TransactionChainRepository $transactionChainRepository Transaction chain repository
      * @param UtilityServiceContainer $utilityContainer Utility service container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         $heldRepository,
         $transactionRepository,
+        TransactionChainRepository $transactionChainRepository,
         $utilityContainer,
         $currentUser
     ) {
         $this->heldRepository = $heldRepository;
         $this->transactionRepository = $transactionRepository;
+        $this->transactionChainRepository = $transactionChainRepository;
         $this->utilityContainer = $utilityContainer;
         $this->currentUser = $currentUser;
 
@@ -261,7 +270,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
 
             // Verify chain integrity before processing held transactions
             // This ensures the sync actually completed successfully
-            $chainIntegrity = $this->transactionRepository->verifyChainIntegrity(
+            $chainIntegrity = $this->transactionChainRepository->verifyChainIntegrity(
                 $this->currentUser->getPublicKey(),
                 $contactPubkey
             );
@@ -382,7 +391,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             }
 
             // Update the transaction's previous_txid
-            $updated = $this->transactionRepository->updatePreviousTxid($txid, $correctPreviousTxid);
+            $updated = $this->transactionChainRepository->updatePreviousTxid($txid, $correctPreviousTxid);
 
             if ($updated) {
                 // Verify the update was persisted by re-reading from database

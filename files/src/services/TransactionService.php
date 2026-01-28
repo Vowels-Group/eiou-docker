@@ -7,6 +7,10 @@ require_once __DIR__ . '/MessageDeliveryService.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
 require_once __DIR__ . '/../contracts/TransactionServiceInterface.php';
 require_once __DIR__ . '/../contracts/LockingServiceInterface.php';
+require_once __DIR__ . '/../database/TransactionChainRepository.php';
+require_once __DIR__ . '/../database/TransactionRecoveryRepository.php';
+require_once __DIR__ . '/../database/TransactionContactRepository.php';
+require_once __DIR__ . '/../database/TransactionStatisticsRepository.php';
 
 
 /**
@@ -148,6 +152,26 @@ class TransactionService implements TransactionServiceInterface {
     private ?LockingServiceInterface $lockingService = null;
 
     /**
+     * @var TransactionChainRepository Transaction chain repository for chain integrity operations
+     */
+    private TransactionChainRepository $transactionChainRepository;
+
+    /**
+     * @var TransactionRecoveryRepository Transaction recovery repository for pending/in-progress operations
+     */
+    private TransactionRecoveryRepository $transactionRecoveryRepository;
+
+    /**
+     * @var TransactionContactRepository Transaction contact repository for contact balance operations
+     */
+    private TransactionContactRepository $transactionContactRepository;
+
+    /**
+     * @var TransactionStatisticsRepository Transaction statistics repository for statistics operations
+     */
+    private TransactionStatisticsRepository $transactionStatisticsRepository;
+
+    /**
      * Set the sync service (setter injection for circular dependency)
      *
      * @param SyncService $service Sync service
@@ -235,13 +259,16 @@ class TransactionService implements TransactionServiceInterface {
      * @param P2pRepository $p2pRepository P2p repository
      * @param Rp2pRepository $rp2pRepository Rp2p repository
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param TransactionChainRepository $transactionChainRepository Transaction chain repository
+     * @param TransactionRecoveryRepository $transactionRecoveryRepository Transaction recovery repository
+     * @param TransactionContactRepository $transactionContactRepository Transaction contact repository
+     * @param TransactionStatisticsRepository $transactionStatisticsRepository Transaction statistics repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param InputValidator $inputValidator InputValidator
      * @param SecureLogger $secureLogger SecureLogger
      * @param UserContext $currentUser Current user data
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      * @param HeldTransactionService|null $heldTransactionService Optional Held transaction service for pending sync
-     * 
      */
     public function __construct(
         ContactRepository $contactRepository,
@@ -250,6 +277,10 @@ class TransactionService implements TransactionServiceInterface {
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
+        TransactionChainRepository $transactionChainRepository,
+        TransactionRecoveryRepository $transactionRecoveryRepository,
+        TransactionContactRepository $transactionContactRepository,
+        TransactionStatisticsRepository $transactionStatisticsRepository,
         UtilityServiceContainer $utilityContainer,
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
@@ -263,6 +294,10 @@ class TransactionService implements TransactionServiceInterface {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
+        $this->transactionChainRepository = $transactionChainRepository;
+        $this->transactionRecoveryRepository = $transactionRecoveryRepository;
+        $this->transactionContactRepository = $transactionContactRepository;
+        $this->transactionStatisticsRepository = $transactionStatisticsRepository;
         $this->utilityContainer = $utilityContainer;
         $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
@@ -414,7 +449,7 @@ class TransactionService implements TransactionServiceInterface {
         ];
 
         // Verify local chain integrity
-        $chainStatus = $this->transactionRepository->verifyChainIntegrity(
+        $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
             $this->currentUser->getPublicKey(),
             $contactPublicKey
         );
@@ -451,7 +486,7 @@ class TransactionService implements TransactionServiceInterface {
 
         if (!$syncResult['success']) {
             // Sync failed - check if chain is now valid anyway
-            $recheckStatus = $this->transactionRepository->verifyChainIntegrity(
+            $recheckStatus = $this->transactionChainRepository->verifyChainIntegrity(
                 $this->currentUser->getPublicKey(),
                 $contactPublicKey
             );
@@ -837,7 +872,7 @@ class TransactionService implements TransactionServiceInterface {
 
                         if ($syncService->verifyTransactionSignaturePublic($txForVerification)) {
                             // Valid signature - update the existing transaction
-                            $updated = $this->transactionRepository->updateChainConflictResolution(
+                            $updated = $this->transactionChainRepository->updateChainConflictResolution(
                                 $request['txid'],
                                 $newPreviousTxid,
                                 $request['senderSignature'],
@@ -1197,7 +1232,7 @@ class TransactionService implements TransactionServiceInterface {
      */
     public function processPendingTransactions(): int {
         // Process pending transactions in database
-        $pendingMessages = $this->transactionRepository->getPendingTransactions();
+        $pendingMessages = $this->transactionRecoveryRepository->getPendingTransactions();
         $processedCount = 0;
 
         // Process each pending message
@@ -1213,7 +1248,7 @@ class TransactionService implements TransactionServiceInterface {
                     // ATOMIC CLAIM: Prevent duplicate processing by claiming the transaction
                     // This atomically changes status from PENDING to SENDING
                     // If another process already claimed it, claimPendingTransaction returns false
-                    if (!$this->transactionRepository->claimPendingTransaction($txid)) {
+                    if (!$this->transactionRecoveryRepository->claimPendingTransaction($txid)) {
                         SecureLogger::info("Transaction already claimed by another process, skipping", [
                             'txid' => $txid
                         ]);
@@ -1235,7 +1270,7 @@ class TransactionService implements TransactionServiceInterface {
                     $sendResult = $this->sendTransactionMessage($message['receiver_address'], $payload, $txid);
 
                     // Mark as sent (SENDING -> SENT) after successful send attempt
-                    $this->transactionRepository->markAsSent($txid);
+                    $this->transactionRecoveryRepository->markAsSent($txid);
                     $response = $sendResult['response'];
                     output(outputTransactionInquiryResponse($response),'SILENT');
 
@@ -1270,7 +1305,7 @@ class TransactionService implements TransactionServiceInterface {
                                 output(outputSyncInlineRetryAttempt(), 'SILENT');
 
                                 // Update previous_txid to the expected value
-                                $updatedPrevTxid = $this->transactionRepository->updatePreviousTxid($txid, $expectedTxid);
+                                $updatedPrevTxid = $this->transactionChainRepository->updatePreviousTxid($txid, $expectedTxid);
 
                                 if ($updatedPrevTxid) {
                                     // Re-fetch the updated transaction
@@ -1426,7 +1461,7 @@ class TransactionService implements TransactionServiceInterface {
         if($message['sender_address'] == $this->transportUtility->resolveUserAddressForTransport($message['sender_address'])){
 
             // ATOMIC CLAIM: Prevent duplicate processing
-            if (!$this->transactionRepository->claimPendingTransaction($txid)) {
+            if (!$this->transactionRecoveryRepository->claimPendingTransaction($txid)) {
                 SecureLogger::info("P2P transaction already claimed by another process, skipping", [
                     'txid' => $txid,
                     'memo' => $memo
@@ -1461,7 +1496,7 @@ class TransactionService implements TransactionServiceInterface {
             $sendResult = $this->sendTransactionMessage($message['receiver_address'], $payload, $txid, $isRelay);
 
             // Mark as sent after send attempt (SENDING -> SENT)
-            $this->transactionRepository->markAsSent($txid);
+            $this->transactionRecoveryRepository->markAsSent($txid);
             $response = $sendResult['response'];
 
             if($response && $response['status'] === Constants::STATUS_ACCEPTED){
@@ -1495,7 +1530,7 @@ class TransactionService implements TransactionServiceInterface {
                         output(outputSyncP2pInlineRetryAttempt(), 'SILENT');
 
                         // Update previous_txid to the expected value
-                        $updatedPrevTxid = $this->transactionRepository->updatePreviousTxid($txid, $expectedTxid);
+                        $updatedPrevTxid = $this->transactionChainRepository->updatePreviousTxid($txid, $expectedTxid);
 
                         if ($updatedPrevTxid) {
                             // Re-fetch the updated transaction
@@ -1614,7 +1649,7 @@ class TransactionService implements TransactionServiceInterface {
 
                         if ($correctPrevTxid !== null) {
                             // Update the transaction's previous_txid
-                            $this->transactionRepository->updatePreviousTxid($txid, $correctPrevTxid);
+                            $this->transactionChainRepository->updatePreviousTxid($txid, $correctPrevTxid);
 
                             // Re-fetch and re-sign the transaction with updated previous_txid
                             $updatedMessageData = $this->transactionRepository->getByTxid($txid);
@@ -2070,7 +2105,7 @@ class TransactionService implements TransactionServiceInterface {
         $pubkeys = array_column($contacts, 'pubkey');
 
         // Get all balances in a single optimized query
-        $balances = $this->transactionRepository->getAllContactBalances($this->currentUser->getPublicKey(), $pubkeys);
+        $balances = $this->transactionContactRepository->getAllContactBalances($this->currentUser->getPublicKey(), $pubkeys);
 
         // Build result array with balances
         $contactsWithBalances = [];
@@ -2096,7 +2131,7 @@ class TransactionService implements TransactionServiceInterface {
             }
 
             // Get recent transactions with this contact
-            $transactions = $this->transactionRepository->getTransactionsWithContact($contactAddresses, $transactionLimit);
+            $transactions = $this->transactionContactRepository->getTransactionsWithContact($contactAddresses, $transactionLimit);
 
             $contactsWithBalances[] = array_merge($addressesAssociative,[
                 'name' => $contact['name'],
@@ -2227,7 +2262,7 @@ class TransactionService implements TransactionServiceInterface {
      * @return int Balance in cents
      */
     public function getContactBalance(string $userPubkey, string $contactPubkey): int {
-        return $this->transactionRepository->getContactBalance($userPubkey,$contactPubkey); 
+        return $this->transactionContactRepository->getContactBalance($userPubkey,$contactPubkey); 
     }
 
     /**
@@ -2238,7 +2273,7 @@ class TransactionService implements TransactionServiceInterface {
      * @return array Associative array of pubkey => balance
      */
     public function getAllContactBalances(string $userPubkey, array $contactPubkeys): array {
-        return $this->transactionRepository->getAllContactBalances($userPubkey,$contactPubkeys); 
+        return $this->transactionContactRepository->getAllContactBalances($userPubkey,$contactPubkeys); 
     }
 
     /**
@@ -2268,7 +2303,7 @@ class TransactionService implements TransactionServiceInterface {
      * @return array Statistics array
      */
     public function getStatistics(): array {
-        return $this->transactionRepository->getStatistics();
+        return $this->transactionStatisticsRepository->getOverallStatistics();
     }
 
     /**
@@ -2279,6 +2314,6 @@ class TransactionService implements TransactionServiceInterface {
      * @return array Array of pending transaction data
      */
     public function getInProgressTransactions(int $limit = 10): array {
-        return $this->transactionRepository->getInProgressTransactions($limit);
+        return $this->transactionRecoveryRepository->getInProgressTransactions($limit);
     }
 }

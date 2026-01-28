@@ -62,6 +62,15 @@ echo -e "[Test Setup]"
 echo -e "\t   Container A: ${containerA} (${addressA})"
 echo -e "\t   Container B: ${containerB} (${addressB})"
 echo -e "\t   Container C: ${containerC} (${addressC})"
+if [[ -n "${containers[3]}" ]]; then
+    containerD="${containers[3]}"
+    if [[ "$MODE" == "http" ]] || [[ "$MODE" == "https" ]]; then
+        addressD="${containerAddresses[${containerD}]}"
+    else
+        addressD=$(get_tor_address "${containerD}")
+    fi
+    echo -e "\t   Container D: ${containerD} (${addressD})"
+fi
 
 # Get transport types for PHP calls
 transportA=$(getPhpTransportType "${addressA}")

@@ -237,4 +237,4 @@ fi
 #     printf "${RED}(%s%% - Sparse connectivity)${NC}\n" ${fullMeshPercentage}
 # fi
 
-# succesrate "${totaltests}" "${passed}" "${failure}" "'send to all peers'"
+succesrate "${totaltests}" "${passed}" "${failure}" "'sendAllPeersTest'"

@@ -941,7 +941,7 @@ HELP;
                     ];
 
                     // Get received transactions
-                    $receivedTx = $this->transactionRepository->getReceivedUserTransactionsCurrency($balance['currency'], PHP_INT_MAX);
+                    $receivedTx = $this->transactionRepository->getReceivedUserTransactions(PHP_INT_MAX, $balance['currency']);
                     foreach ($receivedTx as $tx) {
                         $balanceData['received'][] = [
                             'date' => $tx['date'],
@@ -953,7 +953,7 @@ HELP;
                     }
 
                     // Get sent transactions
-                    $sentTx = $this->transactionRepository->getSentUserTransactionsCurrency($balance['currency'], PHP_INT_MAX);
+                    $sentTx = $this->transactionRepository->getSentUserTransactions(PHP_INT_MAX, $balance['currency']);
                     foreach ($sentTx as $tx) {
                         $balanceData['sent'][] = [
                             'date' => $tx['date'],
@@ -1014,8 +1014,8 @@ HELP;
                 if(isset($balances)){
                     foreach($balances as $balance){
                         printf("\tTotal Balance %s : %s\n", $balance['currency'], number_format($balance['total_balance'] / Constants::TRANSACTION_USD_CONVERSION_FACTOR, 2));
-                        $this->viewBalanceQuery("received","from",$this->transactionRepository->getReceivedUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit);
-                        $this->viewBalanceQuery("sent","to",$this->transactionRepository->getSentUserTransactionsCurrency($balance['currency'],PHP_INT_MAX), $displayLimit);
+                        $this->viewBalanceQuery("received","from",$this->transactionRepository->getReceivedUserTransactions(PHP_INT_MAX, $balance['currency']), $displayLimit);
+                        $this->viewBalanceQuery("sent","to",$this->transactionRepository->getSentUserTransactions(PHP_INT_MAX, $balance['currency']), $displayLimit);
                     }
                 } else{
                     printf("\tNo balances available yet.\n");

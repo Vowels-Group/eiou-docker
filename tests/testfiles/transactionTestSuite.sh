@@ -357,16 +357,16 @@ echo -e "\n\t-> Testing contactTransactionExistsForReceiver method"
 contactExistsCheck=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
+    \$txContactRepo = \$app->services->getTransactionContactRepository();
 
     // First check if method exists
-    if (!method_exists(\$txRepo, 'contactTransactionExistsForReceiver')) {
+    if (!method_exists(\$txContactRepo, 'contactTransactionExistsForReceiver')) {
         echo 'METHOD_MISSING';
         exit;
     }
 
     \$fakeHash = hash('sha256', 'nonexistent_pubkey_' . time());
-    \$exists = \$txRepo->contactTransactionExistsForReceiver(\$fakeHash);
+    \$exists = \$txContactRepo->contactTransactionExistsForReceiver(\$fakeHash);
 
     echo \$exists === false ? 'CORRECT_FALSE' : 'WRONG_TRUE';
 " 2>/dev/null || echo "ERROR")
@@ -386,10 +386,10 @@ echo -e "\n\t-> Testing completeContactTransaction method"
 completeContactCheck=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$txRepo = \$app->services->getTransactionRepository();
+    \$txContactRepo = \$app->services->getTransactionContactRepository();
 
-    if (method_exists(\$txRepo, 'completeContactTransaction')) {
-        \$result = \$txRepo->completeContactTransaction('fake_public_key_' . time());
+    if (method_exists(\$txContactRepo, 'completeContactTransaction')) {
+        \$result = \$txContactRepo->completeContactTransaction('fake_public_key_' . time());
         echo 'METHOD_EXISTS';
     } else {
         echo 'METHOD_MISSING';

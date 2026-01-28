@@ -1162,16 +1162,16 @@ fi
 
 echo -e "\n[9.2 Conflict Detection Repository Method Test]"
 
-# Test: Verify getLocalTransactionByPreviousTxid method exists in TransactionRepository
+# Test: Verify getLocalTransactionByPreviousTxid method exists in TransactionChainRepository
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getLocalTransactionByPreviousTxid method exists"
 
 conflictDetectionResult=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$transactionRepo = \$app->services->getTransactionRepository();
+    \$transactionChainRepo = \$app->services->getTransactionChainRepository();
 
-    if (method_exists(\$transactionRepo, 'getLocalTransactionByPreviousTxid')) {
+    if (method_exists(\$transactionChainRepo, 'getLocalTransactionByPreviousTxid')) {
         echo 'EXISTS';
     } else {
         echo 'MISSING';
@@ -1186,16 +1186,16 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test: Verify getByPreviousTxid method exists in TransactionRepository
+# Test: Verify getByPreviousTxid method exists in TransactionChainRepository
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getByPreviousTxid method exists"
 
 getByPrevTxidResult=$(docker exec ${sender} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$transactionRepo = \$app->services->getTransactionRepository();
+    \$transactionChainRepo = \$app->services->getTransactionChainRepository();
 
-    if (method_exists(\$transactionRepo, 'getByPreviousTxid')) {
+    if (method_exists(\$transactionChainRepo, 'getByPreviousTxid')) {
         echo 'EXISTS';
     } else {
         echo 'MISSING';

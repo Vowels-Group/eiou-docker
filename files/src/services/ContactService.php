@@ -5,6 +5,7 @@ require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
 require_once __DIR__ . '/../contracts/ContactServiceInterface.php';
+require_once __DIR__ . '/../database/TransactionContactRepository.php';
 
 
 /**
@@ -104,6 +105,11 @@ class ContactService implements ContactServiceInterface {
     private ?SyncService $syncService = null;
 
     /**
+     * @var TransactionContactRepository Transaction contact repository for contact transactions
+     */
+    private TransactionContactRepository $transactionContactRepository;
+
+    /**
      * Set the sync service (setter injection for circular dependency)
      *
      * @param SyncService $service Sync service
@@ -136,6 +142,7 @@ class ContactService implements ContactServiceInterface {
      * @param SecureLogger $secureLogger SecureLogger Util
      * @param UserContext $currentUser Current user data
      * @param TransactionRepository $transactionRepository Transaction Repository
+     * @param TransactionContactRepository $transactionContactRepository Transaction contact repository
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      */
     public function __construct(
@@ -147,9 +154,9 @@ class ContactService implements ContactServiceInterface {
         SecureLogger $secureLogger,
         UserContext $currentUser,
         TransactionRepository $transactionRepository,
+        TransactionContactRepository $transactionContactRepository,
         ?MessageDeliveryService $messageDeliveryService = null
-        )
-    {
+    ) {
         $this->contactRepository = $contactRepository;
         $this->addressRepository = $addressRepository;
         $this->balanceRepository = $balanceRepository;
@@ -158,6 +165,7 @@ class ContactService implements ContactServiceInterface {
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
         $this->transactionRepository = $transactionRepository;
+        $this->transactionContactRepository = $transactionContactRepository;
         $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
         $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->messageDeliveryService = $messageDeliveryService;
@@ -204,7 +212,7 @@ class ContactService implements ContactServiceInterface {
      */
     private function contactTransactionExists(string $receiverPublicKey): bool {
         $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
-        return $this->transactionRepository->contactTransactionExistsForReceiver($receiverPublicKeyHash);
+        return $this->transactionContactRepository->contactTransactionExistsForReceiver($receiverPublicKeyHash);
     }
 
     /**
@@ -335,7 +343,7 @@ class ContactService implements ContactServiceInterface {
      * @return bool True if transaction was updated successfully
      */
     private function completeReceivedContactTransaction(string $senderPublicKey): bool {
-        return $this->transactionRepository->completeReceivedContactTransaction($senderPublicKey);
+        return $this->transactionContactRepository->completeReceivedContactTransaction($senderPublicKey);
     }
 
     // =========================================================================
@@ -959,7 +967,7 @@ class ContactService implements ContactServiceInterface {
                 if ($existingContact && $existingContact['status'] === Constants::CONTACT_STATUS_PENDING) {
                     // Contact exists as pending - check if we have the contact transaction
                     // If they're re-adding us and we don't have their contact tx, we need to create one
-                    $hasContactTx = $this->transactionRepository->contactTransactionExistsForReceiver(
+                    $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
                         $senderPublicKeyHash
                     );
 
@@ -986,7 +994,7 @@ class ContactService implements ContactServiceInterface {
                     // Contact is pending - update their address
                     if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
                         // Check if we have the contact transaction
-                        $hasContactTx = $this->transactionRepository->contactTransactionExistsForReceiver(
+                        $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
                             $senderPublicKeyHash
                         );
 

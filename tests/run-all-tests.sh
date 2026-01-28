@@ -32,6 +32,7 @@
 #   sync         - Chain synchronization tests
 #   connections  - SSL certificates and Tor connectivity tests
 #   system       - System tests: shutdown, lockfiles, seedphrase
+#   performance  - Performance baseline benchmarks
 #
 # Environment Variables (for WSL2/slow environments):
 #   EIOU_INIT_TIMEOUT  - Container initialization wait in seconds (default: 120)
