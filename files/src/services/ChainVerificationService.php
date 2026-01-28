@@ -3,7 +3,7 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../contracts/ChainVerificationServiceInterface.php';
-require_once __DIR__ . '/../contracts/SyncServiceInterface.php';
+require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
 require_once __DIR__ . '/../database/TransactionChainRepository.php';
 
 /**
@@ -23,8 +23,10 @@ class ChainVerificationService implements ChainVerificationServiceInterface {
     /** @var SecureLogger */
     private SecureLogger $secureLogger;
 
-    /** @var SyncServiceInterface|null Sync service (setter injected for circular dependency) */
-    private ?SyncServiceInterface $syncService = null;
+    /**
+     * @var SyncTriggerInterface|null Sync trigger for chain repair
+     */
+    private ?SyncTriggerInterface $syncTrigger = null;
 
     /**
      * Constructor
@@ -44,12 +46,25 @@ class ChainVerificationService implements ChainVerificationServiceInterface {
     }
 
     /**
-     * Set the sync service for chain repair operations
+     * Set the sync trigger (accepts interface for loose coupling)
      *
-     * @param SyncServiceInterface $syncService The sync service instance
+     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
      */
-    public function setSyncService(SyncServiceInterface $syncService): void {
-        $this->syncService = $syncService;
+    public function setSyncTrigger(SyncTriggerInterface $sync): void {
+        $this->syncTrigger = $sync;
+    }
+
+    /**
+     * Get the sync trigger (throws if not injected)
+     *
+     * @return SyncTriggerInterface
+     * @throws RuntimeException If sync trigger not injected
+     */
+    private function getSyncTrigger(): SyncTriggerInterface {
+        if ($this->syncTrigger === null) {
+            throw new RuntimeException('SyncTrigger not injected. Call setSyncTrigger() or ensure ServiceContainer properly injects the dependency.');
+        }
+        return $this->syncTrigger;
     }
 
     /**
@@ -82,15 +97,8 @@ class ChainVerificationService implements ChainVerificationServiceInterface {
             'transaction_count' => $chainStatus['transaction_count']
         ]);
 
-        // Sync service required for chain repair
-        if ($this->syncService === null) {
-            $result['success'] = false;
-            $result['error'] = 'Sync service not available to repair chain';
-            return $result;
-        }
-
-        // Perform sync to repair chain
-        $syncResult = $this->syncService->syncTransactionChain($contactAddress, $contactPublicKey);
+        // Perform sync to repair chain (will throw if sync trigger not injected)
+        $syncResult = $this->getSyncTrigger()->syncTransactionChain($contactAddress, $contactPublicKey);
         $result['synced'] = true;
 
         if (!$syncResult['success']) {

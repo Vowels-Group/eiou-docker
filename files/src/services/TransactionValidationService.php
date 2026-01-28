@@ -6,7 +6,7 @@ require_once __DIR__ . '/../utils/InputValidator.php';
 require_once __DIR__ . '/../core/Constants.php';
 require_once __DIR__ . '/../core/ErrorHandler.php';
 require_once __DIR__ . '/../contracts/TransactionValidationServiceInterface.php';
-require_once __DIR__ . '/../contracts/SyncServiceInterface.php';
+require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
 
 /**
  * Transaction Validation Service
@@ -66,9 +66,9 @@ class TransactionValidationService implements TransactionValidationServiceInterf
     private SecureLogger $secureLogger;
 
     /**
-     * @var SyncServiceInterface|null Sync service (setter injection)
+     * @var SyncTriggerInterface|null Sync trigger for proactive sync before validation
      */
-    private ?SyncServiceInterface $syncService = null;
+    private ?SyncTriggerInterface $syncTrigger = null;
 
     /**
      * @var TransactionChainRepository Transaction chain repository
@@ -118,30 +118,29 @@ class TransactionValidationService implements TransactionValidationServiceInterf
     }
 
     /**
-     * Set the sync service (setter injection for circular dependency)
+     * Set the sync trigger (accepts interface for loose coupling)
      *
-     * @param SyncServiceInterface $syncService Sync service instance
-     * @return void
+     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
      */
-    public function setSyncService(SyncServiceInterface $syncService): void
+    public function setSyncTrigger(SyncTriggerInterface $sync): void
     {
-        $this->syncService = $syncService;
+        $this->syncTrigger = $sync;
     }
 
     /**
-     * Get the sync service (must be injected via setSyncService)
+     * Get the sync trigger (must be injected via setSyncTrigger)
      *
-     * @return SyncServiceInterface
-     * @throws RuntimeException If sync service was not injected
+     * @return SyncTriggerInterface
+     * @throws RuntimeException If sync trigger was not injected
      */
-    private function getSyncService(): SyncServiceInterface
+    private function getSyncTrigger(): SyncTriggerInterface
     {
-        if ($this->syncService === null) {
+        if ($this->syncTrigger === null) {
             throw new RuntimeException(
-                'SyncService not injected. Call setSyncService() or ensure ServiceContainer::wireCircularDependencies() is called.'
+                'SyncTrigger not injected. Call setSyncTrigger() or ensure ServiceContainer properly injects the dependency.'
             );
         }
-        return $this->syncService;
+        return $this->syncTrigger;
     }
 
     /**
@@ -357,7 +356,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
 
                 // Proactively sync with the sender to recover missing transactions
                 try {
-                    $syncService = $this->getSyncService();
+                    $syncService = $this->getSyncTrigger();
                     $syncResult = $syncService->syncTransactionChain(
                         $request['senderAddress'],
                         $request['senderPublicKey']
@@ -478,7 +477,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
                         ]);
 
                         // Verify the new signature is valid
-                        $syncService = $this->getSyncService();
+                        $syncService = $this->getSyncTrigger();
                         $txForVerification = [
                             'txid' => $request['txid'],
                             'previous_txid' => $newPreviousTxid,

@@ -139,6 +139,19 @@ class SyncServiceProxy implements SyncTriggerInterface
     }
 
     /**
+     * Verify a transaction signature using the sender's public key
+     *
+     * Delegates to SyncService::verifyTransactionSignaturePublic().
+     *
+     * @param array $tx Transaction data with sender_signature and signature_nonce
+     * @return bool True if signature is valid, false otherwise
+     */
+    public function verifyTransactionSignaturePublic(array $tx): bool
+    {
+        return $this->getService()->verifyTransactionSignaturePublic($tx);
+    }
+
+    /**
      * Check if the actual SyncService has been resolved
      *
      * Useful for debugging and testing to verify lazy loading behavior.

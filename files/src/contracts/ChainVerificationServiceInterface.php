@@ -37,13 +37,13 @@ interface ChainVerificationServiceInterface
     public function verifySenderChainAndSync(string $contactAddress, string $contactPublicKey): array;
 
     /**
-     * Set the sync service for chain repair operations
+     * Set the sync trigger for chain repair operations (interface for loose coupling)
      *
      * Uses setter injection to avoid circular dependency between
      * ChainVerificationService and SyncService.
      *
-     * @param SyncServiceInterface $syncService The sync service instance
+     * @param SyncTriggerInterface $sync The sync trigger interface
      * @return void
      */
-    public function setSyncService(SyncServiceInterface $syncService): void;
+    public function setSyncTrigger(SyncTriggerInterface $sync): void;
 }

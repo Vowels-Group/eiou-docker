@@ -86,4 +86,15 @@ interface SyncTriggerInterface
      * @return void Outputs JSON response directly
      */
     public function handleTransactionSyncRequest(array $request): void;
+
+    /**
+     * Verify a transaction signature using the sender's public key
+     *
+     * Used during chain conflict resolution to verify that a transaction
+     * with a different previous_txid has a valid signature before accepting.
+     *
+     * @param array $tx Transaction data with sender_signature and signature_nonce
+     * @return bool True if signature is valid, false otherwise
+     */
+    public function verifyTransactionSignaturePublic(array $tx): bool;
 }

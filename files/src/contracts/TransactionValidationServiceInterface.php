@@ -15,12 +15,12 @@
 interface TransactionValidationServiceInterface
 {
     /**
-     * Set the sync service (setter injection for circular dependency)
+     * Set the sync trigger (interface for loose coupling)
      *
-     * @param SyncServiceInterface $syncService Sync service instance
+     * @param SyncTriggerInterface $sync Sync trigger interface
      * @return void
      */
-    public function setSyncService(SyncServiceInterface $syncService): void;
+    public function setSyncTrigger(SyncTriggerInterface $sync): void;
 
     /**
      * Set the transaction service (setter injection for processing)

@@ -4,7 +4,7 @@
 require_once __DIR__ . '/../core/Constants.php';
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../contracts/TransactionProcessingServiceInterface.php';
-require_once __DIR__ . '/../contracts/SyncServiceInterface.php';
+require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
 require_once __DIR__ . '/../contracts/P2pServiceInterface.php';
 require_once __DIR__ . '/../contracts/HeldTransactionServiceInterface.php';
 
@@ -33,7 +33,10 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
     private UserContext $currentUser;
     private SecureLogger $secureLogger;
     private ?MessageDeliveryService $messageDeliveryService;
-    private ?SyncServiceInterface $syncService = null;
+    /**
+     * @var SyncTriggerInterface|null Sync trigger for conflict resolution
+     */
+    private ?SyncTriggerInterface $syncTrigger = null;
     private ?P2pServiceInterface $p2pService = null;
     private ?HeldTransactionServiceInterface $heldTransactionService = null;
 
@@ -65,9 +68,14 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         $this->messageDeliveryService = $messageDeliveryService;
     }
 
-    public function setSyncService(SyncServiceInterface $syncService): void
+    /**
+     * Set the sync trigger (accepts interface for loose coupling)
+     *
+     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
+     */
+    public function setSyncTrigger(SyncTriggerInterface $sync): void
     {
-        $this->syncService = $syncService;
+        $this->syncTrigger = $sync;
     }
 
     public function setP2pService(P2pServiceInterface $p2pService): void
@@ -86,12 +94,12 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         $this->timeUtility = $utilityContainer->getTimeUtility();
     }
 
-    private function getSyncService(): SyncServiceInterface
+    private function getSyncTrigger(): SyncTriggerInterface
     {
-        if ($this->syncService === null) {
-            throw new RuntimeException('SyncService not injected.');
+        if ($this->syncTrigger === null) {
+            throw new RuntimeException('SyncTrigger not injected. Call setSyncTrigger() or ensure ServiceContainer properly injects the dependency.');
         }
-        return $this->syncService;
+        return $this->syncTrigger;
     }
 
     private function getP2pService(): P2pServiceInterface
@@ -396,10 +404,10 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         }
 
         output('Attempting immediate sync...', 'SILENT');
-        $syncResult = $this->getSyncService()->syncTransactionChain($message['receiver_address'], $message['receiver_public_key']);
+        $syncResult = $this->getSyncTrigger()->syncTransactionChain($message['receiver_address'], $message['receiver_public_key']);
         if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
             output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced. Syncing balances...', 'SILENT');
-            $this->getSyncService()->syncContactBalance($message['receiver_public_key']);
+            $this->getSyncTrigger()->syncContactBalance($message['receiver_public_key']);
             output('Balances synced. Retrying transaction...', 'SILENT');
             return true;
         }
@@ -443,10 +451,10 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         }
 
         output('Attempting immediate sync...', 'SILENT');
-        $syncResult = $this->getSyncService()->syncTransactionChain($message['receiver_address'], $message['receiver_public_key']);
+        $syncResult = $this->getSyncTrigger()->syncTransactionChain($message['receiver_address'], $message['receiver_public_key']);
         if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
             output('Sync successful, ' . $syncResult['synced_count'] . ' transactions synced.', 'SILENT');
-            $this->getSyncService()->syncContactBalance($message['receiver_public_key']);
+            $this->getSyncTrigger()->syncContactBalance($message['receiver_public_key']);
 
             $correctPrevTxid = $this->transactionRepository->getPreviousTxid($this->currentUser->getPublicKey(), $message['receiver_public_key']);
             if ($correctPrevTxid !== null && $this->updateAndResignTransaction($txid, $correctPrevTxid, false)) {
@@ -504,7 +512,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
 
     private function triggerSyncIfNeeded(array $message): void
     {
-        $syncResult = $this->getSyncService()->syncTransactionChain($message['receiver_address'], $message['receiver_public_key']);
+        $syncResult = $this->getSyncTrigger()->syncTransactionChain($message['receiver_address'], $message['receiver_public_key']);
         if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
             output(outputSyncTransactionsSynced($syncResult['synced_count']), 'SILENT');
         }

@@ -11,6 +11,7 @@ require_once __DIR__ . '/../contracts/LockingServiceInterface.php';
 require_once __DIR__ . '/../contracts/ContactServiceInterface.php';
 require_once __DIR__ . '/../contracts/P2pServiceInterface.php';
 require_once __DIR__ . '/../contracts/P2pTransactionSenderInterface.php';
+require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
 
 /**
  * Send Operation Service - High-level send orchestration for eIOU transactions.
@@ -31,7 +32,10 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
     private ?LockingServiceInterface $lockingService = null;
     private ?ContactServiceInterface $contactService = null;
     private ?P2pServiceInterface $p2pService = null;
-    private ?SyncService $syncService = null;
+    /**
+     * @var SyncTriggerInterface|null Sync trigger for pre-send sync
+     */
+    private ?SyncTriggerInterface $syncTrigger = null;
     private ?TransactionChainRepository $transactionChainRepository = null;
     private ?TransactionService $transactionService = null;
     private static array $contactSendLocks = [];
@@ -59,7 +63,12 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
     // Dependency injection setters
     public function setContactService(ContactServiceInterface $contactService): void { $this->contactService = $contactService; }
     public function setP2pService(P2pServiceInterface $p2pService): void { $this->p2pService = $p2pService; }
-    public function setSyncService(SyncService $syncService): void { $this->syncService = $syncService; }
+    /**
+     * Set the sync trigger (accepts interface for loose coupling)
+     *
+     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
+     */
+    public function setSyncTrigger(SyncTriggerInterface $sync): void { $this->syncTrigger = $sync; }
     public function setLockingService(LockingServiceInterface $lockingService): void { $this->lockingService = $lockingService; }
     public function setTransactionChainRepository(TransactionChainRepository $repo): void { $this->transactionChainRepository = $repo; }
     public function setTransactionService(TransactionService $transactionService): void { $this->transactionService = $transactionService; }
@@ -74,9 +83,11 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
         return $this->p2pService;
     }
 
-    private function getSyncService(): SyncService {
-        if ($this->syncService === null) throw new RuntimeException('SyncService not injected.');
-        return $this->syncService;
+    private function getSyncTrigger(): SyncTriggerInterface {
+        if ($this->syncTrigger === null) {
+            throw new RuntimeException('SyncTrigger not injected. Call setSyncTrigger() or ensure ServiceContainer properly injects the dependency.');
+        }
+        return $this->syncTrigger;
     }
 
     /** Acquire a lock for sending to a specific contact */
@@ -151,12 +162,12 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
             'transaction_count' => $chainStatus['transaction_count']
         ]);
 
-        if ($this->syncService === null) {
-            try { $this->getSyncService(); }
+        if ($this->syncTrigger === null) {
+            try { $this->getSyncTrigger(); }
             catch (\Exception $e) { return ['success' => false, 'synced' => false, 'error' => 'Sync service not available']; }
         }
 
-        $syncResult = $this->syncService->syncTransactionChain($contactAddress, $contactPublicKey);
+        $syncResult = $this->syncTrigger->syncTransactionChain($contactAddress, $contactPublicKey);
         $result['synced'] = true;
 
         if (!$syncResult['success']) {
@@ -237,7 +248,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
             $transportIndex = $this->transportUtility->fallbackTransportType($request[2], $contactInfo);
             if ($transportIndex === null) { $this->handleP2pRoute($request, $output); }
             else {
-                $syncResult = $this->getSyncService()->syncSingleContact($contactInfo[$transportIndex], 'SILENT');
+                $syncResult = $this->getSyncTrigger()->syncSingleContact($contactInfo[$transportIndex], 'SILENT');
                 $syncResult ? $this->handleDirectRoute($request, $contactInfo, $output) : $this->handleP2pRoute($request, $output);
             }
         } elseif ($contactInfo['status'] === Constants::CONTACT_STATUS_BLOCKED) {

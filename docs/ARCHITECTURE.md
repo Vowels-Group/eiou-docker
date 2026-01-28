@@ -587,21 +587,23 @@ The codebase has significantly reduced circular dependencies:
 | Lazy proxy pattern | ✅ Available | SyncServiceProxy for optional use |
 | Service extraction | ✅ Complete | BalanceService, ChainVerificationService, ChainOperationsService |
 
-**Eliminated Cycles:**
+**All SyncService Dependencies Now Use SyncTriggerInterface:**
 
-- ✅ `HeldTransactionService <-> SyncService` - Now uses EventDispatcher
-- ✅ `Rp2pService <-> TransactionService` - Now uses P2pTransactionSenderInterface
-- ✅ `ContactService <-> SyncService` - Now uses SyncTriggerInterface via proxy
-- ✅ `MessageService <-> SyncService` - Now uses SyncTriggerInterface via proxy
-- ✅ `TransactionService <-> SyncService` - Now uses SyncTriggerInterface via proxy
+- ✅ `HeldTransactionService` - Uses EventDispatcher (SyncEvents::SYNC_COMPLETED)
+- ✅ `Rp2pService` - Uses P2pTransactionSenderInterface
+- ✅ `ContactService` - Uses SyncTriggerInterface via proxy
+- ✅ `MessageService` - Uses SyncTriggerInterface via proxy
+- ✅ `TransactionService` - Uses SyncTriggerInterface via proxy
+- ✅ `ContactStatusService` - Uses SyncTriggerInterface via proxy
+- ✅ `ChainVerificationService` - Uses SyncTriggerInterface via proxy
+- ✅ `TransactionValidationService` - Uses SyncTriggerInterface via proxy
+- ✅ `TransactionProcessingService` - Uses SyncTriggerInterface via proxy
+- ✅ `SendOperationService` - Uses SyncTriggerInterface via proxy
 
-**Remaining Setter Injections:**
+**Only Remaining Direct SyncService Usage:**
 
-- ContactStatusService -> SyncService (specialized validation needs)
-- ChainVerificationService -> SyncService (chain repair)
-- TransactionValidationService -> SyncService (proactive sync)
-- TransactionProcessingService -> SyncService (conflict resolution)
-- SendOperationService -> SyncService (pre-send sync)
+- `SyncService -> HeldTransactionService` (one-way setter, not circular)
+- `ChainOperationsService -> SyncService` (for chain repair coordination)
 
 ### CI Script for Cycle Detection
 
