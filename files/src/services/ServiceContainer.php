@@ -372,6 +372,21 @@ class ServiceContainer {
     }
 
     /**
+     * Get TransactionContactRepository instance
+     *
+     * @return TransactionContactRepository
+     */
+    public function getTransactionContactRepository(): TransactionContactRepository {
+        if (!isset($this->repositories['TransactionContactRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/TransactionContactRepository.php';
+            $this->repositories['TransactionContactRepository'] = new TransactionContactRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['TransactionContactRepository'];
+    }
+
+    /**
      * Get ContactService instance
      *
      * Integrates MessageDeliveryService for reliable contact message delivery
