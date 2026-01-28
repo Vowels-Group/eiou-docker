@@ -268,7 +268,12 @@ Application::getInstance()
 
 | Service | Purpose | Key Dependencies |
 |---------|---------|------------------|
-| `TransactionService` | Transaction creation, validation, processing | ContactRepo, BalanceRepo, TransactionRepo, TransactionChainRepo, TransactionContactRepo, TransactionStatisticsRepo, P2pService, SyncService |
+| `TransactionService` | **Facade** for transaction operations, delegates to specialized services | BalanceService, ChainVerificationService, TransactionValidationService, TransactionProcessingService, SendOperationService, P2pService, SyncService |
+| `BalanceService` | Balance calculations and currency conversions | BalanceRepo, TransactionContactRepo, AddressRepo, CurrencyUtility |
+| `ChainVerificationService` | Transaction chain integrity verification | TransactionChainRepo, SyncService |
+| `TransactionValidationService` | Transaction validation with proactive sync | TransactionRepo, ContactRepo, ValidationUtility, SyncService |
+| `TransactionProcessingService` | Transaction processing with atomic claiming | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncService, HeldTransactionService |
+| `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, ContactService, LockingService |
 | `P2pService` | Peer-to-peer message routing | ContactRepo, P2pRepo, TransportUtility, MessageDeliveryService |
 | `Rp2pService` | Return P2P (response) message handling | ContactRepo, Rp2pRepo, TransactionService |
 | `ContactService` | Contact management and messaging | ContactRepo, AddressRepo, TransactionContactRepo, SyncService, MessageDeliveryService |
@@ -304,9 +309,24 @@ and vice versa). These are resolved via setter injection:
 
 ```php
 // In ServiceContainer::wireCircularDependencies()
+
+// Core circular dependencies
 $this->services['TransactionService']->setSyncService($this->services['SyncService']);
 $this->services['SyncService']->setHeldTransactionService($this->services['HeldTransactionService']);
 $this->services['Rp2pService']->setTransactionService($this->services['TransactionService']);
+
+// TransactionService facade receives its 5 specialized services
+$this->services['TransactionService']->setBalanceService($this->services['BalanceService']);
+$this->services['TransactionService']->setChainVerificationService($this->services['ChainVerificationService']);
+$this->services['TransactionService']->setTransactionValidationService($this->services['TransactionValidationService']);
+$this->services['TransactionService']->setTransactionProcessingService($this->services['TransactionProcessingService']);
+$this->services['TransactionService']->setSendOperationService($this->services['SendOperationService']);
+
+// Specialized services also have circular dependencies
+$this->services['ChainVerificationService']->setSyncService($this->services['SyncService']);
+$this->services['TransactionValidationService']->setSyncService($this->services['SyncService']);
+$this->services['TransactionProcessingService']->setSyncService($this->services['SyncService']);
+$this->services['SendOperationService']->setContactService($this->services['ContactService']);
 ```
 
 ---
