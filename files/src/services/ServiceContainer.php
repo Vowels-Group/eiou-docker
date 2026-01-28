@@ -327,6 +327,21 @@ class ServiceContainer {
     }
 
     /**
+     * Get TransactionStatisticsRepository instance
+     *
+     * @return TransactionStatisticsRepository
+     */
+    public function getTransactionStatisticsRepository(): TransactionStatisticsRepository {
+        if (!isset($this->repositories['TransactionStatisticsRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/TransactionStatisticsRepository.php';
+            $this->repositories['TransactionStatisticsRepository'] = new TransactionStatisticsRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['TransactionStatisticsRepository'];
+    }
+
+    /**
      * Get ContactService instance
      *
      * Integrates MessageDeliveryService for reliable contact message delivery

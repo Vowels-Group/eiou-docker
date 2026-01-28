@@ -362,7 +362,7 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getAllTransactionsCurrency(string $currency): array
     {
-        return $this->getTransactionHistoryCurrency($currency, PHP_INT_MAX); // Get a large number
+        return $this->getTransactionHistory(PHP_INT_MAX, $currency); // Get a large number
     }
 
 
@@ -384,16 +384,17 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getAllSentUserTransactionsCurrency(string $currency): array
     {
-        return $this->getSentUserTransactionsCurrency($currency, PHP_INT_MAX); // Get a large number
+        return $this->getSentUserTransactions(PHP_INT_MAX, $currency); // Get a large number
     }
 
     /**
      * Get transactions sent by user
      *
-     * @param int $limit
+     * @param int $limit Maximum number of transactions to return
+     * @param string|null $currency Optional currency filter
      * @return array
      */
-    public function getSentUserTransactions(int $limit = 10): array {
+    public function getSentUserTransactions(int $limit = 10, ?string $currency = null): array {
         $userAddresses = $this->getUserAddressesOrNull();
         if ($userAddresses === null) {
             return [];
@@ -402,10 +403,17 @@ class TransactionRepository extends AbstractRepository {
         $placeholders = $this->createPlaceholders($userAddresses);
 
         $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions
-                    WHERE sender_address IN ($placeholders)
-                    ORDER BY timestamp DESC LIMIT ?";
+                    WHERE sender_address IN ($placeholders)";
 
-        $params = $this->buildInClauseParams($userAddresses, 1, [$limit]);
+        if ($currency !== null) {
+            $query .= " AND currency = ?";
+            $params = $this->buildInClauseParams($userAddresses, 1, [$currency, $limit]);
+        } else {
+            $params = $this->buildInClauseParams($userAddresses, 1, [$limit]);
+        }
+
+        $query .= " ORDER BY timestamp DESC LIMIT ?";
+
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
 
@@ -420,32 +428,13 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Get transactions sent by user (subsetted on currency)
      *
+     * @deprecated Use getSentUserTransactions($limit, $currency) instead
      * @param string $currency Currency of transaction
      * @param int $limit
      * @return array
      */
     public function getSentUserTransactionsCurrency(string $currency, int $limit = 10): array {
-        $userAddresses = $this->getUserAddressesOrNull();
-        if ($userAddresses === null) {
-            return [];
-        }
-
-        $placeholders = $this->createPlaceholders($userAddresses);
-
-        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions
-                    WHERE sender_address IN ($placeholders) AND currency = ?
-                    ORDER BY timestamp DESC LIMIT ?";
-
-        $params = $this->buildInClauseParams($userAddresses, 1, [$currency, $limit]);
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-
-        if(!$stmt){
-            return [];
-        }
-
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
+        return $this->getSentUserTransactions($limit, $currency);
     }
 
     /**
@@ -466,16 +455,17 @@ class TransactionRepository extends AbstractRepository {
      */
     public function getAllReceivedUserTransactionsCurrency(string $currency): array
     {
-        return $this->getReceivedUserTransactionsCurrency($currency, PHP_INT_MAX); // Get a large number
+        return $this->getReceivedUserTransactions(PHP_INT_MAX, $currency); // Get a large number
     }
 
     /**
      * Get transactions received by user
      *
-     * @param int $limit
+     * @param int $limit Maximum number of transactions to return
+     * @param string|null $currency Optional currency filter
      * @return array
      */
-    public function getReceivedUserTransactions(int $limit = 10): array{
+    public function getReceivedUserTransactions(int $limit = 10, ?string $currency = null): array{
         $userAddresses = $this->getUserAddressesOrNull();
         if ($userAddresses === null) {
             return [];
@@ -484,17 +474,24 @@ class TransactionRepository extends AbstractRepository {
         $placeholders = $this->createPlaceholders($userAddresses);
 
         $query = "SELECT sender_address, amount, currency, timestamp FROM transactions
-                    WHERE receiver_address IN ($placeholders)
-                    ORDER BY timestamp DESC LIMIT ?";
+                    WHERE receiver_address IN ($placeholders)";
 
-        $params = $this->buildInClauseParams($userAddresses, 1, [$limit]);
+        if ($currency !== null) {
+            $query .= " AND currency = ?";
+            $params = $this->buildInClauseParams($userAddresses, 1, [$currency, $limit]);
+        } else {
+            $params = $this->buildInClauseParams($userAddresses, 1, [$limit]);
+        }
+
+        $query .= " ORDER BY timestamp DESC LIMIT ?";
+
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
-        
+
         if(!$stmt){
             return [];
         }
-        
+
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
     }
@@ -502,32 +499,13 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Get transactions received by user (subsetted on currency)
      *
+     * @deprecated Use getReceivedUserTransactions($limit, $currency) instead
      * @param string $currency Currency of transaction
      * @param int $limit
      * @return array
      */
     public function getReceivedUserTransactionsCurrency(string $currency, int $limit = 10): array{
-        $userAddresses = $this->getUserAddressesOrNull();
-        if ($userAddresses === null) {
-            return [];
-        }
-
-        $placeholders = $this->createPlaceholders($userAddresses);
-
-        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions
-                    WHERE receiver_address IN ($placeholders) AND currency = ?
-                    ORDER BY timestamp DESC LIMIT ?";
-
-        $params = $this->buildInClauseParams($userAddresses, 1, [$currency, $limit]);
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-        
-        if(!$stmt){
-            return [];
-        }
-        
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
+        return $this->getReceivedUserTransactions($limit, $currency);
     }
 
 
@@ -535,10 +513,11 @@ class TransactionRepository extends AbstractRepository {
      * Get transactions received by user from specific address
      *
      * @param string $senderAddress Address of transaction sender
-     * @param int $limit
+     * @param int $limit Maximum number of transactions to return
+     * @param string|null $currency Optional currency filter
      * @return array
      */
-    public function getReceivedUserTransactionsAddress(string $senderAddress, int $limit = 10): array{
+    public function getReceivedUserTransactionsAddress(string $senderAddress, int $limit = 10, ?string $currency = null): array{
         $userAddresses = $this->getUserAddressesOrNull();
         if ($userAddresses === null) {
             return [];
@@ -547,17 +526,25 @@ class TransactionRepository extends AbstractRepository {
         $placeholders = $this->createPlaceholders($userAddresses);
 
         $query = "SELECT sender_address, amount, currency, timestamp FROM transactions
-                    WHERE receiver_address IN ($placeholders) AND sender_address = ?
-                    ORDER BY timestamp DESC LIMIT ?";
+                    WHERE receiver_address IN ($placeholders) AND sender_address = ?";
 
-        $params = $this->buildInClauseParams($userAddresses, 1, [$senderAddress, $limit]);
+        $additionalParams = [$senderAddress];
+        if ($currency !== null) {
+            $query .= " AND currency = ?";
+            $additionalParams[] = $currency;
+        }
+
+        $query .= " ORDER BY timestamp DESC LIMIT ?";
+        $additionalParams[] = $limit;
+
+        $params = $this->buildInClauseParams($userAddresses, 1, $additionalParams);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
-        
+
         if(!$stmt){
             return [];
         }
-        
+
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
     }
@@ -565,46 +552,28 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Get transactions received by user from specific address (subsetted on currency)
      *
+     * @deprecated Use getReceivedUserTransactionsAddress($senderAddress, $limit, $currency) instead
      * @param string $senderAddress Address of transaction sender
      * @param string $currency Currency of transaction
      * @param int $limit
      * @return array
      */
     public function getReceivedUserTransactionsAddressCurrency(string $senderAddress, string $currency, int $limit = 10): array{
-        $userAddresses = $this->getUserAddressesOrNull();
-        if ($userAddresses === null) {
-            return [];
-        }
-
-        $placeholders = $this->createPlaceholders($userAddresses);
-
-        $query = "SELECT sender_address, amount, currency, timestamp FROM transactions
-                    WHERE receiver_address IN ($placeholders) AND sender_address = ? AND currency = ?
-                    ORDER BY timestamp DESC LIMIT ?";
-
-        $params = $this->buildInClauseParams($userAddresses, 1, [$senderAddress, $currency, $limit]);
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-        
-        if(!$stmt){
-            return [];
-        }
-        
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_RECEIVED, 'sender_address');
+        return $this->getReceivedUserTransactionsAddress($senderAddress, $limit, $currency);
     }
 
 
 
 
     /**
-     * Get transactions sent by user to specific address 
+     * Get transactions sent by user to specific address
      *
-     * @param string $senderAddress Address of transaction sender
-     * @param int $limit
+     * @param string $receiverAddress Address of transaction receiver
+     * @param int $limit Maximum number of transactions to return
+     * @param string|null $currency Optional currency filter
      * @return array
      */
-    public function getSentUserTransactionsAddress(string $senderAddress, int $limit = 10): array {
+    public function getSentUserTransactionsAddress(string $receiverAddress, int $limit = 10, ?string $currency = null): array {
         $userAddresses = $this->getUserAddressesOrNull();
 
         if ($userAddresses === null) {
@@ -614,17 +583,25 @@ class TransactionRepository extends AbstractRepository {
         $placeholders = $this->createPlaceholders($userAddresses);
 
         $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions
-                    WHERE sender_address IN ($placeholders) AND receiver_address = ?
-                    ORDER BY timestamp DESC LIMIT ?";
+                    WHERE sender_address IN ($placeholders) AND receiver_address = ?";
 
-        $params = $this->buildInClauseParams($userAddresses, 1, [$senderAddress, $limit]);
+        $additionalParams = [$receiverAddress];
+        if ($currency !== null) {
+            $query .= " AND currency = ?";
+            $additionalParams[] = $currency;
+        }
+
+        $query .= " ORDER BY timestamp DESC LIMIT ?";
+        $additionalParams[] = $limit;
+
+        $params = $this->buildInClauseParams($userAddresses, 1, $additionalParams);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
-        
+
         if(!$stmt){
             return [];
         }
-       
+
         $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
         return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
     }
@@ -632,34 +609,14 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Get transactions sent by user to specific address (subsetted on currency)
      *
-     * @param string $senderAddress Address of transaction sender
+     * @deprecated Use getSentUserTransactionsAddress($receiverAddress, $limit, $currency) instead
+     * @param string $receiverAddress Address of transaction receiver
      * @param string $currency Currency of transaction
      * @param int $limit
      * @return array
      */
-    public function getSentUserTransactionsAddressCurrency(string $senderAddress, string $currency, int $limit = 10): array {
-        $userAddresses = $this->getUserAddressesOrNull();
-
-        if ($userAddresses === null) {
-            return [];
-        }
-
-        $placeholders = $this->createPlaceholders($userAddresses);
-
-        $query = "SELECT receiver_address, amount, currency, timestamp FROM transactions
-                    WHERE sender_address IN ($placeholders) AND receiver_address = ? AND currency = ?
-                    ORDER BY timestamp DESC LIMIT ?";
-
-        $params = $this->buildInClauseParams($userAddresses, 1, [$senderAddress, $currency, $limit]);
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-        
-        if(!$stmt){
-            return [];
-        }
-       
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return TransactionFormatter::formatSimpleMany($transactions, Constants::TX_TYPE_SENT, 'receiver_address');
+    public function getSentUserTransactionsAddressCurrency(string $receiverAddress, string $currency, int $limit = 10): array {
+        return $this->getSentUserTransactionsAddress($receiverAddress, $limit, $currency);
     }
 
     /**
@@ -698,10 +655,11 @@ class TransactionRepository extends AbstractRepository {
     /**
      * Get transaction history with limit
      *
-     * @param int $limit
+     * @param int $limit Maximum number of transactions to return
+     * @param string|null $currency Optional currency filter
      * @return array
      */
-    public function getTransactionHistory(int $limit = 10): array
+    public function getTransactionHistory(int $limit = 10, ?string $currency = null): array
     {
         $userAddresses = $this->getUserAddressesOrNull();
 
@@ -742,11 +700,19 @@ class TransactionRepository extends AbstractRepository {
                   LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.https OR t.receiver_address = receiver_addr.tor)
                   LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
                   LEFT JOIN p2p ON t.memo = p2p.hash
-                  WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders))
-                  ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
+                  WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders))";
 
-        // Bind parameters - addresses twice for both IN clauses, then limit
-        $params = $this->buildInClauseParams($userAddresses, 2, [$limit]);
+        $additionalParams = [];
+        if ($currency !== null) {
+            $query .= " AND t.currency = ?";
+            $additionalParams[] = $currency;
+        }
+
+        $query .= " ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
+        $additionalParams[] = $limit;
+
+        // Bind parameters - addresses twice for both IN clauses, then optional currency, then limit
+        $params = $this->buildInClauseParams($userAddresses, 2, $additionalParams);
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
         if(!$stmt){
@@ -760,48 +726,14 @@ class TransactionRepository extends AbstractRepository {
      /**
      * Get transaction history with limit (subsetted on currency)
      *
+     * @deprecated Use getTransactionHistory($limit, $currency) instead
      * @param string $currency Currency of transaction
      * @param int $limit
      * @return array
      */
     public function getTransactionHistoryCurrency(string $currency, int $limit = 10): array
     {
-        $userAddresses = $this->getUserAddressesOrNull();
-
-        if ($userAddresses === null) {
-            return [];
-        }
-
-        // Create placeholders for IN clause
-        $placeholders = $this->createPlaceholders($userAddresses);
-
-        // Query with LEFT JOINs to get contact names for both sender and receiver
-        $query = "SELECT
-                    t.sender_address,
-                    t.receiver_address,
-                    t.amount,
-                    t.currency,
-                    t.timestamp,
-                    sender_contact.name AS sender_name,
-                    receiver_contact.name AS receiver_name
-                  FROM {$this->tableName} t
-                  LEFT JOIN addresses sender_addr ON (t.sender_address = sender_addr.http OR t.sender_address = sender_addr.https OR t.sender_address = sender_addr.tor)
-                  LEFT JOIN contacts sender_contact ON sender_addr.pubkey_hash = sender_contact.pubkey_hash
-                  LEFT JOIN addresses receiver_addr ON (t.receiver_address = receiver_addr.http OR t.receiver_address = receiver_addr.https OR t.receiver_address = receiver_addr.tor)
-                  LEFT JOIN contacts receiver_contact ON receiver_addr.pubkey_hash = receiver_contact.pubkey_hash
-                  WHERE (t.sender_address IN ($placeholders) OR t.receiver_address IN ($placeholders)) AND t.currency = ?
-                  ORDER BY COALESCE(t.time, 0) DESC, t.timestamp DESC LIMIT ?";
-
-        // Bind parameters - addresses twice for both IN clauses, then currency, then limit
-        $params = $this->buildInClauseParams($userAddresses, 2, [$currency, $limit]);
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-        if(!$stmt){
-            return [];
-        }
-
-        $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return TransactionFormatter::formatHistoryMany($transactions, $userAddresses);
+        return $this->getTransactionHistory($limit, $currency);
     }
 
 
@@ -1668,101 +1600,6 @@ class TransactionRepository extends AbstractRepository {
             $this->logError("Failed to retrieve transactions timestamps", $e);
             return [];
         }
-    }
-
-    /**
-     * Get transactions count
-     *
-     * @return int Count of transactions in databae
-     */
-    public function getTotalCountTransactions(): int {
-        $query = "SELECT COUNT(*) as count FROM {$this->tableName}";
-        $stmt = $this->pdo->prepare($query);
-        try {
-            $stmt->execute();
-            return $stmt->fetchColumn();
-        } catch (PDOException $e) {
-            $this->logError("Failed to retrieve transactions type counts", $e);
-            return 0;
-        }
-    }
-
-    /**
-     * Get transactions type statistics
-     *
-     * @return array Array of transactions types with counts and sum of amount statistics
-     */
-    public function getTransactionsTypeStatistics(): array {
-        $query = "SELECT type, COUNT(*) as count, SUM(amount) as total FROM {$this->tableName} GROUP BY type";
-        $stmt = $this->pdo->prepare($query);
-        try {
-            $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            $this->logError("Failed to retrieve specific transactions type counts", $e);
-            return [];
-        }
-    }
-
-    /**
-     * Get specific transactions type statistics
-     *
-     * @param string $type type of transaction
-     * @return array Array of transactions type with count and sum of amount statistics
-     */
-    public function getTransactionsSpecificTypeStatistics(string $type): array {
-        $query = "SELECT type, COUNT(*) as count, SUM(amount) as total FROM {$this->tableName} WHERE type = :type";
-        $stmt = $this->execute($query,[':type' => $type]);
-        
-        if (!$stmt) {
-            return [];
-        }
-        $result = $stmt->fetch();
-        return $result ?: [];
-    }
-
-    /**
-     * Get specific transactions type counts
-     *
-     * @param string $type type of transaction
-     * @return int Count of transactions type
-     */
-    public function getTransactionsSpecificTypeCount(string $type): int {
-        $query = "SELECT COUNT(*) as count FROM {$this->tableName} WHERE type = :type";
-        $stmt = $this->execute($query,[':type' => $type]);
-
-        if (!$stmt) {
-            return 0;
-        }
-        
-        $result = $stmt->fetchColumn();
-        return $result ?: 0;
-    }
-
-    /**
-     * Get transaction statistics
-     *
-     * @return array Statistics array with counts and totals
-     */
-    public function getStatistics(): array {
-        $query = "SELECT
-                    COUNT(*) as total_count,
-                    SUM(amount) as total_amount,
-                    AVG(amount) as average_amount,
-                    COUNT(DISTINCT sender_address) as unique_senders,
-                    COUNT(DISTINCT receiver_address) as unique_receivers,
-                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count,
-                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count
-                  FROM {$this->tableName}";
-
-        $stmt = $this->execute($query);
-
-        if (!$stmt) {
-            return [];
-        }
-
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result ?: [];
     }
 
     /**
