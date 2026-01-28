@@ -920,17 +920,18 @@ echo "========================================================================"
 echo -e "\n[8.1 Proactive Sync Trigger Test]"
 
 # Test: Verify that checkTransactionPossible triggers proactive sync when receiver has no history
+# Note: checkTransactionPossible is now in TransactionValidationService (refactored from TransactionService)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing proactive sync trigger in checkTransactionPossible"
 
 proactiveSyncResult=$(docker exec ${receiver} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
-    \$transactionService = \$app->services->getTransactionService();
+    \$validationService = \$app->services->getTransactionValidationService();
 
-    // Check that TransactionService has the checkTransactionPossible method
-    // and that it includes sync logic (by checking for getSyncService call)
-    \$reflection = new ReflectionClass(\$transactionService);
+    // Check that TransactionValidationService has the checkTransactionPossible method
+    // and that it includes sync logic (by checking for syncService call)
+    \$reflection = new ReflectionClass(\$validationService);
     \$method = \$reflection->getMethod('checkTransactionPossible');
     \$startLine = \$method->getStartLine();
     \$endLine = \$method->getEndLine();
@@ -941,7 +942,7 @@ proactiveSyncResult=$(docker exec ${receiver} php -r "
     \$source = implode('', array_slice(\$lines, \$startLine - 1, \$endLine - \$startLine + 1));
 
     // Check if the method contains proactive sync logic
-    if (strpos(\$source, 'getSyncService') !== false &&
+    if (strpos(\$source, 'syncService') !== false &&
         strpos(\$source, 'syncTransactionChain') !== false) {
         echo 'PROACTIVE_SYNC_EXISTS';
     } else {
