@@ -434,6 +434,7 @@ class ServiceContainer {
                 $this->getTransactionChainRepository(),
                 $this->getTransactionRecoveryRepository(),
                 $this->getTransactionContactRepository(),
+                $this->getTransactionStatisticsRepository(),
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->getLogger(),

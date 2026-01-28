@@ -520,7 +520,7 @@ class SyncService implements SyncServiceInterface {
                 $localLoserToResign = null;  // Track local transaction that needs re-signing
 
                 if ($remotePreviousTxid !== null) {
-                    $localConflict = $this->transactionRepository->getLocalTransactionByPreviousTxid(
+                    $localConflict = $this->transactionChainRepository->getLocalTransactionByPreviousTxid(
                         $remotePreviousTxid,
                         $userPubkeyHash,
                         $contactPubkeyHash

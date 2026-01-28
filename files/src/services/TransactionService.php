@@ -10,6 +10,7 @@ require_once __DIR__ . '/../contracts/LockingServiceInterface.php';
 require_once __DIR__ . '/../database/TransactionChainRepository.php';
 require_once __DIR__ . '/../database/TransactionRecoveryRepository.php';
 require_once __DIR__ . '/../database/TransactionContactRepository.php';
+require_once __DIR__ . '/../database/TransactionStatisticsRepository.php';
 
 
 /**
@@ -166,6 +167,11 @@ class TransactionService implements TransactionServiceInterface {
     private TransactionContactRepository $transactionContactRepository;
 
     /**
+     * @var TransactionStatisticsRepository Transaction statistics repository for statistics operations
+     */
+    private TransactionStatisticsRepository $transactionStatisticsRepository;
+
+    /**
      * Set the sync service (setter injection for circular dependency)
      *
      * @param SyncService $service Sync service
@@ -256,6 +262,7 @@ class TransactionService implements TransactionServiceInterface {
      * @param TransactionChainRepository $transactionChainRepository Transaction chain repository
      * @param TransactionRecoveryRepository $transactionRecoveryRepository Transaction recovery repository
      * @param TransactionContactRepository $transactionContactRepository Transaction contact repository
+     * @param TransactionStatisticsRepository $transactionStatisticsRepository Transaction statistics repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param InputValidator $inputValidator InputValidator
      * @param SecureLogger $secureLogger SecureLogger
@@ -273,6 +280,7 @@ class TransactionService implements TransactionServiceInterface {
         TransactionChainRepository $transactionChainRepository,
         TransactionRecoveryRepository $transactionRecoveryRepository,
         TransactionContactRepository $transactionContactRepository,
+        TransactionStatisticsRepository $transactionStatisticsRepository,
         UtilityServiceContainer $utilityContainer,
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
@@ -289,6 +297,7 @@ class TransactionService implements TransactionServiceInterface {
         $this->transactionChainRepository = $transactionChainRepository;
         $this->transactionRecoveryRepository = $transactionRecoveryRepository;
         $this->transactionContactRepository = $transactionContactRepository;
+        $this->transactionStatisticsRepository = $transactionStatisticsRepository;
         $this->utilityContainer = $utilityContainer;
         $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
         $this->validationUtility = $this->utilityContainer->getValidationUtility();
@@ -863,7 +872,7 @@ class TransactionService implements TransactionServiceInterface {
 
                         if ($syncService->verifyTransactionSignaturePublic($txForVerification)) {
                             // Valid signature - update the existing transaction
-                            $updated = $this->transactionRepository->updateChainConflictResolution(
+                            $updated = $this->transactionChainRepository->updateChainConflictResolution(
                                 $request['txid'],
                                 $newPreviousTxid,
                                 $request['senderSignature'],
@@ -2122,7 +2131,7 @@ class TransactionService implements TransactionServiceInterface {
             }
 
             // Get recent transactions with this contact
-            $transactions = $this->transactionRepository->getTransactionsWithContact($contactAddresses, $transactionLimit);
+            $transactions = $this->transactionContactRepository->getTransactionsWithContact($contactAddresses, $transactionLimit);
 
             $contactsWithBalances[] = array_merge($addressesAssociative,[
                 'name' => $contact['name'],
@@ -2294,7 +2303,7 @@ class TransactionService implements TransactionServiceInterface {
      * @return array Statistics array
      */
     public function getStatistics(): array {
-        return $this->transactionRepository->getStatistics();
+        return $this->transactionStatisticsRepository->getOverallStatistics();
     }
 
     /**
