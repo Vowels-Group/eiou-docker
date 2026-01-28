@@ -531,12 +531,7 @@ order constraints. Most circular dependencies have been eliminated:
 
 | Dependency | Pattern | Notes |
 |------------|---------|-------|
-| TransactionService -> SyncService | **ELIMINATED** | Now uses SyncTriggerInterface via proxy |
-| ContactService -> SyncService | **ELIMINATED** | Now uses SyncTriggerInterface via proxy |
-| MessageService -> SyncService | **ELIMINATED** | Now uses SyncTriggerInterface via proxy |
 | SyncService -> HeldTransactionService | Setter injection | Sync notifies held transaction service |
-| HeldTransactionService -> SyncService | **ELIMINATED** | Now uses EventDispatcher (SyncEvents::SYNC_COMPLETED) |
-| Rp2pService -> TransactionService | **ELIMINATED** | Now uses P2pTransactionSenderInterface |
 
 ### How wireCircularDependencies() Works
 
@@ -582,23 +577,10 @@ The codebase has significantly reduced circular dependencies:
 
 | Strategy | Status | Services/Details |
 |----------|--------|------------------|
-| Interface segregation | ✅ Complete | P2pTransactionSenderInterface (Rp2pService), SyncTriggerInterface |
-| Event-driven communication | ✅ Complete | HeldTransactionService uses SyncEvents::SYNC_COMPLETED |
 | Lazy proxy pattern | ✅ Available | SyncServiceProxy for optional use |
-| Service extraction | ✅ Complete | BalanceService, ChainVerificationService, ChainOperationsService |
+
 
 **All SyncService Dependencies Now Use SyncTriggerInterface:**
-
-- ✅ `HeldTransactionService` - Uses EventDispatcher (SyncEvents::SYNC_COMPLETED)
-- ✅ `Rp2pService` - Uses P2pTransactionSenderInterface
-- ✅ `ContactService` - Uses SyncTriggerInterface via proxy
-- ✅ `MessageService` - Uses SyncTriggerInterface via proxy
-- ✅ `TransactionService` - Uses SyncTriggerInterface via proxy
-- ✅ `ContactStatusService` - Uses SyncTriggerInterface via proxy
-- ✅ `ChainVerificationService` - Uses SyncTriggerInterface via proxy
-- ✅ `TransactionValidationService` - Uses SyncTriggerInterface via proxy
-- ✅ `TransactionProcessingService` - Uses SyncTriggerInterface via proxy
-- ✅ `SendOperationService` - Uses SyncTriggerInterface via proxy
 
 **Only Remaining Direct SyncService Usage:**
 
