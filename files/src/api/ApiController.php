@@ -361,6 +361,7 @@ class ApiController {
         $type = $params['type'] ?? null; // sent, received, relay
 
         $transactionRepo = $this->services->getTransactionRepository();
+        $transactionStatsRepo = $this->services->getTransactionStatisticsRepository();
 
         if ($type) {
             $transactions = $transactionRepo->getTransactionsByType($type, $limit, $offset);
@@ -385,7 +386,7 @@ class ApiController {
             ];
         }
 
-        $total = $transactionRepo->getTotalCountTransactions();
+        $total = $transactionStatsRepo->getTotalCount();
 
         return $this->successResponse([
             'transactions' => $result,
@@ -1064,12 +1065,12 @@ class ApiController {
             return $this->permissionDenied('system:read');
         }
 
-        $transactionRepo = $this->services->getTransactionRepository();
+        $transactionStatsRepo = $this->services->getTransactionStatisticsRepository();
         $contactRepo = $this->services->getContactRepository();
         $p2pRepo = $this->services->getP2pRepository();
 
         // Get statistics
-        $txStats = $transactionRepo->getTransactionsTypeStatistics();
+        $txStats = $transactionStatsRepo->getTypeStatistics();
         $contactCount = $contactRepo->countAcceptedContacts();
         $queuedP2p = $p2pRepo->getCountP2pMessagesWithStatus(Constants::STATUS_QUEUED);
 
@@ -1080,7 +1081,7 @@ class ApiController {
 
         return $this->successResponse([
             'transactions' => [
-                'total' => $transactionRepo->getTotalCountTransactions(),
+                'total' => $transactionStatsRepo->getTotalCount(),
                 'by_type' => $txByType
             ],
             'contacts' => [

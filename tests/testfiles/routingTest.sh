@@ -147,7 +147,7 @@ for container in "${containers[@]}"; do
     # Query transaction history and check for relay transactions
     transactionTypes=$(docker exec ${container} php -r "
         require_once('${REL_APPLICATION}');
-        \$results = Application::getInstance()->services->getTransactionRepository()->getTransactionsTypeStatistics();
+        \$results = Application::getInstance()->services->getTransactionStatisticsRepository()->getTypeStatistics();
         foreach (\$results as \$row) {
             echo \$row['type'] . ': ' . \$row['count'] . ', ';
         }
@@ -186,7 +186,7 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
         # Get initial message count or balance
         initialState=$(docker exec ${lastContainer} php -r "
             require_once('${REL_APPLICATION}');
-            echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
+            echo Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
         " 2>/dev/null || echo "0")
 
         # Send end-to-end message
@@ -197,14 +197,14 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
         echo -e "\t   Waiting for multi-hop routing (timeout: 30s)..."
         tx_count_cmd="php -r \"
             require_once('${REL_APPLICATION}');
-            echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
+            echo Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
         \""
         wait_for_condition "[ \"\$(docker exec ${lastContainer} sh -c '$tx_count_cmd' 2>/dev/null)\" -gt \"$initialState\" ]" 30 1 "multi-hop delivery"
 
         # Check if message arrived
         finalState=$(docker exec ${lastContainer} php -r "
             require_once('${REL_APPLICATION}');
-            echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
+            echo Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
         " 2>/dev/null || echo "0")
 
         stateIncreased=$(awk "BEGIN {print ($finalState > $initialState) ? 1 : 0}")
@@ -221,7 +221,7 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
             # Re-check delivery after retry
             finalState=$(docker exec ${lastContainer} php -r "
                 require_once('${REL_APPLICATION}');
-                echo Application::getInstance()->services->getTransactionRepository()->getTransactionsSpecificTypeCount('received');
+                echo Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
             " 2>/dev/null || echo "0")
             stateIncreased=$(awk "BEGIN {print ($finalState > $initialState) ? 1 : 0}")
         fi
