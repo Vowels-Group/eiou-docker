@@ -1051,13 +1051,29 @@ class ServiceContainer {
             $this->services['Rp2pService']->setTransactionService($this->services['TransactionService']);
         }
 
-        // Wire TransactionService -> P2pService, ContactService
+        // Wire TransactionService -> P2pService, ContactService, and new refactored services
         if (isset($this->services['TransactionService'])) {
             if (isset($this->services['P2pService'])) {
                 $this->services['TransactionService']->setP2pService($this->services['P2pService']);
             }
             if (isset($this->services['ContactService'])) {
                 $this->services['TransactionService']->setContactService($this->services['ContactService']);
+            }
+            // Wire the 5 new refactored services to TransactionService facade
+            if (isset($this->services['BalanceService'])) {
+                $this->services['TransactionService']->setBalanceService($this->services['BalanceService']);
+            }
+            if (isset($this->services['ChainVerificationService'])) {
+                $this->services['TransactionService']->setChainVerificationService($this->services['ChainVerificationService']);
+            }
+            if (isset($this->services['TransactionValidationService'])) {
+                $this->services['TransactionService']->setTransactionValidationService($this->services['TransactionValidationService']);
+            }
+            if (isset($this->services['TransactionProcessingService'])) {
+                $this->services['TransactionService']->setTransactionProcessingService($this->services['TransactionProcessingService']);
+            }
+            if (isset($this->services['SendOperationService'])) {
+                $this->services['TransactionService']->setSendOperationService($this->services['SendOperationService']);
             }
         }
 
