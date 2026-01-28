@@ -54,18 +54,9 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
     private ?SyncService $syncService = null;
 
     /**
-     * @var TransactionChainRepository|null Transaction chain repository
+     * @var TransactionChainRepository Transaction chain repository
      */
-    private ?TransactionChainRepository $transactionChainRepository = null;
-
-    /**
-     * Set the transaction chain repository (setter injection)
-     *
-     * @param TransactionChainRepository $repo Transaction chain repository
-     */
-    public function setTransactionChainRepository(TransactionChainRepository $repo): void {
-        $this->transactionChainRepository = $repo;
-    }
+    private TransactionChainRepository $transactionChainRepository;
 
     /**
      * Set the sync service (setter injection for circular dependency)
@@ -94,17 +85,20 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
      *
      * @param HeldTransactionRepository $heldRepository Held transaction repository
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param TransactionChainRepository $transactionChainRepository Transaction chain repository
      * @param UtilityServiceContainer $utilityContainer Utility service container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         $heldRepository,
         $transactionRepository,
+        TransactionChainRepository $transactionChainRepository,
         $utilityContainer,
         $currentUser
     ) {
         $this->heldRepository = $heldRepository;
         $this->transactionRepository = $transactionRepository;
+        $this->transactionChainRepository = $transactionChainRepository;
         $this->utilityContainer = $utilityContainer;
         $this->currentUser = $currentUser;
 

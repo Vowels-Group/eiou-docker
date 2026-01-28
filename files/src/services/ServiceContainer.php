@@ -406,6 +406,7 @@ class ServiceContainer {
                 $this->getLogger(),
                 $this->currentUser,
                 $this->getTransactionRepository(),
+                $this->getTransactionContactRepository(),
                 $this->getMessageDeliveryService()
             );
         }
@@ -430,6 +431,9 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
+                $this->getTransactionChainRepository(),
+                $this->getTransactionRecoveryRepository(),
+                $this->getTransactionContactRepository(),
                 $this->getUtilityContainer(),
                 $this->getInputValidator(),
                 $this->getLogger(),
@@ -519,6 +523,7 @@ class ServiceContainer {
                 $this->getBalanceRepository(),
                 $this->getP2pRepository(),
                 $this->getTransactionRepository(),
+                $this->getTransactionContactRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser,
                 $this->getMessageDeliveryService()
@@ -561,6 +566,8 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getTransactionRepository(),
+                $this->getTransactionChainRepository(),
+                $this->getTransactionContactRepository(),
                 $this->getBalanceRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser
@@ -616,6 +623,7 @@ class ServiceContainer {
             $this->services['HeldTransactionService'] = new HeldTransactionService(
                 $this->getHeldTransactionRepository(),
                 $this->getTransactionRepository(),
+                $this->getTransactionChainRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser
             );
@@ -632,7 +640,8 @@ class ServiceContainer {
         if (!isset($this->services['TransactionRecoveryService'])) {
             require_once __DIR__ . '/TransactionRecoveryService.php';
             $this->services['TransactionRecoveryService'] = new TransactionRecoveryService(
-                $this->getTransactionRepository()
+                $this->getTransactionRepository(),
+                $this->getTransactionRecoveryRepository()
             );
         }
         return $this->services['TransactionRecoveryService'];
@@ -851,13 +860,7 @@ class ServiceContainer {
      * - Rp2pService --> TransactionService
      * - TransactionService --> P2pService, ContactService
      *
-     * Repository injections:
-     * - TransactionService --> TransactionChainRepository, TransactionRecoveryRepository, TransactionContactRepository
-     * - SyncService --> TransactionChainRepository, TransactionContactRepository
-     * - HeldTransactionService --> TransactionChainRepository
-     * - TransactionRecoveryService --> TransactionRecoveryRepository
-     * - ContactService --> TransactionContactRepository
-     * - MessageService --> TransactionContactRepository
+     * Note: Repositories are now passed via constructor injection, not setter injection.
      */
     public function wireCircularDependencies(): void {
         // Wire TransactionService <-> SyncService
@@ -908,44 +911,6 @@ class ServiceContainer {
             if (isset($this->services['ContactService'])) {
                 $this->services['TransactionService']->setContactService($this->services['ContactService']);
             }
-        }
-
-        // Wire specialized transaction repositories to services
-        $transactionChainRepo = $this->getTransactionChainRepository();
-        $transactionRecoveryRepo = $this->getTransactionRecoveryRepository();
-        $transactionContactRepo = $this->getTransactionContactRepository();
-
-        // TransactionService -> TransactionChainRepository, TransactionRecoveryRepository, TransactionContactRepository
-        if (isset($this->services['TransactionService'])) {
-            $this->services['TransactionService']->setTransactionChainRepository($transactionChainRepo);
-            $this->services['TransactionService']->setTransactionRecoveryRepository($transactionRecoveryRepo);
-            $this->services['TransactionService']->setTransactionContactRepository($transactionContactRepo);
-        }
-
-        // SyncService -> TransactionChainRepository, TransactionContactRepository
-        if (isset($this->services['SyncService'])) {
-            $this->services['SyncService']->setTransactionChainRepository($transactionChainRepo);
-            $this->services['SyncService']->setTransactionContactRepository($transactionContactRepo);
-        }
-
-        // HeldTransactionService -> TransactionChainRepository
-        if (isset($this->services['HeldTransactionService'])) {
-            $this->services['HeldTransactionService']->setTransactionChainRepository($transactionChainRepo);
-        }
-
-        // TransactionRecoveryService -> TransactionRecoveryRepository
-        if (isset($this->services['TransactionRecoveryService'])) {
-            $this->services['TransactionRecoveryService']->setTransactionRecoveryRepository($transactionRecoveryRepo);
-        }
-
-        // ContactService -> TransactionContactRepository
-        if (isset($this->services['ContactService'])) {
-            $this->services['ContactService']->setTransactionContactRepository($transactionContactRepo);
-        }
-
-        // MessageService -> TransactionContactRepository
-        if (isset($this->services['MessageService'])) {
-            $this->services['MessageService']->setTransactionContactRepository($transactionContactRepo);
         }
     }
 

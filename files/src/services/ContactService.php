@@ -105,9 +105,9 @@ class ContactService implements ContactServiceInterface {
     private ?SyncService $syncService = null;
 
     /**
-     * @var TransactionContactRepository|null Transaction contact repository for contact transactions
+     * @var TransactionContactRepository Transaction contact repository for contact transactions
      */
-    private ?TransactionContactRepository $transactionContactRepository = null;
+    private TransactionContactRepository $transactionContactRepository;
 
     /**
      * Set the sync service (setter injection for circular dependency)
@@ -116,15 +116,6 @@ class ContactService implements ContactServiceInterface {
      */
     public function setSyncService(SyncService $service): void {
         $this->syncService = $service;
-    }
-
-    /**
-     * Set the transaction contact repository (setter injection)
-     *
-     * @param TransactionContactRepository $repository Transaction contact repository
-     */
-    public function setTransactionContactRepository(TransactionContactRepository $repository): void {
-        $this->transactionContactRepository = $repository;
     }
 
     /**
@@ -151,6 +142,7 @@ class ContactService implements ContactServiceInterface {
      * @param SecureLogger $secureLogger SecureLogger Util
      * @param UserContext $currentUser Current user data
      * @param TransactionRepository $transactionRepository Transaction Repository
+     * @param TransactionContactRepository $transactionContactRepository Transaction contact repository
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      */
     public function __construct(
@@ -162,9 +154,9 @@ class ContactService implements ContactServiceInterface {
         SecureLogger $secureLogger,
         UserContext $currentUser,
         TransactionRepository $transactionRepository,
+        TransactionContactRepository $transactionContactRepository,
         ?MessageDeliveryService $messageDeliveryService = null
-        )
-    {
+    ) {
         $this->contactRepository = $contactRepository;
         $this->addressRepository = $addressRepository;
         $this->balanceRepository = $balanceRepository;
@@ -173,6 +165,7 @@ class ContactService implements ContactServiceInterface {
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
         $this->transactionRepository = $transactionRepository;
+        $this->transactionContactRepository = $transactionContactRepository;
         $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
         $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->messageDeliveryService = $messageDeliveryService;

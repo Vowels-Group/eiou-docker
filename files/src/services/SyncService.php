@@ -96,14 +96,14 @@ class SyncService implements SyncServiceInterface {
     private ?HeldTransactionService $heldTransactionService = null;
 
     /**
-     * @var TransactionChainRepository|null Transaction chain repository instance
+     * @var TransactionChainRepository Transaction chain repository instance
      */
-    private ?TransactionChainRepository $transactionChainRepository = null;
+    private TransactionChainRepository $transactionChainRepository;
 
     /**
-     * @var TransactionContactRepository|null Transaction contact repository instance
+     * @var TransactionContactRepository Transaction contact repository instance
      */
-    private ?TransactionContactRepository $transactionContactRepository = null;
+    private TransactionContactRepository $transactionContactRepository;
 
     /**
      * Set the held transaction service (setter injection for circular dependency)
@@ -112,24 +112,6 @@ class SyncService implements SyncServiceInterface {
      */
     public function setHeldTransactionService(HeldTransactionService $service): void {
         $this->heldTransactionService = $service;
-    }
-
-    /**
-     * Set the transaction chain repository (setter injection)
-     *
-     * @param TransactionChainRepository $repository Transaction chain repository
-     */
-    public function setTransactionChainRepository(TransactionChainRepository $repository): void {
-        $this->transactionChainRepository = $repository;
-    }
-
-    /**
-     * Set the transaction contact repository (setter injection)
-     *
-     * @param TransactionContactRepository $repository Transaction contact repository
-     */
-    public function setTransactionContactRepository(TransactionContactRepository $repository): void {
-        $this->transactionContactRepository = $repository;
     }
 
     /**
@@ -152,16 +134,20 @@ class SyncService implements SyncServiceInterface {
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param TransactionChainRepository $transactionChainRepository Transaction chain repository
+     * @param TransactionContactRepository $transactionContactRepository Transaction contact repository
      * @param BalanceRepository $balanceRepository Balance repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      */
     public function __construct(
         ContactRepository $contactRepository,
-         AddressRepository $addressRepository,
+        AddressRepository $addressRepository,
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
+        TransactionChainRepository $transactionChainRepository,
+        TransactionContactRepository $transactionContactRepository,
         BalanceRepository $balanceRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser
@@ -171,17 +157,19 @@ class SyncService implements SyncServiceInterface {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
+        $this->transactionChainRepository = $transactionChainRepository;
+        $this->transactionContactRepository = $transactionContactRepository;
         $this->balanceRepository = $balanceRepository;
         $this->utilityContainer = $utilityContainer;
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
-       
+
         require_once '/etc/eiou/src/schemas/payloads/ContactPayload.php';
         $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
-       
+
         require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
-      
+
         require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
         $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
     }

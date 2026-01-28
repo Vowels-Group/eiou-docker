@@ -151,19 +151,19 @@ class TransactionService implements TransactionServiceInterface {
     private ?LockingServiceInterface $lockingService = null;
 
     /**
-     * @var TransactionChainRepository|null Transaction chain repository for chain integrity operations
+     * @var TransactionChainRepository Transaction chain repository for chain integrity operations
      */
-    private ?TransactionChainRepository $transactionChainRepository = null;
+    private TransactionChainRepository $transactionChainRepository;
 
     /**
-     * @var TransactionRecoveryRepository|null Transaction recovery repository for pending/in-progress operations
+     * @var TransactionRecoveryRepository Transaction recovery repository for pending/in-progress operations
      */
-    private ?TransactionRecoveryRepository $transactionRecoveryRepository = null;
+    private TransactionRecoveryRepository $transactionRecoveryRepository;
 
     /**
-     * @var TransactionContactRepository|null Transaction contact repository for contact balance operations
+     * @var TransactionContactRepository Transaction contact repository for contact balance operations
      */
-    private ?TransactionContactRepository $transactionContactRepository = null;
+    private TransactionContactRepository $transactionContactRepository;
 
     /**
      * Set the sync service (setter injection for circular dependency)
@@ -240,33 +240,6 @@ class TransactionService implements TransactionServiceInterface {
         $this->lockingService = $service;
     }
 
-    /**
-     * Set the transaction chain repository (setter injection)
-     *
-     * @param TransactionChainRepository $repo Transaction chain repository
-     */
-    public function setTransactionChainRepository(TransactionChainRepository $repo): void {
-        $this->transactionChainRepository = $repo;
-    }
-
-    /**
-     * Set the transaction recovery repository (setter injection)
-     *
-     * @param TransactionRecoveryRepository $repo Transaction recovery repository
-     */
-    public function setTransactionRecoveryRepository(TransactionRecoveryRepository $repo): void {
-        $this->transactionRecoveryRepository = $repo;
-    }
-
-    /**
-     * Set the transaction contact repository (setter injection)
-     *
-     * @param TransactionContactRepository $repo Transaction contact repository
-     */
-    public function setTransactionContactRepository(TransactionContactRepository $repo): void {
-        $this->transactionContactRepository = $repo;
-    }
-
     // =========================================================================
     // CONSTRUCTOR & DEPENDENCY INJECTION
     // =========================================================================
@@ -280,13 +253,15 @@ class TransactionService implements TransactionServiceInterface {
      * @param P2pRepository $p2pRepository P2p repository
      * @param Rp2pRepository $rp2pRepository Rp2p repository
      * @param TransactionRepository $transactionRepository Transaction repository
+     * @param TransactionChainRepository $transactionChainRepository Transaction chain repository
+     * @param TransactionRecoveryRepository $transactionRecoveryRepository Transaction recovery repository
+     * @param TransactionContactRepository $transactionContactRepository Transaction contact repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param InputValidator $inputValidator InputValidator
      * @param SecureLogger $secureLogger SecureLogger
      * @param UserContext $currentUser Current user data
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      * @param HeldTransactionService|null $heldTransactionService Optional Held transaction service for pending sync
-     * 
      */
     public function __construct(
         ContactRepository $contactRepository,
@@ -295,6 +270,9 @@ class TransactionService implements TransactionServiceInterface {
         P2pRepository $p2pRepository,
         Rp2pRepository $rp2pRepository,
         TransactionRepository $transactionRepository,
+        TransactionChainRepository $transactionChainRepository,
+        TransactionRecoveryRepository $transactionRecoveryRepository,
+        TransactionContactRepository $transactionContactRepository,
         UtilityServiceContainer $utilityContainer,
         InputValidator $inputValidator,
         SecureLogger $secureLogger,
@@ -308,6 +286,9 @@ class TransactionService implements TransactionServiceInterface {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
         $this->transactionRepository = $transactionRepository;
+        $this->transactionChainRepository = $transactionChainRepository;
+        $this->transactionRecoveryRepository = $transactionRecoveryRepository;
+        $this->transactionContactRepository = $transactionContactRepository;
         $this->utilityContainer = $utilityContainer;
         $this->currencyUtility = $this->utilityContainer->getCurrencyUtility();
         $this->validationUtility = $this->utilityContainer->getValidationUtility();

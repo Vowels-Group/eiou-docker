@@ -33,9 +33,9 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
     private $transactionRepository;
 
     /**
-     * @var TransactionRecoveryRepository|null Transaction recovery repository
+     * @var TransactionRecoveryRepository Transaction recovery repository
      */
-    private ?TransactionRecoveryRepository $transactionRecoveryRepository = null;
+    private TransactionRecoveryRepository $transactionRecoveryRepository;
 
     /**
      * @var SecureLogger Logger instance
@@ -46,18 +46,10 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
      * Constructor
      *
      * @param TransactionRepository $transactionRepository Transaction repository
-     */
-    public function __construct($transactionRepository) {
-        $this->transactionRepository = $transactionRepository;
-    }
-
-    /**
-     * Set the transaction recovery repository
-     *
      * @param TransactionRecoveryRepository $transactionRecoveryRepository Transaction recovery repository
-     * @return void
      */
-    public function setTransactionRecoveryRepository(TransactionRecoveryRepository $transactionRecoveryRepository): void {
+    public function __construct($transactionRepository, TransactionRecoveryRepository $transactionRecoveryRepository) {
+        $this->transactionRepository = $transactionRepository;
         $this->transactionRecoveryRepository = $transactionRecoveryRepository;
     }
 
