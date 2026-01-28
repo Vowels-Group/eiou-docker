@@ -9,22 +9,17 @@
  *
  * Flow:
  * 1. Transaction rejected with invalid_previous_txid (receiver tells us expected previous_txid)
- * 2. holdTransactionForSync() stores transaction and initiates sync
- * 3. SyncService completes sync (including all transactions to maintain chain integrity)
- * 4. onSyncComplete() triggers processHeldTransactionsAfterSync()
- * 5. updatePreviousTxid() updates the transaction's previous_txid to the expected value
- * 6. resumeTransaction() sets status back to pending for reprocessing
+ * 2. holdTransactionForSync() stores transaction and marks sync as in_progress
+ * 3. Caller (e.g., TransactionProcessingService) triggers sync via SyncService
+ * 4. SyncService dispatches SyncEvents::SYNC_COMPLETED via EventDispatcher
+ * 5. HeldTransactionService.onSyncCompleted() receives event and calls onSyncComplete()
+ * 6. processHeldTransactionsAfterSync() updates previous_txid and resumes transactions
+ *
+ * Note: This service uses event-driven communication via EventDispatcher instead of
+ * direct SyncService dependency to avoid circular dependencies.
  */
 interface HeldTransactionServiceInterface
 {
-    /**
-     * Set the sync service (setter injection for circular dependency)
-     *
-     * @param SyncService $service Sync service
-     * @return void
-     */
-    public function setSyncService(SyncService $service): void;
-
     /**
      * Hold a transaction that received invalid_previous_txid rejection
      *
@@ -85,7 +80,23 @@ interface HeldTransactionServiceInterface
     public function resumeTransaction(string $txid): array;
 
     /**
-     * Callback invoked by SyncService when sync completes
+     * Event handler for sync completion events (event-driven communication)
+     *
+     * This method is called via EventDispatcher when SyncEvents::SYNC_COMPLETED is dispatched.
+     * It extracts the necessary data from the event and delegates to onSyncComplete().
+     *
+     * Expected event data:
+     *   - contact_pubkey: string - The public key of the synced contact
+     *   - success: bool - Whether sync was successful
+     *   - synced_count: int - Number of transactions synced (optional, defaults to 0)
+     *
+     * @param array $data Event data from EventDispatcher
+     * @return void
+     */
+    public function onSyncCompleted(array $data): void;
+
+    /**
+     * Callback invoked when sync completes for a contact
      *
      * Updates the sync status for all held transactions with this contact
      * and triggers processing if sync was successful.

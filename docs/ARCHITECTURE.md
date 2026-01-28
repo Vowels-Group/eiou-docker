@@ -8,13 +8,15 @@ Technical architecture documentation for the EIOU Docker node implementation.
 2. [System Architecture Diagram](#system-architecture-diagram)
 3. [Core Components](#core-components)
 4. [Service Layer](#service-layer)
-5. [Message Processing Pipeline](#message-processing-pipeline)
-6. [Data Layer](#data-layer)
-7. [P2P Networking](#p2p-networking)
-8. [Transaction Lifecycle](#transaction-lifecycle)
-9. [Startup Sequence](#startup-sequence)
-10. [Security Model](#security-model)
-11. [Related Documentation](#related-documentation)
+5. [Dependency Injection Patterns](#dependency-injection-patterns)
+6. [Circular Dependency Management](#circular-dependency-management)
+7. [Message Processing Pipeline](#message-processing-pipeline)
+8. [Data Layer](#data-layer)
+9. [P2P Networking](#p2p-networking)
+10. [Transaction Lifecycle](#transaction-lifecycle)
+11. [Startup Sequence](#startup-sequence)
+12. [Security Model](#security-model)
+13. [Related Documentation](#related-documentation)
 
 ---
 
@@ -327,6 +329,326 @@ $this->services['ChainVerificationService']->setSyncService($this->services['Syn
 $this->services['TransactionValidationService']->setSyncService($this->services['SyncService']);
 $this->services['TransactionProcessingService']->setSyncService($this->services['SyncService']);
 $this->services['SendOperationService']->setContactService($this->services['ContactService']);
+```
+
+---
+
+## Dependency Injection Patterns
+
+The codebase uses several patterns to manage service dependencies while avoiding tight
+coupling and circular dependencies.
+
+### Interface Segregation
+
+Services depend on focused interfaces rather than concrete implementations. This reduces
+coupling and makes circular dependencies easier to break.
+
+**Key Interfaces:**
+
+| Interface | Purpose | Implementing Service |
+|-----------|---------|---------------------|
+| `SyncTriggerInterface` | Minimal sync operations for chain repair | `SyncService`, `SyncServiceProxy` |
+| `P2pTransactionSenderInterface` | P2P transaction sending | `P2pService` |
+| `ChainOperationsInterface` | Chain verification and repair | `ChainOperationsService` |
+| `LockingServiceInterface` | Distributed locking | `DatabaseLockingService` |
+| `EventDispatcherInterface` | Event-driven communication | `EventDispatcher` |
+
+**Example - SyncTriggerInterface:**
+
+```php
+// SyncTriggerInterface defines only the methods other services need
+interface SyncTriggerInterface
+{
+    public function syncTransactionChain(string $contactAddress, string $contactPublicKey, ?string $expectedTxid = null): array;
+    public function syncContactBalance(string $contactPubkey): array;
+    public function syncSingleContact($contactAddress, $echo = 'SILENT'): bool;
+    public function syncReaddedContact(string $contactAddress, string $contactPublicKey): array;
+}
+
+// Services depend on the interface, not the concrete SyncService
+class HeldTransactionService
+{
+    private ?SyncTriggerInterface $syncService = null;
+
+    public function setSyncService(SyncTriggerInterface $syncService): void {
+        $this->syncService = $syncService;
+    }
+}
+```
+
+### Event-Driven Communication
+
+The `EventDispatcher` enables loose coupling by allowing services to communicate via
+events instead of direct dependencies.
+
+**SyncEvents Constants:**
+
+| Event | When Dispatched |
+|-------|-----------------|
+| `SYNC_COMPLETED` | After successful sync operation |
+| `SYNC_FAILED` | When sync operation fails |
+| `CHAIN_GAP_DETECTED` | When missing transactions detected |
+| `BALANCE_SYNCED` | After contact balance sync |
+| `CONTACT_SYNCED` | After contact sync completes |
+| `CHAIN_CONFLICT_RESOLVED` | When chain conflict is resolved |
+
+**Usage Example:**
+
+```php
+// Subscribe to events (typically in service constructor or bootstrap)
+EventDispatcher::getInstance()->subscribe(SyncEvents::SYNC_COMPLETED, function($data) {
+    $contactPubkey = $data['contact_pubkey'];
+    $syncedCount = $data['synced_count'];
+    // React to sync completion...
+});
+
+// Dispatch events (in the service performing the action)
+EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_COMPLETED, [
+    'contact_pubkey' => $pubkey,
+    'synced_count' => 5,
+    'success' => true
+]);
+```
+
+### Lazy Proxy Pattern
+
+`SyncServiceProxy` delays service resolution until first use, breaking circular
+dependencies at construction time.
+
+```php
+// SyncServiceProxy delays resolution until a method is called
+class SyncServiceProxy implements SyncTriggerInterface
+{
+    private ServiceContainer $container;
+    private ?SyncService $instance = null;
+
+    public function __construct(ServiceContainer $container) {
+        $this->container = $container;
+    }
+
+    private function getService(): SyncService {
+        if ($this->instance === null) {
+            $this->instance = $this->container->getSyncService();
+        }
+        return $this->instance;
+    }
+
+    public function syncTransactionChain(...): array {
+        return $this->getService()->syncTransactionChain(...);
+    }
+}
+```
+
+**When to Use Proxies:**
+
+- Service A depends on Service B at runtime but not at construction
+- Breaking a circular dependency where setter injection is not suitable
+- Deferring expensive service initialization
+
+### Constructor vs Setter Injection Guidelines
+
+| Use Case | Pattern | Example |
+|----------|---------|---------|
+| Required dependencies | Constructor injection | Repositories, utilities |
+| Optional dependencies | Setter injection with null default | Debug services |
+| Circular dependencies | Setter injection | SyncService <-> HeldTransactionService |
+| Late-bound dependencies | Lazy proxy | SyncServiceProxy |
+
+**Constructor Injection (Preferred):**
+
+```php
+class BalanceService
+{
+    public function __construct(
+        BalanceRepository $balanceRepository,          // Required
+        TransactionContactRepository $transactionContactRepository,
+        AddressRepository $addressRepository,
+        CurrencyUtilityService $currencyUtility
+    ) {
+        // All dependencies available immediately
+    }
+}
+```
+
+**Setter Injection (For Circular Dependencies):**
+
+```php
+class TransactionService
+{
+    private ?SyncServiceInterface $syncService = null;
+
+    public function setSyncService(SyncServiceInterface $syncService): void {
+        $this->syncService = $syncService;
+    }
+
+    private function getSyncService(): SyncServiceInterface {
+        if ($this->syncService === null) {
+            throw new RuntimeException(
+                'SyncService not injected. Call setSyncService() or ensure ' .
+                'ServiceContainer::wireCircularDependencies() is called.'
+            );
+        }
+        return $this->syncService;
+    }
+}
+```
+
+### Dependency Graph
+
+```
+                    +------------------+
+                    | ServiceContainer |
+                    +--------+---------+
+                             |
+      +----------------------+----------------------+
+      |                      |                      |
++-----v------+       +-------v-------+      +-------v-------+
+|  Sync      |       | Transaction   |      |   Contact     |
+|  Service   |<----->|   Service     |<---->|   Service     |
++-----+------+       +-------+-------+      +-------+-------+
+      |                      |                      |
+      |              +-------+-------+              |
+      |              |               |              |
++-----v------+ +-----v-----+ +------v-----+ +------v------+
+|   Held     | | Balance   | |   Chain    | |   Message   |
+| Transaction| | Service   | |Verification| |   Service   |
+|  Service   | +-----------+ |  Service   | +-------------+
++------------+               +------------+
+
+Legend:
+  -----> Constructor injection
+  <----> Setter injection (circular dependency)
+```
+
+---
+
+## Circular Dependency Management
+
+### Why Setter Injection Exists
+
+Some services have dependencies that require setter injection due to initialization
+order constraints. Most circular dependencies have been eliminated:
+
+| Dependency | Pattern | Notes |
+|------------|---------|-------|
+| TransactionService -> SyncService | **ELIMINATED** | Now uses SyncTriggerInterface via proxy |
+| ContactService -> SyncService | **ELIMINATED** | Now uses SyncTriggerInterface via proxy |
+| MessageService -> SyncService | **ELIMINATED** | Now uses SyncTriggerInterface via proxy |
+| SyncService -> HeldTransactionService | Setter injection | Sync notifies held transaction service |
+| HeldTransactionService -> SyncService | **ELIMINATED** | Now uses EventDispatcher (SyncEvents::SYNC_COMPLETED) |
+| Rp2pService -> TransactionService | **ELIMINATED** | Now uses P2pTransactionSenderInterface |
+
+### How wireCircularDependencies() Works
+
+`ServiceContainer::wireCircularDependencies()` is called after all services are
+constructed to wire up setter-injected dependencies:
+
+```php
+public function wireCircularDependencies(): void {
+    // Core sync-related dependencies - now use SyncTriggerInterface via proxy
+    $this->services['TransactionService']->setSyncTrigger($this->getSyncServiceProxy());
+    $this->services['SyncService']->setHeldTransactionService($this->services['HeldTransactionService']);
+    // Note: HeldTransactionService uses EventDispatcher for sync notifications (no setter injection)
+
+    // Contact and message service dependencies - use SyncTriggerInterface via proxy
+    $this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
+    $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
+
+    // RP2P uses interface-based injection (breaks circular dependency)
+    $this->services['Rp2pService']->setP2pTransactionSender($this->services['SendOperationService']);
+
+    // Refactored service dependencies (still use direct SyncService for specialized needs)
+    $this->services['ChainVerificationService']->setSyncService($this->services['SyncService']);
+    $this->services['TransactionProcessingService']->setSyncService($this->services['SyncService']);
+    $this->services['SendOperationService']->setContactService($this->services['ContactService']);
+    // ... additional wiring
+}
+```
+
+**Initialization Order:**
+
+```
+1. Application::getInstance()
+2. -> loadServiceContainer()
+3. -> ServiceContainer::getInstance()
+4. -> wireAllServices()
+       -> Initialize all services (constructor injection)
+       -> wireCircularDependencies() (setter injection)
+```
+
+### Future Roadmap for Eliminating Cycles
+
+The codebase has significantly reduced circular dependencies:
+
+| Strategy | Status | Services/Details |
+|----------|--------|------------------|
+| Interface segregation | ✅ Complete | P2pTransactionSenderInterface (Rp2pService), SyncTriggerInterface |
+| Event-driven communication | ✅ Complete | HeldTransactionService uses SyncEvents::SYNC_COMPLETED |
+| Lazy proxy pattern | ✅ Available | SyncServiceProxy for optional use |
+| Service extraction | ✅ Complete | BalanceService, ChainVerificationService, ChainOperationsService |
+
+**All SyncService Dependencies Now Use SyncTriggerInterface:**
+
+- ✅ `HeldTransactionService` - Uses EventDispatcher (SyncEvents::SYNC_COMPLETED)
+- ✅ `Rp2pService` - Uses P2pTransactionSenderInterface
+- ✅ `ContactService` - Uses SyncTriggerInterface via proxy
+- ✅ `MessageService` - Uses SyncTriggerInterface via proxy
+- ✅ `TransactionService` - Uses SyncTriggerInterface via proxy
+- ✅ `ContactStatusService` - Uses SyncTriggerInterface via proxy
+- ✅ `ChainVerificationService` - Uses SyncTriggerInterface via proxy
+- ✅ `TransactionValidationService` - Uses SyncTriggerInterface via proxy
+- ✅ `TransactionProcessingService` - Uses SyncTriggerInterface via proxy
+- ✅ `SendOperationService` - Uses SyncTriggerInterface via proxy
+
+**Only Remaining Direct SyncService Usage:**
+
+- `SyncService -> HeldTransactionService` (one-way setter, not circular)
+- `ChainOperationsService -> SyncService` (for chain repair coordination)
+
+### CI Script for Cycle Detection
+
+The `circularDependencyCheck.sh` script detects circular dependencies via static analysis:
+
+```bash
+# Run from eiou-docker root
+cd tests/testfiles
+./circularDependencyCheck.sh           # Normal output
+./circularDependencyCheck.sh --verbose # Detailed dependency graph
+```
+
+**How It Works:**
+
+1. Parses all PHP service files in `/files/src/services/`
+2. Extracts constructor dependencies (type-hinted parameters)
+3. Extracts setter injection dependencies (`set*Service` methods)
+4. Builds a dependency graph
+5. Uses DFS to detect cycles
+6. Reports found cycles with dependency chains
+
+**Exit Codes:**
+
+| Code | Meaning |
+|------|---------|
+| 0 | No circular dependencies found |
+| 1 | Circular dependencies detected |
+
+**Sample Output:**
+
+```
+Circular Dependency Check
+=========================
+
+Analyzing files in /files/src/services...
+Found 25 service files
+
+Detecting cycles...
+
+No circular dependencies detected in core services.
+
+All major cycles have been eliminated using:
+  - SyncTriggerInterface + SyncServiceProxy (ContactService, MessageService, TransactionService)
+  - P2pTransactionSenderInterface (Rp2pService)
+  - EventDispatcher + SyncEvents (HeldTransactionService)
 ```
 
 ---

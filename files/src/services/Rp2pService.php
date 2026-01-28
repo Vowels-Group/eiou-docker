@@ -4,6 +4,7 @@
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 require_once __DIR__ . '/../contracts/Rp2pServiceInterface.php';
+require_once __DIR__ . '/../contracts/P2pTransactionSenderInterface.php';
 
 
 /**
@@ -70,30 +71,38 @@ class Rp2pService implements Rp2pServiceInterface {
     private ?MessageDeliveryService $messageDeliveryService = null;
 
     /**
-     * @var TransactionService|null Transaction service for sending P2P transactions
+     * @var P2pTransactionSenderInterface|null P2P transaction sender for sending P2P transactions
+     *
+     * This uses P2pTransactionSenderInterface instead of TransactionService directly
+     * to break the circular dependency: TransactionService -> Rp2pService -> TransactionService.
+     * By depending on the minimal interface, Rp2pService only needs the sendP2pEiou() method.
      */
-    private ?TransactionService $transactionService = null;
+    private ?P2pTransactionSenderInterface $p2pTransactionSender = null;
 
     /**
-     * Set the transaction service (setter injection for circular dependency)
+     * Set the P2P transaction sender (setter injection to break circular dependency)
      *
-     * @param TransactionService $service Transaction service
+     * This method accepts P2pTransactionSenderInterface, which breaks the circular
+     * dependency between Rp2pService and TransactionService. SendOperationService
+     * implements P2pTransactionSenderInterface, so it can be passed here.
+     *
+     * @param P2pTransactionSenderInterface $sender P2P transaction sender
      */
-    public function setTransactionService(TransactionService $service): void {
-        $this->transactionService = $service;
+    public function setP2pTransactionSender(P2pTransactionSenderInterface $sender): void {
+        $this->p2pTransactionSender = $sender;
     }
 
     /**
-     * Get the transaction service (must be injected via setTransactionService)
+     * Get the P2P transaction sender (must be injected via setP2pTransactionSender)
      *
-     * @return TransactionService
-     * @throws RuntimeException If transaction service was not injected
+     * @return P2pTransactionSenderInterface
+     * @throws RuntimeException If P2P transaction sender was not injected
      */
-    private function getTransactionService(): TransactionService {
-        if ($this->transactionService === null) {
-            throw new RuntimeException('TransactionService not injected. Call setTransactionService() or ensure ServiceContainer::wireCircularDependencies() is called.');
+    private function getP2pTransactionSender(): P2pTransactionSenderInterface {
+        if ($this->p2pTransactionSender === null) {
+            throw new RuntimeException('P2pTransactionSender not injected. Call setP2pTransactionSender() or ensure ServiceContainer::wireCircularDependencies() is called.');
         }
-        return $this->transactionService;
+        return $this->p2pTransactionSender;
     }
 
     /**
@@ -220,8 +229,8 @@ class Rp2pService implements Rp2pServiceInterface {
                 
                 // Check if the fee percent is below the set maximum fee percent the user would pay
                 if ($feePercent <= $this->currentUser->getMaxFee()) {
-                    // Send transaction through rp2p chain using TransactionService directly
-                    $this->getTransactionService()->sendP2pEiou($request);
+                    // Send transaction through rp2p chain using P2pTransactionSenderInterface
+                    $this->getP2pTransactionSender()->sendP2pEiou($request);
                 } else {
                     output(outputFeeRejection(), 'SILENT');
                 }

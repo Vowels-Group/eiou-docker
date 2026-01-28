@@ -12,12 +12,12 @@
 interface ContactStatusServiceInterface
 {
     /**
-     * Set the sync service (setter injection for circular dependency)
+     * Set the sync trigger (interface for loose coupling)
      *
-     * @param SyncService $service Sync service
+     * @param SyncTriggerInterface $sync Sync trigger interface
      * @return void
      */
-    public function setSyncService(SyncService $service): void;
+    public function setSyncTrigger(SyncTriggerInterface $sync): void;
 
     /**
      * Set the rate limiter service (setter injection for circular dependency)

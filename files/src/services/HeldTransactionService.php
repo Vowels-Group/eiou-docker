@@ -5,6 +5,8 @@ require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';
 require_once __DIR__ . '/../contracts/HeldTransactionServiceInterface.php';
 require_once __DIR__ . '/../database/TransactionChainRepository.php';
+require_once __DIR__ . '/../events/EventDispatcher.php';
+require_once __DIR__ . '/../events/SyncEvents.php';
 
 /**
  * Held Transaction Service
@@ -49,36 +51,9 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
     private $transactionPayload;
 
     /**
-     * @var SyncService|null Sync service for transaction chain sync
-     */
-    private ?SyncService $syncService = null;
-
-    /**
      * @var TransactionChainRepository Transaction chain repository
      */
     private TransactionChainRepository $transactionChainRepository;
-
-    /**
-     * Set the sync service (setter injection for circular dependency)
-     *
-     * @param SyncService $service Sync service
-     */
-    public function setSyncService(SyncService $service): void {
-        $this->syncService = $service;
-    }
-
-    /**
-     * Get the sync service (must be injected via setSyncService)
-     *
-     * @return SyncService
-     * @throws RuntimeException If sync service was not injected
-     */
-    private function getSyncService(): SyncService {
-        if ($this->syncService === null) {
-            throw new RuntimeException('SyncService not injected. Call setSyncService() or ensure ServiceContainer::wireCircularDependencies() is called.');
-        }
-        return $this->syncService;
-    }
 
     /**
      * Constructor
@@ -104,6 +79,12 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
 
         require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser, $this->utilityContainer);
+
+        // Subscribe to sync completion events for event-driven communication
+        // This allows SyncService to notify us of completion without a direct dependency
+        EventDispatcher::getInstance()->subscribe(SyncEvents::SYNC_COMPLETED, function($data) {
+            $this->onSyncCompleted($data);
+        });
     }
 
     /**
@@ -185,41 +166,18 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             }
 
             // Update sync status to in_progress
-            $started = $this->heldRepository->markSyncStarted($contactPubkeyHash);
+            $this->heldRepository->markSyncStarted($contactPubkeyHash);
 
-            // Initiate sync through SyncService
-            $syncService = $this->getSyncService();
-            $contactAddress = $transaction['receiver_address'] ?? null;
-
-            if (!$contactAddress) {
-                SecureLogger::error("Cannot initiate sync: missing receiver_address", [
-                    'txid' => $txid,
-                    'contact_hash' => $contactPubkeyHash
-                ]);
-                $this->heldRepository->markSyncFailed($contactPubkeyHash);
-                $result['error'] = 'Missing receiver address for sync';
-                return $result;
-            }
-
-            $syncResult = $syncService->syncTransactionChain($contactAddress, $contactPubkey, $expectedTxid);
-
-            if ($syncResult['success']) {
-                SecureLogger::info("Sync initiated successfully", [
-                    'contact_hash' => $contactPubkeyHash,
-                    'synced_count' => $syncResult['synced_count']
-                ]);
-                $result['sync_initiated'] = true;
-
-                // Mark sync as completed if successful
-                $this->onSyncComplete($contactPubkey, true, $syncResult['synced_count']);
-            } else {
-                SecureLogger::warning("Sync initiation failed", [
-                    'contact_hash' => $contactPubkeyHash,
-                    'error' => $syncResult['error']
-                ]);
-                $this->heldRepository->markSyncFailed($contactPubkeyHash);
-                $result['error'] = $syncResult['error'];
-            }
+            // Transaction is held and sync status marked as in_progress.
+            // The actual sync will be triggered by the caller (e.g., TransactionProcessingService)
+            // which has access to SyncService. When sync completes, SyncService dispatches
+            // SyncEvents::SYNC_COMPLETED which this service listens to via the constructor's
+            // EventDispatcher subscription. The onSyncCompleted() handler will then process
+            // the held transactions.
+            SecureLogger::info("Transaction held, awaiting sync completion via events", [
+                'txid' => $txid,
+                'contact_hash' => $contactPubkeyHash
+            ]);
 
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
@@ -545,6 +503,45 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                 'txid' => $txid
             ]);
             return false;
+        }
+    }
+
+    /**
+     * Event handler for sync completion events (event-driven communication)
+     *
+     * This method is called via EventDispatcher when SyncEvents::SYNC_COMPLETED is dispatched.
+     * It extracts the necessary data from the event and delegates to onSyncComplete().
+     *
+     * Expected event data:
+     *   - contact_pubkey: string - The public key of the synced contact
+     *   - success: bool - Whether sync was successful
+     *   - synced_count: int - Number of transactions synced (optional, defaults to 0)
+     *
+     * @param array $data Event data from EventDispatcher
+     * @return void
+     */
+    public function onSyncCompleted(array $data): void {
+        try {
+            // Extract required fields from event data
+            $contactPubkey = $data['contact_pubkey'] ?? null;
+            $success = $data['success'] ?? false;
+            $syncedCount = $data['synced_count'] ?? 0;
+
+            if ($contactPubkey === null) {
+                SecureLogger::warning("Received sync completion event without contact_pubkey", [
+                    'data_keys' => array_keys($data)
+                ]);
+                return;
+            }
+
+            // Delegate to existing onSyncComplete method
+            $this->onSyncComplete($contactPubkey, $success, $syncedCount);
+
+        } catch (Exception $e) {
+            SecureLogger::logException($e, [
+                'method' => 'onSyncCompleted',
+                'event_data_keys' => array_keys($data)
+            ]);
         }
     }
 

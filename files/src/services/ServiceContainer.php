@@ -3,6 +3,20 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 
+// Dependency injection contracts
+require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
+require_once __DIR__ . '/../contracts/ChainOperationsInterface.php';
+require_once __DIR__ . '/../contracts/P2pTransactionSenderInterface.php';
+require_once __DIR__ . '/../contracts/EventDispatcherInterface.php';
+
+// Event system
+require_once __DIR__ . '/../events/EventDispatcher.php';
+require_once __DIR__ . '/../events/SyncEvents.php';
+
+// New dependency injection services
+require_once __DIR__ . '/ChainOperationsService.php';
+require_once __DIR__ . '/proxies/SyncServiceProxy.php';
+
 /**
  * Service Container
  *
@@ -905,6 +919,66 @@ class ServiceContainer {
     }
 
     /**
+     * Get ChainOperationsService instance
+     *
+     * Provides centralized chain verification and repair operations.
+     * This service encapsulates chain-related operations that multiple
+     * services need, including integrity verification, previous txid
+     * resolution, and chain repair coordination.
+     *
+     * Note: The sync dependency is wired via setter injection in
+     * wireCircularDependencies() to avoid circular dependency issues.
+     *
+     * @return ChainOperationsInterface
+     */
+    public function getChainOperationsService(): ChainOperationsInterface {
+        if (!isset($this->services['ChainOperationsService'])) {
+            $this->services['ChainOperationsService'] = new ChainOperationsService(
+                $this->getTransactionChainRepository(),
+                $this->getTransactionRepository(),
+                $this->currentUser,
+                $this->getLogger()
+            );
+        }
+        return $this->services['ChainOperationsService'];
+    }
+
+    /**
+     * Get SyncServiceProxy instance
+     *
+     * Returns a lazy-loading proxy for SyncService that implements SyncTriggerInterface.
+     * This proxy enables services to depend on sync functionality without creating
+     * circular dependencies - the actual SyncService is only resolved when first needed.
+     *
+     * Services that need loose coupling to sync operations should use this proxy
+     * instead of direct SyncService injection. Type-hint against SyncTriggerInterface.
+     *
+     * @return SyncTriggerInterface
+     */
+    public function getSyncServiceProxy(): SyncTriggerInterface {
+        if (!isset($this->services['SyncServiceProxy'])) {
+            $this->services['SyncServiceProxy'] = new SyncServiceProxy($this);
+        }
+        return $this->services['SyncServiceProxy'];
+    }
+
+    /**
+     * Get EventDispatcher singleton instance
+     *
+     * Returns the central event dispatcher for event-driven communication.
+     * This enables loose coupling between services by allowing them to
+     * communicate via events instead of direct dependencies.
+     *
+     * @return EventDispatcherInterface
+     */
+    public function getEventDispatcher(): EventDispatcherInterface {
+        if (!isset($this->services['EventDispatcher'])) {
+            $this->services['EventDispatcher'] = EventDispatcher::getInstance();
+        }
+        return $this->services['EventDispatcher'];
+    }
+
+    /**
      * Get UtilityServiceContainer instance
      *
      *
@@ -994,61 +1068,90 @@ class ServiceContainer {
      * are initialized. It uses setter injection to break circular dependency cycles
      * while maintaining the lazy loading pattern.
      *
-     * Circular dependencies handled:
-     * - TransactionService <--> SyncService
-     * - SyncService <--> HeldTransactionService
-     * - ContactService --> SyncService
-     * - ContactStatusService --> SyncService, RateLimiterService
-     * - MessageService --> SyncService
-     * - HeldTransactionService --> SyncService
-     * - Rp2pService --> TransactionService
+     * Dependencies handled (all SyncService deps now use SyncTriggerInterface via proxy):
+     * - TransactionService --> SyncTriggerInterface (via proxy)
+     * - ContactService --> SyncTriggerInterface (via proxy)
+     * - ContactStatusService --> SyncTriggerInterface (via proxy), RateLimiterService
+     * - MessageService --> SyncTriggerInterface (via proxy)
+     * - ChainVerificationService --> SyncTriggerInterface (via proxy)
+     * - TransactionValidationService --> SyncTriggerInterface (via proxy), TransactionService
+     * - TransactionProcessingService --> SyncTriggerInterface (via proxy), P2pService, HeldTransactionService
+     * - SendOperationService --> ContactService, P2pService, SyncTriggerInterface (via proxy), TransactionService
+     * - Rp2pService --> SendOperationService (via P2pTransactionSenderInterface)
+     * - HeldTransactionService --> SyncService (via EventDispatcher events)
+     * - SyncService --> HeldTransactionService (one-way setter injection)
      * - TransactionService --> P2pService, ContactService
-     * - ChainVerificationService --> SyncService
-     * - TransactionValidationService --> SyncService, TransactionService
-     * - TransactionProcessingService --> SyncService, P2pService, HeldTransactionService
-     * - SendOperationService --> ContactService, P2pService, SyncService, TransactionService
+     * - ChainOperationsService --> SyncService (for chain repair coordination)
+     *
+     * Future improvements (to reduce circular dependencies):
+     * - Services can use SyncServiceProxy instead of direct SyncService injection
+     *   to avoid construction-time circular dependencies
+     * - Services can use EventDispatcher for loose coupling between services
+     *   (e.g., dispatching SyncEvents instead of direct sync calls)
+     * - ChainOperationsService can be injected into services that need chain
+     *   verification/repair instead of them depending directly on SyncService
      *
      * Note: Repositories are now passed via constructor injection, not setter injection.
      */
     public function wireCircularDependencies(): void {
-        // Wire TransactionService <-> SyncService
-        if (isset($this->services['TransactionService']) && isset($this->services['SyncService'])) {
-            $this->services['TransactionService']->setSyncService($this->services['SyncService']);
+        // =========================================================================
+        // Core sync-related dependencies
+        // Now using SyncTriggerInterface via proxy for loose coupling
+        // =========================================================================
+
+        // Wire TransactionService -> SyncTriggerInterface (via proxy)
+        // Reason: TransactionService needs to trigger sync before sending (fallback path)
+        // Note: Uses SyncTriggerInterface for loose coupling - breaks circular dependency
+        if (isset($this->services['TransactionService'])) {
+            $this->services['TransactionService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
-        // Wire SyncService <-> HeldTransactionService
+        // Wire SyncService <-> HeldTransactionService (one-way now - event-driven in reverse)
+        // Reason: SyncService creates held transactions and notifies HeldTransactionService via events
+        // Note: HeldTransactionService no longer has setSyncService() - it uses EventDispatcher
+        //       to listen for SyncEvents::SYNC_COMPLETED instead of direct dependency
         if (isset($this->services['SyncService']) && isset($this->services['HeldTransactionService'])) {
             $this->services['SyncService']->setHeldTransactionService($this->services['HeldTransactionService']);
         }
 
-        // Wire HeldTransactionService -> SyncService
-        if (isset($this->services['HeldTransactionService']) && isset($this->services['SyncService'])) {
-            $this->services['HeldTransactionService']->setSyncService($this->services['SyncService']);
+        // =========================================================================
+        // Contact and message service dependencies
+        // These now use SyncTriggerInterface via proxy for loose coupling
+        // =========================================================================
+
+        // Wire ContactService -> SyncTriggerInterface (via proxy)
+        // Reason: ContactService needs to sync re-added contacts
+        // Note: Uses SyncTriggerInterface for loose coupling - breaks circular dependency
+        if (isset($this->services['ContactService'])) {
+            $this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
-        // Wire ContactService -> SyncService
-        if (isset($this->services['ContactService']) && isset($this->services['SyncService'])) {
-            $this->services['ContactService']->setSyncService($this->services['SyncService']);
-        }
-
-        // Wire ContactStatusService -> SyncService, RateLimiterService
+        // Wire ContactStatusService -> SyncTriggerInterface (via proxy), RateLimiterService
+        // Reason: ContactStatusService validates chains and needs rate limiting
+        // Note: Uses SyncTriggerInterface for loose coupling
         if (isset($this->services['ContactStatusService'])) {
-            if (isset($this->services['SyncService'])) {
-                $this->services['ContactStatusService']->setSyncService($this->services['SyncService']);
-            }
+            $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServiceProxy());
             if (isset($this->services['RateLimiterService'])) {
                 $this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
             }
         }
 
-        // Wire MessageService -> SyncService
-        if (isset($this->services['MessageService']) && isset($this->services['SyncService'])) {
-            $this->services['MessageService']->setSyncService($this->services['SyncService']);
+        // Wire MessageService -> SyncTriggerInterface (via proxy)
+        // Reason: MessageService handles incoming sync requests
+        // Note: Uses SyncTriggerInterface for loose coupling - breaks circular dependency
+        if (isset($this->services['MessageService'])) {
+            $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
-        // Wire Rp2pService -> TransactionService
-        if (isset($this->services['Rp2pService']) && isset($this->services['TransactionService'])) {
-            $this->services['Rp2pService']->setTransactionService($this->services['TransactionService']);
+        // =========================================================================
+        // Transaction-related circular dependencies
+        // =========================================================================
+
+        // Wire Rp2pService -> SendOperationService (via P2pTransactionSenderInterface)
+        // Reason: RP2P operations complete transaction flows by calling sendP2pEiou()
+        // Note: Uses P2pTransactionSenderInterface to break circular dependency with TransactionService
+        if (isset($this->services['Rp2pService']) && isset($this->services['SendOperationService'])) {
+            $this->services['Rp2pService']->setP2pTransactionSender($this->services['SendOperationService']);
         }
 
         // Wire TransactionService -> P2pService, ContactService, and new refactored services
@@ -1077,26 +1180,30 @@ class ServiceContainer {
             }
         }
 
-        // Wire ChainVerificationService -> SyncService
-        if (isset($this->services['ChainVerificationService']) && isset($this->services['SyncService'])) {
-            $this->services['ChainVerificationService']->setSyncService($this->services['SyncService']);
+        // =========================================================================
+        // Refactored service dependencies (from God Class refactoring)
+        // These services now use SyncTriggerInterface via proxy for loose coupling
+        // =========================================================================
+
+        // Wire ChainVerificationService -> SyncTriggerInterface (via proxy)
+        // Reason: ChainVerificationService repairs chains via sync
+        if (isset($this->services['ChainVerificationService'])) {
+            $this->services['ChainVerificationService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
-        // Wire TransactionValidationService -> SyncService, TransactionService
+        // Wire TransactionValidationService -> SyncTriggerInterface (via proxy), TransactionService
+        // Reason: Proactive sync before validation, transaction lookup for validation
         if (isset($this->services['TransactionValidationService'])) {
-            if (isset($this->services['SyncService'])) {
-                $this->services['TransactionValidationService']->setSyncService($this->services['SyncService']);
-            }
+            $this->services['TransactionValidationService']->setSyncTrigger($this->getSyncServiceProxy());
             if (isset($this->services['TransactionService'])) {
                 $this->services['TransactionValidationService']->setTransactionService($this->services['TransactionService']);
             }
         }
 
-        // Wire TransactionProcessingService -> SyncService, P2pService, HeldTransactionService
+        // Wire TransactionProcessingService -> SyncTriggerInterface (via proxy), P2pService, HeldTransactionService
+        // Reason: Chain sync after conflicts, P2P processing, held transaction handling
         if (isset($this->services['TransactionProcessingService'])) {
-            if (isset($this->services['SyncService'])) {
-                $this->services['TransactionProcessingService']->setSyncService($this->services['SyncService']);
-            }
+            $this->services['TransactionProcessingService']->setSyncTrigger($this->getSyncServiceProxy());
             if (isset($this->services['P2pService'])) {
                 $this->services['TransactionProcessingService']->setP2pService($this->services['P2pService']);
             }
@@ -1105,7 +1212,8 @@ class ServiceContainer {
             }
         }
 
-        // Wire SendOperationService -> ContactService, P2pService, SyncService, TransactionService
+        // Wire SendOperationService -> ContactService, P2pService, SyncTriggerInterface (via proxy), TransactionService
+        // Reason: Contact lookup, P2P routing, pre-send sync, transaction creation
         if (isset($this->services['SendOperationService'])) {
             if (isset($this->services['ContactService'])) {
                 $this->services['SendOperationService']->setContactService($this->services['ContactService']);
@@ -1113,14 +1221,25 @@ class ServiceContainer {
             if (isset($this->services['P2pService'])) {
                 $this->services['SendOperationService']->setP2pService($this->services['P2pService']);
             }
-            if (isset($this->services['SyncService'])) {
-                $this->services['SendOperationService']->setSyncService($this->services['SyncService']);
-            }
+            $this->services['SendOperationService']->setSyncTrigger($this->getSyncServiceProxy());
             if (isset($this->services['TransactionService'])) {
                 $this->services['SendOperationService']->setTransactionService($this->services['TransactionService']);
             }
             // Set TransactionChainRepository for chain verification
             $this->services['SendOperationService']->setTransactionChainRepository($this->getTransactionChainRepository());
+        }
+
+        // =========================================================================
+        // New dependency injection pattern services
+        // These use setter injection to coordinate with SyncService
+        // =========================================================================
+
+        // Wire ChainOperationsService -> SyncService
+        // Reason: ChainOperationsService needs SyncService for chain repair via repairChainIfNeeded()
+        // Note: This is the new centralized chain operations service that can be used by other
+        //       services instead of them directly depending on SyncService for chain repair
+        if (isset($this->services['ChainOperationsService']) && isset($this->services['SyncService'])) {
+            $this->services['ChainOperationsService']->setSyncService($this->services['SyncService']);
         }
     }
 
@@ -1154,6 +1273,10 @@ class ServiceContainer {
         $this->getTransactionValidationService();
         $this->getTransactionProcessingService();
         $this->getSendOperationService();
+
+        // Initialize new dependency injection pattern services
+        $this->getChainOperationsService();
+        $this->getEventDispatcher();
 
         // Wire circular dependencies
         $this->wireCircularDependencies();

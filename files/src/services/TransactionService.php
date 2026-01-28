@@ -12,6 +12,7 @@ require_once __DIR__ . '/../contracts/ChainVerificationServiceInterface.php';
 require_once __DIR__ . '/../contracts/TransactionValidationServiceInterface.php';
 require_once __DIR__ . '/../contracts/TransactionProcessingServiceInterface.php';
 require_once __DIR__ . '/../contracts/SendOperationServiceInterface.php';
+require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
 require_once __DIR__ . '/../database/TransactionChainRepository.php';
 require_once __DIR__ . '/../database/TransactionRecoveryRepository.php';
 require_once __DIR__ . '/../database/TransactionContactRepository.php';
@@ -62,7 +63,10 @@ class TransactionService implements TransactionServiceInterface {
     private ?SendOperationServiceInterface $sendOperationService = null;
 
     // Circular dependency services
-    private ?SyncService $syncService = null;
+    /**
+     * @var SyncTriggerInterface|null Sync trigger for chain repair (fallback when ChainVerificationService not available)
+     */
+    private ?SyncTriggerInterface $syncTrigger = null;
     private ?P2pService $p2pService = null;
     private ?ContactService $contactService = null;
 
@@ -133,8 +137,16 @@ class TransactionService implements TransactionServiceInterface {
         $this->sendOperationService = $service;
     }
 
-    public function setSyncService(SyncService $service): void {
-        $this->syncService = $service;
+    /**
+     * Set the sync trigger (accepts interface for loose coupling)
+     *
+     * Note: Primary chain verification is delegated to ChainVerificationService.
+     * This is a fallback for when that service is not available.
+     *
+     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
+     */
+    public function setSyncTrigger(SyncTriggerInterface $sync): void {
+        $this->syncTrigger = $sync;
     }
 
     public function setP2pService(P2pService $service): void {
@@ -159,11 +171,11 @@ class TransactionService implements TransactionServiceInterface {
         // Kept for backward compatibility
     }
 
-    private function getSyncService(): SyncService {
-        if ($this->syncService === null) {
-            throw new RuntimeException('SyncService not injected.');
+    private function getSyncTrigger(): SyncTriggerInterface {
+        if ($this->syncTrigger === null) {
+            throw new RuntimeException('SyncTrigger not injected. Call setSyncTrigger() or ensure ServiceContainer properly injects the dependency.');
         }
-        return $this->syncService;
+        return $this->syncTrigger;
     }
 
     private function getP2pService(): P2pService {
@@ -364,7 +376,7 @@ class TransactionService implements TransactionServiceInterface {
         if ($chainStatus['valid']) return $result;
 
         output(outputSyncChainIntegrityFailed(count($chainStatus['gaps'])), 'SILENT');
-        $syncResult = $this->getSyncService()->syncTransactionChain($contactAddress, $contactPublicKey);
+        $syncResult = $this->getSyncTrigger()->syncTransactionChain($contactAddress, $contactPublicKey);
         $result['synced'] = true;
 
         if (!$syncResult['success']) {

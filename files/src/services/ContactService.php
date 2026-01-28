@@ -5,6 +5,7 @@ require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
 require_once __DIR__ . '/../contracts/ContactServiceInterface.php';
+require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
 require_once __DIR__ . '/../database/TransactionContactRepository.php';
 
 
@@ -100,9 +101,9 @@ class ContactService implements ContactServiceInterface {
     private TransactionRepository $transactionRepository;
 
     /**
-     * @var SyncService|null Sync service for contact synchronization
+     * @var SyncTriggerInterface|null Sync trigger for contact synchronization
      */
-    private ?SyncService $syncService = null;
+    private ?SyncTriggerInterface $syncTrigger = null;
 
     /**
      * @var TransactionContactRepository Transaction contact repository for contact transactions
@@ -110,25 +111,25 @@ class ContactService implements ContactServiceInterface {
     private TransactionContactRepository $transactionContactRepository;
 
     /**
-     * Set the sync service (setter injection for circular dependency)
+     * Set the sync trigger (accepts interface for loose coupling)
      *
-     * @param SyncService $service Sync service
+     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
      */
-    public function setSyncService(SyncService $service): void {
-        $this->syncService = $service;
+    public function setSyncTrigger(SyncTriggerInterface $sync): void {
+        $this->syncTrigger = $sync;
     }
 
     /**
-     * Get the sync service (must be injected via setSyncService)
+     * Get the sync trigger (must be injected via setSyncTrigger)
      *
-     * @return SyncService
-     * @throws RuntimeException If sync service was not injected
+     * @return SyncTriggerInterface
+     * @throws RuntimeException If sync trigger was not injected
      */
-    private function getSyncService(): SyncService {
-        if ($this->syncService === null) {
-            throw new RuntimeException('SyncService not injected. Call setSyncService() or ensure ServiceContainer::wireCircularDependencies() is called.');
+    private function getSyncTrigger(): SyncTriggerInterface {
+        if ($this->syncTrigger === null) {
+            throw new RuntimeException('SyncTrigger not injected. Call setSyncTrigger() or ensure ServiceContainer properly injects the dependency.');
         }
-        return $this->syncService;
+        return $this->syncTrigger;
     }
 
     /**
@@ -560,7 +561,7 @@ class ContactService implements ContactServiceInterface {
             if($contact['name']){
                 // This contact was already sent a contact request, but has not yet responded to user (try resyncing)
                 // Use full sync chain for wallet restoration scenarios: Contact -> Transactions -> Balances
-                $syncService = $this->getSyncService();
+                $syncService = $this->getSyncTrigger();
                 $syncResult = $syncService->syncReaddedContact($address, $contact['pubkey']);
 
                 if ($syncResult['success'] && $syncResult['contact_synced']) {
@@ -785,7 +786,7 @@ class ContactService implements ContactServiceInterface {
                     }
 
                     // Full sync for re-added contact: sync contact status, transaction chain, and balances
-                    $syncService = $this->getSyncService();
+                    $syncService = $this->getSyncTrigger();
                     $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
 
                     if ($syncResult['success']) {
@@ -843,7 +844,7 @@ class ContactService implements ContactServiceInterface {
                     // Full sync for re-added contact: sync contact status, transaction chain, and balances
                     // If contact still has transaction chain on their end, resync from original contact transaction
                     // through all known transactions (verifying signatures) and finally sync balances
-                    $syncService = $this->getSyncService();
+                    $syncService = $this->getSyncTrigger();
                     $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
 
                     if ($syncResult['success']) {

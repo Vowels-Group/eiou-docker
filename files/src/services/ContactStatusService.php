@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../contracts/ContactStatusServiceInterface.php';
+require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
 
 
 /**
@@ -43,9 +44,9 @@ class ContactStatusService implements ContactStatusServiceInterface {
     private ContactStatusPayload $contactStatusPayload;
 
     /**
-     * @var SyncService|null Sync service for chain validation
+     * @var SyncTriggerInterface|null Sync trigger for chain synchronization
      */
-    private ?SyncService $syncService = null;
+    private ?SyncTriggerInterface $syncTrigger = null;
 
     /**
      * @var RateLimiterService|null Rate limiter service for manual ping rate limiting
@@ -53,25 +54,25 @@ class ContactStatusService implements ContactStatusServiceInterface {
     private ?RateLimiterService $rateLimiterService = null;
 
     /**
-     * Set the sync service (setter injection for circular dependency)
+     * Set the sync trigger (accepts interface for loose coupling)
      *
-     * @param SyncService $service Sync service
+     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
      */
-    public function setSyncService(SyncService $service): void {
-        $this->syncService = $service;
+    public function setSyncTrigger(SyncTriggerInterface $sync): void {
+        $this->syncTrigger = $sync;
     }
 
     /**
-     * Get the sync service (must be injected via setSyncService)
+     * Get the sync trigger (must be injected via setSyncTrigger)
      *
-     * @return SyncService
-     * @throws RuntimeException If sync service was not injected
+     * @return SyncTriggerInterface
+     * @throws RuntimeException If sync trigger was not injected
      */
-    private function getSyncService(): SyncService {
-        if ($this->syncService === null) {
-            throw new RuntimeException('SyncService not injected. Call setSyncService() or ensure ServiceContainer::wireCircularDependencies() is called.');
+    private function getSyncTrigger(): SyncTriggerInterface {
+        if ($this->syncTrigger === null) {
+            throw new RuntimeException('SyncTrigger not injected. Call setSyncTrigger() or ensure ServiceContainer properly injects the dependency.');
         }
-        return $this->syncService;
+        return $this->syncTrigger;
     }
 
     /**
@@ -212,7 +213,7 @@ class ContactStatusService implements ContactStatusServiceInterface {
     private function triggerSync(string $address, string $pubkey): void {
         try {
             // Use existing sync method
-            $this->getSyncService()->syncTransactionChain($address, $pubkey);
+            $this->getSyncTrigger()->syncTransactionChain($address, $pubkey);
 
             SecureLogger::info("Chain sync triggered from incoming ping request", [
                 'contact_address' => $address

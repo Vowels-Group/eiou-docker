@@ -8,16 +8,22 @@
  * Defines the contract for RP2P (Relay Peer-to-Peer) payment routing services.
  * Handles business logic for R peer-to-peer payment routing with reliable
  * message delivery, tracking, retry logic, and dead letter queue support.
+ *
+ * Note: This service uses P2pTransactionSenderInterface instead of TransactionService
+ * to break circular dependencies. SendOperationService implements P2pTransactionSenderInterface.
  */
 interface Rp2pServiceInterface
 {
     /**
-     * Set the transaction service (setter injection for circular dependency)
+     * Set the P2P transaction sender (setter injection to break circular dependency)
      *
-     * @param TransactionService $service Transaction service
+     * This method accepts P2pTransactionSenderInterface, which breaks the circular
+     * dependency between Rp2pService and TransactionService.
+     *
+     * @param P2pTransactionSenderInterface $sender P2P transaction sender
      * @return void
      */
-    public function setTransactionService(TransactionService $service): void;
+    public function setP2pTransactionSender(P2pTransactionSenderInterface $sender): void;
 
     /**
      * Set the message delivery service (for lazy initialization)
