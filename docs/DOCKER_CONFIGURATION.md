@@ -7,13 +7,14 @@ Complete reference for environment variables and volume mounts used in EIOU Dock
 1. [Environment Variables](#environment-variables)
 2. [Volume Mounts](#volume-mounts)
 3. [Network Configuration](#network-configuration)
-4. [SSL Certificate Configuration](#ssl-certificate-configuration)
-5. [Wallet Restoration](#wallet-restoration)
-6. [Timeout Configuration](#timeout-configuration)
-7. [Healthcheck Configuration](#healthcheck-configuration)
-8. [Security Configuration](#security-configuration)
-9. [Backup and Restore](#backup-and-restore)
-10. [Troubleshooting](#troubleshooting)
+4. [Resource Limits](#resource-limits)
+5. [SSL Certificate Configuration](#ssl-certificate-configuration)
+6. [Wallet Restoration](#wallet-restoration)
+7. [Timeout Configuration](#timeout-configuration)
+8. [Healthcheck Configuration](#healthcheck-configuration)
+9. [Security Configuration](#security-configuration)
+10. [Backup and Restore](#backup-and-restore)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -82,6 +83,8 @@ docker run -e "RESTORE=word1 word2 word3 ... word24" ...
 ```
 
 > **Important:** The seed phrase value must be quoted because it contains spaces. Without quotes, only the first word would be captured.
+
+> **Security Note:** When using the `RESTORE` environment variable, the container will display a warning recommending `RESTORE_FILE` instead. The `RESTORE` variable is automatically unset after successful seed restoration to prevent the seed phrase from remaining in the environment during normal operation.
 
 #### SSL_DOMAIN
 
@@ -223,12 +226,34 @@ networks:
 
 ### Port Mappings
 
+#### Single Node
+
 | Port | Protocol | Purpose |
 |------|----------|---------|
 | 80   | TCP      | HTTP web interface and API |
 | 443  | TCP      | HTTPS web interface and API (SSL) |
 
-**Note:** Only the first container in multi-node setups should expose ports 80/443 to the host. Other containers communicate internally via the Docker network.
+#### Multi-Node Topologies
+
+All nodes in multi-node setups expose unique ports for external access:
+
+| Topology | Nodes | HTTP Ports | HTTPS Ports |
+|----------|-------|------------|-------------|
+| 4-line | alice, bob, carol, daniel | 8080-8083 | 8443-8446 |
+| 10-line | node-a through node-j | 8080-8089 | 8443-8452 |
+| cluster | cluster-a0 through cluster-a42 | 8080-8092 | 8443-8455 |
+
+**Example Access:**
+```bash
+# Access alice (4-line topology)
+curl http://localhost:8080/api/v1/system/status
+curl -k https://localhost:8443/api/v1/system/status
+
+# Access bob (4-line topology)
+curl http://localhost:8081/api/v1/system/status
+```
+
+Containers also communicate internally via the Docker network using their hostnames (e.g., `http://alice`, `https://bob`).
 
 ### Container Hostname Resolution
 
@@ -246,6 +271,59 @@ EIOU containers automatically configure Tor hidden services:
 - Hidden service directory: `/var/lib/tor/hidden_service/`
 - Hidden service port: Maps external port 80 to internal Apache
 - Tor SOCKS proxy: Available at `127.0.0.1:9050` inside the container
+
+---
+
+## Resource Limits
+
+All EIOU containers are configured with resource limits to prevent runaway resource consumption and ensure predictable performance.
+
+### Default Resource Configuration
+
+```yaml
+deploy:
+  resources:
+    limits:
+      cpus: '1.0'
+      memory: 512M
+    reservations:
+      memory: 256M
+```
+
+### Resource Parameters
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `limits.cpus` | `1.0` | Maximum CPU cores the container can use |
+| `limits.memory` | `512M` | Maximum memory the container can use |
+| `reservations.memory` | `256M` | Guaranteed minimum memory allocation |
+
+### Memory Requirements by Topology
+
+| Topology | Nodes | Per-Node Limit | Total Reserved | Total Limit |
+|----------|-------|----------------|----------------|-------------|
+| Single | 1 | 512M | 256M | 512M |
+| 4-line | 4 | 512M each | 1GB | 2GB |
+| 10-line | 10 | 512M each | 2.5GB | 5GB |
+| Cluster | 13 | 512M each | 3.25GB | 6.5GB |
+
+### Customizing Resource Limits
+
+Override resource limits for specific environments:
+
+```yaml
+services:
+  alice:
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'      # Allow 2 CPU cores
+          memory: 1G       # Allow 1GB memory
+        reservations:
+          memory: 512M     # Reserve 512MB minimum
+```
+
+**Note:** Resource limits require Docker Compose v2 or Docker Swarm mode. In Docker Compose v1, the `deploy` section is ignored when not using `docker stack deploy`.
 
 ---
 
