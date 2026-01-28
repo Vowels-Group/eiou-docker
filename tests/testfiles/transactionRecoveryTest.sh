@@ -131,10 +131,11 @@ else
 fi
 
 # Test 7: Verify processPendingTransactions uses atomic claiming (using PHP method check)
+# Note: processPendingTransactions is now in TransactionProcessingService (refactored from TransactionService)
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing processPendingTransactions uses atomic claiming"
 atomicClaim=$(docker exec ${testContainer} php -r "
-    \$source = file_get_contents('/etc/eiou/src/services/TransactionService.php');
+    \$source = file_get_contents('/etc/eiou/src/services/TransactionProcessingService.php');
     echo (strpos(\$source, 'claimPendingTransaction') !== false) ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
