@@ -342,6 +342,36 @@ class ServiceContainer {
     }
 
     /**
+     * Get TransactionChainRepository instance
+     *
+     * @return TransactionChainRepository
+     */
+    public function getTransactionChainRepository(): TransactionChainRepository {
+        if (!isset($this->repositories['TransactionChainRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/TransactionChainRepository.php';
+            $this->repositories['TransactionChainRepository'] = new TransactionChainRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['TransactionChainRepository'];
+    }
+
+    /**
+     * Get TransactionRecoveryRepository instance
+     *
+     * @return TransactionRecoveryRepository
+     */
+    public function getTransactionRecoveryRepository(): TransactionRecoveryRepository {
+        if (!isset($this->repositories['TransactionRecoveryRepository'])) {
+            require_once dirname(__DIR__,2) . '/src/database/TransactionRecoveryRepository.php';
+            $this->repositories['TransactionRecoveryRepository'] = new TransactionRecoveryRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['TransactionRecoveryRepository'];
+    }
+
+    /**
      * Get ContactService instance
      *
      * Integrates MessageDeliveryService for reliable contact message delivery
