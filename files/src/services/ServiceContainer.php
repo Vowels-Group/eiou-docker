@@ -683,8 +683,7 @@ class ServiceContainer {
         if (!isset($this->services['LockingService'])) {
             require_once __DIR__ . '/DatabaseLockingService.php';
             $this->services['LockingService'] = new DatabaseLockingService(
-                $this->getPdo(),
-                $this->getLogger()
+                $this->getPdo()
             );
         }
         return $this->services['LockingService'];
@@ -851,6 +850,14 @@ class ServiceContainer {
      * - HeldTransactionService --> SyncService
      * - Rp2pService --> TransactionService
      * - TransactionService --> P2pService, ContactService
+     *
+     * Repository injections:
+     * - TransactionService --> TransactionChainRepository, TransactionRecoveryRepository, TransactionContactRepository
+     * - SyncService --> TransactionChainRepository, TransactionContactRepository
+     * - HeldTransactionService --> TransactionChainRepository
+     * - TransactionRecoveryService --> TransactionRecoveryRepository
+     * - ContactService --> TransactionContactRepository
+     * - MessageService --> TransactionContactRepository
      */
     public function wireCircularDependencies(): void {
         // Wire TransactionService <-> SyncService
@@ -902,6 +909,44 @@ class ServiceContainer {
                 $this->services['TransactionService']->setContactService($this->services['ContactService']);
             }
         }
+
+        // Wire specialized transaction repositories to services
+        $transactionChainRepo = $this->getTransactionChainRepository();
+        $transactionRecoveryRepo = $this->getTransactionRecoveryRepository();
+        $transactionContactRepo = $this->getTransactionContactRepository();
+
+        // TransactionService -> TransactionChainRepository, TransactionRecoveryRepository, TransactionContactRepository
+        if (isset($this->services['TransactionService'])) {
+            $this->services['TransactionService']->setTransactionChainRepository($transactionChainRepo);
+            $this->services['TransactionService']->setTransactionRecoveryRepository($transactionRecoveryRepo);
+            $this->services['TransactionService']->setTransactionContactRepository($transactionContactRepo);
+        }
+
+        // SyncService -> TransactionChainRepository, TransactionContactRepository
+        if (isset($this->services['SyncService'])) {
+            $this->services['SyncService']->setTransactionChainRepository($transactionChainRepo);
+            $this->services['SyncService']->setTransactionContactRepository($transactionContactRepo);
+        }
+
+        // HeldTransactionService -> TransactionChainRepository
+        if (isset($this->services['HeldTransactionService'])) {
+            $this->services['HeldTransactionService']->setTransactionChainRepository($transactionChainRepo);
+        }
+
+        // TransactionRecoveryService -> TransactionRecoveryRepository
+        if (isset($this->services['TransactionRecoveryService'])) {
+            $this->services['TransactionRecoveryService']->setTransactionRecoveryRepository($transactionRecoveryRepo);
+        }
+
+        // ContactService -> TransactionContactRepository
+        if (isset($this->services['ContactService'])) {
+            $this->services['ContactService']->setTransactionContactRepository($transactionContactRepo);
+        }
+
+        // MessageService -> TransactionContactRepository
+        if (isset($this->services['MessageService'])) {
+            $this->services['MessageService']->setTransactionContactRepository($transactionContactRepo);
+        }
     }
 
     /**
@@ -926,6 +971,7 @@ class ServiceContainer {
         $this->getMessageService();
         $this->getContactStatusService();
         $this->getRateLimiterService();
+        $this->getTransactionRecoveryService();
 
         // Wire circular dependencies
         $this->wireCircularDependencies();

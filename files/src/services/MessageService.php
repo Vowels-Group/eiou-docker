@@ -3,6 +3,7 @@
 
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../contracts/MessageServiceInterface.php';
+require_once __DIR__ . '/../database/TransactionContactRepository.php';
 
 /**
  * Message Service
@@ -82,6 +83,11 @@ class MessageService implements MessageServiceInterface {
     private ?SyncService $syncService = null;
 
     /**
+     * @var TransactionContactRepository|null Transaction contact repository for contact transaction operations
+     */
+    private ?TransactionContactRepository $transactionContactRepository = null;
+
+    /**
      * Set the sync service (setter injection for circular dependency)
      *
      * @param SyncService $service Sync service
@@ -101,6 +107,28 @@ class MessageService implements MessageServiceInterface {
             throw new RuntimeException('SyncService not injected. Call setSyncService() or ensure ServiceContainer::wireCircularDependencies() is called.');
         }
         return $this->syncService;
+    }
+
+    /**
+     * Set the transaction contact repository (setter injection)
+     *
+     * @param TransactionContactRepository $repository Transaction contact repository
+     */
+    public function setTransactionContactRepository(TransactionContactRepository $repository): void {
+        $this->transactionContactRepository = $repository;
+    }
+
+    /**
+     * Get the transaction contact repository (must be injected via setTransactionContactRepository)
+     *
+     * @return TransactionContactRepository
+     * @throws RuntimeException If transaction contact repository was not injected
+     */
+    private function getTransactionContactRepository(): TransactionContactRepository {
+        if ($this->transactionContactRepository === null) {
+            throw new RuntimeException('TransactionContactRepository not injected. Call setTransactionContactRepository() or ensure ServiceContainer::wireCircularDependencies() is called.');
+        }
+        return $this->transactionContactRepository;
     }
 
     /**
@@ -399,7 +427,7 @@ class MessageService implements MessageServiceInterface {
             }
 
             // Complete the contact transaction (update status from 'sent' to 'completed')
-            $this->transactionRepository->completeContactTransaction($senderPublicKey);
+            $this->getTransactionContactRepository()->completeContactTransaction($senderPublicKey);
 
             // Return acknowledgment for delivery tracking
             // This confirms the acceptance message was received and processed

@@ -81,8 +81,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing claimPendingTransaction method"
 claimMethod=$(docker exec ${testContainer} php -r "
-    require_once '/etc/eiou/src/database/TransactionRepository.php';
-    echo method_exists('TransactionRepository', 'claimPendingTransaction') ? 'EXISTS' : 'MISSING';
+    require_once '/etc/eiou/src/database/TransactionRecoveryRepository.php';
+    echo method_exists('TransactionRecoveryRepository', 'claimPendingTransaction') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [ "$claimMethod" = "EXISTS" ]; then
@@ -97,8 +97,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing markAsSent method"
 markMethod=$(docker exec ${testContainer} php -r "
-    require_once '/etc/eiou/src/database/TransactionRepository.php';
-    echo method_exists('TransactionRepository', 'markAsSent') ? 'EXISTS' : 'MISSING';
+    require_once '/etc/eiou/src/database/TransactionRecoveryRepository.php';
+    echo method_exists('TransactionRecoveryRepository', 'markAsSent') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [ "$markMethod" = "EXISTS" ]; then
@@ -251,7 +251,7 @@ claimResult=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getTransactionRecoveryRepository();
 
     \$txid = 'test_recovery_claim_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
@@ -283,7 +283,7 @@ dupResult=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getTransactionRecoveryRepository();
 
     \$txid = 'test_recovery_dup_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
@@ -313,7 +313,7 @@ sentResult=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getTransactionRecoveryRepository();
 
     \$txid = 'test_recovery_sent_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
@@ -342,7 +342,7 @@ markResult=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getTransactionRecoveryRepository();
 
     \$txid = 'test_recovery_mark_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
@@ -376,7 +376,7 @@ stuckResult=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getTransactionRecoveryRepository();
 
     \$txid = 'test_recovery_stuck_' . uniqid();
     \$oldTime = date('Y-m-d H:i:s', time() - 300);
@@ -408,7 +408,7 @@ resetResult=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getTransactionRecoveryRepository();
 
     \$txid = 'test_recovery_reset_' . uniqid();
     \$oldTime = date('Y-m-d H:i:s', time() - 300);
@@ -442,7 +442,7 @@ maxRetryResult=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getTransactionRecoveryRepository();
 
     \$txid = 'test_recovery_maxretry_' . uniqid();
     \$oldTime = date('Y-m-d H:i:s', time() - 300);
@@ -476,7 +476,7 @@ concurrentResult=$(docker exec ${testContainer} php -r "
     require_once('${REL_APPLICATION}');
     \$app = Application::getInstance();
     \$pdo = \$app->services->getPdo();
-    \$repo = \$app->services->getTransactionRepository();
+    \$repo = \$app->services->getTransactionRecoveryRepository();
 
     \$txid = 'test_recovery_concurrent_' . uniqid();
     \$pdo->exec(\"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,

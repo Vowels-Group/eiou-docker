@@ -4,6 +4,7 @@
 require_once __DIR__ . '/../utils/SecureLogger.php';
 require_once __DIR__ . '/../core/Constants.php';
 require_once __DIR__ . '/../contracts/HeldTransactionServiceInterface.php';
+require_once __DIR__ . '/../database/TransactionChainRepository.php';
 
 /**
  * Held Transaction Service
@@ -51,6 +52,20 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
      * @var SyncService|null Sync service for transaction chain sync
      */
     private ?SyncService $syncService = null;
+
+    /**
+     * @var TransactionChainRepository|null Transaction chain repository
+     */
+    private ?TransactionChainRepository $transactionChainRepository = null;
+
+    /**
+     * Set the transaction chain repository (setter injection)
+     *
+     * @param TransactionChainRepository $repo Transaction chain repository
+     */
+    public function setTransactionChainRepository(TransactionChainRepository $repo): void {
+        $this->transactionChainRepository = $repo;
+    }
 
     /**
      * Set the sync service (setter injection for circular dependency)
@@ -261,7 +276,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
 
             // Verify chain integrity before processing held transactions
             // This ensures the sync actually completed successfully
-            $chainIntegrity = $this->transactionRepository->verifyChainIntegrity(
+            $chainIntegrity = $this->transactionChainRepository->verifyChainIntegrity(
                 $this->currentUser->getPublicKey(),
                 $contactPubkey
             );
@@ -382,7 +397,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             }
 
             // Update the transaction's previous_txid
-            $updated = $this->transactionRepository->updatePreviousTxid($txid, $correctPreviousTxid);
+            $updated = $this->transactionChainRepository->updatePreviousTxid($txid, $correctPreviousTxid);
 
             if ($updated) {
                 // Verify the update was persisted by re-reading from database
