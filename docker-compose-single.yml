@@ -112,6 +112,13 @@ services:
 
     restart: unless-stopped
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 30s

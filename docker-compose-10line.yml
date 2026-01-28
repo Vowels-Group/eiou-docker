@@ -37,8 +37,8 @@ services:
     networks:
       - eiou-network-compose
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
+      - "8443:443"
     environment:
       - QUICKSTART=node-a
       # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
@@ -58,6 +58,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   node-b:
     build:
@@ -66,6 +73,9 @@ services:
     container_name: node-b
     networks:
       - eiou-network-compose
+    ports:
+      - "8081:80"
+      - "8444:443"
     environment:
       - QUICKSTART=node-b
     volumes:
@@ -82,6 +92,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   node-c:
     build:
@@ -90,6 +107,9 @@ services:
     container_name: node-c
     networks:
       - eiou-network-compose
+    ports:
+      - "8082:80"
+      - "8445:443"
     environment:
       - QUICKSTART=node-c
     volumes:
@@ -106,6 +126,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   node-d:
     build:
@@ -114,6 +141,9 @@ services:
     container_name: node-d
     networks:
       - eiou-network-compose
+    ports:
+      - "8083:80"
+      - "8446:443"
     environment:
       - QUICKSTART=node-d
     volumes:
@@ -130,6 +160,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   node-e:
     build:
@@ -138,6 +175,9 @@ services:
     container_name: node-e
     networks:
       - eiou-network-compose
+    ports:
+      - "8084:80"
+      - "8447:443"
     environment:
       - QUICKSTART=node-e
     volumes:
@@ -154,6 +194,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   node-f:
     build:
@@ -162,6 +209,9 @@ services:
     container_name: node-f
     networks:
       - eiou-network-compose
+    ports:
+      - "8085:80"
+      - "8448:443"
     environment:
       - QUICKSTART=node-f
     volumes:
@@ -178,6 +228,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   node-g:
     build:
@@ -186,6 +243,9 @@ services:
     container_name: node-g
     networks:
       - eiou-network-compose
+    ports:
+      - "8086:80"
+      - "8449:443"
     environment:
       - QUICKSTART=node-g
     volumes:
@@ -202,6 +262,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   node-h:
     build:
@@ -210,6 +277,9 @@ services:
     container_name: node-h
     networks:
       - eiou-network-compose
+    ports:
+      - "8087:80"
+      - "8450:443"
     environment:
       - QUICKSTART=node-h
     volumes:
@@ -226,6 +296,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   node-i:
     build:
@@ -234,6 +311,9 @@ services:
     container_name: node-i
     networks:
       - eiou-network-compose
+    ports:
+      - "8088:80"
+      - "8451:443"
     environment:
       - QUICKSTART=node-i
     volumes:
@@ -250,6 +330,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
   node-j:
     build:
@@ -258,6 +345,9 @@ services:
     container_name: node-j
     networks:
       - eiou-network-compose
+    ports:
+      - "8089:80"
+      - "8452:443"
     environment:
       - QUICKSTART=node-j
     volumes:
@@ -274,6 +364,13 @@ services:
       retries: 5
       start_period: 120s
     stop_grace_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          memory: 256M
 
 networks:
   eiou-network-compose:
