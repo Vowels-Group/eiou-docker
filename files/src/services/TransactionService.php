@@ -6,6 +6,7 @@ require_once __DIR__ . '/../cli/CliOutputManager.php';
 require_once __DIR__ . '/MessageDeliveryService.php';
 require_once __DIR__ . '/../core/ErrorCodes.php';
 require_once __DIR__ . '/../contracts/TransactionServiceInterface.php';
+require_once __DIR__ . '/../contracts/LockingServiceInterface.php';
 
 
 /**
@@ -142,6 +143,11 @@ class TransactionService implements TransactionServiceInterface {
     private ?ContactService $contactService = null;
 
     /**
+     * @var LockingServiceInterface|null Locking service for distributed locks
+     */
+    private ?LockingServiceInterface $lockingService = null;
+
+    /**
      * Set the sync service (setter injection for circular dependency)
      *
      * @param SyncService $service Sync service
@@ -205,6 +211,15 @@ class TransactionService implements TransactionServiceInterface {
             throw new RuntimeException('ContactService not injected. Call setContactService() or ensure ServiceContainer::wireCircularDependencies() is called.');
         }
         return $this->contactService;
+    }
+
+    /**
+     * Set the locking service (setter injection)
+     *
+     * @param LockingServiceInterface $service Locking service
+     */
+    public function setLockingService(LockingServiceInterface $service): void {
+        $this->lockingService = $service;
     }
 
     // =========================================================================
@@ -297,7 +312,8 @@ class TransactionService implements TransactionServiceInterface {
      * Acquire a lock for sending to a specific contact
      *
      * Prevents race conditions when sending multiple transactions
-     * simultaneously to the same contact. Uses file-based locking for persistence
+     * simultaneously to the same contact. Uses LockingService if available,
+     * otherwise falls back to file-based locking for persistence
      * across request boundaries.
      *
      * @param string $contactPubkeyHash Hash of contact's public key
@@ -305,6 +321,12 @@ class TransactionService implements TransactionServiceInterface {
      * @return bool True if lock acquired, false if timeout
      */
     private function acquireContactSendLock(string $contactPubkeyHash, int $timeout = 30): bool {
+        // Use LockingService if available
+        if ($this->lockingService !== null) {
+            return $this->lockingService->acquireLock('contact_send_' . $contactPubkeyHash, $timeout);
+        }
+
+        // Fall back to file-based locking
         $lockFile = sys_get_temp_dir() . '/eiou_send_lock_' . $contactPubkeyHash . '.lock';
 
         // Try to open existing file or create new one
@@ -351,6 +373,13 @@ class TransactionService implements TransactionServiceInterface {
      * @param string $contactPubkeyHash Hash of contact's public key
      */
     private function releaseContactSendLock(string $contactPubkeyHash): void {
+        // Use LockingService if available
+        if ($this->lockingService !== null) {
+            $this->lockingService->releaseLock('contact_send_' . $contactPubkeyHash);
+            return;
+        }
+
+        // Fall back to file-based locking
         if (isset(self::$contactSendLocks[$contactPubkeyHash])) {
             $lockHandle = self::$contactSendLocks[$contactPubkeyHash];
             flock($lockHandle, LOCK_UN);

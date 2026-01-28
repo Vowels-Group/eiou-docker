@@ -377,6 +377,8 @@ class ServiceContainer {
                 $this->getMessageDeliveryService(),
                 $this->getHeldTransactionService() // Set HeldTransactionService for handling invalid_previous_txid rejections
             );
+            // Inject LockingService for distributed contact send locks
+            $this->services['TransactionService']->setLockingService($this->getLockingService());
         }
         return $this->services['TransactionService'];
     }
@@ -608,6 +610,24 @@ class ServiceContainer {
             );
         }
         return $this->services['RateLimiterService'];
+    }
+
+    /**
+     * Get LockingService instance
+     *
+     * Provides database-backed distributed locking for concurrent operations.
+     *
+     * @return LockingServiceInterface
+     */
+    public function getLockingService(): LockingServiceInterface {
+        if (!isset($this->services['LockingService'])) {
+            require_once __DIR__ . '/DatabaseLockingService.php';
+            $this->services['LockingService'] = new DatabaseLockingService(
+                $this->getPdo(),
+                $this->getLogger()
+            );
+        }
+        return $this->services['LockingService'];
     }
 
     /**
