@@ -775,6 +775,136 @@ class ServiceContainer {
     }
 
     /**
+     * Get BalanceService instance
+     *
+     * Handles balance-related operations including user balance retrieval,
+     * contact balance calculations, and contact information conversion.
+     * Extracted from TransactionService as part of God Class refactoring.
+     *
+     * @return BalanceServiceInterface
+     */
+    public function getBalanceService(): BalanceServiceInterface {
+        if (!isset($this->services['BalanceService'])) {
+            require_once __DIR__ . '/BalanceService.php';
+            $this->services['BalanceService'] = new BalanceService(
+                $this->getBalanceRepository(),
+                $this->getTransactionContactRepository(),
+                $this->getAddressRepository(),
+                $this->getUtilityContainer()->getCurrencyUtility(),
+                $this->currentUser
+            );
+        }
+        return $this->services['BalanceService'];
+    }
+
+    /**
+     * Get ChainVerificationService instance
+     *
+     * Handles verification of transaction chain integrity before new transactions
+     * are created. Coordinates with SyncService to repair chains when gaps exist.
+     * Extracted from TransactionService as part of God Class refactoring.
+     *
+     * @return ChainVerificationServiceInterface
+     */
+    public function getChainVerificationService(): ChainVerificationServiceInterface {
+        if (!isset($this->services['ChainVerificationService'])) {
+            require_once __DIR__ . '/ChainVerificationService.php';
+            $this->services['ChainVerificationService'] = new ChainVerificationService(
+                $this->getTransactionChainRepository(),
+                $this->currentUser,
+                $this->getLogger()
+            );
+        }
+        return $this->services['ChainVerificationService'];
+    }
+
+    /**
+     * Get TransactionValidationService instance
+     *
+     * Handles all validation logic for transaction processing including
+     * previous transaction ID validation, funds checking, and full
+     * transaction possibility validation with proactive sync.
+     * Extracted from TransactionService as part of God Class refactoring.
+     *
+     * @return TransactionValidationServiceInterface
+     */
+    public function getTransactionValidationService(): TransactionValidationServiceInterface {
+        if (!isset($this->services['TransactionValidationService'])) {
+            require_once __DIR__ . '/TransactionValidationService.php';
+            $this->services['TransactionValidationService'] = new TransactionValidationService(
+                $this->getTransactionRepository(),
+                $this->getContactRepository(),
+                $this->getUtilityContainer()->getValidationUtility(),
+                $this->getInputValidator(),
+                $this->getTransactionPayload(),
+                $this->currentUser,
+                $this->getLogger()
+            );
+        }
+        return $this->services['TransactionValidationService'];
+    }
+
+    /**
+     * Get TransactionProcessingService instance
+     *
+     * Handles core transaction processing logic including incoming transactions,
+     * pending transactions, and P2P transactions.
+     * Extracted from TransactionService as part of God Class refactoring.
+     *
+     * @return TransactionProcessingServiceInterface
+     */
+    public function getTransactionProcessingService(): TransactionProcessingServiceInterface {
+        if (!isset($this->services['TransactionProcessingService'])) {
+            require_once __DIR__ . '/TransactionProcessingService.php';
+            $this->services['TransactionProcessingService'] = new TransactionProcessingService(
+                $this->getTransactionRepository(),
+                $this->getTransactionRecoveryRepository(),
+                $this->getTransactionChainRepository(),
+                $this->getP2pRepository(),
+                $this->getRp2pRepository(),
+                $this->getBalanceRepository(),
+                $this->getTransactionPayload(),
+                $this->getUtilityContainer()->getTransportUtility(),
+                $this->getUtilityContainer()->getTimeUtility(),
+                $this->currentUser,
+                $this->getLogger(),
+                $this->getMessageDeliveryService()
+            );
+        }
+        return $this->services['TransactionProcessingService'];
+    }
+
+    /**
+     * Get SendOperationService instance
+     *
+     * Handles high-level send operation orchestration for eIOU transactions.
+     * Manages direct sends, P2P routing, transaction message delivery,
+     * and distributed locking for concurrent send prevention.
+     * Extracted from TransactionService as part of God Class refactoring.
+     *
+     * @return SendOperationServiceInterface
+     */
+    public function getSendOperationService(): SendOperationServiceInterface {
+        if (!isset($this->services['SendOperationService'])) {
+            require_once __DIR__ . '/SendOperationService.php';
+            $this->services['SendOperationService'] = new SendOperationService(
+                $this->getTransactionRepository(),
+                $this->getAddressRepository(),
+                $this->getP2pRepository(),
+                $this->getTransactionPayload(),
+                $this->getUtilityContainer()->getTransportUtility(),
+                $this->getUtilityContainer()->getTimeUtility(),
+                $this->getInputValidator(),
+                $this->currentUser,
+                $this->getLogger(),
+                $this->getMessageDeliveryService(),
+                $this->getLockingService()
+            );
+        }
+        return $this->services['SendOperationService'];
+    }
+
+    /**
      * Get UtilityServiceContainer instance
      *
      *
@@ -831,6 +961,19 @@ class ServiceContainer {
     }
 
     /**
+     * Get TransactionPayload instance
+     *
+     * @return TransactionPayload
+     */
+    public function getTransactionPayload(): TransactionPayload {
+        if (!isset($this->utils['TransactionPayload'])) {
+            require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
+            $this->utils['TransactionPayload'] = new TransactionPayload($this->currentUser, $this->getUtilityContainer());
+        }
+        return $this->utils['TransactionPayload'];
+    }
+
+    /**
      * Clear all cached services (useful for testing)
      */
     public function clearServices(): void {
@@ -860,6 +1003,10 @@ class ServiceContainer {
      * - HeldTransactionService --> SyncService
      * - Rp2pService --> TransactionService
      * - TransactionService --> P2pService, ContactService
+     * - ChainVerificationService --> SyncService
+     * - TransactionValidationService --> SyncService, TransactionService
+     * - TransactionProcessingService --> SyncService, P2pService, HeldTransactionService
+     * - SendOperationService --> ContactService, P2pService, SyncService, TransactionService
      *
      * Note: Repositories are now passed via constructor injection, not setter injection.
      */
@@ -904,7 +1051,7 @@ class ServiceContainer {
             $this->services['Rp2pService']->setTransactionService($this->services['TransactionService']);
         }
 
-        // Wire TransactionService -> P2pService, ContactService
+        // Wire TransactionService -> P2pService, ContactService, and new refactored services
         if (isset($this->services['TransactionService'])) {
             if (isset($this->services['P2pService'])) {
                 $this->services['TransactionService']->setP2pService($this->services['P2pService']);
@@ -912,6 +1059,68 @@ class ServiceContainer {
             if (isset($this->services['ContactService'])) {
                 $this->services['TransactionService']->setContactService($this->services['ContactService']);
             }
+            // Wire the 5 new refactored services to TransactionService facade
+            if (isset($this->services['BalanceService'])) {
+                $this->services['TransactionService']->setBalanceService($this->services['BalanceService']);
+            }
+            if (isset($this->services['ChainVerificationService'])) {
+                $this->services['TransactionService']->setChainVerificationService($this->services['ChainVerificationService']);
+            }
+            if (isset($this->services['TransactionValidationService'])) {
+                $this->services['TransactionService']->setTransactionValidationService($this->services['TransactionValidationService']);
+            }
+            if (isset($this->services['TransactionProcessingService'])) {
+                $this->services['TransactionService']->setTransactionProcessingService($this->services['TransactionProcessingService']);
+            }
+            if (isset($this->services['SendOperationService'])) {
+                $this->services['TransactionService']->setSendOperationService($this->services['SendOperationService']);
+            }
+        }
+
+        // Wire ChainVerificationService -> SyncService
+        if (isset($this->services['ChainVerificationService']) && isset($this->services['SyncService'])) {
+            $this->services['ChainVerificationService']->setSyncService($this->services['SyncService']);
+        }
+
+        // Wire TransactionValidationService -> SyncService, TransactionService
+        if (isset($this->services['TransactionValidationService'])) {
+            if (isset($this->services['SyncService'])) {
+                $this->services['TransactionValidationService']->setSyncService($this->services['SyncService']);
+            }
+            if (isset($this->services['TransactionService'])) {
+                $this->services['TransactionValidationService']->setTransactionService($this->services['TransactionService']);
+            }
+        }
+
+        // Wire TransactionProcessingService -> SyncService, P2pService, HeldTransactionService
+        if (isset($this->services['TransactionProcessingService'])) {
+            if (isset($this->services['SyncService'])) {
+                $this->services['TransactionProcessingService']->setSyncService($this->services['SyncService']);
+            }
+            if (isset($this->services['P2pService'])) {
+                $this->services['TransactionProcessingService']->setP2pService($this->services['P2pService']);
+            }
+            if (isset($this->services['HeldTransactionService'])) {
+                $this->services['TransactionProcessingService']->setHeldTransactionService($this->services['HeldTransactionService']);
+            }
+        }
+
+        // Wire SendOperationService -> ContactService, P2pService, SyncService, TransactionService
+        if (isset($this->services['SendOperationService'])) {
+            if (isset($this->services['ContactService'])) {
+                $this->services['SendOperationService']->setContactService($this->services['ContactService']);
+            }
+            if (isset($this->services['P2pService'])) {
+                $this->services['SendOperationService']->setP2pService($this->services['P2pService']);
+            }
+            if (isset($this->services['SyncService'])) {
+                $this->services['SendOperationService']->setSyncService($this->services['SyncService']);
+            }
+            if (isset($this->services['TransactionService'])) {
+                $this->services['SendOperationService']->setTransactionService($this->services['TransactionService']);
+            }
+            // Set TransactionChainRepository for chain verification
+            $this->services['SendOperationService']->setTransactionChainRepository($this->getTransactionChainRepository());
         }
     }
 
@@ -938,6 +1147,13 @@ class ServiceContainer {
         $this->getContactStatusService();
         $this->getRateLimiterService();
         $this->getTransactionRecoveryService();
+
+        // Initialize new refactored services
+        $this->getBalanceService();
+        $this->getChainVerificationService();
+        $this->getTransactionValidationService();
+        $this->getTransactionProcessingService();
+        $this->getSendOperationService();
 
         // Wire circular dependencies
         $this->wireCircularDependencies();
