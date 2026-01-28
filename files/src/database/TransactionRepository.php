@@ -10,11 +10,14 @@ require_once __DIR__ . '/AbstractRepository.php';
  *
  * @package Database\Repository
  *
- * TECH DEBT: Many methods contain redundant `if (!$stmt)` checks after execute().
- * Since PDO is configured with ERRMODE_EXCEPTION (see Pdo.php), the execute() method
- * will throw an exception on failure rather than returning false. These checks are
- * vestigial from defensive coding practices but can be safely removed in a future
- * refactoring pass. The checks don't cause harm, just unnecessary branches.
+ * NOTE: Many methods contain `if (!$stmt)` checks after execute(). While PDO is
+ * configured with ERRMODE_EXCEPTION, the AbstractRepository::execute() method
+ * catches PDOException and returns false (see AbstractRepository.php lines 147-160).
+ * These checks ARE required to handle query failures gracefully. To remove them,
+ * AbstractRepository::execute() would need to be refactored to throw exceptions
+ * instead of returning false, and all callers updated to use try/catch.
+ *
+ * @see AbstractRepository::execute() for the error handling implementation
  */
 class TransactionRepository extends AbstractRepository {
     /**
