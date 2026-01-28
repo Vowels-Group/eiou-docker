@@ -52,7 +52,7 @@ INTERFACE_MAP["GeneralUtilityServiceInterface"]="GeneralUtilityService"
 INTERFACE_MAP["CurrencyUtilityServiceInterface"]="CurrencyUtilityService"
 
 ############################ Test 1: Interface Files Exist ############################
-printf "${YELLOW}Test 1: Verifying interface files exist${NC}\n"
+echo -e "\n[Test 1: Verifying interface files exist]"
 
 for interface in "${!INTERFACE_MAP[@]}"; do
     totaltests=$((totaltests + 1))
@@ -72,7 +72,7 @@ for interface in "${!INTERFACE_MAP[@]}"; do
 done
 
 ############################ Test 2: Services Implement Interfaces ############################
-printf "\n${YELLOW}Test 2: Verifying services implement their interfaces${NC}\n"
+echo -e "\n[Test 2: Verifying services implement their interfaces]"
 
 # Test all services via ServiceContainer (services are loaded via require_once, not autoload)
 # Map: interface => getter expression
@@ -135,7 +135,7 @@ for interface in "${!INTERFACE_MAP[@]}"; do
 done
 
 ############################ Test 3: ServiceContainer Returns Interface Types ############################
-printf "\n${YELLOW}Test 3: Verifying ServiceContainer returns interface types${NC}\n"
+echo -e "\n[Test 3: Verifying ServiceContainer returns interface types]"
 
 # Test key service getters return interface types
 service_getters=(
@@ -172,7 +172,7 @@ for getter_pair in "${service_getters[@]}"; do
 done
 
 ############################ Test 4: Mock Injection Capability ############################
-printf "\n${YELLOW}Test 4: Verifying interface type hints allow mock injection${NC}\n"
+echo -e "\n[Test 4: Verifying interface type hints allow mock injection]"
 totaltests=$((totaltests + 1))
 
 # Test that a function with interface type hint accepts the concrete implementation
@@ -208,7 +208,7 @@ else
 fi
 
 ############################ Test 5: Dependency Inversion Works ############################
-printf "\n${YELLOW}Test 5: Verifying dependency inversion principle${NC}\n"
+echo -e "\n[Test 5: Verifying dependency inversion principle]"
 totaltests=$((totaltests + 1))
 
 # Test that code can depend on abstractions (interfaces) not concretions
