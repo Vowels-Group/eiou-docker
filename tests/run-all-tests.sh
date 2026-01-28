@@ -84,6 +84,7 @@ show_available_subsets() {
     printf "  ${GREEN}sync${NC}         - Chain synchronization tests\n"
     printf "  ${GREEN}connections${NC}  - SSL certificates and Tor connectivity tests\n"
     printf "  ${GREEN}system${NC}       - System tests: shutdown, lockfiles, seedphrase\n"
+    printf "  ${GREEN}performance${NC}  - Performance baseline benchmarks\n"
     echo ""
     printf "${YELLOW}Note:${NC} Some subsets require 'addContactsTest' to run first.\n"
     printf "      The runner automatically includes prerequisites when needed.\n"
@@ -91,7 +92,7 @@ show_available_subsets() {
 }
 
 # Validate SUBSET is one of the allowed values
-VALID_SUBSETS="all quick contacts transactions messaging api sync connections system"
+VALID_SUBSETS="all quick contacts transactions messaging api sync connections system performance"
 if ! echo "$VALID_SUBSETS" | grep -qw "$SUBSET"; then
     printf "${RED}Error: Invalid test subset '${SUBSET}'${NC}\n"
     show_available_subsets
@@ -326,7 +327,8 @@ for container in $CONTAINER_LIST; do
 done
 
 printf "${GREEN}${CHECK} All containers initialized successfully${NC}\n"
-sleep 2  # Additional buffer time for message processors
+# Brief buffer time for message processors (using environment variable if set)
+sleep ${TEST_POLL_INTERVAL:-1}
 
 # Step 2: Run prerequisite test (hostnameTest (HTTP/HTTPS) or torAddressTest (TOR))
 printf "\n${GREEN}[Step 2/3]${NC} Running prerequisite test...\n"
@@ -370,6 +372,7 @@ seedphraseTestSuite
 processorLockfileTest
 pingTestSuite
 serviceInterfaceTest
+performanceBaseline
 "
 
 # Quick validation (fast smoke tests)
@@ -392,6 +395,7 @@ addContactsTest
 balanceTest
 transactionTestSuite
 transactionRecoveryTest
+negativeFinancialTest
 "
 
 # Messaging tests (requires contacts)
@@ -410,6 +414,7 @@ curlErrorHandlingTest
 cliCommandsTest
 apiEndpointsTest
 securityTestSuite
+apiInputValidationTest
 "
 
 # Sync tests (requires contacts and transactions)
@@ -432,6 +437,12 @@ seedphraseTestSuite
 processorLockfileTest
 serviceInterfaceTest
 backupTestSuite
+"
+
+# Performance tests (requires contacts for transaction benchmarks)
+TESTS_PERFORMANCE="
+addContactsTest
+performanceBaseline
 "
 
 # Select test order based on subset
@@ -462,6 +473,9 @@ case "$SUBSET" in
         ;;
     system)
         TEST_ORDER="$TESTS_SYSTEM"
+        ;;
+    performance)
+        TEST_ORDER="$TESTS_PERFORMANCE"
         ;;
 esac
 

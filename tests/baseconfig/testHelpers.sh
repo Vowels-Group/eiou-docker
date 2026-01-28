@@ -4,7 +4,235 @@
 ############################### Test Helper Functions #################################
 # Common helper functions shared across test suites
 # This library reduces code duplication by extracting common patterns
+#
+# ENVIRONMENT VARIABLES:
+#   TEST_TIMEOUT - Default timeout in seconds for wait_for_condition (default: 30)
+#                  Override via: TEST_TIMEOUT=60 ./run-all-tests.sh http4
+#   TEST_POLL_INTERVAL - Default polling interval in seconds (default: 1)
 ###################################################################################
+
+# ==================== Configurable Timeouts ====================
+# These can be overridden via environment variables for slower systems
+TEST_TIMEOUT=${TEST_TIMEOUT:-30}
+TEST_POLL_INTERVAL=${TEST_POLL_INTERVAL:-1}
+
+# ==================== Adaptive Polling Functions ====================
+
+# Wait for a condition to become true with configurable timeout and polling
+# Usage: wait_for_condition "<command>" [timeout] [interval] [description]
+# Returns: 0 if condition met, 1 if timeout
+# Example: wait_for_condition "docker exec alice eiou status" 30 2 "container health"
+wait_for_condition() {
+    local cmd="$1"
+    local timeout="${2:-$TEST_TIMEOUT}"
+    local interval="${3:-$TEST_POLL_INTERVAL}"
+    local description="${4:-condition}"
+    local elapsed=0
+
+    while [ $elapsed -lt $timeout ]; do
+        if eval "$cmd" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep $interval
+        elapsed=$((elapsed + interval))
+    done
+    echo "Timeout after ${timeout}s waiting for: $description" >&2
+    return 1
+}
+
+# Wait for container to be healthy and responding
+# Usage: wait_for_container_health <container> [timeout]
+# Returns: 0 if healthy, 1 if timeout
+wait_for_container_health() {
+    local container="$1"
+    local timeout="${2:-$TEST_TIMEOUT}"
+
+    wait_for_condition \
+        "docker exec ${container} php -r 'echo \"OK\";'" \
+        "$timeout" \
+        2 \
+        "container ${container} health"
+}
+
+# Wait for a newly created container to be fully initialized
+# This includes: container running, MariaDB ready, PHP working, userconfig created
+# Usage: wait_for_container_initialized <container> [timeout]
+# Returns: 0 if initialized, 1 if timeout
+wait_for_container_initialized() {
+    local container="$1"
+    local timeout="${2:-60}"
+    local interval=3
+    local elapsed=0
+
+    while [ $elapsed -lt $timeout ]; do
+        # Check if container is running
+        if ! docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+            sleep $interval
+            elapsed=$((elapsed + interval))
+            continue
+        fi
+
+        # Check if PHP is working and userconfig exists
+        local ready=$(docker exec ${container} php -r "
+            if (file_exists('${USERCONFIG}')) {
+                \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
+                echo isset(\$json['public']) ? 'READY' : 'WAITING';
+            } else {
+                echo 'WAITING';
+            }
+        " 2>/dev/null || echo "WAITING")
+
+        if [ "$ready" = "READY" ]; then
+            return 0
+        fi
+
+        sleep $interval
+        elapsed=$((elapsed + interval))
+    done
+
+    echo "Timeout after ${timeout}s waiting for container ${container} initialization" >&2
+    return 1
+}
+
+# Wait for file to exist in container
+# Usage: wait_for_file <container> <filepath> [timeout]
+# Returns: 0 if file exists, 1 if timeout
+wait_for_file() {
+    local container="$1"
+    local filepath="$2"
+    local timeout="${3:-$TEST_TIMEOUT}"
+
+    wait_for_condition \
+        "docker exec ${container} test -f '${filepath}'" \
+        "$timeout" \
+        1 \
+        "file ${filepath}"
+}
+
+# Wait for process to stop
+# Usage: wait_for_process_stop <container> <process_pattern> [timeout]
+# Returns: 0 if stopped, 1 if timeout
+wait_for_process_stop() {
+    local container="$1"
+    local pattern="$2"
+    local timeout="${3:-$TEST_TIMEOUT}"
+    local interval=1
+    local elapsed=0
+
+    while [ $elapsed -lt $timeout ]; do
+        local count=$(docker exec ${container} pgrep -c -f "$pattern" 2>/dev/null | tr -d '\n ' || true)
+        count=${count:-0}
+        if [ "$count" -eq 0 ]; then
+            return 0
+        fi
+        sleep $interval
+        elapsed=$((elapsed + interval))
+    done
+
+    echo "Timeout: process '$pattern' still running after ${timeout}s" >&2
+    return 1
+}
+
+# Wait for process to start
+# Usage: wait_for_process_start <container> <process_pattern> [timeout]
+# Returns: 0 if started, 1 if timeout
+wait_for_process_start() {
+    local container="$1"
+    local pattern="$2"
+    local timeout="${3:-$TEST_TIMEOUT}"
+    local interval=1
+    local elapsed=0
+
+    while [ $elapsed -lt $timeout ]; do
+        local count=$(docker exec ${container} pgrep -c -f "$pattern" 2>/dev/null | tr -d '\n ' || true)
+        count=${count:-0}
+        if [ "$count" -gt 0 ]; then
+            return 0
+        fi
+        sleep $interval
+        elapsed=$((elapsed + interval))
+    done
+
+    echo "Timeout: process '$pattern' not started after ${timeout}s" >&2
+    return 1
+}
+
+# Wait for message queue processing to complete
+# Usage: wait_for_queue_processed <container> [timeout]
+# Checks that both in and out queues have been processed
+wait_for_queue_processed() {
+    local container="$1"
+    local timeout="${2:-15}"
+
+    # Process queues and wait for completion
+    docker exec -e EIOU_TEST_MODE=true ${container} eiou out >/dev/null 2>&1 || true
+    docker exec -e EIOU_TEST_MODE=true ${container} eiou in >/dev/null 2>&1 || true
+
+    # Brief pause to allow any async processing
+    sleep 1
+}
+
+# Wait for contact status to reach expected value
+# Usage: wait_for_contact_status <container> <transport> <address> <expected_status> [timeout]
+# Returns: 0 if status matches, 1 if timeout
+wait_for_contact_status() {
+    local container="$1"
+    local transport="$2"
+    local address="$3"
+    local expected_status="$4"
+    local timeout="${5:-$TEST_TIMEOUT}"
+    local interval=2
+    local elapsed=0
+
+    while [ $elapsed -lt $timeout ]; do
+        local status=$(docker exec ${container} php -r "
+            require_once('${REL_APPLICATION}');
+            echo Application::getInstance()->services->getContactRepository()->getContactStatus(
+                '${transport}','${address}'
+            );
+        " 2>/dev/null || echo "error")
+
+        if [ "$status" = "$expected_status" ]; then
+            return 0
+        fi
+
+        # Process queues during wait
+        wait_for_queue_processed "$container" 2
+
+        elapsed=$((elapsed + interval + 1))
+    done
+
+    echo "Timeout: contact status is '$status', expected '$expected_status'" >&2
+    return 1
+}
+
+# Wait for transaction count to reach expected value
+# Usage: wait_for_tx_count_reached <container> <pattern> <expected_count> [timeout]
+# Returns: actual count (echoed), 0 if reached, 1 if timeout
+wait_for_tx_count_reached() {
+    local container="$1"
+    local pattern="$2"
+    local expected_count="$3"
+    local timeout="${4:-$TEST_TIMEOUT}"
+    local interval=2
+    local elapsed=0
+    local count=0
+
+    while [ $elapsed -lt $timeout ]; do
+        count=$(get_tx_count_by_desc "$container" "$pattern" 2>/dev/null || echo "0")
+
+        if [ "$count" -ge "$expected_count" ]; then
+            echo "$count"
+            return 0
+        fi
+
+        sleep $interval
+        elapsed=$((elapsed + interval))
+    done
+
+    echo "$count"
+    return 1
+}
 
 # ==================== Test Prerequisites Validation ====================
 
@@ -124,7 +352,9 @@ ensure_contacts() {
 
     docker exec ${s} eiou add ${r_addr} ${r} 0 0 USD 2>&1 > /dev/null || true
     docker exec ${r} eiou add ${s_addr} ${s} 0 0 USD 2>&1 > /dev/null || true
-    sleep 2
+    # Process message queues to complete contact exchange
+    wait_for_queue_processed "$s" 2
+    wait_for_queue_processed "$r" 2
 }
 
 # ==================== Transaction Functions ====================
@@ -476,20 +706,23 @@ check_contact_status_with_retry() {
 process_routing_queues() {
     local containers_str="$1"
     local containers_arr=($containers_str)
+    local settle_time="${2:-1}"
 
     # Process outgoing queues in parallel
     for container in "${containers_arr[@]}"; do
         docker exec -e EIOU_TEST_MODE=true ${container} eiou out 2>&1 > /dev/null &
     done
     wait
-    sleep 2
+    # Brief settle time for message delivery
+    sleep $settle_time
 
     # Process incoming queues in parallel
     for container in "${containers_arr[@]}"; do
         docker exec -e EIOU_TEST_MODE=true ${container} eiou in 2>&1 > /dev/null &
     done
     wait
-    sleep 2
+    # Brief settle time for processing completion
+    sleep $settle_time
 }
 
 # Check relay fees with single retry after queue processing
