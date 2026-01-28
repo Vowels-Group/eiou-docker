@@ -29,11 +29,10 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
     private BalanceRepository $balanceRepository;
     private TransactionPayload $transactionPayload;
     private TransportUtilityService $transportUtility;
+    private TimeUtilityService $timeUtility;
     private UserContext $currentUser;
     private SecureLogger $secureLogger;
     private ?MessageDeliveryService $messageDeliveryService;
-    private UtilityServiceContainer $utilityContainer;
-    private TimeUtilityService $timeUtility;
     private ?SyncServiceInterface $syncService = null;
     private ?P2pServiceInterface $p2pService = null;
     private ?HeldTransactionServiceInterface $heldTransactionService = null;
@@ -47,6 +46,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         BalanceRepository $balanceRepository,
         TransactionPayload $transactionPayload,
         TransportUtilityService $transportUtility,
+        TimeUtilityService $timeUtility,
         UserContext $currentUser,
         SecureLogger $secureLogger,
         ?MessageDeliveryService $messageDeliveryService = null
@@ -59,14 +59,10 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         $this->balanceRepository = $balanceRepository;
         $this->transactionPayload = $transactionPayload;
         $this->transportUtility = $transportUtility;
+        $this->timeUtility = $timeUtility;
         $this->currentUser = $currentUser;
         $this->secureLogger = $secureLogger;
         $this->messageDeliveryService = $messageDeliveryService;
-
-        require_once __DIR__ . '/utilities/UtilityServiceContainer.php';
-        require_once __DIR__ . '/utilities/TimeUtilityService.php';
-        $this->utilityContainer = new UtilityServiceContainer($currentUser);
-        $this->timeUtility = $this->utilityContainer->getTimeUtility();
     }
 
     public function setSyncService(SyncServiceInterface $syncService): void

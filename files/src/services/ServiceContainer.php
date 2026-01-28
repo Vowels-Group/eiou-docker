@@ -836,7 +836,7 @@ class ServiceContainer {
                 $this->getContactRepository(),
                 $this->getUtilityContainer()->getValidationUtility(),
                 $this->getInputValidator(),
-                $this->getUtilityContainer()->getTransactionPayload(),
+                $this->getTransactionPayload(),
                 $this->currentUser,
                 $this->getLogger()
             );
@@ -863,8 +863,9 @@ class ServiceContainer {
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
                 $this->getBalanceRepository(),
-                $this->getUtilityContainer()->getTransactionPayload(),
+                $this->getTransactionPayload(),
                 $this->getUtilityContainer()->getTransportUtility(),
+                $this->getUtilityContainer()->getTimeUtility(),
                 $this->currentUser,
                 $this->getLogger(),
                 $this->getMessageDeliveryService()
@@ -890,7 +891,7 @@ class ServiceContainer {
                 $this->getTransactionRepository(),
                 $this->getAddressRepository(),
                 $this->getP2pRepository(),
-                $this->getUtilityContainer()->getTransactionPayload(),
+                $this->getTransactionPayload(),
                 $this->getUtilityContainer()->getTransportUtility(),
                 $this->getUtilityContainer()->getTimeUtility(),
                 $this->getInputValidator(),
@@ -957,6 +958,19 @@ class ServiceContainer {
             $this->utils['Security'] = new Security();
         }
         return $this->utils['Security'];
+    }
+
+    /**
+     * Get TransactionPayload instance
+     *
+     * @return TransactionPayload
+     */
+    public function getTransactionPayload(): TransactionPayload {
+        if (!isset($this->utils['TransactionPayload'])) {
+            require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
+            $this->utils['TransactionPayload'] = new TransactionPayload($this->currentUser, $this->getUtilityContainer());
+        }
+        return $this->utils['TransactionPayload'];
     }
 
     /**
