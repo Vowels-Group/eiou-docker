@@ -36,7 +36,6 @@ use Eiou\Utils\Security;
 use Eiou\Utils\SecureLogger;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Services\RateLimiterService;
-use PDO;
 
 // Initialize secure logging
 SecureLogger::init(Constants::LOG_FILE_APP ?: '/var/log/eiou/app.log', Constants::LOG_LEVEL ?: 'INFO');
@@ -73,7 +72,7 @@ if (php_sapi_name() !== 'cli') {
     }
 
     // Initialize rate limiting (requires PDO connection)
-    if (isset($pdo) && $pdo instanceof PDO) {
+    if (isset($pdo) && $pdo instanceof \PDO) {
         $rateLimiterRepository = new RateLimiterRepository($pdo);
         $rateLimiterService = new RateLimiterService($rateLimiterRepository);
 

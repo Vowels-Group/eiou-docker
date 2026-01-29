@@ -171,6 +171,19 @@ VOLUME ["/var/lib/mysql", "/etc/eiou", "/usr/local/bin/", "/var/www/html/", "/va
 COPY scripts/ /app/scripts/
 RUN chmod +x /app/scripts/*.sh
 
+# =============================================================================
+# SOURCE FILE BACKUP FOR VOLUME SYNC
+# =============================================================================
+# The /etc/eiou directory is a Docker volume. When existing containers are
+# updated, the volume retains old files. We create a backup of source files
+# in /app/eiou-src-backup/ that startup.sh will use to sync to the volume.
+# This ensures users always get the latest code without losing their data.
+# =============================================================================
+RUN mkdir -p /app/eiou-src-backup
+COPY files/src/ /app/eiou-src-backup/src/
+COPY files/root/ /app/eiou-src-backup/
+COPY files/composer.json /app/eiou-src-backup/composer.json
+
 # Copy and set up startup script
 COPY startup.sh /startup.sh
 RUN chmod +x /startup.sh

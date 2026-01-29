@@ -10,7 +10,6 @@
  */
 
 use Eiou\Core\Application;
-use Throwable;
 
 // ============================================================================
 // DEBUG SERVICE WRAPPERS
@@ -35,7 +34,7 @@ function output($message,$echo = 'ECHO') {
             $service = $app->services->getDebugService();
             $service->output($message,$echo);
         }
-    } catch (Throwable $e) {
+    } catch (\Throwable $e) {
         // Silently ignore if Application isn't available
         // The message is lost but execution continues
     }

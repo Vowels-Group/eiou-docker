@@ -365,21 +365,56 @@ else
 fi
 
 # =============================================================================
+# SOURCE FILE SYNC (Docker Volume Update)
+# =============================================================================
+# The /etc/eiou directory is a Docker volume. When the image is updated, the
+# volume retains old files. This section syncs source files from a backup
+# location in the image to ensure the latest code is always used.
+#
+# Files synced: src/, root PHP files, composer.json
+# Files preserved: userconfig.json, dbconfig.json, encryption keys
+# =============================================================================
+
+# Check if source backup exists (created during docker build)
+if [ -d /app/eiou-src-backup ]; then
+    echo "Syncing source files from image to volume..."
+
+    # Sync src directory (PSR-4 namespaced code)
+    if [ -d /app/eiou-src-backup/src ]; then
+        cp -r /app/eiou-src-backup/src/* /etc/eiou/src/ 2>/dev/null || true
+        echo "  Source code updated."
+    fi
+
+    # Sync root PHP files (entry points)
+    for file in /app/eiou-src-backup/*.php; do
+        if [ -f "$file" ]; then
+            cp "$file" /etc/eiou/ 2>/dev/null || true
+        fi
+    done
+    echo "  Entry points updated."
+
+    # Sync composer.json
+    if [ -f /app/eiou-src-backup/composer.json ]; then
+        cp /app/eiou-src-backup/composer.json /etc/eiou/composer.json 2>/dev/null || true
+        echo "  Composer config updated."
+    fi
+
+    echo "Source file sync completed."
+fi
+
+# =============================================================================
 # PSR-4 AUTOLOADER SETUP
 # =============================================================================
-# Ensure the Composer autoloader exists. This is needed because /etc/eiou is a
-# Docker volume - on first run after image update, the volume may have old files
-# without the vendor directory. Running composer install here ensures the
-# autoloader is always available without requiring users to delete their volumes.
+# Ensure the Composer autoloader exists and is up-to-date.
 # =============================================================================
-if [ ! -f /etc/eiou/vendor/autoload.php ]; then
+
+# Always regenerate autoloader after source sync to ensure class map is current
+if [ -d /app/eiou-src-backup ] || [ ! -f /etc/eiou/vendor/autoload.php ]; then
     echo "Generating PSR-4 autoloader..."
 
-    # Ensure composer.json exists (copy from image if missing in volume)
+    # Ensure composer.json exists
     if [ ! -f /etc/eiou/composer.json ]; then
-        echo "  Restoring composer.json from image..."
-        # The composer.json should be in the image at build time
-        # If it's missing, create a minimal one
+        echo "  Creating composer.json..."
         cat > /etc/eiou/composer.json << 'COMPOSEREOF'
 {
     "name": "eiou/node",
@@ -402,8 +437,8 @@ if [ ! -f /etc/eiou/vendor/autoload.php ]; then
 COMPOSEREOF
     fi
 
-    # Run composer install to generate autoloader
-    cd /etc/eiou && composer install --no-dev --optimize-autoloader --no-interaction 2>&1 | while read line; do
+    # Run composer install/dump-autoload to generate autoloader
+    cd /etc/eiou && composer dump-autoload --optimize --no-interaction 2>&1 | while read line; do
         echo "  $line"
     done
 
