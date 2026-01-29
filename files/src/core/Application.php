@@ -17,6 +17,8 @@ use PDO;
 use Exception;
 use RuntimeException;
 use function Eiou\Database\createPDOConnection;
+use function Eiou\Database\freshInstall;
+use function Eiou\Database\runMigrations;
 
 /**
  * Application singleton to manage global state
