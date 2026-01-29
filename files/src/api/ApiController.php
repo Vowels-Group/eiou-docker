@@ -3,7 +3,9 @@
 
 namespace Eiou\Api;
 
+use Exception;
 use Eiou\Core\Constants;
+use Eiou\Cli\CliOutputManager;
 use Eiou\Services\ServiceContainer;
 use Eiou\Services\ApiAuthService;
 use Eiou\Database\ApiKeyRepository;
