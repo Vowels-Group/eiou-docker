@@ -126,8 +126,8 @@ for interface in "${!INTERFACE_MAP[@]}"; do
         \$app = \Eiou\Core\Application::getInstance();
         try {
             \$service = ${getter};
-            echo (\$service instanceof ${interface}) ? 'yes' : 'no';
-        } catch (Exception \$e) {
+            echo (\$service instanceof \Eiou\Contracts\\${interface}) ? 'yes' : 'no';
+        } catch (\Exception \$e) {
             echo 'error:' . \$e->getMessage();
         }
     " 2>/dev/null || echo "error")
@@ -168,8 +168,7 @@ for getter_pair in "${service_getters[@]}"; do
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
         \$service = \$app->services->${getter}();
-        \$interfaceClass = '${expected_interface}';
-        echo (\$service instanceof \$interfaceClass) ? 'yes' : 'no';
+        echo (\$service instanceof \Eiou\Contracts\\${expected_interface}) ? 'yes' : 'no';
     " 2>/dev/null || echo "error")
 
     if [ "$returns_interface" = "yes" ]; then
@@ -188,11 +187,9 @@ totaltests=$((totaltests + 1))
 # Test that a function with interface type hint accepts the concrete implementation
 mock_test=$(docker exec $test_container php -r "
     require_once('${BOOTSTRAP_PATH}');
-    // Must require interface before defining function with it as type hint
-    require_once('${EIOU_DIR}/src/contracts/TransportServiceInterface.php');
 
     // Create a test function that accepts interface type
-    function testTransportInterface(TransportServiceInterface \$transport): bool {
+    function testTransportInterface(\Eiou\Contracts\TransportServiceInterface \$transport): bool {
         return \$transport->isAddress('http://test');
     }
 
@@ -204,7 +201,7 @@ mock_test=$(docker exec $test_container php -r "
     try {
         testTransportInterface(\$transport);
         echo 'yes';
-    } catch (TypeError \$e) {
+    } catch (\TypeError \$e) {
         echo 'no';
     }
 " 2>/dev/null || echo "error")
@@ -224,14 +221,12 @@ totaltests=$((totaltests + 1))
 # Test that code can depend on abstractions (interfaces) not concretions
 di_test=$(docker exec $test_container php -r "
     require_once('${BOOTSTRAP_PATH}');
-    // Must require interface before defining class with it as type hint
-    require_once('${EIOU_DIR}/src/contracts/ContactServiceInterface.php');
 
     // A class that depends on interface, not concrete implementation
     class TestConsumer {
-        private ContactServiceInterface \$contactService;
+        private \Eiou\Contracts\ContactServiceInterface \$contactService;
 
-        public function __construct(ContactServiceInterface \$contactService) {
+        public function __construct(\Eiou\Contracts\ContactServiceInterface \$contactService) {
             \$this->contactService = \$contactService;
         }
 
@@ -246,7 +241,7 @@ di_test=$(docker exec $test_container php -r "
     try {
         \$consumer = new TestConsumer(\$contactService);
         echo \$consumer->hasService() ? 'yes' : 'no';
-    } catch (TypeError \$e) {
+    } catch (\TypeError \$e) {
         echo 'no';
     }
 " 2>/dev/null || echo "error")
