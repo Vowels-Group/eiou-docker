@@ -18,7 +18,7 @@
 // Change to the eiou directory
 chdir('/etc/eiou');
 
-// Load application bootstrap (PSR-4 autoloader)
+// Load application bootstrap (Composer autoloader)
 require_once '/etc/eiou/src/bootstrap.php';
 
 use Eiou\Core\Application;

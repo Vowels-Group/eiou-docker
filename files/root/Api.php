@@ -1,7 +1,7 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-// Load PSR-4 autoloader
+// Load Composer autoloader
 require_once __DIR__ . '/src/bootstrap.php';
 
 use Eiou\Core\ErrorCodes;

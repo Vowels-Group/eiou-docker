@@ -3,7 +3,7 @@
  * EIOU Bootstrap File
  *
  * This file MUST be included by ALL entry points before using any classes.
- * It initializes the Composer autoloader for PSR-4 namespace support.
+ * It initializes the Composer classmap autoloader for namespace support.
  *
  * Entry points that must include this:
  * - files/root/Functions.php

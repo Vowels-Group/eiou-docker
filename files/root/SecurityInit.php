@@ -8,7 +8,7 @@
  * This file should be included early in the request lifecycle.
  *
  * Initialization Sequence:
- * 1. Load PSR-4 autoloader (if not already loaded)
+ * 1. Load Composer autoloader (if not already loaded)
  * 2. Initialize SecureLogger
  * 3. Initialize ErrorHandler
  * 4. Set security headers (web requests only)
@@ -27,7 +27,7 @@
  *   u($string) - URL encoding for safe output
  */
 
-// Load PSR-4 autoloader (safe to call multiple times due to double-inclusion guard)
+// Load Composer autoloader (safe to call multiple times due to double-inclusion guard)
 require_once __DIR__ . '/src/bootstrap.php';
 
 use Eiou\Core\Constants;

@@ -4,15 +4,15 @@
 /**
  * Application Bootstrap File
  *
- * Central entry point that initializes the PSR-4 autoloader and loads
+ * Central entry point that initializes the Composer autoloader and loads
  * the output() wrapper function (the only non-namespaced function remaining).
  *
- * All classes are now autoloaded via Composer PSR-4 autoloading.
+ * All classes are now autoloaded via Composer classmap autoloading.
  * The output() function in ServiceWrappers.php remains as a global function
  * for backward compatibility and is scheduled for removal in future refactoring.
  */
 
-// Load PSR-4 autoloader
+// Load Composer autoloader
 require_once __DIR__ . '/src/bootstrap.php';
 
 // Load the global output() wrapper function (non-namespaced, for backward compatibility)

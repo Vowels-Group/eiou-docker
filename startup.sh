@@ -390,7 +390,7 @@ fi
 if [ -d /app/eiou-src-backup ]; then
     echo "Syncing source files from image to volume..."
 
-    # Sync src directory (PSR-4 namespaced code)
+    # Sync src directory (namespaced code)
     if [ -d /app/eiou-src-backup/src ]; then
         cp -r /app/eiou-src-backup/src/* /etc/eiou/src/ 2>/dev/null || true
         echo "  Source code updated."
@@ -421,14 +421,14 @@ if [ -f /app/eiou-cli-backup/eiou.php ]; then
 fi
 
 # =============================================================================
-# PSR-4 AUTOLOADER SETUP
+# COMPOSER AUTOLOADER SETUP
 # =============================================================================
 # Ensure the Composer autoloader exists and is up-to-date.
 # =============================================================================
 
 # Always regenerate autoloader after source sync to ensure class map is current
 if [ -d /app/eiou-src-backup ] || [ ! -f /etc/eiou/vendor/autoload.php ]; then
-    echo "Generating PSR-4 autoloader..."
+    echo "Generating Composer autoloader..."
 
     # Ensure composer.json exists
     if [ ! -f /etc/eiou/composer.json ]; then
@@ -467,12 +467,12 @@ COMPOSEREOF
     done
 
     if [ -f /etc/eiou/vendor/autoload.php ]; then
-        echo "PSR-4 autoloader generated successfully."
+        echo "Composer autoloader generated successfully."
     else
         echo "ERROR: Failed to generate autoloader. PHP functionality may be impaired."
     fi
 else
-    echo "PSR-4 autoloader found."
+    echo "Composer autoloader found."
 fi
 
 # Start services

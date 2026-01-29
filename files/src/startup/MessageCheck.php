@@ -1,7 +1,7 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-// Include the PSR-4 autoloader
+// Include the Composer autoloader
 require_once __DIR__ . '/../bootstrap.php';
 
 use Eiou\Utils\SecureLogger;

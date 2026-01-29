@@ -48,7 +48,7 @@ TOR_SECRET_KEY="${TOR_HIDDEN_SERVICE_DIR}//hs_ed25519_secret_key"
 TOR_PUBLIC_KEY="${TOR_HIDDEN_SERVICE_DIR}//hs_ed25519_public_key"
 TOR_HOSTNAME="${TOR_HIDDEN_SERVICE_DIR}//hostname"
 
-# Bootstrap path for PSR-4 autoloading
+# Bootstrap path for Composer autoloading
 # The bootstrap file initializes Composer autoloader and must be included before using any classes
 BOOTSTRAP_PATH="//etc//eiou//src//bootstrap.php"
 
