@@ -38,8 +38,9 @@ require_once '/etc/eiou/Functions.php';
 // Initialize security components for CLI
 require_once '/etc/eiou/SecurityInit.php';
 
-// Load CLI output manager for JSON support
-require_once '/etc/eiou/src/cli/CliOutputManager.php';
+use Eiou\Core\Application;
+use Eiou\Core\ErrorCodes;
+use Eiou\Cli\CliOutputManager;
 
 // Get application instance (if first time build database)
 $app = Application::getInstance();
