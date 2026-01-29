@@ -10,7 +10,7 @@ use Eiou\Database\ContactRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
-use Eiou\Schemas\ContactStatusPayload;
+use Eiou\Schemas\Payloads\ContactStatusPayload;
 use Eiou\Utils\SecureLogger;
 use Exception;
 
