@@ -836,13 +836,12 @@ echo -e "\n\t-> Testing buildAcceptance includes recipientSignature"
 
 acceptancePayloadCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    require_once('/etc/eiou/src/schemas/payloads/TransactionPayload.php');
 
     \$app = \Eiou\Core\Application::getInstance();
     \$user = \$app->services->getCurrentUser();
     \$utilContainer = \$app->services->getUtilityContainer();
 
-    \$payload = new TransactionPayload(\$user, \$utilContainer);
+    \$payload = new \Eiou\Schemas\Payloads\TransactionPayload(\$user, \$utilContainer);
 
     // Create mock request data
     \$request = [
