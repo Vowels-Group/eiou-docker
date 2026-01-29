@@ -364,6 +364,58 @@ else
     echo "Existing SSL certificate found, skipping generation."
 fi
 
+# =============================================================================
+# PSR-4 AUTOLOADER SETUP
+# =============================================================================
+# Ensure the Composer autoloader exists. This is needed because /etc/eiou is a
+# Docker volume - on first run after image update, the volume may have old files
+# without the vendor directory. Running composer install here ensures the
+# autoloader is always available without requiring users to delete their volumes.
+# =============================================================================
+if [ ! -f /etc/eiou/vendor/autoload.php ]; then
+    echo "Generating PSR-4 autoloader..."
+
+    # Ensure composer.json exists (copy from image if missing in volume)
+    if [ ! -f /etc/eiou/composer.json ]; then
+        echo "  Restoring composer.json from image..."
+        # The composer.json should be in the image at build time
+        # If it's missing, create a minimal one
+        cat > /etc/eiou/composer.json << 'COMPOSEREOF'
+{
+    "name": "eiou/node",
+    "description": "EIOU Node - Distributed IOU Network",
+    "type": "project",
+    "license": "proprietary",
+    "autoload": {
+        "psr-4": {
+            "Eiou\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=8.1"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}
+COMPOSEREOF
+    fi
+
+    # Run composer install to generate autoloader
+    cd /etc/eiou && composer install --no-dev --optimize-autoloader --no-interaction 2>&1 | while read line; do
+        echo "  $line"
+    done
+
+    if [ -f /etc/eiou/vendor/autoload.php ]; then
+        echo "PSR-4 autoloader generated successfully."
+    else
+        echo "ERROR: Failed to generate autoloader. PHP functionality may be impaired."
+    fi
+else
+    echo "PSR-4 autoloader found."
+fi
+
 # Start services
 service cron start
 service tor start
