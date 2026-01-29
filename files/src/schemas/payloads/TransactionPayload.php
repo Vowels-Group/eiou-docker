@@ -3,6 +3,7 @@
 
 namespace Eiou\Schemas\Payloads;
 
+use Eiou\Core\Application;
 use Eiou\Core\Constants;
 
 /**
