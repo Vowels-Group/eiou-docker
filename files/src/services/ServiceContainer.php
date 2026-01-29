@@ -6,6 +6,7 @@ namespace Eiou\Services;
 use Eiou\Utils\SecureLogger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
+use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Contracts\ChainOperationsInterface;
