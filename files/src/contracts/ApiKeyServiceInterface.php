@@ -1,5 +1,6 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
+namespace Eiou\Contracts;
 
 /**
  * API Key Service Interface

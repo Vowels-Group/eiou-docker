@@ -1,13 +1,27 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Core;
+
+use Eiou\Utils\SecureLogger;
+use Eiou\Utils\InputValidator;
+use Eiou\Utils\Security;
+use Eiou\Cli\CliOutputManager;
+use Eiou\Services\ServiceContainer;
+use Eiou\Services\RateLimiterService;
+use Eiou\Processors\CleanupMessageProcessor;
+use Eiou\Processors\P2pMessageProcessor;
+use Eiou\Processors\TransactionMessageProcessor;
+use Eiou\Processors\ContactStatusProcessor;
+use PDO;
+use Exception;
+use RuntimeException;
+use function Eiou\Database\createPDOConnection;
+
 /**
  * Application singleton to manage global state
  * Replaces global variables with proper encapsulation
  */
-
-require_once("/etc/eiou/src/utils/SecureLogger.php");
-require_once("/etc/eiou/src/cli/CliOutputManager.php");
 
 class Application {
     private static ?Application $instance = null;
@@ -119,7 +133,6 @@ class Application {
      * Create Database
      */
     private function constructDatabase(): void {
-        require_once '/etc/eiou/src/database/DatabaseSetup.php';
         freshInstall();
     }
 
@@ -129,7 +142,6 @@ class Application {
      * @return void
      */
     private function getDatabase(): void {
-        require_once '/etc/eiou/src/database/Pdo.php';
         try{
             $this->pdo = createPDOConnection();
         } catch (Exception $e) {
@@ -147,7 +159,6 @@ class Application {
         }
 
         try {
-            require_once '/etc/eiou/src/database/DatabaseSetup.php';
             $results = runMigrations($this->pdo);
 
             // Log any newly created tables
@@ -248,7 +259,6 @@ class Application {
      * @return void
      */
     private function loadCurrentDatabase(): void {
-        require_once '/etc/eiou/src/core/DatabaseContext.php';
         $this->currentDatabase = DatabaseContext::getInstance();
     }
 
@@ -268,7 +278,6 @@ class Application {
      * @return void
      */
     public function loadCurrentUser(): void {
-        require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
     }
 
@@ -304,7 +313,6 @@ class Application {
      * @return void
      */
     public function generateWallet(array $argv, ?CliOutputManager $output = null): void {
-        require_once '/etc/eiou/src/core/Wallet.php';
         Wallet::generateWallet($argv, $output);
     }
 
@@ -316,7 +324,6 @@ class Application {
      * @return void
      */
     public function restoreWallet(array $argv, ?CliOutputManager $output = null): void {
-        require_once '/etc/eiou/src/core/Wallet.php';
         Wallet::restoreWallet($argv, $output);
     }
 
@@ -326,7 +333,6 @@ class Application {
      * @return void
      */
     public function loadserviceContainer(): void {
-        require_once $this->getRootPath() . '/src/services/ServiceContainer.php';
         $this->services = ServiceContainer::getInstance($this->currentUser, $this->pdo);
     }
 
@@ -356,7 +362,6 @@ class Application {
      */
     public function getInputValidator(): InputValidator {
         if (!isset($this->utils['InputValidator'])) {
-            require_once $this->getRootPath() . '/src/utils/InputValidator.php';
             $this->utils['InputValidator'] = new InputValidator();
         }
         return $this->utils['InputValidator'];
@@ -378,7 +383,6 @@ class Application {
      */
     public function getLogger(): SecureLogger {
         if (!isset($this->utils['SecureLogger'])) {
-            require_once $this->getRootPath() . '/src/utils/SecureLogger.php';
             $secureLogger = new SecureLogger();
             $secureLogger->init(Constants::LOG_FILE_APP, Constants::LOG_LEVEL);
             $this->utils['SecureLogger'] = $secureLogger;
@@ -393,7 +397,6 @@ class Application {
      */
     public function getSecurity(): Security {
         if (!isset($this->utils['Security'])) {
-            require_once $this->getRootPath() . '/src/utils/Security.php';
             $this->utils['Security'] = new Security();
         }
         return $this->utils['Security'];
@@ -406,7 +409,6 @@ class Application {
      */
     public function getCleanupMessageProcessor(): CleanupMessageProcessor {
          if (!isset($this->processors['cleanupProcessor'])) {
-            require_once $this->getRootPath() . '/src/processors/CleanupMessageProcessor.php';
             $this->processors['cleanupProcessor'] = new CleanupMessageProcessor();
          }
          return $this->processors['cleanupProcessor'];
@@ -418,7 +420,6 @@ class Application {
      */
     public function getP2pMessageProcessor(): P2pMessageProcessor {
          if (!isset($this->processors['p2pProcessor'])) {
-            require_once $this->getRootPath() . '/src/processors/P2pMessageProcessor.php';
             $this->processors['p2pProcessor'] = new P2pMessageProcessor();
          }
          return $this->processors['p2pProcessor'];
@@ -431,7 +432,6 @@ class Application {
      */
     public function getTransactionMessageProcessor(): TransactionMessageProcessor {
           if (!isset($this->processors['transactionProcessor'])) {
-            require_once $this->getRootPath() . '/src/processors/TransactionMessageProcessor.php';
             $this->processors['transactionProcessor'] = new TransactionMessageProcessor();
          }
          return $this->processors['transactionProcessor'];
@@ -444,7 +444,6 @@ class Application {
      */
     public function getContactStatusProcessor(): ContactStatusProcessor {
          if (!isset($this->processors['contactStatusProcessor'])) {
-            require_once $this->getRootPath() . '/src/processors/ContactStatusProcessor.php';
             $this->processors['contactStatusProcessor'] = new ContactStatusProcessor();
          }
          return $this->processors['contactStatusProcessor'];

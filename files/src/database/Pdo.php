@@ -1,6 +1,14 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Database;
+
+use Eiou\Core\DatabaseContext;
+use Eiou\Utils\SecureLogger;
+use PDO;
+use PDOException;
+use RuntimeException;
+
 /**
  * Create a PDO database connection
  *
@@ -10,11 +18,6 @@
  * @return PDO Database connection instance
  * @throws PDOException If connection fails
  */
-
-require_once dirname(__DIR__) . '/core/Constants.php';
-require_once dirname(__DIR__) . '/core/DatabaseContext.php';
-require_once dirname(__DIR__) . '/utils/SecureLogger.php';
-
 function createPDOConnection(): PDO {
     // Try to use UserContext if available, fallback to global $user
     $databaseContext = DatabaseContext::getInstance();

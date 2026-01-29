@@ -1,6 +1,9 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
+namespace Eiou\Contracts;
 
+use Eiou\Repositories\ContactRepository;
+use Eiou\Services\RateLimiterService;
 
 /**
  * Contact Status Service Interface

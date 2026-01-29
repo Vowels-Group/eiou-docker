@@ -6,8 +6,12 @@
  * Provides output encoding, rate limiting, and security headers
  */
 
-require_once dirname(__DIR__) . '/core/Constants.php';
-require_once __DIR__ . '/SecureLogger.php';
+namespace Eiou\Utils;
+
+use Exception;
+use RuntimeException;
+use Eiou\Core\Constants;
+
 class Security {
     /**
      * Encode output for safe HTML display (prevents XSS)

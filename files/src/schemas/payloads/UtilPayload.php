@@ -1,8 +1,9 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/BasePayload.php';
-require_once __DIR__ . '/../../core/ErrorCodes.php';
+namespace Eiou\Schemas\Payloads;
+
+use Eiou\Core\ErrorCodes;
 
 /**
  * Utility payload builder

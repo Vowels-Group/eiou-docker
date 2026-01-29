@@ -1,19 +1,20 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../../contracts/TransportServiceInterface.php';
+namespace Eiou\Services\Utilities;
+
+use Eiou\Contracts\TransportServiceInterface;
+use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
+use Eiou\Utils\SecureLogger;
+use Eiou\Utils\AddressValidator;
+use ServiceContainer;
 
 /**
  * Transport Utility Service
  *
  * Handles Transport
  */
-
-require_once __DIR__ . '/../../core/Constants.php';
-require_once __DIR__ . '/../../utils/SecureLogger.php';
-require_once __DIR__ . '/../../utils/AddressValidator.php';
-
-
 class TransportUtilityService implements TransportServiceInterface
 {
     /**

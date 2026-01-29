@@ -1,23 +1,39 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/InputValidator.php';
-require_once __DIR__ . '/../cli/CliOutputManager.php';
-require_once __DIR__ . '/MessageDeliveryService.php';
-require_once __DIR__ . '/../core/ErrorCodes.php';
-require_once __DIR__ . '/../contracts/TransactionServiceInterface.php';
-require_once __DIR__ . '/../contracts/LockingServiceInterface.php';
-require_once __DIR__ . '/../contracts/BalanceServiceInterface.php';
-require_once __DIR__ . '/../contracts/ChainVerificationServiceInterface.php';
-require_once __DIR__ . '/../contracts/TransactionValidationServiceInterface.php';
-require_once __DIR__ . '/../contracts/TransactionProcessingServiceInterface.php';
-require_once __DIR__ . '/../contracts/SendOperationServiceInterface.php';
-require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
-require_once __DIR__ . '/../database/TransactionChainRepository.php';
-require_once __DIR__ . '/../database/TransactionRecoveryRepository.php';
-require_once __DIR__ . '/../database/TransactionContactRepository.php';
-require_once __DIR__ . '/../database/TransactionStatisticsRepository.php';
+namespace Eiou\Services;
 
+use Eiou\Utils\InputValidator;
+use Eiou\Utils\SecureLogger;
+use Eiou\Cli\CliOutputManager;
+use Eiou\Core\ErrorCodes;
+use Eiou\Core\UserContext;
+use Eiou\Core\Constants;
+use Eiou\Contracts\TransactionServiceInterface;
+use Eiou\Contracts\LockingServiceInterface;
+use Eiou\Contracts\BalanceServiceInterface;
+use Eiou\Contracts\ChainVerificationServiceInterface;
+use Eiou\Contracts\TransactionValidationServiceInterface;
+use Eiou\Contracts\TransactionProcessingServiceInterface;
+use Eiou\Contracts\SendOperationServiceInterface;
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\AddressRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Database\TransactionChainRepository;
+use Eiou\Database\TransactionRecoveryRepository;
+use Eiou\Database\TransactionContactRepository;
+use Eiou\Database\TransactionStatisticsRepository;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\CurrencyUtilityService;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Schemas\Payloads\TransactionPayload;
+use RuntimeException;
+use InvalidArgumentException;
 
 /**
  * Transaction Service (Facade)
@@ -109,7 +125,6 @@ class TransactionService implements TransactionServiceInterface {
         $this->secureLogger = $secureLogger;
         $this->currentUser = $currentUser;
 
-        require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser, $this->utilityContainer);
     }
 

@@ -1,14 +1,20 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Gui\Controllers;
+
+use Eiou\Gui\Includes\Session;
+use Eiou\Services\ContactService;
+use Eiou\Utils\InputValidator;
+use Eiou\Utils\Security;
+use Eiou\Cli\CliOutputManager;
+
 /**
  * Contact Controller
  *
  * Handles HTTP POST requests for contact-related actions.
  * Uses JSON output mode for proper message handling.
  */
-
-require_once __DIR__ . '/../../cli/CliOutputManager.php';
 
 class ContactController
 {
@@ -52,8 +58,6 @@ class ContactController
         $this->session->verifyCSRFToken();
 
         // Import validation and security classes
-        require_once __DIR__ . '/../../utils/InputValidator.php';
-        require_once __DIR__ . '/../../utils/Security.php';
 
         // Sanitize input data
         $address = Security::sanitizeInput($_POST['address'] ?? '');
@@ -157,8 +161,6 @@ class ContactController
         $this->session->verifyCSRFToken();
 
         // Import validation and security classes
-        require_once __DIR__ . '/../../utils/InputValidator.php';
-        require_once __DIR__ . '/../../utils/Security.php';
 
         // Sanitize input data
         $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
@@ -261,8 +263,6 @@ class ContactController
         $this->session->verifyCSRFToken();
 
         // Import validation and security classes
-        require_once __DIR__ . '/../../utils/InputValidator.php';
-        require_once __DIR__ . '/../../utils/Security.php';
 
         // Sanitize input data
         $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
@@ -330,8 +330,6 @@ class ContactController
         $this->session->verifyCSRFToken();
 
         // Import validation and security classes
-        require_once __DIR__ . '/../../utils/InputValidator.php';
-        require_once __DIR__ . '/../../utils/Security.php';
 
         // Sanitize input data
         $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
@@ -399,8 +397,6 @@ class ContactController
         $this->session->verifyCSRFToken();
 
         // Import validation and security classes
-        require_once __DIR__ . '/../../utils/InputValidator.php';
-        require_once __DIR__ . '/../../utils/Security.php';
 
         // Sanitize input data
         $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
@@ -468,8 +464,6 @@ class ContactController
         $this->session->verifyCSRFToken();
 
         // Import validation and security classes
-        require_once __DIR__ . '/../../utils/InputValidator.php';
-        require_once __DIR__ . '/../../utils/Security.php';
 
         // Sanitize input data
         $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');
@@ -573,10 +567,6 @@ class ContactController
         try {
             // CSRF Protection: Verify token before processing
             $this->session->verifyCSRFToken();
-
-            // Import validation and security classes
-            require_once __DIR__ . '/../../utils/InputValidator.php';
-            require_once __DIR__ . '/../../utils/Security.php';
 
             // Sanitize input data
             $contactAddress = Security::sanitizeInput($_POST['contact_address'] ?? '');

@@ -1,6 +1,11 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Cli;
+
+use Eiou\Core\ErrorCodes;
+use Eiou\Utils\SecureLogger;
+
 /**
  * CLI Output Manager
  *
@@ -9,11 +14,6 @@
  *
  * @package Cli
  */
-
-require_once __DIR__ . '/CliJsonResponse.php';
-require_once __DIR__ . '/../core/ErrorCodes.php';
-require_once __DIR__ . '/../utils/SecureLogger.php';
-
 class CliOutputManager
 {
     /** @var bool Whether JSON output mode is enabled */

@@ -1,12 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Core;
+
+use Eiou\Utils\SecureLogger;
+use Exception;
+use Throwable;
+
 /**
  * Standardized error handling system
  * Provides consistent error handling patterns across the application
  */
-
-require_once __DIR__ . '/ErrorCodes.php';
 
 class ErrorHandler {
 

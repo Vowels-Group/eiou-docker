@@ -1,7 +1,9 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../contracts/EventDispatcherInterface.php';
+namespace Eiou\Events;
+
+use Eiou\Contracts\EventDispatcherInterface;
 
 /**
  * Event Dispatcher

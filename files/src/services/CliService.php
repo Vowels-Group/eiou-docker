@@ -1,11 +1,22 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../core/ErrorCodes.php';
-require_once __DIR__ . '/../utils/InputValidator.php';
-require_once __DIR__ . '/../cli/CliOutputManager.php';
-require_once __DIR__ . '/../contracts/CliServiceInterface.php';
+namespace Eiou\Services;
 
+use Eiou\Core\ErrorCodes;
+use Eiou\Core\Constants;
+use Eiou\Utils\InputValidator;
+use Eiou\Utils\SecureSeedphraseDisplay;
+use Eiou\Cli\CliOutputManager;
+use Eiou\Contracts\CliServiceInterface;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\CurrencyUtilityService;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Services\Utilities\GeneralUtilityService;
+use Eiou\Core\UserContext;
 
 /**
  * Cli Service
@@ -894,7 +905,6 @@ HELP;
         // SECURITY: Authentication code is stored in a secure temp file to prevent exposure in logs
         $authcodeInfo = ['status' => '[REDACTED]'];
         if ($showAuth) {
-            require_once '/etc/eiou/src/utils/SecureSeedphraseDisplay.php';
             $authcode = $this->currentUser->getAuthCode();
             if ($authcode) {
                 $displayResult = SecureSeedphraseDisplay::displayAuthcode($authcode);

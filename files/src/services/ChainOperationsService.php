@@ -1,12 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/../contracts/ChainOperationsInterface.php';
-require_once __DIR__ . '/../contracts/SyncServiceInterface.php';
-require_once __DIR__ . '/../database/TransactionChainRepository.php';
-require_once __DIR__ . '/../database/TransactionRepository.php';
-require_once __DIR__ . '/../core/Constants.php';
+namespace Eiou\Services;
+
+use Eiou\Utils\SecureLogger;
+use Eiou\Contracts\ChainOperationsInterface;
+use Eiou\Contracts\SyncServiceInterface;
+use Eiou\Database\TransactionChainRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
+use RuntimeException;
 
 /**
  * Chain Operations Service

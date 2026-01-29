@@ -1,6 +1,15 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Services\Utilities;
+
+use Eiou\Contracts\CurrencyUtilityServiceInterface;
+use Eiou\Contracts\GeneralUtilityServiceInterface;
+use Eiou\Contracts\TimeUtilityServiceInterface;
+use Eiou\Contracts\TransportServiceInterface;
+use Eiou\Contracts\ValidationUtilityServiceInterface;
+use ServiceContainer;
+
 /**
  * Utility Service Container
  *
@@ -10,12 +19,6 @@
  * This class is managed by ServiceContainer and should be obtained via:
  * ServiceContainer::getUtilityContainer()
  */
-
-require_once __DIR__ . '/../ServiceContainer.php';
-require_once __DIR__ . '/TimeUtilityService.php';
-require_once __DIR__ . '/CurrencyUtilityService.php';
-require_once __DIR__ . '/ValidationUtilityService.php';
-
 class UtilityServiceContainer
 {
     /**
@@ -46,7 +49,6 @@ class UtilityServiceContainer
     public function getTimeUtility(): TimeUtilityServiceInterface
     {
         if (!isset($this->utilities['TimeUtilityService'])) {
-             require_once __DIR__ . '/TimeUtilityService.php';
             $this->utilities['TimeUtilityService'] = new TimeUtilityService();
         }
         return $this->utilities['TimeUtilityService'];
@@ -60,7 +62,6 @@ class UtilityServiceContainer
     public function getCurrencyUtility(): CurrencyUtilityServiceInterface
     {
         if (!isset($this->utilities['CurrencyUtilityService'])) {
-             require_once __DIR__ . '/CurrencyUtilityService.php';
             $this->utilities['CurrencyUtilityService'] = new CurrencyUtilityService();
         }
         return $this->utilities['CurrencyUtilityService'];
@@ -74,7 +75,6 @@ class UtilityServiceContainer
     public function getValidationUtility(): ValidationUtilityServiceInterface
     {
         if (!isset($this->utilities['ValidationUtilityService'])) {
-             require_once __DIR__ . '/ValidationUtilityService.php';
             $this->utilities['ValidationUtilityService'] = new ValidationUtilityService(
                 $this->mainContainer
             );
@@ -90,7 +90,6 @@ class UtilityServiceContainer
     public function getTransportUtility(): TransportServiceInterface
     {
         if (!isset($this->utilities['TransportUtilityService'])) {
-             require_once __DIR__ . '/TransportUtilityService.php';
             $this->utilities['TransportUtilityService'] = new TransportUtilityService(
                 $this->mainContainer
             );
@@ -106,7 +105,6 @@ class UtilityServiceContainer
     public function getGeneralUtility(): GeneralUtilityServiceInterface
     {
         if (!isset($this->utilities['GeneralUtilityService'])) {
-             require_once __DIR__ . '/GeneralUtilityService.php';
             $this->utilities['GeneralUtilityService'] = new GeneralUtilityService(
                 $this->mainContainer
             );

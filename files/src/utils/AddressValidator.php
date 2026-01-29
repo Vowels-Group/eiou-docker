@@ -13,8 +13,11 @@
  * - HTTPS: https://hostname or https://hostname:port
  * - Tor: *.onion addresses
  *
- * @package Utils
+ * @package Eiou\Utils
  */
+
+namespace Eiou\Utils;
+
 class AddressValidator
 {
     /**

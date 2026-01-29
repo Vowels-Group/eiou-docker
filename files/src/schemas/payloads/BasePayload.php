@@ -1,6 +1,15 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Schemas\Payloads;
+
+use Eiou\Core\UserContext;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\CurrencyUtilityService;
+use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Services\Utilities\ValidationUtilityService;
+use Eiou\Services\Utilities\TransportUtilityService;
+
 /**
  * Abstract base class for all payload builders
  *
@@ -8,8 +17,6 @@
  * used throughout the EIOU protocol for different message types.
  *
  */
-
-require_once dirname(__DIR__,3) . '/src/core/UserContext.php';
 
 abstract class BasePayload
 {

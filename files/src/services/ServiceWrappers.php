@@ -9,7 +9,8 @@
  * in a separate refactoring effort.
  */
 
-require_once __DIR__ . '/ServiceContainer.php';
+use Eiou\Core\Application;
+use Throwable;
 
 // ============================================================================
 // DEBUG SERVICE WRAPPERS

@@ -1,0 +1,37 @@
+<?php
+/**
+ * EIOU Bootstrap File
+ *
+ * This file MUST be included by ALL entry points before using any classes.
+ * It initializes the Composer autoloader for PSR-4 namespace support.
+ *
+ * Entry points that must include this:
+ * - files/root/Functions.php
+ * - files/root/Api.php
+ * - files/root/P2pMessages.php
+ * - files/root/TransactionMessages.php
+ * - files/root/CleanupMessages.php
+ * - files/root/ContactStatusMessages.php
+ * - files/eiou/Eiou.php
+ * - files/scripts/backup-cron.php
+ * - Any inline PHP in startup.sh
+ */
+
+// Prevent double-inclusion
+if (defined('EIOU_BOOTSTRAP_LOADED')) {
+    return;
+}
+define('EIOU_BOOTSTRAP_LOADED', true);
+
+// Define base path constant for any legacy code
+define('EIOU_BASE_PATH', dirname(__DIR__));
+
+// Load Composer autoloader
+$autoloadPath = EIOU_BASE_PATH . '/vendor/autoload.php';
+if (!file_exists($autoloadPath)) {
+    error_log("FATAL: Composer autoload not found at: $autoloadPath");
+    error_log("Run 'composer install' in the /etc/eiou directory");
+    die("Autoloader not found. See error log.\n");
+}
+
+require_once $autoloadPath;

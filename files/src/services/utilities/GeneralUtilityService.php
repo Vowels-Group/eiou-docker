@@ -1,17 +1,17 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../../contracts/GeneralUtilityServiceInterface.php';
+namespace Eiou\Services\Utilities;
+
+use Eiou\Contracts\GeneralUtilityServiceInterface;
+use Eiou\Core\UserContext;
+use ServiceContainer;
 
 /**
- * Transport Utility Service
+ * General Utility Service
  *
- * Handles Transport
+ * Handles general utility functions.
  */
-
-require_once __DIR__ . '/../../core/Constants.php';
-
-
 class GeneralUtilityService implements GeneralUtilityServiceInterface
 {
     /**

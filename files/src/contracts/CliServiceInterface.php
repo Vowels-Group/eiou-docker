@@ -1,5 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
+namespace Eiou\Contracts;
+
+use Eiou\Services\CliOutputManager;
 
 /**
  * CLI Service Interface
@@ -27,10 +30,10 @@ interface CliServiceInterface
      * - hostname: Node hostname
      *
      * @param array $argv The CLI input data
-     * @param \CliOutputManager|null $output Optional output manager for JSON support
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function changeSettings(array $argv, ?\CliOutputManager $output = null);
+    public function changeSettings(array $argv, ?CliOutputManager $output = null);
 
     /**
      * Display current settings of user in the CLI
@@ -38,10 +41,10 @@ interface CliServiceInterface
      * Shows all current user settings including currency, fees, limits,
      * P2P configuration, output settings, and transport mode.
      *
-     * @param \CliOutputManager|null $output Optional output manager for JSON support
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function displayCurrentSettings(?\CliOutputManager $output = null);
+    public function displayCurrentSettings(?CliOutputManager $output = null);
 
     /**
      * Display available commands to user in the CLI
@@ -50,10 +53,10 @@ interface CliServiceInterface
      * If a specific command is provided, shows detailed help for that command.
      *
      * @param array $argv The CLI input data
-     * @param \CliOutputManager|null $output Optional output manager for JSON support
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function displayHelp(array $argv, ?\CliOutputManager $output = null);
+    public function displayHelp(array $argv, ?CliOutputManager $output = null);
 
     /**
      * Display user information to user in the CLI
@@ -62,10 +65,10 @@ interface CliServiceInterface
      * detailed balance information when 'detail' argument is provided.
      *
      * @param array $argv The CLI input data
-     * @param \CliOutputManager|null $output Optional output manager for JSON support
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function displayUserInfo(array $argv, ?\CliOutputManager $output = null);
+    public function displayUserInfo(array $argv, ?CliOutputManager $output = null);
 
     /**
      * Display pending contact requests (both incoming and outgoing)
@@ -75,10 +78,10 @@ interface CliServiceInterface
      * - Outgoing: Requests user initiated awaiting recipient acceptance
      *
      * @param array $argv The CLI input data
-     * @param \CliOutputManager|null $output Optional output manager for JSON support
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function displayPendingContacts(array $argv, ?\CliOutputManager $output = null): void;
+    public function displayPendingContacts(array $argv, ?CliOutputManager $output = null): void;
 
     /**
      * Display overview dashboard with balances and recent transactions
@@ -89,10 +92,10 @@ interface CliServiceInterface
      * - Recent transactions (configurable limit, default 5)
      *
      * @param array $argv The CLI input data
-     * @param \CliOutputManager|null $output Optional output manager for JSON support
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function displayOverview(array $argv, ?\CliOutputManager $output = null): void;
+    public function displayOverview(array $argv, ?CliOutputManager $output = null): void;
 
     /**
      * View balance information in the CLI based on transactions
@@ -115,10 +118,10 @@ interface CliServiceInterface
      * Optionally filters by contact address or name.
      *
      * @param array $argv The CLI input data
-     * @param \CliOutputManager|null $output Optional output manager for JSON support
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function viewBalances(array $argv, ?\CliOutputManager $output = null);
+    public function viewBalances(array $argv, ?CliOutputManager $output = null);
 
     /**
      * Display all transaction history in pretty print table to user in the CLI
@@ -127,10 +130,10 @@ interface CliServiceInterface
      * contact name/address, amount, and currency. Optionally filters by contact.
      *
      * @param array $argv The CLI input data
-     * @param \CliOutputManager|null $output Optional output manager for JSON support
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function viewTransactionHistory(array $argv, ?\CliOutputManager $output = null);
+    public function viewTransactionHistory(array $argv, ?CliOutputManager $output = null);
 
     /**
      * Helper to display transaction history (sent or received) in pretty print table
@@ -140,8 +143,8 @@ interface CliServiceInterface
      * @param array $transactions The formatted transaction data
      * @param string $direction Direction: 'received' or 'sent'
      * @param int|string $displayLimit The limit of output displayed (int or 'all')
-     * @param \CliOutputManager|null $output Optional output manager for JSON support
+     * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return void
      */
-    public function displayHistory(array $transactions, string $direction, $displayLimit, ?\CliOutputManager $output = null);
+    public function displayHistory(array $transactions, string $direction, $displayLimit, ?CliOutputManager $output = null);
 }

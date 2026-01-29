@@ -14,8 +14,10 @@
  * 1. Direct writes to /dev/tty (interactive terminal)
  * 2. File contents in /dev/shm (user must explicitly read)
  *
- * @package Utils
+ * @package Eiou\Utils
  */
+
+namespace Eiou\Utils;
 
 class SecureSeedphraseDisplay
 {

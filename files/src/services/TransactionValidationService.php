@@ -1,12 +1,22 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/../utils/InputValidator.php';
-require_once __DIR__ . '/../core/Constants.php';
-require_once __DIR__ . '/../core/ErrorHandler.php';
-require_once __DIR__ . '/../contracts/TransactionValidationServiceInterface.php';
-require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
+namespace Eiou\Services;
+
+use Eiou\Utils\SecureLogger;
+use Eiou\Utils\InputValidator;
+use Eiou\Core\Constants;
+use Eiou\Core\ErrorHandler;
+use Eiou\Core\UserContext;
+use Eiou\Contracts\TransactionValidationServiceInterface;
+use Eiou\Contracts\TransactionServiceInterface;
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Database\TransactionRepository;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\TransactionChainRepository;
+use Eiou\Services\Utilities\ValidationUtilityService;
+use Eiou\Schemas\Payloads\TransactionPayload;
+use RuntimeException;
 
 /**
  * Transaction Validation Service
@@ -113,7 +123,6 @@ class TransactionValidationService implements TransactionValidationServiceInterf
         $this->secureLogger = $secureLogger;
 
         // Initialize TransactionChainRepository
-        require_once __DIR__ . '/../database/TransactionChainRepository.php';
         $this->transactionChainRepository = new TransactionChainRepository();
     }
 

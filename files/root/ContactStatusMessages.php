@@ -13,6 +13,9 @@
 
 require_once(__DIR__ . "/Functions.php");
 
+use Eiou\Core\Application;
+use Eiou\Core\Constants;
+
 // Initialize security components for contact status processing
 require_once __DIR__ . '/SecurityInit.php';
 

@@ -1,6 +1,11 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Security;
+
+use InvalidArgumentException;
+use RuntimeException;
+
 /**
  * Key Encryption Service
  *

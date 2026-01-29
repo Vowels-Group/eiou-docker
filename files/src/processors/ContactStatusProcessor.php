@@ -1,8 +1,18 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/AbstractMessageProcessor.php';
-require_once __DIR__ . '/../utils/SecureLogger.php';
+namespace Eiou\Processors;
+
+use Eiou\Core\Application;
+use Eiou\Core\Constants;
+use Eiou\Context\UserContext;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Services\UtilityServiceContainer;
+use Eiou\Services\TransportUtilityService;
+use Eiou\Schemas\ContactStatusPayload;
+use Eiou\Utils\SecureLogger;
+use Exception;
 
 /**
  * Contact Status Processor
@@ -81,7 +91,6 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
         $this->transactionRepository = $app->services->getTransactionRepository();
 
         // Initialize payload builder
-        require_once '/etc/eiou/src/schemas/payloads/ContactStatusPayload.php';
         $this->contactStatusPayload = new ContactStatusPayload($this->currentUser, $this->utilityContainer);
 
         // Configure adaptive polling (keys must end with _ms to match AdaptivePoller)
@@ -212,7 +221,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             $this->updateContactOnlineStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_OFFLINE);
             return true;
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             // Connection error - contact is offline
             $this->updateContactOnlineStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_OFFLINE);
             SecureLogger::warning("Contact ping failed", [
@@ -235,7 +244,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                 'online_status' => $status,
                 'last_ping_at' => date('Y-m-d H:i:s.u')
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             SecureLogger::error("Failed to update contact online status", [
                 'error' => $e->getMessage()
             ]);
@@ -253,7 +262,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             $this->contactRepository->updateContactFields($pubkey, [
                 'valid_chain' => $valid ? 1 : 0
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             SecureLogger::error("Failed to update contact chain status", [
                 'error' => $e->getMessage()
             ]);
@@ -279,7 +288,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             SecureLogger::info("Chain sync triggered from contact status ping", [
                 'contact_address' => $address
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             SecureLogger::warning("Chain sync failed during contact status ping", [
                 'contact_address' => $address,
                 'error' => $e->getMessage()
@@ -301,7 +310,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                 ]);
             }
             SecureLogger::info("Reset all contacts to unknown status (feature disabled)");
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             SecureLogger::error("Failed to reset contacts to unknown status", [
                 'error' => $e->getMessage()
             ]);

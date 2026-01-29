@@ -1,7 +1,15 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
+namespace Eiou\Database;
+
+use Eiou\Core\UserContext;
+use Eiou\Utils\SecureLogger;
+use PDO;
+use PDOException;
+use PDOStatement;
+use RuntimeException;
+use InvalidArgumentException;
 
 /**
  * Abstract Repository Base Class
@@ -58,7 +66,6 @@ abstract class AbstractRepository {
             $this->pdo = $pdo;
         } else {
             // Get PDO from DatabaseConnection helper
-            require_once __DIR__ . '/Pdo.php';
             try {
                 $this->pdo = createPDOConnection();
             } catch (RuntimeException $e) {
@@ -85,7 +92,6 @@ abstract class AbstractRepository {
      * Load current user
      */
     private function loadCurrentUser(): void {
-        require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
     }
 

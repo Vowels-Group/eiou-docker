@@ -1,16 +1,18 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Database;
+
+use Eiou\Security\KeyEncryption;
+use PDO;
+use Exception;
+
 /**
  * Repository for managing API keys
  *
  * Handles CRUD operations for API keys with secure storage.
  * Secrets are stored encrypted (not hashed) to enable server-side HMAC verification.
  */
-
-require_once dirname(__DIR__) . '/database/AbstractRepository.php';
-require_once dirname(__DIR__) . '/security/KeyEncryption.php';
-
 class ApiKeyRepository extends AbstractRepository {
     /**
      * @var array Allowed column names for SQL injection prevention

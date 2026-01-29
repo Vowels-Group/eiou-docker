@@ -1,15 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Schemas\Payloads;
+
+use Eiou\Core\Constants;
+
 /**
  * Return Peer-to-Peer (RP2P) payload builder
  *
  * This class handles building RP2P payloads for peer-to-peer transaction
  * requests, acceptances, and rejections.
- *
  */
-
-require_once __DIR__ . '/BasePayload.php';
 
 class Rp2pPayload extends BasePayload
 {

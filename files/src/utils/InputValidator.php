@@ -6,6 +6,11 @@
  * Provides comprehensive input validation and sanitization for the eIOU application
  */
 
+namespace Eiou\Utils;
+
+use Eiou\Core\Constants;
+use Eiou\Context\UserContext;
+
 class InputValidator {
 
     /**

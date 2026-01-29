@@ -1,4 +1,5 @@
 <?php
+namespace Eiou\Contracts;
 
 /**
  * Interface for P2P (peer-to-peer) services.

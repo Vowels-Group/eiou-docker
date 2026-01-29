@@ -1,16 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Schemas\Payloads;
+
+use Eiou\Core\Constants;
+
 /**
  * Message payload builder for contact and transaction messages
  *
  * This class handles building various message payloads for contact
  * status inquiries and transaction completion confirmations.
- *
- * IMPORTANT: This codebase does NOT use namespaces.
  */
-
-require_once __DIR__ . '/BasePayload.php';
 
 class MessagePayload extends BasePayload
 {

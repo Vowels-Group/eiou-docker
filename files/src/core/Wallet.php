@@ -1,9 +1,13 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../cli/CliOutputManager.php';
-require_once __DIR__ . '/ErrorCodes.php';
-require_once __DIR__ . '/../utils/SecureSeedphraseDisplay.php';
+namespace Eiou\Core;
+
+use Eiou\Cli\CliOutputManager;
+use Eiou\Utils\SecureSeedphraseDisplay;
+use Eiou\Security\KeyEncryption;
+use Eiou\Security\BIP39;
+use Eiou\Security\TorKeyDerivation;
 
 /**
  * Wallet management for BIP39 seed phrase generation and restoration
@@ -69,10 +73,6 @@ class Wallet{
             return;
         }
 
-        // Load KeyEncryption for secure key storage
-        require_once __DIR__ . '/../security/KeyEncryption.php';
-        require_once __DIR__ . '/../security/BIP39.php';
-
         // Add default user values in defaultconfig.json
         $defaultConfig = json_encode([
             'defaultCurrency' => Constants::TRANSACTION_DEFAULT_CURRENCY,           // Default currency
@@ -103,7 +103,6 @@ class Wallet{
 
         // Derive deterministic Tor hidden service keys from seed
         // This ensures the same .onion address is restored from the seed phrase
-        require_once __DIR__ . '/../security/TorKeyDerivation.php';
         $torAddress = TorKeyDerivation::generateHiddenServiceFiles($seed);
 
         // Derive deterministic authentication code from seed
@@ -195,10 +194,6 @@ class Wallet{
     public static function restoreWallet(array $argv, ?CliOutputManager $output = null): void {
         $output = $output ?? CliOutputManager::getInstance();
 
-        // Load required security components
-        require_once __DIR__ . '/../security/KeyEncryption.php';
-        require_once __DIR__ . '/../security/BIP39.php';
-
         // Get seed phrase from arguments (words 3 onwards)
         // Usage: eiou generate restore word1 word2 word3 ... word24
         if (count($argv) < 27) { // eiou generate restore + 24 words
@@ -278,7 +273,6 @@ class Wallet{
 
         // Derive deterministic Tor hidden service keys from seed
         // This restores the SAME .onion address as the original wallet
-        require_once __DIR__ . '/../security/TorKeyDerivation.php';
         $torAddress = TorKeyDerivation::generateHiddenServiceFiles($seed);
 
         // Derive deterministic authentication code from seed
@@ -431,8 +425,6 @@ class Wallet{
      * @return array Array of extracted BIP39 words
      */
     private static function extractSeedWordsFromContent(string $content): array {
-        require_once __DIR__ . '/../security/BIP39.php';
-
         // Get the BIP39 wordlist for validation
         $wordlist = BIP39::getWordlist();
         $wordlistLower = array_map('strtolower', $wordlist);

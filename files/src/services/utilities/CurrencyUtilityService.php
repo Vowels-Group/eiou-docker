@@ -1,17 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../../contracts/CurrencyUtilityServiceInterface.php';
+namespace Eiou\Services\Utilities;
+
+use Eiou\Contracts\CurrencyUtilityServiceInterface;
+use Eiou\Core\Constants;
 
 /**
  * Currency Utility Service
  *
  * Handles currency formatting, conversion, and calculations.
  */
-
-require_once __DIR__ . '/../../core/Constants.php';
-
-
 class CurrencyUtilityService implements CurrencyUtilityServiceInterface
 {
     /**

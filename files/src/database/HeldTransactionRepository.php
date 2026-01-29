@@ -1,8 +1,11 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/AbstractRepository.php';
-require_once __DIR__ . '/../utils/SecureLogger.php';
+namespace Eiou\Database;
+
+use Eiou\Utils\SecureLogger;
+use PDO;
+use PDOException;
 
 /**
  * HeldTransactionRepository

@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+use Eiou\Gui\Helpers\ContactDataBuilder;
+
 /**
  * GUI Request Router and View Data Initializer
  *
@@ -157,5 +159,4 @@ try {
 }
 
 // Initialize ContactDataBuilder helper
-require_once __DIR__ . '/../helpers/ContactDataBuilder.php';
 $contactDataBuilder = new ContactDataBuilder($addressTypes);

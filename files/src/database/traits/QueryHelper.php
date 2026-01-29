@@ -1,6 +1,10 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Database\Traits;
+
+use PDO;
+
 /**
  * Query Helper Trait
  *

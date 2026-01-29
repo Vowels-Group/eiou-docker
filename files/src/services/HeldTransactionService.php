@@ -1,12 +1,19 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/../core/Constants.php';
-require_once __DIR__ . '/../contracts/HeldTransactionServiceInterface.php';
-require_once __DIR__ . '/../database/TransactionChainRepository.php';
-require_once __DIR__ . '/../events/EventDispatcher.php';
-require_once __DIR__ . '/../events/SyncEvents.php';
+namespace Eiou\Services;
+
+use Eiou\Utils\SecureLogger;
+use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
+use Eiou\Contracts\HeldTransactionServiceInterface;
+use Eiou\Database\HeldTransactionRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Database\TransactionChainRepository;
+use Eiou\Events\EventDispatcher;
+use Eiou\Events\SyncEvents;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Schemas\Payloads\TransactionPayload;
 
 /**
  * Held Transaction Service
@@ -77,7 +84,6 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
         $this->utilityContainer = $utilityContainer;
         $this->currentUser = $currentUser;
 
-        require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser, $this->utilityContainer);
 
         // Subscribe to sync completion events for event-driven communication

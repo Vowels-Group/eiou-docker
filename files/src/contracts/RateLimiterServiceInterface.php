@@ -1,4 +1,6 @@
 <?php
+namespace Eiou\Contracts;
+
 /**
  * Rate Limiter Service Interface
  *

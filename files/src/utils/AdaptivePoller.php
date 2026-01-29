@@ -6,6 +6,10 @@
  * Dynamically adjusts polling intervals based on system load and queue size
  */
 
+namespace Eiou\Utils;
+
+use Eiou\Core\Constants;
+
 class AdaptivePoller {
     private $minInterval;
     private $maxInterval;

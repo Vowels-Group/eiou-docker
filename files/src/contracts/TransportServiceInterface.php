@@ -1,4 +1,5 @@
 <?php
+namespace Eiou\Contracts;
 
 /**
  * Interface for transport utility services.

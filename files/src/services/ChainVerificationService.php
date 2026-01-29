@@ -1,10 +1,14 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/../contracts/ChainVerificationServiceInterface.php';
-require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
-require_once __DIR__ . '/../database/TransactionChainRepository.php';
+namespace Eiou\Services;
+
+use Eiou\Utils\SecureLogger;
+use Eiou\Contracts\ChainVerificationServiceInterface;
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Database\TransactionChainRepository;
+use Eiou\Core\UserContext;
+use RuntimeException;
 
 /**
  * Chain Verification Service

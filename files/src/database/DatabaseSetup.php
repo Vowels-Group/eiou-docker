@@ -1,7 +1,12 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
+namespace Eiou\Database;
+
+use Eiou\Utils\SecureLogger;
+use PDO;
+use PDOException;
+use RuntimeException;
 
 function freshInstall(){
     // Check if the configuration file exists
@@ -21,7 +26,6 @@ function freshInstall(){
 
         // Connect as root to create database and user
         try {
-            require_once '/etc/eiou/src/database/DatabaseSchema.php';
             $rootConn = new PDO("mysql:host=$dbHost;unix_socket=/var/run/mysqld/mysqld.sock", $dbRootUser, $dbRootPass);         
             $rootConn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -119,7 +123,6 @@ function freshInstall(){
  * @return array Migration results
  */
 function runMigrations(PDO $pdo): array {
-    require_once '/etc/eiou/src/database/DatabaseSchema.php';
 
     $results = [];
 

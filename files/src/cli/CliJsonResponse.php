@@ -1,6 +1,10 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Cli;
+
+use Eiou\Core\ErrorCodes;
+
 /**
  * CLI JSON Response Formatter
  *
@@ -9,9 +13,6 @@
  *
  * @package Cli
  */
-
-require_once __DIR__ . '/../core/ErrorCodes.php';
-
 class CliJsonResponse
 {
     /** @var string Current CLI version */

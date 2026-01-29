@@ -1,10 +1,20 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/../contracts/ContactStatusServiceInterface.php';
-require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
+namespace Eiou\Services;
 
+use Eiou\Utils\SecureLogger;
+use Eiou\Contracts\ContactStatusServiceInterface;
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Core\UserContext;
+use Eiou\Core\Constants;
+use Eiou\Schemas\Payloads\ContactStatusPayload;
+use RuntimeException;
+use Exception;
 
 /**
  * Contact Status Service
@@ -118,7 +128,6 @@ class ContactStatusService implements ContactStatusServiceInterface {
         $this->currentUser = $currentUser;
 
         // Initialize payload builder
-        require_once '/etc/eiou/src/schemas/payloads/ContactStatusPayload.php';
         $this->contactStatusPayload = new ContactStatusPayload($this->currentUser, $this->utilityContainer);
     }
 

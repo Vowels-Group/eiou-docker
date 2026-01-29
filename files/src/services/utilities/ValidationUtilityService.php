@@ -1,17 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../../contracts/ValidationUtilityServiceInterface.php';
+namespace Eiou\Services\Utilities;
+
+use Eiou\Contracts\ValidationUtilityServiceInterface;
+use ServiceContainer;
 
 /**
  * Validation Utility Service
  *
  * Handles validation logic for requests and data structures.
  */
-
-require_once __DIR__ . '/../ServiceContainer.php';
-
-
 class ValidationUtilityService implements ValidationUtilityServiceInterface
 {
     /**

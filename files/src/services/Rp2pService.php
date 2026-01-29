@@ -1,11 +1,25 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/MessageDeliveryService.php';
-require_once __DIR__ . '/../contracts/Rp2pServiceInterface.php';
-require_once __DIR__ . '/../contracts/P2pTransactionSenderInterface.php';
+namespace Eiou\Services;
 
+use Eiou\Utils\SecureLogger;
+use Eiou\Contracts\Rp2pServiceInterface;
+use Eiou\Contracts\P2pTransactionSenderInterface;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\ValidationUtilityService;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Core\UserContext;
+use Eiou\Core\Constants;
+use Eiou\Schemas\Payloads\Rp2pPayload;
+use PDOException;
+use Exception;
+use RuntimeException;
 
 /**
  * RP2P Service
@@ -136,7 +150,6 @@ class Rp2pService implements Rp2pServiceInterface {
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
 
-        require_once '/etc/eiou/src/schemas/payloads/Rp2pPayload.php';
         $this->rp2pPayload = new Rp2pPayload($this->currentUser,$this->utilityContainer);
     }
 
