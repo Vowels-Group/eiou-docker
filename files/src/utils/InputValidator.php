@@ -9,7 +9,7 @@
 namespace Eiou\Utils;
 
 use Eiou\Core\Constants;
-use Eiou\Context\UserContext;
+use Eiou\Core\UserContext;
 
 class InputValidator {
 

@@ -5,11 +5,11 @@ namespace Eiou\Processors;
 
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
-use Eiou\Context\UserContext;
+use Eiou\Core\UserContext;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\TransactionRepository;
-use Eiou\Services\UtilityServiceContainer;
-use Eiou\Services\TransportUtilityService;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Schemas\ContactStatusPayload;
 use Eiou\Utils\SecureLogger;
 use Exception;
