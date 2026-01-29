@@ -5,7 +5,7 @@ namespace Eiou\Services\Utilities;
 
 use Eiou\Contracts\GeneralUtilityServiceInterface;
 use Eiou\Core\UserContext;
-use ServiceContainer;
+use Eiou\Services\ServiceContainer;
 
 /**
  * General Utility Service

@@ -8,7 +8,7 @@ use Eiou\Contracts\GeneralUtilityServiceInterface;
 use Eiou\Contracts\TimeUtilityServiceInterface;
 use Eiou\Contracts\TransportServiceInterface;
 use Eiou\Contracts\ValidationUtilityServiceInterface;
-use ServiceContainer;
+use Eiou\Services\ServiceContainer;
 
 /**
  * Utility Service Container

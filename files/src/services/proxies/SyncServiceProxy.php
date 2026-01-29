@@ -4,8 +4,8 @@
 namespace Eiou\Services\Proxies;
 
 use Eiou\Contracts\SyncTriggerInterface;
-use ServiceContainer;
-use SyncService;
+use Eiou\Services\ServiceContainer;
+use Eiou\Services\SyncService;
 
 /**
  * SyncServiceProxy - Lazy proxy for SyncService to break circular dependencies

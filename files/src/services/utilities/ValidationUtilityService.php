@@ -4,7 +4,7 @@
 namespace Eiou\Services\Utilities;
 
 use Eiou\Contracts\ValidationUtilityServiceInterface;
-use ServiceContainer;
+use Eiou\Services\ServiceContainer;
 
 /**
  * Validation Utility Service
