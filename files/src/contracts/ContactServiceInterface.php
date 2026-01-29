@@ -2,6 +2,7 @@
 namespace Eiou\Contracts;
 
 use Eiou\Cli\CliOutputManager;
+use Eiou\Exceptions\ValidationServiceException;
 
 /**
  * Interface for contact management services.

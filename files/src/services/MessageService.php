@@ -20,6 +20,7 @@ use Eiou\Schemas\Payloads\ContactPayload;
 use Eiou\Schemas\Payloads\TransactionPayload;
 use Eiou\Schemas\Payloads\UtilPayload;
 use Eiou\Schemas\Payloads\MessagePayload;
+use Eiou\Exceptions\FatalServiceException;
 use RuntimeException;
 
 /**
@@ -285,8 +286,12 @@ class MessageService implements MessageServiceInterface {
     public function handleMessageRequest(array $request): void {
         // Check if message is from a known or logical source
         if(!$this->checkMessageValidity($request)){
-            echo $this->utilPayload->buildInvalidSource($request);
-            exit();
+            throw new FatalServiceException(
+                "Invalid message source",
+                \Eiou\Core\ErrorCodes::UNAUTHORIZED,
+                ['request_type' => $request['typeMessage'] ?? 'unknown'],
+                401
+            );
         }
 
         // Handle Transaction messages

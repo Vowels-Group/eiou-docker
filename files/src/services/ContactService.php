@@ -21,6 +21,7 @@ use Eiou\Utils\SecureLogger;
 use Eiou\Core\UserContext;
 use Eiou\Schemas\Payloads\ContactPayload;
 use Eiou\Schemas\Payloads\MessagePayload;
+use Eiou\Exceptions\ValidationServiceException;
 use RuntimeException;
 
 /**
@@ -1131,8 +1132,12 @@ class ContactService implements ContactServiceInterface {
                     'name' => $data[2] ?? 'empty',
                     'error' => $nameValidation['error']
                 ]);
-                $output->error("Invalid name: " . $nameValidation['error'], ErrorCodes::INVALID_NAME, 400);
-                exit(1);
+                throw new ValidationServiceException(
+                    "Invalid name: " . $nameValidation['error'],
+                    ErrorCodes::INVALID_NAME,
+                    'name',
+                    400
+                );
             }
             $name = $nameValidation['value'];
         }
@@ -1178,8 +1183,12 @@ class ContactService implements ContactServiceInterface {
                 'value' => $data,
                 'error' => $amountValidation['error']
             ]);
-            $output->error("Invalid parameter amount: " . $amountValidation['error'], ErrorCodes::INVALID_PARAMS, 400);
-            exit(0);
+            throw new ValidationServiceException(
+                "Invalid parameter amount: " . $amountValidation['error'],
+                ErrorCodes::INVALID_PARAMS,
+                'parameters',
+                400
+            );
         }
 
         if ($this->transportUtility->isAddress($data[2])) {
@@ -1189,8 +1198,12 @@ class ContactService implements ContactServiceInterface {
                     'address' => $data[2] ?? 'empty',
                     'error' => $addressValidation['error']
                 ]);
-                $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
-                exit(1);
+                throw new ValidationServiceException(
+                    "Invalid Address: " . $addressValidation['error'],
+                    ErrorCodes::INVALID_ADDRESS,
+                    'address',
+                    400
+                );
             }
             $address = $addressValidation['value'];
             $transportIndex = $this->transportUtility->determineTransportType($address);

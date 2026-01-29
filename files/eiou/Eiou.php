@@ -41,6 +41,10 @@ require_once '/etc/eiou/SecurityInit.php';
 use Eiou\Core\Application;
 use Eiou\Core\ErrorCodes;
 use Eiou\Cli\CliOutputManager;
+use Eiou\Exceptions\ServiceException;
+use Eiou\Exceptions\FatalServiceException;
+use Eiou\Exceptions\RecoverableServiceException;
+use Eiou\Exceptions\ValidationServiceException;
 
 // Get application instance (if first time build database)
 $app = Application::getInstance();
@@ -105,6 +109,9 @@ if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
         exit(1);
     }
 }
+
+// Wrap command dispatch in try-catch to handle ServiceExceptions
+try {
 
 // Info
 if ($request === "info") {
@@ -302,4 +309,47 @@ else{
   $cliService = $app->services->getCliService();
   $cliService->displayHelp($cleanArgv, $output);
   $output->error("Command '$request' not found", ErrorCodes::COMMAND_NOT_FOUND, 404);
+}
+
+} catch (ValidationServiceException $e) {
+    // Handle validation errors - input validation failures
+    $output->error($e->getMessage(), $e->getErrorCode(), $e->getHttpStatus(), $e->getContext());
+    $app->getLogger()->warning("Validation error", [
+        'command' => $request,
+        'field' => $e->getField(),
+        'error' => $e->getMessage(),
+        'code' => $e->getErrorCode()
+    ]);
+    exit($e->getExitCode());
+
+} catch (FatalServiceException $e) {
+    // Handle fatal errors - unrecoverable service failures
+    $output->error($e->getMessage(), $e->getErrorCode(), $e->getHttpStatus(), $e->getContext());
+    $app->getLogger()->error("Fatal service error", [
+        'command' => $request,
+        'error' => $e->getMessage(),
+        'code' => $e->getErrorCode(),
+        'context' => $e->getContext()
+    ]);
+    exit($e->getExitCode());
+
+} catch (RecoverableServiceException $e) {
+    // Handle recoverable errors - may succeed on retry
+    $output->error($e->getMessage(), $e->getErrorCode(), $e->getHttpStatus(), $e->getContext());
+    $app->getLogger()->info("Recoverable service error", [
+        'command' => $request,
+        'error' => $e->getMessage(),
+        'code' => $e->getErrorCode()
+    ]);
+    exit($e->getExitCode());
+
+} catch (ServiceException $e) {
+    // Catch-all for any ServiceException subclass not handled above
+    $output->error($e->getMessage(), $e->getErrorCode(), $e->getHttpStatus(), $e->getContext());
+    $app->getLogger()->error("Service error", [
+        'command' => $request,
+        'error' => $e->getMessage(),
+        'code' => $e->getErrorCode()
+    ]);
+    exit($e->getExitCode());
 }
