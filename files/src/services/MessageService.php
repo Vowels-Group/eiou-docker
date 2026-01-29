@@ -432,7 +432,7 @@ class MessageService implements MessageServiceInterface {
 
             // Return acknowledgment with the received status
             echo json_encode([
-                'status' => Constants::STATUS_RECEIVED,
+                'status' => Constants::DELIVERY_RECEIVED,
                 'message' => 'Contact message received',
                 'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($senderAddress),
                 'senderPublicKey' => $this->currentUser->getPublicKey()

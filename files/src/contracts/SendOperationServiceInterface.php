@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 namespace Eiou\Contracts;
 
-use Eiou\Services\CliOutputManager;
+use Eiou\Cli\CliOutputManager;
 
 /**
  * Send Operation Service Interface

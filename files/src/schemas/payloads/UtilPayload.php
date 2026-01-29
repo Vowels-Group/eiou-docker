@@ -4,6 +4,7 @@
 namespace Eiou\Schemas\Payloads;
 
 use Eiou\Core\ErrorCodes;
+use Eiou\Core\Constants;
 
 /**
  * Utility payload builder

@@ -1,7 +1,7 @@
 <?php
 namespace Eiou\Contracts;
 
-use Eiou\Services\CliOutputManager;
+use Eiou\Cli\CliOutputManager;
 
 /**
  * Interface for contact management services.

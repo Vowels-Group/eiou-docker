@@ -17,6 +17,7 @@ use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Schemas\Payloads\TransactionPayload;
 use RuntimeException;
+use PDOException;
 
 /**
  * Transaction Validation Service

@@ -36,6 +36,7 @@ use Eiou\Utils\Security;
 use Eiou\Utils\SecureLogger;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Services\RateLimiterService;
+use PDO;
 
 // Initialize secure logging
 SecureLogger::init(Constants::LOG_FILE_APP ?: '/var/log/eiou/app.log', Constants::LOG_LEVEL ?: 'INFO');

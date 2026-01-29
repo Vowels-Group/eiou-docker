@@ -14,6 +14,7 @@ use Eiou\Events\EventDispatcher;
 use Eiou\Events\SyncEvents;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Schemas\Payloads\TransactionPayload;
+use Exception;
 
 /**
  * Held Transaction Service

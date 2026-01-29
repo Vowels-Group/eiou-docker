@@ -18,9 +18,11 @@
 // Change to the eiou directory
 chdir('/etc/eiou');
 
-// Load application bootstrap
-require_once '/etc/eiou/src/core/Application.php';
-require_once '/etc/eiou/src/utils/SecureLogger.php';
+// Load application bootstrap (PSR-4 autoloader)
+require_once '/etc/eiou/src/bootstrap.php';
+
+use Eiou\Core\Application;
+use Eiou\Utils\SecureLogger;
 
 try {
     $app = Application::getInstance();

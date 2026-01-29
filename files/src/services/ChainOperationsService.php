@@ -11,6 +11,7 @@ use Eiou\Database\TransactionRepository;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use RuntimeException;
+use Exception;
 
 /**
  * Chain Operations Service

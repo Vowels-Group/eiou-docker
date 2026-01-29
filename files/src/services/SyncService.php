@@ -3,6 +3,7 @@
 
 namespace Eiou\Services;
 
+use Eiou\Utils\SecureLogger;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\UserContext;
@@ -26,6 +27,7 @@ use Eiou\Schemas\Payloads\ContactPayload;
 use Eiou\Schemas\Payloads\TransactionPayload;
 use Eiou\Schemas\Payloads\MessagePayload;
 use RuntimeException;
+use Exception;
 
 /**
  * Sync Service
