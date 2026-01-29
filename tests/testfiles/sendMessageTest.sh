@@ -41,11 +41,11 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
 
     # Get initial balance of recipient
     initialBalance=$(docker exec ${containerKeys[1]} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'${testCurrency}');
-        echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+        echo \$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")
 
     # Send the message
@@ -54,11 +54,11 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
     # Wait for balance change with polling (faster than fixed sleep)
     echo -e "\t   Waiting for balance change (timeout: 20s)..."
     balance_cmd="php -r \"
-        require_once('${REL_APPLICATION}');
-        \\\$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \\\$app = \Eiou\Core\Application::getInstance();
         \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${containerKeys[0]}]}');
         \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'${testCurrency}');
-        echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+        echo \\\$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     \""
     newBalance=$(wait_for_balance_change "${containerKeys[1]}" "$initialBalance" "$balance_cmd" 20 "tx processing")
 
@@ -93,8 +93,8 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
 
     # Get contact name from sender's perspective
     contactName=$(docker exec ${senderContainer} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}', '${receiverAddress}');
         echo \$contact['name'] ?? '';
     " 2>/dev/null || echo "")
@@ -105,11 +105,11 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
 
         # Get initial balance of recipient
         initialBalanceByName=$(docker exec ${receiverContainer} php -r "
-            require_once('${REL_APPLICATION}');
-            \$app = Application::getInstance();
+            require_once('${BOOTSTRAP_PATH}');
+            \$app = \Eiou\Core\Application::getInstance();
             \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
             \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
-            echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+            echo \$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR;
         " 2>/dev/null || echo "0")
 
         # Send using NAME instead of address
@@ -118,11 +118,11 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
         # Wait for balance change with polling
         echo -e "\t   Waiting for balance change (timeout: 20s)..."
         balance_cmd_name="php -r \"
-            require_once('${REL_APPLICATION}');
-            \\\$app = Application::getInstance();
+            require_once('${BOOTSTRAP_PATH}');
+            \\\$app = \Eiou\Core\Application::getInstance();
             \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[${senderContainer}]}');
             \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
-            echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+            echo \\\$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR;
         \""
         newBalanceByName=$(wait_for_balance_change "${receiverContainer}" "$initialBalanceByName" "$balance_cmd_name" 20 "send by name")
 
@@ -187,11 +187,11 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
 
     # Get initial balance of httpD
     initialBalanceD=$(docker exec httpD php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
         \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
-        echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+        echo \$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     " 2>/dev/null || echo "0")
 
     # Send from httpA to httpD (multi-hop)
@@ -200,11 +200,11 @@ if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]];
     # Wait for balance change with polling (multi-hop may take longer)
     echo -e "\t   Waiting for multi-hop routing (timeout: 30s)..."
     balance_cmd_d="php -r \"
-        require_once('${REL_APPLICATION}');
-        \\\$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \\\$app = \Eiou\Core\Application::getInstance();
         \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${containerAddresses[httpC]}');
         \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
-        echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR;
+        echo \\\$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR;
     \""
     newBalanceD=$(wait_for_balance_change "httpD" "$initialBalanceD" "$balance_cmd_d" 30 "multi-hop routing")
 

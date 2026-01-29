@@ -467,8 +467,8 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
 
     # Get contact name for name-based tests
     contactName=$(docker exec ${sourceContainer} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$contact = \$app->services->getContactRepository()->lookupByAddress('${MODE}', '${targetAddress}');
         echo \$contact['name'] ?? '';
     " 2>/dev/null || echo "")

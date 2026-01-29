@@ -303,8 +303,8 @@ echo -e "\n\t-> Testing send with amount exceeding balance (1000000 USD via CLI)
 
 # First check current balance
 currentBalance=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$balances = \$app->services->getBalanceRepository()->getAllBalances();
     \$total = 0;
     foreach (\$balances as \$b) {
@@ -524,8 +524,8 @@ echo -e "\n\t-> Testing send to self (own address)"
 
 # Get own address from container
 ownAddress=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$user = \$app->services->getCurrentUser();
     echo \$user->getHttpAddress() ?? \$user->getHttpsAddress() ?? \$user->getTorAddress() ?? '';
 " 2>/dev/null)

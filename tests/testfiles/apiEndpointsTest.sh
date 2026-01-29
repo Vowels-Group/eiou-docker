@@ -122,7 +122,7 @@ else
     echo -e "\n\t-> Attempting direct PHP API key creation..."
     apiKeyDirect=$(docker exec ${testContainer} php -r "
         require_once '${APPLICATION_FILE}';
-        \$app = Application::getInstance();
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         require_once '${DATABASE_DIR}//ApiKeyRepository.php';
         \$repo = new ApiKeyRepository(\$pdo);

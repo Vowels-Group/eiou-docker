@@ -281,9 +281,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 serviceResult=$(docker exec ${container} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getMessageDeliveryService();
 
     if (\$service !== null && is_object(\$service)) {
@@ -309,9 +309,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 serviceStatsResult=$(docker exec ${container} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getMessageDeliveryService();
 
     \$stats = \$service->getDeliveryStatistics();
@@ -367,9 +367,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 dlqAlertResult=$(docker exec ${container} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getMessageDeliveryService();
 
     \$alert = \$service->getDlqAlertStatus(100); // High threshold for test

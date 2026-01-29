@@ -52,8 +52,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing transactions table structure"
 
 tableStructure=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$pdo = Application::getInstance()->services->getPdo();
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
     \$result = \$pdo->query(\"DESCRIBE transactions\");
     \$columns = \$result->fetchAll(PDO::FETCH_COLUMN);
 
@@ -82,8 +82,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getTransactionHistory method"
 
 historyMethodExists=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$repo = \$app->services->getTransactionRepository();
     echo method_exists(\$repo, 'getTransactionHistory') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
@@ -101,8 +101,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getByTxid method"
 
 byTxidMethodExists=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$repo = \$app->services->getTransactionRepository();
     echo method_exists(\$repo, 'getByTxid') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
@@ -120,8 +120,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getPreviousTxid method"
 
 prevTxidMethodExists=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$repo = \$app->services->getTransactionRepository();
     echo method_exists(\$repo, 'getPreviousTxid') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
@@ -149,8 +149,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getStatusByMemo method"
 
 statusByMemoCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$repo = \$app->services->getTransactionRepository();
 
     if (!method_exists(\$repo, 'getStatusByMemo')) {
@@ -179,8 +179,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getStatusByTxid method"
 
 statusByTxidCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$repo = \$app->services->getTransactionRepository();
 
     if (!method_exists(\$repo, 'getStatusByTxid')) {
@@ -210,10 +210,10 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing buildTransactionStatusResponse method"
 
 statusResponseCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
     require_once('/etc/eiou/src/schemas/payloads/MessagePayload.php');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
 
     // Check if core services exist
     if (!method_exists(\$app->services, 'getCurrentUser')) {
@@ -269,10 +269,10 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing buildTransactionNotFound method"
 
 notFoundCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
     require_once('/etc/eiou/src/schemas/payloads/MessagePayload.php');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
 
     // Check if core services exist
     if (!method_exists(\$app->services, 'getCurrentUser')) {
@@ -333,8 +333,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing tx_type ENUM includes 'contact'"
 
 enumCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$pdo = Application::getInstance()->services->getPdo();
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
     \$result = \$pdo->query(\"SHOW COLUMNS FROM transactions LIKE 'tx_type'\");
     \$row = \$result->fetch(PDO::FETCH_ASSOC);
     echo \$row['Type'];
@@ -355,8 +355,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing contactTransactionExistsForReceiver method"
 
 contactExistsCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$txContactRepo = \$app->services->getTransactionContactRepository();
 
     // First check if method exists
@@ -384,8 +384,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing completeContactTransaction method"
 
 completeContactCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$txContactRepo = \$app->services->getTransactionContactRepository();
 
     if (method_exists(\$txContactRepo, 'completeContactTransaction')) {
@@ -419,8 +419,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getPreviousTxid excludes cancelled"
 
 prevTxidExclusionCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$txRepo = \$app->services->getTransactionRepository();
 
     // First check if method exists
@@ -452,8 +452,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getTransactionsBetweenPubkeys includes all"
 
 syncIncludesCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$txRepo = \$app->services->getTransactionRepository();
 
     if (method_exists(\$txRepo, 'getTransactionsBetweenPubkeys')) {
@@ -486,8 +486,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing held_transactions table exists"
 
 heldTableCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$pdo = Application::getInstance()->services->getPdo();
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
     \$result = \$pdo->query(\"SHOW TABLES LIKE 'held_transactions'\");
     echo \$result->rowCount() > 0 ? 'TABLE_EXISTS' : 'TABLE_MISSING';
 " 2>/dev/null || echo "ERROR")
@@ -507,8 +507,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing HeldTransactionRepository methods"
 
 heldRepoCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
 
     // First check if the getter method exists on ServiceContainer
     if (!method_exists(\$app->services, 'getHeldTransactionRepository')) {
@@ -554,8 +554,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing HeldTransactionService exists"
 
 heldServiceCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
 
     // Check if the getter method exists on ServiceContainer
     if (!method_exists(\$app->services, 'getHeldTransactionService')) {
@@ -593,8 +593,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing held transaction isolation"
 
 isolationCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
 
     // First check if the getter method exists
     if (!method_exists(\$app->services, 'getHeldTransactionRepository')) {
@@ -699,10 +699,10 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing self-send detection"
 
 selfSendCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
     require_once('/etc/eiou/src/utils/InputValidator.php');
 
-    \$userContext = Application::getInstance()->services->getCurrentUser();
+    \$userContext = \Eiou\Core\Application::getInstance()->services->getCurrentUser();
     \$myAddress = \$userContext->getHttpAddress() ?? \$userContext->getTorAddress();
 
     if (\$myAddress === null) {
@@ -734,10 +734,10 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing different address validation"
 
 differentAddressCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
     require_once('/etc/eiou/src/utils/InputValidator.php');
 
-    \$userContext = Application::getInstance()->services->getCurrentUser();
+    \$userContext = \Eiou\Core\Application::getInstance()->services->getCurrentUser();
     \$differentAddress = 'https://different-recipient.example.com';
     \$result = InputValidator::validateNotSelfSend(\$differentAddress, \$userContext);
 
@@ -791,8 +791,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing recipient_signature column exists"
 
 recipientSigColumnCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$pdo = Application::getInstance()->services->getPdo();
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
     \$result = \$pdo->query(\"DESCRIBE transactions\");
     \$columns = \$result->fetchAll(PDO::FETCH_COLUMN);
 
@@ -818,8 +818,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing updateRecipientSignature method"
 
 updateRecipSigMethod=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$repo = \$app->services->getTransactionRepository();
     echo method_exists(\$repo, 'updateRecipientSignature') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
@@ -839,10 +839,10 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing buildAcceptance includes recipientSignature"
 
 acceptancePayloadCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
     require_once('/etc/eiou/src/schemas/payloads/TransactionPayload.php');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$user = \$app->services->getCurrentUser();
     \$utilContainer = \$app->services->getUtilityContainer();
 

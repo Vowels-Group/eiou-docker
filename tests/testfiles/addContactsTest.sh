@@ -35,8 +35,8 @@ while [ $wait_elapsed -lt 10 ]; do
     first_keys=(${first_key//,/ })
     transportCheck=$(getPhpTransportType ${containerAddresses[${first_keys[1]}]})
     statusCheck=$(docker exec ${first_keys[0]} php -r "
-        require_once('${REL_APPLICATION}');
-        echo Application::getInstance()->services->getContactRepository()->getContactStatus(
+        require_once('${BOOTSTRAP_PATH}');
+        echo \\Eiou\\Core\\\Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
             '${transportCheck}','${containerAddresses[${first_keys[1]}]}'
         );
     " 2>/dev/null || echo "pending")

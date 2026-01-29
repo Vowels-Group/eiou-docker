@@ -1231,10 +1231,10 @@ echo -e "\t   Waiting for container initialization..."
 wait_for_container_initialized ${authcodeRestoreContainer} 60 || true
 
 newContainerAuthCode=$(docker exec ${authcodeRestoreContainer} php -r '
-    require_once "/etc/eiou/src/security/KeyEncryption.php";
+    require_once "/etc/eiou/src/bootstrap.php";
     $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
     if (isset($json["authcode_encrypted"])) {
-        $authcode = \KeyEncryption::decrypt($json["authcode_encrypted"]);
+        $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
         echo $authcode;
     } else {
         echo "ERROR_NO_AUTHCODE";

@@ -43,8 +43,8 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
 
     # Query contact details using PHP (with single retry if not found)
     contactData=$(docker exec ${containerKeys[0]} php -r "
-        require_once('${REL_APPLICATION}');
-        \$contact = Application::getInstance()->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
+        require_once('${BOOTSTRAP_PATH}');
+        \$contact = \Eiou\Core\Application::getInstance()->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
         if (\$contact) {
             echo json_encode(\$contact);
         } else {
@@ -58,8 +58,8 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
         wait_for_queue_processed ${containerKeys[0]} 5
         wait_for_queue_processed ${containerKeys[1]} 5
         contactData=$(docker exec ${containerKeys[0]} php -r "
-            require_once('${REL_APPLICATION}');
-            \$contact = Application::getInstance()->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
+            require_once('${BOOTSTRAP_PATH}');
+            \$contact = \Eiou\Core\Application::getInstance()->services->getContactRepository()->lookupByAddress('${MODE}','${containerAddresses[${containerKeys[1]}]}');
             if (\$contact) {
                 echo json_encode(\$contact);
             } else {
@@ -145,15 +145,15 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
 
     # Check forward relationship
     forwardExists=$(docker exec ${containerKeys[0]} php -r "
-        require_once('${REL_APPLICATION}');
-        if(Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
+        require_once('${BOOTSTRAP_PATH}');
+        if(\Eiou\Core\Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
         echo '1';} else{ echo '0';}
     " 2>/dev/null || echo "0")
 
     # Check reverse relationship
     reverseExists=$(docker exec ${containerKeys[1]} php -r "
-        require_once('${REL_APPLICATION}');
-        if(Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
+        require_once('${BOOTSTRAP_PATH}');
+        if(\Eiou\Core\Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
         echo '1';} else{ echo '0';}
     " 2>/dev/null || echo "0")
 
@@ -165,14 +165,14 @@ for containersLinkKey in "${containersLinkKeys[@]}"; do
 
         # Retry checks
         forwardExists=$(docker exec ${containerKeys[0]} php -r "
-            require_once('${REL_APPLICATION}');
-            if(Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
+            require_once('${BOOTSTRAP_PATH}');
+            if(\Eiou\Core\Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[1]}]}')){
             echo '1';} else{ echo '0';}
         " 2>/dev/null || echo "0")
 
         reverseExists=$(docker exec ${containerKeys[1]} php -r "
-            require_once('${REL_APPLICATION}');
-            if(Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
+            require_once('${BOOTSTRAP_PATH}');
+            if(\Eiou\Core\Application::getInstance()->services->getContactRepository()->contactExists('${MODE}','${containerAddresses[${containerKeys[0]}]}')){
             echo '1';} else{ echo '0';}
         " 2>/dev/null || echo "0")
     fi
@@ -199,8 +199,8 @@ for container in "${containers[@]}"; do
 
     # Get contact count from database
     contactCount=$(docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        echo Application::getInstance()->services->getContactRepository()->countAcceptedContacts();
+        require_once('${BOOTSTRAP_PATH}');
+        echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->countAcceptedContacts();
     " 2>/dev/null || echo "0")
 
     if [[ "$contactCount" -gt "0" ]]; then

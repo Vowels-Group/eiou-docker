@@ -57,9 +57,9 @@ for routingPair in "${!routingTests[@]}"; do
         for relay in "${intermediates[@]}"; do
             
             initialRelayBalances[$relay]=$(docker exec ${relay} php -r "
-                require_once('${REL_APPLICATION}');
-                \$balance = Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
-                echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+                require_once('${BOOTSTRAP_PATH}');
+                \$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+                echo \$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
             " 2>/dev/null || echo "0")
         done
 
@@ -72,9 +72,9 @@ for routingPair in "${!routingTests[@]}"; do
         if [[ "${intermediates[0]}" ]]; then
             firstRelay="${intermediates[0]}"
             relay_balance_cmd="php -r \"
-                require_once('${REL_APPLICATION}');
-                \\\$balance = Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
-                echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+                require_once('${BOOTSTRAP_PATH}');
+                \\\$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+                echo \\\$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
             \""
             wait_for_balance_change "$firstRelay" "${initialRelayBalances[$firstRelay]}" "$relay_balance_cmd" 20 "relay fee" > /dev/null 2>&1 || true
         fi
@@ -83,9 +83,9 @@ for routingPair in "${!routingTests[@]}"; do
         relayFeesDetected=0
         for relay in "${intermediates[@]}"; do
             newRelayBalance=$(docker exec ${relay} php -r "
-                require_once('${REL_APPLICATION}');
-                \$balance = Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
-                echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+                require_once('${BOOTSTRAP_PATH}');
+                \$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+                echo \$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
             " 2>/dev/null || echo "0")
 
             balanceDiff=$(awk "BEGIN {print $newRelayBalance - ${initialRelayBalances[$relay]}}")
@@ -109,9 +109,9 @@ for routingPair in "${!routingTests[@]}"; do
             # Re-check relay fees after retry
             for relay in "${intermediates[@]}"; do
                 newRelayBalance=$(docker exec ${relay} php -r "
-                    require_once('${REL_APPLICATION}');
-                    \$balance = Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
-                    echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+                    require_once('${BOOTSTRAP_PATH}');
+                    \$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
+                    echo \$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
                 " 2>/dev/null || echo "0")
 
                 balanceDiff=$(awk "BEGIN {print $newRelayBalance - ${initialRelayBalances[$relay]}}")
@@ -146,8 +146,8 @@ for container in "${containers[@]}"; do
 
     # Query transaction history and check for relay transactions
     transactionTypes=$(docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$results = Application::getInstance()->services->getTransactionStatisticsRepository()->getTypeStatistics();
+        require_once('${BOOTSTRAP_PATH}');
+        \$results = \Eiou\Core\Application::getInstance()->services->getTransactionStatisticsRepository()->getTypeStatistics();
         foreach (\$results as \$row) {
             echo \$row['type'] . ': ' . \$row['count'] . ', ';
         }
@@ -185,8 +185,8 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
 
         # Get initial message count or balance
         initialState=$(docker exec ${lastContainer} php -r "
-            require_once('${REL_APPLICATION}');
-            echo Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
+            require_once('${BOOTSTRAP_PATH}');
+            echo \Eiou\Core\Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
         " 2>/dev/null || echo "0")
 
         # Send end-to-end message
@@ -196,15 +196,15 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
         # Wait for multi-hop routing with polling
         echo -e "\t   Waiting for multi-hop routing (timeout: 30s)..."
         tx_count_cmd="php -r \"
-            require_once('${REL_APPLICATION}');
-            echo Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
+            require_once('${BOOTSTRAP_PATH}');
+            echo \Eiou\Core\Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
         \""
         wait_for_condition "[ \"\$(docker exec ${lastContainer} sh -c '$tx_count_cmd' 2>/dev/null)\" -gt \"$initialState\" ]" 30 1 "multi-hop delivery"
 
         # Check if message arrived
         finalState=$(docker exec ${lastContainer} php -r "
-            require_once('${REL_APPLICATION}');
-            echo Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
+            require_once('${BOOTSTRAP_PATH}');
+            echo \Eiou\Core\Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
         " 2>/dev/null || echo "0")
 
         stateIncreased=$(awk "BEGIN {print ($finalState > $initialState) ? 1 : 0}")
@@ -220,8 +220,8 @@ if [[ "${containers[0]}" ]] && [[ "${containers[-1]}" ]]; then
 
             # Re-check delivery after retry
             finalState=$(docker exec ${lastContainer} php -r "
-                require_once('${REL_APPLICATION}');
-                echo Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
+                require_once('${BOOTSTRAP_PATH}');
+                echo \Eiou\Core\Application::getInstance()->services->getTransactionStatisticsRepository()->getCountByType('received');
             " 2>/dev/null || echo "0")
             stateIncreased=$(awk "BEGIN {print ($finalState > $initialState) ? 1 : 0}")
         fi

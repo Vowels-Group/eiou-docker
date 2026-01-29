@@ -88,8 +88,8 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
 
 # Verify contacts table still exists
 tableCheck=$(docker exec ${testContainer} php -r "
-    require_once '/etc/eiou/src/core/Application.php';
-    \$app = Application::getInstance();
+    require_once '${BOOTSTRAP_PATH}';
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$result = \$pdo->query(\"SHOW TABLES LIKE 'contacts'\");
     echo \$result->rowCount() > 0 ? 'TABLE_EXISTS' : 'TABLE_MISSING';
@@ -130,8 +130,8 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
 
 # Verify contacts still exist
 contactCount=$(docker exec ${testContainer} php -r "
-    require_once '/etc/eiou/src/core/Application.php';
-    \$app = Application::getInstance();
+    require_once '${BOOTSTRAP_PATH}';
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$result = \$pdo->query(\"SELECT COUNT(*) as cnt FROM contacts\");
     \$row = \$result->fetch(PDO::FETCH_ASSOC);
@@ -178,8 +178,8 @@ response=$(docker exec ${testContainer} curl ${CURL_SSL_FLAG} -s \
 
 # Check if script tags are stored raw or sanitized/rejected
 checkResult=$(docker exec ${testContainer} php -r "
-    require_once '/etc/eiou/src/core/Application.php';
-    \$app = Application::getInstance();
+    require_once '${BOOTSTRAP_PATH}';
+    \$app = \Eiou\Core\Application::getInstance();
     \$contactRepo = \$app->services->getContactRepository();
     \$contacts = \$contactRepo->searchContacts('script');
     if (empty(\$contacts)) {

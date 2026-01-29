@@ -101,15 +101,15 @@ echo -e "\t   Waiting for contacts to be accepted..."
 waitElapsed=0
 while [ $waitElapsed -lt 15 ]; do
     senderStatus=$(docker exec ${sender} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$status = \$app->services->getContactRepository()->getContactStatus('${receiverTransportType}', '${receiverAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
 
     receiverStatus=$(docker exec ${receiver} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$status = \$app->services->getContactRepository()->getContactStatus('${senderTransportType}', '${senderAddress}');
         echo \$status ?? 'none';
     " 2>/dev/null || echo "none")
@@ -132,8 +132,8 @@ fi
 # Get public keys directly via PHP (using getPhpTransportType for MODE-aware transport)
 # Using getContactPubkey which is the standard method used across tests
 receiverPubkeyB64=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
@@ -143,8 +143,8 @@ receiverPubkeyB64=$(docker exec ${sender} php -r "
 " 2>/dev/null || echo "ERROR")
 
 receiverPubkeyHash=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${receiverTransportType}', '${receiverAddress}');
     if (\$pubkey) {
         echo hash('sha256', \$pubkey);
@@ -154,8 +154,8 @@ receiverPubkeyHash=$(docker exec ${sender} php -r "
 " 2>/dev/null || echo "ERROR")
 
 senderPubkeyB64=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${senderTransportType}', '${senderAddress}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
@@ -165,8 +165,8 @@ senderPubkeyB64=$(docker exec ${receiver} php -r "
 " 2>/dev/null || echo "ERROR")
 
 senderPubkeyHash=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${senderTransportType}', '${senderAddress}');
     if (\$pubkey) {
         echo hash('sha256', \$pubkey);
@@ -348,8 +348,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing syncTransactionChain method exists"
 
 methodExists=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getSyncService();
     echo method_exists(\$service, 'syncTransactionChain') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
@@ -367,8 +367,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing handleTransactionSyncRequest method exists"
 
 handlerExists=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getSyncService();
     echo method_exists(\$service, 'handleTransactionSyncRequest') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
@@ -405,15 +405,15 @@ wait_for_queue_processed ${sender}
 wait_for_queue_processed ${receiver}
 
 senderTxCount=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
 receiverTxCount=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
     echo \$count;
@@ -424,8 +424,8 @@ if [[ "$receiverTxCount" -lt 3 ]]; then
     wait_for_queue_processed ${sender} 5
     wait_for_queue_processed ${receiver} 5
     receiverTxCount=$(docker exec ${receiver} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
         echo \$count;
@@ -448,15 +448,15 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Deleting transactions from sender"
 
 docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\");
 " 2>/dev/null
 
 senderTxCountAfterDelete=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
     echo \$count;
@@ -476,8 +476,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Triggering sync to recover transactions"
 
 syncResult=$(docker exec ${sender} php -r "
-    require_once('${REL_FUNCTIONS}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
     \$receiverPubkey = base64_decode('${receiverPubkeyB64}');
 
@@ -504,8 +504,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Verifying transactions were recovered"
 
 senderTxCountAfterSync=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
     echo \$count;
@@ -517,8 +517,8 @@ if [[ "$senderTxCountAfterSync" -lt 3 ]]; then
     wait_for_queue_processed ${sender} 5
     wait_for_queue_processed ${receiver} 5
     senderTxCountAfterSync=$(docker exec ${sender} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
         echo \$count;
@@ -537,14 +537,14 @@ fi
 
 # Cleanup
 docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'chain-sync-test-tx%'\");
 " 2>/dev/null
 docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'chain-sync-test-tx%'\");
 " 2>/dev/null
@@ -566,8 +566,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing verifyTransactionSignature method exists"
 
 verifyMethodExists=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
     \$reflection = new ReflectionClass(\$syncService);
     \$hasMethod = \$reflection->hasMethod('verifyTransactionSignature');
@@ -589,8 +589,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing signature reconstruction"
 
 reconstructResult=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
     \$reflection = new ReflectionClass(\$syncService);
     \$hasMethod = \$reflection->hasMethod('reconstructSignedMessage');
@@ -630,15 +630,15 @@ wait_for_queue_processed ${sender} 5
 wait_for_queue_processed ${receiver} 5
 
 initialCountSender=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
 initialCountReceiver=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
     echo \$count;
@@ -652,8 +652,8 @@ if [[ "$initialCountReceiver" -lt 2 ]]; then
         wait_for_queue_processed ${receiver} 5
     done
     initialCountReceiver=$(docker exec ${receiver} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
         echo \$count;
@@ -676,8 +676,8 @@ echo -e "\n\t-> Testing cycle: delete -> send -> resync"
 
 # Delete from sender
 docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\");
 " 2>/dev/null
@@ -697,8 +697,8 @@ wait_for_queue_processed ${sender} 5
 wait_for_queue_processed ${receiver} 5
 
 countAfterCycle=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
     echo \$count;
@@ -712,8 +712,8 @@ if [[ "$countAfterCycle" -lt 2 ]]; then
         wait_for_queue_processed ${receiver} 5
     done
     countAfterCycle=$(docker exec ${sender} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
         echo \$count;
@@ -732,14 +732,14 @@ fi
 
 # Cleanup
 docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'cycle-test%'\");
 " 2>/dev/null
 docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'cycle-test%'\");
 " 2>/dev/null
@@ -759,8 +759,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getTransactionsBetweenPubkeys includes cancelled"
 
 includeCancelledResult=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$transactionRepo = \$app->services->getTransactionRepository();
 
     // Verify method exists
@@ -786,8 +786,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing checkPreviousTxid method exists"
 
 checkPrevTxidResult=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$transactionService = \$app->services->getTransactionService();
     \$reflection = new ReflectionClass(\$transactionService);
     echo \$reflection->hasMethod('checkPreviousTxid') ? 'EXISTS' : 'MISSING';
@@ -806,8 +806,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing rejection includes expected_txid"
 
 rejectionResult=$(docker exec ${receiver} php -r "
-    require_once('${REL_FUNCTIONS}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
 
     \$transactionService = \$app->services->getTransactionService();
     \$reflection = new ReflectionClass(\$transactionService);
@@ -854,8 +854,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing P2P sync capability"
 
 p2pSyncResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
 
     // Check if sync service can handle p2p transactions
@@ -887,8 +887,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing ContactService sync capability"
 
 contactSyncResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$contactService = \$app->services->getContactService();
 
     // Check if contact service exists and has required methods
@@ -925,8 +925,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing proactive sync trigger in checkTransactionPossible"
 
 proactiveSyncResult=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$validationService = \$app->services->getTransactionValidationService();
 
     // Check that TransactionValidationService has the checkTransactionPossible method
@@ -965,8 +965,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing description filtering in handleTransactionSyncRequest"
 
 descriptionFilterResult=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
 
     // Check that SyncService has description filtering logic
@@ -1005,7 +1005,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing P2P descriptions are not included in sync"
 
 p2pDescPrivacyResult=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
     // Simulate a P2P transaction (memo is a hash, not 'standard' or 'contact')
     \$mockTransaction = [
@@ -1057,7 +1057,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing standard transactions include descriptions in sync"
 
 standardDescResult=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
     // Simulate a standard (direct) transaction
     \$mockTransaction = [
@@ -1095,7 +1095,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing contact transactions include descriptions in sync"
 
 contactDescResult=$(docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
     // Simulate a contact transaction
     \$mockTransaction = [
@@ -1144,8 +1144,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing resolveChainConflict method exists"
 
 resolveMethodResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
 
     \$reflection = new ReflectionClass(\$syncService);
@@ -1168,8 +1168,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getLocalTransactionByPreviousTxid method exists"
 
 conflictDetectionResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$transactionChainRepo = \$app->services->getTransactionChainRepository();
 
     if (method_exists(\$transactionChainRepo, 'getLocalTransactionByPreviousTxid')) {
@@ -1192,8 +1192,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing getByPreviousTxid method exists"
 
 getByPrevTxidResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$transactionChainRepo = \$app->services->getTransactionChainRepository();
 
     if (method_exists(\$transactionChainRepo, 'getByPreviousTxid')) {
@@ -1218,8 +1218,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing deterministic ordering (lower txid wins)"
 
 deterministicResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
 
     // Use reflection to test the private resolveChainConflict method
@@ -1272,8 +1272,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing syncTransactionChain returns conflicts_resolved"
 
 syncResultFieldsResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
 
     // Check the syncTransactionChain method returns conflicts_resolved
@@ -1312,8 +1312,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing conflict detection in syncTransactionChain"
 
 conflictDetectionFlowResult=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
 
     \$reflection = new ReflectionClass(\$syncService);
@@ -1369,8 +1369,8 @@ wait_for_queue_processed ${receiver} 5
 
 # Get the base transaction's txid (this will be the shared previous_txid)
 baseTxid=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$stmt = \$pdo->query(\"SELECT txid FROM transactions WHERE description LIKE 'fork-test-base-${timestamp408}' LIMIT 1\");
     \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
@@ -1385,8 +1385,8 @@ if [[ "$baseTxid" != "NOT_FOUND" ]] && [[ "$baseTxid" != "ERROR" ]]; then
     # by directly inserting a conflicting transaction
 
     forkResult=$(docker exec ${sender} php -r "
-        require_once('${REL_FUNCTIONS}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$userContext = \$app->services->getCurrentUser();
         \$transactionRepo = \$app->services->getTransactionRepository();
@@ -1441,14 +1441,14 @@ fi
 
 # Cleanup
 docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'fork-test%'\");
 " 2>/dev/null
 docker exec ${receiver} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'fork-test%'\");
 " 2>/dev/null
@@ -1589,8 +1589,8 @@ delete_all_transactions() {
     local partner_pubkey_hash="$2"
     local pattern="$3"
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$pdo->exec(\"DELETE FROM transactions WHERE
             (sender_public_key_hash = '${partner_pubkey_hash}' OR receiver_public_key_hash = '${partner_pubkey_hash}')
@@ -1604,8 +1604,8 @@ delete_transactions_except_contact() {
     local partner_pubkey_hash="$2"
     local pattern="$3"
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$pdo->exec(\"DELETE FROM transactions WHERE
             (sender_public_key_hash = '${partner_pubkey_hash}' OR receiver_public_key_hash = '${partner_pubkey_hash}')
@@ -1619,8 +1619,8 @@ delete_specific_transactions() {
     local container="$1"
     local pattern="$2"  # e.g., "AB1%" to delete AB1
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '${pattern}'\");
     " 2>/dev/null
@@ -1631,8 +1631,8 @@ get_tx_count() {
     local container="$1"
     local pattern="$2"
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${pattern}'\")->fetchColumn();
         echo \$count;
@@ -1691,20 +1691,20 @@ process_all_queues() {
 cleanup_test_transactions() {
     local ts="$1"
     docker exec ${contactA} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '%-${ts}'\");
     " 2>/dev/null || true
     docker exec ${contactB} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '%-${ts}'\");
     " 2>/dev/null || true
     docker exec ${contactC} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '%-${ts}'\");
     " 2>/dev/null || true
@@ -2631,8 +2631,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing verifyRecipientSignature method exists"
 
 recipSigMethodCheck=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
 
     // Check private method exists using reflection
@@ -2686,8 +2686,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing recipient signature validation skips cancelled transactions"
 
 skipCancelledCheck=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
 
     // Use reflection to access private method
@@ -2719,8 +2719,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing recipient signature validation skips rejected transactions"
 
 skipRejectedCheck=$(docker exec ${sender} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$syncService = \$app->services->getSyncService();
 
     // Use reflection to access private method

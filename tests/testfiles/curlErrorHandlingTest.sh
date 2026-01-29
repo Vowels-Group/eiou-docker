@@ -31,9 +31,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 initResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/core/Application.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$transport = \$app->services->getUtilityContainer()->getTransportUtility();
 
     if (\$transport !== null && is_object(\$transport)) {
@@ -163,9 +163,9 @@ totaltests=$(( totaltests + 1 ))
 
 # Try to connect to an unreachable address and verify we get a structured error
 errorResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/core/Application.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$transport = \$app->services->getUtilityContainer()->getTransportUtility();
 
     // Try to send to an unreachable address (should fail fast due to connect timeout)
@@ -253,9 +253,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 structureResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/core/Application.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$transport = \$app->services->getUtilityContainer()->getTransportUtility();
 
     // Send to unreachable address
@@ -300,9 +300,9 @@ if [[ ${#containersLinkKeys[@]} -gt 0 ]]; then
     totaltests=$(( totaltests + 1 ))
 
     successResult=$(docker exec ${sender} php -r "
-        require_once('/etc/eiou/src/core/Application.php');
+        require_once('${BOOTSTRAP_PATH}');
 
-        \$app = Application::getInstance();
+        \$app = \Eiou\Core\Application::getInstance();
         \$transport = \$app->services->getUtilityContainer()->getTransportUtility();
 
         // Create a minimal test payload
@@ -350,9 +350,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 errnoResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/core/Application.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$transport = \$app->services->getUtilityContainer()->getTransportUtility();
 
     \$payload = json_encode(['test' => 'payload', 'senderAddress' => 'http://test', 'senderPublicKey' => 'test']);
@@ -385,9 +385,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 msgResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/core/Application.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$transport = \$app->services->getUtilityContainer()->getTransportUtility();
 
     \$payload = json_encode(['test' => 'payload', 'senderAddress' => 'http://test', 'senderPublicKey' => 'test']);
@@ -457,9 +457,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 diffResult=$(docker exec ${container} php -r "
-    require_once('/etc/eiou/src/core/Application.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$transport = \$app->services->getUtilityContainer()->getTransportUtility();
 
     \$payload = json_encode(['test' => 'payload', 'senderAddress' => 'http://test', 'senderPublicKey' => 'test']);

@@ -116,9 +116,9 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing database accessibility after processor shutdown"
 dbCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
     try {
-        \$app = Application::getInstance();
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$stmt = \$pdo->query('SELECT 1');
         echo 'DB_OK';
@@ -164,9 +164,9 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing contact data integrity after shutdown"
 contactCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
     try {
-        \$app = Application::getInstance();
+        \$app = \Eiou\Core\Application::getInstance();
         \$contactRepo = \$app->services->getContactRepository();
         // Just verify we can query contacts without error
         echo 'CONTACTS_OK';
@@ -188,9 +188,9 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing transaction history integrity after shutdown"
 txCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
     try {
-        \$app = Application::getInstance();
+        \$app = \Eiou\Core\Application::getInstance();
         \$txRepo = \$app->services->getTransactionRepository();
         // Just verify we can query transactions without error
         echo 'TX_OK';

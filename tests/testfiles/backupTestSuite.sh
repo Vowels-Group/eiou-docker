@@ -25,9 +25,9 @@ echo -e "\n[Backup Service Availability Tests]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing BackupService availability via ServiceContainer"
 serviceCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
     try {
-        \$app = Application::getInstance();
+        \$app = \Eiou\Core\Application::getInstance();
         \$backupService = \$app->services->getBackupService();
         if (\$backupService !== null) {
             echo 'SERVICE_OK';
@@ -288,9 +288,9 @@ echo -e "\n\t-> Testing 'eiou backup restore --confirm' works"
 if [ -n "$latestBackup" ] && [ "$latestBackup" != "" ]; then
     # First, record a known contact count before restore
     contactCountBefore=$(docker exec ${testContainer} php -r "
-        require_once('${REL_APPLICATION}');
+        require_once('${BOOTSTRAP_PATH}');
         try {
-            \$app = Application::getInstance();
+            \$app = \Eiou\Core\Application::getInstance();
             \$pdo = \$app->services->getPdo();
             \$stmt = \$pdo->query('SELECT COUNT(*) as cnt FROM contacts');
             \$row = \$stmt->fetch();
@@ -306,9 +306,9 @@ if [ -n "$latestBackup" ] && [ "$latestBackup" != "" ]; then
     if echo "$restoreOutput" | grep -qiE 'success|restored|complete'; then
         # Verify data is intact by checking contact count
         contactCountAfter=$(docker exec ${testContainer} php -r "
-            require_once('${REL_APPLICATION}');
+            require_once('${BOOTSTRAP_PATH}');
             try {
-                \$app = Application::getInstance();
+                \$app = \Eiou\Core\Application::getInstance();
                 \$pdo = \$app->services->getPdo();
                 \$stmt = \$pdo->query('SELECT COUNT(*) as cnt FROM contacts');
                 \$row = \$stmt->fetch();
@@ -341,9 +341,9 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing data integrity after restore"
 
 tableCheck=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
     try {
-        \$app = Application::getInstance();
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
 
         // Check essential tables exist (no eiou_ prefix)
