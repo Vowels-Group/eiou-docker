@@ -1,4 +1,6 @@
 <?php
+namespace Eiou\Contracts;
+
 /**
  * P2P Transaction Sender Interface
  *

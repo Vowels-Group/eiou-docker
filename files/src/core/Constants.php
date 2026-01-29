@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Core;
+
 /**
  * Application-wide constants and configuration values
  * Replaces magic numbers throughout the codebase

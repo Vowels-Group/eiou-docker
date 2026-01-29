@@ -1,6 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Api;
+
+use Exception;
+use Eiou\Core\Constants;
+use Eiou\Cli\CliOutputManager;
+use Eiou\Services\ServiceContainer;
+use Eiou\Services\ApiAuthService;
+use Eiou\Database\ApiKeyRepository;
+use Eiou\Utils\SecureLogger;
+
 /**
  * API Controller
  *

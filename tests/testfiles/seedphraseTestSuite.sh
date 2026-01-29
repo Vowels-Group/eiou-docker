@@ -128,7 +128,7 @@ seedPhrase=$(docker exec ${testContainer} php -r '
     require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["mnemonic_encrypted"])) {
-        $mnemonic = KeyEncryption::decrypt($json["mnemonic_encrypted"]);
+        $mnemonic = \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
         echo $mnemonic;
     } else {
         echo "ERROR_NO_MNEMONIC";
@@ -507,7 +507,7 @@ actualSeedPhrase=$(docker exec ${testContainer} php -r '
     require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["mnemonic_encrypted"])) {
-        echo KeyEncryption::decrypt($json["mnemonic_encrypted"]);
+        echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
     }
 ' 2>&1)
 
@@ -549,7 +549,7 @@ mnemonicCheck=$(docker exec ${testContainer} php -r '
         echo "NO_MNEMONIC";
         exit;
     }
-    $mnemonic = KeyEncryption::decrypt($json["mnemonic_encrypted"]);
+    $mnemonic = \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
     $wordCount = str_word_count($mnemonic);
     if ($wordCount === 24) {
         echo "VALID_24_WORDS";
@@ -598,7 +598,7 @@ echo -e "\n\t-> Step 2.4: Testing SecureSeedphraseDisplay class availability"
 
 displayClassCheck=$(docker exec ${testContainer} php -r '
     require_once "'"${EIOU_DIR}"'/src/utils/SecureSeedphraseDisplay.php";
-    $availability = SecureSeedphraseDisplay::checkAvailability();
+    $availability = \Eiou\Utils\SecureSeedphraseDisplay::checkAvailability();
     echo json_encode($availability);
 ' 2>&1)
 
@@ -625,7 +625,7 @@ fileDisplayTest=$(docker exec ${testContainer} php -r '
     $testPhrase = "test word one two three four five six seven eight nine ten eleven twelve";
 
     // Use reflection to access the private method
-    $class = new ReflectionClass("SecureSeedphraseDisplay");
+    $class = new ReflectionClass("Eiou\\Utils\\SecureSeedphraseDisplay");
     $method = $class->getMethod("displayViaSecureFile");
     $method->setAccessible(true);
 
@@ -671,7 +671,7 @@ echo -e "\n\t-> Step 2.6: Testing restore-file command"
 currentSeedPhrase=$(docker exec ${testContainer} php -r '
     require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
-    echo KeyEncryption::decrypt($json["mnemonic_encrypted"]);
+    echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
 ' 2>&1)
 
 # Store current public key
@@ -756,7 +756,7 @@ loggerMaskTest=$(docker exec ${testContainer} php -r '
     $testMessage = "mnemonic=abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
     // Use reflection to test the private maskSensitive method
-    $class = new ReflectionClass("SecureLogger");
+    $class = new ReflectionClass("Eiou\\Utils\\SecureLogger");
     $method = $class->getMethod("maskSensitive");
     $method->setAccessible(true);
 
@@ -791,7 +791,7 @@ hostSeedFile="$(pwd)/eiou_test_restore_seed_$$"
 docker exec ${testContainer} php -r '
     require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
-    echo KeyEncryption::decrypt($json["mnemonic_encrypted"]);
+    echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
 ' > "${hostSeedFile}" 2>&1
 chmod 600 "${hostSeedFile}"
 
@@ -879,7 +879,7 @@ echo -e "\n\t-> Step 2.10: Testing RESTORE env var approach"
 restoreEnvSeedPhrase=$(docker exec ${testContainer} php -r '
     require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
-    echo KeyEncryption::decrypt($json["mnemonic_encrypted"]);
+    echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
 ' 2>&1)
 
 # Get original public key for comparison
@@ -956,7 +956,7 @@ originalAuthCode=$(docker exec ${testContainer} php -r '
     require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
-        $authcode = KeyEncryption::decrypt($json["authcode_encrypted"]);
+        $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
         echo $authcode;
     } else {
         echo "ERROR_NO_AUTHCODE";
@@ -1015,7 +1015,7 @@ seedPhraseAuth=$(docker exec ${testContainer} php -r '
     require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["mnemonic_encrypted"])) {
-        $mnemonic = KeyEncryption::decrypt($json["mnemonic_encrypted"]);
+        $mnemonic = \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
         echo $mnemonic;
     } else {
         echo "ERROR_NO_MNEMONIC";
@@ -1085,7 +1085,7 @@ restoredAuthCode=$(docker exec ${testContainer} php -r '
     require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
-        $authcode = KeyEncryption::decrypt($json["authcode_encrypted"]);
+        $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
         echo $authcode;
     } else {
         echo "ERROR_NO_AUTHCODE";
@@ -1179,7 +1179,7 @@ iteration2AuthCode=$(docker exec ${testContainer} php -r '
     require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
-        $authcode = KeyEncryption::decrypt($json["authcode_encrypted"]);
+        $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
         echo $authcode;
     } else {
         echo "ERROR_NO_AUTHCODE";
@@ -1195,7 +1195,7 @@ iteration3AuthCode=$(docker exec ${testContainer} php -r '
     require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
-        $authcode = KeyEncryption::decrypt($json["authcode_encrypted"]);
+        $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
         echo $authcode;
     } else {
         echo "ERROR_NO_AUTHCODE";
@@ -1231,10 +1231,10 @@ echo -e "\t   Waiting for container initialization..."
 wait_for_container_initialized ${authcodeRestoreContainer} 60 || true
 
 newContainerAuthCode=$(docker exec ${authcodeRestoreContainer} php -r '
-    require_once "/etc/eiou/src/security/KeyEncryption.php";
+    require_once "/etc/eiou/src/bootstrap.php";
     $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
     if (isset($json["authcode_encrypted"])) {
-        $authcode = \KeyEncryption::decrypt($json["authcode_encrypted"]);
+        $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
         echo $authcode;
     } else {
         echo "ERROR_NO_AUTHCODE";

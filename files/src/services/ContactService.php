@@ -1,13 +1,27 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../cli/CliOutputManager.php';
-require_once __DIR__ . '/MessageDeliveryService.php';
-require_once __DIR__ . '/../core/ErrorCodes.php';
-require_once __DIR__ . '/../contracts/ContactServiceInterface.php';
-require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
-require_once __DIR__ . '/../database/TransactionContactRepository.php';
+namespace Eiou\Services;
 
+use Eiou\Cli\CliOutputManager;
+use Eiou\Core\ErrorCodes;
+use Eiou\Core\Constants;
+use Eiou\Contracts\ContactServiceInterface;
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Database\TransactionContactRepository;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\AddressRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Utils\InputValidator;
+use Eiou\Utils\SecureLogger;
+use Eiou\Core\UserContext;
+use Eiou\Schemas\Payloads\ContactPayload;
+use Eiou\Schemas\Payloads\MessagePayload;
+use RuntimeException;
 
 /**
  * Contact Service
@@ -171,10 +185,7 @@ class ContactService implements ContactServiceInterface {
         $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->messageDeliveryService = $messageDeliveryService;
 
-        require_once '/etc/eiou/src/schemas/payloads/ContactPayload.php';
         $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
-
-        require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
         $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
     }
 

@@ -1,11 +1,14 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/../core/Constants.php';
-require_once __DIR__ . '/../contracts/TransactionRecoveryServiceInterface.php';
-require_once __DIR__ . '/../database/TransactionRecoveryRepository.php';
+namespace Eiou\Services;
 
+use Eiou\Utils\SecureLogger;
+use Eiou\Core\Constants;
+use Eiou\Contracts\TransactionRecoveryServiceInterface;
+use Eiou\Database\TransactionRecoveryRepository;
+use Eiou\Database\TransactionRepository;
+use Exception;
 
 /**
  * Transaction Recovery Service

@@ -1,15 +1,33 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../cli/CliOutputManager.php';
-require_once __DIR__ . '/../core/ErrorCodes.php';
-require_once __DIR__ . '/../contracts/SyncServiceInterface.php';
-require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
-require_once __DIR__ . '/../database/TransactionChainRepository.php';
-require_once __DIR__ . '/../database/TransactionContactRepository.php';
-require_once __DIR__ . '/../events/EventDispatcher.php';
-require_once __DIR__ . '/../events/SyncEvents.php';
+namespace Eiou\Services;
 
+use Eiou\Utils\SecureLogger;
+use Eiou\Cli\CliOutputManager;
+use Eiou\Core\ErrorCodes;
+use Eiou\Core\UserContext;
+use Eiou\Core\Constants;
+use Eiou\Contracts\SyncServiceInterface;
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\AddressRepository;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\TransactionChainRepository;
+use Eiou\Database\TransactionContactRepository;
+use Eiou\Database\HeldTransactionRepository;
+use Eiou\Events\EventDispatcher;
+use Eiou\Events\SyncEvents;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Schemas\Payloads\ContactPayload;
+use Eiou\Schemas\Payloads\TransactionPayload;
+use Eiou\Schemas\Payloads\MessagePayload;
+use RuntimeException;
+use Exception;
 
 /**
  * Sync Service
@@ -167,14 +185,9 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         $this->transportUtility = $this->utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
 
-        require_once '/etc/eiou/src/schemas/payloads/ContactPayload.php';
-        $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
-
-        require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
-        $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
-
-        require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
-        $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
+        $this->contactPayload = new ContactPayload($this->currentUser, $this->utilityContainer);
+        $this->transactionPayload = new TransactionPayload($this->currentUser, $this->utilityContainer);
+        $this->messagePayload = new MessagePayload($this->currentUser, $this->utilityContainer);
     }
 
     // =========================================================================
@@ -966,7 +979,6 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
      */
     private function releaseHeldTransaction(string $txid): bool {
         try {
-            require_once __DIR__ . '/../database/HeldTransactionRepository.php';
             $heldRepository = new HeldTransactionRepository();
 
             // Check if transaction is held

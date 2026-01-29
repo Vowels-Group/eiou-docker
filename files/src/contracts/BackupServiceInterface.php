@@ -1,5 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
+namespace Eiou\Contracts;
+
+use Eiou\Cli\CliOutputManager;
 
 /**
  * Backup Service Interface

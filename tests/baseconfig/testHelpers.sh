@@ -186,8 +186,8 @@ wait_for_contact_status() {
 
     while [ $elapsed -lt $timeout ]; do
         local status=$(docker exec ${container} php -r "
-            require_once('${REL_APPLICATION}');
-            echo Application::getInstance()->services->getContactRepository()->getContactStatus(
+            require_once('${BOOTSTRAP_PATH}');
+            echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
                 '${transport}','${address}'
             );
         " 2>/dev/null || echo "error")
@@ -318,8 +318,8 @@ get_pubkey_info() {
     local mode="$2"
     local address="$3"
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${mode}','${address}');
         if (\$pubkey) {
             echo base64_encode(\$pubkey) . '|' . hash('sha256', \$pubkey);
@@ -365,8 +365,8 @@ get_tx_count_by_desc() {
     local container="$1"
     local pattern="$2"
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${pattern}'\")->fetchColumn();
         echo \$count;
@@ -379,8 +379,8 @@ get_tx_count_by_pubkey() {
     local container="$1"
     local pubkey_hash="$2"
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE
             (sender_public_key_hash = '${pubkey_hash}' OR receiver_public_key_hash = '${pubkey_hash}')
@@ -395,8 +395,8 @@ cleanup_transactions() {
     local container="$1"
     local pattern="$2"
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$deleted = \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '${pattern}'\");
         echo 'DELETED:' . \$deleted;
@@ -409,8 +409,8 @@ delete_tx_by_pubkey() {
     local container="$1"
     local pubkey_hash="$2"
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$deleted = \$pdo->exec(\"DELETE FROM transactions WHERE
             (sender_public_key_hash = '${pubkey_hash}' OR receiver_public_key_hash = '${pubkey_hash}')
@@ -438,8 +438,8 @@ check_method_exists() {
     local service_getter="$2"
     local method_name="$3"
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$service = \$app->services->${service_getter}();
         echo method_exists(\$service, '${method_name}') ? 'EXISTS' : 'MISSING';
     " 2>/dev/null || echo "ERROR"
@@ -558,14 +558,14 @@ get_chain_info() {
     local container="$1"
     local pubkey_hash="$2"
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$stmt = \$pdo->query(\"SELECT txid, previous_txid, status FROM transactions
             WHERE (sender_public_key_hash = '${pubkey_hash}' OR receiver_public_key_hash = '${pubkey_hash}')
             AND memo = 'standard'
             ORDER BY COALESCE(time, 0) ASC, timestamp ASC\");
-        \$txs = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+        \$txs = \$stmt->fetchAll(\\PDO::FETCH_ASSOC);
         foreach (\$txs as \$tx) {
             echo substr(\$tx['txid'], 0, 8) . '->' . (isset(\$tx['previous_txid']) ? substr(\$tx['previous_txid'], 0, 8) : 'NULL') . ':' . \$tx['status'] . '|';
         }
@@ -578,13 +578,13 @@ verify_chain_integrity() {
     local container="$1"
     local pubkey_hash="$2"
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
         \$stmt = \$pdo->query(\"SELECT txid, previous_txid FROM transactions
             WHERE (sender_public_key_hash = '${pubkey_hash}' OR receiver_public_key_hash = '${pubkey_hash}')
             AND memo = 'standard'\");
-        \$txs = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+        \$txs = \$stmt->fetchAll(\\PDO::FETCH_ASSOC);
 
         \$txids = array_column(\$txs, 'txid');
         \$issues = [];
@@ -673,8 +673,8 @@ check_contact_status_with_retry() {
 
     # First check
     local status=$(docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        echo Application::getInstance()->services->getContactRepository()->getContactStatus(
+        require_once('${BOOTSTRAP_PATH}');
+        echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
             '${transport_type}','${address}'
         );
     " 2>/dev/null || echo "error")
@@ -688,8 +688,8 @@ check_contact_status_with_retry() {
         docker exec -e EIOU_TEST_MODE=true ${container} eiou in >/dev/null 2>&1 || true
         # Retry check
         status=$(docker exec ${container} php -r "
-            require_once('${REL_APPLICATION}');
-            echo Application::getInstance()->services->getContactRepository()->getContactStatus(
+            require_once('${BOOTSTRAP_PATH}');
+            echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->getContactStatus(
                 '${transport_type}','${address}'
             );
         " 2>/dev/null || echo "error")
@@ -791,8 +791,8 @@ trigger_sync() {
     local receiver_addr="$2"
     local receiver_pubkey_b64="$3"
     docker exec ${container} php -r "
-        require_once('${REL_FUNCTIONS}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$syncService = \$app->services->getSyncService();
         \$receiverPubkey = base64_decode('${receiver_pubkey_b64}');
 

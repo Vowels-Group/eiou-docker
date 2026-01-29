@@ -6,8 +6,10 @@
  * Prevents sensitive information from being logged
  */
 
-// Require Constants for DISPLAY_DATE_FORMAT
-require_once __DIR__ . '/../core/Constants.php';
+namespace Eiou\Utils;
+
+use DateTime;
+use Eiou\Core\Constants;
 
 class SecureLogger {
     private static $sensitivePatterns = [

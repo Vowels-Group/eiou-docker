@@ -1,4 +1,6 @@
 <?php
+namespace Eiou\Contracts;
+
 /**
  * API Authentication Service Interface
  *

@@ -31,8 +31,8 @@ for container in "${containers[@]}"; do
     echo "  -> Getting contacts for ${container}"    
     
     contacts=$(docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$contacts = Application::getInstance()->services->getContactRepository()->getAllSingleAcceptedAddresses('${MODE}');
+        require_once('${BOOTSTRAP_PATH}');
+        \$contacts = \Eiou\Core\Application::getInstance()->services->getContactRepository()->getAllSingleAcceptedAddresses('${MODE}');
         echo implode(' ', \$contacts);
     " 2>/dev/null || echo "")
 
@@ -77,11 +77,11 @@ for sender in "${containers[@]}"; do
 
         # Get initial balance of recipient
         initialBalance=$(docker exec ${sender} php -r "
-            require_once('${REL_APPLICATION}');
-            \$app = Application::getInstance();
+            require_once('${BOOTSTRAP_PATH}');
+            \$app = \Eiou\Core\Application::getInstance();
             \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${MODE}','${contactAddress}');
             \$balance = \$app->services->getBalanceRepository()->getCurrentContactBalance(\$pubkey,'USD');
-            echo \$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+            echo \$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
         " 2>/dev/null || echo "0")
 
         # Send test amount
@@ -91,11 +91,11 @@ for sender in "${containers[@]}"; do
 
         # Wait for transaction to process with polling
         balance_cmd="php -r \"
-            require_once('${REL_APPLICATION}');
-            \\\$app = Application::getInstance();
+            require_once('${BOOTSTRAP_PATH}');
+            \\\$app = \Eiou\Core\Application::getInstance();
             \\\$pubkey = \\\$app->services->getContactRepository()->getContactPubkey('${MODE}','${contactAddress}');
             \\\$balance = \\\$app->services->getBalanceRepository()->getCurrentContactBalance(\\\$pubkey,'USD');
-            echo \\\$balance/Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
+            echo \\\$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
         \""
         newBalance=$(wait_for_balance_change "${sender}" "$initialBalance" "$balance_cmd" 10 "tx processing")
 
@@ -192,8 +192,8 @@ for sender in "${containers[@]}"; do
         receiverAddress="${containerAddresses[$receiver]}"
        
         hasContact=$(docker exec ${sender} php -r "
-            require_once('${REL_APPLICATION}');
-            echo Application::getInstance()->services->getContactRepository()->isAcceptedContactAddress('${MODE}','${receiverAddress}');
+            require_once('${BOOTSTRAP_PATH}');
+            echo \Eiou\Core\Application::getInstance()->services->getContactRepository()->isAcceptedContactAddress('${MODE}','${receiverAddress}');
         " 2>/dev/null || echo "0")
 
         if [[ "$hasContact" -eq "1" ]]; then

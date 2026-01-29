@@ -1,0 +1,24 @@
+{
+    "name": "eiou/node",
+    "description": "EIOU Node - Distributed IOU Network",
+    "type": "project",
+    "license": "proprietary",
+    "autoload": {
+        "classmap": ["src/"],
+        "files": [
+            "src/database/Pdo.php",
+            "src/database/DatabaseSetup.php",
+            "src/database/DatabaseSchema.php",
+            "src/services/ServiceWrappers.php",
+            "src/schemas/EchoSchema.php",
+            "src/schemas/OutputSchema.php"
+        ]
+    },
+    "require": {
+        "php": ">=8.1"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}

@@ -1,13 +1,23 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Gui\Controllers;
+
+use Eiou\Gui\Includes\Session;
+use Eiou\Services\ContactService;
+use Eiou\Services\TransactionService;
+use Eiou\Utils\InputValidator;
+use Eiou\Utils\Security;
+use Eiou\Utils\SecureLogger;
+use Eiou\Cli\CliOutputManager;
+use Eiou\Core\UserContext;
+use Eiou\Core\Constants;
+
 /**
  * Transaction Controller
  *
  * Handles HTTP POST requests for transaction-related actions.
  */
-
-
 
 class TransactionController
 {
@@ -59,9 +69,6 @@ class TransactionController
         $this->session->verifyCSRFToken();
 
         // Import validation and security classes
-        require_once __DIR__ . '/../../utils/InputValidator.php';
-        require_once __DIR__ . '/../../utils/Security.php';
-        require_once __DIR__ . '/../../cli/CliOutputManager.php';
 
         // Sanitize input data
         $recipient = Security::sanitizeInput($_POST['recipient'] ?? '');
@@ -118,11 +125,9 @@ class TransactionController
 
             // Check if recipient is one of user's own addresses (self-send prevention)
             if ($addressValidation['valid']) {
-                require_once __DIR__ . '/../../core/UserContext.php';
                 $userContext = UserContext::getInstance();
                 $selfSendValidation = InputValidator::validateNotSelfSend($finalRecipient, $userContext);
                 if (!$selfSendValidation['valid']) {
-                    require_once __DIR__ . '/../../utils/SecureLogger.php';
                     SecureLogger::warning("Self-send transaction attempted", [
                         'recipient' => $finalRecipient,
                         'error' => $selfSendValidation['error']

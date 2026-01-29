@@ -1,7 +1,14 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../contracts/DebugServiceInterface.php';
+namespace Eiou\Services;
+
+use Eiou\Contracts\DebugServiceInterface;
+use Eiou\Database\DebugRepository;
+use Eiou\Core\UserContext;
+use Eiou\Core\Constants;
+use PDO;
+use Exception;
 
 /**
  * Debug Service

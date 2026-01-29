@@ -1,9 +1,22 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/../contracts/CleanupServiceInterface.php';
+namespace Eiou\Services;
 
+use Eiou\Utils\SecureLogger;
+use Eiou\Contracts\CleanupServiceInterface;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Core\UserContext;
+use Eiou\Core\Constants;
+use Eiou\Schemas\Payloads\MessagePayload;
+use PDOException;
+use Exception;
 
 /**
  * Cleanup Service
@@ -82,7 +95,6 @@ class CleanupService implements CleanupServiceInterface {
         $this->transportUtility = $utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
 
-        require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
         $this->messagePayload = new MessagePayload($this->currentUser, $this->utilityContainer);
     }
 

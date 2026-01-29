@@ -1,17 +1,28 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/InputValidator.php';
-require_once __DIR__ . '/../cli/CliOutputManager.php';
-require_once __DIR__ . '/MessageDeliveryService.php';
-require_once __DIR__ . '/../core/ErrorCodes.php';
-require_once __DIR__ . '/../core/Constants.php';
-require_once __DIR__ . '/../contracts/SendOperationServiceInterface.php';
-require_once __DIR__ . '/../contracts/LockingServiceInterface.php';
-require_once __DIR__ . '/../contracts/ContactServiceInterface.php';
-require_once __DIR__ . '/../contracts/P2pServiceInterface.php';
-require_once __DIR__ . '/../contracts/P2pTransactionSenderInterface.php';
-require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
+namespace Eiou\Services;
+
+use Eiou\Utils\InputValidator;
+use Eiou\Utils\SecureLogger;
+use Eiou\Cli\CliOutputManager;
+use Eiou\Core\ErrorCodes;
+use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
+use Eiou\Contracts\SendOperationServiceInterface;
+use Eiou\Contracts\LockingServiceInterface;
+use Eiou\Contracts\ContactServiceInterface;
+use Eiou\Contracts\P2pServiceInterface;
+use Eiou\Contracts\P2pTransactionSenderInterface;
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Database\TransactionRepository;
+use Eiou\Database\AddressRepository;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\TransactionChainRepository;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Schemas\Payloads\TransactionPayload;
+use RuntimeException;
 
 /**
  * Send Operation Service - High-level send orchestration for eIOU transactions.

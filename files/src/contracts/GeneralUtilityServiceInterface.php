@@ -1,5 +1,7 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
+namespace Eiou\Contracts;
+
 /**
  * General Utility Service Interface
  *

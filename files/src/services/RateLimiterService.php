@@ -1,9 +1,12 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../core/ErrorCodes.php';
-require_once __DIR__ . '/../core/Constants.php';
-require_once __DIR__ . '/../contracts/RateLimiterServiceInterface.php';
+namespace Eiou\Services;
+
+use Eiou\Core\ErrorCodes;
+use Eiou\Core\Constants;
+use Eiou\Contracts\RateLimiterServiceInterface;
+use Eiou\Database\RateLimiterRepository;
 
 /**
  * Rate Limiter Service

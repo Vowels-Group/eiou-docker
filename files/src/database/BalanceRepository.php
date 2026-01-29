@@ -1,7 +1,10 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/AbstractRepository.php';
+namespace Eiou\Database;
+
+use Eiou\Core\Constants;
+use PDO;
 
 /**
  * Balance Repository

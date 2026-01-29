@@ -26,6 +26,7 @@ FROM debian:12-slim
 # - openssl: SSL certificate generation and cryptography
 # - php, php-*: PHP runtime with required extensions
 # - tor: Anonymous network for .onion addresses
+# - unzip: Required by Composer for package installation
 RUN apt-get update && apt-get install -y \
     apache2 \
     cron \
@@ -37,7 +38,12 @@ RUN apt-get update && apt-get install -y \
     php-mbstring \
     php-mysql \
     tor \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Composer for PSR-4 autoloading
+# Using the official installer script for security
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
 # Configure Tor hidden service:
 # - HiddenServiceDir: Directory for Tor identity keys and hostname
@@ -126,6 +132,11 @@ COPY files/root/ /etc/eiou/
 # Copy src folder to /etc/eiou/src
 COPY files/src/ /etc/eiou/src/
 
+# Copy composer.json and generate PSR-4 autoloader
+# This creates vendor/autoload.php for namespace-based class loading
+COPY files/composer.json /etc/eiou/composer.json
+RUN cd /etc/eiou && composer install --no-dev --optimize-autoloader --no-interaction
+
 RUN chown www-data:www-data /etc/eiou/SecurityInit.php \
     /etc/eiou/Functions.php \
     /etc/eiou/P2pMessages.php \
@@ -159,6 +170,20 @@ VOLUME ["/var/lib/mysql", "/etc/eiou", "/usr/local/bin/", "/var/www/html/", "/va
 # Copy scripts directory (includes banner.sh for warning messages)
 COPY scripts/ /app/scripts/
 RUN chmod +x /app/scripts/*.sh
+
+# =============================================================================
+# SOURCE FILE BACKUP FOR VOLUME SYNC
+# =============================================================================
+# The /etc/eiou directory is a Docker volume. When existing containers are
+# updated, the volume retains old files. We create a backup of source files
+# in /app/eiou-src-backup/ that startup.sh will use to sync to the volume.
+# This ensures users always get the latest code without losing their data.
+# =============================================================================
+RUN mkdir -p /app/eiou-src-backup /app/eiou-cli-backup
+COPY files/src/ /app/eiou-src-backup/src/
+COPY files/root/ /app/eiou-src-backup/
+COPY files/composer.json /app/eiou-src-backup/composer.json
+COPY files/eiou/Eiou.php /app/eiou-cli-backup/eiou.php
 
 # Copy and set up startup script
 COPY startup.sh /startup.sh

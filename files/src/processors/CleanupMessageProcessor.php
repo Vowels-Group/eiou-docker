@@ -1,6 +1,11 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Processors;
+
+use Eiou\Core\Application;
+use Eiou\Core\Constants;
+
 /**
  * Cleanup Message Processor
  *
@@ -8,9 +13,6 @@
  * Uses slower polling intervals as cleanup is less time-critical.
  *
  */
-
-require_once(__DIR__ . "/AbstractMessageProcessor.php");
-
 class CleanupMessageProcessor extends AbstractMessageProcessor {
     private $cleanupService;
 

@@ -1,10 +1,17 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../database/MessageDeliveryRepository.php';
-require_once __DIR__ . '/../database/DeadLetterQueueRepository.php';
-require_once __DIR__ . '/../database/DeliveryMetricsRepository.php';
-require_once __DIR__ . '/../contracts/MessageDeliveryServiceInterface.php';
+namespace Eiou\Services;
+
+use Eiou\Database\MessageDeliveryRepository;
+use Eiou\Database\DeadLetterQueueRepository;
+use Eiou\Database\DeliveryMetricsRepository;
+use Eiou\Contracts\MessageDeliveryServiceInterface;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Core\UserContext;
+use Eiou\Utils\SecureLogger;
+use Exception;
 
 /**
  * Message Delivery Service

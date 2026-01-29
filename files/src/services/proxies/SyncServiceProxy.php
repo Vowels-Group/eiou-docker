@@ -1,7 +1,11 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../../contracts/SyncTriggerInterface.php';
+namespace Eiou\Services\Proxies;
+
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Services\ServiceContainer;
+use Eiou\Services\SyncService;
 
 /**
  * SyncServiceProxy - Lazy proxy for SyncService to break circular dependencies

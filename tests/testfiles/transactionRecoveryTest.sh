@@ -30,8 +30,8 @@ echo -e "\n[Static Verification Tests]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing SENDING status constant exists"
 sendingStatus=$(docker exec ${testContainer} php -r "
-    require_once '/etc/eiou/src/core/Constants.php';
-    echo defined('Constants::STATUS_SENDING') ? 'EXISTS' : 'MISSING';
+    require_once '${BOOTSTRAP_PATH}';
+    echo defined('Eiou\\\\Core\\\\Constants::STATUS_SENDING') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [ "$sendingStatus" = "EXISTS" ]; then
@@ -46,10 +46,10 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing recovery configuration constants"
 recoveryConsts=$(docker exec ${testContainer} php -r "
-    require_once '/etc/eiou/src/core/Constants.php';
+    require_once '${BOOTSTRAP_PATH}';
     \$count = 0;
-    if (defined('Constants::RECOVERY_SENDING_TIMEOUT_SECONDS')) \$count++;
-    if (defined('Constants::RECOVERY_MAX_RETRY_COUNT')) \$count++;
+    if (defined('Eiou\\\\Core\\\\Constants::RECOVERY_SENDING_TIMEOUT_SECONDS')) \$count++;
+    if (defined('Eiou\\\\Core\\\\Constants::RECOVERY_MAX_RETRY_COUNT')) \$count++;
     echo \$count;
 " 2>/dev/null || echo "0")
 
@@ -65,8 +65,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing TransactionRecoveryService exists"
 serviceExists=$(docker exec ${testContainer} php -r "
-    require_once '/etc/eiou/src/services/TransactionRecoveryService.php';
-    echo class_exists('TransactionRecoveryService') ? 'EXISTS' : 'MISSING';
+    require_once '${BOOTSTRAP_PATH}';
+    echo class_exists('Eiou\\\\Services\\\\TransactionRecoveryService') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [ "$serviceExists" = "EXISTS" ]; then
@@ -81,8 +81,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing claimPendingTransaction method"
 claimMethod=$(docker exec ${testContainer} php -r "
-    require_once '/etc/eiou/src/database/TransactionRecoveryRepository.php';
-    echo method_exists('TransactionRecoveryRepository', 'claimPendingTransaction') ? 'EXISTS' : 'MISSING';
+    require_once '${BOOTSTRAP_PATH}';
+    echo method_exists('Eiou\\\\Database\\\\TransactionRecoveryRepository', 'claimPendingTransaction') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [ "$claimMethod" = "EXISTS" ]; then
@@ -97,8 +97,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing markAsSent method"
 markMethod=$(docker exec ${testContainer} php -r "
-    require_once '/etc/eiou/src/database/TransactionRecoveryRepository.php';
-    echo method_exists('TransactionRecoveryRepository', 'markAsSent') ? 'EXISTS' : 'MISSING';
+    require_once '${BOOTSTRAP_PATH}';
+    echo method_exists('Eiou\\\\Database\\\\TransactionRecoveryRepository', 'markAsSent') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [ "$markMethod" = "EXISTS" ]; then
@@ -222,8 +222,8 @@ create_test_tx() {
     local review="${5:-0}"
 
     docker exec ${testContainer} php -r "
-        require_once('${REL_APPLICATION}');
-        \$pdo = Application::getInstance()->services->getPdo();
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
         \$sql = \"INSERT INTO transactions (txid, tx_type, type, status, sender_address, sender_public_key,
                 receiver_address, receiver_public_key, amount, currency, memo, sending_started_at, recovery_count, needs_manual_review)
                 VALUES ('${txid}', 'standard', 'sent', '${status}', 'test_sender', 'test_pubkey',
@@ -236,8 +236,8 @@ create_test_tx() {
 # Helper: Cleanup test transactions
 cleanup_test_tx() {
     docker exec ${testContainer} php -r "
-        require_once('${REL_APPLICATION}');
-        \$pdo = Application::getInstance()->services->getPdo();
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
         \$pdo->exec(\"DELETE FROM transactions WHERE txid LIKE 'test_recovery_%'\");
     " 2>/dev/null
 }
@@ -249,8 +249,8 @@ cleanup_test_tx
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing atomic claim succeeds"
 claimResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$repo = \$app->services->getTransactionRecoveryRepository();
 
@@ -281,8 +281,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing duplicate claim rejected"
 dupResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$repo = \$app->services->getTransactionRecoveryRepository();
 
@@ -311,8 +311,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing cannot claim sent transaction"
 sentResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$repo = \$app->services->getTransactionRecoveryRepository();
 
@@ -340,8 +340,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing mark as sent works"
 markResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$repo = \$app->services->getTransactionRecoveryRepository();
 
@@ -374,8 +374,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing detect stuck transaction"
 stuckResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$repo = \$app->services->getTransactionRecoveryRepository();
 
@@ -406,8 +406,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing recovery resets to pending"
 resetResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$repo = \$app->services->getTransactionRecoveryRepository();
 
@@ -440,8 +440,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing max retry marks for review"
 maxRetryResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$repo = \$app->services->getTransactionRecoveryRepository();
 
@@ -474,8 +474,8 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing concurrent claims atomicity"
 concurrentResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     \$repo = \$app->services->getTransactionRecoveryRepository();
 

@@ -1,5 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
+namespace Eiou\Contracts;
+
+use Eiou\Services\MessageDeliveryService;
 
 /**
  * Message Service Interface
@@ -16,18 +19,18 @@ interface MessageServiceInterface
      * Uses SyncTriggerInterface instead of concrete SyncService to break
      * circular dependencies. Can be satisfied by SyncServiceProxy or SyncService.
      *
-     * @param \SyncTriggerInterface $sync Sync trigger instance
+     * @param SyncTriggerInterface $sync Sync trigger instance
      * @return void
      */
-    public function setSyncTrigger(\SyncTriggerInterface $sync): void;
+    public function setSyncTrigger(SyncTriggerInterface $sync): void;
 
     /**
      * Set the message delivery service (for lazy initialization)
      *
-     * @param \MessageDeliveryService $service Message delivery service instance
+     * @param MessageDeliveryService $service Message delivery service instance
      * @return void
      */
-    public function setMessageDeliveryService(\MessageDeliveryService $service): void;
+    public function setMessageDeliveryService(MessageDeliveryService $service): void;
 
     /**
      * Check if message is from a valid source

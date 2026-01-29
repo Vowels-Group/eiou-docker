@@ -1,4 +1,8 @@
 <?php
+namespace Eiou\Contracts;
+
+use Eiou\Cli\CliOutputManager;
+
 /**
  * Interface for synchronization services.
  *

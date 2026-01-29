@@ -1,7 +1,11 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
+namespace Eiou\Database;
+
+use Eiou\Utils\SecureLogger;
+use PDO;
+use PDOException;
 
 /**
  * Rate Limiter Repository
@@ -10,7 +14,6 @@ require_once __DIR__ . '/../utils/SecureLogger.php';
  *
  * @package Database
  */
-
 class RateLimiterRepository {
     private PDO $pdo;
 

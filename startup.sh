@@ -364,6 +364,117 @@ else
     echo "Existing SSL certificate found, skipping generation."
 fi
 
+# =============================================================================
+# SOURCE FILE SYNC (Docker Volume Update)
+# =============================================================================
+# The /etc/eiou directory is a Docker volume. When the image is updated, the
+# volume retains old files. This section syncs source files from a backup
+# location in the image to ensure the latest code is always used.
+#
+# Files synced: src/, root PHP files, composer.json
+# Files preserved: userconfig.json, dbconfig.json, encryption keys
+# =============================================================================
+
+# Debug: Show source backup status
+echo "Checking for source file backup..."
+if [ -d /app/eiou-src-backup ]; then
+    echo "  Backup directory found at /app/eiou-src-backup"
+    ls -la /app/eiou-src-backup/ 2>/dev/null | head -5
+else
+    echo "  WARNING: Backup directory /app/eiou-src-backup not found!"
+    echo "  This means the Docker image was not rebuilt with --build flag."
+    echo "  Run: docker-compose -f <compose-file>.yml up -d --build"
+fi
+
+# Check if source backup exists (created during docker build)
+if [ -d /app/eiou-src-backup ]; then
+    echo "Syncing source files from image to volume..."
+
+    # Sync src directory (namespaced code)
+    if [ -d /app/eiou-src-backup/src ]; then
+        cp -r /app/eiou-src-backup/src/* /etc/eiou/src/ 2>/dev/null || true
+        echo "  Source code updated."
+    fi
+
+    # Sync root PHP files (entry points)
+    for file in /app/eiou-src-backup/*.php; do
+        if [ -f "$file" ]; then
+            cp "$file" /etc/eiou/ 2>/dev/null || true
+        fi
+    done
+    echo "  Entry points updated."
+
+    # Sync composer.json
+    if [ -f /app/eiou-src-backup/composer.json ]; then
+        cp /app/eiou-src-backup/composer.json /etc/eiou/composer.json 2>/dev/null || true
+        echo "  Composer config updated."
+    fi
+
+    echo "Source file sync completed."
+fi
+
+# Sync CLI tool if backup exists
+if [ -f /app/eiou-cli-backup/eiou.php ]; then
+    echo "Syncing CLI tool..."
+    cp /app/eiou-cli-backup/eiou.php /usr/local/bin/eiou.php 2>/dev/null || true
+    echo "  CLI tool updated."
+fi
+
+# =============================================================================
+# COMPOSER AUTOLOADER SETUP
+# =============================================================================
+# Ensure the Composer autoloader exists and is up-to-date.
+# =============================================================================
+
+# Always regenerate autoloader after source sync to ensure class map is current
+if [ -d /app/eiou-src-backup ] || [ ! -f /etc/eiou/vendor/autoload.php ]; then
+    echo "Generating Composer autoloader..."
+
+    # Ensure composer.json exists
+    if [ ! -f /etc/eiou/composer.json ]; then
+        echo "  Creating composer.json..."
+        cat > /etc/eiou/composer.json << 'COMPOSEREOF'
+{
+    "name": "eiou/node",
+    "description": "EIOU Node - Distributed IOU Network",
+    "type": "project",
+    "license": "proprietary",
+    "autoload": {
+        "classmap": ["src/"],
+        "files": [
+            "src/database/Pdo.php",
+            "src/database/DatabaseSetup.php",
+            "src/database/DatabaseSchema.php",
+            "src/services/ServiceWrappers.php",
+            "src/schemas/EchoSchema.php",
+            "src/schemas/OutputSchema.php"
+        ]
+    },
+    "require": {
+        "php": ">=8.1"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}
+COMPOSEREOF
+    fi
+
+    # Run composer install/dump-autoload to generate autoloader
+    cd /etc/eiou && composer dump-autoload --optimize --no-interaction 2>&1 | while read line; do
+        echo "  $line"
+    done
+
+    if [ -f /etc/eiou/vendor/autoload.php ]; then
+        echo "Composer autoloader generated successfully."
+    else
+        echo "ERROR: Failed to generate autoloader. PHP functionality may be impaired."
+    fi
+else
+    echo "Composer autoloader found."
+fi
+
 # Start services
 service cron start
 service tor start
@@ -579,7 +690,7 @@ while true; do
         http=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["hostname"])){echo $json["hostname"];}')
         tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
         pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
-        authcode=$(php -r 'require_once("/etc/eiou/src/core/UserContext.php"); echo UserContext::getInstance()->getAuthCode();')
+        authcode=$(php -r 'require_once("/etc/eiou/src/bootstrap.php"); echo Eiou\Core\UserContext::getInstance()->getAuthCode();')
         break
     else
         if $first; then

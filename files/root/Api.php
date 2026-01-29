@@ -1,8 +1,14 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/src/core/ErrorCodes.php';
-require_once __DIR__ . '/src/core/Constants.php';
+// Load Composer autoloader
+require_once __DIR__ . '/src/bootstrap.php';
+
+use Eiou\Core\ErrorCodes;
+use Eiou\Core\Constants;
+use Eiou\Core\Application;
+use Eiou\Api\ApiController;
+use Eiou\Services\ApiAuthService;
 
 /**
  * API Entry Point
@@ -40,12 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Initialize application
-require_once '/etc/eiou/src/core/Application.php';
-require_once '/etc/eiou/src/core/Constants.php';
-
 try {
     $app = Application::getInstance();
-} catch (Exception $e) {
+} catch (\Exception $e) {
     http_response_code(ErrorCodes::HTTP_INTERNAL_SERVER_ERROR);
     echo json_encode([
         'success' => false,
@@ -57,11 +60,6 @@ try {
     ]);
     exit;
 }
-
-// Load API components
-require_once '/etc/eiou/src/api/ApiController.php';
-require_once '/etc/eiou/src/services/ServiceWrappers.php';
-require_once '/etc/eiou/src/schemas/OutputSchema.php';
 
 // Initialize API components using ServiceContainer
 $authService = $app->services->getApiAuthService();

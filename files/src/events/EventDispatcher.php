@@ -1,7 +1,9 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../contracts/EventDispatcherInterface.php';
+namespace Eiou\Events;
+
+use Eiou\Contracts\EventDispatcherInterface;
 
 /**
  * Event Dispatcher
@@ -100,8 +102,8 @@ class EventDispatcher implements EventDispatcherInterface
             } catch (\Exception $e) {
                 // Log exception but continue dispatching to other listeners
                 // This prevents one failing listener from blocking others
-                if (class_exists('SecureLogger')) {
-                    \SecureLogger::warning("Event listener exception during dispatch", [
+                if (class_exists('Eiou\\Utils\\SecureLogger')) {
+                    \Eiou\Utils\SecureLogger::warning("Event listener exception during dispatch", [
                         'event' => $event,
                         'error' => $e->getMessage(),
                         'trace' => $e->getTraceAsString()

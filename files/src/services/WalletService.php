@@ -1,8 +1,10 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../contracts/WalletServiceInterface.php';
+namespace Eiou\Services;
 
+use Eiou\Contracts\WalletServiceInterface;
+use Eiou\Core\UserContext;
 
 /**
  * Wallet Service

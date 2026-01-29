@@ -1,21 +1,67 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
+namespace Eiou\Services;
 
-// Dependency injection contracts
-require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
-require_once __DIR__ . '/../contracts/ChainOperationsInterface.php';
-require_once __DIR__ . '/../contracts/P2pTransactionSenderInterface.php';
-require_once __DIR__ . '/../contracts/EventDispatcherInterface.php';
-
-// Event system
-require_once __DIR__ . '/../events/EventDispatcher.php';
-require_once __DIR__ . '/../events/SyncEvents.php';
-
-// New dependency injection services
-require_once __DIR__ . '/ChainOperationsService.php';
-require_once __DIR__ . '/proxies/SyncServiceProxy.php';
+use Eiou\Utils\SecureLogger;
+use Eiou\Utils\InputValidator;
+use Eiou\Utils\Security;
+use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Contracts\ChainOperationsInterface;
+use Eiou\Contracts\P2pTransactionSenderInterface;
+use Eiou\Contracts\EventDispatcherInterface;
+use Eiou\Contracts\ContactServiceInterface;
+use Eiou\Contracts\TransactionServiceInterface;
+use Eiou\Contracts\P2pServiceInterface;
+use Eiou\Contracts\Rp2pServiceInterface;
+use Eiou\Contracts\WalletServiceInterface;
+use Eiou\Contracts\MessageServiceInterface;
+use Eiou\Contracts\CleanupServiceInterface;
+use Eiou\Contracts\SyncServiceInterface;
+use Eiou\Contracts\DebugServiceInterface;
+use Eiou\Contracts\MessageDeliveryServiceInterface;
+use Eiou\Contracts\HeldTransactionServiceInterface;
+use Eiou\Contracts\TransactionRecoveryServiceInterface;
+use Eiou\Contracts\CliServiceInterface;
+use Eiou\Contracts\RateLimiterServiceInterface;
+use Eiou\Contracts\LockingServiceInterface;
+use Eiou\Contracts\ContactStatusServiceInterface;
+use Eiou\Contracts\ApiAuthServiceInterface;
+use Eiou\Contracts\ApiKeyServiceInterface;
+use Eiou\Contracts\BackupServiceInterface;
+use Eiou\Contracts\BalanceServiceInterface;
+use Eiou\Contracts\ChainVerificationServiceInterface;
+use Eiou\Contracts\TransactionValidationServiceInterface;
+use Eiou\Contracts\TransactionProcessingServiceInterface;
+use Eiou\Contracts\SendOperationServiceInterface;
+use Eiou\Events\EventDispatcher;
+use Eiou\Events\SyncEvents;
+use Eiou\Services\Proxies\SyncServiceProxy;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Database\AddressRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Database\DebugRepository;
+use Eiou\Database\ApiKeyRepository;
+use Eiou\Database\MessageDeliveryRepository;
+use Eiou\Database\DeadLetterQueueRepository;
+use Eiou\Database\DeliveryMetricsRepository;
+use Eiou\Database\HeldTransactionRepository;
+use Eiou\Database\RateLimiterRepository;
+use Eiou\Database\TransactionStatisticsRepository;
+use Eiou\Database\TransactionChainRepository;
+use Eiou\Database\TransactionRecoveryRepository;
+use Eiou\Database\TransactionContactRepository;
+use Eiou\Schemas\Payloads\TransactionPayload;
+use Eiou\Cli\CliOutputManager;
+use PDO;
+use RuntimeException;
+use function Eiou\Database\createPDOConnection;
 
 /**
  * Service Container
@@ -94,7 +140,6 @@ class ServiceContainer {
      * Load current user from global scope
      */
     private function loadCurrentUser(): void {
-        require_once '/etc/eiou/src/core/UserContext.php';
         $this->currentUser = UserContext::getInstance();
     }
 
@@ -122,7 +167,6 @@ class ServiceContainer {
      * @return void
      */
     public function loadDatabase(): void {
-        require_once '/etc/eiou/src/database/Pdo.php';
         try {
             $this->pdo = createPDOConnection();
         } catch (RuntimeException $e) {
@@ -153,7 +197,6 @@ class ServiceContainer {
      */
     public function getAddressRepository(): AddressRepository {
         if (!isset($this->repositories['AddressRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/AddressRepository.php';
             $this->repositories['AddressRepository'] = new AddressRepository(
                 $this->pdo
             );
@@ -168,7 +211,6 @@ class ServiceContainer {
      */
     public function getBalanceRepository(): BalanceRepository {
         if (!isset($this->repositories['BalanceRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/BalanceRepository.php';
             $this->repositories['BalanceRepository'] = new BalanceRepository(
                 $this->pdo
             );
@@ -183,7 +225,6 @@ class ServiceContainer {
      */
     public function getContactRepository(): ContactRepository {
         if (!isset($this->repositories['ContactRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/ContactRepository.php';
             $this->repositories['ContactRepository'] = new ContactRepository(
                 $this->pdo
             );
@@ -198,7 +239,6 @@ class ServiceContainer {
      */
     public function getP2pRepository(): P2pRepository {
         if (!isset($this->repositories['P2pRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/P2pRepository.php';
             $this->repositories['P2pRepository'] = new P2pRepository(
                 $this->pdo
             );
@@ -213,7 +253,6 @@ class ServiceContainer {
      */
     public function getRp2pRepository(): Rp2pRepository {
         if (!isset($this->repositories['Rp2pRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/Rp2pRepository.php';
             $this->repositories['Rp2pRepository'] = new Rp2pRepository(
                 $this->pdo
             );
@@ -228,7 +267,6 @@ class ServiceContainer {
      */
     public function getTransactionRepository(): TransactionRepository {
         if (!isset($this->repositories['TransactionRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/TransactionRepository.php';
             $this->repositories['TransactionRepository'] = new TransactionRepository(
                 $this->pdo
             );
@@ -243,7 +281,6 @@ class ServiceContainer {
      */
     public function getDebugRepository(): DebugRepository {
         if (!isset($this->repositories['DebugRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/DebugRepository.php';
             $this->repositories['DebugRepository'] = new DebugRepository(
                 $this->pdo
             );
@@ -258,7 +295,6 @@ class ServiceContainer {
      */
     public function getApiKeyRepository(): ApiKeyRepository {
         if (!isset($this->repositories['ApiKeyRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/ApiKeyRepository.php';
             $this->repositories['ApiKeyRepository'] = new ApiKeyRepository(
                 $this->pdo
             );
@@ -272,7 +308,6 @@ class ServiceContainer {
      */
     public function getMessageDeliveryRepository(): MessageDeliveryRepository {
         if (!isset($this->repositories['MessageDeliveryRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/MessageDeliveryRepository.php';
             $this->repositories['MessageDeliveryRepository'] = new MessageDeliveryRepository(
                 $this->pdo
             );
@@ -287,7 +322,6 @@ class ServiceContainer {
      */
     public function getDeadLetterQueueRepository(): DeadLetterQueueRepository {
         if (!isset($this->repositories['DeadLetterQueueRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/DeadLetterQueueRepository.php';
             $this->repositories['DeadLetterQueueRepository'] = new DeadLetterQueueRepository(
                 $this->pdo
             );
@@ -302,7 +336,6 @@ class ServiceContainer {
      */
     public function getDeliveryMetricsRepository(): DeliveryMetricsRepository {
         if (!isset($this->repositories['DeliveryMetricsRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/DeliveryMetricsRepository.php';
             $this->repositories['DeliveryMetricsRepository'] = new DeliveryMetricsRepository(
                 $this->pdo
             );
@@ -317,7 +350,6 @@ class ServiceContainer {
      */
     public function getHeldTransactionRepository(): HeldTransactionRepository {
         if (!isset($this->repositories['HeldTransactionRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/HeldTransactionRepository.php';
             $this->repositories['HeldTransactionRepository'] = new HeldTransactionRepository(
                 $this->pdo
             );
@@ -332,7 +364,6 @@ class ServiceContainer {
      */
     public function getRateLimiterRepository(): RateLimiterRepository {
         if (!isset($this->repositories['RateLimiterRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/RateLimiterRepository.php';
             $this->repositories['RateLimiterRepository'] = new RateLimiterRepository(
                 $this->pdo
             );
@@ -347,7 +378,6 @@ class ServiceContainer {
      */
     public function getTransactionStatisticsRepository(): TransactionStatisticsRepository {
         if (!isset($this->repositories['TransactionStatisticsRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/TransactionStatisticsRepository.php';
             $this->repositories['TransactionStatisticsRepository'] = new TransactionStatisticsRepository(
                 $this->pdo
             );
@@ -362,7 +392,6 @@ class ServiceContainer {
      */
     public function getTransactionChainRepository(): TransactionChainRepository {
         if (!isset($this->repositories['TransactionChainRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/TransactionChainRepository.php';
             $this->repositories['TransactionChainRepository'] = new TransactionChainRepository(
                 $this->pdo
             );
@@ -377,7 +406,6 @@ class ServiceContainer {
      */
     public function getTransactionRecoveryRepository(): TransactionRecoveryRepository {
         if (!isset($this->repositories['TransactionRecoveryRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/TransactionRecoveryRepository.php';
             $this->repositories['TransactionRecoveryRepository'] = new TransactionRecoveryRepository(
                 $this->pdo
             );
@@ -392,7 +420,6 @@ class ServiceContainer {
      */
     public function getTransactionContactRepository(): TransactionContactRepository {
         if (!isset($this->repositories['TransactionContactRepository'])) {
-            require_once dirname(__DIR__,2) . '/src/database/TransactionContactRepository.php';
             $this->repositories['TransactionContactRepository'] = new TransactionContactRepository(
                 $this->pdo
             );
@@ -410,7 +437,6 @@ class ServiceContainer {
      */
     public function getContactService(): ContactServiceInterface {
         if (!isset($this->services['ContactService'])) {
-            require_once __DIR__ . '/ContactService.php';
             $this->services['ContactService'] = new ContactService(
                 $this->getContactRepository(),
                 $this->getAddressRepository(),
@@ -437,7 +463,6 @@ class ServiceContainer {
      */
     public function getTransactionService(): TransactionServiceInterface {
         if (!isset($this->services['TransactionService'])) {
-            require_once __DIR__ . '/TransactionService.php';
             $this->services['TransactionService'] = new TransactionService(
                 $this->getContactRepository(),
                 $this->getAddressRepository(),
@@ -472,7 +497,6 @@ class ServiceContainer {
      */
     public function getP2pService(): P2pServiceInterface {
         if (!isset($this->services['P2pService'])) {
-            require_once __DIR__ . '/P2pService.php';
             $this->services['P2pService'] = new P2pService(
                 $this->getContactRepository(),
                 $this->getBalanceRepository(),
@@ -496,7 +520,6 @@ class ServiceContainer {
      */
     public function getRp2pService(): Rp2pServiceInterface {
         if (!isset($this->services['Rp2pService'])) {
-            require_once __DIR__ . '/Rp2pService.php';
             $this->services['Rp2pService'] = new Rp2pService(
                 $this->getContactRepository(),
                 $this->getBalanceRepository(),
@@ -517,7 +540,6 @@ class ServiceContainer {
      */
     public function getWalletService(): WalletServiceInterface {
         if (!isset($this->services['WalletService'])) {
-            require_once __DIR__ . '/WalletService.php';
             $this->services['WalletService'] = new WalletService(
                 $this->currentUser
             );
@@ -532,7 +554,6 @@ class ServiceContainer {
      */
     public function getMessageService(): MessageServiceInterface {
         if (!isset($this->services['MessageService'])) {
-            require_once __DIR__ . '/MessageService.php';
             $this->services['MessageService'] = new MessageService(
                 $this->getContactRepository(),
                 $this->getBalanceRepository(),
@@ -554,7 +575,6 @@ class ServiceContainer {
      */
     public function getCleanupService(): CleanupServiceInterface {
         if (!isset($this->services['CleanupService'])) {
-            require_once __DIR__ . '/CleanupService.php';
             $this->services['CleanupService'] = new CleanupService(
                 $this->getP2pRepository(),
                 $this->getRp2pRepository(),
@@ -574,7 +594,6 @@ class ServiceContainer {
      */
     public function getSyncService(): SyncServiceInterface {
         if (!isset($this->services['SyncService'])) {
-            require_once __DIR__ . '/SyncService.php';
             $this->services['SyncService'] = new SyncService(
                 $this->getContactRepository(),
                 $this->getAddressRepository(),
@@ -598,7 +617,6 @@ class ServiceContainer {
      */
     public function getDebugService(): DebugServiceInterface {
         if (!isset($this->services['DebugService'])) {
-            require_once __DIR__ . '/DebugService.php';
             $this->services['DebugService'] = new DebugService(
                 $this->getDebugRepository(),
                 $this->currentUser
@@ -614,7 +632,6 @@ class ServiceContainer {
      */
     public function getMessageDeliveryService(): MessageDeliveryServiceInterface {
         if (!isset($this->services['MessageDeliveryService'])) {
-            require_once __DIR__ . '/MessageDeliveryService.php';
             $this->services['MessageDeliveryService'] = new MessageDeliveryService(
                 $this->getMessageDeliveryRepository(),
                 $this->getDeadLetterQueueRepository(),
@@ -634,7 +651,6 @@ class ServiceContainer {
      */
     public function getHeldTransactionService(): HeldTransactionServiceInterface {
         if (!isset($this->services['HeldTransactionService'])) {
-            require_once __DIR__ . '/HeldTransactionService.php';
             $this->services['HeldTransactionService'] = new HeldTransactionService(
                 $this->getHeldTransactionRepository(),
                 $this->getTransactionRepository(),
@@ -653,7 +669,6 @@ class ServiceContainer {
      */
     public function getTransactionRecoveryService(): TransactionRecoveryServiceInterface {
         if (!isset($this->services['TransactionRecoveryService'])) {
-            require_once __DIR__ . '/TransactionRecoveryService.php';
             $this->services['TransactionRecoveryService'] = new TransactionRecoveryService(
                 $this->getTransactionRepository(),
                 $this->getTransactionRecoveryRepository()
@@ -669,7 +684,6 @@ class ServiceContainer {
      */
     public function getCliService(): CliServiceInterface {
         if (!isset($this->services['CliService'])) {
-            require_once __DIR__ . '/CliService.php';
             $this->services['CliService'] = new CliService(
                 $this->getContactRepository(),
                 $this->getBalanceRepository(),
@@ -688,7 +702,6 @@ class ServiceContainer {
      */
     public function getRateLimiterService(): RateLimiterServiceInterface {
         if (!isset($this->services['RateLimiterService'])) {
-            require_once __DIR__ . '/RateLimiterService.php';
             $this->services['RateLimiterService'] = new RateLimiterService(
                 $this->getRateLimiterRepository()
             );
@@ -705,7 +718,6 @@ class ServiceContainer {
      */
     public function getLockingService(): LockingServiceInterface {
         if (!isset($this->services['LockingService'])) {
-            require_once __DIR__ . '/DatabaseLockingService.php';
             $this->services['LockingService'] = new DatabaseLockingService(
                 $this->getPdo()
             );
@@ -722,7 +734,6 @@ class ServiceContainer {
      */
     public function getContactStatusService(): ContactStatusServiceInterface {
         if (!isset($this->services['ContactStatusService'])) {
-            require_once __DIR__ . '/ContactStatusService.php';
             $this->services['ContactStatusService'] = new ContactStatusService(
                 $this->getContactRepository(),
                 $this->getTransactionRepository(),
@@ -742,7 +753,6 @@ class ServiceContainer {
      */
     public function getApiAuthService(): ApiAuthServiceInterface {
         if (!isset($this->services['ApiAuthService'])) {
-            require_once __DIR__ . '/ApiAuthService.php';
             $this->services['ApiAuthService'] = new ApiAuthService(
                 $this->getApiKeyRepository(),
                 $this->getLogger()
@@ -761,7 +771,6 @@ class ServiceContainer {
      */
     public function getApiKeyService(CliOutputManager $output): ApiKeyServiceInterface {
         if (!isset($this->services['ApiKeyService'])) {
-            require_once __DIR__ . '/ApiKeyService.php';
             $this->services['ApiKeyService'] = new ApiKeyService(
                 $this->getApiKeyRepository(),
                 $output
@@ -779,7 +788,6 @@ class ServiceContainer {
      */
     public function getBackupService(): BackupServiceInterface {
         if (!isset($this->services['BackupService'])) {
-            require_once __DIR__ . '/BackupService.php';
             $this->services['BackupService'] = new BackupService(
                 $this->currentUser,
                 $this->pdo
@@ -799,7 +807,6 @@ class ServiceContainer {
      */
     public function getBalanceService(): BalanceServiceInterface {
         if (!isset($this->services['BalanceService'])) {
-            require_once __DIR__ . '/BalanceService.php';
             $this->services['BalanceService'] = new BalanceService(
                 $this->getBalanceRepository(),
                 $this->getTransactionContactRepository(),
@@ -822,7 +829,6 @@ class ServiceContainer {
      */
     public function getChainVerificationService(): ChainVerificationServiceInterface {
         if (!isset($this->services['ChainVerificationService'])) {
-            require_once __DIR__ . '/ChainVerificationService.php';
             $this->services['ChainVerificationService'] = new ChainVerificationService(
                 $this->getTransactionChainRepository(),
                 $this->currentUser,
@@ -844,7 +850,6 @@ class ServiceContainer {
      */
     public function getTransactionValidationService(): TransactionValidationServiceInterface {
         if (!isset($this->services['TransactionValidationService'])) {
-            require_once __DIR__ . '/TransactionValidationService.php';
             $this->services['TransactionValidationService'] = new TransactionValidationService(
                 $this->getTransactionRepository(),
                 $this->getContactRepository(),
@@ -869,7 +874,6 @@ class ServiceContainer {
      */
     public function getTransactionProcessingService(): TransactionProcessingServiceInterface {
         if (!isset($this->services['TransactionProcessingService'])) {
-            require_once __DIR__ . '/TransactionProcessingService.php';
             $this->services['TransactionProcessingService'] = new TransactionProcessingService(
                 $this->getTransactionRepository(),
                 $this->getTransactionRecoveryRepository(),
@@ -900,7 +904,6 @@ class ServiceContainer {
      */
     public function getSendOperationService(): SendOperationServiceInterface {
         if (!isset($this->services['SendOperationService'])) {
-            require_once __DIR__ . '/SendOperationService.php';
             $this->services['SendOperationService'] = new SendOperationService(
                 $this->getTransactionRepository(),
                 $this->getAddressRepository(),
@@ -986,7 +989,6 @@ class ServiceContainer {
      */
     public function getUtilityContainer(): UtilityServiceContainer {
         if (!isset($this->services['UtilityServiceContainer'])) {
-            require_once __DIR__ . '/utilities/UtilityServiceContainer.php';
             $this->services['UtilityServiceContainer'] = new UtilityServiceContainer($this);
         }
         return $this->services['UtilityServiceContainer'];
@@ -1000,7 +1002,6 @@ class ServiceContainer {
      */
     public function getInputValidator(): InputValidator {
         if (!isset($this->utils['InputValidator'])) {
-            require_once '/etc/eiou/src/utils/InputValidator.php';
             $this->utils['InputValidator'] = new InputValidator();
         }
         return $this->utils['InputValidator'];
@@ -1013,7 +1014,6 @@ class ServiceContainer {
      */
     public function getLogger(): SecureLogger {
         if (!isset($this->utils['SecureLogger'])) {
-            require_once '/etc/eiou/src/utils/SecureLogger.php';
             $secureLogger = new SecureLogger();
             $secureLogger->init(Constants::LOG_FILE_APP, Constants::LOG_LEVEL);
             $this->utils['SecureLogger'] = $secureLogger;
@@ -1028,7 +1028,6 @@ class ServiceContainer {
      */
     public function getSecurity(): Security {
         if (!isset($this->utils['Security'])) {
-            require_once '/etc/eiou/src/utils/Security.php';
             $this->utils['Security'] = new Security();
         }
         return $this->utils['Security'];
@@ -1041,7 +1040,6 @@ class ServiceContainer {
      */
     public function getTransactionPayload(): TransactionPayload {
         if (!isset($this->utils['TransactionPayload'])) {
-            require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
             $this->utils['TransactionPayload'] = new TransactionPayload($this->currentUser, $this->getUtilityContainer());
         }
         return $this->utils['TransactionPayload'];

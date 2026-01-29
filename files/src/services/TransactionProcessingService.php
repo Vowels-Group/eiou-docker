@@ -1,12 +1,27 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../core/Constants.php';
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/../contracts/TransactionProcessingServiceInterface.php';
-require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
-require_once __DIR__ . '/../contracts/P2pServiceInterface.php';
-require_once __DIR__ . '/../contracts/HeldTransactionServiceInterface.php';
+namespace Eiou\Services;
+
+use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
+use Eiou\Utils\SecureLogger;
+use Eiou\Contracts\TransactionProcessingServiceInterface;
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Contracts\P2pServiceInterface;
+use Eiou\Contracts\HeldTransactionServiceInterface;
+use Eiou\Database\TransactionRepository;
+use Eiou\Database\TransactionRecoveryRepository;
+use Eiou\Database\TransactionChainRepository;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\Rp2pRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Schemas\Payloads\TransactionPayload;
+use RuntimeException;
+use PDOException;
 
 /**
  * Transaction Processing Service

@@ -1,9 +1,12 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../core/ErrorCodes.php';
-require_once __DIR__ . '/../contracts/ApiAuthServiceInterface.php';
+namespace Eiou\Services;
 
+use Eiou\Core\ErrorCodes;
+use Eiou\Contracts\ApiAuthServiceInterface;
+use Eiou\Database\ApiKeyRepository;
+use Eiou\Utils\SecureLogger;
 
 /**
  * API Authentication Service with HMAC Signature Verification
@@ -304,7 +307,6 @@ class ApiAuthService implements ApiAuthServiceInterface {
      * @return bool True if permission is granted
      */
     public function hasPermission(array $keyData, string $permission): bool {
-        require_once dirname(__DIR__) . '/database/ApiKeyRepository.php';
         return ApiKeyRepository::hasPermission($keyData['permissions'], $permission);
     }
 

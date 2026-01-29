@@ -1,10 +1,26 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/../contracts/MessageServiceInterface.php';
-require_once __DIR__ . '/../contracts/SyncTriggerInterface.php';
-require_once __DIR__ . '/../database/TransactionContactRepository.php';
+namespace Eiou\Services;
+
+use Eiou\Utils\SecureLogger;
+use Eiou\Contracts\MessageServiceInterface;
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Database\TransactionContactRepository;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Core\UserContext;
+use Eiou\Core\Constants;
+use Eiou\Schemas\Payloads\ContactPayload;
+use Eiou\Schemas\Payloads\TransactionPayload;
+use Eiou\Schemas\Payloads\UtilPayload;
+use Eiou\Schemas\Payloads\MessagePayload;
+use RuntimeException;
 
 /**
  * Message Service
@@ -143,16 +159,9 @@ class MessageService implements MessageServiceInterface {
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
 
-        require_once '/etc/eiou/src/schemas/payloads/ContactPayload.php';
         $this->contactPayload = new ContactPayload($this->currentUser,$this->utilityContainer);
-
-        require_once '/etc/eiou/src/schemas/payloads/TransactionPayload.php';
         $this->transactionPayload = new TransactionPayload($this->currentUser,$this->utilityContainer);
-
-        require_once '/etc/eiou/src/schemas/payloads/UtilPayload.php';
         $this->utilPayload = new UtilPayload($this->currentUser,$this->utilityContainer);
-
-        require_once '/etc/eiou/src/schemas/payloads/MessagePayload.php';
         $this->messagePayload = new MessagePayload($this->currentUser,$this->utilityContainer);
     }
 
@@ -423,7 +432,7 @@ class MessageService implements MessageServiceInterface {
 
             // Return acknowledgment with the received status
             echo json_encode([
-                'status' => Constants::STATUS_RECEIVED,
+                'status' => Constants::DELIVERY_RECEIVED,
                 'message' => 'Contact message received',
                 'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($senderAddress),
                 'senderPublicKey' => $this->currentUser->getPublicKey()

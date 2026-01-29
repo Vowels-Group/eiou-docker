@@ -11,6 +11,8 @@
 
 require_once(__DIR__ . "/Functions.php");
 
+use Eiou\Core\Application;
+
 // Initialize security components for message processing
 // Note: For CLI processors, we skip session management but keep logging
 require_once __DIR__ . '/SecurityInit.php';

@@ -121,11 +121,10 @@ else
     # Create key directly via PHP as fallback
     echo -e "\n\t-> Attempting direct PHP API key creation..."
     apiKeyDirect=$(docker exec ${testContainer} php -r "
-        require_once '${APPLICATION_FILE}';
-        \$app = Application::getInstance();
+        require_once '${BOOTSTRAP_PATH}';
+        \$app = \Eiou\Core\Application::getInstance();
         \$pdo = \$app->services->getPdo();
-        require_once '${DATABASE_DIR}//ApiKeyRepository.php';
-        \$repo = new ApiKeyRepository(\$pdo);
+        \$repo = new \Eiou\Database\ApiKeyRepository(\$pdo);
         \$key = \$repo->createKey('TestAPIKey', ['wallet:read', 'contacts:read', 'contacts:write', 'system:read'], 1000, null);
         echo json_encode(\$key);
     " 2>/dev/null)

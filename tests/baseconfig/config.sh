@@ -48,8 +48,12 @@ TOR_SECRET_KEY="${TOR_HIDDEN_SERVICE_DIR}//hs_ed25519_secret_key"
 TOR_PUBLIC_KEY="${TOR_HIDDEN_SERVICE_DIR}//hs_ed25519_public_key"
 TOR_HOSTNAME="${TOR_HIDDEN_SERVICE_DIR}//hostname"
 
-# Relative paths used with require_once from current working directory
-# These use ./ prefix and are relative to container working directory
+# Bootstrap path for Composer autoloading
+# The bootstrap file initializes Composer autoloader and must be included before using any classes
+BOOTSTRAP_PATH="//etc//eiou//src//bootstrap.php"
+
+# Legacy paths (deprecated - use BOOTSTRAP_PATH with fully qualified class names)
+# Kept for reference only
 REL_APPLICATION=".//etc//eiou//src//core//Application.php"
 REL_FUNCTIONS=".//etc//eiou//Functions.php"
 
@@ -188,8 +192,8 @@ function wait_for_tx_status(){
 
     while [ $elapsed -lt $timeout ]; do
         status=$(docker exec $container php -r "
-            require_once('${REL_APPLICATION}');
-            \$app = Application::getInstance();
+            require_once('${BOOTSTRAP_PATH}');
+            \$app = \Eiou\Core\Application::getInstance();
             \$tx = \$app->services->getTransactionRepository()->getByTxid('$txid');
             echo \$tx['status'] ?? 'unknown';
         " 2>/dev/null || echo "unknown")
@@ -218,8 +222,8 @@ function wait_for_contact(){
     transportCheck=$(getPhpTransportType ${address})
     while [ $elapsed -lt $timeout ]; do
         local contact_exists=$(docker exec $container php -r "
-            require_once('${REL_APPLICATION}');
-            \$app = Application::getInstance();
+            require_once('${BOOTSTRAP_PATH}');
+            \$app = \Eiou\Core\Application::getInstance();
             \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportCheck}','$address');
             echo \$contact ? 'yes' : 'no';
         " 2>/dev/null || echo "no")

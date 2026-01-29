@@ -11,6 +11,8 @@
 
 require_once(__DIR__ . "/Functions.php");
 
+use Eiou\Core\Application;
+
 // Initialize security components for cleanup processing
 require_once __DIR__ . '/SecurityInit.php';
 

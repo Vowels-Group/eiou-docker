@@ -1,6 +1,8 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Database;
+
 // Contacts table
 function getContactsTableSchema() {
     return "CREATE TABLE IF NOT EXISTS contacts (

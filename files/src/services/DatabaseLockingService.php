@@ -1,8 +1,12 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/../contracts/LockingServiceInterface.php';
+namespace Eiou\Services;
+
+use Eiou\Utils\SecureLogger;
+use Eiou\Contracts\LockingServiceInterface;
+use PDO;
+use PDOException;
 
 /**
  * Database Locking Service

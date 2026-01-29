@@ -91,8 +91,8 @@ echo -e "\n[1.1 Verify online_status column exists in contacts table]"
 
 # Check if online_status column exists by trying to select it
 columnExists=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     try {
         \$result = \$pdo->query('SELECT online_status FROM contacts LIMIT 1');
@@ -117,8 +117,8 @@ echo -e "\n[1.2 Verify valid_chain column exists in contacts table]"
 
 # Check if valid_chain column exists by trying to select it
 chainColumnExists=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pdo = \$app->services->getPdo();
     try {
         \$result = \$pdo->query('SELECT valid_chain FROM contacts LIMIT 1');
@@ -158,20 +158,20 @@ wait_for_queue_processed ${containerC}
 waitElapsed=0
 while [ $waitElapsed -lt 20 ]; do
     statusAB=$(docker exec ${containerA} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         echo \$app->services->getContactRepository()->getContactStatus('${transportB}', '${addressB}') ?? 'none';
     " 2>/dev/null || echo "none")
 
     statusBA=$(docker exec ${containerB} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         echo \$app->services->getContactRepository()->getContactStatus('${transportA}', '${addressA}') ?? 'none';
     " 2>/dev/null || echo "none")
 
     statusBC=$(docker exec ${containerB} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         echo \$app->services->getContactRepository()->getContactStatus('${transportC}', '${addressC}') ?? 'none';
     " 2>/dev/null || echo "none")
 
@@ -212,15 +212,15 @@ wait_for_queue_processed ${containerC}
 
 # Verify transactions were created
 txCountA=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$count = \$app->services->getPdo()->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '%ping-test%'\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
 
 txCountB=$(docker exec ${containerB} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$count = \$app->services->getPdo()->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '%ping-test%'\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
@@ -239,8 +239,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[1.5 Verify ContactStatusProcessor class exists]"
 
 processorExists=$(docker exec ${containerA} php -r "
-    require_once('/etc/eiou/src/processors/ContactStatusProcessor.php');
-    echo class_exists('ContactStatusProcessor') ? 'EXISTS' : 'MISSING';
+    require_once('${BOOTSTRAP_PATH}');
+    echo class_exists('\Eiou\Processors\ContactStatusProcessor') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [[ "$processorExists" == "EXISTS" ]]; then
@@ -257,8 +257,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[1.6 Verify ContactStatusPayload class exists]"
 
 payloadExists=$(docker exec ${containerA} php -r "
-    require_once('/etc/eiou/src/schemas/payloads/ContactStatusPayload.php');
-    echo class_exists('ContactStatusPayload') ? 'EXISTS' : 'MISSING';
+    require_once('${BOOTSTRAP_PATH}');
+    echo class_exists('\Eiou\Schemas\Payloads\ContactStatusPayload') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [[ "$payloadExists" == "EXISTS" ]]; then
@@ -282,8 +282,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[2.1 Get container B's public key from A's perspective]"
 
 pubkeyBfromA=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
@@ -307,8 +307,8 @@ echo -e "\n[2.2 Manually ping B from A while B is online]"
 
 # Get A's previous txid with B for the ping
 prevTxidAB=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$userPubkey = \$app->services->getCurrentUser()->getPublicKey();
     \$contactPubkey = base64_decode('${pubkeyBfromA}');
     \$txid = \$app->services->getTransactionRepository()->getPreviousTxid(\$userPubkey, \$contactPubkey);
@@ -317,15 +317,14 @@ prevTxidAB=$(docker exec ${containerA} php -r "
 
 # Execute ping via the transport utility
 pingResult=$(docker exec ${containerA} php -r "
-    require_once('/etc/eiou/Functions.php');
-    require_once('/etc/eiou/src/schemas/payloads/ContactStatusPayload.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$currentUser = \$app->services->getCurrentUser();
     \$utilityContainer = \$app->utilityServices;
     \$transportUtility = \$utilityContainer->getTransportUtility();
 
-    \$payload = new ContactStatusPayload(\$currentUser, \$utilityContainer);
+    \$payload = new \Eiou\Schemas\Payloads\ContactStatusPayload(\$currentUser, \$utilityContainer);
     \$builtPayload = \$payload->build([
         'receiverAddress' => '${addressB}',
         'prevTxid' => '${prevTxidAB}' === 'NULL' ? null : '${prevTxidAB}',
@@ -340,7 +339,7 @@ pingResult=$(docker exec ${containerA} php -r "
         } else {
             echo 'INVALID_RESPONSE';
         }
-    } catch (Exception \$e) {
+    } catch (\Exception \$e) {
         echo 'EXCEPTION:' . \$e->getMessage();
     }
 " 2>&1 || echo "ERROR")
@@ -362,8 +361,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[2.3 Update contact online status via repository method]"
 
 updateResult=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$contactRepo = \$app->services->getContactRepository();
 
     // Get B's pubkey
@@ -396,8 +395,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[2.4 Verify online status is set correctly]"
 
 onlineStatus=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
     echo \$contact['online_status'] ?? 'unknown';
 " 2>/dev/null || echo "ERROR")
@@ -435,10 +434,10 @@ originalTorB=$(docker exec ${containerB} php -r "
 " 2>/dev/null || echo "ERROR")
 
 seedPhraseB=$(docker exec ${containerB} php -r "
-    require_once '/etc/eiou/src/security/KeyEncryption.php';
+    require_once '${BOOTSTRAP_PATH}';
     \$json = json_decode(file_get_contents('${USERCONFIG}'), true);
     if (isset(\$json['mnemonic_encrypted'])) {
-        echo KeyEncryption::decrypt(\$json['mnemonic_encrypted']);
+        echo \Eiou\Security\KeyEncryption::decrypt(\$json['mnemonic_encrypted']);
     } else {
         echo 'ERROR';
     }
@@ -446,15 +445,15 @@ seedPhraseB=$(docker exec ${containerB} php -r "
 
 # Count B's contacts and transactions before deletion
 originalContactCountB=$(docker exec ${containerB} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$count = \$app->services->getPdo()->query(\"SELECT COUNT(*) FROM contacts WHERE status = 'accepted'\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
 
 originalTxCountB=$(docker exec ${containerB} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$count = \$app->services->getPdo()->query(\"SELECT COUNT(*) FROM transactions\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
@@ -478,8 +477,8 @@ echo -e "\n[3.2 Set B's online status to 'online' on A and C]"
 
 # Set B as online on A
 docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$contactRepo = \$app->services->getContactRepository();
     \$pubkey = \$contactRepo->getContactPubkey('${transportB}', '${addressB}');
     if (\$pubkey) {
@@ -489,8 +488,8 @@ docker exec ${containerA} php -r "
 
 # Set B as online on C
 docker exec ${containerC} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$contactRepo = \$app->services->getContactRepository();
     \$pubkey = \$contactRepo->getContactPubkey('${transportB}', '${addressB}');
     if (\$pubkey) {
@@ -530,15 +529,14 @@ echo -e "\n[3.4 Verify A detects B as offline after wallet deletion]"
 
 # Try to ping B from A (should fail now)
 pingFailResult=$(docker exec ${containerA} php -r "
-    require_once('/etc/eiou/Functions.php');
-    require_once('/etc/eiou/src/schemas/payloads/ContactStatusPayload.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$currentUser = \$app->services->getCurrentUser();
     \$utilityContainer = \$app->utilityServices;
     \$transportUtility = \$utilityContainer->getTransportUtility();
 
-    \$payload = new ContactStatusPayload(\$currentUser, \$utilityContainer);
+    \$payload = new \Eiou\Schemas\Payloads\ContactStatusPayload(\$currentUser, \$utilityContainer);
     \$builtPayload = \$payload->build([
         'receiverAddress' => '${addressB}',
         'prevTxid' => null,
@@ -553,7 +551,7 @@ pingFailResult=$(docker exec ${containerA} php -r "
         } else {
             echo 'NO_VALID_RESPONSE';
         }
-    } catch (Exception \$e) {
+    } catch (\Exception \$e) {
         echo 'OFFLINE';
     }
 " 2>&1 || echo "OFFLINE")
@@ -561,8 +559,8 @@ pingFailResult=$(docker exec ${containerA} php -r "
 # Update B's status to offline on A based on ping failure
 if [[ "$pingFailResult" == "OFFLINE" ]] || [[ "$pingFailResult" == "NO_VALID_RESPONSE" ]]; then
     docker exec ${containerA} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$contactRepo = \$app->services->getContactRepository();
         \$pubkey = \$contactRepo->getContactPubkey('${transportB}', '${addressB}');
         if (\$pubkey) {
@@ -571,8 +569,8 @@ if [[ "$pingFailResult" == "OFFLINE" ]] || [[ "$pingFailResult" == "NO_VALID_RES
     " 2>/dev/null
 
     offlineStatusA=$(docker exec ${containerA} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
         echo \$contact['online_status'] ?? 'unknown';
     " 2>/dev/null || echo "unknown")
@@ -624,21 +622,21 @@ echo -e "\n[3.6 Verify B has no contacts or transactions after fresh restore]"
 # Need to initialize the database first
 docker exec ${containerB} php -r "
     require_once('/etc/eiou/Functions.php');
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
 " 2>/dev/null
 # Brief pause for database initialization
 wait_for_condition "docker exec ${containerB} php -r 'require_once(\"${REL_APPLICATION}\"); echo \"OK\";'" 5 1 "database init"
 
 restoredContactCountB=$(docker exec ${containerB} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$count = \$app->services->getPdo()->query(\"SELECT COUNT(*) FROM contacts WHERE status = 'accepted'\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
 
 restoredTxCountB=$(docker exec ${containerB} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$count = \$app->services->getPdo()->query(\"SELECT COUNT(*) FROM transactions\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
@@ -667,8 +665,8 @@ wait_for_queue_processed ${containerB}
 
 # Get B's pubkey for sync
 pubkeyBfromAforSync=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
@@ -702,8 +700,8 @@ wait_for_queue_processed ${containerB}
 
 # Get B's pubkey from C's perspective
 pubkeyBfromCforSync=$(docker exec ${containerC} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
@@ -735,8 +733,8 @@ wait_for_queue_processed ${containerB}
 wait_for_queue_processed ${containerC}
 
 finalContactCountB=$(docker exec ${containerB} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$count = \$app->services->getPdo()->query(\"SELECT COUNT(*) FROM contacts WHERE status = 'accepted'\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
@@ -755,8 +753,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[3.10 Verify B has transactions restored after sync]"
 
 finalTxCountB=$(docker exec ${containerB} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$count = \$app->services->getPdo()->query(\"SELECT COUNT(*) FROM transactions\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
@@ -776,8 +774,8 @@ echo -e "\n[3.11 Verify B's online status is updated on A after successful sync]
 
 # Manually update B's status to online after successful sync
 docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$contactRepo = \$app->services->getContactRepository();
     \$pubkey = \$contactRepo->getContactPubkey('${transportB}', '${addressB}');
     if (\$pubkey) {
@@ -786,8 +784,8 @@ docker exec ${containerA} php -r "
 " 2>/dev/null
 
 finalStatusA=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
     echo \$contact['online_status'] ?? 'unknown';
 " 2>/dev/null || echo "unknown")
@@ -819,7 +817,7 @@ pingResultA=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
     // Test the eiou ping command logic directly
     try {
         require_once('/etc/eiou/Functions.php');
-        \$app = Application::getInstance();
+        \$app = \Eiou\Core\Application::getInstance();
         \$contactStatusService = \$app->services->getContactStatusService();
         \$result = \$contactStatusService->pingContact('${addressB}');
         echo json_encode(\$result);
@@ -848,7 +846,7 @@ echo -e "\n[4.2 Test ping non-existent contact returns error]"
 
 pingNonExistent=$(docker exec ${containerA} php -r "
     require_once('/etc/eiou/Functions.php');
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$contactStatusService = \$app->services->getContactStatusService();
     \$result = \$contactStatusService->pingContact('nonexistent-contact-xyz');
     echo json_encode(\$result);
@@ -873,8 +871,8 @@ echo -e "\n[4.3 Test ping by contact name]"
 
 # Get B's name from A's contact list
 contactNameB=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$contact = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
     echo \$contact['name'] ?? '';
 " 2>/dev/null || echo "")
@@ -885,7 +883,7 @@ if [[ -n "$contactNameB" ]]; then
     pingByName=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
         try {
             require_once('/etc/eiou/Functions.php');
-            \$app = Application::getInstance();
+            \$app = \Eiou\Core\Application::getInstance();
             \$contactStatusService = \$app->services->getContactStatusService();
             \$result = \$contactStatusService->pingContact('${contactNameB}');
             echo json_encode(\$result);
@@ -917,8 +915,8 @@ echo -e "\n[4.4 Test manual ping rate limiting (3 per 5 minutes)]"
 # Disable test mode temporarily to test rate limiting
 # Note: In test mode, rate limiting is bypassed, so we verify the rate limiter is called
 rateLimitCheck=$(docker exec ${containerA} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
 
     // Check that RateLimiterService exists and is callable
     \$rateLimiter = \$app->services->getRateLimiterService();
@@ -956,8 +954,8 @@ echo -e "\n[Cleaning up ping test transactions]"
 # Remove test transactions
 for container in "${containers[@]}"; do
     docker exec ${container} php -r "
-        require_once('${REL_APPLICATION}');
-        \$app = Application::getInstance();
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
         \$app->services->getPdo()->exec(\"DELETE FROM transactions WHERE description LIKE '%ping-test%'\");
     " 2>/dev/null || true
 done

@@ -1,7 +1,9 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../core/Constants.php';
+namespace Eiou\Formatters;
+
+use Eiou\Core\Constants;
 
 /**
  * Transaction Formatter

@@ -1,7 +1,10 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/BasePayload.php';
+namespace Eiou\Schemas\Payloads;
+
+use Eiou\Core\Application;
+use Eiou\Core\Constants;
 
 /**
  * Transaction payload builder

@@ -1,10 +1,29 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/InputValidator.php';
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/MessageDeliveryService.php';
-require_once __DIR__ . '/../contracts/P2pServiceInterface.php';
+namespace Eiou\Services;
+
+use Eiou\Utils\InputValidator;
+use Eiou\Utils\SecureLogger;
+use Eiou\Contracts\P2pServiceInterface;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\P2pRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\ValidationUtilityService;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Services\Utilities\CurrencyUtilityService;
+use Eiou\Core\UserContext;
+use Eiou\Core\Constants;
+use Eiou\Schemas\Payloads\P2pPayload;
+use Eiou\Schemas\Payloads\Rp2pPayload;
+use Eiou\Schemas\Payloads\UtilPayload;
+use PDOException;
+use Exception;
+use InvalidArgumentException;
+use RuntimeException;
 
 /**
  * P2P Service
@@ -122,13 +141,8 @@ class P2pService implements P2pServiceInterface {
         $this->messageDeliveryService = $messageDeliveryService;
         $this->secureLogger = new SecureLogger();
 
-        require_once '/etc/eiou/src/schemas/payloads/P2pPayload.php';
         $this->p2pPayload = new P2pPayload($this->currentUser, $this->utilityContainer);
-
-        require_once '/etc/eiou/src/schemas/payloads/Rp2pPayload.php';
         $this->rp2pPayload = new Rp2pPayload($this->currentUser, $this->utilityContainer);
-
-        require_once '/etc/eiou/src/schemas/payloads/UtilPayload.php';
         $this->utilPayload = new UtilPayload($this->currentUser, $this->utilityContainer);
     }
 

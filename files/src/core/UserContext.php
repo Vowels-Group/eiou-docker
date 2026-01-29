@@ -1,7 +1,12 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/AddressValidator.php';
+namespace Eiou\Core;
+
+use Eiou\Utils\AddressValidator;
+use Eiou\Security\KeyEncryption;
+use Eiou\Utils\SecureLogger;
+use Exception;
 
 /**
  * UserContext - Singleton wrapper for user configuration
@@ -134,16 +139,13 @@ class UserContext {
     public function getPrivateKey(): ?string {
         // Try new encrypted format first
         if ($this->has('private_encrypted')) {
-            require_once '/etc/eiou/src/security/KeyEncryption.php';
             try {
                 return KeyEncryption::decrypt($this->get('private_encrypted'));
             } catch (Exception $e) {
                 // Log decryption failure but don't expose details
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::error('Failed to decrypt private key', [
-                        'error' => $e->getMessage()
-                    ]);
-                }
+                SecureLogger::error('Failed to decrypt private key', [
+                    'error' => $e->getMessage()
+                ]);
                 return null;
             }
         }
@@ -176,16 +178,13 @@ class UserContext {
     public function getAuthCode(): ?string {
         // Try new encrypted format first
         if ($this->has('authcode_encrypted')) {
-            require_once '/etc/eiou/src/security/KeyEncryption.php';
             try {
                 return KeyEncryption::decrypt($this->get('authcode_encrypted'));
             } catch (Exception $e) {
                 // Log decryption failure but don't expose details
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::error('Failed to decrypt auth code', [
-                        'error' => $e->getMessage()
-                    ]);
-                }
+                SecureLogger::error('Failed to decrypt auth code', [
+                    'error' => $e->getMessage()
+                ]);
                 return null;
             }
         }

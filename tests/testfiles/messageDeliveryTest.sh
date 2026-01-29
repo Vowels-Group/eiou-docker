@@ -31,8 +31,8 @@ for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
 
     tableCheck=$(docker exec ${container} php -r "
-        require_once('${PDO_FILE}');
-        \$pdo = createPDOConnection();
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Database\createPDOConnection();
         \$stmt = \$pdo->query('SHOW TABLES LIKE \"message_delivery\"');
         echo \$stmt->rowCount() > 0 ? 'EXISTS' : 'NOT_FOUND';
     " 2>/dev/null || echo "ERROR")
@@ -54,8 +54,8 @@ for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
 
     tableCheck=$(docker exec ${container} php -r "
-        require_once('${PDO_FILE}');
-        \$pdo = createPDOConnection();
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Database\createPDOConnection();
         \$stmt = \$pdo->query('SHOW TABLES LIKE \"dead_letter_queue\"');
         echo \$stmt->rowCount() > 0 ? 'EXISTS' : 'NOT_FOUND';
     " 2>/dev/null || echo "ERROR")
@@ -77,8 +77,8 @@ for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
 
     tableCheck=$(docker exec ${container} php -r "
-        require_once('${PDO_FILE}');
-        \$pdo = createPDOConnection();
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Database\createPDOConnection();
         \$stmt = \$pdo->query('SHOW TABLES LIKE \"delivery_metrics\"');
         echo \$stmt->rowCount() > 0 ? 'EXISTS' : 'NOT_FOUND';
     " 2>/dev/null || echo "ERROR")
@@ -100,9 +100,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 createResult=$(docker exec ${container} php -r "
-    require_once('${DATABASE_DIR}//MessageDeliveryRepository.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$repo = new MessageDeliveryRepository();
+    \$repo = new \Eiou\Database\MessageDeliveryRepository();
 
     // Create a test delivery record
     \$testId = 'test-' . time() . '-' . uniqid();
@@ -141,9 +141,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 updateResult=$(docker exec ${container} php -r "
-    require_once('${DATABASE_DIR}//MessageDeliveryRepository.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$repo = new MessageDeliveryRepository();
+    \$repo = new \Eiou\Database\MessageDeliveryRepository();
 
     // Create a test delivery record
     \$testId = 'test-update-' . time() . '-' . uniqid();
@@ -178,9 +178,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 dlqResult=$(docker exec ${container} php -r "
-    require_once('${DATABASE_DIR}//DeadLetterQueueRepository.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$repo = new DeadLetterQueueRepository();
+    \$repo = new \Eiou\Database\DeadLetterQueueRepository();
 
     // Add a test item to DLQ
     \$testId = 'dlq-test-' . time() . '-' . uniqid();
@@ -219,9 +219,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 statsResult=$(docker exec ${container} php -r "
-    require_once('${DATABASE_DIR}//DeadLetterQueueRepository.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$repo = new DeadLetterQueueRepository();
+    \$repo = new \Eiou\Database\DeadLetterQueueRepository();
 
     \$stats = \$repo->getStatistics();
 
@@ -248,9 +248,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 metricsResult=$(docker exec ${container} php -r "
-    require_once('${DATABASE_DIR}//DeliveryMetricsRepository.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$repo = new DeliveryMetricsRepository();
+    \$repo = new \Eiou\Database\DeliveryMetricsRepository();
 
     // Record a test delivery event
     \$result = \$repo->recordDeliveryEvent('transaction', true, 150, 0);
@@ -281,9 +281,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 serviceResult=$(docker exec ${container} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getMessageDeliveryService();
 
     if (\$service !== null && is_object(\$service)) {
@@ -309,9 +309,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 serviceStatsResult=$(docker exec ${container} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getMessageDeliveryService();
 
     \$stats = \$service->getDeliveryStatistics();
@@ -339,8 +339,8 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 debugCheck=$(docker exec ${container} php -r "
-    require_once('${PDO_FILE}');
-    \$pdo = createPDOConnection();
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Database\createPDOConnection();
 
     // Check for MessageDelivery related log entries
     \$stmt = \$pdo->prepare('SELECT COUNT(*) as count FROM debug WHERE message LIKE \"%MessageDelivery%\" OR message LIKE \"%[DLQ]%\"');
@@ -367,9 +367,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 dlqAlertResult=$(docker exec ${container} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$service = \$app->services->getMessageDeliveryService();
 
     \$alert = \$service->getDlqAlertStatus(100); // High threshold for test
@@ -397,9 +397,9 @@ container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
 stageResult=$(docker exec ${container} php -r "
-    require_once('${DATABASE_DIR}//MessageDeliveryRepository.php');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$repo = new MessageDeliveryRepository();
+    \$repo = new \Eiou\Database\MessageDeliveryRepository();
 
     // Create and progress through stages
     \$testId = 'stage-test-' . time() . '-' . uniqid();

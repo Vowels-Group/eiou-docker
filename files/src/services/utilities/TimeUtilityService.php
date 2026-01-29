@@ -1,15 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../../contracts/TimeUtilityServiceInterface.php';
+namespace Eiou\Services\Utilities;
+
+use Eiou\Contracts\TimeUtilityServiceInterface;
+use Eiou\Core\Constants;
 
 /**
  * Time Utility Service
  *
  * Handles all time-related utility functions.
  */
-
-
 class TimeUtilityService implements TimeUtilityServiceInterface
 {
     /**

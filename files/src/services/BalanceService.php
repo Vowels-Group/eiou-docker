@@ -1,12 +1,14 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../contracts/BalanceServiceInterface.php';
-require_once __DIR__ . '/../database/BalanceRepository.php';
-require_once __DIR__ . '/../database/TransactionContactRepository.php';
-require_once __DIR__ . '/../database/AddressRepository.php';
-require_once __DIR__ . '/utilities/CurrencyUtilityService.php';
-require_once __DIR__ . '/../core/UserContext.php';
+namespace Eiou\Services;
+
+use Eiou\Contracts\BalanceServiceInterface;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\TransactionContactRepository;
+use Eiou\Database\AddressRepository;
+use Eiou\Services\Utilities\CurrencyUtilityService;
+use Eiou\Core\UserContext;
 
 /**
  * Balance Service

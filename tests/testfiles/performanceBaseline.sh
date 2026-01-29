@@ -121,8 +121,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing simple SELECT query performance"
 
 queryResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$pdo = Application::getInstance()->services->getPdo();
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
 
     \$start = microtime(true);
     \$result = \$pdo->query('SELECT COUNT(*) as cnt FROM transactions');
@@ -146,8 +146,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing indexed query performance"
 
 indexedQueryResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$pdo = Application::getInstance()->services->getPdo();
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
 
     \$start = microtime(true);
     // Query using indexed column (txid is primary/unique)
@@ -173,8 +173,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing join query performance"
 
 joinQueryResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$pdo = Application::getInstance()->services->getPdo();
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
 
     \$start = microtime(true);
     // Query with potential join (contacts table)
@@ -336,9 +336,9 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing signature generation time"
 
 signatureTimeResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$user = \$app->services->getCurrentUser();
     \$privateKey = \$user->getPrivateKey();
 
@@ -365,9 +365,9 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing signature verification time"
 
 verificationTimeResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$user = \$app->services->getCurrentUser();
     \$privateKey = \$user->getPrivateKey();
     \$publicKey = \$user->getPublicKey();
@@ -509,9 +509,9 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing transaction history retrieval time"
 
 historyTimeResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$txRepo = \$app->services->getTransactionRepository();
 
     \$start = microtime(true);
@@ -535,9 +535,9 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing contact search time"
 
 contactSearchTimeResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$contactRepo = \$app->services->getContactRepository();
 
     \$start = microtime(true);
@@ -561,9 +561,9 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing balance calculation time"
 
 balanceCalcTimeResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
+    require_once('${BOOTSTRAP_PATH}');
 
-    \$app = Application::getInstance();
+    \$app = \Eiou\Core\Application::getInstance();
     \$balanceRepository = \$app->services->getBalanceRepository();
 
     \$start = microtime(true);
@@ -588,12 +588,12 @@ echo -e "\n[Section 6: Service Initialization Performance]"
 
 # Test 6.1: Application getInstance time
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Testing Application::getInstance() time"
+echo -e "\n\t-> Testing \Eiou\Core\Application::getInstance() time"
 
 appInitTimeResult=$(docker exec ${testContainer} php -r "
     \$start = microtime(true);
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
     \$end = microtime(true);
 
     \$elapsed_ms = round((\$end - \$start) * 1000, 2);
@@ -615,8 +615,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing ServiceContainer repeated access time"
 
 serviceAccessTimeResult=$(docker exec ${testContainer} php -r "
-    require_once('${REL_APPLICATION}');
-    \$app = Application::getInstance();
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
 
     // Warm up
     \$_ = \$app->services->getPdo();

@@ -8,9 +8,9 @@
  * This file should be included early in the request lifecycle.
  *
  * Initialization Sequence:
- * 1. Load Constants and ErrorHandler
- * 2. Load Security utilities and RateLimiter
- * 3. Initialize SecureLogger
+ * 1. Load Composer autoloader (if not already loaded)
+ * 2. Initialize SecureLogger
+ * 3. Initialize ErrorHandler
  * 4. Set security headers (web requests only)
  * 5. Configure and start secure session
  * 6. Apply rate limiting based on action type
@@ -27,17 +27,15 @@
  *   u($string) - URL encoding for safe output
  */
 
-// Load constants
-require_once __DIR__ . '/src/core/Constants.php';
+// Load Composer autoloader (safe to call multiple times due to double-inclusion guard)
+require_once __DIR__ . '/src/bootstrap.php';
 
-// Load error handler (must be loaded before other security classes)
-require_once __DIR__ . '/src/core/ErrorHandler.php';
-
-// Load security classes
-require_once __DIR__ . '/src/utils/Security.php';
-require_once __DIR__ . '/src/database/RateLimiterRepository.php';
-require_once __DIR__ . '/src/services/RateLimiterService.php';
-require_once __DIR__ . '/src/utils/SecureLogger.php';
+use Eiou\Core\Constants;
+use Eiou\Core\ErrorHandler;
+use Eiou\Utils\Security;
+use Eiou\Utils\SecureLogger;
+use Eiou\Database\RateLimiterRepository;
+use Eiou\Services\RateLimiterService;
 
 // Initialize secure logging
 SecureLogger::init(Constants::LOG_FILE_APP ?: '/var/log/eiou/app.log', Constants::LOG_LEVEL ?: 'INFO');
@@ -74,7 +72,7 @@ if (php_sapi_name() !== 'cli') {
     }
 
     // Initialize rate limiting (requires PDO connection)
-    if (isset($pdo) && $pdo instanceof PDO) {
+    if (isset($pdo) && $pdo instanceof \PDO) {
         $rateLimiterRepository = new RateLimiterRepository($pdo);
         $rateLimiterService = new RateLimiterService($rateLimiterRepository);
 

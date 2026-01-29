@@ -1,10 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
-require_once __DIR__ . '/../utils/SecureLogger.php';
-require_once __DIR__ . '/../contracts/BackupServiceInterface.php';
-require_once __DIR__ . '/../security/KeyEncryption.php';
-require_once __DIR__ . '/../core/Constants.php';
+namespace Eiou\Services;
+
+use Eiou\Utils\SecureLogger;
+use Eiou\Contracts\BackupServiceInterface;
+use Eiou\Security\KeyEncryption;
+use Eiou\Core\Constants;
+use Eiou\Core\UserContext;
+use PDO;
+use DateTime;
+use Exception;
 
 /**
  * Backup Service

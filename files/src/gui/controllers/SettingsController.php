@@ -1,6 +1,15 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Gui\Controllers;
+
+use Eiou\Gui\Includes\Session;
+use Eiou\Utils\InputValidator;
+use Eiou\Utils\Security;
+use Eiou\Core\Constants;
+use Eiou\Database\DebugRepository;
+use Eiou\Services\ServiceContainer;
+
 /**
  * Settings Controller
  *
@@ -35,8 +44,6 @@ class SettingsController
         $this->session->verifyCSRFToken();
 
         // Import validation and security classes
-        require_once __DIR__ . '/../../utils/InputValidator.php';
-        require_once __DIR__ . '/../../utils/Security.php';
 
         // Collect and validate settings
         $settings = [];
@@ -180,7 +187,6 @@ class SettingsController
         $this->session->verifyCSRFToken();
 
         try {
-            require_once __DIR__ . '/../../database/DebugRepository.php';
             $debugRepo = new DebugRepository();
 
             if ($debugRepo->clearDebugEntries()) {
@@ -203,13 +209,11 @@ class SettingsController
         // CSRF Protection
         $this->session->verifyCSRFToken();
 
-        require_once __DIR__ . '/../../utils/Security.php';
 
         $description = Security::sanitizeInput($_POST['description'] ?? '');
 
         try {
             // Collect all debug information
-            require_once __DIR__ . '/../../database/DebugRepository.php';
             $debugRepo = new DebugRepository();
             $debugEntries = $debugRepo->getRecentDebugEntries(100);
 
@@ -227,7 +231,6 @@ class SettingsController
 
             // Get MySQL/MariaDB version
             try {
-                require_once __DIR__ . '/../../services/ServiceContainer.php';
                 $serviceContainer = ServiceContainer::getInstance(null, null);
                 $pdo = $serviceContainer->getPdo();
                 if ($pdo) {
@@ -294,7 +297,6 @@ class SettingsController
             $systemInfo['php_extensions'] = $phpExtensionsWithVersions;
 
             // Get Constants.php values
-            require_once __DIR__ . '/../../core/Constants.php';
             $systemInfo['constants'] = Constants::all();
 
             // Get defaultconfig.json values
@@ -437,7 +439,6 @@ class SettingsController
         // Note: CSRF already verified in walletIndex.html before Functions.php is included
         // JSON header already set in Functions.php for clean error handling
 
-        require_once __DIR__ . '/../../utils/Security.php';
 
         $description = Security::sanitizeInput($_POST['description'] ?? '');
         // Check if limited mode requested (same data as GUI display)
@@ -446,7 +447,6 @@ class SettingsController
 
         try {
             // Collect debug information based on mode
-            require_once __DIR__ . '/../../database/DebugRepository.php';
             $debugRepo = new DebugRepository();
 
             if ($isFullReport) {
@@ -471,7 +471,6 @@ class SettingsController
 
             // Get MySQL/MariaDB version
             try {
-                require_once __DIR__ . '/../../services/ServiceContainer.php';
                 $serviceContainer = ServiceContainer::getInstance(null, null);
                 $pdo = $serviceContainer->getPdo();
                 if ($pdo) {
@@ -538,7 +537,6 @@ class SettingsController
             $systemInfo['php_extensions'] = $phpExtensionsWithVersions;
 
             // Get Constants.php values
-            require_once __DIR__ . '/../../core/Constants.php';
             $systemInfo['constants'] = Constants::all();
 
             // Get defaultconfig.json values

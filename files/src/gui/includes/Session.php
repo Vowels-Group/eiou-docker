@@ -1,14 +1,16 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Gui\Includes;
+
+use Eiou\Core\ErrorCodes;
+
 /**
  *
  * Session Management for eIOU Wallet
  *
  * Handles secure session-based authentication
  */
-
-require_once __DIR__ . '/../../core/ErrorCodes.php';
 
 class Session
 {

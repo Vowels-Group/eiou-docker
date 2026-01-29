@@ -1,15 +1,17 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Processors;
+
+use Eiou\Core\Application;
+use Eiou\Core\Constants;
+
 /**
  * Transaction Message Processor
  *
  * Processes pending transaction messages with fast polling for time-critical transactions.
  *
  */
-
-require_once(__DIR__ . "/AbstractMessageProcessor.php");
-
 class TransactionMessageProcessor extends AbstractMessageProcessor {
     private $transactionService;
 

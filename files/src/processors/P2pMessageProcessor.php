@@ -1,15 +1,17 @@
 <?php
 # Copyright 2025-2026 Vowels Group, LLC
 
+namespace Eiou\Processors;
+
+use Eiou\Core\Application;
+use Eiou\Core\Constants;
+
 /**
  * P2P Message Processor
  *
  * Processes queued P2P messages with fast polling for time-critical routing.
  *
  */
-
-require_once(__DIR__ . "/AbstractMessageProcessor.php");
-
 class P2pMessageProcessor extends AbstractMessageProcessor {
     private $p2pService;
 
