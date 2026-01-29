@@ -33,7 +33,7 @@
             <!-- Minimum Fee -->
             <div class="form-group">
                 <label for="minFee">Minimum Fee Amount:</label>
-                <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.01" min="<?php echo Constants::TRANSACTION_MINIMUM_FEE; ?>" max="<?php echo Constants::TRANSACTION_MAX_AMOUNT; ?>" class="default-value">
+                <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.01" min="0" class="default-value">
                 <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                     <i class="fas fa-info-circle"></i>
                     Minimum fee amount in default currency (cannot be lower than <?php echo Constants::TRANSACTION_MINIMUM_FEE; ?>)
