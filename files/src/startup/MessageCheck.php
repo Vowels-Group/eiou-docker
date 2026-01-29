@@ -6,7 +6,6 @@ require_once __DIR__ . '/../bootstrap.php';
 
 use Eiou\Utils\SecureLogger;
 use function Eiou\Database\createPDOConnection;
-use Exception;
 
 // Check if all needed precursors for core functionality are available and working
 $passed = false;
@@ -21,7 +20,7 @@ try{
     $pdo = null; // reset PDO
     $passed = true; // All needed precursors are available and working
     return;
-} catch(Exception $e){
+} catch(\Exception $e){
     SecureLogger::logException($e, 'ERROR');
     return;
 }

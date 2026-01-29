@@ -9,7 +9,6 @@ use Eiou\Core\Constants;
 use Eiou\Core\Application;
 use Eiou\Api\ApiController;
 use Eiou\Services\ApiAuthService;
-use Exception;
 
 /**
  * API Entry Point
@@ -49,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Initialize application
 try {
     $app = Application::getInstance();
-} catch (Exception $e) {
+} catch (\Exception $e) {
     http_response_code(ErrorCodes::HTTP_INTERNAL_SERVER_ERROR);
     echo json_encode([
         'success' => false,
