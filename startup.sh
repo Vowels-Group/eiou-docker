@@ -413,6 +413,13 @@ if [ -d /app/eiou-src-backup ]; then
     echo "Source file sync completed."
 fi
 
+# Sync CLI tool if backup exists
+if [ -f /app/eiou-cli-backup/eiou.php ]; then
+    echo "Syncing CLI tool..."
+    cp /app/eiou-cli-backup/eiou.php /usr/local/bin/eiou.php 2>/dev/null || true
+    echo "  CLI tool updated."
+fi
+
 # =============================================================================
 # PSR-4 AUTOLOADER SETUP
 # =============================================================================

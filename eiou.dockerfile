@@ -179,10 +179,11 @@ RUN chmod +x /app/scripts/*.sh
 # in /app/eiou-src-backup/ that startup.sh will use to sync to the volume.
 # This ensures users always get the latest code without losing their data.
 # =============================================================================
-RUN mkdir -p /app/eiou-src-backup
+RUN mkdir -p /app/eiou-src-backup /app/eiou-cli-backup
 COPY files/src/ /app/eiou-src-backup/src/
 COPY files/root/ /app/eiou-src-backup/
 COPY files/composer.json /app/eiou-src-backup/composer.json
+COPY files/eiou/Eiou.php /app/eiou-cli-backup/eiou.php
 
 # Copy and set up startup script
 COPY startup.sh /startup.sh
