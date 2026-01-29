@@ -4,9 +4,15 @@
     "type": "project",
     "license": "proprietary",
     "autoload": {
-        "psr-4": {
-            "Eiou\\": "src/"
-        }
+        "classmap": ["src/"],
+        "files": [
+            "src/database/Pdo.php",
+            "src/database/DatabaseSetup.php",
+            "src/database/DatabaseSchema.php",
+            "src/services/ServiceWrappers.php",
+            "src/schemas/EchoSchema.php",
+            "src/schemas/OutputSchema.php"
+        ]
     },
     "require": {
         "php": ">=8.1"

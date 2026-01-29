@@ -375,6 +375,17 @@ fi
 # Files preserved: userconfig.json, dbconfig.json, encryption keys
 # =============================================================================
 
+# Debug: Show source backup status
+echo "Checking for source file backup..."
+if [ -d /app/eiou-src-backup ]; then
+    echo "  Backup directory found at /app/eiou-src-backup"
+    ls -la /app/eiou-src-backup/ 2>/dev/null | head -5
+else
+    echo "  WARNING: Backup directory /app/eiou-src-backup not found!"
+    echo "  This means the Docker image was not rebuilt with --build flag."
+    echo "  Run: docker-compose -f <compose-file>.yml up -d --build"
+fi
+
 # Check if source backup exists (created during docker build)
 if [ -d /app/eiou-src-backup ]; then
     echo "Syncing source files from image to volume..."
@@ -422,9 +433,15 @@ if [ -d /app/eiou-src-backup ] || [ ! -f /etc/eiou/vendor/autoload.php ]; then
     "type": "project",
     "license": "proprietary",
     "autoload": {
-        "psr-4": {
-            "Eiou\\": "src/"
-        }
+        "classmap": ["src/"],
+        "files": [
+            "src/database/Pdo.php",
+            "src/database/DatabaseSetup.php",
+            "src/database/DatabaseSchema.php",
+            "src/services/ServiceWrappers.php",
+            "src/schemas/EchoSchema.php",
+            "src/schemas/OutputSchema.php"
+        ]
     },
     "require": {
         "php": ">=8.1"
