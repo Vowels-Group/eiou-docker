@@ -3,13 +3,14 @@
 
 namespace Eiou\Gui\Controllers;
 
+use Eiou\Core\Application;
+use Eiou\Core\Constants;
 use Eiou\Gui\Includes\Session;
 use Eiou\Services\ContactService;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Utils\SecureLogger;
-use Eiou\Core\Constants;
 
 /**
  * Contact Controller

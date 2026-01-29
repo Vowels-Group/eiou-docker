@@ -239,8 +239,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[1.5 Verify ContactStatusProcessor class exists]"
 
 processorExists=$(docker exec ${containerA} php -r "
-    require_once('/etc/eiou/src/processors/ContactStatusProcessor.php');
-    echo class_exists('ContactStatusProcessor') ? 'EXISTS' : 'MISSING';
+    require_once('${BOOTSTRAP_PATH}');
+    echo class_exists('\Eiou\Processors\ContactStatusProcessor') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [[ "$processorExists" == "EXISTS" ]]; then
@@ -257,8 +257,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n[1.6 Verify ContactStatusPayload class exists]"
 
 payloadExists=$(docker exec ${containerA} php -r "
-    require_once('/etc/eiou/src/schemas/payloads/ContactStatusPayload.php');
-    echo class_exists('ContactStatusPayload') ? 'EXISTS' : 'MISSING';
+    require_once('${BOOTSTRAP_PATH}');
+    echo class_exists('\Eiou\Schemas\Payloads\ContactStatusPayload') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [[ "$payloadExists" == "EXISTS" ]]; then
@@ -317,15 +317,14 @@ prevTxidAB=$(docker exec ${containerA} php -r "
 
 # Execute ping via the transport utility
 pingResult=$(docker exec ${containerA} php -r "
-    require_once('/etc/eiou/Functions.php');
-    require_once('/etc/eiou/src/schemas/payloads/ContactStatusPayload.php');
+    require_once('${BOOTSTRAP_PATH}');
 
     \$app = \Eiou\Core\Application::getInstance();
     \$currentUser = \$app->services->getCurrentUser();
     \$utilityContainer = \$app->utilityServices;
     \$transportUtility = \$utilityContainer->getTransportUtility();
 
-    \$payload = new ContactStatusPayload(\$currentUser, \$utilityContainer);
+    \$payload = new \Eiou\Schemas\Payloads\ContactStatusPayload(\$currentUser, \$utilityContainer);
     \$builtPayload = \$payload->build([
         'receiverAddress' => '${addressB}',
         'prevTxid' => '${prevTxidAB}' === 'NULL' ? null : '${prevTxidAB}',
@@ -340,7 +339,7 @@ pingResult=$(docker exec ${containerA} php -r "
         } else {
             echo 'INVALID_RESPONSE';
         }
-    } catch (Exception \$e) {
+    } catch (\Exception \$e) {
         echo 'EXCEPTION:' . \$e->getMessage();
     }
 " 2>&1 || echo "ERROR")
@@ -530,15 +529,14 @@ echo -e "\n[3.4 Verify A detects B as offline after wallet deletion]"
 
 # Try to ping B from A (should fail now)
 pingFailResult=$(docker exec ${containerA} php -r "
-    require_once('/etc/eiou/Functions.php');
-    require_once('/etc/eiou/src/schemas/payloads/ContactStatusPayload.php');
+    require_once('${BOOTSTRAP_PATH}');
 
     \$app = \Eiou\Core\Application::getInstance();
     \$currentUser = \$app->services->getCurrentUser();
     \$utilityContainer = \$app->utilityServices;
     \$transportUtility = \$utilityContainer->getTransportUtility();
 
-    \$payload = new ContactStatusPayload(\$currentUser, \$utilityContainer);
+    \$payload = new \Eiou\Schemas\Payloads\ContactStatusPayload(\$currentUser, \$utilityContainer);
     \$builtPayload = \$payload->build([
         'receiverAddress' => '${addressB}',
         'prevTxid' => null,
@@ -553,7 +551,7 @@ pingFailResult=$(docker exec ${containerA} php -r "
         } else {
             echo 'NO_VALID_RESPONSE';
         }
-    } catch (Exception \$e) {
+    } catch (\Exception \$e) {
         echo 'OFFLINE';
     }
 " 2>&1 || echo "OFFLINE")
