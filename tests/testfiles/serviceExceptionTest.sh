@@ -523,6 +523,410 @@ else
     failure=$(( failure + 1 ))
 fi
 
+############################ SECTION 7: CONTACTSERVICE EXCEPTION TESTS ############################
+
+echo -e "\n[Section 7: ContactService Exception Tests]"
+
+# Test 7.1: blockContact with invalid address throws ValidationServiceException
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing blockContact with invalid address throws ValidationServiceException"
+
+blockInvalidResult=$(docker exec ${testContainer} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+
+    use Eiou\Services\ContactService;
+    use Eiou\Exceptions\ValidationServiceException;
+
+    try {
+        \$container = \Eiou\Services\ServiceContainer::getInstance();
+        \$contactService = \$container->get(ContactService::class);
+        // Use an address with invalid characters that will fail validation
+        \$contactService->blockContact('http://invalid<script>address');
+        echo 'FAILED:no_exception';
+    } catch (ValidationServiceException \$e) {
+        if (strpos(\$e->getErrorCode(), 'INVALID') !== false) {
+            echo 'SUCCESS';
+        } else {
+            echo 'FAILED:wrong_code:' . \$e->getErrorCode();
+        }
+    } catch (\Exception \$e) {
+        echo 'FAILED:wrong_exception:' . get_class(\$e);
+    }
+" 2>&1 | tail -1)
+
+if [[ "$blockInvalidResult" == "SUCCESS" ]]; then
+    printf "\t   blockContact with invalid address throws ValidationServiceException ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   blockContact invalid address ${RED}FAILED${NC} (%s)\n" "${blockInvalidResult}"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7.2: blockContact with non-existent contact throws exception
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing blockContact with non-existent contact throws exception"
+
+blockNonExistentResult=$(docker exec ${testContainer} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+
+    use Eiou\Services\ContactService;
+    use Eiou\Exceptions\ValidationServiceException;
+
+    try {
+        \$container = \Eiou\Services\ServiceContainer::getInstance();
+        \$contactService = \$container->get(ContactService::class);
+        // Use a valid but non-existent address
+        \$contactService->blockContact('http://nonexistent.test.local:8080');
+        echo 'FAILED:no_exception';
+    } catch (ValidationServiceException \$e) {
+        if (\$e->getErrorCode() === 'CONTACT_NOT_FOUND') {
+            echo 'SUCCESS';
+        } else {
+            echo 'FAILED:wrong_code:' . \$e->getErrorCode();
+        }
+    } catch (\Exception \$e) {
+        echo 'FAILED:wrong_exception:' . get_class(\$e);
+    }
+" 2>&1 | tail -1)
+
+if [[ "$blockNonExistentResult" == "SUCCESS" ]]; then
+    printf "\t   blockContact with non-existent contact throws exception ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   blockContact non-existent contact ${RED}FAILED${NC} (%s)\n" "${blockNonExistentResult}"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7.3: deleteContact with invalid input throws exception
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing deleteContact with invalid input throws exception"
+
+deleteInvalidResult=$(docker exec ${testContainer} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+
+    use Eiou\Services\ContactService;
+    use Eiou\Exceptions\ValidationServiceException;
+
+    try {
+        \$container = \Eiou\Services\ServiceContainer::getInstance();
+        \$contactService = \$container->get(ContactService::class);
+        // Use an address with invalid characters
+        \$contactService->deleteContact('http://test<invalid>address');
+        echo 'FAILED:no_exception';
+    } catch (ValidationServiceException \$e) {
+        if (strpos(\$e->getErrorCode(), 'INVALID') !== false) {
+            echo 'SUCCESS';
+        } else {
+            echo 'FAILED:wrong_code:' . \$e->getErrorCode();
+        }
+    } catch (\Exception \$e) {
+        echo 'FAILED:wrong_exception:' . get_class(\$e);
+    }
+" 2>&1 | tail -1)
+
+if [[ "$deleteInvalidResult" == "SUCCESS" ]]; then
+    printf "\t   deleteContact with invalid input throws exception ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   deleteContact invalid input ${RED}FAILED${NC} (%s)\n" "${deleteInvalidResult}"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7.4: deleteContact with null input throws ValidationServiceException
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing deleteContact with null input throws ValidationServiceException"
+
+deleteNullResult=$(docker exec ${testContainer} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+
+    use Eiou\Services\ContactService;
+    use Eiou\Exceptions\ValidationServiceException;
+
+    try {
+        \$container = \Eiou\Services\ServiceContainer::getInstance();
+        \$contactService = \$container->get(ContactService::class);
+        \$contactService->deleteContact(null);
+        echo 'FAILED:no_exception';
+    } catch (ValidationServiceException \$e) {
+        if (\$e->getErrorCode() === 'MISSING_IDENTIFIER') {
+            echo 'SUCCESS';
+        } else {
+            echo 'FAILED:wrong_code:' . \$e->getErrorCode();
+        }
+    } catch (\Exception \$e) {
+        echo 'FAILED:wrong_exception:' . get_class(\$e);
+    }
+" 2>&1 | tail -1)
+
+if [[ "$deleteNullResult" == "SUCCESS" ]]; then
+    printf "\t   deleteContact with null input throws ValidationServiceException ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   deleteContact null input ${RED}FAILED${NC} (%s)\n" "${deleteNullResult}"
+    failure=$(( failure + 1 ))
+fi
+
+############################ SECTION 8: BACKUPSERVICE EXCEPTION TESTS ############################
+
+echo -e "\n[Section 8: BackupService Exception Tests]"
+
+# Test 8.1: restoreBackup with missing file throws ValidationServiceException
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing restoreBackup with missing file throws ValidationServiceException"
+
+restoreMissingResult=$(docker exec ${testContainer} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+
+    use Eiou\Services\BackupService;
+    use Eiou\Exceptions\ValidationServiceException;
+    use Eiou\Core\UserContext;
+
+    try {
+        \$userContext = UserContext::getInstance();
+        \$pdo = \Eiou\Services\ServiceContainer::getInstance()->get(PDO::class);
+        \$backupService = new BackupService(\$userContext, \$pdo);
+        // Try to restore a file that doesn't exist
+        \$backupService->restoreBackup('nonexistent_backup.eiou', true);
+        echo 'FAILED:no_exception';
+    } catch (ValidationServiceException \$e) {
+        if (\$e->getErrorCode() === 'BACKUP_NOT_FOUND') {
+            echo 'SUCCESS';
+        } else {
+            echo 'FAILED:wrong_code:' . \$e->getErrorCode();
+        }
+    } catch (\Exception \$e) {
+        echo 'FAILED:wrong_exception:' . get_class(\$e) . ':' . \$e->getMessage();
+    }
+" 2>&1 | tail -1)
+
+if [[ "$restoreMissingResult" == "SUCCESS" ]]; then
+    printf "\t   restoreBackup with missing file throws ValidationServiceException ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   restoreBackup missing file ${RED}FAILED${NC} (%s)\n" "${restoreMissingResult}"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 8.2: restoreBackup without confirmation throws ValidationServiceException
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing restoreBackup without confirmation throws ValidationServiceException"
+
+restoreNoConfirmResult=$(docker exec ${testContainer} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+
+    use Eiou\Services\BackupService;
+    use Eiou\Exceptions\ValidationServiceException;
+    use Eiou\Core\UserContext;
+
+    try {
+        \$userContext = UserContext::getInstance();
+        \$pdo = \Eiou\Services\ServiceContainer::getInstance()->get(PDO::class);
+        \$backupService = new BackupService(\$userContext, \$pdo);
+        // Try to restore without confirmation (confirmOverwrite = false)
+        \$backupService->restoreBackup('any_backup.eiou', false);
+        echo 'FAILED:no_exception';
+    } catch (ValidationServiceException \$e) {
+        if (\$e->getErrorCode() === 'RESTORE_CONFIRM_REQUIRED') {
+            echo 'SUCCESS';
+        } else {
+            echo 'FAILED:wrong_code:' . \$e->getErrorCode();
+        }
+    } catch (\Exception \$e) {
+        echo 'FAILED:wrong_exception:' . get_class(\$e) . ':' . \$e->getMessage();
+    }
+" 2>&1 | tail -1)
+
+if [[ "$restoreNoConfirmResult" == "SUCCESS" ]]; then
+    printf "\t   restoreBackup without confirmation throws ValidationServiceException ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   restoreBackup no confirmation ${RED}FAILED${NC} (%s)\n" "${restoreNoConfirmResult}"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 8.3: deleteBackup with non-existent file throws exception
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing deleteBackup with non-existent file throws exception"
+
+deleteNonExistentBackupResult=$(docker exec ${testContainer} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+
+    use Eiou\Services\BackupService;
+    use Eiou\Exceptions\ValidationServiceException;
+    use Eiou\Core\UserContext;
+
+    try {
+        \$userContext = UserContext::getInstance();
+        \$pdo = \Eiou\Services\ServiceContainer::getInstance()->get(PDO::class);
+        \$backupService = new BackupService(\$userContext, \$pdo);
+        // Try to delete a file that doesn't exist
+        \$backupService->deleteBackup('nonexistent_backup_file.eiou');
+        echo 'FAILED:no_exception';
+    } catch (ValidationServiceException \$e) {
+        if (\$e->getErrorCode() === 'BACKUP_NOT_FOUND') {
+            echo 'SUCCESS';
+        } else {
+            echo 'FAILED:wrong_code:' . \$e->getErrorCode();
+        }
+    } catch (\Exception \$e) {
+        echo 'FAILED:wrong_exception:' . get_class(\$e) . ':' . \$e->getMessage();
+    }
+" 2>&1 | tail -1)
+
+if [[ "$deleteNonExistentBackupResult" == "SUCCESS" ]]; then
+    printf "\t   deleteBackup with non-existent file throws exception ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   deleteBackup non-existent file ${RED}FAILED${NC} (%s)\n" "${deleteNonExistentBackupResult}"
+    failure=$(( failure + 1 ))
+fi
+
+############################ SECTION 9: ERRORHANDLER REQUEST ID TESTS ############################
+
+echo -e "\n[Section 9: ErrorHandler Request ID Tests]"
+
+# Test 9.1: Request ID can be set and retrieved
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing ErrorHandler setRequestId and getRequestId"
+
+requestIdSetGetResult=$(docker exec ${testContainer} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+
+    use Eiou\Core\ErrorHandler;
+
+    // Set a request ID
+    \$testId = 'test_request_12345';
+    ErrorHandler::setRequestId(\$testId);
+
+    // Get the request ID
+    \$retrievedId = ErrorHandler::getRequestId();
+
+    if (\$retrievedId === \$testId) {
+        echo 'SUCCESS';
+    } else {
+        echo 'FAILED:mismatch:set=' . \$testId . ',got=' . \$retrievedId;
+    }
+" 2>&1 | tail -1)
+
+if [[ "$requestIdSetGetResult" == "SUCCESS" ]]; then
+    printf "\t   ErrorHandler setRequestId and getRequestId ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   ErrorHandler request ID set/get ${RED}FAILED${NC} (%s)\n" "${requestIdSetGetResult}"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 9.2: generateRequestId creates valid IDs
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing ErrorHandler generateRequestId creates valid IDs"
+
+generateRequestIdResult=$(docker exec ${testContainer} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+
+    use Eiou\Core\ErrorHandler;
+
+    // Generate a new request ID
+    \$generatedId = ErrorHandler::generateRequestId();
+
+    // Verify it's not empty
+    if (empty(\$generatedId)) {
+        echo 'FAILED:empty';
+        exit;
+    }
+
+    // Verify it's a valid hex string (16 chars from 8 random bytes)
+    if (!preg_match('/^[a-f0-9]{16}$/', \$generatedId)) {
+        echo 'FAILED:invalid_format:' . \$generatedId;
+        exit;
+    }
+
+    // Verify getRequestId returns the same value
+    \$retrievedId = ErrorHandler::getRequestId();
+    if (\$retrievedId !== \$generatedId) {
+        echo 'FAILED:not_stored:generated=' . \$generatedId . ',retrieved=' . \$retrievedId;
+        exit;
+    }
+
+    echo 'SUCCESS';
+" 2>&1 | tail -1)
+
+if [[ "$generateRequestIdResult" == "SUCCESS" ]]; then
+    printf "\t   ErrorHandler generateRequestId creates valid IDs ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   ErrorHandler generateRequestId ${RED}FAILED${NC} (%s)\n" "${generateRequestIdResult}"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 9.3: generateRequestId creates unique IDs
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing ErrorHandler generateRequestId creates unique IDs"
+
+generateUniqueResult=$(docker exec ${testContainer} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+
+    use Eiou\Core\ErrorHandler;
+
+    // Generate multiple request IDs
+    \$ids = [];
+    for (\$i = 0; \$i < 10; \$i++) {
+        \$ids[] = ErrorHandler::generateRequestId();
+    }
+
+    // Verify all IDs are unique
+    \$uniqueIds = array_unique(\$ids);
+    if (count(\$uniqueIds) === count(\$ids)) {
+        echo 'SUCCESS';
+    } else {
+        echo 'FAILED:duplicates_found:' . count(\$ids) . '_generated,' . count(\$uniqueIds) . '_unique';
+    }
+" 2>&1 | tail -1)
+
+if [[ "$generateUniqueResult" == "SUCCESS" ]]; then
+    printf "\t   ErrorHandler generateRequestId creates unique IDs ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   ErrorHandler generateRequestId uniqueness ${RED}FAILED${NC} (%s)\n" "${generateUniqueResult}"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 9.4: createErrorResponseWithContext includes request ID
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing ErrorHandler createErrorResponseWithContext includes request ID"
+
+errorResponseContextResult=$(docker exec ${testContainer} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+
+    use Eiou\Core\ErrorHandler;
+    use Eiou\Exceptions\FatalServiceException;
+    use Eiou\Core\ErrorCodes;
+
+    // Set a known request ID
+    \$testRequestId = 'test_req_abc123';
+    ErrorHandler::setRequestId(\$testRequestId);
+
+    // Create an exception
+    \$exception = new FatalServiceException('Test error', ErrorCodes::INTERNAL_ERROR);
+
+    // Create error response with context
+    \$response = ErrorHandler::createErrorResponseWithContext(\$exception);
+
+    // Verify request_id is in the response
+    if (isset(\$response['request_id']) && \$response['request_id'] === \$testRequestId) {
+        echo 'SUCCESS';
+    } else {
+        echo 'FAILED:request_id=' . (\$response['request_id'] ?? 'missing');
+    }
+" 2>&1 | tail -1)
+
+if [[ "$errorResponseContextResult" == "SUCCESS" ]]; then
+    printf "\t   ErrorHandler createErrorResponseWithContext includes request ID ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   ErrorHandler createErrorResponseWithContext ${RED}FAILED${NC} (%s)\n" "${errorResponseContextResult}"
+    failure=$(( failure + 1 ))
+fi
+
 ############################ RESULTS ############################
 
 succesrate "${totaltests}" "${passed}" "${failure}" "'service exception tests'"

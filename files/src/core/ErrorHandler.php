@@ -3,6 +3,7 @@
 
 namespace Eiou\Core;
 
+use Eiou\Exceptions\ServiceException;
 use Eiou\Utils\SecureLogger;
 use Exception;
 use Throwable;
@@ -16,6 +17,7 @@ class ErrorHandler {
 
     private static $errorHandlers = [];
     private static $initialized = false;
+    private static ?string $requestId = null;
 
     /**
      * Initialize error handling
@@ -30,6 +32,34 @@ class ErrorHandler {
         register_shutdown_function([self::class, 'handleShutdown']);
 
         self::$initialized = true;
+    }
+
+    /**
+     * Set the request ID for error tracking
+     *
+     * @param string $id
+     */
+    public static function setRequestId(string $id): void {
+        self::$requestId = $id;
+    }
+
+    /**
+     * Get the current request ID
+     *
+     * @return string|null
+     */
+    public static function getRequestId(): ?string {
+        return self::$requestId;
+    }
+
+    /**
+     * Generate a new request ID
+     *
+     * @return string
+     */
+    public static function generateRequestId(): string {
+        self::$requestId = bin2hex(random_bytes(8));
+        return self::$requestId;
     }
 
     /**
@@ -83,6 +113,20 @@ class ErrorHandler {
 
         // Log the exception
         self::logException($exception);
+
+        // Handle ServiceException with consistent formatting
+        if ($exception instanceof ServiceException) {
+            $response = self::createErrorResponseWithContext($exception);
+
+            if (php_sapi_name() === 'cli') {
+                echo json_encode($response, JSON_PRETTY_PRINT) . "\n";
+            } else {
+                http_response_code($exception->getHttpStatus());
+                header('Content-Type: application/json');
+                echo json_encode($response);
+            }
+            return;
+        }
 
         // In production, don't expose exception details
         if (self::isProduction()) {
@@ -278,6 +322,22 @@ class ErrorHandler {
             $response['error']['details'] = $details;
         }
 
+        return $response;
+    }
+
+    /**
+     * Create an error response from a ServiceException with context
+     *
+     * @param ServiceException $exception
+     * @param string|null $requestId
+     * @return array
+     */
+    public static function createErrorResponseWithContext(
+        ServiceException $exception,
+        ?string $requestId = null
+    ): array {
+        $response = $exception->toArray();
+        $response['request_id'] = $requestId ?? self::$requestId;
         return $response;
     }
 

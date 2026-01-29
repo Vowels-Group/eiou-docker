@@ -22,6 +22,7 @@ use Eiou\Core\UserContext;
 use Eiou\Schemas\Payloads\ContactPayload;
 use Eiou\Schemas\Payloads\MessagePayload;
 use Eiou\Exceptions\ValidationServiceException;
+use Eiou\Exceptions\FatalServiceException;
 use RuntimeException;
 
 /**
@@ -1300,13 +1301,19 @@ class ContactService implements ContactServiceInterface {
      * @param string|null $addressOrName Contact address or name
      * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return bool Success status
+     * @throws ValidationServiceException For invalid input
+     * @throws FatalServiceException For operation failures
      */
     public function blockContact(?string $addressOrName, ?CliOutputManager $output = null): bool {
         $output = $output ?? CliOutputManager::getInstance();
 
         if ($addressOrName === null) {
-            $output->error("Address or name is required", ErrorCodes::MISSING_IDENTIFIER, 400);
-            return false;
+            throw new ValidationServiceException(
+                "Address or name is required",
+                ErrorCodes::MISSING_IDENTIFIER,
+                'addressOrName',
+                400
+            );
         }
 
         // Check if it's an HTTP, HTTPS, or Tor address
@@ -1317,27 +1324,43 @@ class ContactService implements ContactServiceInterface {
                     'address' => $addressOrName,
                     'error' => $addressValidation['error']
                 ]);
-                $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
-                return false;
+                throw new ValidationServiceException(
+                    "Invalid Address: " . $addressValidation['error'],
+                    ErrorCodes::INVALID_ADDRESS,
+                    'address',
+                    400
+                );
             }
             $address = $addressValidation['value'];
             $transportIndex = $this->transportUtility->determineTransportType($address);
             // Check if contact exists before attempting to block
             if (!$this->contactRepository->contactExists($transportIndex, $address)) {
-                $output->error("Contact not found for address: " . $address, ErrorCodes::CONTACT_NOT_FOUND, 404);
-                return false;
+                throw new ValidationServiceException(
+                    "Contact not found for address: " . $address,
+                    ErrorCodes::CONTACT_NOT_FOUND,
+                    'address',
+                    404
+                );
             }
         } else {
             // Check if the name yields an address
             $contact = $this->contactRepository->lookupByName($addressOrName);
             if (!$contact) {
-                $output->error("Contact not found with name: " . $addressOrName, ErrorCodes::CONTACT_NOT_FOUND, 404);
-                return false;
+                throw new ValidationServiceException(
+                    "Contact not found with name: " . $addressOrName,
+                    ErrorCodes::CONTACT_NOT_FOUND,
+                    'name',
+                    404
+                );
             }
             $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
-                $output->error("Contact has no valid address", ErrorCodes::NO_ADDRESS, 500);
-                return false;
+                throw new FatalServiceException(
+                    "Contact has no valid address",
+                    ErrorCodes::NO_ADDRESS,
+                    ['name' => $addressOrName],
+                    500
+                );
             }
             $transportIndex = $this->transportUtility->determineTransportType($address);
         }
@@ -1349,8 +1372,12 @@ class ContactService implements ContactServiceInterface {
             ]);
             return true;
         } else {
-            $output->error("Failed to block contact", ErrorCodes::BLOCK_FAILED, 500, ['address' => $address]);
-            return false;
+            throw new FatalServiceException(
+                "Failed to block contact",
+                ErrorCodes::BLOCK_FAILED,
+                ['address' => $address],
+                500
+            );
         }
     }
 
@@ -1360,13 +1387,19 @@ class ContactService implements ContactServiceInterface {
      * @param string|null $addressOrName Contact address or name
      * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return bool Success status
+     * @throws ValidationServiceException For invalid input
+     * @throws FatalServiceException For operation failures
      */
     public function unblockContact(?string $addressOrName, ?CliOutputManager $output = null): bool {
         $output = $output ?? CliOutputManager::getInstance();
 
         if ($addressOrName === null) {
-            $output->error("Address or name is required", ErrorCodes::MISSING_IDENTIFIER, 400);
-            return false;
+            throw new ValidationServiceException(
+                "Address or name is required",
+                ErrorCodes::MISSING_IDENTIFIER,
+                'addressOrName',
+                400
+            );
         }
 
         // Check if it's an HTTP, HTTPS, or Tor address
@@ -1377,27 +1410,43 @@ class ContactService implements ContactServiceInterface {
                     'address' => $addressOrName,
                     'error' => $addressValidation['error']
                 ]);
-                $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
-                return false;
+                throw new ValidationServiceException(
+                    "Invalid Address: " . $addressValidation['error'],
+                    ErrorCodes::INVALID_ADDRESS,
+                    'address',
+                    400
+                );
             }
             $address = $addressValidation['value'];
             $transportIndex = $this->transportUtility->determineTransportType($address);
             // Check if contact exists before attempting to unblock
             if (!$this->contactRepository->contactExists($transportIndex, $address)) {
-                $output->error("Contact not found for address: " . $address, ErrorCodes::CONTACT_NOT_FOUND, 404);
-                return false;
+                throw new ValidationServiceException(
+                    "Contact not found for address: " . $address,
+                    ErrorCodes::CONTACT_NOT_FOUND,
+                    'address',
+                    404
+                );
             }
         } else {
             // Check if the name yields an address
             $contact = $this->contactRepository->lookupByName($addressOrName);
             if (!$contact) {
-                $output->error("Contact not found with name: " . $addressOrName, ErrorCodes::CONTACT_NOT_FOUND, 404);
-                return false;
+                throw new ValidationServiceException(
+                    "Contact not found with name: " . $addressOrName,
+                    ErrorCodes::CONTACT_NOT_FOUND,
+                    'name',
+                    404
+                );
             }
             $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
-                $output->error("Contact has no valid address", ErrorCodes::NO_ADDRESS, 500);
-                return false;
+                throw new FatalServiceException(
+                    "Contact has no valid address",
+                    ErrorCodes::NO_ADDRESS,
+                    ['name' => $addressOrName],
+                    500
+                );
             }
             $transportIndex = $this->transportUtility->determineTransportType($address);
         }
@@ -1409,8 +1458,12 @@ class ContactService implements ContactServiceInterface {
             ]);
             return true;
         } else {
-            $output->error("Failed to unblock contact", ErrorCodes::UNBLOCK_FAILED, 500, ['address' => $address]);
-            return false;
+            throw new FatalServiceException(
+                "Failed to unblock contact",
+                ErrorCodes::UNBLOCK_FAILED,
+                ['address' => $address],
+                500
+            );
         }
     }
 
@@ -1420,13 +1473,19 @@ class ContactService implements ContactServiceInterface {
      * @param string|null $addressOrName Contact address or name
      * @param CliOutputManager|null $output Optional output manager for JSON support
      * @return bool Success status
+     * @throws ValidationServiceException For invalid input
+     * @throws FatalServiceException For operation failures
      */
     public function deleteContact(?string $addressOrName, ?CliOutputManager $output = null): bool {
         $output = $output ?? CliOutputManager::getInstance();
 
         if ($addressOrName === null) {
-            $output->error("Address or name is required", ErrorCodes::MISSING_IDENTIFIER, 400);
-            return false;
+            throw new ValidationServiceException(
+                "Address or name is required",
+                ErrorCodes::MISSING_IDENTIFIER,
+                'addressOrName',
+                400
+            );
         }
 
         // Check if it's an HTTP, HTTPS, or Tor address
@@ -1437,35 +1496,55 @@ class ContactService implements ContactServiceInterface {
                     'address' => $addressOrName,
                     'error' => $addressValidation['error']
                 ]);
-                $output->error("Invalid Address: " . $addressValidation['error'], ErrorCodes::INVALID_ADDRESS, 400);
-                return false;
+                throw new ValidationServiceException(
+                    "Invalid Address: " . $addressValidation['error'],
+                    ErrorCodes::INVALID_ADDRESS,
+                    'address',
+                    400
+                );
             }
             $address = $addressValidation['value'];
             $transportIndex = $this->transportUtility->determineTransportType($address);
             // Check if contact exists before attempting to delete
             if (!$this->contactRepository->contactExists($transportIndex, $address)) {
-                $output->error("Contact not found for address: " . $address, ErrorCodes::CONTACT_NOT_FOUND, 404);
-                return false;
+                throw new ValidationServiceException(
+                    "Contact not found for address: " . $address,
+                    ErrorCodes::CONTACT_NOT_FOUND,
+                    'address',
+                    404
+                );
             }
         } else {
             // Check if the name yields an address
             $contact = $this->contactRepository->lookupByName($addressOrName);
             if (!$contact) {
-                $output->error("Contact not found with name: " . $addressOrName, ErrorCodes::CONTACT_NOT_FOUND, 404);
-                return false;
+                throw new ValidationServiceException(
+                    "Contact not found with name: " . $addressOrName,
+                    ErrorCodes::CONTACT_NOT_FOUND,
+                    'name',
+                    404
+                );
             }
             $address = $this->transportUtility->fallbackTransportAddress($contact);
             if (!$address) {
-                $output->error("Contact has no valid address", ErrorCodes::NO_ADDRESS, 500);
-                return false;
+                throw new FatalServiceException(
+                    "Contact has no valid address",
+                    ErrorCodes::NO_ADDRESS,
+                    ['name' => $addressOrName],
+                    500
+                );
             }
         }
 
         $pubkey = $this->getContactPubkey($address);
 
         if ($pubkey === null) {
-            $output->error("Contact not found for address: " . $address, ErrorCodes::CONTACT_NOT_FOUND, 404);
-            return false;
+            throw new ValidationServiceException(
+                "Contact not found for address: " . $address,
+                ErrorCodes::CONTACT_NOT_FOUND,
+                'address',
+                404
+            );
         }
 
         if ($this->contactRepository->deleteContact($pubkey) && $this->addressRepository->deleteByPubkey($pubkey) && $this->balanceRepository->deleteByPubkey($pubkey)) {
@@ -1475,8 +1554,12 @@ class ContactService implements ContactServiceInterface {
             ]);
             return true;
         } else {
-            $output->error("Failed to delete contact", ErrorCodes::DELETE_FAILED, 500, ['address' => $address]);
-            return false;
+            throw new FatalServiceException(
+                "Failed to delete contact",
+                ErrorCodes::DELETE_FAILED,
+                ['address' => $address],
+                500
+            );
         }
     }
 
