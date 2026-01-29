@@ -211,8 +211,7 @@ echo -e "\n\t-> Testing buildTransactionStatusResponse method"
 
 statusResponseCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    require_once('/etc/eiou/src/schemas/payloads/MessagePayload.php');
-
+    
     \$app = \Eiou\Core\Application::getInstance();
 
     // Check if core services exist
@@ -233,7 +232,7 @@ statusResponseCheck=$(docker exec ${testContainer} php -r "
         exit;
     }
 
-    \$payload = new MessagePayload(\$user, \$utilContainer);
+    \$payload = new \Eiou\Schemas\Payloads\MessagePayload(\$user, \$utilContainer);
 
     if (!method_exists(\$payload, 'buildTransactionStatusResponse')) {
         echo 'METHOD_NOT_FOUND';
@@ -270,8 +269,7 @@ echo -e "\n\t-> Testing buildTransactionNotFound method"
 
 notFoundCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    require_once('/etc/eiou/src/schemas/payloads/MessagePayload.php');
-
+    
     \$app = \Eiou\Core\Application::getInstance();
 
     // Check if core services exist
@@ -292,7 +290,7 @@ notFoundCheck=$(docker exec ${testContainer} php -r "
         exit;
     }
 
-    \$payload = new MessagePayload(\$user, \$utilContainer);
+    \$payload = new \Eiou\Schemas\Payloads\MessagePayload(\$user, \$utilContainer);
 
     if (!method_exists(\$payload, 'buildTransactionNotFound')) {
         echo 'METHOD_NOT_FOUND';
@@ -642,9 +640,9 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing SELF_SEND constant exists"
 
 selfSendConstant=$(docker exec ${testContainer} php -r "
-    require_once('/etc/eiou/src/core/ErrorCodes.php');
-    if (defined('ErrorCodes::SELF_SEND')) {
-        echo ErrorCodes::SELF_SEND;
+    require_once('${BOOTSTRAP_PATH}');
+    if (defined('\Eiou\Core\ErrorCodes::SELF_SEND')) {
+        echo \Eiou\Core\ErrorCodes::SELF_SEND;
     } else {
         echo 'CONSTANT_NOT_FOUND';
     }
@@ -663,8 +661,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing SELF_SEND HTTP status is 400"
 
 httpStatus=$(docker exec ${testContainer} php -r "
-    require_once('/etc/eiou/src/core/ErrorCodes.php');
-    echo ErrorCodes::getHttpStatus(ErrorCodes::SELF_SEND);
+    require_once('${BOOTSTRAP_PATH}');
+    echo \Eiou\Core\ErrorCodes::getHttpStatus(\Eiou\Core\ErrorCodes::SELF_SEND);
 " 2>/dev/null || echo "ERROR")
 
 if [[ "$httpStatus" == "400" ]]; then
@@ -682,8 +680,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing validateNotSelfSend method exists"
 
 methodExists=$(docker exec ${testContainer} php -r "
-    require_once('/etc/eiou/src/utils/InputValidator.php');
-    echo method_exists('InputValidator', 'validateNotSelfSend') ? 'EXISTS' : 'MISSING';
+    require_once('${BOOTSTRAP_PATH}');
+    echo method_exists('\Eiou\Utils\InputValidator', 'validateNotSelfSend') ? 'EXISTS' : 'MISSING';
 " 2>/dev/null || echo "ERROR")
 
 if [[ "$methodExists" == "EXISTS" ]]; then
@@ -700,8 +698,7 @@ echo -e "\n\t-> Testing self-send detection"
 
 selfSendCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    require_once('/etc/eiou/src/utils/InputValidator.php');
-
+    
     \$userContext = \Eiou\Core\Application::getInstance()->services->getCurrentUser();
     \$myAddress = \$userContext->getHttpAddress() ?? \$userContext->getTorAddress();
 
@@ -710,7 +707,7 @@ selfSendCheck=$(docker exec ${testContainer} php -r "
         exit;
     }
 
-    \$result = InputValidator::validateNotSelfSend(\$myAddress, \$userContext);
+    \$result = \Eiou\Utils\InputValidator::validateNotSelfSend(\$myAddress, \$userContext);
 
     if (\$result['valid'] === false && strpos(\$result['error'], 'yourself') !== false) {
         echo 'CORRECTLY_INVALID';
@@ -735,11 +732,10 @@ echo -e "\n\t-> Testing different address validation"
 
 differentAddressCheck=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
-    require_once('/etc/eiou/src/utils/InputValidator.php');
-
+    
     \$userContext = \Eiou\Core\Application::getInstance()->services->getCurrentUser();
     \$differentAddress = 'https://different-recipient.example.com';
-    \$result = InputValidator::validateNotSelfSend(\$differentAddress, \$userContext);
+    \$result = \Eiou\Utils\InputValidator::validateNotSelfSend(\$differentAddress, \$userContext);
 
     if (\$result['valid'] === true && \$result['error'] === null) {
         echo 'CORRECTLY_VALID';
@@ -763,8 +759,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing SELF_SEND GUI-friendly message"
 
 guiMessage=$(docker exec ${testContainer} php -r "
-    require_once('/etc/eiou/src/gui/helpers/MessageHelper.php');
-    \$msg = MessageHelper::getGuiFriendlyMessage('SELF_SEND', '');
+    require_once('${BOOTSTRAP_PATH}');
+    \$msg = \Eiou\Gui\Helpers\MessageHelper::getGuiFriendlyMessage('SELF_SEND', '');
     echo \$msg;
 " 2>/dev/null || echo "ERROR")
 
