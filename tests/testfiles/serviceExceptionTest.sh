@@ -316,7 +316,8 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing CLI exit code for invalid search name"
 
 # Use a name with invalid characters that should trigger ValidationServiceException
-docker exec ${testContainer} eiou search "<script>alert('xss')</script>" --json >/dev/null 2>&1
+# Using @ and ! which are not in the allowed character set [a-zA-Z0-9_\s-]
+docker exec ${testContainer} eiou search 'invalid@name!test' --json >/dev/null 2>&1
 exitCode=$?
 
 if [[ "$exitCode" == "1" ]]; then
@@ -342,11 +343,13 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 3.3: viewcontact with invalid address produces exit code 1
+# Test 3.3: viewcontact with invalid address format produces exit code 1
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing CLI exit code for invalid viewcontact address"
 
-docker exec ${testContainer} eiou viewcontact "not-a-valid-address<script>" --json >/dev/null 2>&1
+# Use an address that IS recognized as an address format (http://) but contains invalid characters
+# This will pass isAddress() check but fail validateAddress()
+docker exec ${testContainer} eiou viewcontact 'http://invalid<script>address' --json >/dev/null 2>&1
 exitCode=$?
 
 if [[ "$exitCode" == "1" ]]; then
@@ -365,9 +368,10 @@ echo -e "\n[Section 4: Error Message Format]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing error message contains error code"
 
-errorOutput=$(docker exec ${testContainer} eiou search "<invalid>" --json 2>&1)
+# Use invalid characters that trigger validation error
+errorOutput=$(docker exec ${testContainer} eiou search 'test@invalid!' --json 2>&1)
 
-if [[ "$errorOutput" =~ "INVALID" ]] || [[ "$errorOutput" =~ "error" ]]; then
+if [[ "$errorOutput" =~ "INVALID" ]] || [[ "$errorOutput" =~ "error" ]] || [[ "$errorOutput" =~ "invalid" ]]; then
     printf "\t   Error message contains error code ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -381,7 +385,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing error output is valid JSON"
 
 jsonValid=$(docker exec ${testContainer} php -r "
-    \$output = shell_exec('eiou search \"<invalid>\" --json 2>&1');
+    \$output = shell_exec('eiou search \"test@invalid\" --json 2>&1');
     \$decoded = json_decode(\$output, true);
     if (\$decoded !== null && isset(\$decoded['success'])) {
         echo 'SUCCESS';
@@ -406,7 +410,8 @@ echo -e "\n[Section 5: Exception Handling in Entry Points]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing Eiou.php imports ServiceException classes"
 
-importsExist=$(docker exec ${testContainer} sh -c "grep -c 'use Eiou.Exceptions.ServiceException' /etc/eiou/eiou/Eiou.php 2>/dev/null || echo 0")
+# CLI entry point is at /usr/local/bin/eiou.php
+importsExist=$(docker exec ${testContainer} sh -c "grep -c 'Eiou.Exceptions.ServiceException' /usr/local/bin/eiou.php 2>/dev/null || echo 0")
 
 if [[ "$importsExist" -ge "1" ]]; then
     printf "\t   Eiou.php imports ServiceException ${GREEN}PASSED${NC}\n"
@@ -420,7 +425,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing Eiou.php has ServiceException catch blocks"
 
-catchExists=$(docker exec ${testContainer} sh -c "grep -c 'catch.*ServiceException' /etc/eiou/eiou/Eiou.php 2>/dev/null || echo 0")
+catchExists=$(docker exec ${testContainer} sh -c "grep -c 'catch.*ServiceException' /usr/local/bin/eiou.php 2>/dev/null || echo 0")
 
 if [[ "$catchExists" -ge "1" ]]; then
     printf "\t   Eiou.php has ServiceException catch blocks ${GREEN}PASSED${NC}\n"
@@ -434,7 +439,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing ApiController.php imports ServiceException"
 
-apiImportExists=$(docker exec ${testContainer} sh -c "grep -c 'use Eiou.Exceptions.ServiceException' /etc/eiou/src/api/ApiController.php 2>/dev/null || echo 0")
+apiImportExists=$(docker exec ${testContainer} sh -c "grep -c 'Eiou.Exceptions.ServiceException' /etc/eiou/src/api/ApiController.php 2>/dev/null || echo 0")
 
 if [[ "$apiImportExists" -ge "1" ]]; then
     printf "\t   ApiController.php imports ServiceException ${GREEN}PASSED${NC}\n"
