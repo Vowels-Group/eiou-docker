@@ -12,8 +12,7 @@ Standardized error handling guidelines for the EIOU codebase.
 6. [Integration with ErrorCodes](#integration-with-errorcodes)
 7. [Entry Point Handling](#entry-point-handling)
 8. [Code Examples](#code-examples)
-9. [Migration Guide](#migration-guide)
-10. [Testing Exceptions](#testing-exceptions)
+9. [Testing Exceptions](#testing-exceptions)
 
 ---
 
@@ -624,87 +623,6 @@ try {
     echo $e->toJson();
 }
 ```
-
----
-
-## Migration Guide
-
-### Converting Existing Code
-
-**Before (return false pattern)**:
-
-```php
-public function deleteContact(?string $identifier, CliOutputManager $output): bool
-{
-    if (empty($identifier)) {
-        $output->error("Contact name or address required", ErrorCodes::MISSING_ARGUMENT);
-        return false;
-    }
-
-    $contact = $this->findContact($identifier);
-    if (!$contact) {
-        $output->error("Contact not found: $identifier", ErrorCodes::CONTACT_NOT_FOUND);
-        return false;
-    }
-
-    if (!$this->contactRepo->deleteContact($contact['pubkey'])) {
-        $output->error("Failed to delete contact", ErrorCodes::DELETE_FAILED);
-        return false;
-    }
-
-    $output->success("Contact deleted successfully");
-    return true;
-}
-```
-
-**After (exception pattern)**:
-
-```php
-public function deleteContact(?string $identifier, CliOutputManager $output): bool
-{
-    if (empty($identifier)) {
-        throw new ValidationServiceException(
-            "Contact name or address required",
-            ErrorCodes::MISSING_ARGUMENT,
-            'identifier'
-        );
-    }
-
-    $contact = $this->findContact($identifier);
-    if (!$contact) {
-        throw new RecoverableServiceException(
-            "Contact not found: $identifier",
-            ErrorCodes::CONTACT_NOT_FOUND,
-            ['identifier' => $identifier]
-        );
-    }
-
-    if (!$this->contactRepo->deleteContact($contact['pubkey'])) {
-        throw new FatalServiceException(
-            "Failed to delete contact",
-            ErrorCodes::DELETE_FAILED,
-            ['contact_name' => $contact['name']]
-        );
-    }
-
-    $output->success(
-        "Contact '{$contact['name']}' deleted successfully",
-        ['contact_name' => $contact['name']]
-    );
-    return true;
-}
-```
-
-### Migration Checklist
-
-- [ ] Add `use` statements for exception classes
-- [ ] Replace `return false` with appropriate exception throw
-- [ ] Replace direct `exit()` calls with exceptions
-- [ ] Add `@throws` annotations to docblocks
-- [ ] Include context array with relevant data
-- [ ] Update unit tests to expect exceptions
-- [ ] Test CLI output format
-- [ ] Test API JSON response format
 
 ---
 
