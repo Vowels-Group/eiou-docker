@@ -33,10 +33,10 @@
             <!-- Minimum Fee -->
             <div class="form-group">
                 <label for="minFee">Minimum Fee Amount:</label>
-                <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.01" min="<?php echo Constants::TRANSACTION_MINIMUM_FEE; ?>" class="default-value">
+                <input type="number" id="minFee" name="minFee" value="<?php echo htmlspecialchars($user->getMinimumFee()); ?>" step="0.01" min="<?php echo \Eiou\Core\Constants::TRANSACTION_MINIMUM_FEE; ?>" class="default-value">
                 <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                     <i class="fas fa-info-circle"></i>
-                    Minimum fee amount in default currency (cannot be lower than <?php echo Constants::TRANSACTION_MINIMUM_FEE; ?>)
+                    Minimum fee amount in default currency (cannot be lower than <?php echo \Eiou\Core\Constants::TRANSACTION_MINIMUM_FEE; ?>)
                 </small>
             </div>
 
@@ -63,20 +63,20 @@
             <!-- Max P2P Level -->
             <div class="form-group">
                 <label for="maxP2pLevel">Max P2P Routing Level:</label>
-                <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo Constants::P2P_MAX_ROUTING_LEVEL; ?>" class="default-value">
+                <input type="number" id="maxP2pLevel" name="maxP2pLevel" value="<?php echo htmlspecialchars($user->getMaxP2pLevel()); ?>" step="1" min="1" max="<?php echo \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL; ?>" class="default-value">
                 <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                     <i class="fas fa-info-circle"></i>
-                    Maximum number of hops for P2P routing (1-<?php echo Constants::P2P_MAX_ROUTING_LEVEL; ?>)
+                    Maximum number of hops for P2P routing (1-<?php echo \Eiou\Core\Constants::P2P_MAX_ROUTING_LEVEL; ?>)
                 </small>
             </div>
 
             <!-- P2P Expiration -->
             <div class="form-group">
                 <label for="p2pExpiration">P2P Request Expiration (seconds):</label>
-                <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="<?php echo Constants::P2P_MIN_EXPIRATION_SECONDS; ?>" class="default-value">
+                <input type="number" id="p2pExpiration" name="p2pExpiration" value="<?php echo htmlspecialchars($user->getP2pExpirationTime()); ?>" step="1" min="<?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?>" class="default-value">
                 <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                     <i class="fas fa-info-circle"></i>
-                    How long P2P routing requests remain valid (minimum <?php echo Constants::P2P_MIN_EXPIRATION_SECONDS; ?> seconds)
+                    How long P2P routing requests remain valid (minimum <?php echo \Eiou\Core\Constants::P2P_MIN_EXPIRATION_SECONDS; ?> seconds)
                 </small>
             </div>
 
@@ -96,7 +96,7 @@
                 <select id="defaultTransportMode" name="defaultTransportMode" class="default-value">
                     <?php
                     // Dynamically generate transport options from available types
-                    $transportTypes = Constants::VALID_TRANSPORT_INDICES;
+                    $transportTypes = \Eiou\Core\Constants::VALID_TRANSPORT_INDICES;
                     $currentTransport = $user->getDefaultTransportMode();
                     foreach ($transportTypes as $type):
                         $displayName = strtoupper($type);
@@ -432,7 +432,7 @@
                 <tr><td><strong>Memory Limit</strong></td><td><?php echo ini_get('memory_limit'); ?></td></tr>
                 <tr><td><strong>Max Execution Time</strong></td><td><?php echo ini_get('max_execution_time'); ?>s</td></tr>
                 <tr><td><strong>Server Software</strong></td><td><?php echo $_SERVER['SERVER_SOFTWARE'] ?? 'N/A'; ?></td></tr>
-                <tr><td><strong>App Debug Mode</strong></td><td><?php echo Constants::get('APP_DEBUG') ? 'Enabled' : 'Disabled'; ?></td></tr>
+                <tr><td><strong>App Debug Mode</strong></td><td><?php echo \Eiou\Core\Constants::get('APP_DEBUG') ? 'Enabled' : 'Disabled'; ?></td></tr>
                 <tr><td><strong>Debian Version</strong></td><td><?php echo htmlspecialchars($debianVersion); ?></td></tr>
                 <tr><td><strong>OS Release</strong></td><td><?php echo htmlspecialchars($osRelease); ?></td></tr>
                 <tr><td><strong>MySQL/MariaDB Version</strong></td><td><?php echo htmlspecialchars($mysqlVersion); ?></td></tr>
@@ -468,7 +468,7 @@
 
             <!-- Constants.php Values (Collapsible) -->
             <?php
-            $constantsValues = Constants::all();
+            $constantsValues = \Eiou\Core\Constants::all();
             $constantsFormatted = '';
             foreach ($constantsValues as $key => $value) {
                 $displayValue = is_bool($value) ? ($value ? 'true' : 'false') : (is_array($value) ? json_encode($value) : $value);

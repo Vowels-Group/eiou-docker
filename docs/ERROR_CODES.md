@@ -5,19 +5,20 @@ Complete reference of all error codes used in the EIOU system, with HTTP status 
 ## Table of Contents
 
 1. [Error Response Format](#error-response-format)
-2. [General Errors](#general-errors)
-3. [Authentication Errors](#authentication-errors)
-4. [API Key Errors](#api-key-errors)
-5. [Wallet Errors](#wallet-errors)
-6. [Contact Errors](#contact-errors)
-7. [Transaction Errors](#transaction-errors)
-8. [Transport Errors](#transport-errors)
-9. [Validation Errors](#validation-errors)
-10. [File Errors](#file-errors)
-11. [Backup Errors](#backup-errors)
-12. [Command Errors](#command-errors)
-13. [Connection Errors](#connection-errors)
-14. [HTTP Status Code Reference](#http-status-code-reference)
+2. [Service Exception Hierarchy](#service-exception-hierarchy)
+3. [General Errors](#general-errors)
+4. [Authentication Errors](#authentication-errors)
+5. [API Key Errors](#api-key-errors)
+6. [Wallet Errors](#wallet-errors)
+7. [Contact Errors](#contact-errors)
+8. [Transaction Errors](#transaction-errors)
+9. [Transport Errors](#transport-errors)
+10. [Validation Errors](#validation-errors)
+11. [File Errors](#file-errors)
+12. [Backup Errors](#backup-errors)
+13. [Command Errors](#command-errors)
+14. [Connection Errors](#connection-errors)
+15. [HTTP Status Code Reference](#http-status-code-reference)
 
 ---
 
@@ -51,6 +52,115 @@ Complete reference of all error codes used in the EIOU system, with HTTP status 
     "timestamp": "2026-01-24T12:00:00Z"
 }
 ```
+
+---
+
+## Service Exception Hierarchy
+
+The EIOU system uses a structured exception hierarchy for error handling in service
+methods. This enables proper error recovery, testability, and consistent error responses
+across CLI and API interfaces.
+
+### Exception Classes
+
+| Exception Class | Purpose | Default Exit Code |
+|-----------------|---------|-------------------|
+| `ServiceException` | Abstract base class for all service errors | N/A |
+| `FatalServiceException` | Unrecoverable errors (missing wallet, unauthorized) | 1 |
+| `RecoverableServiceException` | Retryable errors (timeouts, temporary failures) | 0 |
+| `ValidationServiceException` | Input validation errors (invalid name, address) | 1 |
+
+### Exception Properties
+
+All `ServiceException` subclasses carry rich error context:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `message` | string | Human-readable error description |
+| `errorCode` | string | Error code constant (e.g., `INVALID_NAME`) |
+| `httpStatus` | int | HTTP status code for API responses |
+| `context` | array | Additional debugging information |
+| `field` | string | (ValidationServiceException only) Field that failed validation |
+
+### CLI Exit Codes
+
+When a `ServiceException` is thrown during CLI command execution:
+
+| Exception Type | Exit Code | Meaning |
+|----------------|-----------|---------|
+| `ValidationServiceException` | 1 | Invalid input, user should correct and retry |
+| `FatalServiceException` | 1 | Unrecoverable error, operation cannot proceed |
+| `RecoverableServiceException` | 0 | Temporary failure, may succeed on retry |
+
+### API Error Responses
+
+When a `ServiceException` is caught by the API controller, it produces a structured
+JSON response using the exception's properties:
+
+```json
+{
+    "success": false,
+    "error": {
+        "code": "INVALID_NAME",
+        "message": "Invalid name: contains disallowed characters"
+    },
+    "timestamp": "2026-01-29T12:00:00Z",
+    "request_id": "req_abc123",
+    "status_code": 400
+}
+```
+
+### Usage in Services
+
+Service methods throw specific exception types based on the error category:
+
+```php
+// Validation error - user input is invalid
+throw new ValidationServiceException(
+    "Invalid name: " . $validation['error'],
+    ErrorCodes::INVALID_NAME,
+    'name',           // Field that failed
+    400               // HTTP status
+);
+
+// Fatal error - operation cannot proceed
+throw new FatalServiceException(
+    "Wallet does not exist",
+    ErrorCodes::WALLET_NOT_FOUND,
+    ['requested_action' => $request],
+    404
+);
+
+// Recoverable error - may succeed on retry
+throw new RecoverableServiceException(
+    "Contact temporarily unavailable",
+    ErrorCodes::CONTACT_OFFLINE,
+    ['retry_after' => 60],
+    503
+);
+```
+
+### Error Flow
+
+```
+Service Method
+      |
+      v
+throw ServiceException
+      |
+      v
++-----+------+
+|            |
+v            v
+CLI        API
+(Eiou.php) (ApiController)
+|            |
+v            v
+Format     JSON
++ exit()   response
+```
+
+For detailed architecture information, see [ARCHITECTURE.md](ARCHITECTURE.md#error-handling).
 
 ---
 
@@ -291,3 +401,4 @@ Complete reference of all error codes used in the EIOU system, with HTTP status 
 - [API Reference](API_REFERENCE.md) - Complete REST API documentation
 - [CLI Reference](CLI_REFERENCE.md) - Command-line interface documentation
 - [API Quick Reference](API_QUICK_REFERENCE.md) - API endpoint summary
+- [Architecture - Error Handling](ARCHITECTURE.md#error-handling) - Error handling architecture and diagrams

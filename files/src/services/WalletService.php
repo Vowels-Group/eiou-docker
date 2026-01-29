@@ -5,6 +5,8 @@ namespace Eiou\Services;
 
 use Eiou\Contracts\WalletServiceInterface;
 use Eiou\Core\UserContext;
+use Eiou\Core\ErrorCodes;
+use Eiou\Exceptions\FatalServiceException;
 
 /**
  * Wallet Service
@@ -35,8 +37,12 @@ class WalletService implements WalletServiceInterface {
     public function checkWalletExists(string $request): void {
         // Check if wallet exists
         if ((null === $this->currentUser->hasKeys()) && $request != 'generate' && $request != 'restore') {
-            echo returnNoWalletExists();
-            exit();
+            throw new FatalServiceException(
+                "Wallet does not exist. Run 'generate' or 'restore' first.",
+                ErrorCodes::WALLET_NOT_FOUND,
+                ['requested_action' => $request],
+                404
+            );
         }
     }
 }

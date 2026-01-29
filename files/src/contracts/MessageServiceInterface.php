@@ -3,6 +3,7 @@
 namespace Eiou\Contracts;
 
 use Eiou\Services\MessageDeliveryService;
+use Eiou\Exceptions\FatalServiceException;
 
 /**
  * Message Service Interface
@@ -59,6 +60,7 @@ interface MessageServiceInterface
      *
      * @param array $request Request data (already decoded)
      * @return void
+     * @throws FatalServiceException If message is from an invalid source
      */
     public function handleMessageRequest(array $request): void;
 

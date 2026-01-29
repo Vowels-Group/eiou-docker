@@ -16,7 +16,8 @@ Technical architecture documentation for the EIOU Docker node implementation.
 10. [Transaction Lifecycle](#transaction-lifecycle)
 11. [Startup Sequence](#startup-sequence)
 12. [Security Model](#security-model)
-13. [Related Documentation](#related-documentation)
+13. [Error Handling](#error-handling)
+14. [Related Documentation](#related-documentation)
 
 ---
 
@@ -1220,6 +1221,225 @@ RATE_LIMIT_ENABLED = true  // Always true in production
 
 ---
 
+## Error Handling
+
+### Error Handling Architecture
+
+The application uses a layered error handling approach with specialized exceptions for
+business logic errors and a global safety net for unexpected failures.
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │           ErrorHandler.php              │
+                    │  (Global safety net - set_exception_    │
+                    │   handler for truly uncaught errors)    │
+                    └─────────────────────────────────────────┘
+                                       ▲
+                                       │ (only if not caught below)
+                    ┌──────────────────┴──────────────────┐
+                    │                                     │
+        ┌───────────┴───────────┐         ┌──────────────┴──────────────┐
+        │      Eiou.php         │         │      ApiController          │
+        │    (CLI Entry)        │         │      (API Entry)            │
+        ├───────────────────────┤         ├─────────────────────────────┤
+        │ catch Validation →    │         │ catch ServiceException →    │
+        │   format + exit(1)    │         │   use getMessage()          │
+        │                       │         │   use getHttpStatus()       │
+        │ catch Fatal →         │         │   use getErrorCode()        │
+        │   format + exit(1)    │         │                             │
+        │                       │         │ catch Exception →           │
+        │ catch Recoverable →   │         │   generic 500 error         │
+        │   format + exit(0)    │         │                             │
+        └───────────────────────┘         └─────────────────────────────┘
+                    ▲                                     ▲
+                    │                                     │
+        ┌───────────┴─────────────────────────────────────┴───────────┐
+        │                    Service Layer                             │
+        │  ContactService, MessageService, WalletService, etc.        │
+        │                                                              │
+        │  throw ValidationServiceException("Invalid name", ...)       │
+        │  throw FatalServiceException("Wallet not found", ...)        │
+        └──────────────────────────────────────────────────────────────┘
+```
+
+### ServiceException Hierarchy
+
+The `ServiceException` classes (`/src/exceptions/`) provide structured error handling
+for business logic errors, replacing direct `exit()` calls in service methods.
+
+```
+ServiceException (abstract)
+    │
+    ├── FatalServiceException
+    │   └── Unrecoverable errors (missing wallet, unauthorized access)
+    │   └── Exit code: 1
+    │
+    ├── RecoverableServiceException
+    │   └── Retryable errors (network timeouts, temporary unavailability)
+    │   └── Exit code: 0 (configurable)
+    │
+    └── ValidationServiceException
+        └── Input validation errors (invalid address, invalid name)
+        └── Exit code: 1
+        └── Includes field name for targeted error display
+```
+
+**ServiceException Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `errorCode` | string | Maps to `ErrorCodes` constants |
+| `httpStatus` | int | HTTP status code for API responses |
+| `context` | array | Additional debugging data |
+
+**Key Methods:**
+
+```php
+$exception->getMessage();      // Human-readable error message
+$exception->getErrorCode();    // ErrorCodes constant (e.g., INVALID_NAME)
+$exception->getHttpStatus();   // HTTP status (e.g., 400, 404, 500)
+$exception->getContext();      // Additional context array
+$exception->getExitCode();     // CLI exit code (0 or 1)
+$exception->toArray();         // Full error as array for JSON
+$exception->toJson();          // JSON-encoded error response
+```
+
+### Error Handling by Entry Point
+
+**CLI Entry Point (Eiou.php):**
+
+```php
+try {
+    // Command dispatch...
+} catch (ValidationServiceException $e) {
+    $output->error($e->getMessage(), $e->getErrorCode(), $e->getHttpStatus());
+    $logger->warning("Validation error", ['field' => $e->getField()]);
+    exit($e->getExitCode());  // exit(1)
+
+} catch (FatalServiceException $e) {
+    $output->error($e->getMessage(), $e->getErrorCode(), $e->getHttpStatus());
+    $logger->error("Fatal service error", ['context' => $e->getContext()]);
+    exit($e->getExitCode());  // exit(1)
+
+} catch (RecoverableServiceException $e) {
+    $output->error($e->getMessage(), $e->getErrorCode(), $e->getHttpStatus());
+    $logger->info("Recoverable error");
+    exit($e->getExitCode());  // exit(0)
+}
+```
+
+**API Entry Point (ApiController):**
+
+```php
+try {
+    $response = match ($resource) { ... };
+} catch (ServiceException $e) {
+    // Use rich error context from exception
+    $response = $this->errorResponse(
+        $e->getMessage(),
+        $e->getHttpStatus(),
+        strtolower($e->getErrorCode())
+    );
+} catch (Exception $e) {
+    // Generic fallback for unexpected errors
+    $response = $this->errorResponse('Internal server error', 500, 'internal_error');
+}
+```
+
+### ErrorHandler (Global Safety Net)
+
+The `ErrorHandler` class (`/src/core/ErrorHandler.php`) provides last-resort handling
+for any exceptions that escape the entry point try-catch blocks.
+
+**Initialization:**
+
+```php
+ErrorHandler::init();  // Called during Application bootstrap
+```
+
+**What It Handles:**
+
+| Handler | Purpose |
+|---------|---------|
+| `set_error_handler()` | PHP errors (warnings, notices) |
+| `set_exception_handler()` | Uncaught exceptions |
+| `register_shutdown_function()` | Fatal errors on shutdown |
+
+**Environment-Aware Output:**
+
+| Environment | Behavior |
+|-------------|----------|
+| Production | Shows generic "An error occurred" message |
+| Development | Shows full error details, stack trace |
+
+### When to Use Each Exception Type
+
+| Scenario | Exception Type | Example |
+|----------|----------------|---------|
+| Invalid user input | `ValidationServiceException` | Bad address format, invalid name |
+| Missing required resource | `FatalServiceException` | Wallet doesn't exist |
+| Unauthorized action | `FatalServiceException` | Invalid message source |
+| Network timeout | `RecoverableServiceException` | Contact temporarily unreachable |
+| Rate limited | `RecoverableServiceException` | Too many requests |
+
+### Throwing Exceptions in Services
+
+```php
+// Validation error with field context
+throw new ValidationServiceException(
+    "Invalid name: " . $validation['error'],
+    ErrorCodes::INVALID_NAME,
+    'name',           // Field that failed
+    400               // HTTP status
+);
+
+// Fatal error with context
+throw new FatalServiceException(
+    "Wallet does not exist. Run 'generate' or 'restore' first.",
+    ErrorCodes::WALLET_NOT_FOUND,
+    ['requested_action' => $request],  // Context for debugging
+    404
+);
+
+// Recoverable error
+throw new RecoverableServiceException(
+    "Contact temporarily unavailable",
+    ErrorCodes::CONTACT_OFFLINE,
+    ['retry_after' => 60],
+    503,
+    0  // Exit code 0 (not a hard failure)
+);
+```
+
+### Integration with ErrorCodes
+
+ServiceExceptions integrate with the existing `ErrorCodes` class for consistent
+error identification:
+
+```php
+// ErrorCodes provides:
+ErrorCodes::INVALID_NAME        // Error code constant
+ErrorCodes::getHttpStatus($code)  // Auto-detect HTTP status from code
+ErrorCodes::getTitle($code)     // Human-readable title
+```
+
+### Testing Error Paths
+
+ServiceExceptions enable proper unit testing of error conditions:
+
+```php
+// Test that validation errors are properly thrown
+public function testSearchContactsWithInvalidName(): void
+{
+    $this->expectException(ValidationServiceException::class);
+    $this->expectExceptionMessage('Invalid name');
+
+    $contactService->searchContacts(['eiou', 'search', '<script>'], $output);
+}
+```
+
+---
+
 ## Related Documentation
 
 ### API and CLI Reference
@@ -1250,6 +1470,8 @@ RATE_LIMIT_ENABLED = true  // Always true in production
 |-----------|------|
 | Application | `/etc/eiou/src/core/Application.php` |
 | ServiceContainer | `/etc/eiou/src/services/ServiceContainer.php` |
+| ErrorHandler | `/etc/eiou/src/core/ErrorHandler.php` |
+| Exceptions | `/etc/eiou/src/exceptions/` |
 | Processors | `/etc/eiou/src/processors/` |
 | Repositories | `/etc/eiou/src/database/` |
 | Repository Traits | `/etc/eiou/src/database/traits/` |

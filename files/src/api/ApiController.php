@@ -10,6 +10,7 @@ use Eiou\Services\ServiceContainer;
 use Eiou\Services\ApiAuthService;
 use Eiou\Database\ApiKeyRepository;
 use Eiou\Utils\SecureLogger;
+use Eiou\Exceptions\ServiceException;
 
 /**
  * API Controller
@@ -132,7 +133,21 @@ class ApiController {
                 'backup' => $this->handleBackup($method, $action, $params, $body),
                 default => $this->errorResponse('Unknown resource: ' . $resource, 404, 'unknown_resource')
             };
+        } catch (ServiceException $e) {
+            // Handle ServiceExceptions with their rich error context
+            $this->log('warning', 'Service exception in API request', [
+                'path' => $path,
+                'error' => $e->getMessage(),
+                'code' => $e->getErrorCode(),
+                'context' => $e->getContext()
+            ]);
+            $response = $this->errorResponse(
+                $e->getMessage(),
+                $e->getHttpStatus(),
+                strtolower($e->getErrorCode())
+            );
         } catch (Exception $e) {
+            // Generic fallback for unexpected exceptions
             $this->log('error', 'API request failed', [
                 'path' => $path,
                 'error' => $e->getMessage()

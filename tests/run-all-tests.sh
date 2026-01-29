@@ -373,6 +373,7 @@ seedphraseTestSuite
 processorLockfileTest
 pingTestSuite
 serviceInterfaceTest
+serviceExceptionTest
 performanceBaseline
 "
 
@@ -416,6 +417,7 @@ cliCommandsTest
 apiEndpointsTest
 securityTestSuite
 apiInputValidationTest
+serviceExceptionTest
 "
 
 # Sync tests (requires contacts and transactions)
@@ -437,6 +439,7 @@ gracefulShutdownTest
 seedphraseTestSuite
 processorLockfileTest
 serviceInterfaceTest
+serviceExceptionTest
 backupTestSuite
 "
 
