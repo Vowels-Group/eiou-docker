@@ -28,7 +28,7 @@ Unit tests validate individual PHP classes and methods in isolation.
 
 - **Location**: `tests/Unit/`
 - **Framework**: PHPUnit 11
-- **Total**: 309 tests, 703 assertions
+- **Total**: 346 tests, 773 assertions
 
 ### Integration Tests (Shell)
 
@@ -56,6 +56,7 @@ Integration tests validate the complete system behavior using Docker containers.
 | **SecurityTest.php** | 30 | XSS prevention (htmlEncode, jsEncode), input sanitization, password hashing/verification, CSRF tokens, email/URL/IP validation, filename sanitization, timing-safe comparison |
 | **AddressValidatorTest.php** | 20 | HTTP/HTTPS/Tor address detection, transport type identification, address categorization |
 | **SecureLoggerTest.php** | 18 | Sensitive data masking (passwords, authcodes, API keys, emails, credit cards, SSN, mnemonics), log levels, file rotation |
+| **AdaptivePollerTest.php** | 17 | Polling interval calculation, state management, reset, force interval bounds clamping |
 
 ### Services Tests (`tests/Unit/Services/`)
 
@@ -83,6 +84,7 @@ Integration tests validate the complete system behavior using Docker containers.
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
 | **CliJsonResponseTest.php** | 24 | RFC 9457 compliant JSON responses, success/error structure, validation errors, pagination, table formatting, transaction responses |
+| **CliOutputManagerTest.php** | 20 | Singleton pattern, JSON mode flag parsing, cleanArgv argument filtering, command parsing, fluent interface |
 
 ### Events Tests (`tests/Unit/Events/`)
 
@@ -186,7 +188,8 @@ tests/
 ├── run-all-tests.sh           # Integration test runner
 ├── Unit/                      # PHPUnit unit tests
 │   ├── Cli/
-│   │   └── CliJsonResponseTest.php
+│   │   ├── CliJsonResponseTest.php
+│   │   └── CliOutputManagerTest.php
 │   ├── Core/
 │   │   └── ErrorCodesTest.php
 │   ├── Events/
@@ -209,6 +212,7 @@ tests/
 │   │       └── TimeUtilityServiceTest.php
 │   └── Utils/
 │       ├── AddressValidatorTest.php
+│       ├── AdaptivePollerTest.php
 │       ├── InputValidatorTest.php
 │       ├── SecureLoggerTest.php
 │       └── SecurityTest.php
