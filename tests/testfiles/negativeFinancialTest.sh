@@ -296,12 +296,13 @@ fi
 
 echo -e "\n[Section 6: Insufficient Funds Test]"
 
-# Test 6.1: Send amount exceeding available balance via CLI
-# Since new containers start with 0 balance, sending any large amount should fail
+# Test 6.1: Send amount exceeding credit limit via CLI
+# The receiver (B) should reject the transaction due to credit limit exceeded
+# This tests the async validation flow: A sends -> B validates -> B rejects -> A gets rejection
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Testing send with amount exceeding balance (1000000 USD via CLI)"
+echo -e "\n\t-> Testing send with amount exceeding credit limit (1000000 USD via CLI)"
 
-# First check current balance
+# First check current balance on sender side
 currentBalance=$(docker exec ${testContainer} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
@@ -317,22 +318,70 @@ currentBalance=$(docker exec ${testContainer} php -r "
 
 echo -e "\t   Current balance: ${currentBalance}"
 
-# Try to send much more than available
-sendResult=$(docker exec ${testContainer} eiou send ${realContactAddress} 1000000 USD 2>&1)
+# Send the transaction and capture txid (using JSON output)
+sendResult=$(docker exec ${testContainer} eiou send ${realContactAddress} 1000000 USD --json 2>&1)
+txid=$(echo "$sendResult" | grep -o '"txid"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/"txid"[[:space:]]*:[[:space:]]*"//;s/"$//' | head -1)
 
-# The send should fail with insufficient funds or similar error
-if [[ "$sendResult" =~ "insufficient" || "$sendResult" =~ "Insufficient" || "$sendResult" =~ "balance" || "$sendResult" =~ "Balance" || "$sendResult" =~ "fail" || "$sendResult" =~ "Fail" || "$sendResult" =~ "error" || "$sendResult" =~ "Error" ]]; then
-    printf "\t   Insufficient funds rejection ${GREEN}PASSED${NC}\n"
-    passed=$(( passed + 1 ))
-else
-    # Check if response indicates failure in any way
-    if [[ "$sendResult" =~ "false" ]] || [[ ! "$sendResult" =~ "success" ]]; then
-        printf "\t   Insufficient funds rejection ${GREEN}PASSED${NC}\n"
+if [[ -z "$txid" ]]; then
+    # If no txid, check if it was an immediate rejection
+    if [[ "$sendResult" =~ "insufficient" || "$sendResult" =~ "Insufficient" || "$sendResult" =~ "credit" || "$sendResult" =~ "Credit" || "$sendResult" =~ "false" ]]; then
+        printf "\t   Insufficient funds/credit rejection ${GREEN}PASSED${NC} (immediate rejection)\n"
         passed=$(( passed + 1 ))
     else
-        printf "\t   Insufficient funds rejection ${RED}FAILED${NC}\n"
+        printf "\t   Insufficient funds rejection ${RED}FAILED${NC} (no txid and no rejection)\n"
         printf "\t   Send output: ${sendResult}\n"
         failure=$(( failure + 1 ))
+    fi
+else
+    echo -e "\t   Transaction queued with txid: ${txid}"
+
+    # Trigger message processing: A sends to B
+    echo -e "\t   Processing outgoing messages on sender..."
+    docker exec ${testContainer} php /var/www/html/TransactionMessages.php 2>/dev/null
+    sleep 1
+
+    # Trigger message processing: B receives and validates (should reject)
+    echo -e "\t   Processing incoming messages on receiver..."
+    docker exec ${realContactContainer} php /var/www/html/TransactionMessages.php 2>/dev/null
+    sleep 1
+
+    # Trigger message processing: A receives B's response
+    echo -e "\t   Processing response on sender..."
+    docker exec ${testContainer} php /var/www/html/TransactionMessages.php 2>/dev/null
+    sleep 1
+
+    # Check transaction status - should be rejected
+    echo -e "\t   Checking transaction status..."
+    txStatus=$(docker exec ${testContainer} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
+        \$tx = \$app->services->getTransactionRepository()->getByTxid('${txid}');
+        echo \$tx['status'] ?? 'unknown';
+    " 2>/dev/null || echo "unknown")
+
+    echo -e "\t   Transaction status: ${txStatus}"
+
+    # Check if transaction was rejected
+    if [[ "$txStatus" == "rejected" || "$txStatus" == "failed" || "$txStatus" == "cancelled" ]]; then
+        printf "\t   Insufficient funds/credit rejection ${GREEN}PASSED${NC} (status: ${txStatus})\n"
+        passed=$(( passed + 1 ))
+    else
+        # Also check if there's a rejection reason in the transaction
+        rejectionReason=$(docker exec ${testContainer} php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \$app = \Eiou\Core\Application::getInstance();
+            \$tx = \$app->services->getTransactionRepository()->getByTxid('${txid}');
+            echo \$tx['rejection_reason'] ?? \$tx['error'] ?? \$tx['message'] ?? '';
+        " 2>/dev/null || echo "")
+
+        if [[ "$rejectionReason" =~ "credit" || "$rejectionReason" =~ "insufficient" || "$rejectionReason" =~ "funds" || "$rejectionReason" =~ "limit" ]]; then
+            printf "\t   Insufficient funds/credit rejection ${GREEN}PASSED${NC} (reason: ${rejectionReason})\n"
+            passed=$(( passed + 1 ))
+        else
+            printf "\t   Insufficient funds rejection ${RED}FAILED${NC}\n"
+            printf "\t   Status: ${txStatus}, Reason: ${rejectionReason:-none}\n"
+            failure=$(( failure + 1 ))
+        fi
     fi
 fi
 

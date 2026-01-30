@@ -8,6 +8,10 @@ use Eiou\Contracts\BackupServiceInterface;
 use Eiou\Security\KeyEncryption;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
+use Eiou\Core\ErrorCodes;
+use Eiou\Exceptions\FatalServiceException;
+use Eiou\Exceptions\RecoverableServiceException;
+use Eiou\Exceptions\ValidationServiceException;
 use PDO;
 use DateTime;
 use Exception;
@@ -42,185 +46,215 @@ class BackupService implements BackupServiceInterface
 
     public function createBackup(?string $customFilename = null): array
     {
-        try {
-            // Generate filename
-            $timestamp = date('Ymd_His');
-            $filename = $customFilename
-                ? preg_replace('/[^a-zA-Z0-9_-]/', '', $customFilename) . Constants::BACKUP_FILE_EXTENSION
-                : "backup_{$timestamp}" . Constants::BACKUP_FILE_EXTENSION;
+        // Generate filename
+        $timestamp = date('Ymd_His');
+        $filename = $customFilename
+            ? preg_replace('/[^a-zA-Z0-9_-]/', '', $customFilename) . Constants::BACKUP_FILE_EXTENSION
+            : "backup_{$timestamp}" . Constants::BACKUP_FILE_EXTENSION;
 
-            $filepath = $this->backupDirectory . '/' . $filename;
+        $filepath = $this->backupDirectory . '/' . $filename;
 
-            // Get database credentials from config file
-            $dbConfig = $this->getDatabaseCredentials();
-            if (!$dbConfig) {
-                return ['success' => false, 'error' => 'Database configuration not found'];
-            }
-            $dbHost = $dbConfig['dbHost'];
-            $dbName = $dbConfig['dbName'];
-            $dbUser = $dbConfig['dbUser'];
-            $dbPass = $dbConfig['dbPass'];
-
-            // Create temporary MySQL config file for secure password passing
-            $tempCnf = tempnam('/tmp', 'mysql_');
-            chmod($tempCnf, 0600);
-            file_put_contents($tempCnf, "[client]\nuser={$dbUser}\npassword={$dbPass}\nhost={$dbHost}\n");
-
-            $cmd = sprintf(
-                'mysqldump --defaults-extra-file=%s --single-transaction --routines --triggers --quick %s 2>&1',
-                escapeshellarg($tempCnf),
-                escapeshellarg($dbName)
+        // Get database credentials from config file
+        $dbConfig = $this->getDatabaseCredentials();
+        if (!$dbConfig) {
+            throw new FatalServiceException(
+                'Database configuration not found',
+                ErrorCodes::DB_CONFIG_NOT_FOUND,
+                ['path' => '/etc/eiou/dbconfig.json']
             );
-
-            $sqlDump = shell_exec($cmd);
-
-            // Securely remove temp config file
-            unlink($tempCnf);
-
-            // Better error diagnostics
-            if (empty($sqlDump)) {
-                return [
-                    'success' => false,
-                    'error' => 'mysqldump returned empty result',
-                    'debug' => [
-                        'host' => $dbHost,
-                        'database' => $dbName,
-                        'user' => $dbUser,
-                        'password_set' => !empty($dbPass)
-                    ]
-                ];
-            }
-
-            // Check if output is an error message rather than SQL
-            if (strpos($sqlDump, 'CREATE TABLE') === false) {
-                // Truncate potential error message for logging
-                $errorPreview = substr(trim($sqlDump), 0, 500);
-                return [
-                    'success' => false,
-                    'error' => 'mysqldump failed: ' . $errorPreview,
-                    'debug' => [
-                        'host' => $dbHost,
-                        'database' => $dbName,
-                        'user' => $dbUser,
-                        'password_set' => !empty($dbPass)
-                    ]
-                ];
-            }
-
-            // Encrypt the SQL dump
-            $encrypted = KeyEncryption::encrypt($sqlDump);
-
-            // Clear sensitive data
-            KeyEncryption::secureClear($sqlDump);
-
-            // Create backup file with metadata
-            $backupData = [
-                'version' => '1.0',
-                'created_at' => date('c'),
-                'hostname' => $this->currentUser->getHttpAddress() ?? $this->currentUser->getTorAddress() ?? 'unknown',
-                'database' => $dbName,
-                'encrypted' => $encrypted
-            ];
-
-            $jsonData = json_encode($backupData, JSON_PRETTY_PRINT);
-
-            if (file_put_contents($filepath, $jsonData, LOCK_EX) === false) {
-                return ['success' => false, 'error' => 'Failed to write backup file'];
-            }
-
-            chmod($filepath, 0600);
-
-            SecureLogger::info("Backup created", ['filename' => $filename, 'size' => filesize($filepath)]);
-
-            return [
-                'success' => true,
-                'filename' => $filename,
-                'size' => filesize($filepath),
-                'path' => $filepath
-            ];
-
-        } catch (Exception $e) {
-            SecureLogger::error("Backup creation failed", ['error' => $e->getMessage()]);
-            return ['success' => false, 'error' => $e->getMessage()];
         }
+        $dbHost = $dbConfig['dbHost'];
+        $dbName = $dbConfig['dbName'];
+        $dbUser = $dbConfig['dbUser'];
+        $dbPass = $dbConfig['dbPass'];
+
+        // Create temporary MySQL config file for secure password passing
+        $tempCnf = tempnam('/tmp', 'mysql_');
+        chmod($tempCnf, 0600);
+        file_put_contents($tempCnf, "[client]\nuser={$dbUser}\npassword={$dbPass}\nhost={$dbHost}\n");
+
+        $cmd = sprintf(
+            'mysqldump --defaults-extra-file=%s --single-transaction --routines --triggers --quick %s 2>&1',
+            escapeshellarg($tempCnf),
+            escapeshellarg($dbName)
+        );
+
+        $sqlDump = shell_exec($cmd);
+
+        // Securely remove temp config file
+        unlink($tempCnf);
+
+        // Better error diagnostics
+        if (empty($sqlDump)) {
+            throw new FatalServiceException(
+                'mysqldump returned empty result',
+                ErrorCodes::MYSQLDUMP_FAILED,
+                [
+                    'host' => $dbHost,
+                    'database' => $dbName,
+                    'user' => $dbUser,
+                    'password_set' => !empty($dbPass)
+                ]
+            );
+        }
+
+        // Check if output is an error message rather than SQL
+        if (strpos($sqlDump, 'CREATE TABLE') === false) {
+            // Truncate potential error message for logging
+            $errorPreview = substr(trim($sqlDump), 0, 500);
+            throw new FatalServiceException(
+                'mysqldump failed: ' . $errorPreview,
+                ErrorCodes::MYSQLDUMP_FAILED,
+                [
+                    'host' => $dbHost,
+                    'database' => $dbName,
+                    'user' => $dbUser,
+                    'password_set' => !empty($dbPass)
+                ]
+            );
+        }
+
+        // Encrypt the SQL dump
+        $encrypted = KeyEncryption::encrypt($sqlDump);
+
+        // Clear sensitive data
+        KeyEncryption::secureClear($sqlDump);
+
+        // Create backup file with metadata
+        $backupData = [
+            'version' => '1.0',
+            'created_at' => date('c'),
+            'hostname' => $this->currentUser->getHttpAddress() ?? $this->currentUser->getTorAddress() ?? 'unknown',
+            'database' => $dbName,
+            'encrypted' => $encrypted
+        ];
+
+        $jsonData = json_encode($backupData, JSON_PRETTY_PRINT);
+
+        if (file_put_contents($filepath, $jsonData, LOCK_EX) === false) {
+            throw new FatalServiceException(
+                'Failed to write backup file',
+                ErrorCodes::BACKUP_FAILED,
+                ['filepath' => $filepath]
+            );
+        }
+
+        chmod($filepath, 0600);
+
+        SecureLogger::info("Backup created", ['filename' => $filename, 'size' => filesize($filepath)]);
+
+        return [
+            'success' => true,
+            'filename' => $filename,
+            'size' => filesize($filepath),
+            'path' => $filepath
+        ];
     }
 
     public function restoreBackup(string $filename, bool $confirmOverwrite = false): array
     {
         if (!$confirmOverwrite) {
-            return ['success' => false, 'error' => 'Must confirm overwrite to restore backup'];
-        }
-
-        try {
-            $filepath = $this->backupDirectory . '/' . $filename;
-
-            if (!file_exists($filepath)) {
-                return ['success' => false, 'error' => 'Backup file not found'];
-            }
-
-            // Read and parse backup file
-            $jsonData = file_get_contents($filepath);
-            $backupData = json_decode($jsonData, true);
-
-            if (!$backupData || !isset($backupData['encrypted'])) {
-                return ['success' => false, 'error' => 'Invalid backup file format'];
-            }
-
-            // Decrypt the SQL dump
-            $sqlDump = KeyEncryption::decrypt($backupData['encrypted']);
-
-            // Get database credentials from config file
-            $dbConfig = $this->getDatabaseCredentials();
-            if (!$dbConfig) {
-                return ['success' => false, 'error' => 'Database configuration not found'];
-            }
-            $dbHost = $dbConfig['dbHost'];
-            $dbName = $dbConfig['dbName'];
-            $dbUser = $dbConfig['dbUser'];
-            $dbPass = $dbConfig['dbPass'];
-
-            // Write SQL to temp file for mysql import
-            $tempFile = tempnam('/tmp', 'eiou_restore_');
-            file_put_contents($tempFile, $sqlDump);
-            KeyEncryption::secureClear($sqlDump);
-
-            // Create temporary MySQL config file for secure password passing
-            $tempCnf = tempnam('/tmp', 'mysql_');
-            chmod($tempCnf, 0600);
-            file_put_contents($tempCnf, "[client]\nuser={$dbUser}\npassword={$dbPass}\nhost={$dbHost}\n");
-
-            $cmd = sprintf(
-                'mysql --defaults-extra-file=%s %s < %s 2>&1',
-                escapeshellarg($tempCnf),
-                escapeshellarg($dbName),
-                escapeshellarg($tempFile)
+            throw new ValidationServiceException(
+                'Must confirm overwrite to restore backup',
+                ErrorCodes::RESTORE_CONFIRM_REQUIRED,
+                'confirmOverwrite'
             );
-
-            $output = shell_exec($cmd);
-
-            // Securely remove temp config file
-            unlink($tempCnf);
-
-            unlink($tempFile);
-
-            // Check for errors (mysql doesn't always return proper exit codes via shell_exec)
-            if ($output && preg_match('/ERROR/i', $output)) {
-                SecureLogger::error("Backup restore failed", ['output' => $output]);
-                return ['success' => false, 'error' => 'MySQL restore failed: ' . $output];
-            }
-
-            SecureLogger::info("Backup restored", ['filename' => $filename]);
-
-            return [
-                'success' => true,
-                'filename' => $filename,
-                'restored_at' => date('c')
-            ];
-
-        } catch (Exception $e) {
-            SecureLogger::error("Backup restore failed", ['error' => $e->getMessage()]);
-            return ['success' => false, 'error' => $e->getMessage()];
         }
+
+        $filepath = $this->backupDirectory . '/' . $filename;
+
+        if (!file_exists($filepath)) {
+            throw new ValidationServiceException(
+                'Backup file not found',
+                ErrorCodes::BACKUP_NOT_FOUND,
+                'filename',
+                null,
+                ['filename' => $filename, 'path' => $filepath]
+            );
+        }
+
+        // Read and parse backup file
+        $jsonData = file_get_contents($filepath);
+        $backupData = json_decode($jsonData, true);
+
+        if (!$backupData || !isset($backupData['encrypted'])) {
+            throw new ValidationServiceException(
+                'Invalid backup file format',
+                ErrorCodes::BACKUP_INVALID,
+                'filename',
+                null,
+                ['filename' => $filename]
+            );
+        }
+
+        // Decrypt the SQL dump
+        try {
+            $sqlDump = KeyEncryption::decrypt($backupData['encrypted']);
+        } catch (Exception $e) {
+            throw new FatalServiceException(
+                'Failed to decrypt backup: ' . $e->getMessage(),
+                ErrorCodes::BACKUP_DECRYPT_FAILED,
+                ['filename' => $filename],
+                null,
+                $e
+            );
+        }
+
+        // Get database credentials from config file
+        $dbConfig = $this->getDatabaseCredentials();
+        if (!$dbConfig) {
+            throw new FatalServiceException(
+                'Database configuration not found',
+                ErrorCodes::DB_CONFIG_NOT_FOUND,
+                ['path' => '/etc/eiou/dbconfig.json']
+            );
+        }
+        $dbHost = $dbConfig['dbHost'];
+        $dbName = $dbConfig['dbName'];
+        $dbUser = $dbConfig['dbUser'];
+        $dbPass = $dbConfig['dbPass'];
+
+        // Write SQL to temp file for mysql import
+        $tempFile = tempnam('/tmp', 'eiou_restore_');
+        file_put_contents($tempFile, $sqlDump);
+        KeyEncryption::secureClear($sqlDump);
+
+        // Create temporary MySQL config file for secure password passing
+        $tempCnf = tempnam('/tmp', 'mysql_');
+        chmod($tempCnf, 0600);
+        file_put_contents($tempCnf, "[client]\nuser={$dbUser}\npassword={$dbPass}\nhost={$dbHost}\n");
+
+        $cmd = sprintf(
+            'mysql --defaults-extra-file=%s %s < %s 2>&1',
+            escapeshellarg($tempCnf),
+            escapeshellarg($dbName),
+            escapeshellarg($tempFile)
+        );
+
+        $output = shell_exec($cmd);
+
+        // Securely remove temp config file
+        unlink($tempCnf);
+
+        unlink($tempFile);
+
+        // Check for errors (mysql doesn't always return proper exit codes via shell_exec)
+        if ($output && preg_match('/ERROR/i', $output)) {
+            SecureLogger::error("Backup restore failed", ['output' => $output]);
+            throw new FatalServiceException(
+                'MySQL restore failed: ' . $output,
+                ErrorCodes::RESTORE_FAILED,
+                ['filename' => $filename, 'mysql_output' => $output]
+            );
+        }
+
+        SecureLogger::info("Backup restored", ['filename' => $filename]);
+
+        return [
+            'success' => true,
+            'filename' => $filename,
+            'restored_at' => date('c')
+        ];
     }
 
     public function listBackups(): array
@@ -253,7 +287,13 @@ class BackupService implements BackupServiceInterface
         $filepath = $this->backupDirectory . '/' . $filename;
 
         if (!file_exists($filepath)) {
-            return ['success' => false, 'error' => 'Backup file not found'];
+            throw new ValidationServiceException(
+                'Backup file not found',
+                ErrorCodes::BACKUP_NOT_FOUND,
+                'filename',
+                null,
+                ['filename' => $filename, 'path' => $filepath]
+            );
         }
 
         if (unlink($filepath)) {
@@ -261,43 +301,64 @@ class BackupService implements BackupServiceInterface
             return ['success' => true, 'filename' => $filename];
         }
 
-        return ['success' => false, 'error' => 'Failed to delete backup file'];
+        throw new FatalServiceException(
+            'Failed to delete backup file',
+            ErrorCodes::DELETE_FAILED,
+            ['filename' => $filename, 'path' => $filepath]
+        );
     }
 
     public function verifyBackup(string $filename): array
     {
-        try {
-            $filepath = $this->backupDirectory . '/' . $filename;
+        $filepath = $this->backupDirectory . '/' . $filename;
 
-            if (!file_exists($filepath)) {
-                return ['success' => false, 'valid' => false, 'error' => 'Backup file not found'];
-            }
-
-            $jsonData = file_get_contents($filepath);
-            $backupData = json_decode($jsonData, true);
-
-            if (!$backupData || !isset($backupData['encrypted'])) {
-                return ['success' => false, 'valid' => false, 'error' => 'Invalid backup file format'];
-            }
-
-            // Try to decrypt
-            $sqlDump = KeyEncryption::decrypt($backupData['encrypted']);
-
-            // Verify it contains SQL
-            $valid = strpos($sqlDump, 'CREATE TABLE') !== false || strpos($sqlDump, 'INSERT INTO') !== false;
-
-            KeyEncryption::secureClear($sqlDump);
-
-            return [
-                'success' => true,
-                'valid' => $valid,
-                'version' => $backupData['version'] ?? 'unknown',
-                'created_at' => $backupData['created_at'] ?? 'unknown'
-            ];
-
-        } catch (Exception $e) {
-            return ['success' => false, 'valid' => false, 'error' => $e->getMessage()];
+        if (!file_exists($filepath)) {
+            throw new ValidationServiceException(
+                'Backup file not found',
+                ErrorCodes::BACKUP_NOT_FOUND,
+                'filename',
+                null,
+                ['filename' => $filename, 'path' => $filepath]
+            );
         }
+
+        $jsonData = file_get_contents($filepath);
+        $backupData = json_decode($jsonData, true);
+
+        if (!$backupData || !isset($backupData['encrypted'])) {
+            throw new ValidationServiceException(
+                'Invalid backup file format',
+                ErrorCodes::BACKUP_INVALID,
+                'filename',
+                null,
+                ['filename' => $filename]
+            );
+        }
+
+        // Try to decrypt
+        try {
+            $sqlDump = KeyEncryption::decrypt($backupData['encrypted']);
+        } catch (Exception $e) {
+            throw new FatalServiceException(
+                'Failed to decrypt backup: ' . $e->getMessage(),
+                ErrorCodes::BACKUP_DECRYPT_FAILED,
+                ['filename' => $filename],
+                null,
+                $e
+            );
+        }
+
+        // Verify it contains SQL
+        $valid = strpos($sqlDump, 'CREATE TABLE') !== false || strpos($sqlDump, 'INSERT INTO') !== false;
+
+        KeyEncryption::secureClear($sqlDump);
+
+        return [
+            'success' => true,
+            'valid' => $valid,
+            'version' => $backupData['version'] ?? 'unknown',
+            'created_at' => $backupData['created_at'] ?? 'unknown'
+        ];
     }
 
     public function isAutoBackupEnabled(): bool
@@ -311,27 +372,27 @@ class BackupService implements BackupServiceInterface
 
     public function setAutoBackupEnabled(bool $enabled): array
     {
-        try {
-            // Update in-memory setting
-            $this->currentUser->set('autoBackupEnabled', $enabled);
+        // Update in-memory setting
+        $this->currentUser->set('autoBackupEnabled', $enabled);
 
-            // Persist to config file
-            $configFile = '/etc/eiou/defaultconfig.json';
-            $config = [];
-            if (file_exists($configFile)) {
-                $config = json_decode(file_get_contents($configFile), true) ?? [];
-            }
-            $config['autoBackupEnabled'] = $enabled;
-            if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
-                throw new Exception('Failed to write configuration file');
-            }
-
-            SecureLogger::info("Auto backup " . ($enabled ? 'enabled' : 'disabled'));
-
-            return ['success' => true, 'enabled' => $enabled];
-        } catch (Exception $e) {
-            return ['success' => false, 'error' => $e->getMessage()];
+        // Persist to config file
+        $configFile = '/etc/eiou/defaultconfig.json';
+        $config = [];
+        if (file_exists($configFile)) {
+            $config = json_decode(file_get_contents($configFile), true) ?? [];
         }
+        $config['autoBackupEnabled'] = $enabled;
+        if (file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT), LOCK_EX) === false) {
+            throw new FatalServiceException(
+                'Failed to write configuration file',
+                ErrorCodes::UPDATE_FAILED,
+                ['path' => $configFile]
+            );
+        }
+
+        SecureLogger::info("Auto backup " . ($enabled ? 'enabled' : 'disabled'));
+
+        return ['success' => true, 'enabled' => $enabled];
     }
 
     public function getBackupStatus(): array
@@ -384,20 +445,17 @@ class BackupService implements BackupServiceInterface
         switch ($subcommand) {
             case 'create':
                 $customName = $argv[3] ?? null;
+                // Let exceptions propagate - CLI entry point handles them
                 $result = $this->createBackup($customName);
-                if ($result['success']) {
-                    $output->success(
-                        "Backup created: {$result['filename']} ({$this->formatBytes($result['size'])})",
-                        [
-                            'filename' => $result['filename'],
-                            'size' => $result['size'],
-                            'size_human' => $this->formatBytes($result['size'])
-                        ],
-                        'Backup created successfully'
-                    );
-                } else {
-                    $output->error($result['error']);
-                }
+                $output->success(
+                    "Backup created: {$result['filename']} ({$this->formatBytes($result['size'])})",
+                    [
+                        'filename' => $result['filename'],
+                        'size' => $result['size'],
+                        'size_human' => $this->formatBytes($result['size'])
+                    ],
+                    'Backup created successfully'
+                );
                 break;
 
             case 'restore':
@@ -405,8 +463,11 @@ class BackupService implements BackupServiceInterface
                 $confirm = ($argv[4] ?? '') === '--confirm';
 
                 if (!$filename) {
-                    $output->error('Usage: backup restore <filename> --confirm');
-                    return;
+                    throw new ValidationServiceException(
+                        'Usage: backup restore <filename> --confirm',
+                        ErrorCodes::MISSING_ARGUMENT,
+                        'filename'
+                    );
                 }
 
                 if (!$confirm) {
@@ -417,12 +478,9 @@ class BackupService implements BackupServiceInterface
                     return;
                 }
 
+                // Let exceptions propagate - CLI entry point handles them
                 $result = $this->restoreBackup($filename, true);
-                if ($result['success']) {
-                    $output->success('Backup restored successfully', $result);
-                } else {
-                    $output->error($result['error']);
-                }
+                $output->success('Backup restored successfully', $result);
                 break;
 
             case 'list':
@@ -446,49 +504,45 @@ class BackupService implements BackupServiceInterface
             case 'delete':
                 $filename = $argv[3] ?? null;
                 if (!$filename) {
-                    $output->error('Usage: backup delete <filename>');
-                    return;
+                    throw new ValidationServiceException(
+                        'Usage: backup delete <filename>',
+                        ErrorCodes::MISSING_ARGUMENT,
+                        'filename'
+                    );
                 }
+                // Let exceptions propagate - CLI entry point handles them
                 $result = $this->deleteBackup($filename);
-                if ($result['success']) {
-                    $output->success("Backup deleted: {$filename}", $result);
-                } else {
-                    $output->error($result['error']);
-                }
+                $output->success("Backup deleted: {$filename}", $result);
                 break;
 
             case 'verify':
                 $filename = $argv[3] ?? null;
                 if (!$filename) {
-                    $output->error('Usage: backup verify <filename>');
-                    return;
+                    throw new ValidationServiceException(
+                        'Usage: backup verify <filename>',
+                        ErrorCodes::MISSING_ARGUMENT,
+                        'filename'
+                    );
                 }
+                // Let exceptions propagate - CLI entry point handles them
                 $result = $this->verifyBackup($filename);
-                if ($result['success'] && $result['valid']) {
+                if ($result['valid']) {
                     $output->success("Backup verified: {$filename} is valid", $result);
-                } elseif ($result['success'] && !$result['valid']) {
-                    $output->info("Backup verification failed: {$filename} appears corrupted", $result);
                 } else {
-                    $output->error($result['error'] ?? 'Verification failed');
+                    $output->info("Backup verification failed: {$filename} appears corrupted", $result);
                 }
                 break;
 
             case 'enable':
+                // Let exceptions propagate - CLI entry point handles them
                 $result = $this->setAutoBackupEnabled(true);
-                if ($result['success']) {
-                    $output->success('Automatic backups enabled', $result);
-                } else {
-                    $output->error($result['error']);
-                }
+                $output->success('Automatic backups enabled', $result);
                 break;
 
             case 'disable':
+                // Let exceptions propagate - CLI entry point handles them
                 $result = $this->setAutoBackupEnabled(false);
-                if ($result['success']) {
-                    $output->success('Automatic backups disabled', $result);
-                } else {
-                    $output->error($result['error']);
-                }
+                $output->success('Automatic backups disabled', $result);
                 break;
 
             case 'status':
