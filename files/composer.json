@@ -31,6 +31,8 @@
     },
     "scripts": {
         "test": "phpunit --configuration ../tests/phpunit.xml",
+        "test-verbose": "phpunit --configuration ../tests/phpunit.xml --testdox",
+        "test-debug": "phpunit --configuration ../tests/phpunit.xml --testdox --stop-on-failure",
         "test-coverage": "phpunit --configuration ../tests/phpunit.xml --coverage-text"
     }
 }
