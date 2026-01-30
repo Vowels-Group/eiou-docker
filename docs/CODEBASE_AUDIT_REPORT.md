@@ -13,7 +13,7 @@ This audit reviewed the eiou-docker repository for security vulnerabilities, cod
 | Category | Critical | High | Medium | Low | Info |
 |----------|----------|------|--------|-----|------|
 | Security | 0 | 0 | 2 | 4 | 2 |
-| Code Quality | 0 | 1 | 3 | 4 | 3 |
+| Code Quality | 0 | 0 | 4 | 4 | 3 |
 | Architecture | 0 | 2 | 3 | 2 | 0 |
 | Test Coverage | 0 | 1 | 2 | 1 | 0 |
 | Documentation | 0 | 0 | 1 | 2 | 0 |
@@ -70,16 +70,15 @@ This audit reviewed the eiou-docker repository for security vulnerabilities, cod
 
 ## Code Quality Findings
 
-### High Severity
+### Medium Severity
 
-#### CQ-001: God Classes
-**Location**: `files/src/services/ServiceContainer.php`, `files/src/services/TransactionService.php`, `files/src/services/ContactService.php`
-**Description**: ServiceContainer (~700 lines), TransactionService (~1800 lines), and ContactService (~1500 lines) exceed recommended class sizes. These classes have too many responsibilities.
-**Recommendation**: Refactor into smaller, focused service classes. Consider:
-- Extracting BalanceCalculationService from TransactionService
-- Extracting TransactionValidationService from TransactionService
-- Breaking ContactService into ContactManagementService and ContactSyncService
-**Status**: OPEN - Deferred to future refactoring effort.
+#### CQ-001: Large Service Classes
+**Location**: `files/src/services/ServiceContainer.php`, `files/src/services/ContactService.php`
+**Description**: ServiceContainer (1357 lines) and ContactService (1806 lines) are larger than typical service classes. Note: TransactionService was previously refactored and is now a reasonable 545 lines.
+**Recommendation**: Consider breaking ContactService into smaller, focused service classes:
+- ContactManagementService (CRUD operations)
+- ContactSyncService (synchronization logic)
+**Status**: OPEN - Low priority, deferred to future refactoring effort.
 
 ### Medium Severity
 
@@ -237,7 +236,7 @@ This audit reviewed the eiou-docker repository for security vulnerabilities, cod
 3. Document P2P routing flow
 
 ### Long-Term (Roadmap)
-1. Refactor God classes into smaller services
+1. Consider breaking ContactService into smaller focused services
 2. Migrate to proper dependency injection
 3. Add OpenAPI specification for REST API
 4. Implement unified logging interface
