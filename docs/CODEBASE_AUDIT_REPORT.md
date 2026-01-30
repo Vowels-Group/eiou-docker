@@ -211,7 +211,7 @@ This audit reviewed the eiou-docker repository for security vulnerabilities, cod
 - CHANGELOG.md - Version history and changes
 - CONTRIBUTING.md - Contribution guidelines
 - SECURITY.md - Security policy and vulnerability reporting
-**Status**: FIXED - Files created in this audit.
+**Status**: OPEN - Tracked in issue #550.
 
 ### Low Severity
 
@@ -225,10 +225,10 @@ This audit reviewed the eiou-docker repository for security vulnerabilities, cod
 
 ## Recommendations Summary
 
-### Immediate Actions (This PR)
-1. ~~Create CHANGELOG.md~~ DONE
-2. ~~Create CONTRIBUTING.md~~ DONE
-3. ~~Create SECURITY.md~~ DONE
+### Immediate Actions
+1. Create CHANGELOG.md - See issue #550
+2. Create CONTRIBUTING.md - See issue #550
+3. Create SECURITY.md - See issue #550
 
 ### Near-Term (Future PRs)
 1. Add PHPUnit test infrastructure
