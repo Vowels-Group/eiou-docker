@@ -25,18 +25,6 @@ This document defines the standardized approach to error handling across the EIO
 - **Testability**: Exception-based errors can be caught and verified in unit tests
 - **Recoverability**: Clear distinction between fatal and recoverable errors enables proper retry logic
 
-### Why Exceptions Over Return Values
-
-Previously, error conditions were handled by returning `false` or calling `exit()` directly. This approach had several problems:
-
-- No way to distinguish between different error types
-- Lost context about what went wrong
-- Impossible to test error conditions
-- No separation between recoverable and fatal errors
-- Inconsistent error output formats
-
-The exception-based approach solves all these issues by providing a structured, type-safe way to propagate errors up the call stack.
-
 ---
 
 ## Core Principles
