@@ -539,7 +539,7 @@ blockInvalidResult=$(docker exec ${testContainer} php -r "
 
     try {
         \$container = \Eiou\Services\ServiceContainer::getInstance();
-        \$contactService = \$container->get(ContactService::class);
+        \$contactService = \$container->getContactService();
         // Use an address with invalid characters that will fail validation
         \$contactService->blockContact('http://invalid<script>address');
         echo 'FAILED:no_exception';
@@ -574,7 +574,7 @@ blockNonExistentResult=$(docker exec ${testContainer} php -r "
 
     try {
         \$container = \Eiou\Services\ServiceContainer::getInstance();
-        \$contactService = \$container->get(ContactService::class);
+        \$contactService = \$container->getContactService();
         // Use a valid but non-existent address
         \$contactService->blockContact('http://nonexistent.test.local:8080');
         echo 'FAILED:no_exception';
@@ -609,7 +609,7 @@ deleteInvalidResult=$(docker exec ${testContainer} php -r "
 
     try {
         \$container = \Eiou\Services\ServiceContainer::getInstance();
-        \$contactService = \$container->get(ContactService::class);
+        \$contactService = \$container->getContactService();
         // Use an address with invalid characters
         \$contactService->deleteContact('http://test<invalid>address');
         echo 'FAILED:no_exception';
@@ -644,7 +644,7 @@ deleteNullResult=$(docker exec ${testContainer} php -r "
 
     try {
         \$container = \Eiou\Services\ServiceContainer::getInstance();
-        \$contactService = \$container->get(ContactService::class);
+        \$contactService = \$container->getContactService();
         \$contactService->deleteContact(null);
         echo 'FAILED:no_exception';
     } catch (ValidationServiceException \$e) {
@@ -683,7 +683,7 @@ restoreMissingResult=$(docker exec ${testContainer} php -r "
 
     try {
         \$userContext = UserContext::getInstance();
-        \$pdo = \Eiou\Services\ServiceContainer::getInstance()->get(PDO::class);
+        \$pdo = \Eiou\Services\ServiceContainer::getInstance()->getPdo();
         \$backupService = new BackupService(\$userContext, \$pdo);
         // Try to restore a file that doesn't exist
         \$backupService->restoreBackup('nonexistent_backup.eiou', true);
@@ -720,7 +720,7 @@ restoreNoConfirmResult=$(docker exec ${testContainer} php -r "
 
     try {
         \$userContext = UserContext::getInstance();
-        \$pdo = \Eiou\Services\ServiceContainer::getInstance()->get(PDO::class);
+        \$pdo = \Eiou\Services\ServiceContainer::getInstance()->getPdo();
         \$backupService = new BackupService(\$userContext, \$pdo);
         // Try to restore without confirmation (confirmOverwrite = false)
         \$backupService->restoreBackup('any_backup.eiou', false);
@@ -757,7 +757,7 @@ deleteNonExistentBackupResult=$(docker exec ${testContainer} php -r "
 
     try {
         \$userContext = UserContext::getInstance();
-        \$pdo = \Eiou\Services\ServiceContainer::getInstance()->get(PDO::class);
+        \$pdo = \Eiou\Services\ServiceContainer::getInstance()->getPdo();
         \$backupService = new BackupService(\$userContext, \$pdo);
         // Try to delete a file that doesn't exist
         \$backupService->deleteBackup('nonexistent_backup_file.eiou');
