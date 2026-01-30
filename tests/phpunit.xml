@@ -14,15 +14,6 @@
         <testsuite name="Unit">
             <directory>Unit</directory>
         </testsuite>
-        <testsuite name="Utils">
-            <directory>Unit/Utils</directory>
-        </testsuite>
-        <testsuite name="Services">
-            <directory>Unit/Services</directory>
-        </testsuite>
-        <testsuite name="Repositories">
-            <directory>Unit/Repositories</directory>
-        </testsuite>
     </testsuites>
     <source>
         <include>

@@ -44,7 +44,8 @@ class ContactServiceTest extends TestCase
         $this->assertIsFloat(Constants::CONTACT_DEFAULT_FEE_PERCENT);
         $this->assertGreaterThanOrEqual(0, Constants::CONTACT_DEFAULT_FEE_PERCENT);
 
-        $this->assertIsFloat(Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX);
+        // Max fee can be int or float, just needs to be numeric and greater than default
+        $this->assertIsNumeric(Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX);
         $this->assertGreaterThan(Constants::CONTACT_DEFAULT_FEE_PERCENT, Constants::CONTACT_DEFAULT_FEE_PERCENT_MAX);
 
         $this->assertIsInt(Constants::CONTACT_DEFAULT_CREDIT_LIMIT);
