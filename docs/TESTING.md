@@ -28,7 +28,7 @@ Unit tests validate individual PHP classes and methods in isolation.
 
 - **Location**: `tests/Unit/`
 - **Framework**: PHPUnit 11
-- **Total**: 1200+ tests, 4000+ assertions
+- **Total**: 1600+ tests, 5500+ assertions
 
 ### Integration Tests (Shell)
 
@@ -57,6 +57,13 @@ Integration tests validate the complete system behavior using Docker containers.
 | **AddressValidatorTest.php** | 20 | HTTP/HTTPS/Tor address detection, transport type identification, address categorization |
 | **SecureLoggerTest.php** | 18 | Sensitive data masking (passwords, authcodes, API keys, emails, credit cards, SSN, mnemonics), log levels, file rotation |
 | **AdaptivePollerTest.php** | 17 | Polling interval calculation, state management, reset, force interval bounds clamping |
+| **SecureSeedphraseDisplayTest.php** | 30+ | Secure file display, availability check, TTL, cleanup |
+
+### API Tests (`tests/Unit/Api/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **ApiControllerTest.php** | 41 | API endpoint routing, authentication, error handling, all wallet/contacts/system endpoints |
 
 ### Core Tests (`tests/Unit/Core/`)
 
@@ -64,6 +71,11 @@ Integration tests validate the complete system behavior using Docker containers.
 |-----------|-------|----------|
 | **ErrorCodesTest.php** | 20 | HTTP status mapping, error titles, code validation, constant verification |
 | **ConstantsTest.php** | 43 | Application constants validation, hash algorithms, transport modes, status codes |
+| **ApplicationTest.php** | 26 | Singleton pattern, service delegation, path getters, CLI mode |
+| **DatabaseContextTest.php** | 29 | Config management, DB credentials, initialization state |
+| **ErrorHandlerTest.php** | 30 | Error/exception handling, responses, request ID management |
+| **UserContextTest.php** | 46 | User data, addresses, wallet validation, config defaults |
+| **WalletTest.php** | 19 | Seed extraction, config defaults, hostname validation |
 
 ### Exceptions Tests (`tests/Unit/Exceptions/`)
 
@@ -76,6 +88,18 @@ Integration tests validate the complete system behavior using Docker containers.
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
 | **DatabaseSchemaTest.php** | 67 | Schema validation for all 14 tables, column types, constraints, indexes |
+| **DatabaseSetupTest.php** | 15+ | Migration execution, column migrations, idempotency |
+| **PdoConnectionTest.php** | 10+ | Connection creation, DSN format, PDO options |
+
+### Processors Tests (`tests/Unit/Processors/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **AbstractMessageProcessorTest.php** | 30+ | Base processor, signal handling, lockfile management, shutdown |
+| **CleanupMessageProcessorTest.php** | 15+ | Cleanup message handling, log intervals, polling config |
+| **ContactStatusProcessorTest.php** | 35+ | Ping/pong, address priority (Tor > HTTPS > HTTP), chain validation |
+| **P2pMessageProcessorTest.php** | 20+ | P2P message queue processing, fast polling config |
+| **TransactionMessageProcessorTest.php** | 20+ | Transaction processing, lockfile paths |
 
 ### Repositories Tests (`tests/Unit/Repositories/`)
 
@@ -143,6 +167,23 @@ Integration tests validate the complete system behavior using Docker containers.
 |-----------|-------|----------|
 | **CurrencyUtilityServiceTest.php** | 15 | Cents/dollars conversion, currency formatting, fee percent calculations, rounding, large amounts |
 | **TimeUtilityServiceTest.php** | 11 | Microtime conversion, expiration checking, TTL calculations, timestamp precision |
+| **GeneralUtilityServiceTest.php** | 15+ | Address truncation, string manipulation |
+| **TransportUtilityServiceTest.php** | 25+ | Transport detection, address types, jitter function |
+| **UtilityServiceContainerTest.php** | 15+ | Lazy loading container, utility caching |
+| **ValidationUtilityServiceTest.php** | 20+ | Request validation, signature verification, funds calculation |
+
+### Service Wrappers Tests (`tests/Unit/Services/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **ServiceWrappersTest.php** | 10+ | Output wrapper function, message handling |
+
+### Startup Tests (`tests/Unit/Startup/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **ConfigCheckTest.php** | 15+ | Userconfig validation, public key detection |
+| **MessageCheckTest.php** | 15+ | Database prerequisite checks, PDO availability |
 
 ### CLI Tests (`tests/Unit/Cli/`)
 
@@ -164,6 +205,13 @@ Integration tests validate the complete system behavior using Docker containers.
 |-----------|-------|----------|
 | **TransactionFormatterTest.php** | 14 | Amount conversion (cents to dollars), transaction history formatting, counterparty detection, contact formatting |
 
+### GUI Tests (`tests/Unit/Gui/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **FunctionsTest.php** | 20+ | Router, view data initialization, XSS prevention, action routing |
+| **Includes/SessionTest.php** | 40+ | Authentication, CSRF tokens, flash messages, session timeout |
+
 ### GUI Helpers Tests (`tests/Unit/Gui/Helpers/`)
 
 | Test File | Tests | Coverage |
@@ -179,6 +227,13 @@ Integration tests validate the complete system behavior using Docker containers.
 | **ContactControllerTest.php** | 25+ | Contact CRUD actions, CSRF verification, validation |
 | **SettingsControllerTest.php** | 25+ | Settings management, input validation, JSON export |
 | **TransactionControllerTest.php** | 20+ | Transaction actions, recipient handling |
+
+### Schema Tests (`tests/Unit/Schemas/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **EchoSchemaTest.php** | 34+ | Contact, wallet, system, transaction echo messages |
+| **OutputSchemaTest.php** | 25+ | Debug/logging output for all message types |
 
 ### Schema/Payload Tests (`tests/Unit/Schemas/Payloads/`)
 
