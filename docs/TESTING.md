@@ -28,7 +28,7 @@ Unit tests validate individual PHP classes and methods in isolation.
 
 - **Location**: `tests/Unit/`
 - **Framework**: PHPUnit 11
-- **Total**: 641 tests, 1500+ assertions
+- **Total**: 1200+ tests, 4000+ assertions
 
 ### Integration Tests (Shell)
 
@@ -58,6 +58,48 @@ Integration tests validate the complete system behavior using Docker containers.
 | **SecureLoggerTest.php** | 18 | Sensitive data masking (passwords, authcodes, API keys, emails, credit cards, SSN, mnemonics), log levels, file rotation |
 | **AdaptivePollerTest.php** | 17 | Polling interval calculation, state management, reset, force interval bounds clamping |
 
+### Core Tests (`tests/Unit/Core/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **ErrorCodesTest.php** | 20 | HTTP status mapping, error titles, code validation, constant verification |
+| **ConstantsTest.php** | 43 | Application constants validation, hash algorithms, transport modes, status codes |
+
+### Exceptions Tests (`tests/Unit/Exceptions/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **ServiceExceptionTest.php** | 41 | Service exception hierarchy (ServiceException, FatalServiceException, RecoverableServiceException, ValidationServiceException) |
+
+### Database Tests (`tests/Unit/Database/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **DatabaseSchemaTest.php** | 67 | Schema validation for all 14 tables, column types, constraints, indexes |
+
+### Repositories Tests (`tests/Unit/Repositories/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **TransactionRepositoryTest.php** | 4 | Transaction status constants, type constants, hash length validation |
+| **AbstractRepositoryTest.php** | 30+ | Base CRUD operations, column validation, transactions, JSON decoding |
+| **AddressRepositoryTest.php** | 25+ | Address management, lookups, pubkey hashing, transport types |
+| **ApiKeyRepositoryTest.php** | 25+ | API key CRUD, permission checks, rate limit logging |
+| **BalanceRepositoryTest.php** | 30+ | Balance operations, sent/received tracking, currency grouping |
+| **ContactRepositoryTest.php** | 40+ | Contact management, status transitions, lookups |
+| **DeadLetterQueueRepositoryTest.php** | 25+ | DLQ operations, status transitions, statistics |
+| **DebugRepositoryTest.php** | 20+ | Debug logging, pruning, log levels |
+| **DeliveryMetricsRepositoryTest.php** | 25+ | Delivery metrics tracking, aggregation, cleanup |
+| **HeldTransactionRepositoryTest.php** | 44 | Held transaction lifecycle, sync status, retry management |
+| **MessageDeliveryRepositoryTest.php** | 38 | Message delivery tracking, retry queue, statistics |
+| **P2pRepositoryTest.php** | 48 | P2P request management, status updates, statistics |
+| **RateLimiterRepositoryTest.php** | 30 | Rate limiting operations, blocking, cleanup |
+| **Rp2pRepositoryTest.php** | 25+ | RP2P request management, queries, cleanup |
+| **TransactionChainRepositoryTest.php** | 20+ | Chain integrity verification, gap detection |
+| **TransactionContactRepositoryTest.php** | 15+ | Contact transaction queries, balance calculation |
+| **TransactionRecoveryRepositoryTest.php** | 20+ | Recovery operations, stuck transactions, claiming |
+| **TransactionStatisticsRepositoryTest.php** | 20+ | Transaction statistics, daily counts, type grouping |
+
 ### Services Tests (`tests/Unit/Services/`)
 
 | Test File | Tests | Coverage |
@@ -69,21 +111,38 @@ Integration tests validate the complete system behavior using Docker containers.
 | **BalanceServiceTest.php** | 23 | Contact balance conversion, user total balance, contact balance retrieval, batch balance operations, currency conversion, edge cases |
 | **DatabaseLockingServiceTest.php** | 40 | MySQL advisory locks (GET_LOCK/RELEASE_LOCK/IS_FREE_LOCK), lock acquisition/release, timeout handling, lock name sanitization, held locks tracking |
 | **ChainOperationsServiceTest.php** | 16 | Chain integrity verification, previous txid lookup, chain repair coordination, sync service injection, exception handling |
+| **ChainVerificationServiceTest.php** | 16 | Chain verification logic, gap detection, conflict resolution |
 | **HeldTransactionServiceTest.php** | 23 | Transaction hold/resume lifecycle, sync status tracking, previous txid updates, statistics, event handling, chain integrity checks |
 | **TransactionRecoveryServiceTest.php** | 28 | Stuck transaction recovery, manual resolution (retry/cancel/complete), recovery statistics, exception handling |
+| **TransactionValidationServiceTest.php** | 35 | Transaction validation logic, required fields, amount validation |
 | **BackupServiceTest.php** | 22 | formatBytes utility, getNextScheduledBackup date logic, boundary conditions |
+| **ApiKeyServiceTest.php** | 44 | CLI API key management, permission validation |
+| **CleanupServiceTest.php** | 23 | Expired message processing, cleanup scheduling |
+| **ContactStatusServiceTest.php** | 27 | Ping/pong handling, contact status updates |
+| **MessageDeliveryServiceTest.php** | 55 | Message delivery with retries, dead letter queue |
+| **WalletServiceTest.php** | 22 | Wallet key operations, key detection |
+| **CliServiceTest.php** | 25+ | CLI command handling, output formatting |
+| **DebugServiceTest.php** | 15+ | Debug context, error logging setup |
+| **MessageServiceTest.php** | 25+ | Message processing, validation, routing |
+| **P2pServiceTest.php** | 30+ | P2P routing logic, fund availability, matching |
+| **Rp2pServiceTest.php** | 25+ | RP2P relay logic, fee calculation |
+| **SendOperationServiceTest.php** | 20+ | Send operations with locking, message delivery |
+| **ServiceContainerTest.php** | 20+ | Singleton pattern, dependency management, lazy loading |
+| **SyncServiceTest.php** | 20+ | Synchronization operations, contact/transaction sync |
+| **TransactionProcessingServiceTest.php** | 20+ | Transaction processing, claiming, P2P handling |
 
-### Repositories Tests (`tests/Unit/Repositories/`)
+### Services Proxies Tests (`tests/Unit/Services/Proxies/`)
 
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
-| **TransactionRepositoryTest.php** | 4 | Transaction status constants, type constants, hash length validation |
+| **SyncServiceProxyTest.php** | 15+ | Lazy proxy pattern, deferred initialization |
 
-### Core Tests (`tests/Unit/Core/`)
+### Services Utilities Tests (`tests/Unit/Services/Utilities/`)
 
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
-| **ErrorCodesTest.php** | 20 | HTTP status mapping, error titles, code validation, constant verification |
+| **CurrencyUtilityServiceTest.php** | 15 | Cents/dollars conversion, currency formatting, fee percent calculations, rounding, large amounts |
+| **TimeUtilityServiceTest.php** | 11 | Microtime conversion, expiration checking, TTL calculations, timestamp precision |
 
 ### CLI Tests (`tests/Unit/Cli/`)
 
@@ -105,18 +164,21 @@ Integration tests validate the complete system behavior using Docker containers.
 |-----------|-------|----------|
 | **TransactionFormatterTest.php** | 14 | Amount conversion (cents to dollars), transaction history formatting, counterparty detection, contact formatting |
 
-### Utility Services Tests (`tests/Unit/Services/Utilities/`)
-
-| Test File | Tests | Coverage |
-|-----------|-------|----------|
-| **CurrencyUtilityServiceTest.php** | 15 | Cents/dollars conversion, currency formatting, fee percent calculations, rounding, large amounts |
-| **TimeUtilityServiceTest.php** | 11 | Microtime conversion, expiration checking, TTL calculations, timestamp precision |
-
 ### GUI Helpers Tests (`tests/Unit/Gui/Helpers/`)
 
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
 | **ContactDataBuilderTest.php** | 20 | Contact data building, address type handling, primary address priority (Tor > HTTPS > HTTP), JSON encoding, HTML-safe output, status handling, Unicode support |
+| **MessageHelperTest.php** | 62 | Message parsing, formatting, HTML encoding |
+| **ViewHelperTest.php** | 54 | View rendering helpers, template processing |
+
+### GUI Controllers Tests (`tests/Unit/Gui/Controllers/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **ContactControllerTest.php** | 25+ | Contact CRUD actions, CSRF verification, validation |
+| **SettingsControllerTest.php** | 25+ | Settings management, input validation, JSON export |
+| **TransactionControllerTest.php** | 20+ | Transaction actions, recipient handling |
 
 ### Schema/Payload Tests (`tests/Unit/Schemas/Payloads/`)
 
@@ -124,7 +186,12 @@ Integration tests validate the complete system behavior using Docker containers.
 |-----------|-------|----------|
 | **BasePayloadTest.php** | 53 | ensureRequiredFields validation, sanitizeString, sanitizeNumber type handling, validate empty check, edge cases |
 | **ContactPayloadTest.php** | 26 | Contact creation/received/updated/rejection/pending/mutually-accepted payloads, filterAddresses, JSON encoding |
+| **ContactStatusPayloadTest.php** | 53 | Ping/pong payloads, status responses |
 | **MessagePayloadTest.php** | 20 | Contact inquiry/accepted/unknown payloads, transaction status/sync responses, P2P status inquiry/response |
+| **P2pPayloadTest.php** | 50+ | P2P request payloads, validation |
+| **Rp2pPayloadTest.php** | 54 | Return P2P payloads, relay routing |
+| **TransactionPayloadTest.php** | 77 | Transaction payloads, all transaction types |
+| **UtilPayloadTest.php** | 77 | Utility/error payloads, acknowledgments |
 
 ## Running Unit Tests
 
@@ -212,37 +279,88 @@ tests/
 │   │   ├── CliJsonResponseTest.php
 │   │   └── CliOutputManagerTest.php
 │   ├── Core/
+│   │   ├── ConstantsTest.php
 │   │   └── ErrorCodesTest.php
+│   ├── Database/
+│   │   └── DatabaseSchemaTest.php
 │   ├── Events/
 │   │   ├── EventDispatcherTest.php
 │   │   └── SyncEventsTest.php
+│   ├── Exceptions/
+│   │   └── ServiceExceptionTest.php
 │   ├── Formatters/
 │   │   └── TransactionFormatterTest.php
 │   ├── Gui/
+│   │   ├── Controllers/
+│   │   │   ├── ContactControllerTest.php
+│   │   │   ├── SettingsControllerTest.php
+│   │   │   └── TransactionControllerTest.php
 │   │   └── Helpers/
-│   │       └── ContactDataBuilderTest.php
+│   │       ├── ContactDataBuilderTest.php
+│   │       ├── MessageHelperTest.php
+│   │       └── ViewHelperTest.php
+│   ├── Repositories/
+│   │   ├── AbstractRepositoryTest.php
+│   │   ├── AddressRepositoryTest.php
+│   │   ├── ApiKeyRepositoryTest.php
+│   │   ├── BalanceRepositoryTest.php
+│   │   ├── ContactRepositoryTest.php
+│   │   ├── DeadLetterQueueRepositoryTest.php
+│   │   ├── DebugRepositoryTest.php
+│   │   ├── DeliveryMetricsRepositoryTest.php
+│   │   ├── HeldTransactionRepositoryTest.php
+│   │   ├── MessageDeliveryRepositoryTest.php
+│   │   ├── P2pRepositoryTest.php
+│   │   ├── RateLimiterRepositoryTest.php
+│   │   ├── Rp2pRepositoryTest.php
+│   │   ├── TransactionChainRepositoryTest.php
+│   │   ├── TransactionContactRepositoryTest.php
+│   │   ├── TransactionRecoveryRepositoryTest.php
+│   │   ├── TransactionRepositoryTest.php
+│   │   └── TransactionStatisticsRepositoryTest.php
 │   ├── Schemas/
 │   │   └── Payloads/
 │   │       ├── BasePayloadTest.php
 │   │       ├── ContactPayloadTest.php
-│   │       └── MessagePayloadTest.php
-│   ├── Repositories/
-│   │   └── TransactionRepositoryTest.php
+│   │       ├── ContactStatusPayloadTest.php
+│   │       ├── MessagePayloadTest.php
+│   │       ├── P2pPayloadTest.php
+│   │       ├── Rp2pPayloadTest.php
+│   │       ├── TransactionPayloadTest.php
+│   │       └── UtilPayloadTest.php
 │   ├── Security/
 │   │   ├── BIP39Test.php
 │   │   ├── KeyEncryptionTest.php
 │   │   └── TorKeyDerivationTest.php
 │   ├── Services/
 │   │   ├── ApiAuthServiceTest.php
+│   │   ├── ApiKeyServiceTest.php
 │   │   ├── BackupServiceTest.php
 │   │   ├── BalanceServiceTest.php
 │   │   ├── ChainOperationsServiceTest.php
+│   │   ├── ChainVerificationServiceTest.php
+│   │   ├── CleanupServiceTest.php
+│   │   ├── CliServiceTest.php
 │   │   ├── ContactServiceTest.php
+│   │   ├── ContactStatusServiceTest.php
 │   │   ├── DatabaseLockingServiceTest.php
+│   │   ├── DebugServiceTest.php
 │   │   ├── HeldTransactionServiceTest.php
+│   │   ├── MessageDeliveryServiceTest.php
+│   │   ├── MessageServiceTest.php
+│   │   ├── P2pServiceTest.php
 │   │   ├── RateLimiterServiceTest.php
+│   │   ├── Rp2pServiceTest.php
+│   │   ├── SendOperationServiceTest.php
+│   │   ├── ServiceContainerTest.php
+│   │   ├── SyncServiceTest.php
+│   │   ├── TransactionProcessingServiceTest.php
 │   │   ├── TransactionRecoveryServiceTest.php
 │   │   ├── TransactionServiceTest.php
+│   │   ├── TransactionValidationServiceTest.php
+│   │   ├── WalletServiceTest.php
+│   │   ├── Proxies/
+│   │   │   └── SyncServiceProxyTest.php
 │   │   └── Utilities/
 │   │       ├── CurrencyUtilityServiceTest.php
 │   │       └── TimeUtilityServiceTest.php
