@@ -16,3 +16,6 @@ tests/baseconfig/credentials.sh
 *.secrets
 .env.local
 .env.test.local
+
+# PHPUnit cache
+tests/.phpunit.cache/

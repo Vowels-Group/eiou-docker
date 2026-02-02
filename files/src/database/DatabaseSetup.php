@@ -9,6 +9,11 @@ use PDOException;
 use RuntimeException;
 
 function freshInstall(){
+    // Skip database setup in test mode
+    if (defined('EIOU_TEST_MODE') && EIOU_TEST_MODE === true) {
+        return;
+    }
+
     // Check if the configuration file exists
     if (!file_exists('/etc/eiou/dbconfig.json')) {
         // Create the directory if it doesn't exist

@@ -208,7 +208,7 @@ class SettingsController
         $this->session->verifyCSRFToken();
 
         try {
-            $debugRepo = new DebugRepository();
+            $debugRepo = new DebugRepository($this->getPdoConnection());
 
             if ($debugRepo->clearDebugEntries()) {
                 MessageHelper::redirectMessage('Debug logs cleared successfully', 'success');
@@ -235,7 +235,7 @@ class SettingsController
 
         try {
             // Collect all debug information
-            $debugRepo = new DebugRepository();
+            $debugRepo = new DebugRepository($this->getPdoConnection());
             $debugEntries = $debugRepo->getRecentDebugEntries(100);
 
             // Collect system info
@@ -469,7 +469,7 @@ class SettingsController
 
         try {
             // Collect debug information based on mode
-            $debugRepo = new DebugRepository();
+            $debugRepo = new DebugRepository($this->getPdoConnection());
 
             if ($isFullReport) {
                 // Full mode: get complete debug history

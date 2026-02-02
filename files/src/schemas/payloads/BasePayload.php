@@ -5,10 +5,10 @@ namespace Eiou\Schemas\Payloads;
 
 use Eiou\Core\UserContext;
 use Eiou\Services\Utilities\UtilityServiceContainer;
-use Eiou\Services\Utilities\CurrencyUtilityService;
-use Eiou\Services\Utilities\TimeUtilityService;
-use Eiou\Services\Utilities\ValidationUtilityService;
-use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Contracts\CurrencyUtilityServiceInterface;
+use Eiou\Contracts\TimeUtilityServiceInterface;
+use Eiou\Contracts\ValidationUtilityServiceInterface;
+use Eiou\Contracts\TransportServiceInterface;
 
 /**
  * Abstract base class for all payload builders
@@ -31,24 +31,24 @@ abstract class BasePayload
     protected UtilityServiceContainer $utilityContainer;
 
     /**
-     * @var CurrencyUtilityService Currecy utility service 
+     * @var CurrencyUtilityServiceInterface Currency utility service
      */
-    protected CurrencyUtilityService $currencyUtility;
+    protected CurrencyUtilityServiceInterface $currencyUtility;
 
      /**
-     * @var TimeUtilityService Time utility service 
+     * @var TimeUtilityServiceInterface Time utility service
      */
-    protected TimeUtilityService $timeUtility;
+    protected TimeUtilityServiceInterface $timeUtility;
 
     /**
-     * @var ValidationUtilityService Validation utility service 
+     * @var ValidationUtilityServiceInterface Validation utility service
      */
-    protected ValidationUtilityService $validationUtility;
+    protected ValidationUtilityServiceInterface $validationUtility;
 
     /**
-     * @var TransportUtilityService Transport utility service 
+     * @var TransportServiceInterface Transport utility service
      */
-    protected TransportUtilityService $transportUtility;
+    protected TransportServiceInterface $transportUtility;
 
     /**
      * Constructor

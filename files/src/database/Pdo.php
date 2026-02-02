@@ -22,14 +22,20 @@ function createPDOConnection(): PDO {
     // Try to use UserContext if available, fallback to global $user
     $databaseContext = DatabaseContext::getInstance();
 
+    // Initialize variables to null
+    $dbHost = null;
+    $dbName = null;
+    $dbUser = null;
+    $dbPass = null;
+
     // Get database configuration from UserContext or global $user
     if ($databaseContext && $databaseContext->isInitialized()) {
         $dbHost = $databaseContext->getDbHost();
         $dbName = $databaseContext->getDbName();
         $dbUser = $databaseContext->getDbUser();
         $dbPass = $databaseContext->getDbPass();
-    } 
-    
+    }
+
     // Validate required configuration
     if (!$dbHost || !$dbName || !$dbUser || !$dbPass) {
         SecureLogger::error("Missing database configuration parameters");
