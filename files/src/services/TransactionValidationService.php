@@ -12,7 +12,7 @@ use Eiou\Contracts\TransactionValidationServiceInterface;
 use Eiou\Contracts\TransactionServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Database\TransactionRepository;
-use Eiou\Database\ContactRepository;
+use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Schemas\Payloads\TransactionPayload;
@@ -47,9 +47,9 @@ class TransactionValidationService implements TransactionValidationServiceInterf
     private TransactionRepository $transactionRepository;
 
     /**
-     * @var ContactRepository Contact repository instance
+     * @var ContactServiceInterface Contact service instance
      */
-    private ContactRepository $contactRepository;
+    private ContactServiceInterface $contactService;
 
     /**
      * @var ValidationUtilityService Validation utility service
@@ -99,7 +99,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
      * Constructor
      *
      * @param TransactionRepository $transactionRepository Transaction repository
-     * @param ContactRepository $contactRepository Contact repository
+     * @param ContactServiceInterface $contactService Contact service
      * @param ValidationUtilityService $validationUtility Validation utility service
      * @param InputValidator $inputValidator Input validator
      * @param TransactionPayload $transactionPayload Transaction payload builder
@@ -108,7 +108,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
      */
     public function __construct(
         TransactionRepository $transactionRepository,
-        ContactRepository $contactRepository,
+        ContactServiceInterface $contactService,
         ValidationUtilityService $validationUtility,
         InputValidator $inputValidator,
         TransactionPayload $transactionPayload,
@@ -116,7 +116,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
         SecureLogger $secureLogger
     ) {
         $this->transactionRepository = $transactionRepository;
-        $this->contactRepository = $contactRepository;
+        $this->contactService = $contactService;
         $this->validationUtility = $validationUtility;
         $this->inputValidator = $inputValidator;
         $this->transactionPayload = $transactionPayload;
@@ -266,7 +266,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
 
             // Check if there is enough funds to complete the transaction (sufficient balance or credit limit)
             $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
-            $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
+            $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey']);
             $requestedAmount = $request['amount'];
 
             if (($availableFunds + $creditLimit) < $requestedAmount) {
@@ -301,7 +301,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
         $pubkey = $request['senderPublicKey'];
 
         // Check if User is not blocked
-        if (!$this->contactRepository->isNotBlocked($pubkey)) {
+        if (!$this->contactService->isNotBlocked($pubkey)) {
             if ($echo) {
                 echo $this->transactionPayload->buildRejection($request, 'contact_blocked');
             }

@@ -498,7 +498,7 @@ class ServiceContainer {
     public function getP2pService(): P2pServiceInterface {
         if (!isset($this->services['P2pService'])) {
             $this->services['P2pService'] = new P2pService(
-                $this->getContactRepository(),
+                $this->getContactService(),
                 $this->getBalanceRepository(),
                 $this->getP2pRepository(),
                 $this->getTransactionRepository(),
@@ -852,7 +852,7 @@ class ServiceContainer {
         if (!isset($this->services['TransactionValidationService'])) {
             $this->services['TransactionValidationService'] = new TransactionValidationService(
                 $this->getTransactionRepository(),
-                $this->getContactRepository(),
+                $this->getContactService(),
                 $this->getUtilityContainer()->getValidationUtility(),
                 $this->getInputValidator(),
                 $this->getTransactionPayload(),
