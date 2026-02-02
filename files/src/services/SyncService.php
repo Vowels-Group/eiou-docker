@@ -1044,13 +1044,22 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             // Filter to only include transactions NEWER than lastKnownTxid if provided
             // Transactions are ordered by timestamp DESC (newest first), so we collect
             // all transactions until we hit the lastKnownTxid
-            // All transactions are included regardless of status (cancelled/rejected included)
+            // Cancelled/rejected/completed transactions are included, but pending/sending
+            // are excluded since they haven't been signed yet (signature added after send)
             $filteredTransactions = [];
 
             foreach ($transactions as $tx) {
                 // If we hit the lastKnownTxid, stop - requester already has this and older
                 if ($lastKnownTxid !== null && $tx['txid'] === $lastKnownTxid) {
                     break;
+                }
+
+                // Skip transactions that haven't been sent yet - they won't have signatures
+                // Transactions are inserted before sending, so pending/sending status means
+                // the signature hasn't been added to the database yet
+                $status = $tx['status'] ?? '';
+                if ($status === Constants::STATUS_PENDING || $status === Constants::STATUS_SENDING) {
+                    continue;
                 }
 
                 // Include necessary fields for security and signature verification
@@ -1868,6 +1877,13 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                     $tx = $this->transactionRepository->getByTxid($txid);
                     if ($tx && count($tx) > 0) {
                         $txData = $tx[0]; // getByTxid returns array
+
+                        // Skip transactions that haven't been sent yet - they won't have signatures
+                        $status = $txData['status'] ?? '';
+                        if ($status === Constants::STATUS_PENDING || $status === Constants::STATUS_SENDING) {
+                            continue;
+                        }
+
                         $transactionsToSend[] = [
                             'txid' => $txData['txid'],
                             'previous_txid' => $txData['previous_txid'],
