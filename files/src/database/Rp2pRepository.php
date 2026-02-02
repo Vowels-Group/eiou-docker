@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Database\Traits\QueryBuilder;
 use PDO;
 use PDOException;
 
@@ -14,6 +15,7 @@ use PDOException;
  * @package Database\Repository
  */
 class Rp2pRepository extends AbstractRepository {
+    use QueryBuilder;
     /**
      * @var array Allowed column names for SQL injection prevention
      */
