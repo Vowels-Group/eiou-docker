@@ -34,8 +34,8 @@ class SessionTest extends TestCase
             }
         }
 
-        // Suppress session start warnings in test environment
-        @session_start();
+        // Don't start session here - let Session class handle it
+        // This allows Session constructor to set custom session name and initialization
 
         $this->session = new Session();
     }

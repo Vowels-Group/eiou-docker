@@ -16,6 +16,8 @@ namespace Eiou\Tests\Services;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use Eiou\Services\SyncService;
 use Eiou\Services\HeldTransactionService;
 use Eiou\Database\ContactRepository;
@@ -34,6 +36,8 @@ use Eiou\Cli\CliOutputManager;
 use RuntimeException;
 
 #[CoversClass(SyncService::class)]
+#[RunTestsInSeparateProcesses]
+#[PreserveGlobalState(false)]
 class SyncServiceTest extends TestCase
 {
     private SyncService $service;
