@@ -1786,6 +1786,18 @@ class ContactService implements ContactServiceInterface {
     }
 
     /**
+     * Get all accepted contact addresses for P2P routing
+     *
+     * Returns addresses of contacts with 'accepted' status for use in
+     * P2P message broadcasting.
+     *
+     * @return array List of accepted contact addresses
+     */
+    public function getAllAcceptedAddresses(): array {
+        return $this->contactRepository->getAllAcceptedAddresses();
+    }
+
+    /**
      * Lookup contact name by address
      *
      * @param string|null $transportIndex Address type, i.e. http, https, tor (null returns null gracefully)
