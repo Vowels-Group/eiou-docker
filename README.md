@@ -12,6 +12,20 @@ This repository provides Docker Compose configurations for running EIOU nodes in
 - **Encrypted Backups**: Automatic daily database backups encrypted with AES-256-GCM
 - **Persistent Storage**: Named volumes for MySQL data, configuration, and backups
 
+## Testing
+
+The project includes comprehensive testing infrastructure:
+
+```bash
+# Run unit tests (PHPUnit)
+cd files && composer test
+
+# Run integration tests
+cd tests && ./run-all-tests.sh http4
+```
+
+See [Testing Guide](docs/TESTING.md) for detailed documentation.
+
 ## Documentation
 
 | Document | Description |
@@ -24,6 +38,9 @@ This repository provides Docker Compose configurations for running EIOU nodes in
 | [GUI Quick Reference](docs/GUI_QUICK_REFERENCE.md) | GUI feature summary |
 | [CLI Reference](docs/CLI_REFERENCE.md) | Command-line interface documentation |
 | [Error Codes](docs/ERROR_CODES.md) | Error codes and troubleshooting |
+| [Testing Guide](docs/TESTING.md) | Unit and integration testing documentation |
+| [CLI Demo Guide](docs/CLI_DEMO_GUIDE.md) | Step-by-step CLI command walkthrough |
+| [Error Handling Policy](docs/ERROR_HANDLING_POLICY.md) | Error handling standards |
 
 ## Prerequisites
 

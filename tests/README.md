@@ -1,8 +1,18 @@
 # EIOU Docker Test Suite
 
+> **Note:** This document covers **integration/shell tests** (E2E tests run via Docker).
+> For **PHPUnit unit tests**, see [Testing Guide](../docs/TESTING.md).
+
 ## Overview
 
 Automated test suite for validating EIOU Docker node deployments. The suite tests multi-node network topologies including contact management, transaction processing, message routing, chain synchronization, and Tor/SSL connectivity.
+
+### Test Types
+
+| Type | Location | Command | Purpose |
+|------|----------|---------|---------|
+| **Integration tests** | `tests/` (this README) | `./run-all-tests.sh` | E2E testing of Docker deployments |
+| **Unit tests** | `tests/Unit/` | `composer test` | PHPUnit tests for individual components |
 
 ## Prerequisites
 

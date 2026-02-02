@@ -923,6 +923,67 @@ $contactRepo = $container->getContactRepository();
 $contacts = $contactRepo->getAcceptedContacts();
 ```
 
+### QueryBuilder Trait
+
+The `QueryBuilder` trait (`/src/database/traits/QueryBuilder.php`) provides shared query
+building utilities used across repositories to reduce code duplication:
+
+```php
+use Eiou\Database\Traits\QueryBuilder;
+
+class MyRepository extends AbstractRepository
+{
+    use QueryBuilder;
+}
+```
+
+**Available Methods:**
+
+| Method | Purpose |
+|--------|---------|
+| `createPlaceholders($values)` | Generate PDO placeholder string (?, ?, ?) for IN clauses |
+| `buildInClauseParams($values, $repeatCount, $additionalParams)` | Build parameters for queries with multiple IN clauses |
+| `getUserAddressesOrNull()` | Get user addresses or null if empty (early return pattern) |
+| `executeSelectAll($query, $params)` | Execute query returning all rows as associative array |
+| `executeSelectOne($query, $params)` | Execute query returning single row or null |
+| `buildUserTransactionQuery(...)` | Build user transaction query with address filtering |
+| `buildInClause($values)` | Build complete IN clause like "IN (?,?,?)" |
+| `buildWhereClause($conditions)` | Build WHERE clause from array of conditions |
+| `buildOrderByClause($columns)` | Build ORDER BY clause with direction support |
+
+**Usage Examples:**
+
+```php
+// Create placeholders for IN clause
+$placeholders = $this->createPlaceholders($userIds);
+// Result: "?,?,?" for 3 items
+
+// Build complete IN clause
+$inClause = $this->buildInClause($addresses);
+// Result: "IN (?,?,?)"
+
+// Build WHERE clause from conditions
+$where = $this->buildWhereClause([
+    'status' => 'active',           // "status = ?"
+    'amount >' => 100,              // "amount > ?"
+    'sender_address IN (?,?)'       // Raw SQL (numeric key)
+]);
+// Result: "status = ? AND amount > ? AND sender_address IN (?,?)"
+
+// Build ORDER BY clause
+$orderBy = $this->buildOrderByClause([
+    'timestamp' => 'DESC',
+    'id'                            // Defaults to ASC
+]);
+// Result: "timestamp DESC, id"
+
+// Execute queries with helper methods
+$results = $this->executeSelectAll($query, $params);
+$row = $this->executeSelectOne($query, $params);
+```
+
+This trait centralizes common query patterns to reduce code duplication across repositories.
+
 ---
 
 ## P2P Networking
