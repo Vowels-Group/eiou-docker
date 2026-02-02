@@ -25,6 +25,7 @@ FROM debian:12-slim
 # - mariadb-server: Database for wallet, transactions, contacts
 # - openssl: SSL certificate generation and cryptography
 # - php, php-*: PHP runtime with required extensions
+#   - php-xml: DOM extension required for Composer dependency resolution
 # - tor: Anonymous network for .onion addresses
 # - unzip: Required by Composer for package installation
 RUN apt-get update && apt-get install -y \
@@ -37,6 +38,7 @@ RUN apt-get update && apt-get install -y \
     php-curl \
     php-mbstring \
     php-mysql \
+    php-xml \
     tor \
     unzip \
     && rm -rf /var/lib/apt/lists/*

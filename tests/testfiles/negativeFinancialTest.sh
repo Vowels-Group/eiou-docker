@@ -356,8 +356,8 @@ else
     txStatus=$(docker exec ${testContainer} php -r "
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
-        \$tx = \$app->services->getTransactionRepository()->getByTxid('${txid}');
-        echo \$tx['status'] ?? 'unknown';
+        // Use getStatusByTxid which returns status string directly
+        echo \$app->services->getTransactionRepository()->getStatusByTxid('${txid}') ?? 'unknown';
     " 2>/dev/null || echo "unknown")
 
     echo -e "\t   Transaction status: ${txStatus}"
@@ -368,10 +368,12 @@ else
         passed=$(( passed + 1 ))
     else
         # Also check if there's a rejection reason in the transaction
+        # Note: getByTxid returns array of arrays, so access first element
         rejectionReason=$(docker exec ${testContainer} php -r "
             require_once('${BOOTSTRAP_PATH}');
             \$app = \Eiou\Core\Application::getInstance();
-            \$tx = \$app->services->getTransactionRepository()->getByTxid('${txid}');
+            \$txArray = \$app->services->getTransactionRepository()->getByTxid('${txid}');
+            \$tx = \$txArray[0] ?? [];
             echo \$tx['rejection_reason'] ?? \$tx['error'] ?? \$tx['message'] ?? '';
         " 2>/dev/null || echo "")
 
