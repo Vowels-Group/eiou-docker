@@ -88,13 +88,13 @@ class CliServiceTest extends TestCase
         $this->userContext->method('getDefaultCurrency')
             ->willReturn('USD');
         $this->userContext->method('getMinimumFee')
-            ->willReturn(10);
+            ->willReturn(10.0);
         $this->userContext->method('getDefaultFee')
             ->willReturn(1.0);
         $this->userContext->method('getMaxFee')
             ->willReturn(5.0);
         $this->userContext->method('getDefaultCreditLimit')
-            ->willReturn(1000);
+            ->willReturn(1000.0);
         $this->userContext->method('getMaxP2pLevel')
             ->willReturn(3);
         $this->userContext->method('getP2pExpirationTime')
@@ -112,10 +112,10 @@ class CliServiceTest extends TestCase
             ->method('settings')
             ->with($this->callback(function ($settings) {
                 return $settings['default_currency'] === 'USD'
-                    && $settings['minimum_fee_amount'] === 10
+                    && $settings['minimum_fee_amount'] === 10.0
                     && $settings['default_fee_percent'] === 1.0
                     && $settings['maximum_fee_percent'] === 5.0
-                    && $settings['default_credit_limit'] === 1000
+                    && $settings['default_credit_limit'] === 1000.0
                     && $settings['max_p2p_level'] === 3
                     && $settings['p2p_expiration_seconds'] === 300
                     && $settings['max_output_lines'] === 50
@@ -138,13 +138,13 @@ class CliServiceTest extends TestCase
         $this->userContext->method('getDefaultCurrency')
             ->willReturn('USD');
         $this->userContext->method('getMinimumFee')
-            ->willReturn(10);
+            ->willReturn(10.0);
         $this->userContext->method('getDefaultFee')
             ->willReturn(1.0);
         $this->userContext->method('getMaxFee')
             ->willReturn(5.0);
         $this->userContext->method('getDefaultCreditLimit')
-            ->willReturn(1000);
+            ->willReturn(1000.0);
         $this->userContext->method('getMaxP2pLevel')
             ->willReturn(3);
         $this->userContext->method('getP2pExpirationTime')

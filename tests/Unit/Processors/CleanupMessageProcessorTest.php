@@ -111,7 +111,8 @@ class CleanupMessageProcessorTest extends TestCase
             self::TEST_LOCKFILE
         );
 
-        $reflection = new ReflectionClass($processor);
+        // Use actual class reflection to access private property
+        $reflection = new ReflectionClass(CleanupMessageProcessor::class);
         $serviceProp = $reflection->getProperty('cleanupService');
         $serviceProp->setAccessible(true);
 
@@ -308,11 +309,9 @@ class CleanupMessageProcessorTest extends TestCase
             ->onlyMethods([])
             ->getMock();
 
-        // Manually set up the processor using reflection
-        $reflection = new ReflectionClass($processor);
-
-        // Set up parent class properties
-        $parentReflection = $reflection->getParentClass();
+        // Get reflection for the actual classes (not the mock)
+        $actualClassReflection = new ReflectionClass(CleanupMessageProcessor::class);
+        $parentClassReflection = $actualClassReflection->getParentClass();
 
         // Set pollerConfig
         $actualConfig = $pollerConfig ?? [
@@ -321,33 +320,33 @@ class CleanupMessageProcessorTest extends TestCase
             'idle_interval_ms' => 10000,
             'adaptive' => true,
         ];
-        $pollerConfigProp = $parentReflection->getProperty('pollerConfig');
+        $pollerConfigProp = $parentClassReflection->getProperty('pollerConfig');
         $pollerConfigProp->setAccessible(true);
         $pollerConfigProp->setValue($processor, $actualConfig);
 
         // Set lockfile
         $actualLockfile = $lockfile ?? '/tmp/cleanupmessages_lock.pid';
-        $lockfileProp = $parentReflection->getProperty('lockfile');
+        $lockfileProp = $parentClassReflection->getProperty('lockfile');
         $lockfileProp->setAccessible(true);
         $lockfileProp->setValue($processor, $actualLockfile);
 
         // Set logInterval (300 seconds = 5 minutes for cleanup)
-        $logIntervalProp = $parentReflection->getProperty('logInterval');
+        $logIntervalProp = $parentClassReflection->getProperty('logInterval');
         $logIntervalProp->setAccessible(true);
         $logIntervalProp->setValue($processor, 300);
 
         // Set lastLogTime
-        $lastLogTimeProp = $parentReflection->getProperty('lastLogTime');
+        $lastLogTimeProp = $parentClassReflection->getProperty('lastLogTime');
         $lastLogTimeProp->setAccessible(true);
         $lastLogTimeProp->setValue($processor, time());
 
         // Set default shutdown timeout
-        $shutdownTimeoutProp = $parentReflection->getProperty('shutdownTimeout');
+        $shutdownTimeoutProp = $parentClassReflection->getProperty('shutdownTimeout');
         $shutdownTimeoutProp->setAccessible(true);
         $shutdownTimeoutProp->setValue($processor, 30);
 
-        // Set cleanupService
-        $serviceProp = $reflection->getProperty('cleanupService');
+        // Set cleanupService using actual class reflection
+        $serviceProp = $actualClassReflection->getProperty('cleanupService');
         $serviceProp->setAccessible(true);
         $serviceProp->setValue($processor, $this->cleanupService);
 

@@ -25,6 +25,7 @@ use Eiou\Core\Application;
 use Eiou\Core\Constants;
 use Eiou\Schemas\Payloads\ContactStatusPayload;
 use Eiou\Services\ServiceContainer;
+use Eiou\Services\SyncService;
 use Exception;
 use ReflectionClass;
 use ReflectionProperty;
@@ -38,6 +39,7 @@ class ContactStatusProcessorTest extends TestCase
     private MockObject|TransportUtilityService $transportUtility;
     private MockObject|UserContext $userContext;
     private MockObject|ContactStatusPayload $contactStatusPayload;
+    private object $syncService;
 
     /**
      * Sample test data constants
@@ -60,6 +62,13 @@ class ContactStatusProcessorTest extends TestCase
         $this->utilityContainer = $this->createMock(UtilityServiceContainer::class);
         $this->userContext = $this->createMock(UserContext::class);
         $this->contactStatusPayload = $this->createMock(ContactStatusPayload::class);
+
+        // Create a simple mock sync service object that can be used when triggerSync is called
+        $this->syncService = new class {
+            public function syncTransactionChain(string $address, string $pubkey): bool {
+                return true;
+            }
+        };
 
         // Configure utility container
         $this->utilityContainer->method('getTransportUtility')
@@ -338,19 +347,23 @@ class ContactStatusProcessorTest extends TestCase
             ->method('send')
             ->willReturn(json_encode(['status' => 'pong', 'chainValid' => true]));
 
+        // Track all calls to updateContactFields and verify the expected one exists
+        $onlineStatusUpdated = false;
         $this->contactRepository->expects($this->atLeastOnce())
             ->method('updateContactFields')
-            ->with(
-                self::TEST_CONTACT_PUBKEY,
-                $this->callback(function ($fields) {
-                    return isset($fields['online_status']) &&
-                           $fields['online_status'] === Constants::CONTACT_ONLINE_STATUS_ONLINE;
-                })
-            );
+            ->willReturnCallback(function ($pubkey, $fields) use (&$onlineStatusUpdated) {
+                if (isset($fields['online_status']) &&
+                    $fields['online_status'] === Constants::CONTACT_ONLINE_STATUS_ONLINE) {
+                    $onlineStatusUpdated = true;
+                }
+                return true;
+            });
 
         $processor = $this->createProcessorWithMockedDependencies();
 
         $this->invokeProtectedMethod($processor, 'pingContact', [$contact]);
+
+        $this->assertTrue($onlineStatusUpdated, 'Contact online status should be updated to ONLINE');
     }
 
     /**
@@ -598,8 +611,8 @@ class ContactStatusProcessorTest extends TestCase
     {
         $processor = $this->createProcessorWithMockedDependencies();
 
-        // Set some cached contacts
-        $reflection = new ReflectionClass($processor);
+        // Use actual class reflection to access private properties
+        $reflection = new ReflectionClass(ContactStatusProcessor::class);
         $contactsProp = $reflection->getProperty('acceptedContacts');
         $contactsProp->setAccessible(true);
         $contactsProp->setValue($processor, [['pubkey' => 'test']]);
@@ -663,9 +676,9 @@ class ContactStatusProcessorTest extends TestCase
             ->onlyMethods([])
             ->getMock();
 
-        // Set up the processor using reflection
-        $reflection = new ReflectionClass($processor);
-        $parentReflection = $reflection->getParentClass();
+        // Get reflection for the actual classes (not the mock)
+        $actualClassReflection = new ReflectionClass(ContactStatusProcessor::class);
+        $parentClassReflection = $actualClassReflection->getParentClass();
 
         // Set parent class properties
         $pollerConfig = [
@@ -674,62 +687,67 @@ class ContactStatusProcessorTest extends TestCase
             'idle_interval_ms' => Constants::CONTACT_STATUS_IDLE_INTERVAL_MS ?? 30000,
             'adaptive' => true
         ];
-        $pollerConfigProp = $parentReflection->getProperty('pollerConfig');
+        $pollerConfigProp = $parentClassReflection->getProperty('pollerConfig');
         $pollerConfigProp->setAccessible(true);
         $pollerConfigProp->setValue($processor, $pollerConfig);
 
-        $lockfileProp = $parentReflection->getProperty('lockfile');
+        $lockfileProp = $parentClassReflection->getProperty('lockfile');
         $lockfileProp->setAccessible(true);
         $lockfileProp->setValue($processor, '/tmp/contact_status.pid');
 
-        $logIntervalProp = $parentReflection->getProperty('logInterval');
+        $logIntervalProp = $parentClassReflection->getProperty('logInterval');
         $logIntervalProp->setAccessible(true);
         $logIntervalProp->setValue($processor, 60);
 
-        $lastLogTimeProp = $parentReflection->getProperty('lastLogTime');
+        $lastLogTimeProp = $parentClassReflection->getProperty('lastLogTime');
         $lastLogTimeProp->setAccessible(true);
         $lastLogTimeProp->setValue($processor, time());
 
-        $shutdownTimeoutProp = $parentReflection->getProperty('shutdownTimeout');
+        $shutdownTimeoutProp = $parentClassReflection->getProperty('shutdownTimeout');
         $shutdownTimeoutProp->setAccessible(true);
         $shutdownTimeoutProp->setValue($processor, 30);
 
-        $shouldStopProp = $parentReflection->getProperty('shouldStop');
+        $shouldStopProp = $parentClassReflection->getProperty('shouldStop');
         $shouldStopProp->setAccessible(true);
         $shouldStopProp->setValue($processor, false);
 
-        // Set class-specific properties
-        $contactRepoProp = $reflection->getProperty('contactRepository');
+        // Set class-specific properties using actual class reflection
+        $contactRepoProp = $actualClassReflection->getProperty('contactRepository');
         $contactRepoProp->setAccessible(true);
         $contactRepoProp->setValue($processor, $this->contactRepository);
 
-        $transactionRepoProp = $reflection->getProperty('transactionRepository');
+        $transactionRepoProp = $actualClassReflection->getProperty('transactionRepository');
         $transactionRepoProp->setAccessible(true);
         $transactionRepoProp->setValue($processor, $this->transactionRepository);
 
-        $utilityContainerProp = $reflection->getProperty('utilityContainer');
+        $utilityContainerProp = $actualClassReflection->getProperty('utilityContainer');
         $utilityContainerProp->setAccessible(true);
         $utilityContainerProp->setValue($processor, $this->utilityContainer);
 
-        $transportUtilityProp = $reflection->getProperty('transportUtility');
+        $transportUtilityProp = $actualClassReflection->getProperty('transportUtility');
         $transportUtilityProp->setAccessible(true);
         $transportUtilityProp->setValue($processor, $this->transportUtility);
 
-        $currentUserProp = $reflection->getProperty('currentUser');
+        $currentUserProp = $actualClassReflection->getProperty('currentUser');
         $currentUserProp->setAccessible(true);
         $currentUserProp->setValue($processor, $this->userContext);
 
-        $contactStatusPayloadProp = $reflection->getProperty('contactStatusPayload');
+        $contactStatusPayloadProp = $actualClassReflection->getProperty('contactStatusPayload');
         $contactStatusPayloadProp->setAccessible(true);
         $contactStatusPayloadProp->setValue($processor, $this->contactStatusPayload);
 
-        $acceptedContactsProp = $reflection->getProperty('acceptedContacts');
+        $acceptedContactsProp = $actualClassReflection->getProperty('acceptedContacts');
         $acceptedContactsProp->setAccessible(true);
         $acceptedContactsProp->setValue($processor, []);
 
-        $currentContactIndexProp = $reflection->getProperty('currentContactIndex');
+        $currentContactIndexProp = $actualClassReflection->getProperty('currentContactIndex');
         $currentContactIndexProp->setAccessible(true);
         $currentContactIndexProp->setValue($processor, 0);
+
+        // Set the syncService to prevent Application::getInstance() call
+        $syncServiceProp = $actualClassReflection->getProperty('syncService');
+        $syncServiceProp->setAccessible(true);
+        $syncServiceProp->setValue($processor, $this->syncService);
 
         return $processor;
     }

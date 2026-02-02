@@ -95,9 +95,10 @@ class WalletTest extends TestCase
         $method->setAccessible(true);
 
         // Get some valid BIP39 words mixed with invalid ones
+        // Note: "another" IS a valid BIP39 word, so we use "notaword" instead
         $wordlist = BIP39::getWordlist();
         $validWords = array_slice($wordlist, 0, 12);
-        $mixedContent = implode(' invalidword ', $validWords) . ' notavalidword another';
+        $mixedContent = implode(' invalidword ', $validWords) . ' notavalidword xyzzy';
 
         $result = $method->invoke(null, $mixedContent);
 
@@ -176,7 +177,9 @@ Delete this file after saving!
         $method = $reflection->getMethod('extractSeedWordsFromContent');
         $method->setAccessible(true);
 
-        $content = "This content has no valid BIP39 words xyzzy foobar";
+        // Use words that are definitely NOT in the BIP39 wordlist
+        // Note: Common words like "this", "valid" ARE in the BIP39 wordlist
+        $content = "xyzzy foobar qwerty asdfgh zxcvbn notaword invalidword";
 
         $result = $method->invoke(null, $content);
 

@@ -110,7 +110,8 @@ class TransactionMessageProcessorTest extends TestCase
             self::TEST_LOCKFILE
         );
 
-        $reflection = new ReflectionClass($processor);
+        // Use actual class reflection to access private property
+        $reflection = new ReflectionClass(TransactionMessageProcessor::class);
         $serviceProp = $reflection->getProperty('transactionService');
         $serviceProp->setAccessible(true);
 
@@ -489,11 +490,9 @@ class TransactionMessageProcessorTest extends TestCase
             ->onlyMethods([])
             ->getMock();
 
-        // Manually set up the processor using reflection
-        $reflection = new ReflectionClass($processor);
-
-        // Set up parent class properties
-        $parentReflection = $reflection->getParentClass();
+        // Get reflection for the actual classes (not the mock)
+        $actualClassReflection = new ReflectionClass(TransactionMessageProcessor::class);
+        $parentClassReflection = $actualClassReflection->getParentClass();
 
         // Set pollerConfig
         $actualConfig = $pollerConfig ?? [
@@ -502,33 +501,33 @@ class TransactionMessageProcessorTest extends TestCase
             'idle_interval_ms' => 2000,
             'adaptive' => true,
         ];
-        $pollerConfigProp = $parentReflection->getProperty('pollerConfig');
+        $pollerConfigProp = $parentClassReflection->getProperty('pollerConfig');
         $pollerConfigProp->setAccessible(true);
         $pollerConfigProp->setValue($processor, $actualConfig);
 
         // Set lockfile
         $actualLockfile = $lockfile ?? '/tmp/transactionmessages_lock.pid';
-        $lockfileProp = $parentReflection->getProperty('lockfile');
+        $lockfileProp = $parentClassReflection->getProperty('lockfile');
         $lockfileProp->setAccessible(true);
         $lockfileProp->setValue($processor, $actualLockfile);
 
         // Set logInterval (60 seconds for Transaction)
-        $logIntervalProp = $parentReflection->getProperty('logInterval');
+        $logIntervalProp = $parentClassReflection->getProperty('logInterval');
         $logIntervalProp->setAccessible(true);
         $logIntervalProp->setValue($processor, 60);
 
         // Set lastLogTime
-        $lastLogTimeProp = $parentReflection->getProperty('lastLogTime');
+        $lastLogTimeProp = $parentClassReflection->getProperty('lastLogTime');
         $lastLogTimeProp->setAccessible(true);
         $lastLogTimeProp->setValue($processor, time());
 
         // Set default shutdown timeout
-        $shutdownTimeoutProp = $parentReflection->getProperty('shutdownTimeout');
+        $shutdownTimeoutProp = $parentClassReflection->getProperty('shutdownTimeout');
         $shutdownTimeoutProp->setAccessible(true);
         $shutdownTimeoutProp->setValue($processor, 30);
 
-        // Set transactionService
-        $serviceProp = $reflection->getProperty('transactionService');
+        // Set transactionService using actual class reflection
+        $serviceProp = $actualClassReflection->getProperty('transactionService');
         $serviceProp->setAccessible(true);
         $serviceProp->setValue($processor, $this->transactionService);
 

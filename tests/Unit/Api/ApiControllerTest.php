@@ -17,7 +17,7 @@ use Eiou\Database\ApiKeyRepository;
 use Eiou\Services\ServiceContainer;
 use Eiou\Utils\SecureLogger;
 use Eiou\Core\Constants;
-use Eiou\Exceptions\ServiceException;
+use Eiou\Exceptions\FatalServiceException;
 
 #[CoversClass(ApiController::class)]
 class ApiControllerTest extends TestCase
@@ -215,26 +215,36 @@ class ApiControllerTest extends TestCase
      */
     public function testHandleRequestHandlesServiceException(): void
     {
-        $this->mockAuthService->method('authenticate')
+        // Create a fresh mock auth service for this test
+        $mockAuth = $this->createMock(ApiAuthService::class);
+        $mockAuth->method('authenticate')
             ->willReturn([
                 'success' => true,
                 'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:read']]
             ]);
-
-        $this->mockAuthService->method('hasPermission')
+        $mockAuth->method('hasPermission')
             ->willReturn(true);
 
-        // Create a mock balance repository that throws a ServiceException
+        // Create mock services with a balance repo that throws
+        $mockServices = $this->createMock(ServiceContainer::class);
         $mockBalanceRepo = $this->createMock(\Eiou\Database\BalanceRepository::class);
         $mockBalanceRepo->method('getAllBalances')
-            ->willThrowException(new ServiceException('Database error', 'DB_ERROR', 500));
-
-        $this->mockServices->method('getBalanceRepository')
+            ->willThrowException(new FatalServiceException('Database error', 'DB_ERROR', [], 500));
+        $mockServices->method('getBalanceRepository')
             ->willReturn($mockBalanceRepo);
 
-        $this->mockApiKeyRepository->method('logRequest');
+        $mockApiKeyRepo = $this->createMock(ApiKeyRepository::class);
+        $mockApiKeyRepo->method('logRequest');
 
-        $response = $this->controller->handleRequest(
+        // Create controller WITHOUT logger to avoid static method issues
+        $controller = new ApiController(
+            $mockAuth,
+            $mockApiKeyRepo,
+            $mockServices,
+            null  // No logger - avoids SecureLogger static method call issue
+        );
+
+        $response = $controller->handleRequest(
             'GET',
             '/api/v1/wallet/balance',
             [],
