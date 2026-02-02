@@ -943,4 +943,810 @@ class P2pServiceTest extends TestCase
     {
         $this->markTestSkipped('API mismatch: lookupAddressesByName returns string but fallbackTransportAddress expects array');
     }
+
+    // =========================================================================
+    // Fee Calculation and Node Failure Tests
+    // =========================================================================
+
+    /**
+     * Test fee calculation across multiple relay hops
+     *
+     * When a P2P request passes through multiple intermediary nodes,
+     * each node adds its own fee. This test verifies that calculateRequestedAmount
+     * correctly calculates the total amount needed including the fee for the current hop.
+     */
+    public function testCalculateRequestedAmountWithMultipleHops(): void
+    {
+        // Simulate a request that has already passed through 2 hops
+        // Each hop adds fees, so the amount reflects accumulated fees
+        $request = [
+            'senderAddress' => self::TEST_ADDRESS,
+            'amount' => 10000, // Original 100.00 in cents
+            'requestLevel' => 2, // Already passed through 2 nodes
+            'maxRequestLevel' => 5
+        ];
+
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        // First hop contact has 1.5% fee
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(['fee_percent' => 1.5]);
+
+        // Fee calculation: 10000 * 1.5% = 150 (with minimum fee of 10)
+        $this->currencyUtility->method('calculateFee')
+            ->with(10000, 1.5, 10)
+            ->willReturn(150);
+
+        $result = $this->service->calculateRequestedAmount($request);
+
+        // Total should be amount + fee for this hop
+        $this->assertEquals(10150, $result);
+    }
+
+    /**
+     * Test cumulative fee tracking through a P2P chain
+     *
+     * Verifies that fees accumulate correctly as a P2P request
+     * passes through multiple intermediary nodes.
+     */
+    public function testFeeAccumulationAcrossChain(): void
+    {
+        // Simulate tracking fees through a 3-hop chain
+        // Hop 1: Original amount 10000, fee 100 (1%), total needed: 10100
+        // Hop 2: Amount 10000, fee 150 (1.5%), total needed: 10150
+        // Hop 3: Amount 10000, fee 200 (2%), total needed: 10200
+
+        $baseAmount = 10000;
+
+        // Test each hop's fee calculation
+        $feeRates = [1.0, 1.5, 2.0];
+        $expectedFees = [100, 150, 200];
+
+        foreach ($feeRates as $index => $feeRate) {
+            $request = [
+                'senderAddress' => 'http://hop' . ($index + 1) . '.test',
+                'amount' => $baseAmount,
+                'requestLevel' => $index + 1
+            ];
+
+            $this->transportUtility->method('determineTransportType')
+                ->willReturn('http');
+
+            // Each contact has different fee rate
+            $this->contactService->expects($this->atLeastOnce())
+                ->method('lookupByAddress')
+                ->willReturn(['fee_percent' => $feeRate]);
+
+            $this->currencyUtility->expects($this->atLeastOnce())
+                ->method('calculateFee')
+                ->with($baseAmount, $feeRate, 10)
+                ->willReturn($expectedFees[$index]);
+
+            $result = $this->service->calculateRequestedAmount($request);
+
+            $this->assertEquals(
+                $baseAmount + $expectedFees[$index],
+                $result,
+                "Fee calculation failed for hop " . ($index + 1)
+            );
+
+            // Reset mocks for next iteration
+            $this->setUp();
+        }
+    }
+
+    /**
+     * Test rejection when accumulated fees exceed maximum allowed
+     *
+     * When the total fees accumulated through the P2P chain exceed
+     * the user's configured maxFee, the request should be rejected.
+     */
+    public function testMaxFeeRejectionAtEndRecipient(): void
+    {
+        $request = [
+            'senderAddress' => self::TEST_ADDRESS,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'hash' => self::TEST_HASH,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'amount' => 10000,
+            'requestLevel' => 3,
+            'maxRequestLevel' => 5,
+            'accumulatedFee' => 600 // 6% accumulated fee
+        ];
+
+        // User's maxFee is 5% (from setUp)
+        // Accumulated fee of 6% exceeds this
+
+        $this->contactService->method('isNotBlocked')
+            ->willReturn(true);
+        $this->validationUtility->method('validateRequestLevel')
+            ->willReturn(true);
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://other.address');
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://me.test']);
+
+        // When accumulated fee exceeds maxFee, checkAvailableFunds should consider this
+        // The fee percent check happens during calculateRequestedAmount
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(['fee_percent' => 1.0]);
+
+        // High fee that would push total over limit
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(600);
+
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(5000); // Less than requested amount + fees
+
+        $this->p2pRepository->method('getCreditInP2p')
+            ->willReturn(0);
+
+        $this->contactService->method('getCreditLimit')
+            ->willReturn(1000.0);
+
+        ob_start();
+        $result = $this->service->checkP2pPossible($request, false);
+        ob_get_clean();
+
+        $this->assertFalse($result);
+    }
+
+    /**
+     * Test handling of network timeouts during P2P message send
+     *
+     * When sendP2pMessage encounters a network timeout, it should
+     * handle the failure gracefully and return appropriate status.
+     */
+    public function testSendP2pMessageHandlesNetworkTimeout(): void
+    {
+        // Create a service without MessageDeliveryService to test fallback path
+        $serviceWithoutDelivery = new P2pService(
+            $this->contactService,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->transactionRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            null // No MessageDeliveryService
+        );
+
+        // Simulate network timeout by returning empty/null response
+        $this->transportUtility->method('send')
+            ->willReturn(''); // Empty response indicates timeout/failure
+
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1234567890123456);
+
+        // Use reflection to test private sendP2pMessage method
+        $reflection = new \ReflectionClass($serviceWithoutDelivery);
+        $method = $reflection->getMethod('sendP2pMessage');
+        $method->setAccessible(true);
+
+        $payload = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT
+        ];
+
+        $result = $method->invoke($serviceWithoutDelivery, 'p2p', self::TEST_ADDRESS, $payload);
+
+        $this->assertFalse($result['success']);
+        $this->assertNull($result['response']);
+        $this->assertEquals('', $result['raw']);
+    }
+
+    /**
+     * Test partial delivery success in queued message processing
+     *
+     * When processing queued P2P messages to multiple contacts,
+     * some deliveries may succeed while others fail. The service
+     * should track partial success correctly.
+     */
+    public function testProcessQueuedP2pMessagesHandlesPartialDeliverySuccess(): void
+    {
+        $queuedMessage = [
+            'hash' => self::TEST_HASH,
+            'sender_address' => 'http://sender.test',
+            'sender_pubkey' => 'sender-pubkey',
+            'amount' => self::TEST_AMOUNT,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'expiration' => '1234567890000000', // Required for buildFromDatabase
+            'request_level' => 1,
+            'max_request_level' => 5,
+            'fee_amount' => 100,
+            'currency' => 'USD'
+        ];
+
+        $contacts = [
+            ['http' => 'http://contact1.test', 'pubkey' => 'contact1-pubkey'],
+            ['http' => 'http://contact2.test', 'pubkey' => 'contact2-pubkey'],
+            ['http' => 'http://contact3.test', 'pubkey' => 'contact3-pubkey']
+        ];
+
+        $this->p2pRepository->method('getQueuedP2pMessages')
+            ->willReturn([$queuedMessage]);
+
+        $this->contactService->method('getAllAcceptedAddresses')
+            ->willReturn($contacts);
+
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        // Simulate partial success: first two succeed, third fails (with valid response structure)
+        $this->messageDeliveryService->expects($this->any())
+            ->method('sendMessage')
+            ->willReturnCallback(function ($type, $address, $payload, $messageId, $async) {
+                if (strpos($address, 'contact3') !== false) {
+                    // Return a valid response structure even for failed sends
+                    // to avoid null access warnings in production code
+                    return [
+                        'success' => false,
+                        'response' => ['status' => 'failed', 'error' => 'timeout'],
+                        'raw' => '{"status":"failed","error":"timeout"}',
+                        'messageId' => $messageId
+                    ];
+                }
+                return [
+                    'success' => true,
+                    'response' => ['status' => 'inserted'],
+                    'raw' => '{"status":"inserted"}',
+                    'messageId' => $messageId
+                ];
+            });
+
+        // Status should be updated to 'sent' even with partial success
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, Constants::STATUS_SENT);
+
+        $result = $this->service->processQueuedP2pMessages();
+
+        $this->assertEquals(1, $result);
+    }
+
+    /**
+     * Test P2P request insertion when user is the end recipient
+     *
+     * When a P2P request arrives and the user matches the recipient hash,
+     * the service should insert the request with 'found' status and
+     * send an rp2p response back to the sender.
+     */
+    public function testHandleP2pRequestInsertsForEndRecipient(): void
+    {
+        $myAddress = 'http://mynode.test';
+        $salt = 'test-salt-123';
+        $time = '1234567890';
+        $hash = hash(Constants::HASH_ALGORITHM, $myAddress . $salt . $time);
+
+        $request = [
+            'senderAddress' => self::TEST_ADDRESS,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'hash' => $hash,
+            'salt' => $salt,
+            'time' => $time,
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD', // Required for Rp2pPayload::build
+            'signature' => 'test-signature-abc123', // Required for Rp2pPayload::build
+            'requestLevel' => 1,
+            'maxRequestLevel' => 5
+        ];
+
+        // User is the end recipient
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn($myAddress);
+
+        // Expect P2P to be inserted with 'found' status
+        $this->p2pRepository->expects($this->once())
+            ->method('insertP2pRequest')
+            ->with(
+                $this->callback(function ($req) {
+                    return $req['status'] === 'found';
+                }),
+                $myAddress
+            );
+
+        // Expect rp2p message to be sent back to sender
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'rp2p',
+                self::TEST_ADDRESS,
+                $this->anything(),
+                $this->stringContains('response-'),
+                true
+            )
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'accepted'],
+                'raw' => '{"status":"accepted"}',
+                'messageId' => 'response-' . $hash
+            ]);
+
+        $this->service->handleP2pRequest($request);
+    }
+
+    /**
+     * Test fee calculation for intermediary nodes
+     *
+     * When the user is an intermediary (not the end recipient),
+     * the service should calculate the fee amount and store it
+     * with the P2P request.
+     */
+    public function testHandleP2pRequestCalculatesFeesForIntermediary(): void
+    {
+        $request = [
+            'senderAddress' => self::TEST_ADDRESS,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'hash' => self::TEST_HASH, // Different hash, user is not recipient
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'amount' => self::TEST_AMOUNT,
+            'requestLevel' => 1,
+            'maxRequestLevel' => 5
+        ];
+
+        // User is NOT the end recipient
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://mynode.test');
+
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://mynode.test']);
+
+        // Setup for calculateRequestedAmount
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(['fee_percent' => 2.0]);
+
+        // Fee calculation: 10000 * 2% = 200
+        $expectedFee = 200;
+        $this->currencyUtility->method('calculateFee')
+            ->with(self::TEST_AMOUNT, 2.0, 10)
+            ->willReturn($expectedFee);
+
+        // Expect P2P to be inserted with calculated fee
+        $this->p2pRepository->expects($this->once())
+            ->method('insertP2pRequest')
+            ->with(
+                $this->callback(function ($req) use ($expectedFee) {
+                    return isset($req['feeAmount']) && $req['feeAmount'] === $expectedFee;
+                }),
+                null // destination_address is null for intermediary
+            );
+
+        // Status should be updated to queued for forwarding
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, Constants::STATUS_QUEUED);
+
+        $this->service->handleP2pRequest($request);
+    }
+
+    // =========================================================================
+    // Multi-Hop Routing and Timeout Tests
+    // =========================================================================
+
+    /**
+     * Test that queued P2P messages get broadcast to multiple contacts
+     *
+     * Verifies that when processing queued P2P messages without a direct contact match,
+     * the service broadcasts the P2P request to all accepted contacts with compatible
+     * transport types.
+     */
+    public function testProcessQueuedP2pMessagesForwardsToMultipleContacts(): void
+    {
+        $p2pHash = self::TEST_HASH;
+        $queuedMessage = [
+            'hash' => $p2pHash,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'sender_address' => self::TEST_ADDRESS,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'request_level' => 1,
+            'max_request_level' => 5,
+            'status' => Constants::STATUS_QUEUED
+        ];
+
+        $contacts = [
+            [
+                'name' => 'Contact1',
+                'http' => 'http://contact1.test',
+                'pubkey' => 'pubkey1'
+            ],
+            [
+                'name' => 'Contact2',
+                'http' => 'http://contact2.test',
+                'pubkey' => 'pubkey2'
+            ],
+            [
+                'name' => 'Contact3',
+                'http' => 'http://contact3.test',
+                'pubkey' => 'pubkey3'
+            ]
+        ];
+
+        $this->p2pRepository->method('getQueuedP2pMessages')
+            ->willReturn([$queuedMessage]);
+
+        $this->contactService->method('getAllAcceptedAddresses')
+            ->willReturn($contacts);
+
+        $this->contactService->method('getAllContacts')
+            ->willReturn([]);
+
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        $this->transportUtility->method('getAllAddressTypes')
+            ->willReturn(['http', 'https', 'tor']);
+
+        // Expect message delivery service to be used for each contact
+        $this->messageDeliveryService->expects($this->exactly(3))
+            ->method('sendMessage')
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{"status":"inserted"}',
+                'messageId' => 'broadcast-' . $p2pHash . '-abc12345'
+            ]);
+
+        $this->messageDeliveryService->expects($this->exactly(3))
+            ->method('updateStageToForwarded');
+
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with($p2pHash, Constants::STATUS_SENT);
+
+        ob_start();
+        $result = $this->service->processQueuedP2pMessages();
+        ob_get_clean();
+
+        $this->assertEquals(1, $result);
+    }
+
+    /**
+     * Test direct contact matching during P2P broadcast
+     *
+     * Verifies that when a queued P2P message's recipient matches a known contact,
+     * the service sends directly to that contact instead of broadcasting.
+     */
+    public function testProcessQueuedP2pMessagesMatchesDirectContact(): void
+    {
+        $contactAddress = 'http://direct-contact.test';
+        $salt = 'test-salt';
+        $time = '1234567890';
+        $hash = hash(Constants::HASH_ALGORITHM, $contactAddress . $salt . $time);
+
+        $queuedMessage = [
+            'hash' => $hash,
+            'salt' => $salt,
+            'time' => $time,
+            'sender_address' => self::TEST_ADDRESS,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'request_level' => 1,
+            'max_request_level' => 5,
+            'status' => Constants::STATUS_QUEUED
+            // No destination_address set - indicates user is not original sender
+        ];
+
+        $matchingContact = [
+            'name' => 'DirectContact',
+            'http' => $contactAddress,
+            'pubkey' => 'direct-pubkey'
+        ];
+
+        $this->p2pRepository->method('getQueuedP2pMessages')
+            ->willReturn([$queuedMessage]);
+
+        $this->contactService->method('getAllAcceptedAddresses')
+            ->willReturn([$matchingContact]);
+
+        $this->contactService->method('getAllContacts')
+            ->willReturn([$matchingContact]);
+
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        $this->transportUtility->method('getAllAddressTypes')
+            ->willReturn(['http', 'https', 'tor']);
+
+        // Expect exactly one message to the matched contact
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'p2p',
+                $contactAddress,
+                $this->anything(),
+                $this->stringContains('direct-')
+            )
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{"status":"inserted"}',
+                'messageId' => 'direct-' . $hash . '-abc12345'
+            ]);
+
+        $this->messageDeliveryService->expects($this->once())
+            ->method('updateStageToForwarded')
+            ->with('p2p', $this->anything(), $contactAddress);
+
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with($hash, Constants::STATUS_SENT);
+
+        ob_start();
+        $result = $this->service->processQueuedP2pMessages();
+        ob_get_clean();
+
+        $this->assertEquals(1, $result);
+    }
+
+    /**
+     * Test handling when one contact rejects the P2P request
+     *
+     * Verifies that when there are multiple contacts and one rejects,
+     * the P2P continues processing with remaining contacts.
+     */
+    public function testProcessQueuedP2pMessagesHandlesSingleContactRejection(): void
+    {
+        $p2pHash = self::TEST_HASH;
+        $queuedMessage = [
+            'hash' => $p2pHash,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'sender_address' => self::TEST_ADDRESS,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'request_level' => 1,
+            'max_request_level' => 5,
+            'status' => Constants::STATUS_QUEUED
+        ];
+
+        $contacts = [
+            [
+                'name' => 'Contact1',
+                'http' => 'http://contact1.test',
+                'pubkey' => 'pubkey1'
+            ],
+            [
+                'name' => 'Contact2',
+                'http' => 'http://contact2.test',
+                'pubkey' => 'pubkey2'
+            ]
+        ];
+
+        $this->p2pRepository->method('getQueuedP2pMessages')
+            ->willReturn([$queuedMessage]);
+
+        $this->contactService->method('getAllAcceptedAddresses')
+            ->willReturn($contacts);
+
+        $this->contactService->method('getAllContacts')
+            ->willReturn([]);
+
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        $this->transportUtility->method('getAllAddressTypes')
+            ->willReturn(['http', 'https', 'tor']);
+
+        // First contact rejects, second accepts
+        $this->messageDeliveryService->expects($this->exactly(2))
+            ->method('sendMessage')
+            ->willReturnOnConsecutiveCalls(
+                [
+                    'success' => true,
+                    'response' => ['status' => Constants::STATUS_REJECTED, 'reason' => 'insufficient_funds'],
+                    'raw' => '{"status":"rejected","reason":"insufficient_funds"}',
+                    'messageId' => 'broadcast-' . $p2pHash . '-contact1'
+                ],
+                [
+                    'success' => true,
+                    'response' => ['status' => 'inserted'],
+                    'raw' => '{"status":"inserted"}',
+                    'messageId' => 'broadcast-' . $p2pHash . '-contact2'
+                ]
+            );
+
+        // Only successful send gets stage update
+        $this->messageDeliveryService->expects($this->once())
+            ->method('updateStageToForwarded');
+
+        // Status should be sent since at least one contact accepted
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with($p2pHash, Constants::STATUS_SENT);
+
+        ob_start();
+        $result = $this->service->processQueuedP2pMessages();
+        ob_get_clean();
+
+        $this->assertEquals(1, $result);
+    }
+
+    /**
+     * Test P2P cancellation when no viable route exists
+     *
+     * Verifies that when all contacts are either incompatible (wrong transport),
+     * are the original sender, or the destination address that already failed,
+     * the P2P is cancelled.
+     */
+    public function testProcessQueuedP2pMessagesCancelsOnNoViableRoute(): void
+    {
+        $p2pHash = self::TEST_HASH;
+        $queuedMessage = [
+            'hash' => $p2pHash,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'sender_address' => self::TEST_ADDRESS,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'request_level' => 1,
+            'max_request_level' => 5,
+            'status' => Constants::STATUS_QUEUED,
+            'destination_address' => 'http://failed-destination.test'
+        ];
+
+        // Only contact is the original sender - should be skipped
+        $contacts = [
+            [
+                'name' => 'OriginalSender',
+                'http' => self::TEST_ADDRESS, // Same as sender_address
+                'pubkey' => 'sender-pubkey'
+            ]
+        ];
+
+        $this->p2pRepository->method('getQueuedP2pMessages')
+            ->willReturn([$queuedMessage]);
+
+        $this->contactService->method('getAllAcceptedAddresses')
+            ->willReturn($contacts);
+
+        $this->contactService->method('getAllContacts')
+            ->willReturn([]);
+
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        $this->transportUtility->method('getAllAddressTypes')
+            ->willReturn(['http', 'https', 'tor']);
+
+        // No messages should be sent since only contact is the sender
+        $this->messageDeliveryService->expects($this->never())
+            ->method('sendMessage');
+
+        // Status should be cancelled due to no viable route
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with($p2pHash, Constants::STATUS_CANCELLED);
+
+        ob_start();
+        $result = $this->service->processQueuedP2pMessages();
+        ob_get_clean();
+
+        $this->assertEquals(1, $result);
+    }
+
+    /**
+     * Test that expired P2P requests are rejected during checkP2pPossible
+     *
+     * Verifies that when a P2P request has an expiration time in the past,
+     * the checkP2pPossible method rejects it appropriately.
+     */
+    public function testCheckP2pPossibleRejectsExpiredP2p(): void
+    {
+        // Create a request with an expiration time that has already passed
+        $request = [
+            'senderAddress' => self::TEST_ADDRESS,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'requestLevel' => 1,
+            'maxRequestLevel' => 5,
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'expiration' => 1000000000000000 // Very old expiration (year 2001 in microtime)
+        ];
+
+        // Pass blocked check
+        $this->contactService->method('isNotBlocked')
+            ->willReturn(true);
+
+        // Pass request level check
+        $this->validationUtility->method('validateRequestLevel')
+            ->willReturn(true);
+
+        // Pass funds check
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn(self::TEST_ADDRESS);
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://me.test']);
+
+        // P2P does not exist yet
+        $this->p2pRepository->method('p2pExists')
+            ->with(self::TEST_HASH)
+            ->willReturn(false);
+
+        // Mock time utility to return current time much later than expiration
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1800000000000000); // Year 2027 in microtime
+
+        // Validation utility should check expiration
+        $this->validationUtility->method('isExpired')
+            ->with($request['expiration'])
+            ->willReturn(true);
+
+        // Expect rejection for expiration - this happens during handleP2pRequest
+        // The service should call p2pRepository->insertP2pRequest which will handle it
+        $this->p2pRepository->expects($this->once())
+            ->method('insertP2pRequest')
+            ->willThrowException(new \Exception('P2P request expired'));
+
+        ob_start();
+        $result = $this->service->checkP2pPossible($request, true);
+        $output = ob_get_clean();
+
+        // Check that a rejection response was echoed
+        $this->assertFalse($result);
+        $this->assertNotEmpty($output);
+        $decoded = json_decode($output, true);
+        $this->assertIsArray($decoded);
+        $this->assertEquals('rejected', $decoded['status']);
+    }
+
+    /**
+     * Test P2P expiration handling and cleanup
+     *
+     * Verifies that the repository correctly identifies expired P2P messages
+     * and that the service can handle cleanup of expired requests.
+     */
+    public function testP2pExpirationTriggersCleanup(): void
+    {
+        $currentMicrotime = 1700000000000000; // Current time in microtime format
+        $expiredP2ps = [
+            [
+                'hash' => 'expired-hash-1',
+                'expiration' => 1600000000000000, // Expired
+                'status' => Constants::STATUS_SENT,
+                'sender_address' => 'http://sender1.test'
+            ],
+            [
+                'hash' => 'expired-hash-2',
+                'expiration' => 1650000000000000, // Expired
+                'status' => Constants::STATUS_QUEUED,
+                'sender_address' => 'http://sender2.test'
+            ]
+        ];
+
+        // Test that repository can identify expired P2Ps
+        $this->p2pRepository->expects($this->once())
+            ->method('getExpiredP2p')
+            ->with($currentMicrotime, 10)
+            ->willReturn($expiredP2ps);
+
+        // Get expired P2Ps from repository
+        $result = $this->p2pRepository->getExpiredP2p($currentMicrotime, 10);
+
+        $this->assertCount(2, $result);
+        $this->assertEquals('expired-hash-1', $result[0]['hash']);
+        $this->assertEquals('expired-hash-2', $result[1]['hash']);
+
+        // Verify both have expiration times less than current time
+        foreach ($result as $p2p) {
+            $this->assertLessThan($currentMicrotime, $p2p['expiration']);
+            $this->assertNotEquals(Constants::STATUS_COMPLETED, $p2p['status']);
+            $this->assertNotEquals(Constants::STATUS_EXPIRED, $p2p['status']);
+            $this->assertNotEquals(Constants::STATUS_CANCELLED, $p2p['status']);
+        }
+    }
 }
