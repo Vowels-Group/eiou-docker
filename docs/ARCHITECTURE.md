@@ -838,14 +838,14 @@ The transaction data access layer is split into specialized repositories for mai
 | `TransactionRecoveryRepository` | Finding/updating stuck transactions for recovery |
 | `TransactionContactRepository` | Queries filtered by contact relationships |
 
-All specialized repositories use the `QueryHelper` trait for shared query building functionality.
+All specialized repositories use the `QueryBuilder` trait for shared query building functionality.
 
 **Supporting Classes:**
 
 | Class | Location | Purpose |
 |-------|----------|---------|
 | `TransactionFormatter` | `/src/formatters/` | Output formatting for CLI and API responses |
-| `QueryHelper` | `/src/database/traits/` | Shared SQL building and parameter handling |
+| `QueryBuilder` | `/src/database/traits/` | Shared SQL building and parameter handling |
 
 **AbstractRepository Features:**
 

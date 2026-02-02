@@ -6,14 +6,14 @@ namespace Eiou\Database\Traits;
 use PDO;
 
 /**
- * Query Helper Trait
+ * Query Builder Trait
  *
  * Provides common query building utilities for repository classes.
  * Reduces duplication of placeholder generation and parameter building.
  *
  * @package Database\Traits
  */
-trait QueryHelper
+trait QueryBuilder
 {
     /**
      * Create SQL placeholders for IN clause
@@ -141,5 +141,85 @@ trait QueryHelper
         $query .= " ORDER BY timestamp DESC LIMIT ?";
 
         return $query;
+    }
+
+    /**
+     * Build complete IN clause with placeholders
+     *
+     * @param array $values Array of values for IN clause
+     * @return string Complete IN clause like "IN (?,?,?)" or empty string if no values
+     */
+    protected function buildInClause(array $values): string
+    {
+        if (empty($values)) {
+            return '';
+        }
+        $placeholders = $this->createPlaceholders($values);
+        return "IN ({$placeholders})";
+    }
+
+    /**
+     * Build WHERE clause from array of conditions
+     *
+     * Supports multiple formats:
+     * - Simple: ['column' => 'value'] becomes "column = ?"
+     * - With operator: ['column >' => 'value'] becomes "column > ?"
+     * - Raw SQL: ['column IN (?,?,?)'] (numeric key)
+     *
+     * @param array $conditions Associative array of conditions
+     * @return string WHERE clause parts joined by AND (without "WHERE" keyword)
+     */
+    protected function buildWhereClause(array $conditions): string
+    {
+        if (empty($conditions)) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($conditions as $key => $value) {
+            if (is_numeric($key)) {
+                // Raw SQL condition string
+                $parts[] = $value;
+            } elseif (strpos($key, ' ') !== false) {
+                // Key contains operator (e.g., "column >")
+                $parts[] = "{$key} ?";
+            } else {
+                // Simple column = value
+                $parts[] = "{$key} = ?";
+            }
+        }
+
+        return implode(' AND ', $parts);
+    }
+
+    /**
+     * Build ORDER BY clause from array of columns
+     *
+     * Supports formats:
+     * - Simple: ['column1', 'column2'] - defaults to ASC
+     * - With direction: ['column1' => 'DESC', 'column2' => 'ASC']
+     *
+     * @param array $columns Array of column specifications
+     * @return string ORDER BY clause (without "ORDER BY" keyword)
+     */
+    protected function buildOrderByClause(array $columns): string
+    {
+        if (empty($columns)) {
+            return '';
+        }
+
+        $parts = [];
+        foreach ($columns as $key => $value) {
+            if (is_numeric($key)) {
+                // Simple column name, default to ASC
+                $parts[] = $value;
+            } else {
+                // Column with explicit direction
+                $direction = strtoupper($value) === 'DESC' ? 'DESC' : 'ASC';
+                $parts[] = "{$key} {$direction}";
+            }
+        }
+
+        return implode(', ', $parts);
     }
 }
