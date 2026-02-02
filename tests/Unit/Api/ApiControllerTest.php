@@ -1,0 +1,1002 @@
+<?php
+/**
+ * Unit Tests for ApiController
+ *
+ * Tests the REST API controller for handling external application integration.
+ * Uses mocked dependencies to test routing, authentication, and response handling.
+ */
+
+namespace Eiou\Tests\Api;
+
+use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Eiou\Api\ApiController;
+use Eiou\Services\ApiAuthService;
+use Eiou\Database\ApiKeyRepository;
+use Eiou\Services\ServiceContainer;
+use Eiou\Utils\SecureLogger;
+use Eiou\Core\Constants;
+use Eiou\Exceptions\ServiceException;
+
+#[CoversClass(ApiController::class)]
+class ApiControllerTest extends TestCase
+{
+    private ApiAuthService $mockAuthService;
+    private ApiKeyRepository $mockApiKeyRepository;
+    private ServiceContainer $mockServices;
+    private ?SecureLogger $mockLogger;
+    private ApiController $controller;
+
+    protected function setUp(): void
+    {
+        $this->mockAuthService = $this->createMock(ApiAuthService::class);
+        $this->mockApiKeyRepository = $this->createMock(ApiKeyRepository::class);
+        $this->mockServices = $this->createMock(ServiceContainer::class);
+        $this->mockLogger = $this->createMock(SecureLogger::class);
+
+        $this->controller = new ApiController(
+            $this->mockAuthService,
+            $this->mockApiKeyRepository,
+            $this->mockServices,
+            $this->mockLogger
+        );
+    }
+
+    /**
+     * Test constructor sets dependencies
+     */
+    public function testConstructorSetsDependencies(): void
+    {
+        $controller = new ApiController(
+            $this->mockAuthService,
+            $this->mockApiKeyRepository,
+            $this->mockServices,
+            $this->mockLogger
+        );
+
+        $this->assertInstanceOf(ApiController::class, $controller);
+    }
+
+    /**
+     * Test constructor works without optional logger
+     */
+    public function testConstructorWorksWithoutLogger(): void
+    {
+        $controller = new ApiController(
+            $this->mockAuthService,
+            $this->mockApiKeyRepository,
+            $this->mockServices,
+            null
+        );
+
+        $this->assertInstanceOf(ApiController::class, $controller);
+    }
+
+    /**
+     * Test handleRequest returns 401 on authentication failure
+     */
+    public function testHandleRequestReturns401OnAuthFailure(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => false,
+                'error' => 'Authentication failed',
+                'code' => 'auth_failed'
+            ]);
+
+        $this->mockApiKeyRepository->expects($this->once())
+            ->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/wallet/balance',
+            [],
+            '',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(401, $response['status_code']);
+        $this->assertEquals('Authentication failed', $response['error']['message']);
+    }
+
+    /**
+     * Test handleRequest returns 404 for invalid API path
+     */
+    public function testHandleRequestReturns404ForInvalidPath(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/invalid/path',
+            [],
+            '',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(404, $response['status_code']);
+        $this->assertEquals('invalid_path', $response['error']['code']);
+    }
+
+    /**
+     * Test handleRequest returns 404 for missing v1 prefix
+     */
+    public function testHandleRequestReturns404ForMissingV1Prefix(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:read']]
+            ]);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v2/wallet/balance',
+            [],
+            '',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(404, $response['status_code']);
+    }
+
+    /**
+     * Test handleRequest returns 404 for unknown resource
+     */
+    public function testHandleRequestReturns404ForUnknownResource(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:read']]
+            ]);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/unknown/action',
+            [],
+            '',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(404, $response['status_code']);
+        $this->assertEquals('unknown_resource', $response['error']['code']);
+    }
+
+    /**
+     * Test handleRequest returns 403 for permission denied
+     */
+    public function testHandleRequestReturns403ForPermissionDenied(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => []]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(false);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/wallet/balance',
+            [],
+            '',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(403, $response['status_code']);
+        $this->assertEquals('permission_denied', $response['error']['code']);
+    }
+
+    /**
+     * Test handleRequest handles ServiceException properly
+     */
+    public function testHandleRequestHandlesServiceException(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        // Create a mock balance repository that throws a ServiceException
+        $mockBalanceRepo = $this->createMock(\Eiou\Database\BalanceRepository::class);
+        $mockBalanceRepo->method('getAllBalances')
+            ->willThrowException(new ServiceException('Database error', 'DB_ERROR', 500));
+
+        $this->mockServices->method('getBalanceRepository')
+            ->willReturn($mockBalanceRepo);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/wallet/balance',
+            [],
+            '',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(500, $response['status_code']);
+    }
+
+    /**
+     * Test handleRequest includes request_id in response
+     */
+    public function testHandleRequestIncludesRequestId(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => false,
+                'error' => 'Authentication failed',
+                'code' => 'auth_failed'
+            ]);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/wallet/balance',
+            [],
+            '',
+            []
+        );
+
+        $this->assertArrayHasKey('request_id', $response);
+        $this->assertStringStartsWith('req_', $response['request_id']);
+    }
+
+    /**
+     * Test handleRequest includes timestamp in response
+     */
+    public function testHandleRequestIncludesTimestamp(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => false,
+                'error' => 'Authentication failed',
+                'code' => 'auth_failed'
+            ]);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/wallet/balance',
+            [],
+            '',
+            []
+        );
+
+        $this->assertArrayHasKey('timestamp', $response);
+    }
+
+    /**
+     * Test wallet balance endpoint requires wallet:read permission
+     */
+    public function testWalletBalanceRequiresPermission(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => []]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->with($this->anything(), 'wallet:read')
+            ->willReturn(false);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/wallet/balance',
+            [],
+            '',
+            []
+        );
+
+        $this->assertEquals(403, $response['status_code']);
+        $this->assertStringContainsString('wallet:read', $response['error']['message']);
+    }
+
+    /**
+     * Test contacts list endpoint requires contacts:read permission
+     */
+    public function testContactsListRequiresPermission(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => []]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(false);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/contacts',
+            [],
+            '',
+            []
+        );
+
+        $this->assertEquals(403, $response['status_code']);
+    }
+
+    /**
+     * Test system status endpoint requires system:read permission
+     */
+    public function testSystemStatusRequiresPermission(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => []]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(false);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/system/status',
+            [],
+            '',
+            []
+        );
+
+        $this->assertEquals(403, $response['status_code']);
+    }
+
+    /**
+     * Test keys management requires admin permission
+     */
+    public function testKeysManagementRequiresAdminPermission(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturnCallback(function ($key, $permission) {
+                return $permission !== 'admin';
+            });
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/keys',
+            [],
+            '',
+            []
+        );
+
+        $this->assertEquals(403, $response['status_code']);
+        $this->assertStringContainsString('Admin permission required', $response['error']['message']);
+    }
+
+    /**
+     * Test send transaction returns 400 for invalid JSON
+     */
+    public function testSendTransactionReturns400ForInvalidJson(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:send']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'POST',
+            '/api/v1/wallet/send',
+            [],
+            'invalid json',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(400, $response['status_code']);
+        $this->assertEquals('invalid_json', $response['error']['code']);
+    }
+
+    /**
+     * Test send transaction returns 400 for missing required fields
+     */
+    public function testSendTransactionReturns400ForMissingFields(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:send']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'POST',
+            '/api/v1/wallet/send',
+            [],
+            json_encode(['address' => 'test']),
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(400, $response['status_code']);
+        $this->assertEquals('missing_field', $response['error']['code']);
+    }
+
+    /**
+     * Test send transaction returns 400 for invalid amount
+     */
+    public function testSendTransactionReturns400ForInvalidAmount(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:send']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'POST',
+            '/api/v1/wallet/send',
+            [],
+            json_encode(['address' => 'test', 'amount' => -10, 'currency' => 'USD']),
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(400, $response['status_code']);
+        $this->assertEquals('invalid_amount', $response['error']['code']);
+    }
+
+    /**
+     * Test add contact returns 400 for invalid JSON
+     */
+    public function testAddContactReturns400ForInvalidJson(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['contacts:write']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'POST',
+            '/api/v1/contacts',
+            [],
+            'invalid json',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(400, $response['status_code']);
+        $this->assertEquals('invalid_json', $response['error']['code']);
+    }
+
+    /**
+     * Test add contact returns 400 for missing fields
+     */
+    public function testAddContactReturns400ForMissingFields(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['contacts:write']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'POST',
+            '/api/v1/contacts',
+            [],
+            json_encode(['address' => 'test']),
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(400, $response['status_code']);
+        $this->assertEquals('missing_field', $response['error']['code']);
+    }
+
+    /**
+     * Test backup restore requires confirmation
+     */
+    public function testBackupRestoreRequiresConfirmation(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['backup:write']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'POST',
+            '/api/v1/backup/restore',
+            [],
+            json_encode(['filename' => 'backup.sql']),
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(400, $response['status_code']);
+        $this->assertEquals('confirmation_required', $response['error']['code']);
+    }
+
+    /**
+     * Test backup verify returns 400 for missing filename
+     */
+    public function testBackupVerifyReturns400ForMissingFilename(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['backup:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'POST',
+            '/api/v1/backup/verify',
+            [],
+            json_encode([]),
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(400, $response['status_code']);
+        $this->assertEquals('missing_field', $response['error']['code']);
+    }
+
+    /**
+     * Test create API key returns 400 for missing name
+     */
+    public function testCreateApiKeyReturns400ForMissingName(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['admin']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'POST',
+            '/api/v1/keys',
+            [],
+            json_encode([]),
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(400, $response['status_code']);
+        $this->assertEquals('missing_field', $response['error']['code']);
+    }
+
+    /**
+     * Data provider for valid wallet endpoints
+     */
+    public static function walletEndpointsProvider(): array
+    {
+        return [
+            'balance GET' => ['GET', 'balance', 'wallet:read'],
+            'balances GET' => ['GET', 'balances', 'wallet:read'],
+            'transactions GET' => ['GET', 'transactions', 'wallet:read'],
+            'info GET' => ['GET', 'info', 'wallet:read'],
+            'overview GET' => ['GET', 'overview', 'wallet:read'],
+            'send POST' => ['POST', 'send', 'wallet:send'],
+        ];
+    }
+
+    /**
+     * Test wallet endpoints routing
+     */
+    #[DataProvider('walletEndpointsProvider')]
+    public function testWalletEndpointsRouting(string $method, string $action, string $permission): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => []]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(false);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            $method,
+            '/api/v1/wallet/' . $action,
+            [],
+            $method === 'POST' ? '{}' : '',
+            []
+        );
+
+        // Should get permission denied, meaning routing worked correctly
+        $this->assertEquals(403, $response['status_code']);
+    }
+
+    /**
+     * Data provider for contacts endpoints
+     */
+    public static function contactsEndpointsProvider(): array
+    {
+        return [
+            'list GET' => ['GET', '', 'contacts:read'],
+            'pending GET' => ['GET', 'pending', 'contacts:read'],
+            'search GET' => ['GET', 'search', 'contacts:read'],
+            'add POST' => ['POST', '', 'contacts:write'],
+        ];
+    }
+
+    /**
+     * Test contacts endpoints routing
+     */
+    #[DataProvider('contactsEndpointsProvider')]
+    public function testContactsEndpointsRouting(string $method, string $action, string $permission): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => []]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(false);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $path = '/api/v1/contacts' . ($action ? '/' . $action : '');
+        $response = $this->controller->handleRequest(
+            $method,
+            $path,
+            [],
+            $method === 'POST' ? '{}' : '',
+            []
+        );
+
+        // Should get permission denied, meaning routing worked correctly
+        $this->assertEquals(403, $response['status_code']);
+    }
+
+    /**
+     * Data provider for system endpoints
+     */
+    public static function systemEndpointsProvider(): array
+    {
+        return [
+            'status GET' => ['GET', 'status'],
+            'metrics GET' => ['GET', 'metrics'],
+            'settings GET' => ['GET', 'settings'],
+        ];
+    }
+
+    /**
+     * Test system endpoints routing
+     */
+    #[DataProvider('systemEndpointsProvider')]
+    public function testSystemEndpointsRouting(string $method, string $action): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => []]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(false);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            $method,
+            '/api/v1/system/' . $action,
+            [],
+            '',
+            []
+        );
+
+        // Should get permission denied, meaning routing worked correctly
+        $this->assertEquals(403, $response['status_code']);
+    }
+
+    /**
+     * Data provider for backup endpoints
+     */
+    public static function backupEndpointsProvider(): array
+    {
+        return [
+            'status GET' => ['GET', 'status'],
+            'list GET' => ['GET', 'list'],
+            'create POST' => ['POST', 'create'],
+            'restore POST' => ['POST', 'restore'],
+            'verify POST' => ['POST', 'verify'],
+            'enable POST' => ['POST', 'enable'],
+            'disable POST' => ['POST', 'disable'],
+            'cleanup POST' => ['POST', 'cleanup'],
+        ];
+    }
+
+    /**
+     * Test backup endpoints routing
+     */
+    #[DataProvider('backupEndpointsProvider')]
+    public function testBackupEndpointsRouting(string $method, string $action): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => []]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(false);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            $method,
+            '/api/v1/backup/' . $action,
+            [],
+            $method === 'POST' ? '{}' : '',
+            []
+        );
+
+        // Should get permission denied, meaning routing worked correctly
+        $this->assertEquals(403, $response['status_code']);
+    }
+
+    /**
+     * Test unknown wallet action returns 404
+     */
+    public function testUnknownWalletActionReturns404(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/wallet/unknownaction',
+            [],
+            '',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(404, $response['status_code']);
+        $this->assertEquals('unknown_action', $response['error']['code']);
+    }
+
+    /**
+     * Test unknown system action returns 404
+     */
+    public function testUnknownSystemActionReturns404(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['system:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/system/unknownaction',
+            [],
+            '',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(404, $response['status_code']);
+        $this->assertEquals('unknown_action', $response['error']['code']);
+    }
+
+    /**
+     * Test unknown backup action returns 404
+     */
+    public function testUnknownBackupActionReturns404(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['backup:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/backup/unknownaction',
+            [],
+            '',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertEquals(404, $response['status_code']);
+        $this->assertEquals('unknown_action', $response['error']['code']);
+    }
+
+    /**
+     * Test response structure for success
+     */
+    public function testResponseStructureForSuccess(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => true,
+                'key' => ['key_id' => 'test_key', 'permissions' => ['wallet:read']]
+            ]);
+
+        $this->mockAuthService->method('hasPermission')
+            ->willReturn(true);
+
+        // Mock repositories
+        $mockBalanceRepo = $this->createMock(\Eiou\Database\BalanceRepository::class);
+        $mockBalanceRepo->method('getAllBalances')->willReturn([]);
+
+        $mockContactRepo = $this->createMock(\Eiou\Database\ContactRepository::class);
+
+        $this->mockServices->method('getBalanceRepository')->willReturn($mockBalanceRepo);
+        $this->mockServices->method('getContactRepository')->willReturn($mockContactRepo);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/wallet/balance',
+            [],
+            '',
+            []
+        );
+
+        $this->assertArrayHasKey('success', $response);
+        $this->assertArrayHasKey('data', $response);
+        $this->assertArrayHasKey('error', $response);
+        $this->assertArrayHasKey('timestamp', $response);
+        $this->assertArrayHasKey('request_id', $response);
+        $this->assertArrayHasKey('status_code', $response);
+    }
+
+    /**
+     * Test response structure for error
+     */
+    public function testResponseStructureForError(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => false,
+                'error' => 'Test error',
+                'code' => 'test_error'
+            ]);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/wallet/balance',
+            [],
+            '',
+            []
+        );
+
+        $this->assertFalse($response['success']);
+        $this->assertNull($response['data']);
+        $this->assertIsArray($response['error']);
+        $this->assertArrayHasKey('message', $response['error']);
+        $this->assertArrayHasKey('code', $response['error']);
+    }
+
+    /**
+     * Test request ID format
+     */
+    public function testRequestIdFormat(): void
+    {
+        $this->mockAuthService->method('authenticate')
+            ->willReturn([
+                'success' => false,
+                'error' => 'Test error',
+                'code' => 'test_error'
+            ]);
+
+        $this->mockApiKeyRepository->method('logRequest');
+
+        $response = $this->controller->handleRequest(
+            'GET',
+            '/api/v1/wallet/balance',
+            [],
+            '',
+            []
+        );
+
+        // Request ID should start with 'req_' and be 20 characters (req_ + 16 hex chars)
+        $this->assertStringStartsWith('req_', $response['request_id']);
+        $this->assertEquals(20, strlen($response['request_id']));
+    }
+}
