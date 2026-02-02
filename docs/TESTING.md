@@ -28,7 +28,7 @@ Unit tests validate individual PHP classes and methods in isolation.
 
 - **Location**: `tests/Unit/`
 - **Framework**: PHPUnit 11
-- **Total**: 346 tests, 773 assertions
+- **Total**: 492 tests, 1000+ assertions
 
 ### Integration Tests (Shell)
 
@@ -66,6 +66,10 @@ Integration tests validate the complete system behavior using Docker containers.
 | **ContactServiceTest.php** | 4 | Contact status constants, name length limits, default settings, online status |
 | **ApiAuthServiceTest.php** | 14 | HMAC-SHA256 signature generation, string-to-sign building, request header parsing, client IP detection |
 | **RateLimiterServiceTest.php** | 7 | Rate limiting logic, client IP detection (Cloudflare, X-Forwarded-For), test mode bypass |
+| **BalanceServiceTest.php** | 23 | Contact balance conversion, user total balance, contact balance retrieval, batch balance operations, currency conversion, edge cases |
+| **DatabaseLockingServiceTest.php** | 40 | MySQL advisory locks (GET_LOCK/RELEASE_LOCK/IS_FREE_LOCK), lock acquisition/release, timeout handling, lock name sanitization, held locks tracking |
+| **ChainOperationsServiceTest.php** | 16 | Chain integrity verification, previous txid lookup, chain repair coordination, sync service injection, exception handling |
+| **HeldTransactionServiceTest.php** | 23 | Transaction hold/resume lifecycle, sync status tracking, previous txid updates, statistics, event handling, chain integrity checks |
 
 ### Repositories Tests (`tests/Unit/Repositories/`)
 
@@ -91,6 +95,7 @@ Integration tests validate the complete system behavior using Docker containers.
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
 | **EventDispatcherTest.php** | 20 | Singleton pattern, event subscription/unsubscription, listener invocation order, exception handling, listener management |
+| **SyncEventsTest.php** | 18 | Sync event constants verification, naming convention compliance, string type validation, reflection-based constant enumeration |
 
 ### Formatters Tests (`tests/Unit/Formatters/`)
 
@@ -104,6 +109,12 @@ Integration tests validate the complete system behavior using Docker containers.
 |-----------|-------|----------|
 | **CurrencyUtilityServiceTest.php** | 15 | Cents/dollars conversion, currency formatting, fee percent calculations, rounding, large amounts |
 | **TimeUtilityServiceTest.php** | 11 | Microtime conversion, expiration checking, TTL calculations, timestamp precision |
+
+### GUI Helpers Tests (`tests/Unit/Gui/Helpers/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **ContactDataBuilderTest.php** | 20 | Contact data building, address type handling, primary address priority (Tor > HTTPS > HTTP), JSON encoding, HTML-safe output, status handling, Unicode support |
 
 ## Running Unit Tests
 
@@ -193,9 +204,13 @@ tests/
 │   ├── Core/
 │   │   └── ErrorCodesTest.php
 │   ├── Events/
-│   │   └── EventDispatcherTest.php
+│   │   ├── EventDispatcherTest.php
+│   │   └── SyncEventsTest.php
 │   ├── Formatters/
 │   │   └── TransactionFormatterTest.php
+│   ├── Gui/
+│   │   └── Helpers/
+│   │       └── ContactDataBuilderTest.php
 │   ├── Repositories/
 │   │   └── TransactionRepositoryTest.php
 │   ├── Security/
@@ -204,7 +219,11 @@ tests/
 │   │   └── TorKeyDerivationTest.php
 │   ├── Services/
 │   │   ├── ApiAuthServiceTest.php
+│   │   ├── BalanceServiceTest.php
+│   │   ├── ChainOperationsServiceTest.php
 │   │   ├── ContactServiceTest.php
+│   │   ├── DatabaseLockingServiceTest.php
+│   │   ├── HeldTransactionServiceTest.php
 │   │   ├── RateLimiterServiceTest.php
 │   │   ├── TransactionServiceTest.php
 │   │   └── Utilities/
