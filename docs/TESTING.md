@@ -28,7 +28,7 @@ Unit tests validate individual PHP classes and methods in isolation.
 
 - **Location**: `tests/Unit/`
 - **Framework**: PHPUnit 11
-- **Total**: 492 tests, 1000+ assertions
+- **Total**: 641 tests, 1500+ assertions
 
 ### Integration Tests (Shell)
 
@@ -70,6 +70,8 @@ Integration tests validate the complete system behavior using Docker containers.
 | **DatabaseLockingServiceTest.php** | 40 | MySQL advisory locks (GET_LOCK/RELEASE_LOCK/IS_FREE_LOCK), lock acquisition/release, timeout handling, lock name sanitization, held locks tracking |
 | **ChainOperationsServiceTest.php** | 16 | Chain integrity verification, previous txid lookup, chain repair coordination, sync service injection, exception handling |
 | **HeldTransactionServiceTest.php** | 23 | Transaction hold/resume lifecycle, sync status tracking, previous txid updates, statistics, event handling, chain integrity checks |
+| **TransactionRecoveryServiceTest.php** | 28 | Stuck transaction recovery, manual resolution (retry/cancel/complete), recovery statistics, exception handling |
+| **BackupServiceTest.php** | 22 | formatBytes utility, getNextScheduledBackup date logic, boundary conditions |
 
 ### Repositories Tests (`tests/Unit/Repositories/`)
 
@@ -115,6 +117,14 @@ Integration tests validate the complete system behavior using Docker containers.
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
 | **ContactDataBuilderTest.php** | 20 | Contact data building, address type handling, primary address priority (Tor > HTTPS > HTTP), JSON encoding, HTML-safe output, status handling, Unicode support |
+
+### Schema/Payload Tests (`tests/Unit/Schemas/Payloads/`)
+
+| Test File | Tests | Coverage |
+|-----------|-------|----------|
+| **BasePayloadTest.php** | 53 | ensureRequiredFields validation, sanitizeString, sanitizeNumber type handling, validate empty check, edge cases |
+| **ContactPayloadTest.php** | 26 | Contact creation/received/updated/rejection/pending/mutually-accepted payloads, filterAddresses, JSON encoding |
+| **MessagePayloadTest.php** | 20 | Contact inquiry/accepted/unknown payloads, transaction status/sync responses, P2P status inquiry/response |
 
 ## Running Unit Tests
 
@@ -211,6 +221,11 @@ tests/
 │   ├── Gui/
 │   │   └── Helpers/
 │   │       └── ContactDataBuilderTest.php
+│   ├── Schemas/
+│   │   └── Payloads/
+│   │       ├── BasePayloadTest.php
+│   │       ├── ContactPayloadTest.php
+│   │       └── MessagePayloadTest.php
 │   ├── Repositories/
 │   │   └── TransactionRepositoryTest.php
 │   ├── Security/
@@ -219,12 +234,14 @@ tests/
 │   │   └── TorKeyDerivationTest.php
 │   ├── Services/
 │   │   ├── ApiAuthServiceTest.php
+│   │   ├── BackupServiceTest.php
 │   │   ├── BalanceServiceTest.php
 │   │   ├── ChainOperationsServiceTest.php
 │   │   ├── ContactServiceTest.php
 │   │   ├── DatabaseLockingServiceTest.php
 │   │   ├── HeldTransactionServiceTest.php
 │   │   ├── RateLimiterServiceTest.php
+│   │   ├── TransactionRecoveryServiceTest.php
 │   │   ├── TransactionServiceTest.php
 │   │   └── Utilities/
 │   │       ├── CurrencyUtilityServiceTest.php
