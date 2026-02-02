@@ -246,15 +246,32 @@ cryptographic key derivation.
 
 The `ServiceContainer` class (`/src/services/ServiceContainer.php`) implements the
 dependency injection pattern, providing centralized management of service instances.
+It implements PSR-11 `ContainerInterface` and integrates with PHP-DI for autowiring.
 
 **Key Features:**
 
 | Feature | Description |
 |---------|-------------|
+| PSR-11 Compliant | Implements `ContainerInterface` with `get()` and `has()` methods |
+| PHP-DI Integration | Uses PHP-DI container for autowiring and interface bindings |
 | Singleton Pattern | Single instance manages all services |
 | Lazy Loading | Services instantiated on first access |
 | Circular Dependency Handling | Setter injection via `wireAllServices()` |
 | Testability | Services can be mocked via `registerService()` |
+
+**PHP-DI Configuration:**
+
+The container configuration is defined in `/src/config/container.php`:
+
+```php
+// Interface to implementation bindings
+ContactServiceInterface::class => get(ContactService::class),
+TransactionServiceInterface::class => get(TransactionService::class),
+
+// Autowired repositories (receive PDO automatically)
+AddressRepository::class => autowire(),
+ContactRepository::class => autowire(),
+```
 
 **Initialization Flow:**
 
@@ -262,9 +279,25 @@ dependency injection pattern, providing centralized management of service instan
 Application::getInstance()
     -> loadServiceContainer()
         -> ServiceContainer::getInstance()
+            -> buildPhpDiContainer() (lazy, on first DI access)
     -> services->wireAllServices()
         -> Initialize core services
         -> wireCircularDependencies()
+```
+
+**Accessing Services via PSR-11:**
+
+```php
+// Traditional getter method (still supported)
+$contactService = $container->getContactService();
+
+// PSR-11 interface method
+$contactService = $container->get(ContactServiceInterface::class);
+
+// Check if service exists
+if ($container->has(ContactServiceInterface::class)) {
+    // ...
+}
 ```
 
 ### Service Catalog
@@ -450,12 +483,38 @@ class SyncServiceProxy implements SyncTriggerInterface
 
 | Use Case | Pattern | Example |
 |----------|---------|---------|
-| Required dependencies | Constructor injection | Repositories, utilities |
+| Required dependencies | Constructor injection | Repositories, utilities, PDO |
 | Optional dependencies | Setter injection with null default | Debug services |
 | Circular dependencies | Setter injection | SyncService <-> HeldTransactionService |
 | Late-bound dependencies | Lazy proxy | SyncServiceProxy |
 
-**Constructor Injection (Preferred):**
+**Constructor Injection (Required - No Fallbacks):**
+
+Dependencies must be explicitly provided via constructor injection. There are no
+automatic fallbacks to ServiceContainer - if a dependency is not provided, the
+code will fail fast with a clear error.
+
+```php
+class SettingsController
+{
+    private Session $session;
+    private ?PDO $pdo;
+
+    // PDO must be injected - no ServiceContainer fallback
+    public function __construct(Session $session, ?PDO $pdo = null)
+    {
+        $this->session = $session;
+        $this->pdo = $pdo;
+    }
+
+    private function getPdoConnection(): ?PDO
+    {
+        return $this->pdo;  // Returns injected value only
+    }
+}
+```
+
+**Service Layer Constructor Injection:**
 
 ```php
 class BalanceService
@@ -1470,6 +1529,7 @@ public function testSearchContactsWithInvalidName(): void
 |-----------|------|
 | Application | `/etc/eiou/src/core/Application.php` |
 | ServiceContainer | `/etc/eiou/src/services/ServiceContainer.php` |
+| DI Container Config | `/etc/eiou/src/config/container.php` |
 | ErrorHandler | `/etc/eiou/src/core/ErrorHandler.php` |
 | Exceptions | `/etc/eiou/src/exceptions/` |
 | Processors | `/etc/eiou/src/processors/` |
