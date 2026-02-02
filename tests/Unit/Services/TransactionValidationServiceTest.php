@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Services\TransactionValidationService;
 use Eiou\Database\TransactionRepository;
-use Eiou\Database\ContactRepository;
+use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Utils\InputValidator;
@@ -31,7 +31,7 @@ use ReflectionClass;
 class TransactionValidationServiceTest extends TestCase
 {
     private TransactionRepository $transactionRepository;
-    private ContactRepository $contactRepository;
+    private ContactServiceInterface $contactService;
     private ValidationUtilityService $validationUtility;
     private InputValidator $inputValidator;
     private TransactionPayload $transactionPayload;
@@ -46,7 +46,7 @@ class TransactionValidationServiceTest extends TestCase
     {
         // Create mock objects for all constructor dependencies
         $this->transactionRepository = $this->createMock(TransactionRepository::class);
-        $this->contactRepository = $this->createMock(ContactRepository::class);
+        $this->contactService = $this->createMock(ContactServiceInterface::class);
         $this->validationUtility = $this->createMock(ValidationUtilityService::class);
         $this->inputValidator = $this->createMock(InputValidator::class);
         $this->transactionPayload = $this->createMock(TransactionPayload::class);
@@ -66,7 +66,7 @@ class TransactionValidationServiceTest extends TestCase
 
         // Inject all dependencies via reflection
         $this->setPrivateProperty('transactionRepository', $this->transactionRepository);
-        $this->setPrivateProperty('contactRepository', $this->contactRepository);
+        $this->setPrivateProperty('contactService', $this->contactService);
         $this->setPrivateProperty('validationUtility', $this->validationUtility);
         $this->setPrivateProperty('inputValidator', $this->inputValidator);
         $this->setPrivateProperty('transactionPayload', $this->transactionPayload);
@@ -310,7 +310,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(1500);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey')
             ->willReturn(0.0);
@@ -335,7 +335,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(500);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey')
             ->willReturn(600.0);
@@ -360,7 +360,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(300);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey')
             ->willReturn(500.0);
@@ -385,7 +385,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(800);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey')
             ->willReturn(200.0);
@@ -482,7 +482,7 @@ class TransactionValidationServiceTest extends TestCase
             'memo' => 'standard'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->with('sender-pubkey')
             ->willReturn(false);
@@ -515,7 +515,7 @@ class TransactionValidationServiceTest extends TestCase
             'memo' => 'standard'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->with('sender-pubkey')
             ->willReturn(false);
@@ -544,7 +544,7 @@ class TransactionValidationServiceTest extends TestCase
             'memo' => 'standard'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->with('sender-pubkey')
             ->willReturn(true);
@@ -597,7 +597,7 @@ class TransactionValidationServiceTest extends TestCase
             'memo' => 'standard'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->with('sender-pubkey')
             ->willReturn(true);
@@ -611,7 +611,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(100);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey')
             ->willReturn(100.0);
@@ -645,7 +645,7 @@ class TransactionValidationServiceTest extends TestCase
             'memo' => 'standard'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->with('sender-pubkey')
             ->willReturn(true);
@@ -659,7 +659,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(2000);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey')
             ->willReturn(0.0);
@@ -704,7 +704,7 @@ class TransactionValidationServiceTest extends TestCase
             'memo' => 'p2p-hash-abc123'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->with('sender-pubkey')
             ->willReturn(true);
@@ -718,7 +718,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(2000);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey')
             ->willReturn(0.0);
@@ -757,7 +757,7 @@ class TransactionValidationServiceTest extends TestCase
             'memo' => 'standard'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->with('sender-pubkey')
             ->willReturn(true);
@@ -771,7 +771,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(2000);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey')
             ->willReturn(0.0);
@@ -822,7 +822,7 @@ class TransactionValidationServiceTest extends TestCase
             'memo' => 'standard'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->with('sender-pubkey')
             ->willReturn(true);
@@ -873,7 +873,7 @@ class TransactionValidationServiceTest extends TestCase
             'time' => time()
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->with('sender-pubkey')
             ->willReturn(true);
@@ -906,7 +906,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(2000);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->with('sender-pubkey')
             ->willReturn(0.0);
@@ -997,7 +997,7 @@ class TransactionValidationServiceTest extends TestCase
             'memo' => 'standard'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->willReturn(true);
 
@@ -1009,7 +1009,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(2000);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->willReturn(0.0);
 
@@ -1042,7 +1042,7 @@ class TransactionValidationServiceTest extends TestCase
             'recipientSignature' => 'existing-signature'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->willReturn(true);
 
@@ -1054,7 +1054,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(2000);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->willReturn(0.0);
 
@@ -1102,7 +1102,7 @@ class TransactionValidationServiceTest extends TestCase
             'signatureNonce' => '12345'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->willReturn(true);
 
@@ -1114,7 +1114,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(2000);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->willReturn(0.0);
 
@@ -1175,7 +1175,7 @@ class TransactionValidationServiceTest extends TestCase
             'signatureNonce' => '12345'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->willReturn(true);
 
@@ -1187,7 +1187,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(2000);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->willReturn(0.0);
 
@@ -1245,7 +1245,7 @@ class TransactionValidationServiceTest extends TestCase
             'memo' => 'standard'
         ];
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('isNotBlocked')
             ->willReturn(true);
 
@@ -1257,7 +1257,7 @@ class TransactionValidationServiceTest extends TestCase
             ->method('calculateAvailableFunds')
             ->willReturn(2000);
 
-        $this->contactRepository->expects($this->once())
+        $this->contactService->expects($this->once())
             ->method('getCreditLimit')
             ->willReturn(0.0);
 

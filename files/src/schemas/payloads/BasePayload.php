@@ -6,6 +6,7 @@ namespace Eiou\Schemas\Payloads;
 use Eiou\Core\UserContext;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\CurrencyUtilityService;
+use Eiou\Contracts\CurrencyUtilityServiceInterface;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -31,9 +32,9 @@ abstract class BasePayload
     protected UtilityServiceContainer $utilityContainer;
 
     /**
-     * @var CurrencyUtilityService Currecy utility service 
+     * @var CurrencyUtilityServiceInterface Currency utility service
      */
-    protected CurrencyUtilityService $currencyUtility;
+    protected CurrencyUtilityServiceInterface $currencyUtility;
 
      /**
      * @var TimeUtilityService Time utility service 

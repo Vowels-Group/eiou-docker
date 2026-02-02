@@ -22,7 +22,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use Eiou\Services\P2pService;
 use Eiou\Services\MessageDeliveryService;
-use Eiou\Database\ContactRepository;
+use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
@@ -39,7 +39,7 @@ use PDOException;
 #[CoversClass(P2pService::class)]
 class P2pServiceTest extends TestCase
 {
-    private MockObject|ContactRepository $contactRepository;
+    private MockObject|ContactServiceInterface $contactService;
     private MockObject|BalanceRepository $balanceRepository;
     private MockObject|P2pRepository $p2pRepository;
     private MockObject|TransactionRepository $transactionRepository;
@@ -61,7 +61,7 @@ class P2pServiceTest extends TestCase
     {
         parent::setUp();
 
-        $this->contactRepository = $this->createMock(ContactRepository::class);
+        $this->contactService = $this->createMock(ContactServiceInterface::class);
         $this->balanceRepository = $this->createMock(BalanceRepository::class);
         $this->p2pRepository = $this->createMock(P2pRepository::class);
         $this->transactionRepository = $this->createMock(TransactionRepository::class);
@@ -87,7 +87,7 @@ class P2pServiceTest extends TestCase
         $this->userContext->method('getDefaultFee')
             ->willReturn(1.0);
         $this->userContext->method('getMinimumFee')
-            ->willReturn(10);
+            ->willReturn(10.0);
         $this->userContext->method('getMaxP2pLevel')
             ->willReturn(3);
         $this->userContext->method('getMaxFee')
@@ -96,7 +96,7 @@ class P2pServiceTest extends TestCase
             ->willReturn(self::TEST_PUBLIC_KEY);
 
         $this->service = new P2pService(
-            $this->contactRepository,
+            $this->contactService,
             $this->balanceRepository,
             $this->p2pRepository,
             $this->transactionRepository,
@@ -269,10 +269,10 @@ class P2pServiceTest extends TestCase
         $this->p2pRepository->method('getCreditInP2p')
             ->willReturn(0);
 
-        $this->contactRepository->method('getCreditLimit')
+        $this->contactService->method('getCreditLimit')
             ->willReturn(1000);
 
-        $this->contactRepository->method('lookupByAddress')
+        $this->contactService->method('lookupByAddress')
             ->willReturn(['fee_percent' => 1.0]);
 
         $this->currencyUtility->method('calculateFee')
@@ -330,7 +330,7 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
 
-        $this->contactRepository->method('lookupByAddress')
+        $this->contactService->method('lookupByAddress')
             ->willReturn(['fee_percent' => 1.0]);
 
         $this->currencyUtility->method('calculateFee')
@@ -355,7 +355,7 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
 
-        $this->contactRepository->method('lookupByAddress')
+        $this->contactService->method('lookupByAddress')
             ->willReturn(null);
 
         $this->currencyUtility->method('calculateFee')
@@ -385,7 +385,7 @@ class P2pServiceTest extends TestCase
             'amount' => self::TEST_AMOUNT
         ];
 
-        $this->contactRepository->method('isNotBlocked')
+        $this->contactService->method('isNotBlocked')
             ->with(self::TEST_PUBLIC_KEY)
             ->willReturn(false);
 
@@ -410,7 +410,7 @@ class P2pServiceTest extends TestCase
             'amount' => self::TEST_AMOUNT
         ];
 
-        $this->contactRepository->method('isNotBlocked')
+        $this->contactService->method('isNotBlocked')
             ->willReturn(true);
         $this->validationUtility->method('validateRequestLevel')
             ->willReturn(true);
@@ -444,7 +444,7 @@ class P2pServiceTest extends TestCase
             'amount' => self::TEST_AMOUNT
         ];
 
-        $this->contactRepository->method('isNotBlocked')
+        $this->contactService->method('isNotBlocked')
             ->willReturn(false);
 
         ob_start();
@@ -471,7 +471,7 @@ class P2pServiceTest extends TestCase
             'amount' => self::TEST_AMOUNT
         ];
 
-        $this->contactRepository->method('isNotBlocked')
+        $this->contactService->method('isNotBlocked')
             ->willReturn(false);
 
         ob_start();
@@ -569,7 +569,7 @@ class P2pServiceTest extends TestCase
             'time' => '1234567890'
         ];
 
-        $this->contactRepository->method('getAllContacts')
+        $this->contactService->method('getAllContacts')
             ->willReturn([]);
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
@@ -604,7 +604,7 @@ class P2pServiceTest extends TestCase
             'pubkey' => self::TEST_PUBLIC_KEY
         ];
 
-        $this->contactRepository->method('getAllContacts')
+        $this->contactService->method('getAllContacts')
             ->willReturn([$contact]);
         $this->transportUtility->method('determineTransportType')
             ->willReturn('http');
@@ -668,7 +668,7 @@ class P2pServiceTest extends TestCase
         $request = ['eiou', 'send', self::TEST_ADDRESS, '100.00'];
 
         $this->timeUtility->method('getCurrentMicrotime')
-            ->willReturn('1234567890123456');
+            ->willReturn(1234567890123456);
 
         $result = $this->service->prepareP2pRequestData($request);
 
@@ -876,7 +876,7 @@ class P2pServiceTest extends TestCase
     public function testConstructorWithNullMessageDeliveryService(): void
     {
         $service = new P2pService(
-            $this->contactRepository,
+            $this->contactService,
             $this->balanceRepository,
             $this->p2pRepository,
             $this->transactionRepository,
@@ -894,7 +894,7 @@ class P2pServiceTest extends TestCase
     public function testConstructorInitializesPayloads(): void
     {
         $service = new P2pService(
-            $this->contactRepository,
+            $this->contactService,
             $this->balanceRepository,
             $this->p2pRepository,
             $this->transactionRepository,
@@ -920,7 +920,7 @@ class P2pServiceTest extends TestCase
             ->with('not-an-address')
             ->willReturn(false);
 
-        $this->contactRepository->method('lookupAddressesByName')
+        $this->contactService->method('lookupAddressesByName')
             ->with('not-an-address')
             ->willReturn(null);
 
@@ -940,7 +940,7 @@ class P2pServiceTest extends TestCase
         $this->transportUtility->method('isAddress')
             ->willReturn(false);
 
-        $this->contactRepository->method('lookupAddressesByName')
+        $this->contactService->method('lookupAddressesByName')
             ->with('ContactName')
             ->willReturn(['http' => self::TEST_ADDRESS]);
 
@@ -948,7 +948,7 @@ class P2pServiceTest extends TestCase
             ->willReturn(self::TEST_ADDRESS);
 
         $this->timeUtility->method('getCurrentMicrotime')
-            ->willReturn('1234567890123456');
+            ->willReturn(1234567890123456);
 
         $this->transportUtility->method('jitter')
             ->willReturnCallback(fn($val) => $val);
