@@ -1421,34 +1421,22 @@ class ServiceContainer implements ContainerInterface {
      * Build the PHP-DI container
      *
      * @return ContainerInterface
+     * @throws RuntimeException If container configuration is not found
      */
     private function buildPhpDiContainer(): ContainerInterface {
-        // Check if the container configuration file exists
         $configPath = dirname(__DIR__) . '/config/container.php';
-        if (file_exists($configPath)) {
-            require_once $configPath;
-            if (function_exists('Eiou\\Config\\buildContainer')) {
-                return \Eiou\Config\buildContainer($this->pdo, $this->currentUser);
-            }
+
+        if (!file_exists($configPath)) {
+            throw new RuntimeException("Container configuration not found: {$configPath}");
         }
 
-        // Fallback: Return a simple wrapper around this container
-        // This maintains backward compatibility if config is not available
-        return new class($this) implements ContainerInterface {
-            private ServiceContainer $container;
+        require_once $configPath;
 
-            public function __construct(ServiceContainer $container) {
-                $this->container = $container;
-            }
+        if (!function_exists('Eiou\\Config\\buildContainer')) {
+            throw new RuntimeException("buildContainer function not found in container configuration");
+        }
 
-            public function get(string $id): mixed {
-                return $this->container->get($id);
-            }
-
-            public function has(string $id): bool {
-                return $this->container->has($id);
-            }
-        };
+        return \Eiou\Config\buildContainer($this->pdo, $this->currentUser);
     }
 
     /**

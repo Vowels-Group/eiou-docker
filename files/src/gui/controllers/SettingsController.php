@@ -8,7 +8,6 @@ use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Core\Constants;
 use Eiou\Database\DebugRepository;
-use Eiou\Services\ServiceContainer;
 use PDO;
 use Exception;
 
@@ -17,9 +16,8 @@ use Exception;
  *
  * Handles HTTP POST requests for settings-related actions.
  *
- * This controller follows the Dependency Injection pattern. The PDO connection
- * can be injected via the constructor. If not provided, it will be resolved
- * from the ServiceContainer when needed (for backward compatibility).
+ * This controller uses Dependency Injection. All dependencies must be provided
+ * via the constructor.
  */
 
 class SettingsController
@@ -30,7 +28,7 @@ class SettingsController
     private Session $session;
 
     /**
-     * @var PDO|null Database connection (optional, lazy-loaded if not provided)
+     * @var PDO|null Database connection
      */
     private ?PDO $pdo;
 
@@ -38,7 +36,7 @@ class SettingsController
      * Constructor
      *
      * @param Session $session Session manager (required)
-     * @param PDO|null $pdo Database connection (optional, resolved from ServiceContainer if not provided)
+     * @param PDO|null $pdo Database connection (optional, some methods may fail without it)
      */
     public function __construct(Session $session, ?PDO $pdo = null)
     {
@@ -49,24 +47,11 @@ class SettingsController
     /**
      * Get the PDO database connection
      *
-     * Uses dependency injection if provided, otherwise falls back to ServiceContainer.
-     * This method supports gradual migration from service locator to DI.
-     *
-     * @return PDO|null Database connection or null if unavailable
+     * @return PDO|null Database connection or null if not provided
      */
     private function getPdoConnection(): ?PDO
     {
-        if ($this->pdo !== null) {
-            return $this->pdo;
-        }
-
-        // Fallback: Resolve from ServiceContainer (for backward compatibility)
-        try {
-            $serviceContainer = ServiceContainer::getInstance(null, null);
-            return $serviceContainer->getPdo();
-        } catch (Exception $e) {
-            return null;
-        }
+        return $this->pdo;
     }
 
     /**
