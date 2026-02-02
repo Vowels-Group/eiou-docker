@@ -20,3 +20,7 @@ tests/baseconfig/credentials.sh
 # PHPUnit cache and local config
 tests/.phpunit.cache/
 tests/phpunit.xml
+
+# Composer dependencies and lock file (in files/ directory)
+files/vendor/
+files/composer.lock

@@ -1,5 +1,0 @@
-# Composer dependencies (installed via composer install)
-/vendor/
-
-# Composer lock file (regenerated on install)
-composer.lock
