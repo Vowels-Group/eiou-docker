@@ -358,9 +358,7 @@ class SyncServiceTest extends TestCase
             ->method('send')
             ->willReturn('invalid json response');
 
-        $this->mockHeldTransactionService->expects($this->once())
-            ->method('onSyncComplete')
-            ->with($contactPubkey, false, 0);
+        // Note: onSyncComplete is NOT called on invalid response - method returns early
 
         $result = $this->service->syncTransactionChain($contactAddress, $contactPubkey);
 

@@ -166,34 +166,31 @@ class MessageServiceTest extends TestCase
      */
     public function testCheckMessageValidityReturnsTrueForValidHash(): void
     {
-        $message = [
-            'senderPublicKey' => self::TEST_PUBLIC_KEY,
-            'senderAddress' => self::TEST_ADDRESS,
-            'typeMessage' => 'transaction',
-            'hash' => self::TEST_HASH
-        ];
-
-        $this->contactRepository->method('contactExistsPubkey')
-            ->willReturn(false);
-
         $p2pData = [
             'salt' => 'test-salt',
             'time' => '1234567890'
         ];
 
-        $this->p2pRepository->method('getByHash')
-            ->with(self::TEST_HASH)
-            ->willReturn($p2pData);
-
         // Setup transport utility to return the proper address
         $this->transportUtility->method('resolveUserAddressForTransport')
             ->willReturn(self::TEST_ADDRESS);
 
-        // Create the expected hash
+        // Create the expected hash that will match
         $expectedHash = hash(Constants::HASH_ALGORITHM, self::TEST_ADDRESS . $p2pData['salt'] . $p2pData['time']);
 
-        // If hash matches, return true
-        $message['hash'] = $expectedHash;
+        $message = [
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'senderAddress' => self::TEST_ADDRESS,
+            'typeMessage' => 'transaction',
+            'hash' => $expectedHash
+        ];
+
+        $this->contactRepository->method('contactExistsPubkey')
+            ->willReturn(false);
+
+        $this->p2pRepository->method('getByHash')
+            ->with($expectedHash)
+            ->willReturn($p2pData);
 
         $result = $this->service->checkMessageValidity($message);
 

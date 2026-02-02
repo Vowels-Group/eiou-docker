@@ -77,6 +77,10 @@ class Rp2pServiceTest extends TestCase
         $this->utilityContainer->method('getTimeUtility')
             ->willReturn($this->timeUtility);
 
+        // Setup transport utility to return address as-is
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturnCallback(fn($address) => $address ?? self::TEST_ADDRESS);
+
         // Setup default user context
         $this->userContext->method('getMaxFee')
             ->willReturn(5.0);
@@ -176,7 +180,7 @@ class Rp2pServiceTest extends TestCase
             ->with(self::TEST_HASH, 'found');
 
         $this->rp2pRepository->method('insertRp2pRequest')
-            ->willReturn(true);
+            ->willReturn('test-rp2p-id');
 
         // Fee is 1% of 10000 = 100, which is <= 5% max
         $this->service->setP2pTransactionSender($this->p2pTransactionSender);
@@ -194,7 +198,8 @@ class Rp2pServiceTest extends TestCase
     {
         $request = [
             'hash' => self::TEST_HASH,
-            'amount' => self::TEST_AMOUNT
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
         ];
 
         $p2p = [
@@ -213,17 +218,17 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(100000);
 
         $this->contactRepository->method('getCreditLimit')
-            ->willReturn(100000);
+            ->willReturn(100000.0);
 
         $this->rp2pRepository->method('insertRp2pRequest')
-            ->willReturn(true);
+            ->willReturn('test-rp2p-id');
 
         $this->p2pRepository->expects($this->once())
             ->method('updateStatus')
             ->with(self::TEST_HASH, 'found');
 
         $this->timeUtility->method('getCurrentMicrotime')
-            ->willReturn('1234567890');
+            ->willReturn(1234567890);
 
         $this->messageDeliveryService->method('sendMessage')
             ->willReturn([
@@ -265,7 +270,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(0);
 
         $this->contactRepository->method('getCreditLimit')
-            ->willReturn(1000);
+            ->willReturn(1000.0);
 
         // With amount 101000 (100000 + 1000 fee) and only 1000 credit, should reject
         // insertRp2pRequest should not be called
@@ -298,7 +303,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->rp2pRepository->method('insertRp2pRequest')
-            ->willReturn(true);
+            ->willReturn('test-rp2p-id');
 
         $this->service->setP2pTransactionSender($this->p2pTransactionSender);
 
@@ -331,7 +336,9 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->rp2pRepository->method('insertRp2pRequest')
-            ->willReturn(false);
+            ->willReturn('');
+
+        $this->service->setP2pTransactionSender($this->p2pTransactionSender);
 
         // Should output failure message but continue
         $this->service->handleRp2pRequest($request);
@@ -351,7 +358,8 @@ class Rp2pServiceTest extends TestCase
     {
         $request = [
             'hash' => self::TEST_HASH,
-            'amount' => self::TEST_AMOUNT
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
         ];
 
         $this->rp2pRepository->method('rp2pExists')
@@ -372,7 +380,8 @@ class Rp2pServiceTest extends TestCase
     {
         $request = [
             'hash' => self::TEST_HASH,
-            'amount' => self::TEST_AMOUNT
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
         ];
 
         $this->rp2pRepository->method('rp2pExists')
@@ -393,7 +402,8 @@ class Rp2pServiceTest extends TestCase
     {
         $request = [
             'hash' => self::TEST_HASH,
-            'amount' => self::TEST_AMOUNT
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
         ];
 
         $this->rp2pRepository->method('rp2pExists')
@@ -413,7 +423,8 @@ class Rp2pServiceTest extends TestCase
     {
         $request = [
             'hash' => self::TEST_HASH,
-            'amount' => self::TEST_AMOUNT
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
         ];
 
         $this->rp2pRepository->method('rp2pExists')
@@ -436,7 +447,8 @@ class Rp2pServiceTest extends TestCase
     {
         $request = [
             'hash' => self::TEST_HASH,
-            'amount' => self::TEST_AMOUNT
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
         ];
 
         $this->rp2pRepository->method('rp2pExists')
@@ -460,7 +472,8 @@ class Rp2pServiceTest extends TestCase
     {
         $request = [
             'hash' => self::TEST_HASH,
-            'amount' => self::TEST_AMOUNT
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
         ];
 
         $this->rp2pRepository->method('rp2pExists')
@@ -478,7 +491,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->rp2pRepository->method('insertRp2pRequest')
-            ->willReturn(true);
+            ->willReturn('test-rp2p-id');
 
         $this->service->setP2pTransactionSender($this->p2pTransactionSender);
 
@@ -647,7 +660,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->rp2pRepository->method('insertRp2pRequest')
-            ->willReturn(true);
+            ->willReturn('test-rp2p-id');
 
         // Don't set P2P transaction sender
 
@@ -683,7 +696,7 @@ class Rp2pServiceTest extends TestCase
             ->willReturn($p2p);
 
         $this->rp2pRepository->method('insertRp2pRequest')
-            ->willReturn(true);
+            ->willReturn('test-rp2p-id');
 
         $this->service->setP2pTransactionSender($this->p2pTransactionSender);
 
@@ -701,7 +714,8 @@ class Rp2pServiceTest extends TestCase
     {
         $request = [
             'hash' => '',
-            'amount' => self::TEST_AMOUNT
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
         ];
 
         $this->rp2pRepository->method('rp2pExists')
@@ -726,7 +740,8 @@ class Rp2pServiceTest extends TestCase
     {
         $request = [
             'hash' => self::TEST_HASH,
-            'amount' => self::TEST_AMOUNT
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
         ];
 
         $p2p = [
@@ -745,13 +760,13 @@ class Rp2pServiceTest extends TestCase
             ->willReturn(100000);
 
         $this->contactRepository->method('getCreditLimit')
-            ->willReturn(100000);
+            ->willReturn(100000.0);
 
         $this->rp2pRepository->method('insertRp2pRequest')
-            ->willReturn(true);
+            ->willReturn('test-rp2p-id');
 
         $this->timeUtility->method('getCurrentMicrotime')
-            ->willReturn('1234567890');
+            ->willReturn(1234567890);
 
         // Simulate delivery failure
         $this->messageDeliveryService->method('sendMessage')
