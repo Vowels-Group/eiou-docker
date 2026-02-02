@@ -51,8 +51,9 @@ class DebugServiceTest extends TestCase
         $this->userContext->method('isInitialized')
             ->willReturn(false);
 
+        $mockPdo = $this->createMock(PDO::class);
         $this->debugRepository->method('getPdo')
-            ->willReturn(null);
+            ->willReturn($mockPdo);
 
         $result = $this->service->getContext();
 
@@ -70,8 +71,9 @@ class DebugServiceTest extends TestCase
         $this->userContext->method('isInitialized')
             ->willReturn(false);
 
+        $mockPdo = $this->createMock(PDO::class);
         $this->debugRepository->method('getPdo')
-            ->willReturn(null);
+            ->willReturn($mockPdo);
 
         $result = $this->service->getContext();
         $decoded = json_decode($result, true);
@@ -91,8 +93,9 @@ class DebugServiceTest extends TestCase
         $this->userContext->method('isInitialized')
             ->willReturn(false);
 
+        $mockPdo = $this->createMock(PDO::class);
         $this->debugRepository->method('getPdo')
-            ->willReturn(null);
+            ->willReturn($mockPdo);
 
         $result = $this->service->getContext();
         $decoded = json_decode($result, true);
@@ -117,8 +120,9 @@ class DebugServiceTest extends TestCase
         $this->userContext->method('getHttpsAddress')
             ->willReturn('https://test.local');
 
+        $mockPdo = $this->createMock(PDO::class);
         $this->debugRepository->method('getPdo')
-            ->willReturn(null);
+            ->willReturn($mockPdo);
 
         $result = $this->service->getContext();
         $decoded = json_decode($result, true);
@@ -138,8 +142,9 @@ class DebugServiceTest extends TestCase
         $this->userContext->method('isInitialized')
             ->willReturn(false);
 
+        $mockPdo = $this->createMock(PDO::class);
         $this->debugRepository->method('getPdo')
-            ->willReturn(null);
+            ->willReturn($mockPdo);
 
         $result = $this->service->getContext();
         $decoded = json_decode($result, true);
@@ -373,8 +378,9 @@ class DebugServiceTest extends TestCase
 
         $this->userContext->method('isInitialized')
             ->willReturn(false);
+        $mockPdo = $this->createMock(PDO::class);
         $this->debugRepository->method('getPdo')
-            ->willReturn(null);
+            ->willReturn($mockPdo);
 
         $result = $this->service->getContext();
         $decoded = json_decode($result, true);
@@ -398,8 +404,9 @@ class DebugServiceTest extends TestCase
 
         $this->userContext->method('isInitialized')
             ->willReturn(false);
+        $mockPdo = $this->createMock(PDO::class);
         $this->debugRepository->method('getPdo')
-            ->willReturn(null);
+            ->willReturn($mockPdo);
 
         $result = $this->service->getContext();
         $decoded = json_decode($result, true);
