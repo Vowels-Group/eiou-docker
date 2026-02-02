@@ -28,7 +28,7 @@ Unit tests validate individual PHP classes and methods in isolation.
 
 - **Location**: `tests/Unit/`
 - **Framework**: PHPUnit 11
-- **Total**: 1600+ tests, 5500+ assertions
+- **Total**: 2900+ tests, 5500+ assertions
 
 ### Integration Tests (Shell)
 
@@ -250,6 +250,16 @@ Integration tests validate the complete system behavior using Docker containers.
 
 ## Running Unit Tests
 
+### Configuration Files
+
+- `tests/phpunit.xml.dist` - PHPUnit 11 configuration template (tracked in git)
+- `tests/phpunit.xml` - Local configuration override (in .gitignore)
+
+The `.dist` file is the tracked template. Copy it to `phpunit.xml` for local customization:
+```bash
+cp tests/phpunit.xml.dist tests/phpunit.xml
+```
+
 ### Composer Commands
 
 ```bash
@@ -326,8 +336,11 @@ cd eiou-docker/tests
 
 ```
 tests/
-├── bootstrap.php              # PHPUnit bootstrap (autoloader setup)
-├── phpunit.xml                # PHPUnit configuration
+├── bootstrap.php              # PHPUnit bootstrap - sets up test environment:
+│   │                          #   - EIOU_TEST_MODE constant (true during tests)
+│   │                          #   - PSR-4 namespace Eiou\Tests\ autoloading
+│   │                          #   - Mocked output() function for suppressing logs
+├── phpunit.xml.dist           # PHPUnit configuration template (tracked in git)
 ├── run-all-tests.sh           # Integration test runner
 ├── Unit/                      # PHPUnit unit tests
 │   ├── Cli/
