@@ -17,5 +17,6 @@ tests/baseconfig/credentials.sh
 .env.local
 .env.test.local
 
-# PHPUnit cache
+# PHPUnit cache and local config
 tests/.phpunit.cache/
+tests/phpunit.xml
