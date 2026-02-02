@@ -3,7 +3,7 @@
 
 namespace Eiou\Database;
 
-use Eiou\Database\Traits\QueryHelper;
+use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
 use Eiou\Utils\SecureLogger;
 use PDO;
@@ -24,7 +24,7 @@ use PDOException;
  * @package Database\Repository
  */
 class TransactionRecoveryRepository extends AbstractRepository {
-    use QueryHelper;
+    use QueryBuilder;
 
     /**
      * @var array Allowed column names for SQL injection prevention

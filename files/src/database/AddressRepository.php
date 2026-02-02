@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
 use PDO;
 
@@ -14,6 +15,7 @@ use PDO;
  * @package Database\Repository
  */
 class AddressRepository extends AbstractRepository {
+    use QueryBuilder;
     /**
      * @var array Allowed column names for SQL injection prevention
      */

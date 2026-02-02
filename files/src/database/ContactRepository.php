@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
 use PDO;
 use PDOException;
@@ -15,6 +16,7 @@ use PDOException;
  * @package Database\Repository
  */
 class ContactRepository extends AbstractRepository {
+    use QueryBuilder;
     /**
      * @var array Allowed column names for SQL injection prevention
      */

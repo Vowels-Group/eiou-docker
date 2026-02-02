@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Utils\SecureLogger;
 use PDO;
 use PDOException;
@@ -41,6 +42,8 @@ use PDOException;
  * 7. releaseTransaction() removes them after successful reprocessing
  */
 class HeldTransactionRepository extends AbstractRepository {
+    use QueryBuilder;
+
     /**
      * @var array Allowed column names for SQL injection prevention
      */

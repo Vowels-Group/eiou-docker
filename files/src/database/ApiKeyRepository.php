@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Security\KeyEncryption;
 use PDO;
 use Exception;
@@ -14,6 +15,7 @@ use Exception;
  * Secrets are stored encrypted (not hashed) to enable server-side HMAC verification.
  */
 class ApiKeyRepository extends AbstractRepository {
+    use QueryBuilder;
     /**
      * @var array Allowed column names for SQL injection prevention
      */

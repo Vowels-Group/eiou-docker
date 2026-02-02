@@ -8,12 +8,16 @@ use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Core\Constants;
 use Eiou\Database\DebugRepository;
-use Eiou\Services\ServiceContainer;
+use PDO;
+use Exception;
 
 /**
  * Settings Controller
  *
  * Handles HTTP POST requests for settings-related actions.
+ *
+ * This controller uses Dependency Injection. All dependencies must be provided
+ * via the constructor.
  */
 
 class SettingsController
@@ -24,13 +28,30 @@ class SettingsController
     private Session $session;
 
     /**
+     * @var PDO|null Database connection
+     */
+    private ?PDO $pdo;
+
+    /**
      * Constructor
      *
-     * @param Session $session
+     * @param Session $session Session manager (required)
+     * @param PDO|null $pdo Database connection (optional, some methods may fail without it)
      */
-    public function __construct(Session $session)
+    public function __construct(Session $session, ?PDO $pdo = null)
     {
         $this->session = $session;
+        $this->pdo = $pdo;
+    }
+
+    /**
+     * Get the PDO database connection
+     *
+     * @return PDO|null Database connection or null if not provided
+     */
+    private function getPdoConnection(): ?PDO
+    {
+        return $this->pdo;
     }
 
     /**
@@ -231,12 +252,13 @@ class SettingsController
 
             // Get MySQL/MariaDB version
             try {
-                $serviceContainer = ServiceContainer::getInstance(null, null);
-                $pdo = $serviceContainer->getPdo();
+                $pdo = $this->getPdoConnection();
                 if ($pdo) {
                     $stmt = $pdo->query('SELECT VERSION() as version');
                     $result = $stmt->fetch();
                     $systemInfo['mysql_version'] = $result['version'] ?? 'N/A';
+                } else {
+                    $systemInfo['mysql_version'] = 'N/A (no connection)';
                 }
             } catch (Exception $e) {
                 $systemInfo['mysql_version'] = 'Error: ' . $e->getMessage();
@@ -471,12 +493,13 @@ class SettingsController
 
             // Get MySQL/MariaDB version
             try {
-                $serviceContainer = ServiceContainer::getInstance(null, null);
-                $pdo = $serviceContainer->getPdo();
+                $pdo = $this->getPdoConnection();
                 if ($pdo) {
                     $stmt = $pdo->query('SELECT VERSION() as version');
                     $result = $stmt->fetch();
                     $systemInfo['mysql_version'] = $result['version'] ?? 'N/A';
+                } else {
+                    $systemInfo['mysql_version'] = 'N/A (no connection)';
                 }
             } catch (Exception $e) {
                 $systemInfo['mysql_version'] = 'Error: ' . $e->getMessage();

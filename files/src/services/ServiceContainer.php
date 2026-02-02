@@ -3,6 +3,7 @@
 
 namespace Eiou\Services;
 
+use Psr\Container\ContainerInterface;
 use Eiou\Utils\SecureLogger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
@@ -13,6 +14,8 @@ use Eiou\Contracts\ChainOperationsInterface;
 use Eiou\Contracts\P2pTransactionSenderInterface;
 use Eiou\Contracts\EventDispatcherInterface;
 use Eiou\Contracts\ContactServiceInterface;
+use Eiou\Contracts\ContactManagementServiceInterface;
+use Eiou\Contracts\ContactSyncServiceInterface;
 use Eiou\Contracts\TransactionServiceInterface;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Contracts\Rp2pServiceInterface;
@@ -39,6 +42,8 @@ use Eiou\Contracts\SendOperationServiceInterface;
 use Eiou\Events\EventDispatcher;
 use Eiou\Events\SyncEvents;
 use Eiou\Services\Proxies\SyncServiceProxy;
+use Eiou\Services\ContactManagementService;
+use Eiou\Services\ContactSyncService;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\BalanceRepository;
@@ -69,11 +74,16 @@ use function Eiou\Database\createPDOConnection;
  * Centralized dependency injection container for managing service instances.
  */
 
-class ServiceContainer {
+class ServiceContainer implements ContainerInterface {
     /**
      * @var ServiceContainer|null Singleton instance
      */
     private static ?ServiceContainer $instance = null;
+
+    /**
+     * @var ContainerInterface|null PHP-DI container for PSR-11 compliance
+     */
+    private ?ContainerInterface $phpdi = null;
 
     /**
      * @var array Cached repository instances
@@ -428,26 +438,54 @@ class ServiceContainer {
     }
 
     /**
-     * Get ContactService instance
+     * Get ContactManagementService instance
+     * @return ContactManagementServiceInterface
+     */
+    public function getContactManagementService(): ContactManagementServiceInterface {
+        if (!isset($this->services['ContactManagementService'])) {
+            $this->services['ContactManagementService'] = new ContactManagementService(
+                $this->getContactRepository(),
+                $this->getAddressRepository(),
+                $this->getBalanceRepository(),
+                $this->getUtilityContainer(),
+                $this->getInputValidator(),
+                $this->currentUser
+            );
+        }
+        return $this->services['ContactManagementService'];
+    }
+
+    /**
+     * Get ContactSyncService instance
+     * @return ContactSyncServiceInterface
+     */
+    public function getContactSyncService(): ContactSyncServiceInterface {
+        if (!isset($this->services['ContactSyncService'])) {
+            $this->services['ContactSyncService'] = new ContactSyncService(
+                $this->getContactRepository(),
+                $this->getAddressRepository(),
+                $this->getBalanceRepository(),
+                $this->getTransactionRepository(),
+                $this->getTransactionContactRepository(),
+                $this->getUtilityContainer(),
+                $this->currentUser
+            );
+        }
+        return $this->services['ContactSyncService'];
+    }
+
+    /**
+     * Get ContactService instance (facade)
      *
-     * Integrates MessageDeliveryService for reliable contact message delivery
-     * with retry logic and dead letter queue support.
+     * Integrates ContactManagementService and ContactSyncService for contact operations.
      *
      * @return ContactServiceInterface
      */
     public function getContactService(): ContactServiceInterface {
         if (!isset($this->services['ContactService'])) {
             $this->services['ContactService'] = new ContactService(
-                $this->getContactRepository(),
-                $this->getAddressRepository(),
-                $this->getBalanceRepository(),
-                $this->getUtilityContainer(),
-                $this->getInputValidator(),
-                $this->getLogger(),
-                $this->currentUser,
-                $this->getTransactionRepository(),
-                $this->getTransactionContactRepository(),
-                $this->getMessageDeliveryService()
+                $this->getContactManagementService(),
+                $this->getContactSyncService()
             );
         }
         return $this->services['ContactService'];
@@ -498,7 +536,7 @@ class ServiceContainer {
     public function getP2pService(): P2pServiceInterface {
         if (!isset($this->services['P2pService'])) {
             $this->services['P2pService'] = new P2pService(
-                $this->getContactRepository(),
+                $this->getContactService(),
                 $this->getBalanceRepository(),
                 $this->getP2pRepository(),
                 $this->getTransactionRepository(),
@@ -852,7 +890,7 @@ class ServiceContainer {
         if (!isset($this->services['TransactionValidationService'])) {
             $this->services['TransactionValidationService'] = new TransactionValidationService(
                 $this->getTransactionRepository(),
-                $this->getContactRepository(),
+                $this->getContactService(),
                 $this->getUtilityContainer()->getValidationUtility(),
                 $this->getInputValidator(),
                 $this->getTransactionPayload(),
@@ -1117,8 +1155,26 @@ class ServiceContainer {
         // These now use SyncTriggerInterface via proxy for loose coupling
         // =========================================================================
 
-        // Wire ContactService -> SyncTriggerInterface (via proxy)
-        // Reason: ContactService needs to sync re-added contacts
+        // Wire ContactManagementService with ContactSyncService
+        // Reason: ContactManagementService needs to trigger sync operations after contact changes
+        if (isset($this->services['ContactManagementService']) && isset($this->services['ContactSyncService'])) {
+            $this->services['ContactManagementService']->setContactSyncService($this->services['ContactSyncService']);
+        }
+
+        // Wire ContactSyncService -> SyncTriggerInterface (via proxy)
+        // Reason: ContactSyncService needs to trigger sync operations for contacts
+        if (isset($this->services['ContactSyncService'])) {
+            $this->services['ContactSyncService']->setSyncTrigger($this->getSyncServiceProxy());
+        }
+
+        // Wire ContactSyncService -> MessageDeliveryService
+        // Reason: ContactSyncService needs reliable message delivery for contact operations
+        if (isset($this->services['ContactSyncService']) && isset($this->services['MessageDeliveryService'])) {
+            $this->services['ContactSyncService']->setMessageDeliveryService($this->services['MessageDeliveryService']);
+        }
+
+        // Wire ContactService -> SyncTriggerInterface (via proxy) - backwards compatibility
+        // Reason: ContactService facade delegates to underlying services but may need sync trigger
         // Note: Uses SyncTriggerInterface for loose coupling - breaks circular dependency
         if (isset($this->services['ContactService'])) {
             $this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
@@ -1256,6 +1312,8 @@ class ServiceContainer {
         // Initialize core services (order matters for some dependencies)
         $this->getSyncService();
         $this->getHeldTransactionService();
+        $this->getContactManagementService();
+        $this->getContactSyncService();
         $this->getContactService();
         $this->getTransactionService();
         $this->getP2pService();
@@ -1338,6 +1396,115 @@ class ServiceContainer {
      */
     public function getUtil(string $name) {
         return $this->utils[$name] ?? null;
+    }
+
+    // =========================================================================
+    // PSR-11 CONTAINER INTERFACE IMPLEMENTATION
+    // =========================================================================
+
+    /**
+     * Get the PHP-DI container instance (lazy-loaded)
+     *
+     * This provides access to the underlying DI container for advanced use cases
+     * and gradual migration from service locator to proper dependency injection.
+     *
+     * @return ContainerInterface PHP-DI container
+     */
+    public function getContainer(): ContainerInterface {
+        if ($this->phpdi === null) {
+            $this->phpdi = $this->buildPhpDiContainer();
+        }
+        return $this->phpdi;
+    }
+
+    /**
+     * Build the PHP-DI container
+     *
+     * @return ContainerInterface
+     * @throws RuntimeException If container configuration is not found
+     */
+    private function buildPhpDiContainer(): ContainerInterface {
+        $configPath = dirname(__DIR__) . '/config/container.php';
+
+        if (!file_exists($configPath)) {
+            throw new RuntimeException("Container configuration not found: {$configPath}");
+        }
+
+        require_once $configPath;
+
+        if (!function_exists('Eiou\\Config\\buildContainer')) {
+            throw new RuntimeException("buildContainer function not found in container configuration");
+        }
+
+        return \Eiou\Config\buildContainer($this->pdo, $this->currentUser);
+    }
+
+    /**
+     * PSR-11: Finds an entry of the container by its identifier and returns it.
+     *
+     * @param string $id Identifier of the entry to look for.
+     * @return mixed Entry
+     * @throws \Psr\Container\NotFoundExceptionInterface No entry found for identifier
+     */
+    public function get(string $id): mixed {
+        // First check if we have a getter method for this service
+        $getterMethod = 'get' . $id;
+        if (method_exists($this, $getterMethod)) {
+            return $this->$getterMethod();
+        }
+
+        // Check if it's a registered service or util
+        if (isset($this->services[$id])) {
+            return $this->services[$id];
+        }
+        if (isset($this->utils[$id])) {
+            return $this->utils[$id];
+        }
+        if (isset($this->repositories[$id])) {
+            return $this->repositories[$id];
+        }
+
+        // Try to resolve via PHP-DI if available
+        if ($this->phpdi !== null && $this->phpdi->has($id)) {
+            return $this->phpdi->get($id);
+        }
+
+        throw new class("Service not found: {$id}") extends \Exception implements \Psr\Container\NotFoundExceptionInterface {};
+    }
+
+    /**
+     * PSR-11: Returns true if the container can return an entry for the given identifier.
+     *
+     * @param string $id Identifier of the entry to look for.
+     * @return bool
+     */
+    public function has(string $id): bool {
+        // Check for getter method
+        $getterMethod = 'get' . $id;
+        if (method_exists($this, $getterMethod)) {
+            return true;
+        }
+
+        // Check registered services/utils/repos
+        if (isset($this->services[$id]) || isset($this->utils[$id]) || isset($this->repositories[$id])) {
+            return true;
+        }
+
+        // Check PHP-DI container
+        if ($this->phpdi !== null && $this->phpdi->has($id)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Reset the singleton instance (for testing purposes)
+     *
+     * @return void
+     */
+    public static function resetInstance(): void {
+        self::$instance = null;
     }
 
     /**

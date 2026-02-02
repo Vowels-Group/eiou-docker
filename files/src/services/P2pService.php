@@ -6,7 +6,7 @@ namespace Eiou\Services;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\SecureLogger;
 use Eiou\Contracts\P2pServiceInterface;
-use Eiou\Database\ContactRepository;
+use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
@@ -34,9 +34,9 @@ use RuntimeException;
  */
 class P2pService implements P2pServiceInterface {
     /**
-     * @var ContactRepository Contact repository instance
+     * @var ContactServiceInterface Contact service instance
      */
-    private ContactRepository $contactRepository;
+    private ContactServiceInterface $contactService;
 
     /**
      * @var BalanceRepository Balance repository instance
@@ -111,7 +111,7 @@ class P2pService implements P2pServiceInterface {
     /**
      * Constructor
      *
-     * @param ContactRepository $contactRepository Contact repository
+     * @param ContactServiceInterface $contactService Contact service
      * @param BalanceRepository $balanceRepository Balance repository
      * @param P2pRepository $p2pRepository P2P repository
      * @param TransactionRepository $transactionRepository Transaction repository
@@ -120,7 +120,7 @@ class P2pService implements P2pServiceInterface {
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
      */
     public function __construct(
-        ContactRepository $contactRepository,
+        ContactServiceInterface $contactService,
         BalanceRepository $balanceRepository,
         P2pRepository $p2pRepository,
         TransactionRepository $transactionRepository,
@@ -128,7 +128,7 @@ class P2pService implements P2pServiceInterface {
         UserContext $currentUser,
         ?MessageDeliveryService $messageDeliveryService = null
     ) {
-        $this->contactRepository = $contactRepository;
+        $this->contactService = $contactService;
         $this->balanceRepository = $balanceRepository;
         $this->p2pRepository = $p2pRepository;
         $this->transactionRepository = $transactionRepository;
@@ -248,7 +248,7 @@ class P2pService implements P2pServiceInterface {
                 $availableFunds = $this->validationUtility->calculateAvailableFunds($request);
 
                 $fundsOnHold = $this->p2pRepository->getCreditInP2p($request['senderPublicKey']);
-                $creditLimit = $this->contactRepository->getCreditLimit($request['senderPublicKey']);
+                $creditLimit = $this->contactService->getCreditLimit($request['senderPublicKey']);
 
                 if (($availableFunds + $creditLimit) < ($requestedAmount + $fundsOnHold)) {
                     // Note: Do NOT echo here - the caller (checkP2pPossible) handles the response
@@ -280,7 +280,7 @@ class P2pService implements P2pServiceInterface {
         $transportIndex = $this->transportUtility->determineTransportType($address);
         $senderContact = null;
         if ($transportIndex !== null) {
-            $senderContact = $this->contactRepository->lookupByAddress($transportIndex, $address);
+            $senderContact = $this->contactService->lookupByAddress($transportIndex, $address);
         }
         $fee = ($senderContact ? $senderContact['fee_percent'] : $this->currentUser->getDefaultFee());
         return $request['amount'] + $this->currencyUtility->calculateFee($request['amount'], $fee, $this->currentUser->getMinimumFee());
@@ -297,7 +297,7 @@ class P2pService implements P2pServiceInterface {
         $senderAddress = $request['senderAddress'];
         $pubkey = $request['senderPublicKey'];
         // Check if User is not blocked
-        if(!$this->contactRepository->isNotBlocked($pubkey)){
+        if(!$this->contactService->isNotBlocked($pubkey)){
             if($echo){
                 echo $this->p2pPayload->buildRejection($request, 'contact_blocked');
             }
@@ -427,7 +427,7 @@ class P2pService implements P2pServiceInterface {
      */
     public function matchContact($request): ?array {
         // Check if contact matches transactions end-recipient
-        $contacts = $this->contactRepository->getAllContacts();
+        $contacts = $this->contactService->getAllContacts();
         // Check if end recipient of request in contacts
         $senderAddress = $request['sender_address'];
         $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
@@ -599,7 +599,7 @@ class P2pService implements P2pServiceInterface {
         // Select queued messages from the p2p table (with status queued)
         $queuedMessages = $this->p2pRepository->getQueuedP2pMessages();
         if($queuedMessages !== []){
-            $contacts = $this->contactRepository->getAllAcceptedAddresses(); // Retrieve all accepted contact addresses to send p2p request
+            $contacts = $this->contactService->getAllAcceptedAddresses(); // Retrieve all accepted contact addresses to send p2p request
             $contactsCount = count($contacts); // Count amount of contacts to send p2p request
         }
         // Process each queued message
@@ -727,7 +727,7 @@ class P2pService implements P2pServiceInterface {
             $address = $data[2];
         } else{
             // Check if contact exists by Name supplied, if not then cannot send the p2p request
-            $contactAddresses = $this->contactRepository->lookupAddressesByName($data[2]);
+            $contactAddresses = $this->contactService->lookupAddressesByName($data[2]);
             if($contactAddresses){
                 $address = $this->transportUtility->fallbackTransportAddress($contactAddresses);
                 if($address){

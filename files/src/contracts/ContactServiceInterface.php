@@ -168,4 +168,24 @@ interface ContactServiceInterface
      * @return array List of all addresses
      */
     public function getAllAddresses(?string $exclude = null): array;
+
+    /**
+     * Get all accepted contact addresses for P2P routing.
+     *
+     * Returns addresses of contacts with 'accepted' status for use in
+     * P2P message broadcasting.
+     *
+     * @return array List of accepted contact addresses
+     */
+    public function getAllAcceptedAddresses(): array;
+
+    /**
+     * Lookup contact addresses by name.
+     *
+     * Used for address resolution when sending to a contact by name.
+     *
+     * @param string $name Contact name
+     * @return string|null Contact addresses or null if not found
+     */
+    public function lookupAddressesByName(string $name): ?string;
 }

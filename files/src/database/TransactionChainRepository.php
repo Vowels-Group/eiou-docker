@@ -3,7 +3,7 @@
 
 namespace Eiou\Database;
 
-use Eiou\Database\Traits\QueryHelper;
+use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
 use PDO;
 use PDOException;
@@ -24,7 +24,7 @@ use PDOException;
  */
 class TransactionChainRepository extends AbstractRepository
 {
-    use QueryHelper;
+    use QueryBuilder;
 
     /**
      * @var string Table name for this repository

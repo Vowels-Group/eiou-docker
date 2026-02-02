@@ -3,7 +3,7 @@
 
 namespace Eiou\Database;
 
-use Eiou\Database\Traits\QueryHelper;
+use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
 use Eiou\Formatters\TransactionFormatter;
 use PDO;
@@ -26,7 +26,7 @@ use PDOException;
  * @see AbstractRepository::execute() for the error handling implementation
  */
 class TransactionRepository extends AbstractRepository {
-    use QueryHelper;
+    use QueryBuilder;
 
     /**
      * @var array Allowed column names for SQL injection prevention
