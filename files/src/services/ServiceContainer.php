@@ -3,6 +3,7 @@
 
 namespace Eiou\Services;
 
+use Psr\Container\ContainerInterface;
 use Eiou\Utils\SecureLogger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
@@ -73,11 +74,16 @@ use function Eiou\Database\createPDOConnection;
  * Centralized dependency injection container for managing service instances.
  */
 
-class ServiceContainer {
+class ServiceContainer implements ContainerInterface {
     /**
      * @var ServiceContainer|null Singleton instance
      */
     private static ?ServiceContainer $instance = null;
+
+    /**
+     * @var ContainerInterface|null PHP-DI container for PSR-11 compliance
+     */
+    private ?ContainerInterface $phpdi = null;
 
     /**
      * @var array Cached repository instances
@@ -1390,6 +1396,115 @@ class ServiceContainer {
      */
     public function getUtil(string $name) {
         return $this->utils[$name] ?? null;
+    }
+
+    // =========================================================================
+    // PSR-11 CONTAINER INTERFACE IMPLEMENTATION
+    // =========================================================================
+
+    /**
+     * Get the PHP-DI container instance (lazy-loaded)
+     *
+     * This provides access to the underlying DI container for advanced use cases
+     * and gradual migration from service locator to proper dependency injection.
+     *
+     * @return ContainerInterface PHP-DI container
+     */
+    public function getContainer(): ContainerInterface {
+        if ($this->phpdi === null) {
+            $this->phpdi = $this->buildPhpDiContainer();
+        }
+        return $this->phpdi;
+    }
+
+    /**
+     * Build the PHP-DI container
+     *
+     * @return ContainerInterface
+     * @throws RuntimeException If container configuration is not found
+     */
+    private function buildPhpDiContainer(): ContainerInterface {
+        $configPath = dirname(__DIR__) . '/config/container.php';
+
+        if (!file_exists($configPath)) {
+            throw new RuntimeException("Container configuration not found: {$configPath}");
+        }
+
+        require_once $configPath;
+
+        if (!function_exists('Eiou\\Config\\buildContainer')) {
+            throw new RuntimeException("buildContainer function not found in container configuration");
+        }
+
+        return \Eiou\Config\buildContainer($this->pdo, $this->currentUser);
+    }
+
+    /**
+     * PSR-11: Finds an entry of the container by its identifier and returns it.
+     *
+     * @param string $id Identifier of the entry to look for.
+     * @return mixed Entry
+     * @throws \Psr\Container\NotFoundExceptionInterface No entry found for identifier
+     */
+    public function get(string $id): mixed {
+        // First check if we have a getter method for this service
+        $getterMethod = 'get' . $id;
+        if (method_exists($this, $getterMethod)) {
+            return $this->$getterMethod();
+        }
+
+        // Check if it's a registered service or util
+        if (isset($this->services[$id])) {
+            return $this->services[$id];
+        }
+        if (isset($this->utils[$id])) {
+            return $this->utils[$id];
+        }
+        if (isset($this->repositories[$id])) {
+            return $this->repositories[$id];
+        }
+
+        // Try to resolve via PHP-DI if available
+        if ($this->phpdi !== null && $this->phpdi->has($id)) {
+            return $this->phpdi->get($id);
+        }
+
+        throw new class("Service not found: {$id}") extends \Exception implements \Psr\Container\NotFoundExceptionInterface {};
+    }
+
+    /**
+     * PSR-11: Returns true if the container can return an entry for the given identifier.
+     *
+     * @param string $id Identifier of the entry to look for.
+     * @return bool
+     */
+    public function has(string $id): bool {
+        // Check for getter method
+        $getterMethod = 'get' . $id;
+        if (method_exists($this, $getterMethod)) {
+            return true;
+        }
+
+        // Check registered services/utils/repos
+        if (isset($this->services[$id]) || isset($this->utils[$id]) || isset($this->repositories[$id])) {
+            return true;
+        }
+
+        // Check PHP-DI container
+        if ($this->phpdi !== null && $this->phpdi->has($id)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Reset the singleton instance (for testing purposes)
+     *
+     * @return void
+     */
+    public static function resetInstance(): void {
+        self::$instance = null;
     }
 
     /**
