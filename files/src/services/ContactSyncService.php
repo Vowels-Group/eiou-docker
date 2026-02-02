@@ -1,0 +1,986 @@
+<?php
+# Copyright 2025-2026 Vowels Group, LLC
+
+namespace Eiou\Services;
+
+use Eiou\Cli\CliOutputManager;
+use Eiou\Core\ErrorCodes;
+use Eiou\Core\Constants;
+use Eiou\Contracts\ContactSyncServiceInterface;
+use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Database\TransactionContactRepository;
+use Eiou\Database\ContactRepository;
+use Eiou\Database\AddressRepository;
+use Eiou\Database\BalanceRepository;
+use Eiou\Database\TransactionRepository;
+use Eiou\Services\Utilities\UtilityServiceContainer;
+use Eiou\Services\Utilities\TransportUtilityService;
+use Eiou\Services\Utilities\TimeUtilityService;
+use Eiou\Utils\SecureLogger;
+use Eiou\Core\UserContext;
+use Eiou\Schemas\Payloads\ContactPayload;
+use Eiou\Schemas\Payloads\MessagePayload;
+use RuntimeException;
+
+/**
+ * Contact Sync Service
+ *
+ * Handles contact synchronization and P2P exchange operations.
+ * Extracted from ContactService to separate sync/exchange concerns
+ * from core contact management operations.
+ *
+ * Responsibilities:
+ * - Contact request sending and receiving
+ * - Message delivery for contact operations
+ * - Contact transaction chain management
+ * - Existing and new contact exchange handling
+ *
+ * @see ContactServiceInterface for contact management operations
+ * @see SyncTriggerInterface for transaction chain sync operations
+ */
+class ContactSyncService implements ContactSyncServiceInterface {
+
+    // =========================================================================
+    // PROPERTIES
+    // =========================================================================
+
+    /**
+     * @var ContactRepository Contact Repository instance
+     */
+    private ContactRepository $contactRepository;
+
+    /**
+     * @var AddressRepository Address repository instance
+     */
+    private AddressRepository $addressRepository;
+
+    /**
+     * @var BalanceRepository Balance repository instance
+     */
+    private BalanceRepository $balanceRepository;
+
+    /**
+     * @var TransactionRepository Transaction repository for contact transactions
+     */
+    private TransactionRepository $transactionRepository;
+
+    /**
+     * @var TransactionContactRepository Transaction contact repository for contact transactions
+     */
+    private TransactionContactRepository $transactionContactRepository;
+
+    /**
+     * @var UtilityServiceContainer Utility service container
+     */
+    private UtilityServiceContainer $utilityContainer;
+
+    /**
+     * @var TransportUtilityService Transport utility service
+     */
+    private TransportUtilityService $transportUtility;
+
+    /**
+     * @var TimeUtilityService Time utility service
+     */
+    private TimeUtilityService $timeUtility;
+
+    /**
+     * @var UserContext Current user data
+     */
+    private UserContext $currentUser;
+
+    /**
+     * @var ContactPayload payload builder for contacts
+     */
+    private ContactPayload $contactPayload;
+
+    /**
+     * @var MessagePayload payload builder for messages
+     */
+    private MessagePayload $messagePayload;
+
+    /**
+     * @var MessageDeliveryService|null Message delivery service for reliable delivery
+     */
+    private ?MessageDeliveryService $messageDeliveryService = null;
+
+    /**
+     * @var SyncTriggerInterface|null Sync trigger for contact synchronization
+     */
+    private ?SyncTriggerInterface $syncTrigger = null;
+
+    // =========================================================================
+    // CONSTRUCTOR
+    // =========================================================================
+
+    /**
+     * Constructor
+     *
+     * @param ContactRepository $contactRepository Contact Repository
+     * @param AddressRepository $addressRepository Address Repository
+     * @param BalanceRepository $balanceRepository Balance repository
+     * @param TransactionRepository $transactionRepository Transaction Repository
+     * @param TransactionContactRepository $transactionContactRepository Transaction contact repository
+     * @param UtilityServiceContainer $utilityContainer Utility Container
+     * @param UserContext $currentUser Current user data
+     */
+    public function __construct(
+        ContactRepository $contactRepository,
+        AddressRepository $addressRepository,
+        BalanceRepository $balanceRepository,
+        TransactionRepository $transactionRepository,
+        TransactionContactRepository $transactionContactRepository,
+        UtilityServiceContainer $utilityContainer,
+        UserContext $currentUser
+    ) {
+        $this->contactRepository = $contactRepository;
+        $this->addressRepository = $addressRepository;
+        $this->balanceRepository = $balanceRepository;
+        $this->transactionRepository = $transactionRepository;
+        $this->transactionContactRepository = $transactionContactRepository;
+        $this->utilityContainer = $utilityContainer;
+        $this->currentUser = $currentUser;
+        $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
+        $this->timeUtility = $this->utilityContainer->getTimeUtility();
+
+        $this->contactPayload = new ContactPayload($this->currentUser, $this->utilityContainer);
+        $this->messagePayload = new MessagePayload($this->currentUser, $this->utilityContainer);
+    }
+
+    // =========================================================================
+    // DEPENDENCY INJECTION
+    // =========================================================================
+
+    /**
+     * Set the sync trigger (accepts interface for loose coupling)
+     *
+     * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
+     */
+    public function setSyncTrigger(SyncTriggerInterface $sync): void {
+        $this->syncTrigger = $sync;
+    }
+
+    /**
+     * Get the sync trigger
+     *
+     * @return SyncTriggerInterface|null The sync trigger or null if not set
+     */
+    public function getSyncTrigger(): ?SyncTriggerInterface {
+        return $this->syncTrigger;
+    }
+
+    /**
+     * Get the sync trigger with null check (internal use)
+     *
+     * @return SyncTriggerInterface
+     * @throws RuntimeException If sync trigger was not injected
+     */
+    private function requireSyncTrigger(): SyncTriggerInterface {
+        if ($this->syncTrigger === null) {
+            throw new RuntimeException('SyncTrigger not injected. Call setSyncTrigger() or ensure ServiceContainer properly injects the dependency.');
+        }
+        return $this->syncTrigger;
+    }
+
+    /**
+     * Set the message delivery service (for lazy initialization)
+     *
+     * @param MessageDeliveryService $service Message delivery service
+     */
+    public function setMessageDeliveryService(MessageDeliveryService $service): void {
+        $this->messageDeliveryService = $service;
+    }
+
+    // =========================================================================
+    // CONTACT TRANSACTION ID
+    // =========================================================================
+
+    /**
+     * Create unique transaction ID for contact requests
+     *
+     * For contact transactions, amount is always 0, so txid is generated from:
+     * senderPublicKey + receiverPublicKey + 0 + time
+     *
+     * @param string $receiverPublicKey The receiver's public key
+     * @return string The generated transaction ID (SHA-256 hash)
+     */
+    public function createContactTxid(string $receiverPublicKey): string {
+        $time = $this->timeUtility->getCurrentMicrotime();
+        return hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $receiverPublicKey . '0' . $time);
+    }
+
+    // =========================================================================
+    // CONTACT TRANSACTION CHECKS
+    // =========================================================================
+
+    /**
+     * Check if a contact transaction already exists for the given receiver
+     *
+     * @param string $receiverPublicKey The public key of the contact
+     * @return bool True if contact transaction exists
+     */
+    public function contactTransactionExists(string $receiverPublicKey): bool {
+        $receiverPublicKeyHash = hash(Constants::HASH_ALGORITHM, $receiverPublicKey);
+        return $this->transactionContactRepository->contactTransactionExistsForReceiver($receiverPublicKeyHash);
+    }
+
+    // =========================================================================
+    // CONTACT TRANSACTION OPERATIONS
+    // =========================================================================
+
+    /**
+     * Insert a contact transaction after receiving the public key from a contact
+     *
+     * Creates a contact transaction with amount=0 to record the contact request
+     * as the first transaction between users. Used by the sender of the contact request.
+     *
+     * The txid should come from the receiver's response to ensure both parties
+     * have matching txids for the contact transaction.
+     *
+     * @param string $receiverPublicKey The public key of the contact
+     * @param string $receiverAddress The address of the contact
+     * @param string $currency The currency for the transaction
+     * @param string|null $txid The txid from the receiver's response
+     * @return string|null The txid on success, null on failure
+     */
+    public function insertContactTransaction(string $receiverPublicKey, string $receiverAddress, string $currency, ?string $txid = null): ?string {
+        // Use provided txid from receiver, or generate locally as fallback
+        $time = $this->timeUtility->getCurrentMicrotime();
+        $txid = $txid ?? hash(Constants::HASH_ALGORITHM, $this->currentUser->getPublicKey() . $receiverPublicKey . '0' . $time);
+
+        // Build transaction data with status 'sent' (will move to 'completed' upon acceptance)
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($receiverAddress);
+        $transactionData = [
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+            'receiverAddress' => $receiverAddress,
+            'receiverPublicKey' => $receiverPublicKey,
+            'amount' => 0,
+            'currency' => $currency,
+            'status' => Constants::STATUS_SENT,
+            'txid' => $txid,
+            'time' => $time,
+            'memo' => 'contact',
+            'description' => 'Contact request transaction'
+            // NOTE: endRecipientAddress and initialSenderAddress are NOT included here
+            // They are added via updateTrackingFields() after insert
+        ];
+
+        // Insert the contact transaction as 'sent' type
+        $result = $this->transactionRepository->insertTransaction($transactionData, Constants::TX_TYPE_SENT);
+
+        if ($result !== false) {
+            // Update tracking fields after insert (these are NOT part of signed payload)
+            // Contact transactions are direct - both parties know sender and recipient
+            $this->transactionRepository->updateTrackingFields(
+                $txid,
+                $receiverAddress,  // endRecipientAddress
+                $myAddress  // initialSenderAddress
+            );
+            return $txid;
+        }
+
+        return null;
+    }
+
+    /**
+     * Insert a received contact transaction when we receive a contact request
+     *
+     * Creates a contact transaction with amount=0 from the perspective of the receiver.
+     * The transaction is created with status 'accepted' (pending user acceptance) and
+     * moves to 'completed' when the user explicitly accepts the contact request.
+     *
+     * The receiver generates the txid and returns it so it can be included in the
+     * response for the sender to use, ensuring both parties have matching txids.
+     *
+     * @param string $senderPublicKey The public key of the contact who sent the request
+     * @param string $senderAddress The address of the contact who sent the request
+     * @param string $currency The currency for the transaction
+     * @param string|null $signature The sender's signature from the incoming request
+     * @param int|null $nonce The signature nonce from the incoming request
+     * @return string|null The txid on success, null on failure
+     */
+    public function insertReceivedContactTransaction(string $senderPublicKey, string $senderAddress, string $currency = 'USD', ?string $signature = null, ?int $nonce = null): ?string {
+        // Generate time and txid on receiver side
+        $time = $this->timeUtility->getCurrentMicrotime();
+
+        // Generate txid using sender's public key + receiver's public key + 0 + time
+        $txid = hash(Constants::HASH_ALGORITHM, $senderPublicKey . $this->currentUser->getPublicKey() . '0' . $time);
+
+        // Build transaction data with status 'accepted' (pending user acceptance, will move to 'completed')
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($senderAddress);
+        $transactionData = [
+            'senderAddress' => $senderAddress,
+            'senderPublicKey' => $senderPublicKey,
+            'receiverAddress' => $myAddress,
+            'receiverPublicKey' => $this->currentUser->getPublicKey(),
+            'amount' => 0,
+            'currency' => $currency,
+            'status' => Constants::STATUS_ACCEPTED,
+            'txid' => $txid,
+            'time' => $time,
+            'memo' => 'contact',
+            'description' => 'Contact request transaction',
+            // Sender's signature data for future sync verification
+            'signature' => $signature,
+            'nonce' => $nonce
+            // NOTE: endRecipientAddress and initialSenderAddress are NOT included here
+            // They are added via updateTrackingFields() after insert
+        ];
+
+        // Insert the contact transaction with 'accepted' status
+        // Second parameter is transaction type: 'received' (we are receiving a contact request)
+        $result = $this->transactionRepository->insertTransaction($transactionData, Constants::TX_TYPE_RECEIVED);
+
+        if ($result !== false) {
+            // Update tracking fields after insert (these are NOT part of signed payload)
+            // Contact transactions are direct - both parties know sender and recipient
+            $this->transactionRepository->updateTrackingFields(
+                $txid,
+                $myAddress,  // endRecipientAddress
+                $senderAddress  // initialSenderAddress
+            );
+        }
+
+        // Return the txid so caller can include it in the response
+        return $result !== false ? $txid : null;
+    }
+
+    /**
+     * Complete a received contact transaction when user accepts the contact request
+     *
+     * Updates the contact transaction status from 'accepted' to 'completed'.
+     * This is called from the receiver's perspective when they accept an incoming request.
+     *
+     * @param string $senderPublicKey The public key of the contact who sent the request
+     * @return bool True if transaction was updated successfully
+     */
+    public function completeReceivedContactTransaction(string $senderPublicKey): bool {
+        return $this->transactionContactRepository->completeReceivedContactTransaction($senderPublicKey);
+    }
+
+    // =========================================================================
+    // MESSAGE SENDING
+    // =========================================================================
+
+    /**
+     * Send a message to a contact.
+     *
+     * Delivers a message payload to the specified contact address.
+     * Used for contact request messages, acceptance messages, and
+     * other P2P communication.
+     *
+     * @param string $contactAddress The recipient's address
+     * @param string $payload The message payload (JSON-encoded string)
+     * @param string $description A description of the message for logging
+     * @return array Result array containing:
+     *   - success: bool - Whether the message was sent successfully
+     *   - error: string|null - Error message if failed
+     *   - response: mixed - Response from the recipient (if any)
+     */
+    public function sendContactMessage(string $contactAddress, string $payload, string $description): array {
+        // Decode payload if it's a JSON string
+        $payloadArray = json_decode($payload, true);
+        if ($payloadArray === null) {
+            return [
+                'success' => false,
+                'error' => 'Invalid JSON payload',
+                'response' => null
+            ];
+        }
+
+        // Generate message ID from description
+        $messageId = hash('sha256', $description . $this->timeUtility->getCurrentMicrotime());
+
+        // Call internal send method
+        return $this->sendContactMessageInternal($contactAddress, $payloadArray, $messageId, true);
+    }
+
+    /**
+     * Send a contact message with optional delivery tracking (internal method)
+     *
+     * Uses MessageDeliveryService.sendMessage() when available for reliable delivery
+     * with retry logic and dead letter queue support. Falls back to direct transport
+     * if delivery service is not configured.
+     *
+     * @param string $address Recipient address
+     * @param array $payload Message payload
+     * @param string|null $messageId Optional unique message ID for tracking
+     * @param bool $async Whether to send asynchronously
+     * @return array Response with 'success', 'response', 'raw', and 'messageId' keys
+     */
+    private function sendContactMessageInternal(string $address, array $payload, ?string $messageId = null, bool $async = true): array {
+        // Use unified sendMessage() from MessageDeliveryService if available
+        if ($this->messageDeliveryService !== null) {
+            // async=true: Non-blocking, queues for retry if first attempt fails
+            // async=false: Blocking, waits for response (required for acceptance messages
+            //              to ensure the sender's status is updated before returning)
+            return $this->messageDeliveryService->sendMessage(
+                'contact',
+                $address,
+                $payload,
+                $messageId,
+                $async
+            );
+        }
+
+        // Fall back to direct transport when MessageDeliveryService not available
+        if ($messageId === null) {
+            $messageId = hash('sha256', json_encode($payload) . $this->timeUtility->getCurrentMicrotime());
+        }
+
+        $rawResponse = $this->transportUtility->send($address, $payload);
+        $response = json_decode($rawResponse, true);
+
+        return [
+            'success' => $response !== null && isset($response['status']),
+            'response' => $response,
+            'raw' => $rawResponse,
+            'messageId' => $messageId
+        ];
+    }
+
+    // =========================================================================
+    // CONTACT EXCHANGE HANDLERS
+    // =========================================================================
+
+    /**
+     * Handle existing contact addition
+     *
+     * @param array $contact Existing contact data
+     * @param string $address Contact address
+     * @param string $name Contact name
+     * @param float $fee Fee percentage
+     * @param float $credit Credit limit
+     * @param string $currency Currency code
+     * @param CliOutputManager|null $output Optional output manager for JSON support
+     */
+    public function handleExistingContact(array $contact, string $address, string $name, float $fee, float $credit, string $currency, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        // Build contact data for JSON response
+        $contactData = [
+            'address' => $address,
+            'name' => $name,
+            'fee' => $fee / Constants::FEE_CONVERSION_FACTOR,
+            'credit' => $credit / Constants::CREDIT_CONVERSION_FACTOR,
+            'currency' => $currency,
+            'status' => $contact['status']
+        ];
+
+        // Check if contact is already an accepted contact
+        if($contact['status'] === Constants::CONTACT_STATUS_ACCEPTED){
+            $output->error("Contact " . $address . " already exists ", ErrorCodes::CONTACT_EXISTS, 409, ['contact' => $contactData]);
+        }
+        // Check if contact was blocked
+        elseif($contact['status'] === Constants::CONTACT_STATUS_BLOCKED){
+            // Contact was blocked after user sent contact request
+            if($contact['name']){
+                // Unblock contact and add values
+                if($this->contactRepository->updateUnblockContact($contact['pubkey'], $name, $fee, $credit, $currency)){
+                    $output->success("Contact" . $address . "unblocked and updated", $contactData, "Contact unblocked and updated successfully");
+                } else{
+                    $output->error("Failed to unblock and update contact " . $address, ErrorCodes::UNBLOCK_FAILED, 500, ['contact' => $contactData]);
+                }
+            }
+            // Contact was blocked when user received contact request
+            else{
+                if($this->contactRepository->updateUnblockContact($contact['pubkey'], $name, $fee, $credit, $currency)){
+                    // Send message of successful contact acceptance back to original contact requester with tracking
+                    // Message ID format: unblock-accept-{hash} (message_type 'contact' provides context)
+                    $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
+                    $messageId = 'unblock-accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
+                    $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId);
+
+                    // For acceptance messages, we update stages based on our local operations (using MessageDeliveryService directly)
+                    // Stage progression: pending -> sent -> received (from transport) -> inserted (local) -> completed
+                    if ($sendResult['success'] && $this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
+
+                    // Complete the received contact transaction (update status from 'accepted' to 'completed')
+                    $this->completeReceivedContactTransaction($contact['pubkey']);
+
+                    $output->success("Contact " . $address . " unblocked and added", $contactData, "Contact unblocked and added successfully");
+                } else{
+                    $output->error("Failed to unblock and add contact " . $address, ErrorCodes::UNBLOCK_ADD_FAILED, 500, ['contact' => $contactData]);
+                }
+            }
+        }
+        elseif($contact['status'] === Constants::CONTACT_STATUS_PENDING){
+            // if pending with name (contact was inserted by user for contact request)
+            if($contact['name']){
+                // This contact was already sent a contact request, but has not yet responded to user (try resyncing)
+                // Use full sync chain for wallet restoration scenarios: Contact -> Transactions -> Balances
+                $syncService = $this->requireSyncTrigger();
+                $syncResult = $syncService->syncReaddedContact($address, $contact['pubkey']);
+
+                if ($syncResult['success'] && $syncResult['contact_synced']) {
+                    $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                    $contactData['sync'] = [
+                        'transactions_synced' => $syncResult['transactions_synced'],
+                        'balances_synced' => $syncResult['balances_synced'],
+                        'currencies' => $syncResult['currencies']
+                    ];
+                    $output->success("Contact request already sent, synced successfully with " . $address, $contactData, "Contact synced");
+                } elseif ($syncResult['contact_synced']) {
+                    // Contact status synced but transactions/balances may have failed
+                    $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                    $output->success("Contact synced, transaction sync may be incomplete", $contactData, "Partial sync");
+                } else {
+                    $output->info("Contact request already sent, awaiting response from " . $address, $contactData);
+                }
+            } else{
+                // If contact already exists with an address, it's a contact request, skip sending a message
+                if ($this->acceptContact($contact['pubkey'], $name, $fee, $credit, $currency)) {
+                    // Send message of successful contact acceptance back to original contact requester with tracking
+                    // Message ID format: accept-{hash} (message_type 'contact' provides context)
+                    // IMPORTANT: Use sync delivery (async=false) to ensure the original requester updates
+                    // their contact status to 'accepted' before we return success. This prevents race conditions
+                    // when multiple contacts are added in rapid succession.
+                    $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
+                    $messageId = 'accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
+                    $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false); // sync delivery
+
+                    // Log if acceptance message delivery failed
+                    if (!$sendResult['success']) {
+                        SecureLogger::warning("Contact acceptance message delivery failed", [
+                            'recipient_address' => $address,
+                            'message_id' => $messageId,
+                            'error' => $sendResult['tracking']['error'] ?? 'unknown'
+                        ]);
+                    }
+
+                    // For acceptance messages, we update stages based on our local operations (using MessageDeliveryService directly)
+                    // The acceptance message was sent and our local DB was updated (acceptContact above)
+                    // Stage progression: pending -> sent -> received (from transport) -> inserted (local) -> completed
+                    if ($sendResult['success'] && $this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
+
+                    // Complete the received contact transaction (update status from 'accepted' to 'completed')
+                    $this->completeReceivedContactTransaction($contact['pubkey']);
+
+                    $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                    $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
+                }
+                else {
+                    $output->error("Failed to accept contact request from " . $address, ErrorCodes::ACCEPT_FAILED, 500, ['contact' => $contactData]);
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle new contact creation
+     *
+     * Uses MessageDeliveryService for reliable message delivery when available.
+     *
+     * @param string $address Contact address
+     * @param string $name Contact name
+     * @param float $fee Fee percentage
+     * @param float $credit Credit limit
+     * @param string $currency Currency code
+     * @param CliOutputManager|null $output Optional output manager for JSON support
+     */
+    public function handleNewContact(string $address, string $name, float $fee, float $credit, string $currency, ?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        // Build contact data for JSON response
+        $contactData = [
+            'address' => $address,
+            'name' => $name,
+            'fee' => $fee / Constants::FEE_CONVERSION_FACTOR,
+            'credit' => $credit / Constants::CREDIT_CONVERSION_FACTOR,
+            'currency' => $currency
+        ];
+
+        // Build the payload array
+        $payload = $this->contactPayload->buildCreateRequest($address);
+        $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($address);  // Address already passed validation before
+
+        // Generate unique message ID for contact creation tracking
+        // Message ID format: create-{hash} (message_type 'contact' provides context)
+        $messageId = 'create-' . hash('sha256', $address . $this->currentUser->getPublicKey() . $this->timeUtility->getCurrentMicrotime());
+
+        // Send contact creation request with delivery tracking
+        $sendResult = $this->sendContactMessageInternal($address, $payload, $messageId);
+        $responseData = $sendResult['response'];
+
+        if (isset($responseData['status'])){
+            $senderPublicKey = $responseData['senderPublicKey'];
+            $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+
+            // Check if we already have this contact stored locally (under a different address)
+            // This handles the case where user adds a known contact via new address type
+            // OR the case where they sent us a request while we were sending ours
+            $existingLocalContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
+            if ($existingLocalContact) {
+                // Update the address with new transport type
+                $this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative);
+
+                if ($this->messageDeliveryService !== null) {
+                    $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                }
+
+                // If contact is pending without name (we received their request), accept with our provided values
+                if ($existingLocalContact['status'] === Constants::CONTACT_STATUS_PENDING && $existingLocalContact['name'] === null) {
+                    // Accept the contact with the user-provided name/fee/credit values
+                    if ($this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                        // Send acceptance message back to them
+                        $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
+                        $acceptMessageId = 'accept-' . hash('sha256', $address . $senderPublicKey . $this->timeUtility->getCurrentMicrotime());
+                        $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $acceptMessageId, false);
+
+                        if (!$sendResult['success']) {
+                            SecureLogger::warning("Contact acceptance message delivery failed", [
+                                'recipient_address' => $address,
+                                'message_id' => $acceptMessageId,
+                                'error' => $sendResult['tracking']['error'] ?? 'unknown'
+                            ]);
+                        }
+
+                        // Complete the received contact transaction
+                        $this->completeReceivedContactTransaction($senderPublicKey);
+
+                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                        $contactData['pubkey'] = $senderPublicKey;
+                        $output->success("Contact request accepted from " . $address, $contactData, "Contact accepted successfully");
+                        return;
+                    }
+                }
+
+                // Contact exists with name or non-pending status - just report the update
+                $contactData['status'] = $existingLocalContact['status'];
+                $contactData['pubkey'] = $senderPublicKey;
+                $output->success("Contact address updated for " . $name, $contactData, "New address type added to existing contact");
+                return;
+            }
+
+            // Contact request was received (initial insert on their end as pending, awaiting acceptance)
+            if($responseData['status'] === 'received'){
+                // Insert contact on our end with returned pubkey as pending (awaiting acceptance)
+                if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+
+                    // Store any additional addresses from senderAddresses if present
+                    if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                    }
+
+                    $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+                    // Insert contact transaction (first transaction between users, amount=0)
+                    // Use the txid from the response to ensure both parties have matching txids
+                    $txid = $responseData['txid'] ?? null;
+                    $this->insertContactTransaction($senderPublicKey, $address, $currency, $txid);
+
+                    // Store signature data for future sync verification
+                    $signingData = $sendResult['signing_data'] ?? null;
+                    if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                        $this->transactionRepository->updateSignatureData(
+                            $txid,
+                            $signingData['signature'],
+                            $signingData['nonce']
+                        );
+                    }
+
+                    // Update delivery stage: received -> inserted -> completed (using MessageDeliveryService directly)
+                    // Contact request phase is complete (awaiting acceptance is a separate phase)
+                    if ($this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
+
+                    $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+                    $contactData['pubkey'] = $senderPublicKey;
+                    $output->success("Contact request sent successfully to " . $address, $contactData, "Contact request sent, awaiting acceptance");
+                } else{
+                    $output->error("Failed to create contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
+                    return;
+                }
+            }
+            // Our contact pubkey exists on their end, but not provided address
+            // we are known under a different address or transport type
+            // Note: If contact existed locally, we would have returned early above
+            // So reaching here means contact was deleted locally - need to re-insert and sync
+            elseif($responseData['status'] === 'updated'){
+                $senderAddress = $responseData['senderAddress'];
+                // Contact was deleted locally - re-insert and sync
+                if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+
+                    // Store any additional addresses from senderAddresses if present
+                    if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                    }
+
+                    // Insert initial balances - will be updated by full sync below
+                    $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+                    if (!$this->contactTransactionExists($senderPublicKey)) {
+                        $txid = $this->insertContactTransaction($senderPublicKey, $address, $currency);
+
+                        // Store signature data for future sync verification
+                        $signingData = $sendResult['signing_data'] ?? null;
+                        if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                            $this->transactionRepository->updateSignatureData(
+                                $txid,
+                                $signingData['signature'],
+                                $signingData['nonce']
+                            );
+                        }
+                    }
+
+                    if ($this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
+
+                    // Full sync for re-added contact: sync contact status, transaction chain, and balances
+                    $syncService = $this->requireSyncTrigger();
+                    $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
+
+                    if ($syncResult['success']) {
+                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                        $contactData['pubkey'] = $senderPublicKey;
+                        $contactData['sync'] = [
+                            'transactions_synced' => $syncResult['transactions_synced'],
+                            'balances_synced' => $syncResult['balances_synced'],
+                            'currencies' => $syncResult['currencies']
+                        ];
+                        $output->success("Contact re-added and fully synced with " . $address, $contactData, "Contact created with transaction and balance sync");
+                    } else {
+                        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+                        $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
+                    }
+                } else {
+                    $output->error("Failed to re-add contact with " . $address, ErrorCodes::CONTACT_CREATE_FAILED, 500, ['contact' => $contactData]);
+                }
+            }
+            // Our contact pubkey and address both exist on their end (Case when we delete the contact and try re-adding it)
+            elseif($responseData['status'] === Constants::DELIVERY_WARNING){
+                // Insert contact and perform full sync (transactions + balances)
+                if ($this->contactRepository->insertContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                    $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative);
+
+                    // Store any additional addresses from senderAddresses if present
+                    if (isset($responseData['senderAddresses']) && is_array($responseData['senderAddresses'])) {
+                        $this->addressRepository->updateContactFields($senderPublicKeyHash, $responseData['senderAddresses']);
+                    }
+
+                    // Insert initial balances - will be updated by full sync below
+                    $this->balanceRepository->insertInitialContactBalances($senderPublicKey, $currency);
+
+                    // Insert contact transaction only if one doesn't already exist
+                    // (contact may have been deleted but transaction still exists in history)
+                    if (!$this->contactTransactionExists($senderPublicKey)) {
+                        $txid = $this->insertContactTransaction($senderPublicKey, $address, $currency);
+
+                        // Store signature data for future sync verification
+                        $signingData = $sendResult['signing_data'] ?? null;
+                        if ($txid && $signingData && isset($signingData['signature']) && isset($signingData['nonce'])) {
+                            $this->transactionRepository->updateSignatureData(
+                                $txid,
+                                $signingData['signature'],
+                                $signingData['nonce']
+                            );
+                        }
+                    }
+
+                    // Update delivery stage: warning -> inserted -> completed (using MessageDeliveryService directly)
+                    if ($this->messageDeliveryService !== null) {
+                        $this->messageDeliveryService->updateStageAfterLocalInsert('contact', $messageId, true);
+                    }
+
+                    // Full sync for re-added contact: sync contact status, transaction chain, and balances
+                    // If contact still has transaction chain on their end, resync from original contact transaction
+                    // through all known transactions (verifying signatures) and finally sync balances
+                    $syncService = $this->requireSyncTrigger();
+                    $syncResult = $syncService->syncReaddedContact($address, $senderPublicKey);
+
+                    if ($syncResult['success']) {
+                        $contactData['status'] = Constants::CONTACT_STATUS_ACCEPTED;
+                        $contactData['pubkey'] = $senderPublicKey;
+                        $contactData['sync'] = [
+                            'transactions_synced' => $syncResult['transactions_synced'],
+                            'balances_synced' => $syncResult['balances_synced'],
+                            'currencies' => $syncResult['currencies']
+                        ];
+                        $output->success("Contact re-added and fully synced with " . $address, $contactData, "Contact created with transaction and balance sync");
+                    } else {
+                        $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+                        $output->success("Contact re-added, awaiting sync with " . $address, $contactData, "Contact created, sync pending");
+                    }
+                }
+            }
+            // Our contact request could not be processed on their end
+            elseif($responseData['status'] === 'rejection'){
+                $output->error("Contact request rejected by " . $address . " : " . ($responseData['reason'] ?? 'Unknown reason'), ErrorCodes::CONTACT_REJECTED, 403, [
+                    'contact' => $contactData,
+                    'response' => $responseData
+                ]);
+                return;
+            }
+        } else{
+            // No immediate response - check if message was queued for background retry
+            // This is expected behavior for async mode over slow Tor connections
+            if ($sendResult['queued_for_retry'] ?? false) {
+                // Message is being retried in the background by the message processor
+                // Insert contact locally as pending so user can see it in their contact list
+                $contactData['status'] = Constants::CONTACT_STATUS_PENDING;
+                $contactData['delivery_status'] = 'queued_for_retry';
+                $output->success(
+                    "Contact request sent to " . $address . ". Awaiting response (message being delivered in background).",
+                    $contactData,
+                    "Contact request sent, delivery in progress"
+                );
+                return;
+            }
+
+            // Message delivery failed completely (not queued for retry)
+            // Tracking results are nested inside 'tracking' key from sendContactMessageInternal
+            $trackingResult = $sendResult['tracking'] ?? [];
+            $attempts = $trackingResult['attempts'] ?? 'unknown';
+            $lastError = $trackingResult['error'] ?? 'No response received';
+
+            $output->error(
+                "Failed to reach contact address after " . $attempts . " attempts. " .
+                "Address " . $address . " may not exist or is offline.",
+                ErrorCodes::CONTACT_UNREACHABLE,
+                null,
+                [
+                    'contact' => $contactData,
+                    'attempts' => $attempts,
+                    'last_error' => $lastError,
+                    'moved_to_dlq' => $trackingResult['dlq'] ?? false
+                ]
+            );
+            return;
+        }
+    }
+
+    // =========================================================================
+    // CONTACT CREATION HANDLER
+    // =========================================================================
+
+    /**
+     * Handle contact creation request (incoming)
+     *
+     * @param array $request Request data
+     * @return string Response payload
+     */
+    public function handleContactCreation(array $request): string {
+        $senderAddress = $request['senderAddress'];
+        $senderPublicKey = $request['senderPublicKey'];
+        $senderPublicKeyHash = hash(Constants::HASH_ALGORITHM, $senderPublicKey);
+        $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($senderAddress);
+
+        // Extract sender's signature data for storing with the contact transaction
+        $signature = $request['signature'] ?? null;
+        $nonce = isset($request['nonce']) ? (int)$request['nonce'] : null;
+
+        // Get our own (the responder's) addresses to include in response
+        // This allows the requester to store all our known addresses
+        $myAddresses = $this->currentUser->getUserLocaters();
+
+        // Check if contact already exists
+        if ($this->contactRepository->contactExistsPubkey($senderPublicKey)) {
+            $contactAddresses = $this->addressRepository->lookupByPubkeyHash($senderPublicKeyHash);
+            $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
+            // Check if we have a valid transport type and the address matches
+            if($transportIndex !== null && isset($contactAddresses[$transportIndex]) && $contactAddresses[$transportIndex] === $senderAddress){
+                // Address already exists - check contact status for re-add scenario
+                // When a deleted contact re-adds us, we may have them as 'pending'
+                // (they added us before but we never accepted, then they deleted and re-added)
+                $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
+                if ($existingContact && $existingContact['status'] === Constants::CONTACT_STATUS_PENDING) {
+                    // Contact exists as pending - check if we have the contact transaction
+                    // If they're re-adding us and we don't have their contact tx, we need to create one
+                    $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
+                        $senderPublicKeyHash
+                    );
+
+                    if (!$hasContactTx) {
+                        // Create the contact transaction on our side (they already have one on their end)
+                        $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                        // Return 'received' with txid so sender can sync
+                        return $this->contactPayload->buildReceived($senderAddress, null, $txid);
+                    }
+
+                    // Contact exists as pending with contact transaction - treat as re-confirmation
+                    // Return 'received' so sender handles it like a new contact (no sync attempt)
+                    // Don't include other addresses for pending contacts (privacy)
+                    return $this->contactPayload->buildReceived($senderAddress);
+                }
+                // Contact is accepted or other status - return warning (already exists)
+                // Include all our known addresses so sender can store them (re-add scenario)
+                return $this->contactPayload->buildAlreadyExists($senderAddress, $myAddresses);
+            } else{
+                // Address unknown prior but pubkey exists (known contact, unknown address)
+                // Check contact status - if pending, treat as re-confirmation with new address
+                $existingContact = $this->contactRepository->getContactByPubkey($senderPublicKey);
+                if ($existingContact && $existingContact['status'] === Constants::CONTACT_STATUS_PENDING) {
+                    // Contact is pending - update their address
+                    if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
+                        // Check if we have the contact transaction
+                        $hasContactTx = $this->transactionContactRepository->contactTransactionExistsForReceiver(
+                            $senderPublicKeyHash
+                        );
+
+                        if (!$hasContactTx) {
+                            // Create the contact transaction on our side
+                            $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                            return $this->contactPayload->buildReceived($senderAddress, null, $txid);
+                        }
+
+                        // Return 'received' so sender handles it like a new contact request
+                        return $this->contactPayload->buildReceived($senderAddress);
+                    }
+                }
+                // Contact is accepted - update address and return 'updated'
+                // Include all our known addresses so sender can store them (re-add scenario)
+                if($this->addressRepository->updateContactFields($senderPublicKeyHash, $transportIndexAssociative)){
+                    return $this->contactPayload->buildUpdated($senderAddress, $myAddresses);
+                } else{
+                    // Unable to update contact
+                    return $this->contactPayload->buildRejection($senderAddress);
+                }
+            }
+        } else{
+            // Contact request is brand new, no prior users exist in any form
+            if($this->contactRepository->addPendingContact($senderPublicKey) && $this->addressRepository->insertAddress($senderPublicKey, $transportIndexAssociative)){
+                // Insert received contact transaction with status 'accepted' (pending user acceptance)
+                // This creates the contact transaction on the receiver's side
+                // Receiver generates txid and includes it in response for sender to use
+                $txid = $this->insertReceivedContactTransaction($senderPublicKey, $senderAddress, 'USD', $signature, $nonce);
+                return $this->contactPayload->buildReceived($senderAddress, null, $txid);
+            } else{
+                // Unable to insert contact
+                return $this->contactPayload->buildRejection($senderAddress);
+            }
+        }
+    }
+
+    // =========================================================================
+    // HELPER METHODS
+    // =========================================================================
+
+    /**
+     * Accept a contact request
+     *
+     * @param string $pubkey Contact pubkey
+     * @param string $name Contact name
+     * @param float $fee Fee percentage
+     * @param float $credit Credit limit
+     * @param string $currency Currency code
+     * @return bool Success status
+     */
+    private function acceptContact(string $pubkey, string $name, float $fee, float $credit, string $currency): bool {
+        $success = $this->contactRepository->acceptContact($pubkey, $name, $fee, $credit, $currency);
+        if($success){
+            // Addresses already saved, just need to add initial contact balances
+            $this->balanceRepository->insertInitialContactBalances($pubkey, $currency);
+        }
+        return $success;
+    }
+}
