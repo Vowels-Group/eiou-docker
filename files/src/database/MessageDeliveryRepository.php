@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
 use Eiou\Utils\SecureLogger;
 use PDO;
@@ -17,6 +18,7 @@ use PDOException;
  * @package Database\Repository
  */
 class MessageDeliveryRepository extends AbstractRepository {
+    use QueryBuilder;
     /**
      * @var array Allowed column names for SQL injection prevention
      */

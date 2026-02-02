@@ -3,6 +3,7 @@
 
 namespace Eiou\Database;
 
+use Eiou\Database\Traits\QueryBuilder;
 use PDO;
 use PDOException;
 
@@ -17,6 +18,7 @@ use PDOException;
  */
 class TransactionStatisticsRepository extends AbstractRepository
 {
+    use QueryBuilder;
     /**
      * Constructor
      *
