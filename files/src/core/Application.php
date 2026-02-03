@@ -548,6 +548,10 @@ class Application {
     public function shutdown(?CliOutputManager $output = null): void {
         $output = $output ?? CliOutputManager::getInstance();
 
+        // Set shutdown flag to prevent watchdog from restarting processors
+        $shutdownFlag = '/tmp/eiou_shutdown.flag';
+        file_put_contents($shutdownFlag, (string)time());
+
         $pidFiles = glob('/tmp/' . '*.pid');
         $processesTerminated = 0;
 

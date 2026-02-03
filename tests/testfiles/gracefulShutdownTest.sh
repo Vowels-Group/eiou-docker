@@ -112,6 +112,33 @@ else
     passed=$(( passed + 1 ))
 fi
 
+# Test 5b: Verify shutdown flag file is created
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing shutdown flag file exists after shutdown"
+shutdownFlagExists=$(docker exec ${testContainer} sh -c "test -f /tmp/eiou_shutdown.flag && echo 'YES' || echo 'NO'" 2>&1)
+
+if [ "$shutdownFlagExists" = "YES" ]; then
+    printf "\t   Shutdown flag created ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Shutdown flag created ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 5c: Verify watchdog does NOT restart processors while shutdown flag exists
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Testing watchdog respects shutdown flag (waiting 45s)..."
+sleep 45
+processCheckWatchdog=$(docker exec ${testContainer} sh -c "ps aux | grep -E 'P2pMessages|TransactionMessages|CleanupMessages' | grep -v grep | wc -l" 2>&1)
+
+if [ "$processCheckWatchdog" -eq 0 ]; then
+    printf "\t   Watchdog did not restart processors ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Watchdog restarted processors despite shutdown flag ${RED}FAILED${NC} (${processCheckWatchdog} running)\n"
+    failure=$(( failure + 1 ))
+fi
+
 # Test 6: Verify database is still accessible after processor shutdown
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing database accessibility after processor shutdown"
@@ -215,6 +242,9 @@ echo -e "\n[Processor Restart Tests]"
 # Test 10: Restart processors manually and verify they start
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing processors can be restarted after shutdown"
+
+# Clear shutdown flag so watchdog can resume normal operation
+docker exec ${testContainer} rm -f /tmp/eiou_shutdown.flag 2>/dev/null
 
 # Start processors again
 docker exec ${testContainer} sh -c "nohup php /etc/eiou/processors/P2pMessages.php > /dev/null 2>&1 &" 2>/dev/null
