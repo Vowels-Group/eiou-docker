@@ -337,7 +337,7 @@ echo -e "\n\t-> Step 1.12: Restoring wallet with 'docker run -d ... -e RESTORE=<
 
 # Create a completely new Container
 restoreContainer="httpRestoreSeedTest"
-restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-files:/etc/eiou/" -v "${restoreContainer}-index:/var/www/html" -v "${restoreContainer}-eiou:/usr/local/bin/" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
+restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-files:/etc/eiou/" -v "${restoreContainer}-index:/var/www/html" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
 
 # Wait for container to fully initialize and process RESTORE env var
 # Container needs time for: MariaDB startup, startup.sh execution, wallet restoration
@@ -816,7 +816,6 @@ MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileCon
     -v "${restoreFileContainer}-mysql-data:/var/lib/mysql" \
     -v "${restoreFileContainer}-files:/etc/eiou/" \
     -v "${restoreFileContainer}-index:/var/www/html" \
-    -v "${restoreFileContainer}-eiou:/usr/local/bin/" \
     eiou/eiou > /dev/null 2>&1
 
 echo -e "\t   Waiting for container initialization..."
@@ -896,7 +895,6 @@ docker run -d --network="${network}" --name "${restoreEnvContainer}" \
     -v "${restoreEnvContainer}-mysql-data:/var/lib/mysql" \
     -v "${restoreEnvContainer}-files:/etc/eiou/" \
     -v "${restoreEnvContainer}-index:/var/www/html" \
-    -v "${restoreEnvContainer}-eiou:/usr/local/bin/" \
     eiou/eiou > /dev/null 2>&1
 
 echo -e "\t   Waiting for container initialization..."
@@ -1224,7 +1222,7 @@ echo -e "\n\t-> Step 3.11: Testing authcode restoration in new container"
 
 # Create a completely new Container
 authcodeRestoreContainer="httpAuthcodeRestoreTest"
-authcodeContainerHash=$(docker run -d --network="${network}" --name "${authcodeRestoreContainer}" -v "${authcodeRestoreContainer}-mysql-data:/var/lib/mysql" -v "${authcodeRestoreContainer}-files:/etc/eiou/" -v "${authcodeRestoreContainer}-index:/var/www/html" -v "${authcodeRestoreContainer}-eiou:/usr/local/bin/" -e RESTORE="${seedPhraseAuth}" eiou/eiou 2>&1)
+authcodeContainerHash=$(docker run -d --network="${network}" --name "${authcodeRestoreContainer}" -v "${authcodeRestoreContainer}-mysql-data:/var/lib/mysql" -v "${authcodeRestoreContainer}-files:/etc/eiou/" -v "${authcodeRestoreContainer}-index:/var/www/html" -e RESTORE="${seedPhraseAuth}" eiou/eiou 2>&1)
 
 # Wait for container to fully initialize and process RESTORE env var
 echo -e "\t   Waiting for container initialization..."

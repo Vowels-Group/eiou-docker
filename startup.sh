@@ -410,14 +410,13 @@ if [ -d /app/eiou-src-backup ]; then
         echo "  Composer config updated."
     fi
 
-    echo "Source file sync completed."
-fi
+    # Sync CLI entry point
+    if [ -f /app/eiou-src-backup/eiou.php ]; then
+        cp /app/eiou-src-backup/eiou.php /etc/eiou/eiou.php 2>/dev/null || true
+        echo "  CLI entry point updated."
+    fi
 
-# Sync CLI tool if backup exists
-if [ -f /app/eiou-cli-backup/eiou.php ]; then
-    echo "Syncing CLI tool..."
-    cp /app/eiou-cli-backup/eiou.php /usr/local/bin/eiou.php 2>/dev/null || true
-    echo "  CLI tool updated."
+    echo "Source file sync completed."
 fi
 
 # =============================================================================

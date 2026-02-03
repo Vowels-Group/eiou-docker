@@ -229,7 +229,7 @@ docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice eiou/eiou
 
 **With persistent volumes (recommended):**
 ```bash
-docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-eiou:/usr/local/bin/ -v alice-backups:/var/lib/eiou/backups eiou/eiou
+docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
 **Volume descriptions:**
@@ -240,7 +240,6 @@ docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -v alice-mysq
 | `alice-files` | Wallet keys, userconfig.json, encryption data | CRITICAL |
 | `alice-backups` | Encrypted database backups | CRITICAL |
 | `alice-index` | Web GUI files | Low (regenerated) |
-| `alice-eiou` | CLI tool | Low (regenerated) |
 
 **View container logs to see wallet information:**
 ```bash
@@ -275,7 +274,7 @@ echo "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12
 ```
 
 ```bash
-docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e RESTORE_FILE=/restore/seed -v /tmp/seed.txt:/restore/seed:ro -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-eiou:/usr/local/bin/ -v alice-backups:/var/lib/eiou/backups eiou/eiou
+docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e RESTORE_FILE=/restore/seed -v /tmp/seed.txt:/restore/seed:ro -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
 After successful restoration, delete the seed file:
@@ -292,7 +291,7 @@ rm /tmp/seed.txt
 
 Pass the seed phrase directly as an environment variable:
 ```bash
-docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e "RESTORE=word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24" -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-eiou:/usr/local/bin/ -v alice-backups:/var/lib/eiou/backups eiou/eiou
+docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -e "RESTORE=word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24" -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
 **Warning:** The `RESTORE` environment variable remains visible via `docker inspect`. Use `RESTORE_FILE` for production.
@@ -317,7 +316,7 @@ Setting the HTTP hostname automatically derives the HTTPS version (e.g., `http:/
 For privacy-focused deployments with only Tor access (no HTTP/HTTPS), omit the `QUICKSTART` variable:
 
 ```bash
-docker run -d --name alice-tor -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-eiou:/usr/local/bin/ -v alice-backups:/var/lib/eiou/backups eiou/eiou
+docker run -d --name alice-tor -v alice-mysql-data:/var/lib/mysql -v alice-files:/etc/eiou/ -v alice-index:/var/www/html -v alice-backups:/var/lib/eiou/backups eiou/eiou
 ```
 
 **Note:** Without `QUICKSTART`, the container:

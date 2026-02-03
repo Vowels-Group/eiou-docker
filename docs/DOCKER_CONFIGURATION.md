@@ -159,7 +159,7 @@ environment:
 
 ### Required Volumes
 
-All EIOU containers use four named volumes for data persistence:
+All EIOU containers use named volumes for data persistence:
 
 | Volume | Container Path | Purpose | Backup Priority |
 |--------|----------------|---------|-----------------|
@@ -167,7 +167,6 @@ All EIOU containers use four named volumes for data persistence:
 | `{node}-files` | `/etc/eiou/` | Config: wallet keys, userconfig.json, encryption data | **CRITICAL** |
 | `{node}-backups` | `/var/lib/eiou/backups` | Encrypted database backups | **CRITICAL** |
 | `{node}-index` | `/var/www/html` | Web: GUI and API files | Low (regenerated) |
-| `{node}-eiou` | `/usr/local/bin/` | CLI: eiou command-line tool | Low (regenerated) |
 
 **Example:**
 ```yaml
@@ -175,7 +174,6 @@ volumes:
   - alice-mysql-data:/var/lib/mysql     # Transaction history, contacts
   - alice-files:/etc/eiou/              # Wallet keys, configuration
   - alice-index:/var/www/html           # Web interface
-  - alice-eiou:/usr/local/bin/          # CLI tool
 ```
 
 ### Optional Volumes

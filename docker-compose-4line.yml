@@ -50,7 +50,6 @@ services:
       - alice-mysql-data:/var/lib/mysql
       - alice-files:/etc/eiou/
       - alice-index:/var/www/html
-      - alice-eiou:/usr/local/bin/
       - alice-backups:/var/lib/eiou/backups
     restart: unless-stopped
     stop_grace_period: 45s
@@ -84,7 +83,6 @@ services:
       - bob-mysql-data:/var/lib/mysql
       - bob-files:/etc/eiou/
       - bob-index:/var/www/html
-      - bob-eiou:/usr/local/bin/
       - bob-backups:/var/lib/eiou/backups
     restart: unless-stopped
     stop_grace_period: 45s
@@ -118,7 +116,6 @@ services:
       - carol-mysql-data:/var/lib/mysql
       - carol-files:/etc/eiou/
       - carol-index:/var/www/html
-      - carol-eiou:/usr/local/bin/
       - carol-backups:/var/lib/eiou/backups
     restart: unless-stopped
     stop_grace_period: 45s
@@ -152,7 +149,6 @@ services:
       - daniel-mysql-data:/var/lib/mysql
       - daniel-files:/etc/eiou/
       - daniel-index:/var/www/html
-      - daniel-eiou:/usr/local/bin/
       - daniel-backups:/var/lib/eiou/backups
     restart: unless-stopped
     stop_grace_period: 45s
@@ -182,8 +178,6 @@ volumes:
     name: alice-files
   alice-index:
     name: alice-index
-  alice-eiou:
-    name: alice-eiou
   alice-backups:
     name: alice-backups
 
@@ -193,8 +187,6 @@ volumes:
     name: bob-files
   bob-index:
     name: bob-index
-  bob-eiou:
-    name: bob-eiou
   bob-backups:
     name: bob-backups
 
@@ -204,8 +196,6 @@ volumes:
     name: carol-files
   carol-index:
     name: carol-index
-  carol-eiou:
-    name: carol-eiou
   carol-backups:
     name: carol-backups
 
@@ -215,7 +205,5 @@ volumes:
     name: daniel-files
   daniel-index:
     name: daniel-index
-  daniel-eiou:
-    name: daniel-eiou
   daniel-backups:
     name: daniel-backups
