@@ -446,7 +446,6 @@ if [ -d /app/eiou-src-backup ] || [ ! -f /etc/eiou/vendor/autoload.php ]; then
             "src/database/DatabaseSetup.php",
             "src/database/DatabaseSchema.php",
             "src/services/ServiceWrappers.php",
-            "src/schemas/EchoSchema.php",
             "src/schemas/OutputSchema.php"
         ]
     },

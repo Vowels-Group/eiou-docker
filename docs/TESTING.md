@@ -232,7 +232,6 @@ Integration tests validate the complete system behavior using Docker containers.
 
 | Test File | Tests | Coverage |
 |-----------|-------|----------|
-| **EchoSchemaTest.php** | 34+ | Contact, wallet, system, transaction echo messages |
 | **OutputSchemaTest.php** | 25+ | Debug/logging output for all message types |
 
 ### Schema/Payload Tests (`tests/Unit/Schemas/Payloads/`)
