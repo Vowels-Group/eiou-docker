@@ -432,7 +432,7 @@ Docker healthchecks monitor container readiness. Default configuration:
 
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost/"]
+  test: ["CMD", "curl", "-f", "http://localhost/gui/"]
   interval: 30s        # Check every 30 seconds
   timeout: 20s         # Timeout per check
   retries: 5           # Mark unhealthy after 5 failures
@@ -444,7 +444,7 @@ stop_grace_period: 45s   # Time allowed for graceful shutdown
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `test` | `curl -f http://localhost/` | Command to verify health |
+| `test` | `curl -f http://localhost/gui/` | Command to verify health |
 | `interval` | `30s` | Time between health checks |
 | `timeout` | `20s` | Maximum time for health check |
 | `retries` | `5` | Failures before unhealthy |
@@ -465,7 +465,7 @@ For WSL2 or limited resources:
 
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost/"]
+  test: ["CMD", "curl", "-f", "http://localhost/gui/"]
   interval: 60s
   timeout: 30s
   retries: 10
