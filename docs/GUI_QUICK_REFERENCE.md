@@ -8,8 +8,8 @@ Quick lookup card for the EIOU Wallet web interface.
 
 | URL | File | Purpose |
 |-----|------|---------|
-| `/` | `guiIndex.html` | Main wallet interface (auth + dashboard) |
-| `/?logout` | `guiIndex.html` | Logout and clear session |
+| `/` | `index.html` | Main wallet interface (auth + dashboard) |
+| `/?logout` | `index.html` | Logout and clear session |
 
 ---
 
@@ -17,7 +17,7 @@ Quick lookup card for the EIOU Wallet web interface.
 
 | Component | Inside Container | Outside Container |
 |-----------|------------------|-------------------|
-| Entry point | `/etc/eiou/www/guiIndex.html` | `files/root/www/guiIndex.html` |
+| Entry point | `/etc/eiou/www/index.html` | `files/root/www/index.html` |
 | GUI source | `/etc/eiou/src/gui/` | `files/src/gui/` |
 | Controllers | `/etc/eiou/src/gui/controllers/` | `files/src/gui/controllers/` |
 | Helpers | `/etc/eiou/src/gui/helpers/` | `files/src/gui/helpers/` |
@@ -175,7 +175,7 @@ fetch(window.location.href, {
 ## Request Flow
 
 ```
-1. guiIndex.html
+1. index.html
    -> Session check
    -> Auth form (if not authenticated)
    -> CSRF verification (POST only)

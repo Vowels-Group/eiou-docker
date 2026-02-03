@@ -105,7 +105,7 @@ class SettingsControllerTest extends TestCase
             'report_mode' => 'limited'
         ];
 
-        // Note: CSRF already verified in guiIndex.html before Functions.php
+        // Note: CSRF already verified in index.html before Functions.php
         try {
             ob_start();
             $this->controller->routeAction();

@@ -31,14 +31,14 @@ docker run -d --name Bob --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/
 docker run -d --name Carol --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Carol eiou/eiou
 docker run -d --name Daniel --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Daniel eiou/eiou
 
-# Alternative absolute path examples (guiIndex.html is served from /etc/eiou/www/):
-# Windows: -v "C:\path\to\your\eiou\files\root\www\guiIndex.html:/etc/eiou/www/guiIndex.html"
-# Linux: -v "/home/user/eiou/files/root/www/guiIndex.html:/etc/eiou/www/guiIndex.html"
-# macOS: -v "/Users/user/eiou/files/root/www/guiIndex.html:/etc/eiou/www/guiIndex.html"
+# Alternative absolute path examples (index.html is served from /etc/eiou/www/):
+# Windows: -v "C:\path\to\your\eiou\files\root\www\index.html:/etc/eiou/www/index.html"
+# Linux: -v "/home/user/eiou/files/root/www/index.html:/etc/eiou/www/index.html"
+# macOS: -v "/Users/user/eiou/files/root/www/index.html:/etc/eiou/www/index.html"
 
 
 ### Option 2: Alice, Carol, and Daniel (standard containers)
-# These containers use the built-in guiIndex.html from the Docker image
+# These containers use the built-in index.html from the Docker image
 # No volume mounting needed - they use the default GUI
 
 # Windows (PowerShell/Command Prompt)
@@ -65,7 +65,7 @@ docker logs Daniel
 
 # To access the GUI directly from within a container:
 docker exec -it Bob bash
-# Then navigate to /etc/eiou/src/gui/ and view guiIndex.html
+# Then navigate to /etc/eiou/src/gui/ and view index.html
 
 ## Notes
 

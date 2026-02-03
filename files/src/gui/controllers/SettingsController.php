@@ -458,7 +458,7 @@ class SettingsController
      */
     public function handleGetDebugReportJson(): void
     {
-        // Note: CSRF already verified in guiIndex.html before Functions.php is included
+        // Note: CSRF already verified in index.html before Functions.php is included
         // JSON header already set in Functions.php for clean error handling
 
 

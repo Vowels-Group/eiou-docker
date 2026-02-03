@@ -431,7 +431,7 @@ if [ -d /app/eiou-src-backup ]; then
         echo "  Processor entry points updated."
     fi
 
-    # Sync web files (guiIndex.html, eiou/index.html)
+    # Sync web files (index.html, eiou/index.html)
     if [ -d /app/eiou-src-backup/www ]; then
         mkdir -p /etc/eiou/www/eiou
         cp -r /app/eiou-src-backup/www/* /etc/eiou/www/ 2>/dev/null || true

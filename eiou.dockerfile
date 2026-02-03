@@ -76,9 +76,6 @@ RUN mkdir -p /etc/apache2/ssl
 # the need for a separate /var/www/html volume
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /etc/eiou/www|' /etc/apache2/sites-available/000-default.conf
 
-# Set DirectoryIndex to serve guiIndex.html as the default page
-RUN echo "DirectoryIndex guiIndex.html index.html" | tee -a /etc/apache2/apache2.conf
-
 # Add GUI assets alias and document root configuration
 # This allows /gui/assets/* to serve Font Awesome and other static assets
 # API requests are rewritten to the api/ subdirectory under DocumentRoot
