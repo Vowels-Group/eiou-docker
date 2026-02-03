@@ -7,7 +7,7 @@
  *
  * Entry points that must include this:
  * - files/root/Functions.php
- * - files/root/Api.php
+ * - files/root/api/Api.php
  * - files/root/processors/P2pMessages.php
  * - files/root/processors/TransactionMessages.php
  * - files/root/processors/CleanupMessages.php

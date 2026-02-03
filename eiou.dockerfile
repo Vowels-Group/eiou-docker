@@ -154,7 +154,7 @@ RUN find /etc/eiou/ -type f -exec chmod 644 "{}" \;
 
 # Create API directory in web root and symlink to actual Api.php
 RUN mkdir -p /var/www/html/api && \
-    ln -s /etc/eiou/Api.php /var/www/html/api/index.php
+    ln -s /etc/eiou/api/Api.php /var/www/html/api/index.php
 
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini
