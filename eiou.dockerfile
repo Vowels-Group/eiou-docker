@@ -164,10 +164,9 @@ RUN touch /var/log/php_errors.log && \
 # Persistent volumes:
 # - /var/lib/mysql: Database files (transactions, contacts, balances)
 # - /etc/eiou: Wallet configuration and encryption keys
-# - /usr/local/bin: CLI tools
 # - /var/www/html: Web interface files
 # - /var/lib/eiou/backups: Encrypted database backups
-VOLUME ["/var/lib/mysql", "/etc/eiou", "/usr/local/bin/", "/var/www/html/", "/var/lib/eiou/backups"]
+VOLUME ["/var/lib/mysql", "/etc/eiou", "/var/www/html/", "/var/lib/eiou/backups"]
 
 # Copy scripts directory (includes banner.sh for warning messages)
 COPY scripts/ /app/scripts/
@@ -181,11 +180,10 @@ RUN chmod +x /app/scripts/*.sh
 # in /app/eiou-src-backup/ that startup.sh will use to sync to the volume.
 # This ensures users always get the latest code without losing their data.
 # =============================================================================
-RUN mkdir -p /app/eiou-src-backup /app/eiou-cli-backup
+RUN mkdir -p /app/eiou-src-backup
 COPY files/src/ /app/eiou-src-backup/src/
 COPY files/root/ /app/eiou-src-backup/
 COPY files/composer.json /app/eiou-src-backup/composer.json
-COPY files/eiou/Eiou.php /app/eiou-cli-backup/eiou.php
 
 # Copy and set up startup script
 COPY startup.sh /startup.sh

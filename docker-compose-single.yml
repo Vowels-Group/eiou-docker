@@ -91,9 +91,6 @@ services:
       # Web: GUI and API files (regenerated on build)
       - eiou-index:/var/www/html
 
-      # CLI: eiou command-line tool (regenerated on build)
-      - eiou-eiou:/usr/local/bin/
-
       # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
       - eiou-backups:/var/lib/eiou/backups
 
@@ -144,8 +141,6 @@ volumes:
     name: eiou-files
   eiou-index:
     name: eiou-index
-  eiou-eiou:
-    name: eiou-eiou
   # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
   eiou-backups:
     name: eiou-backups
