@@ -438,10 +438,6 @@ if [ -d /app/eiou-src-backup ]; then
         echo "  Web files updated."
     fi
 
-    # Recreate API symlink in web root (may be lost on volume mount)
-    mkdir -p /etc/eiou/www/api
-    ln -sf /etc/eiou/api/Api.php /etc/eiou/www/api/index.php
-
     # Reapply permissions after sync (mirroring dockerfile build steps)
     find /etc/eiou/ -type d -exec chmod 755 "{}" \;
     find /etc/eiou/ -type f -exec chmod 644 "{}" \;

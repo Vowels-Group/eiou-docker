@@ -71,34 +71,29 @@ RUN a2enmod rewrite ssl
 # Create SSL certificate directory
 RUN mkdir -p /etc/apache2/ssl
 
-# Change default DocumentRoot from /var/www/html to /etc/eiou/www
-# Web files are served directly from the /etc/eiou volume, eliminating
-# the need for a separate /var/www/html volume
-RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /etc/eiou/www|' /etc/apache2/sites-available/000-default.conf
-
-# Add GUI assets alias and document root configuration
-# This allows /gui/assets/* to serve Font Awesome and other static assets
-# API requests are rewritten to the api/ subdirectory under DocumentRoot
+# Configure Apache HTTP VirtualHost
+# DocumentRoot stays at /var/www/html (Debian default, already has Require all granted).
+# Symlinks in /var/www/html point to actual files under /etc/eiou/ (the persistent volume).
+# This avoids needing a /var/www/html volume — it only contains symlinks in the container layer.
 RUN echo 'RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/000-default.conf && \
     echo 'Alias /gui/assets /etc/eiou/src/gui/assets' >> /etc/apache2/sites-available/000-default.conf && \
     echo '<Directory /etc/eiou/src/gui/assets>' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    Require all granted' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    Options -Indexes' >> /etc/apache2/sites-available/000-default.conf && \
     echo '</Directory>' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '<Directory /etc/eiou/www>' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    Require all granted' >> /etc/apache2/sites-available/000-default.conf && \
+    echo '<Directory /var/www/html>' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    AllowOverride All' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    Options -Indexes +FollowSymLinks' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    RewriteEngine On' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    RewriteCond %{REQUEST_FILENAME} !-f' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    RewriteCond %{REQUEST_FILENAME} !-d' >> /etc/apache2/sites-available/000-default.conf && \
-    echo '    RewriteRule ^api/(.*)$ /etc/eiou/www/api/index.php [L,QSA]' >> /etc/apache2/sites-available/000-default.conf && \
+    echo '    RewriteRule ^api/(.*)$ /var/www/html/api/index.php [L,QSA]' >> /etc/apache2/sites-available/000-default.conf && \
     echo '</Directory>' >> /etc/apache2/sites-available/000-default.conf
 
 # Create SSL VirtualHost configuration
 RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf && \
     echo '    ServerAdmin webmaster@localhost' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    DocumentRoot /etc/eiou/www' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '    DocumentRoot /var/www/html' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    SSLEngine on' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    SSLCertificateFile /etc/apache2/ssl/server.crt' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    SSLCertificateKeyFile /etc/apache2/ssl/server.key' >> /etc/apache2/sites-available/default-ssl.conf && \
@@ -108,14 +103,13 @@ RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf &
     echo '        Require all granted' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        Options -Indexes' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    </Directory>' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    <Directory /etc/eiou/www>' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '        Require all granted' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '    <Directory /var/www/html>' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        AllowOverride All' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        Options -Indexes +FollowSymLinks' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        RewriteEngine On' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        RewriteCond %{REQUEST_FILENAME} !-f' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        RewriteCond %{REQUEST_FILENAME} !-d' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '        RewriteRule ^api/(.*)$ /etc/eiou/www/api/index.php [L,QSA]' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '        RewriteRule ^api/(.*)$ /var/www/html/api/index.php [L,QSA]' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    </Directory>' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    ErrorLog ${APACHE_LOG_DIR}/error.log' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    CustomLog ${APACHE_LOG_DIR}/access.log combined' >> /etc/apache2/sites-available/default-ssl.conf && \
@@ -152,9 +146,14 @@ RUN find /etc/eiou/ -type d -exec chmod 755 "{}" \;
 # Set _files_ in the /etc/eiou/ directory and its subdirectories to 644
 RUN find /etc/eiou/ -type f -exec chmod 644 "{}" \;
 
-# Create API symlink in web root: /etc/eiou/www/api/index.php -> /etc/eiou/api/Api.php
-RUN mkdir -p /etc/eiou/www/api && \
-    ln -s /etc/eiou/api/Api.php /etc/eiou/www/api/index.php
+# Create symlinks in /var/www/html pointing to files under /etc/eiou/
+# This keeps DocumentRoot at /var/www/html (standard Apache access policy)
+# while actual files live in the /etc/eiou volume for persistence and sync
+RUN rm -f /var/www/html/index.html && \
+    ln -s /etc/eiou/www/gui /var/www/html/gui && \
+    ln -s /etc/eiou/www/eiou /var/www/html/eiou && \
+    mkdir -p /var/www/html/api && \
+    ln -s /etc/eiou/api/Api.php /var/www/html/api/index.php
 
 # Enable PHP error logging
 RUN sed -i 's/^;error_log = php_errors.log/error_log = \/var\/log\/php_errors.log/' /etc/php/*/apache2/php.ini
