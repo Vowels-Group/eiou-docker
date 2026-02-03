@@ -442,6 +442,17 @@ if [ -d /app/eiou-src-backup ]; then
     mkdir -p /etc/eiou/www/api
     ln -sf /etc/eiou/api/Api.php /etc/eiou/www/api/index.php
 
+    # Reapply permissions after sync (mirroring dockerfile build steps)
+    find /etc/eiou/ -type d -exec chmod 755 "{}" \;
+    find /etc/eiou/ -type f -exec chmod 644 "{}" \;
+    chown www-data:www-data /etc/eiou/SecurityInit.php \
+        /etc/eiou/Functions.php \
+        /etc/eiou/processors/P2pMessages.php \
+        /etc/eiou/processors/TransactionMessages.php \
+        /etc/eiou/processors/CleanupMessages.php \
+        /etc/eiou/processors/ContactStatusMessages.php 2>/dev/null || true
+    echo "  Permissions reapplied."
+
     echo "Source file sync completed."
 fi
 
