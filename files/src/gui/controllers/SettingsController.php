@@ -10,6 +10,7 @@ use Eiou\Core\Constants;
 use Eiou\Database\DebugRepository;
 use PDO;
 use Exception;
+use Eiou\Gui\Helpers\MessageHelper;
 
 /**
  * Settings Controller
@@ -156,7 +157,7 @@ class SettingsController
             if (in_array($value, Constants::VALID_TRANSPORT_INDICES)) {
                 $settings['defaultTransportMode'] = $value;
             } else {
-                $errors[] = 'Invalid transport mode: must be in ' . Constants::VALID_TRANSPORT_INDICES;
+                $errors[] = 'Invalid transport mode: must be in ' . implode(', ', Constants::VALID_TRANSPORT_INDICES);
             }
         }
 

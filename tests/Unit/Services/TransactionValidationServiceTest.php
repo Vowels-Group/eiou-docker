@@ -1221,18 +1221,9 @@ class TransactionValidationServiceTest extends TestCase
     }
 
     /**
-     * Test checkTransactionPossible propagates processing exception
-     *
-     * NOTE: The TransactionValidationService has `catch (Exception $e)` blocks
-     * but does NOT import Exception from the global namespace. This means
-     * PHP looks for `Eiou\Services\Exception` which doesn't exist, so
-     * exceptions are NOT caught. This test verifies the current behavior
-     * where exceptions propagate up to the caller.
-     *
-     * TODO: The service should use `catch (\Exception $e)` or add
-     * `use Exception;` at the top of the file to properly catch exceptions.
+     * Test checkTransactionPossible catches processing exception and returns rejection
      */
-    public function testCheckTransactionPossiblePropagatesProcessingException(): void
+    public function testCheckTransactionPossibleCatchesProcessingException(): void
     {
         $request = [
             'senderAddress' => 'http://sender.example.com',
@@ -1274,11 +1265,17 @@ class TransactionValidationServiceTest extends TestCase
             ->method('processTransaction')
             ->willThrowException(new \Exception('Processing failed'));
 
-        // Expect the exception to propagate since the catch block doesn't work
-        // due to unimported Exception class in the service
-        $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('Processing failed');
+        $this->transactionPayload->expects($this->once())
+            ->method('buildRejection')
+            ->with($this->anything(), 'processing_error')
+            ->willReturn('{"error":"processing_error"}');
 
-        $this->validationService->checkTransactionPossible($request);
+        // Exception is caught and handled gracefully - returns false with rejection output
+        ob_start();
+        $result = $this->validationService->checkTransactionPossible($request);
+        $output = ob_get_clean();
+
+        $this->assertFalse($result);
+        $this->assertStringContainsString('processing_error', $output);
     }
 }

@@ -11,6 +11,7 @@ use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Utils\SecureLogger;
+use Eiou\Gui\Helpers\MessageHelper;
 
 /**
  * Contact Controller

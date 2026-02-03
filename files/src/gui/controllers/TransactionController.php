@@ -12,6 +12,7 @@ use Eiou\Utils\SecureLogger;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Gui\Helpers\MessageHelper;
 
 /**
  * Transaction Controller
