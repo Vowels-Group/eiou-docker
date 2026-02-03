@@ -2,7 +2,7 @@
 # Copyright 2025-2026 Vowels Group, LLC
 
 // Load Composer autoloader
-require_once __DIR__ . '/src/bootstrap.php';
+require_once dirname(__DIR__) . '/src/bootstrap.php';
 
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
@@ -16,7 +16,7 @@ use Eiou\Services\ApiAuthService;
  * Handles all incoming REST API requests
  *
  * All requests should be directed here via Apache rewrite:
- * RewriteRule ^api/(.*)$ /etc/eiou/Api.php [L,QSA]
+ * RewriteRule ^api/(.*)$ /etc/eiou/api/Api.php [L,QSA]
  */
 
 // Set JSON content type

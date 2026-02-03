@@ -393,7 +393,7 @@ self::CUSTOM_ERROR => 'Custom Error Title',
 
 ### CLI Entry Point (Eiou.php)
 
-The CLI entry point (`files/eiou/Eiou.php`) wraps all command dispatch in a try-catch block:
+The CLI entry point (`files/root/cli/Eiou.php`) wraps all command dispatch in a try-catch block:
 
 ```php
 try {

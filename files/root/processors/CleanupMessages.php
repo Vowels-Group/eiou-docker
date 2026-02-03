@@ -9,12 +9,12 @@
  *
  */
 
-require_once(__DIR__ . "/Functions.php");
+require_once(dirname(__DIR__) . "/Functions.php");
 
 use Eiou\Core\Application;
 
 // Initialize security components for cleanup processing
-require_once __DIR__ . '/SecurityInit.php';
+require_once dirname(__DIR__) . '/SecurityInit.php';
 
 $app = Application::getInstance();
 
