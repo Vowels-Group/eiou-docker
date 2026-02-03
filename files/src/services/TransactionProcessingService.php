@@ -22,6 +22,8 @@ use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Schemas\Payloads\TransactionPayload;
 use RuntimeException;
 use PDOException;
+use Exception;
+use InvalidArgumentException;
 
 /**
  * Transaction Processing Service

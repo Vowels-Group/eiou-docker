@@ -66,6 +66,7 @@ use Eiou\Schemas\Payloads\TransactionPayload;
 use Eiou\Cli\CliOutputManager;
 use PDO;
 use RuntimeException;
+use Exception;
 use function Eiou\Database\createPDOConnection;
 
 /**
