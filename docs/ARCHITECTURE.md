@@ -816,6 +816,10 @@ The watchdog runs every 30 seconds and monitors processor health:
 | (30s interval)   |
 +------------------+
         |
+        +-- Shutdown flag exists?
+        |       |-- Yes: Skip all checks (processors intentionally stopped)
+        |       |-- Flag just cleared? Reset all restart counters
+        |
         +-- Check P2P PID alive?
         |       |-- No: Restart (if < 10 restarts, > 60s cooldown)
         |
@@ -828,6 +832,19 @@ The watchdog runs every 30 seconds and monitors processor health:
         +-- Check ContactStatus PID alive? (if enabled)
                 |-- No: Restart (if < 10 restarts, > 60s cooldown)
 ```
+
+**Shutdown Flag Lifecycle:**
+
+The shutdown flag (`/tmp/eiou_shutdown.flag`) coordinates between the PHP CLI commands and the bash watchdog:
+
+| Event | Action |
+|-------|--------|
+| `eiou shutdown` | Creates flag, sends SIGTERM to processors, cleans PID files |
+| Watchdog cycle | Checks for flag — if present, skips all processor checks |
+| `eiou start` | Removes flag |
+| Watchdog (after flag removal) | Detects transition, resets restart counters, resumes monitoring |
+| Container startup (`startup.sh`) | Removes stale flag from previous container lifecycle |
+| Docker SIGTERM (container stop) | `graceful_shutdown()` creates flag before stopping processors |
 
 **Watchdog Configuration:**
 

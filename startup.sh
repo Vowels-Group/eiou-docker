@@ -873,6 +873,8 @@ watchdog() {
     local CLEANUP_LAST_RESTART=0
     local CONTACT_STATUS_LAST_RESTART=0
 
+    local WAS_SHUTDOWN=false  # Track shutdown-to-normal transitions
+
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Watchdog started - monitoring processor PIDs"
 
     while true; do
@@ -881,7 +883,22 @@ watchdog() {
 
         # Skip restart cycle if shutdown was requested via 'eiou shutdown'
         if [ -f "$SHUTDOWN_FLAG" ]; then
+            WAS_SHUTDOWN=true
             continue
+        fi
+
+        # Reset restart counters when coming out of shutdown (e.g., after 'eiou start')
+        if [ "$WAS_SHUTDOWN" = true ]; then
+            WAS_SHUTDOWN=false
+            P2P_RESTARTS=0
+            TRANSACTION_RESTARTS=0
+            CLEANUP_RESTARTS=0
+            CONTACT_STATUS_RESTARTS=0
+            P2P_LAST_RESTART=0
+            TRANSACTION_LAST_RESTART=0
+            CLEANUP_LAST_RESTART=0
+            CONTACT_STATUS_LAST_RESTART=0
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Shutdown flag cleared, resuming processor monitoring with reset counters"
         fi
 
         # Check P2pMessages processor

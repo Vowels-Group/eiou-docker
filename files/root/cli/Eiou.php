@@ -291,6 +291,11 @@ elseif($request === "shutdown"){
   $debugService->output("Executing shutdown request", 'SILENT');
   $app->shutdown($output);
 }
+elseif($request === "start"){
+  // Start processors after a previous shutdown
+  $debugService->output("Executing start request", 'SILENT');
+  $app->start($output);
+}
 // API Key Management
 elseif($request === "apikey"){
   // Manage API keys
