@@ -86,6 +86,15 @@ docker run -e "RESTORE=word1 word2 word3 ... word24" ...
 
 > **Security Note:** When using the `RESTORE` environment variable, the container will display a warning recommending `RESTORE_FILE` instead. The `RESTORE` variable is automatically unset after successful seed restoration to prevent the seed phrase from remaining in the environment during normal operation.
 
+> **Combining with QUICKSTART:** When both `RESTORE` (or `RESTORE_FILE`) and `QUICKSTART` are set, the wallet is first restored from the seed phrase (restoring keys and Tor address), and then the `QUICKSTART` hostname is automatically applied as the HTTP/HTTPS address. This allows a restored wallet to be reachable at both its original Tor address and the new HTTP/HTTPS hostname. Example:
+> ```yaml
+> environment:
+>   - QUICKSTART=alice
+>   - RESTORE_FILE=/restore/seed
+> volumes:
+>   - /path/to/seed.txt:/restore/seed:ro
+> ```
+
 #### SSL_DOMAIN
 
 Override the primary domain used in the SSL certificate's Common Name (CN). Useful when the container hostname differs from the external domain.

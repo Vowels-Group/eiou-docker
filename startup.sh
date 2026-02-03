@@ -534,6 +534,21 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
         echo "Wallet restore completed."
         echo "NOTE: You can now safely unmount and delete the seed phrase file from the host."
 
+        # Apply QUICKSTART hostname to restored wallet if set
+        # Restore only configures Tor address; QUICKSTART adds HTTP/HTTPS addressing
+        if [ "$QUICKSTART" != "false" ]; then
+            echo "Applying QUICKSTART hostname ($QUICKSTART) to restored wallet..."
+            HOSTNAME_RESULT=$(eiou changesettings hostname "https://$QUICKSTART" 2>&1)
+            HOSTNAME_EXIT_CODE=$?
+            if [ $HOSTNAME_EXIT_CODE -ne 0 ]; then
+                echo "WARNING: Failed to apply hostname ($QUICKSTART) to restored wallet:"
+                echo "$HOSTNAME_RESULT"
+                echo "You can set it manually later with: eiou changesettings hostname https://$QUICKSTART"
+            else
+                echo "HTTP/HTTPS hostname configured: https://$QUICKSTART"
+            fi
+        fi
+
     elif [ "$RESTORE" != "false" ]; then
         # Method 2: Environment variable restore (convenient but less secure)
         # Warning: Seedphrase remains visible in docker inspect and container env
@@ -599,6 +614,22 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
         echo "$RESTORE_RESULT"
         echo "Wallet restore completed."
         echo "NOTE: RESTORE environment variable has been cleared from this shell."
+
+        # Apply QUICKSTART hostname to restored wallet if set
+        # Restore only configures Tor address; QUICKSTART adds HTTP/HTTPS addressing
+        if [ "$QUICKSTART" != "false" ]; then
+            echo "Applying QUICKSTART hostname ($QUICKSTART) to restored wallet..."
+            HOSTNAME_RESULT=$(eiou changesettings hostname "https://$QUICKSTART" 2>&1)
+            HOSTNAME_EXIT_CODE=$?
+            if [ $HOSTNAME_EXIT_CODE -ne 0 ]; then
+                echo "WARNING: Failed to apply hostname ($QUICKSTART) to restored wallet:"
+                echo "$HOSTNAME_RESULT"
+                echo "You can set it manually later with: eiou changesettings hostname https://$QUICKSTART"
+            else
+                echo "HTTP/HTTPS hostname configured: https://$QUICKSTART"
+            fi
+        fi
+
     elif [ "$QUICKSTART" != "false" ]; then
         echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
         # Use HTTPS for secure P2P communication (SSL certificates are auto-generated)
