@@ -423,30 +423,6 @@ if [ -d /app/eiou-src-backup ]; then
 fi
 
 # =============================================================================
-# CONFIG FILE MIGRATION
-# =============================================================================
-# Move config files from /etc/eiou/ root to /etc/eiou/config/ subdirectory.
-# This handles existing containers that have config files at the old location.
-# =============================================================================
-mkdir -p /etc/eiou/config
-if [ -f /etc/eiou/userconfig.json ] && [ ! -f /etc/eiou/config/userconfig.json ]; then
-    mv /etc/eiou/userconfig.json /etc/eiou/config/userconfig.json 2>/dev/null || true
-    echo "Migrated userconfig.json to config/"
-fi
-if [ -f /etc/eiou/dbconfig.json ] && [ ! -f /etc/eiou/config/dbconfig.json ]; then
-    mv /etc/eiou/dbconfig.json /etc/eiou/config/dbconfig.json 2>/dev/null || true
-    echo "Migrated dbconfig.json to config/"
-fi
-if [ -f /etc/eiou/defaultconfig.json ] && [ ! -f /etc/eiou/config/defaultconfig.json ]; then
-    mv /etc/eiou/defaultconfig.json /etc/eiou/config/defaultconfig.json 2>/dev/null || true
-    echo "Migrated defaultconfig.json to config/"
-fi
-if [ -f /etc/eiou/.master.key ] && [ ! -f /etc/eiou/config/.master.key ]; then
-    mv /etc/eiou/.master.key /etc/eiou/config/.master.key 2>/dev/null || true
-    echo "Migrated .master.key to config/"
-fi
-
-# =============================================================================
 # COMPOSER AUTOLOADER SETUP
 # =============================================================================
 # Ensure the Composer autoloader exists and is up-to-date.
