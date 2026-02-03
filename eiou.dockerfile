@@ -181,7 +181,7 @@ RUN chmod +x /app/scripts/*.sh
 # =============================================================================
 RUN mkdir -p /app/eiou-src-backup
 COPY files/src/ /app/eiou-src-backup/src/
-COPY files/root/ /app/eiou-src-backup/
+COPY files/root/ /app/eiou-src-backup/root/
 COPY files/composer.json /app/eiou-src-backup/composer.json
 
 # Copy and set up startup script

@@ -396,46 +396,16 @@ if [ -d /app/eiou-src-backup ]; then
         echo "  Source code updated."
     fi
 
-    # Sync root PHP files (entry points)
-    for file in /app/eiou-src-backup/*.php; do
-        if [ -f "$file" ]; then
-            cp "$file" /etc/eiou/ 2>/dev/null || true
-        fi
-    done
-    echo "  Entry points updated."
+    # Sync root files to /etc/eiou/ (includes api/, cli/, processors/, www/, *.php)
+    if [ -d /app/eiou-src-backup/root ]; then
+        cp -r /app/eiou-src-backup/root/* /etc/eiou/ 2>/dev/null || true
+        echo "  Root files updated."
+    fi
 
     # Sync composer.json
     if [ -f /app/eiou-src-backup/composer.json ]; then
         cp /app/eiou-src-backup/composer.json /etc/eiou/composer.json 2>/dev/null || true
         echo "  Composer config updated."
-    fi
-
-    # Sync CLI entry point
-    if [ -f /app/eiou-src-backup/cli/Eiou.php ]; then
-        mkdir -p /etc/eiou/cli
-        cp /app/eiou-src-backup/cli/Eiou.php /etc/eiou/cli/Eiou.php 2>/dev/null || true
-        echo "  CLI entry point updated."
-    fi
-
-    # Sync API entry point
-    if [ -d /app/eiou-src-backup/api ]; then
-        mkdir -p /etc/eiou/api
-        cp -r /app/eiou-src-backup/api/* /etc/eiou/api/ 2>/dev/null || true
-        echo "  API entry point updated."
-    fi
-
-    # Sync processor entry points
-    if [ -d /app/eiou-src-backup/processors ]; then
-        mkdir -p /etc/eiou/processors
-        cp -r /app/eiou-src-backup/processors/* /etc/eiou/processors/ 2>/dev/null || true
-        echo "  Processor entry points updated."
-    fi
-
-    # Sync web files (gui/index.html, eiou/index.html)
-    if [ -d /app/eiou-src-backup/www ]; then
-        mkdir -p /etc/eiou/www/gui /etc/eiou/www/eiou
-        cp -r /app/eiou-src-backup/www/* /etc/eiou/www/ 2>/dev/null || true
-        echo "  Web files updated."
     fi
 
     # Reapply permissions after sync (mirroring dockerfile build steps)
