@@ -6,6 +6,7 @@
 # - Seed phrase generate and restore functionality
 # - Secure seedphrase display (security validation)
 # - Authcode restoration from seedphrase
+# - Restore + QUICKSTART hostname application
 #
 # NOTE: All paths use double slashes (//etc/eiou/) to prevent Git Bash on Windows
 # from converting /etc/ to C:/Program Files/Git/etc/. This is safe on Linux too.
@@ -18,6 +19,7 @@ echo -e "Testing:"
 echo -e "  - Seed phrase generate/restore"
 echo -e "  - Secure seedphrase display (security)"
 echo -e "  - Authcode restoration from seedphrase"
+echo -e "  - Restore + QUICKSTART hostname application"
 echo -e "================================================================\n"
 
 testname="seedphraseTestSuite"
@@ -1274,6 +1276,240 @@ else
     echo -e "\t   ${YELLOW}To fix: Modify Wallet.php to derive authcode from seed${NC}"
     echo -e "\t   ${YELLOW}using HMAC-SHA256 or similar deterministic method.${NC}"
 fi
+echo -e "\t   ============================================\n"
+
+################################################################################
+#                    PART 4: RESTORE + QUICKSTART HOSTNAME TEST
+################################################################################
+
+echo -e "\n\n[PART 4: Restore + QUICKSTART Hostname Test]"
+echo -e "================================================================"
+echo -e "Testing that QUICKSTART hostname is applied after wallet restore"
+echo -e "================================================================"
+
+############################ TEST 4.1: RESTORE ENV VAR + QUICKSTART ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 4.1: Testing RESTORE + QUICKSTART applies hostname to restored wallet"
+
+# Get the current seedphrase from existing container
+restoreQsSeedPhrase=$(docker exec ${testContainer} php -r '
+    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    echo \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"]);
+' 2>&1)
+
+# Get original public key for comparison
+originalPubKeyQs=$(docker exec ${testContainer} php -r '
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    echo $json["public"] ?? "ERROR";
+' 2>&1)
+
+# Create a new container with both RESTORE and QUICKSTART
+restoreQsContainer="httpRestoreQuickstartTest"
+docker rm -f ${restoreQsContainer} > /dev/null 2>&1
+docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-files ${restoreQsContainer}-eiou > /dev/null 2>&1
+
+docker run -d --network="${network}" --name "${restoreQsContainer}" \
+    -e RESTORE="${restoreQsSeedPhrase}" \
+    -e QUICKSTART="${restoreQsContainer}" \
+    -v "${restoreQsContainer}-mysql-data:/var/lib/mysql" \
+    -v "${restoreQsContainer}-files:/etc/eiou/" \
+    eiou/eiou > /dev/null 2>&1
+
+echo -e "\t   Waiting for container initialization..."
+wait_for_container_initialized ${restoreQsContainer} 60 || true
+
+# Check if wallet was restored (public key matches)
+restoredPubKeyQs=$(docker exec ${restoreQsContainer} php -r '
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    echo $json["public"] ?? "ERROR";
+' 2>&1)
+
+if [[ "$originalPubKeyQs" == "$restoredPubKeyQs" ]] && [[ "$restoredPubKeyQs" != "ERROR" ]]; then
+    printf "\t   Wallet restored with matching public key ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Wallet restoration with QUICKSTART ${RED}FAILED${NC}\n"
+    printf "\t   Original: ${originalPubKeyQs:0:50}...\n"
+    printf "\t   Restored: ${restoredPubKeyQs:0:50}...\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 4.2: VERIFY HOSTNAME SET IN USERCONFIG ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 4.2: Verifying hostname is set in userconfig.json after RESTORE + QUICKSTART"
+
+hostnameCheck=$(docker exec ${restoreQsContainer} php -r '
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    $hostname = $json["hostname"] ?? "NOT_SET";
+    $hostnameSec = $json["hostname_secure"] ?? "NOT_SET";
+    echo json_encode(["hostname" => $hostname, "hostname_secure" => $hostnameSec]);
+' 2>&1)
+
+# Parse hostname and hostname_secure from JSON
+hostnameValue=$(echo "$hostnameCheck" | php -r 'echo json_decode(file_get_contents("php://stdin"), true)["hostname"] ?? "NOT_SET";')
+hostnameSecureValue=$(echo "$hostnameCheck" | php -r 'echo json_decode(file_get_contents("php://stdin"), true)["hostname_secure"] ?? "NOT_SET";')
+
+echo -e "\n\t   ============================================"
+echo -e "\t   HOSTNAME CHECK (RESTORE + QUICKSTART)"
+echo -e "\t   ============================================"
+echo -e "\t   hostname:        ${hostnameValue}"
+echo -e "\t   hostname_secure: ${hostnameSecureValue}"
+echo -e "\t   expected:        http://${restoreQsContainer}"
+echo -e "\t   expected_secure: https://${restoreQsContainer}"
+echo -e "\t   ============================================\n"
+
+if [[ "$hostnameValue" == "http://${restoreQsContainer}" ]] && [[ "$hostnameSecureValue" == "https://${restoreQsContainer}" ]]; then
+    printf "\t   ${GREEN}HOSTNAME SET CORRECTLY after RESTORE + QUICKSTART!${NC}\n"
+    printf "\t   Hostname verification ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   ${RED}HOSTNAME NOT SET CORRECTLY after RESTORE + QUICKSTART${NC}\n"
+    if [[ "$hostnameValue" == "NOT_SET" ]]; then
+        printf "\t   hostname field is missing from userconfig.json\n"
+    fi
+    if [[ "$hostnameSecureValue" == "NOT_SET" ]]; then
+        printf "\t   hostname_secure field is missing from userconfig.json\n"
+    fi
+    printf "\t   Hostname verification ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 4.3: VERIFY TOR ADDRESS STILL PRESENT ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 4.3: Verifying Tor address is preserved alongside hostname"
+
+torAddressQs=$(docker exec ${restoreQsContainer} php -r '
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    echo $json["torAddress"] ?? "NOT_SET";
+' 2>&1)
+
+if [[ "$torAddressQs" != "NOT_SET" ]] && [[ -n "$torAddressQs" ]] && [[ "$torAddressQs" == *".onion" ]]; then
+    printf "\t   Tor address preserved after QUICKSTART hostname applied ${GREEN}PASSED${NC}\n"
+    printf "\t   Tor: ${torAddressQs}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Tor address verification ${RED}FAILED${NC}\n"
+    printf "\t   Tor address: ${torAddressQs}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 4.4: CLEANUP RESTORE ENV + QUICKSTART CONTAINER ############################
+
+echo -e "\n\t-> Cleaning up RESTORE + QUICKSTART container..."
+docker rm -f ${restoreQsContainer} 2>/dev/null
+docker volume rm ${restoreQsContainer}-mysql-data ${restoreQsContainer}-files ${restoreQsContainer}-eiou 2>/dev/null
+
+############################ TEST 4.5: RESTORE_FILE + QUICKSTART ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 4.4: Testing RESTORE_FILE + QUICKSTART applies hostname to restored wallet"
+
+# Write seed phrase to temp file on host
+hostSeedFileQs="$(pwd)/eiou_test_restore_qs_seed_$$"
+echo "${restoreQsSeedPhrase}" > "${hostSeedFileQs}"
+chmod 600 "${hostSeedFileQs}"
+
+# Create a new container with both RESTORE_FILE and QUICKSTART
+restoreFileQsContainer="httpRestoreFileQsTest"
+docker rm -f ${restoreFileQsContainer} > /dev/null 2>&1
+docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-files ${restoreFileQsContainer}-eiou > /dev/null 2>&1
+
+MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileQsContainer}" \
+    -v "${hostSeedFileQs}:/restore/seed:ro" \
+    -e RESTORE_FILE="/restore/seed" \
+    -e QUICKSTART="${restoreFileQsContainer}" \
+    -v "${restoreFileQsContainer}-mysql-data:/var/lib/mysql" \
+    -v "${restoreFileQsContainer}-files:/etc/eiou/" \
+    eiou/eiou > /dev/null 2>&1
+
+echo -e "\t   Waiting for container initialization..."
+wait_for_container_initialized ${restoreFileQsContainer} 60 || true
+
+# Check hostname and hostname_secure
+hostnameFileQsCheck=$(docker exec ${restoreFileQsContainer} php -r '
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    $hostname = $json["hostname"] ?? "NOT_SET";
+    $hostnameSec = $json["hostname_secure"] ?? "NOT_SET";
+    $pubKey = $json["public"] ?? "NOT_SET";
+    $torAddr = $json["torAddress"] ?? "NOT_SET";
+    echo json_encode(["hostname" => $hostname, "hostname_secure" => $hostnameSec, "public" => $pubKey, "torAddress" => $torAddr]);
+' 2>&1)
+
+# Parse results
+hostnameFileQs=$(echo "$hostnameFileQsCheck" | php -r 'echo json_decode(file_get_contents("php://stdin"), true)["hostname"] ?? "NOT_SET";')
+hostnameSecureFileQs=$(echo "$hostnameFileQsCheck" | php -r 'echo json_decode(file_get_contents("php://stdin"), true)["hostname_secure"] ?? "NOT_SET";')
+pubKeyFileQs=$(echo "$hostnameFileQsCheck" | php -r 'echo json_decode(file_get_contents("php://stdin"), true)["public"] ?? "NOT_SET";')
+torAddrFileQs=$(echo "$hostnameFileQsCheck" | php -r 'echo json_decode(file_get_contents("php://stdin"), true)["torAddress"] ?? "NOT_SET";')
+
+echo -e "\n\t   ============================================"
+echo -e "\t   HOSTNAME CHECK (RESTORE_FILE + QUICKSTART)"
+echo -e "\t   ============================================"
+echo -e "\t   hostname:        ${hostnameFileQs}"
+echo -e "\t   hostname_secure: ${hostnameSecureFileQs}"
+echo -e "\t   expected:        http://${restoreFileQsContainer}"
+echo -e "\t   expected_secure: https://${restoreFileQsContainer}"
+echo -e "\t   public_key:      ${pubKeyFileQs:0:50}..."
+echo -e "\t   tor_address:     ${torAddrFileQs}"
+echo -e "\t   ============================================\n"
+
+# Verify all conditions: hostname set, key matches, Tor preserved
+hostnameFileOk="false"
+keyFileOk="false"
+torFileOk="false"
+
+if [[ "$hostnameFileQs" == "http://${restoreFileQsContainer}" ]] && [[ "$hostnameSecureFileQs" == "https://${restoreFileQsContainer}" ]]; then
+    hostnameFileOk="true"
+fi
+
+if [[ "$originalPubKeyQs" == "$pubKeyFileQs" ]] && [[ "$pubKeyFileQs" != "NOT_SET" ]]; then
+    keyFileOk="true"
+fi
+
+if [[ "$torAddrFileQs" != "NOT_SET" ]] && [[ "$torAddrFileQs" == *".onion" ]]; then
+    torFileOk="true"
+fi
+
+if [[ "$hostnameFileOk" == "true" ]] && [[ "$keyFileOk" == "true" ]] && [[ "$torFileOk" == "true" ]]; then
+    printf "\t   ${GREEN}RESTORE_FILE + QUICKSTART: All checks passed!${NC}\n"
+    printf "\t   - Hostname set correctly\n"
+    printf "\t   - Public key matches original\n"
+    printf "\t   - Tor address preserved\n"
+    printf "\t   RESTORE_FILE + QUICKSTART ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   ${RED}RESTORE_FILE + QUICKSTART: Some checks failed${NC}\n"
+    if [[ "$hostnameFileOk" != "true" ]]; then
+        printf "\t   - ${RED}Hostname NOT set correctly${NC}\n"
+    fi
+    if [[ "$keyFileOk" != "true" ]]; then
+        printf "\t   - ${RED}Public key mismatch${NC}\n"
+    fi
+    if [[ "$torFileOk" != "true" ]]; then
+        printf "\t   - ${RED}Tor address missing${NC}\n"
+    fi
+    printf "\t   RESTORE_FILE + QUICKSTART ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ CLEANUP RESTORE_FILE + QUICKSTART ############################
+
+echo -e "\n\t-> Cleaning up RESTORE_FILE + QUICKSTART container..."
+docker rm -f ${restoreFileQsContainer} 2>/dev/null
+docker volume rm ${restoreFileQsContainer}-mysql-data ${restoreFileQsContainer}-files ${restoreFileQsContainer}-eiou 2>/dev/null
+rm -f "${hostSeedFileQs}"
+
+############################ PART 4 SUMMARY ############################
+
+echo -e "\n\t   ============================================"
+echo -e "\t   RESTORE + QUICKSTART HOSTNAME TEST SUMMARY"
+echo -e "\t   ============================================"
+echo -e "\t   Tests verify that when QUICKSTART is set alongside"
+echo -e "\t   RESTORE or RESTORE_FILE, the hostname is automatically"
+echo -e "\t   applied to the restored wallet's userconfig.json."
 echo -e "\t   ============================================\n"
 
 ##################################################################
