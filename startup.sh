@@ -48,6 +48,7 @@ fi
 # Graceful shutdown configuration
 SHUTDOWN_TIMEOUT=30  # Maximum seconds to wait for processes to terminate
 SHUTDOWN_IN_PROGRESS=false
+SHUTDOWN_FLAG="/tmp/eiou_shutdown.flag"  # Flag file to signal intentional shutdown to watchdog
 
 # Store background process PIDs
 P2P_PID=""
@@ -70,6 +71,9 @@ graceful_shutdown() {
         return
     fi
     SHUTDOWN_IN_PROGRESS=true
+
+    # Set shutdown flag to prevent watchdog from restarting processes
+    touch "$SHUTDOWN_FLAG" 2>/dev/null || true
 
     # Stop watchdog first to prevent it from restarting processes during shutdown
     if [ -n "$WATCHDOG_PID" ] && kill -0 "$WATCHDOG_PID" 2>/dev/null; then
@@ -172,11 +176,12 @@ graceful_shutdown() {
     echo "[Shutdown] Stopping Cron..."
     service cron stop 2>/dev/null || true
 
-    # Step 4: Clean up lockfiles
+    # Step 4: Clean up lockfiles and shutdown flag
     echo "[Shutdown] Cleaning up lockfiles..."
     rm -f /tmp/p2pmessages_lock.pid 2>/dev/null
     rm -f /tmp/transactionmessages_lock.pid 2>/dev/null
     rm -f /tmp/cleanupmessages_lock.pid 2>/dev/null
+    rm -f "$SHUTDOWN_FLAG" 2>/dev/null
 
     SHUTDOWN_END=$(date +%s)
     SHUTDOWN_DURATION=$((SHUTDOWN_END - SHUTDOWN_START))
@@ -810,6 +815,9 @@ else
     echo "Automatic backups disabled via EIOU_BACKUP_AUTO_ENABLED"
 fi
 
+# Clear any stale shutdown flag from previous runs
+rm -f "$SHUTDOWN_FLAG" 2>/dev/null
+
 # Start p2p message processing in background
 nohup php /etc/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
 P2P_PID=$!
@@ -846,6 +854,7 @@ fi
 #   - Enforces RESTART_COOLDOWN between restarts of same processor (default: 60s)
 #   - Limits total restarts per processor to MAX_RESTARTS (default: 10)
 #   - Tracks P2pMessages, TransactionMessages, CleanupMessages, ContactStatusMessages
+#   - Respects SHUTDOWN_FLAG: skips restarts when intentional shutdown was requested
 # Note: Watchdog is stopped first during graceful_shutdown() to prevent
 #       process respawning during container termination.
 # -----------------------------------------------------------------------------
@@ -869,6 +878,11 @@ watchdog() {
     while true; do
         sleep $WATCHDOG_INTERVAL
         local CURRENT_TIME=$(date +%s)
+
+        # Skip restart cycle if shutdown was requested via 'eiou shutdown'
+        if [ -f "$SHUTDOWN_FLAG" ]; then
+            continue
+        fi
 
         # Check P2pMessages processor
         if ! kill -0 "$P2P_PID" 2>/dev/null; then
