@@ -221,7 +221,7 @@ if [[ ${#containers[@]} -gt 1 ]]; then
         printf "\t   Target IP: ${targetIP}\n"
 
         # Test SSL connection with -k flag (should succeed)
-        httpCode=$(docker exec ${sourceContainer} curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 https://${targetIP}/ 2>/dev/null)
+        httpCode=$(docker exec ${sourceContainer} curl -k -L -s -o /dev/null -w "%{http_code}" --max-time 10 https://${targetIP}/ 2>/dev/null)
 
         if [[ "$httpCode" == "200" ]]; then
             printf "\t   SSL to IP with -k flag ${GREEN}PASSED${NC}\n"
@@ -297,7 +297,7 @@ if [[ ${#containers[@]} -gt 1 ]]; then
     echo -e "\n\t-> Testing SSL connection from ${sourceContainer} to ${targetContainer} via hostname"
 
     # Test SSL connection to hostname with -k flag
-    httpCode=$(docker exec ${sourceContainer} curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 https://${targetContainer}/ 2>/dev/null)
+    httpCode=$(docker exec ${sourceContainer} curl -k -L -s -o /dev/null -w "%{http_code}" --max-time 10 https://${targetContainer}/ 2>/dev/null)
 
     if [[ "$httpCode" == "200" ]]; then
         printf "\t   SSL to Docker hostname with -k flag ${GREEN}PASSED${NC}\n"
