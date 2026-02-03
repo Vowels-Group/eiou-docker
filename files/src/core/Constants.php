@@ -275,7 +275,7 @@ class Constants {
      * @return array
      */
     public static function all() {
-        $reflection = new ReflectionClass(self::class);
+        $reflection = new \ReflectionClass(self::class);
         return $reflection->getConstants();
     }
 }
