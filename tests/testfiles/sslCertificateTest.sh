@@ -381,7 +381,7 @@ for container in "${containers[@]}"; do
 
     # Get configured hostname from userconfig.json (extract domain from URL)
     configuredHostname=$(docker exec ${container} php -r '
-        $config = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+        $config = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
         if (isset($config["hostname"])) {
             $hostname = preg_replace("#^https?://#", "", $config["hostname"]);
             echo rtrim($hostname, "/");

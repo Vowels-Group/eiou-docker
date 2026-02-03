@@ -32,8 +32,8 @@ network="eiou-network"
 # These paths are used INSIDE Docker containers, not on the host system
 # Double slashes prevent Git Bash on Windows from converting /etc/ to C:/Program Files/Git/etc/
 EIOU_DIR="//etc//eiou"
-USERCONFIG="${EIOU_DIR}//userconfig.json"
-MASTER_KEY="${EIOU_DIR}//.master.key"
+USERCONFIG="${EIOU_DIR}//config//userconfig.json"
+MASTER_KEY="${EIOU_DIR}//config//.master.key"
 SRC_DIR="${EIOU_DIR}//src"
 CORE_DIR="${SRC_DIR}//core"
 DATABASE_DIR="${SRC_DIR}//database"

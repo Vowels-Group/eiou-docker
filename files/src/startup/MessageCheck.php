@@ -11,8 +11,8 @@ use function Eiou\Database\createPDOConnection;
 $passed = false;
 try{
     // Checks if dbconfig.json exists (needed for core functionality)
-    if(!file_exists('/etc/eiou/dbconfig.json')){
-        SecureLogger::error("messageCheck: dbconfig.json not found at /etc/eiou/dbconfig.json");
+    if(!file_exists('/etc/eiou/config/dbconfig.json')){
+        SecureLogger::error("messageCheck: dbconfig.json not found at /etc/eiou/config/dbconfig.json");
         return;
     }
     // create PDO connection, will return the connection or raise an exception (check if PDO functions)

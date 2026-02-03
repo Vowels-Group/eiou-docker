@@ -47,11 +47,11 @@ class UserContext {
     private function loadConfigFromFiles(): void {
         if(!$this->initialized ){
             // Load in default config values
-            if (file_exists('/etc/eiou/defaultconfig.json')){
-                $this->userData = json_decode(file_get_contents('/etc/eiou/defaultconfig.json'),true);
+            if (file_exists('/etc/eiou/config/defaultconfig.json')){
+                $this->userData = json_decode(file_get_contents('/etc/eiou/config/defaultconfig.json'),true);
                  // Load in user config information
-                if (file_exists('/etc/eiou/userconfig.json')){
-                    $this->userData = array_merge($this->userData, json_decode(file_get_contents('/etc/eiou/userconfig.json'),true));
+                if (file_exists('/etc/eiou/config/userconfig.json')){
+                    $this->userData = array_merge($this->userData, json_decode(file_get_contents('/etc/eiou/config/userconfig.json'),true));
                     $this->initialized = true;
                 }
             }     

@@ -176,7 +176,7 @@ class SettingsController
 
         // Save settings to config file
         try {
-            $configFile = '/etc/eiou/defaultconfig.json';
+            $configFile = '/etc/eiou/config/defaultconfig.json';
             $config = [];
 
             if (file_exists($configFile)) {
@@ -322,7 +322,7 @@ class SettingsController
             $systemInfo['constants'] = Constants::all();
 
             // Get defaultconfig.json values
-            $defaultConfigPath = '/etc/eiou/defaultconfig.json';
+            $defaultConfigPath = '/etc/eiou/config/defaultconfig.json';
             $systemInfo['user_config'] = [];
             if (file_exists($defaultConfigPath) && is_readable($defaultConfigPath)) {
                 $defaultConfigData = json_decode(file_get_contents($defaultConfigPath), true);
@@ -563,7 +563,7 @@ class SettingsController
             $systemInfo['constants'] = Constants::all();
 
             // Get defaultconfig.json values
-            $defaultConfigPath = '/etc/eiou/defaultconfig.json';
+            $defaultConfigPath = '/etc/eiou/config/defaultconfig.json';
             $systemInfo['user_config'] = [];
             if (file_exists($defaultConfigPath) && is_readable($defaultConfigPath)) {
                 $defaultConfigData = json_decode(file_get_contents($defaultConfigPath), true);

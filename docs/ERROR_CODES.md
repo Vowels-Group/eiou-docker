@@ -335,7 +335,7 @@ For detailed architecture information, see [ARCHITECTURE.md](ARCHITECTURE.md#err
 | `BACKUP_DECRYPT_FAILED` | 500 | Decryption Failed | Cannot decrypt backup file | Ensure wallet is restored with correct seed phrase |
 | `RESTORE_FAILED` | 500 | Restore Failed | Database restore operation failed | Check database connectivity; verify backup integrity |
 | `RESTORE_CONFIRM_REQUIRED` | 400 | Confirmation Required | Restore requires --confirm flag | Add `--confirm` flag to acknowledge data overwrite |
-| `DB_CONFIG_NOT_FOUND` | 500 | Database Config Not Found | Database configuration file missing | Ensure `/etc/eiou/dbconfig.json` exists |
+| `DB_CONFIG_NOT_FOUND` | 500 | Database Config Not Found | Database configuration file missing | Ensure `/etc/eiou/config/dbconfig.json` exists |
 | `MYSQLDUMP_FAILED` | 500 | MySQL Dump Failed | mysqldump command failed | Check MariaDB service is running |
 
 ---

@@ -6,7 +6,7 @@ require_once('/etc/eiou/Functions.php');
 
 use Eiou\Core\Application;
 
-if (!file_exists('/etc/eiou/userconfig.json')) {
+if (!file_exists('/etc/eiou/config/userconfig.json')) {
   echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
   die;
 }

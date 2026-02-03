@@ -121,6 +121,9 @@ RUN a2ensite default-ssl
 # Copy root files to /etc/eiou/ (includes api/, cli/, processors/, www/)
 COPY files/root/ /etc/eiou/
 
+# Create config directory for wallet configuration files
+RUN mkdir -p /etc/eiou/config
+
 # Create CLI wrapper in PATH
 RUN echo '#!/bin/bash\nphp /etc/eiou/cli/Eiou.php "$@"' > /usr/local/bin/eiou && \
     chmod +x /usr/local/bin/eiou

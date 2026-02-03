@@ -15,10 +15,13 @@ function freshInstall(){
     }
 
     // Check if the configuration file exists
-    if (!file_exists('/etc/eiou/dbconfig.json')) {
+    if (!file_exists('/etc/eiou/config/dbconfig.json')) {
         // Create the directory if it doesn't exist
         if (!file_exists('/etc/eiou')) {
             mkdir('/etc/eiou', 0755, true);
+        }
+        if (!file_exists('/etc/eiou/config')) {
+            mkdir('/etc/eiou/config', 0755, true);
         }
         
         // Create a default configuration file
@@ -115,7 +118,7 @@ function freshInstall(){
    
         // Write the default configuration
         if($dbConfig !== []){
-            file_put_contents('/etc/eiou/dbconfig.json', json_encode($dbConfig), LOCK_EX);
+            file_put_contents('/etc/eiou/config/dbconfig.json', json_encode($dbConfig), LOCK_EX);
         }
     }
 }

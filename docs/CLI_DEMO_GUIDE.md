@@ -237,7 +237,7 @@ docker run -d --name alice -p 80:80 -p 443:443 -e QUICKSTART=alice -v alice-mysq
 | Volume | Purpose | Backup Priority |
 |--------|---------|-----------------|
 | `alice-mysql-data` | Database (transactions, contacts, balances) | CRITICAL |
-| `alice-files` | Wallet keys, userconfig.json, encryption data | CRITICAL |
+| `alice-files` | Wallet keys, config/userconfig.json, encryption data | CRITICAL |
 | `alice-backups` | Encrypted database backups | CRITICAL |
 
 **View container logs to see wallet information:**

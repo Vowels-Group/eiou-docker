@@ -685,7 +685,7 @@ docker exec ${testContainer} sh -c "echo '${currentSeedPhrase}' > //dev//shm//te
 docker exec ${testContainer} sh -c "chmod 600 //dev//shm//test_restore_seedphrase"
 
 # Delete the userconfig to test restoration
-docker exec ${testContainer} sh -c "rm -f //etc//eiou//userconfig.json"
+docker exec ${testContainer} sh -c "rm -f //etc//eiou//config//userconfig.json"
 
 # Test restore-file command
 restoreOutput=$(docker exec ${testContainer} sh -c "eiou generate restore-file //dev//shm//test_restore_seedphrase" 2>&1)
@@ -1228,7 +1228,7 @@ wait_for_container_initialized ${authcodeRestoreContainer} 60 || true
 
 newContainerAuthCode=$(docker exec ${authcodeRestoreContainer} php -r '
     require_once "/etc/eiou/src/bootstrap.php";
-    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+    $json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
         echo $authcode;

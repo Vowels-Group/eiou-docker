@@ -372,7 +372,7 @@ fi
 # location in the image to ensure the latest code is always used.
 #
 # Files synced: src/, root PHP files, composer.json
-# Files preserved: userconfig.json, dbconfig.json, encryption keys
+# Files preserved: config/userconfig.json, config/dbconfig.json, config/ encryption keys
 # =============================================================================
 
 # Debug: Show source backup status
@@ -488,7 +488,7 @@ while ! mysqladmin ping -h localhost --silent; do
     sleep 1
 done
 
-# Check if userconfig.json was already made and if so if user keys exist, if not build config
+# Check if config/userconfig.json was already made and if so if user keys exist, if not build config
 if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;') ]]; then
     # RESTORE_FILE takes priority over RESTORE, which takes priority over QUICKSTART
     if [ "$RESTORE_FILE" != "false" ]; then
@@ -688,9 +688,9 @@ while true; do
     if [[ $(php -r 'require_once "/etc/eiou/src/startup/MessageCheck.php"; echo $passed;') ]]; then
         echo "Message processing check completed successfully."  
         # Display all user info for quick access
-        http=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["hostname"])){echo $json["hostname"];}')
-        tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
-        pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
+        http=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["hostname"])){echo $json["hostname"];}')
+        tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
+        pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
         authcode=$(php -r 'require_once("/etc/eiou/src/bootstrap.php"); echo Eiou\Core\UserContext::getInstance()->getAuthCode();')
         break
     else

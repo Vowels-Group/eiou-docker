@@ -410,7 +410,7 @@ class CliService implements CliServiceInterface {
             $configFile = 'defaultconfig.json';
         }
 
-        $config_content = json_decode(file_get_contents('/etc/eiou/' . $configFile),true);
+        $config_content = json_decode(file_get_contents('/etc/eiou/config/' . $configFile),true);
         $config_content[$key] = $value;
 
         // Also save hostname_secure when hostname is updated
@@ -418,7 +418,7 @@ class CliService implements CliServiceInterface {
             $config_content['hostname_secure'] = $hostnameSecure;
         }
 
-        file_put_contents('/etc/eiou/'. $configFile, json_encode($config_content,true), LOCK_EX);
+        file_put_contents('/etc/eiou/config/'. $configFile, json_encode($config_content,true), LOCK_EX);
 
         // Regenerate SSL certificate when hostname changes
         // The certificate CN and SANs need to match the new hostname
