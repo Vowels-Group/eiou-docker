@@ -117,9 +117,9 @@ RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf &
 # Enable SSL site (will be activated after certificate is generated in startup.sh)
 RUN a2ensite default-ssl
 
-# Copy Eiou.php file to /usr/local/bin and create a wrapper script
-COPY files/eiou/Eiou.php /usr/local/bin/eiou.php
-RUN echo '#!/bin/bash\nphp /usr/local/bin/eiou.php "$@"' > /usr/local/bin/eiou && \
+# Copy Eiou.php to /etc/eiou (covered by volume sync) and create a wrapper in PATH
+COPY files/eiou/Eiou.php /etc/eiou/eiou.php
+RUN echo '#!/bin/bash\nphp /etc/eiou/eiou.php "$@"' > /usr/local/bin/eiou && \
     chmod +x /usr/local/bin/eiou
 
 # Copy wallet and index files to web directory
@@ -184,6 +184,7 @@ RUN mkdir -p /app/eiou-src-backup
 COPY files/src/ /app/eiou-src-backup/src/
 COPY files/root/ /app/eiou-src-backup/
 COPY files/composer.json /app/eiou-src-backup/composer.json
+COPY files/eiou/Eiou.php /app/eiou-src-backup/eiou.php
 
 # Copy and set up startup script
 COPY startup.sh /startup.sh

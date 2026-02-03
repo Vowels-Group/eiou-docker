@@ -410,6 +410,12 @@ if [ -d /app/eiou-src-backup ]; then
         echo "  Composer config updated."
     fi
 
+    # Sync CLI entry point
+    if [ -f /app/eiou-src-backup/eiou.php ]; then
+        cp /app/eiou-src-backup/eiou.php /etc/eiou/eiou.php 2>/dev/null || true
+        echo "  CLI entry point updated."
+    fi
+
     echo "Source file sync completed."
 fi
 
