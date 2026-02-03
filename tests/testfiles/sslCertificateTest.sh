@@ -99,8 +99,8 @@ for container in "${containers[@]}"; do
     totaltests=$(( totaltests + 1 ))
     echo -e "\n\t-> Testing HTTPS endpoint on ${container}"
 
-    # Test HTTPS endpoint returns 200 (using -k to accept self-signed cert)
-    httpCode=$(docker exec ${container} curl -k -s -o /dev/null -w "%{http_code}" https://localhost/ 2>/dev/null)
+    # Test HTTPS endpoint returns 200 (using -k to accept self-signed cert, -L to follow redirects)
+    httpCode=$(docker exec ${container} curl -k -L -s -o /dev/null -w "%{http_code}" https://localhost/ 2>/dev/null)
 
     if [[ "$httpCode" == "200" ]]; then
         printf "\t   HTTPS endpoint accessible ${GREEN}PASSED${NC}\n"
@@ -221,7 +221,7 @@ if [[ ${#containers[@]} -gt 1 ]]; then
         printf "\t   Target IP: ${targetIP}\n"
 
         # Test SSL connection with -k flag (should succeed)
-        httpCode=$(docker exec ${sourceContainer} curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 https://${targetIP}/ 2>/dev/null)
+        httpCode=$(docker exec ${sourceContainer} curl -k -L -s -o /dev/null -w "%{http_code}" --max-time 10 https://${targetIP}/ 2>/dev/null)
 
         if [[ "$httpCode" == "200" ]]; then
             printf "\t   SSL to IP with -k flag ${GREEN}PASSED${NC}\n"
@@ -297,7 +297,7 @@ if [[ ${#containers[@]} -gt 1 ]]; then
     echo -e "\n\t-> Testing SSL connection from ${sourceContainer} to ${targetContainer} via hostname"
 
     # Test SSL connection to hostname with -k flag
-    httpCode=$(docker exec ${sourceContainer} curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 https://${targetContainer}/ 2>/dev/null)
+    httpCode=$(docker exec ${sourceContainer} curl -k -L -s -o /dev/null -w "%{http_code}" --max-time 10 https://${targetContainer}/ 2>/dev/null)
 
     if [[ "$httpCode" == "200" ]]; then
         printf "\t   SSL to Docker hostname with -k flag ${GREEN}PASSED${NC}\n"
@@ -542,7 +542,7 @@ if [[ ${#containers[@]} -ge 1 ]]; then
     echo -e "\n\t-> Verifying HTTPS still works after certificate regeneration on ${testContainer}"
 
     # Test HTTPS endpoint after regeneration
-    httpCode=$(docker exec ${testContainer} curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 https://localhost/ 2>/dev/null)
+    httpCode=$(docker exec ${testContainer} curl -k -L -s -o /dev/null -w "%{http_code}" --max-time 10 https://localhost/ 2>/dev/null)
 
     if [[ "$httpCode" == "200" ]]; then
         printf "\t   HTTPS works after regeneration ${GREEN}PASSED${NC}\n"

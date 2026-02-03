@@ -16,7 +16,7 @@ use Eiou\Services\ApiAuthService;
  * Handles all incoming REST API requests
  *
  * All requests should be directed here via Apache rewrite:
- * RewriteRule ^api/(.*)$ /etc/eiou/api/Api.php [L,QSA]
+ * RewriteRule ^api/(.*)$ /var/www/html/api/index.php [L,QSA]
  */
 
 // Set JSON content type

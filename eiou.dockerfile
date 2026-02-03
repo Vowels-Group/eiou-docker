@@ -71,10 +71,11 @@ RUN a2enmod rewrite ssl
 # Create SSL certificate directory
 RUN mkdir -p /etc/apache2/ssl
 
-# Add API endpoint alias and GUI assets alias to Apache configuration
-# This allows /api/* to be served by the Api.php script
-# This allows /gui/assets/* to serve Font Awesome and other static assets
-RUN echo 'Alias /api /var/www/html/api' >> /etc/apache2/sites-available/000-default.conf && \
+# Configure Apache HTTP VirtualHost
+# DocumentRoot stays at /var/www/html (Debian default, already has Require all granted).
+# Symlinks in /var/www/html point to actual files under /etc/eiou/ (the persistent volume).
+# This avoids needing a /var/www/html volume — it only contains symlinks in the container layer.
+RUN echo 'RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/000-default.conf && \
     echo 'Alias /gui/assets /etc/eiou/src/gui/assets' >> /etc/apache2/sites-available/000-default.conf && \
     echo '<Directory /etc/eiou/src/gui/assets>' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    Require all granted' >> /etc/apache2/sites-available/000-default.conf && \
@@ -96,7 +97,7 @@ RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf &
     echo '    SSLEngine on' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    SSLCertificateFile /etc/apache2/ssl/server.crt' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    SSLCertificateKeyFile /etc/apache2/ssl/server.key' >> /etc/apache2/sites-available/default-ssl.conf && \
-    echo '    Alias /api /var/www/html/api' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '    RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    Alias /gui/assets /etc/eiou/src/gui/assets' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    <Directory /etc/eiou/src/gui/assets>' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        Require all granted' >> /etc/apache2/sites-available/default-ssl.conf && \
@@ -117,13 +118,7 @@ RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf &
 # Enable SSL site (will be activated after certificate is generated in startup.sh)
 RUN a2ensite default-ssl
 
-# Copy wallet and index files to web directory
-COPY files/index/walletIndex.html /var/www/html/index.html
-COPY files/index/index.html /var/www/html/eiou/index.html
-RUN chown www-data:www-data /var/www/html/eiou -R
-RUN chmod 755 /var/www/html/eiou
-
-# Copy root files to /etc/eiou/ (includes api/, cli/, processors/)
+# Copy root files to /etc/eiou/ (includes api/, cli/, processors/, www/)
 COPY files/root/ /etc/eiou/
 
 # Create CLI wrapper in PATH
@@ -151,8 +146,13 @@ RUN find /etc/eiou/ -type d -exec chmod 755 "{}" \;
 # Set _files_ in the /etc/eiou/ directory and its subdirectories to 644
 RUN find /etc/eiou/ -type f -exec chmod 644 "{}" \;
 
-# Create API directory in web root and symlink to actual Api.php
-RUN mkdir -p /var/www/html/api && \
+# Create symlinks in /var/www/html pointing to files under /etc/eiou/
+# This keeps DocumentRoot at /var/www/html (standard Apache access policy)
+# while actual files live in the /etc/eiou volume for persistence and sync
+RUN rm -f /var/www/html/index.html && \
+    ln -s /etc/eiou/www/gui /var/www/html/gui && \
+    ln -s /etc/eiou/www/eiou /var/www/html/eiou && \
+    mkdir -p /var/www/html/api && \
     ln -s /etc/eiou/api/Api.php /var/www/html/api/index.php
 
 # Enable PHP error logging
@@ -163,10 +163,9 @@ RUN touch /var/log/php_errors.log && \
 
 # Persistent volumes:
 # - /var/lib/mysql: Database files (transactions, contacts, balances)
-# - /etc/eiou: Wallet configuration and encryption keys
-# - /var/www/html: Web interface files
+# - /etc/eiou: Wallet configuration, encryption keys, and web files (www/)
 # - /var/lib/eiou/backups: Encrypted database backups
-VOLUME ["/var/lib/mysql", "/etc/eiou", "/var/www/html/", "/var/lib/eiou/backups"]
+VOLUME ["/var/lib/mysql", "/etc/eiou", "/var/lib/eiou/backups"]
 
 # Copy scripts directory (includes banner.sh for warning messages)
 COPY scripts/ /app/scripts/
@@ -182,7 +181,7 @@ RUN chmod +x /app/scripts/*.sh
 # =============================================================================
 RUN mkdir -p /app/eiou-src-backup
 COPY files/src/ /app/eiou-src-backup/src/
-COPY files/root/ /app/eiou-src-backup/
+COPY files/root/ /app/eiou-src-backup/root/
 COPY files/composer.json /app/eiou-src-backup/composer.json
 
 # Copy and set up startup script
@@ -195,7 +194,7 @@ RUN chmod +x /startup.sh
 # - start-period: Wait 120 seconds before first check (MariaDB needs 30-60s to initialize)
 # - retries: Mark unhealthy after 5 consecutive failures
 HEALTHCHECK --interval=30s --timeout=20s --start-period=120s --retries=5 \
-    CMD curl -f http://localhost/ || exit 1
+    CMD curl -f http://localhost/gui/ || exit 1
 
 # Start services using the startup script
 ENTRYPOINT ["/startup.sh"]

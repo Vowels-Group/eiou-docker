@@ -77,7 +77,7 @@ services:
     #
     # BACKUP PRIORITY:
     #   CRITICAL: mysql-data (transactions, contacts), files (wallet keys)
-    #   LOW: index, eiou (regenerated on startup)
+    #   LOW: eiou (regenerated on startup)
     #
     # See docs/DOCKER_CONFIGURATION.md for backup/restore instructions
     # =========================================================================
@@ -87,9 +87,6 @@ services:
 
       # Config: wallet keys, userconfig.json, encryption data (CRITICAL)
       - eiou-files:/etc/eiou/
-
-      # Web: GUI and API files (regenerated on build)
-      - eiou-index:/var/www/html
 
       # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
       - eiou-backups:/var/lib/eiou/backups
@@ -117,7 +114,7 @@ services:
         reservations:
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -139,8 +136,6 @@ volumes:
     name: eiou-mysql-data
   eiou-files:
     name: eiou-files
-  eiou-index:
-    name: eiou-index
   # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)
   eiou-backups:
     name: eiou-backups

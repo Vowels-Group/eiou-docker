@@ -27,7 +27,7 @@ The EIOU GUI is a server-rendered PHP web application optimized for Tor Browser 
 Browser Request
        |
        v
-   walletIndex.php (Entry Point)
+   index.html (Entry Point)
        |
        +-- Authentication check (Session.php)
        |       |

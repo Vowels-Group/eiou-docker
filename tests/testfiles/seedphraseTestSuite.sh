@@ -337,7 +337,7 @@ echo -e "\n\t-> Step 1.12: Restoring wallet with 'docker run -d ... -e RESTORE=<
 
 # Create a completely new Container
 restoreContainer="httpRestoreSeedTest"
-restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-files:/etc/eiou/" -v "${restoreContainer}-index:/var/www/html" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
+restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-files:/etc/eiou/" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
 
 # Wait for container to fully initialize and process RESTORE env var
 # Container needs time for: MariaDB startup, startup.sh execution, wallet restoration
@@ -806,7 +806,7 @@ restoreFileContainer="httpRestoreFileTest"
 
 # Clean up any existing container first
 docker rm -f ${restoreFileContainer} > /dev/null 2>&1
-docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-index ${restoreFileContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-eiou > /dev/null 2>&1
 
 # Create the container
 # MSYS_NO_PATHCONV=1 disables Git Bash path conversion for this command
@@ -815,7 +815,6 @@ MSYS_NO_PATHCONV=1 docker run -d --network="${network}" --name "${restoreFileCon
     -e RESTORE_FILE="/restore/seed" \
     -v "${restoreFileContainer}-mysql-data:/var/lib/mysql" \
     -v "${restoreFileContainer}-files:/etc/eiou/" \
-    -v "${restoreFileContainer}-index:/var/www/html" \
     eiou/eiou > /dev/null 2>&1
 
 echo -e "\t   Waiting for container initialization..."
@@ -846,7 +845,7 @@ fi
 
 # Clean up the new container
 docker rm -f ${restoreFileContainer} > /dev/null 2>&1
-docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-index ${restoreFileContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreFileContainer}-mysql-data ${restoreFileContainer}-files ${restoreFileContainer}-eiou > /dev/null 2>&1
 rm -f "${hostSeedFile}"
 
 if [[ "$seedInEnv" == "0" ]] && [[ "$seedInLogs" == "0" ]] && [[ "$originalPubKeyRestoreFile" == "$restoredPubKeyRestoreFile" ]] && [[ "$restoredPubKeyRestoreFile" != "ERROR" ]]; then
@@ -894,7 +893,6 @@ docker run -d --network="${network}" --name "${restoreEnvContainer}" \
     -e RESTORE="${restoreEnvSeedPhrase}" \
     -v "${restoreEnvContainer}-mysql-data:/var/lib/mysql" \
     -v "${restoreEnvContainer}-files:/etc/eiou/" \
-    -v "${restoreEnvContainer}-index:/var/www/html" \
     eiou/eiou > /dev/null 2>&1
 
 echo -e "\t   Waiting for container initialization..."
@@ -917,7 +915,7 @@ fi
 
 # Clean up the new container
 docker rm -f ${restoreEnvContainer} > /dev/null 2>&1
-docker volume rm ${restoreEnvContainer}-mysql-data ${restoreEnvContainer}-files ${restoreEnvContainer}-index ${restoreEnvContainer}-eiou > /dev/null 2>&1
+docker volume rm ${restoreEnvContainer}-mysql-data ${restoreEnvContainer}-files ${restoreEnvContainer}-eiou > /dev/null 2>&1
 
 if [[ "$threeWordInLogs" == "0" ]] && [[ "$originalPubKeyRestoreEnv" == "$restoredPubKeyRestoreEnv" ]] && [[ "$restoredPubKeyRestoreEnv" != "ERROR" ]]; then
     printf "\t   RESTORE env var approach ${GREEN}PASSED${NC}\n"
@@ -1222,7 +1220,7 @@ echo -e "\n\t-> Step 3.11: Testing authcode restoration in new container"
 
 # Create a completely new Container
 authcodeRestoreContainer="httpAuthcodeRestoreTest"
-authcodeContainerHash=$(docker run -d --network="${network}" --name "${authcodeRestoreContainer}" -v "${authcodeRestoreContainer}-mysql-data:/var/lib/mysql" -v "${authcodeRestoreContainer}-files:/etc/eiou/" -v "${authcodeRestoreContainer}-index:/var/www/html" -e RESTORE="${seedPhraseAuth}" eiou/eiou 2>&1)
+authcodeContainerHash=$(docker run -d --network="${network}" --name "${authcodeRestoreContainer}" -v "${authcodeRestoreContainer}-mysql-data:/var/lib/mysql" -v "${authcodeRestoreContainer}-files:/etc/eiou/" -e RESTORE="${seedPhraseAuth}" eiou/eiou 2>&1)
 
 # Wait for container to fully initialize and process RESTORE env var
 echo -e "\t   Waiting for container initialization..."
@@ -1261,7 +1259,7 @@ fi
 
 echo -e "\n\t-> Cleaning up test container..."
 docker rm -f ${authcodeRestoreContainer} 2>/dev/null
-docker volume rm ${authcodeRestoreContainer}-mysql-data ${authcodeRestoreContainer}-files ${authcodeRestoreContainer}-index ${authcodeRestoreContainer}-eiou 2>/dev/null
+docker volume rm ${authcodeRestoreContainer}-mysql-data ${authcodeRestoreContainer}-files ${authcodeRestoreContainer}-eiou 2>/dev/null
 
 ############################ AUTHCODE SUMMARY ############################
 

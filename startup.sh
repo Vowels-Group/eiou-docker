@@ -396,13 +396,11 @@ if [ -d /app/eiou-src-backup ]; then
         echo "  Source code updated."
     fi
 
-    # Sync root PHP files (entry points)
-    for file in /app/eiou-src-backup/*.php; do
-        if [ -f "$file" ]; then
-            cp "$file" /etc/eiou/ 2>/dev/null || true
-        fi
-    done
-    echo "  Entry points updated."
+    # Sync root files to /etc/eiou/ (includes api/, cli/, processors/, www/, *.php)
+    if [ -d /app/eiou-src-backup/root ]; then
+        cp -r /app/eiou-src-backup/root/* /etc/eiou/ 2>/dev/null || true
+        echo "  Root files updated."
+    fi
 
     # Sync composer.json
     if [ -f /app/eiou-src-backup/composer.json ]; then
@@ -410,12 +408,16 @@ if [ -d /app/eiou-src-backup ]; then
         echo "  Composer config updated."
     fi
 
-    # Sync CLI entry point
-    if [ -f /app/eiou-src-backup/cli/Eiou.php ]; then
-        mkdir -p /etc/eiou/cli
-        cp /app/eiou-src-backup/cli/Eiou.php /etc/eiou/cli/Eiou.php 2>/dev/null || true
-        echo "  CLI entry point updated."
-    fi
+    # Reapply permissions after sync (mirroring dockerfile build steps)
+    find /etc/eiou/ -type d -exec chmod 755 "{}" \;
+    find /etc/eiou/ -type f -exec chmod 644 "{}" \;
+    chown www-data:www-data /etc/eiou/SecurityInit.php \
+        /etc/eiou/Functions.php \
+        /etc/eiou/processors/P2pMessages.php \
+        /etc/eiou/processors/TransactionMessages.php \
+        /etc/eiou/processors/CleanupMessages.php \
+        /etc/eiou/processors/ContactStatusMessages.php 2>/dev/null || true
+    echo "  Permissions reapplied."
 
     echo "Source file sync completed."
 fi
