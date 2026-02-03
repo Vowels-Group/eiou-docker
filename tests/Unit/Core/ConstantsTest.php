@@ -459,13 +459,10 @@ class ConstantsTest extends TestCase
 
     /**
      * Test all method returns array of all constants
-     * Note: Uses local reflection due to namespace issue in Constants::all()
      */
     public function testAllMethodReturnsArrayOfAllConstants(): void
     {
-        // Use local reflection to work around namespace issue in Constants::all()
-        $reflection = new ReflectionClass(Constants::class);
-        $all = $reflection->getConstants();
+        $all = Constants::all();
 
         $this->assertIsArray($all);
         $this->assertNotEmpty($all);
@@ -484,18 +481,10 @@ class ConstantsTest extends TestCase
      */
     public function testGetInstanceReturnsSingleton(): void
     {
-        // Note: Constants::getInstance() calls Constants::all() internally
-        // which has a namespace bug (uses ReflectionClass without leading backslash)
-        // This test uses expectException to document the current behavior
-        // Once the bug is fixed in Constants.php, update this test to:
-        // $instance1 = Constants::getInstance();
-        // $instance2 = Constants::getInstance();
-        // $this->assertSame($instance1, $instance2);
-        // $this->assertInstanceOf(Constants::class, $instance1);
-
-        $this->expectException(\Error::class);
-        $this->expectExceptionMessage('Class "Eiou\Core\ReflectionClass" not found');
-        Constants::getInstance();
+        $instance1 = Constants::getInstance();
+        $instance2 = Constants::getInstance();
+        $this->assertSame($instance1, $instance2);
+        $this->assertInstanceOf(Constants::class, $instance1);
     }
 
     /**
@@ -574,13 +563,10 @@ class ConstantsTest extends TestCase
 
     /**
      * Test all constants count is reasonable
-     * Note: Uses local reflection due to namespace issue in Constants::all()
      */
     public function testConstantsCountIsReasonable(): void
     {
-        // Use local reflection to work around namespace issue in Constants::all()
-        $reflection = new ReflectionClass(Constants::class);
-        $all = $reflection->getConstants();
+        $all = Constants::all();
 
         // Should have at least 80 constants based on the class definition
         $this->assertGreaterThanOrEqual(80, count($all));
