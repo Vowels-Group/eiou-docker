@@ -386,18 +386,17 @@ class ContactManagementService implements ContactManagementServiceInterface
                 ]);
             } else {
                 echo "Search Results:\n";
-                foreach ($results as $contact) {
-                    echo "\tName: " . ($contact['name'] ?? 'N/A') . "\n";
+                foreach ($results as $i => $contact) {
+                    echo "\n\t[" . ($i + 1) . "] " . ($contact['name'] ?? 'N/A') . "\n";
                     foreach ($addressTypes as $type) {
-                        if (isset($contact[$type])) echo "\t" . ucfirst($type) . ": " . $contact[$type] . "\n";
+                        if (isset($contact[$type])) echo "\t    " . ucfirst($type) . ": " . $contact[$type] . "\n";
                     }
-                    echo "\tStatus: " . ($contact['status'] ?? 'N/A') . "\n";
-                    if (isset($contact['fee_percent'])) echo "\tFee: " . ($contact['fee_percent'] / Constants::FEE_CONVERSION_FACTOR) . "%\n";
-                    if (isset($contact['credit_limit'])) echo "\tCredit Limit: " . ($contact['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR) . "\n";
-                    if (isset($contact['currency'])) echo "\tCurrency: " . $contact['currency'] . "\n";
-                    echo "\t---\n";
+                    echo "\t    Status: " . ($contact['status'] ?? 'N/A') . "\n";
+                    if (isset($contact['fee_percent'])) echo "\t    Fee: " . ($contact['fee_percent'] / Constants::FEE_CONVERSION_FACTOR) . "%\n";
+                    if (isset($contact['credit_limit'])) echo "\t    Credit Limit: " . ($contact['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR) . "\n";
+                    if (isset($contact['currency'])) echo "\t    Currency: " . $contact['currency'] . "\n";
                 }
-                echo "Found " . count($results) . " contact(s)\n";
+                echo "\nFound " . count($results) . " contact(s)\n";
             }
         } else {
             $output->success("No contacts found", [
