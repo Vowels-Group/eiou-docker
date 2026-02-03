@@ -584,6 +584,36 @@ class Application {
     }
 
     /**
+     * Start processors after a previous shutdown
+     *
+     * Removes the shutdown flag so the watchdog resumes monitoring and
+     * restarts processors on its next cycle.
+     *
+     * @param CliOutputManager|null $output Optional output manager for JSON support
+     */
+    public function start(?CliOutputManager $output = null): void {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        $shutdownFlag = '/tmp/eiou_shutdown.flag';
+        $wasShutdown = file_exists($shutdownFlag);
+
+        if (!$wasShutdown) {
+            $output->success("Processors are already running", [
+                'shutdown_flag_present' => false,
+                'action' => 'none'
+            ], "No shutdown flag found — processors are already active");
+            return;
+        }
+
+        unlink($shutdownFlag);
+
+        $output->success("Processor restart initiated", [
+            'shutdown_flag_removed' => true,
+            'action' => 'watchdog_will_restart'
+        ], "Shutdown flag removed. The watchdog will restart all processors within 30 seconds");
+    }
+
+    /**
      * Prevent cloning (singleton pattern)
      *
      * @return void

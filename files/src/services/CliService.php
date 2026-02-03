@@ -759,6 +759,11 @@ class CliService implements CliServiceInterface {
                 'usage' => 'shutdown',
                 'arguments' => []
             ],
+            'start' => [
+                'description' => 'Start processors after a previous shutdown',
+                'usage' => 'start',
+                'arguments' => []
+            ],
             'global_options' => [
                 'description' => 'Global options available for all commands',
                 'options' => [

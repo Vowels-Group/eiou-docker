@@ -796,12 +796,37 @@ eiou help --json
 
 ### shutdown
 
-Gracefully shutdown the wallet application.
+Gracefully shutdown the wallet application. Stops all message processors and sets a shutdown flag to prevent the watchdog from restarting them.
 
 **Syntax:**
 ```bash
 eiou shutdown
 ```
+
+**Behavior:**
+- Sends SIGTERM to all running processors (P2P, Transaction, Cleanup, ContactStatus)
+- Removes PID and lockfiles
+- Creates `/tmp/eiou_shutdown.flag` to prevent watchdog restarts
+- Releases application resources (database connections, services)
+
+Use `eiou start` to resume processor operations after a shutdown.
+
+---
+
+### start
+
+Resume processor operations after a previous `eiou shutdown`.
+
+**Syntax:**
+```bash
+eiou start
+```
+
+**Behavior:**
+- Removes the shutdown flag (`/tmp/eiou_shutdown.flag`)
+- The watchdog detects the flag removal and restarts all processors within 30 seconds
+- Restart counters are reset so processors are not blocked by pre-shutdown limits
+- If no shutdown flag exists (processors are already running), the command reports that and exits
 
 ---
 
