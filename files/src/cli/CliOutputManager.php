@@ -448,7 +448,7 @@ class CliOutputManager
         if ($this->jsonMode) {
             echo $this->jsonResponse->walletExists() . "\n";
         } else {
-            echo "[Wallet] Already exists";
+            echo "Wallet already exists";
         }
     }
 
