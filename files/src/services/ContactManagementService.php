@@ -365,16 +365,37 @@ class ContactManagementService implements ContactManagementServiceInterface
         $searchTerm = $name ?? null;
 
         if ($results = $this->contactRepository->searchContacts($searchTerm)) {
+            $addressTypes = $this->getAllAddressTypes();
             if ($output->isJsonMode()) {
+                $contacts = [];
+                foreach ($results as $result) {
+                    $contact = ['name' => $result['name'] ?? null];
+                    foreach ($addressTypes as $type) {
+                        $contact[$type] = $result[$type] ?? null;
+                    }
+                    $contact['status'] = $result['status'] ?? null;
+                    $contact['fee_percent'] = isset($result['fee_percent']) ? $result['fee_percent'] / Constants::FEE_CONVERSION_FACTOR : null;
+                    $contact['credit_limit'] = isset($result['credit_limit']) ? $result['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR : null;
+                    $contact['currency'] = $result['currency'] ?? null;
+                    $contacts[] = $contact;
+                }
                 $output->success("Found " . count($results) . " contact(s)", [
                     'search_term' => $searchTerm,
                     'count' => count($results),
-                    'contacts' => $results
+                    'contacts' => $contacts
                 ]);
             } else {
                 echo "Search Results:\n";
                 foreach ($results as $contact) {
-                    echo "\t" . $contact['name'] . " - " . ($contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? 'No address') . " (" . $contact['status'] . ")\n";
+                    echo "\tName: " . ($contact['name'] ?? 'N/A') . "\n";
+                    foreach ($addressTypes as $type) {
+                        if (isset($contact[$type])) echo "\t" . ucfirst($type) . ": " . $contact[$type] . "\n";
+                    }
+                    echo "\tStatus: " . ($contact['status'] ?? 'N/A') . "\n";
+                    if (isset($contact['fee_percent'])) echo "\tFee: " . ($contact['fee_percent'] / Constants::FEE_CONVERSION_FACTOR) . "%\n";
+                    if (isset($contact['credit_limit'])) echo "\tCredit Limit: " . ($contact['credit_limit'] / Constants::CREDIT_CONVERSION_FACTOR) . "\n";
+                    if (isset($contact['currency'])) echo "\tCurrency: " . $contact['currency'] . "\n";
+                    echo "\t---\n";
                 }
                 echo "Found " . count($results) . " contact(s)\n";
             }
