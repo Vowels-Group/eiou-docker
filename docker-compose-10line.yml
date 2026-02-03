@@ -47,7 +47,6 @@ services:
     volumes:
       - node-a-mysql-data:/var/lib/mysql
       - node-a-files:/etc/eiou/
-      - node-a-index:/var/www/html
       - node-a-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
@@ -80,7 +79,6 @@ services:
     volumes:
       - node-b-mysql-data:/var/lib/mysql
       - node-b-files:/etc/eiou/
-      - node-b-index:/var/www/html
       - node-b-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
@@ -113,7 +111,6 @@ services:
     volumes:
       - node-c-mysql-data:/var/lib/mysql
       - node-c-files:/etc/eiou/
-      - node-c-index:/var/www/html
       - node-c-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
@@ -146,7 +143,6 @@ services:
     volumes:
       - node-d-mysql-data:/var/lib/mysql
       - node-d-files:/etc/eiou/
-      - node-d-index:/var/www/html
       - node-d-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
@@ -179,7 +175,6 @@ services:
     volumes:
       - node-e-mysql-data:/var/lib/mysql
       - node-e-files:/etc/eiou/
-      - node-e-index:/var/www/html
       - node-e-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
@@ -212,7 +207,6 @@ services:
     volumes:
       - node-f-mysql-data:/var/lib/mysql
       - node-f-files:/etc/eiou/
-      - node-f-index:/var/www/html
       - node-f-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
@@ -245,7 +239,6 @@ services:
     volumes:
       - node-g-mysql-data:/var/lib/mysql
       - node-g-files:/etc/eiou/
-      - node-g-index:/var/www/html
       - node-g-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
@@ -278,7 +271,6 @@ services:
     volumes:
       - node-h-mysql-data:/var/lib/mysql
       - node-h-files:/etc/eiou/
-      - node-h-index:/var/www/html
       - node-h-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
@@ -311,7 +303,6 @@ services:
     volumes:
       - node-i-mysql-data:/var/lib/mysql
       - node-i-files:/etc/eiou/
-      - node-i-index:/var/www/html
       - node-i-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
@@ -344,7 +335,6 @@ services:
     volumes:
       - node-j-mysql-data:/var/lib/mysql
       - node-j-files:/etc/eiou/
-      - node-j-index:/var/www/html
       - node-j-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
@@ -372,8 +362,6 @@ volumes:
     name: node-a-mysql-data
   node-a-files:
     name: node-a-files
-  node-a-index:
-    name: node-a-index
   node-a-backups:
     name: node-a-backups
 
@@ -381,8 +369,6 @@ volumes:
     name: node-b-mysql-data
   node-b-files:
     name: node-b-files
-  node-b-index:
-    name: node-b-index
   node-b-backups:
     name: node-b-backups
 
@@ -390,8 +376,6 @@ volumes:
     name: node-c-mysql-data
   node-c-files:
     name: node-c-files
-  node-c-index:
-    name: node-c-index
   node-c-backups:
     name: node-c-backups
 
@@ -399,8 +383,6 @@ volumes:
     name: node-d-mysql-data
   node-d-files:
     name: node-d-files
-  node-d-index:
-    name: node-d-index
   node-d-backups:
     name: node-d-backups
 
@@ -408,8 +390,6 @@ volumes:
     name: node-e-mysql-data
   node-e-files:
     name: node-e-files
-  node-e-index:
-    name: node-e-index
   node-e-backups:
     name: node-e-backups
 
@@ -417,8 +397,6 @@ volumes:
     name: node-f-mysql-data
   node-f-files:
     name: node-f-files
-  node-f-index:
-    name: node-f-index
   node-f-backups:
     name: node-f-backups
 
@@ -426,8 +404,6 @@ volumes:
     name: node-g-mysql-data
   node-g-files:
     name: node-g-files
-  node-g-index:
-    name: node-g-index
   node-g-backups:
     name: node-g-backups
 
@@ -435,8 +411,6 @@ volumes:
     name: node-h-mysql-data
   node-h-files:
     name: node-h-files
-  node-h-index:
-    name: node-h-index
   node-h-backups:
     name: node-h-backups
 
@@ -444,8 +418,6 @@ volumes:
     name: node-i-mysql-data
   node-i-files:
     name: node-i-files
-  node-i-index:
-    name: node-i-index
   node-i-backups:
     name: node-i-backups
 
@@ -453,7 +425,5 @@ volumes:
     name: node-j-mysql-data
   node-j-files:
     name: node-j-files
-  node-j-index:
-    name: node-j-index
   node-j-backups:
     name: node-j-backups

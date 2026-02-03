@@ -417,6 +417,31 @@ if [ -d /app/eiou-src-backup ]; then
         echo "  CLI entry point updated."
     fi
 
+    # Sync API entry point
+    if [ -d /app/eiou-src-backup/api ]; then
+        mkdir -p /etc/eiou/api
+        cp -r /app/eiou-src-backup/api/* /etc/eiou/api/ 2>/dev/null || true
+        echo "  API entry point updated."
+    fi
+
+    # Sync processor entry points
+    if [ -d /app/eiou-src-backup/processors ]; then
+        mkdir -p /etc/eiou/processors
+        cp -r /app/eiou-src-backup/processors/* /etc/eiou/processors/ 2>/dev/null || true
+        echo "  Processor entry points updated."
+    fi
+
+    # Sync web files (guiIndex.html, eiou/index.html)
+    if [ -d /app/eiou-src-backup/www ]; then
+        mkdir -p /etc/eiou/www/eiou
+        cp -r /app/eiou-src-backup/www/* /etc/eiou/www/ 2>/dev/null || true
+        echo "  Web files updated."
+    fi
+
+    # Recreate API symlink in web root (may be lost on volume mount)
+    mkdir -p /etc/eiou/www/api
+    ln -sf /etc/eiou/api/Api.php /etc/eiou/www/api/index.php
+
     echo "Source file sync completed."
 fi
 

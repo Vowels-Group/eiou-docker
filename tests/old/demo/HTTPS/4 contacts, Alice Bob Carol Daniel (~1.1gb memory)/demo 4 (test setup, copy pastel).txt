@@ -14,10 +14,10 @@ docker volume rm Daniel-mysql-data Daniel-files Daniel-index Daniel-eiou Daniel-
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d  --network=demo-net --name Alice -v "Alice-mysql-data:/var/lib/mysql" -v "Alice-files:/etc/eiou/" -v "Alice-index:/var/www/html" -v "Alice-backups:/var/lib/eiou/backups" -e QUICKSTART=Alice eiou/eiou
-docker run -d  --network=demo-net --name Bob -v "Bob-mysql-data:/var/lib/mysql" -v "Bob-files:/etc/eiou/" -v "Bob-index:/var/www/html" -v "Bob-backups:/var/lib/eiou/backups" -e QUICKSTART=Bob eiou/eiou
-docker run -d  --network=demo-net --name Carol -v "Carol-mysql-data:/var/lib/mysql" -v "Carol-files:/etc/eiou/" -v "Carol-index:/var/www/html" -v "Carol-backups:/var/lib/eiou/backups" -e QUICKSTART=Carol eiou/eiou
-docker run -d  --network=demo-net --name Daniel -v "Daniel-mysql-data:/var/lib/mysql" -v "Daniel-files:/etc/eiou/" -v "Daniel-index:/var/www/html" -v "Daniel-backups:/var/lib/eiou/backups" -e QUICKSTART=Daniel eiou/eiou
+docker run -d  --network=demo-net --name Alice -v "Alice-mysql-data:/var/lib/mysql" -v "Alice-files:/etc/eiou/" -v "Alice-backups:/var/lib/eiou/backups" -e QUICKSTART=Alice eiou/eiou
+docker run -d  --network=demo-net --name Bob -v "Bob-mysql-data:/var/lib/mysql" -v "Bob-files:/etc/eiou/" -v "Bob-backups:/var/lib/eiou/backups" -e QUICKSTART=Bob eiou/eiou
+docker run -d  --network=demo-net --name Carol -v "Carol-mysql-data:/var/lib/mysql" -v "Carol-files:/etc/eiou/" -v "Carol-backups:/var/lib/eiou/backups" -e QUICKSTART=Carol eiou/eiou
+docker run -d  --network=demo-net --name Daniel -v "Daniel-mysql-data:/var/lib/mysql" -v "Daniel-files:/etc/eiou/" -v "Daniel-backups:/var/lib/eiou/backups" -e QUICKSTART=Daniel eiou/eiou
 sleep 5
 
 # add contacts

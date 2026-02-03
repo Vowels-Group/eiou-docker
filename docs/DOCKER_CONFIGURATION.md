@@ -166,14 +166,12 @@ All EIOU containers use named volumes for data persistence:
 | `{node}-mysql-data` | `/var/lib/mysql` | Database: transactions, contacts, balances | **CRITICAL** |
 | `{node}-files` | `/etc/eiou/` | Config: wallet keys, userconfig.json, encryption data | **CRITICAL** |
 | `{node}-backups` | `/var/lib/eiou/backups` | Encrypted database backups | **CRITICAL** |
-| `{node}-index` | `/var/www/html` | Web: GUI and API files | Low (regenerated) |
 
 **Example:**
 ```yaml
 volumes:
   - alice-mysql-data:/var/lib/mysql     # Transaction history, contacts
   - alice-files:/etc/eiou/              # Wallet keys, configuration
-  - alice-index:/var/www/html           # Web interface
 ```
 
 ### Optional Volumes
@@ -556,7 +554,7 @@ docker exec <container> eiou backup cleanup
 - `{node}-backups` - Contains encrypted database backups
 
 **Optional backup:**
-- `{node}-index` and `{node}-eiou` - Regenerated on container startup
+- `{node}-eiou` - Regenerated on container startup
 
 ### Manual Volume Backup
 
