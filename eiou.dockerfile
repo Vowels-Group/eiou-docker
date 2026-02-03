@@ -117,18 +117,18 @@ RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf &
 # Enable SSL site (will be activated after certificate is generated in startup.sh)
 RUN a2ensite default-ssl
 
-# Create CLI wrapper in PATH (Eiou.php is copied via COPY files/root/ above)
-RUN echo '#!/bin/bash\nphp /etc/eiou/cli/Eiou.php "$@"' > /usr/local/bin/eiou && \
-    chmod +x /usr/local/bin/eiou
-
 # Copy wallet and index files to web directory
 COPY files/index/walletIndex.html /var/www/html/index.html
 COPY files/index/index.html /var/www/html/eiou/index.html
 RUN chown www-data:www-data /var/www/html/eiou -R
 RUN chmod 755 /var/www/html/eiou
 
-# Copy root files to a /etc/eiou/
+# Copy root files to /etc/eiou/ (includes api/, cli/, processors/)
 COPY files/root/ /etc/eiou/
+
+# Create CLI wrapper in PATH
+RUN echo '#!/bin/bash\nphp /etc/eiou/cli/Eiou.php "$@"' > /usr/local/bin/eiou && \
+    chmod +x /usr/local/bin/eiou
 
 # Copy src folder to /etc/eiou/src
 COPY files/src/ /etc/eiou/src/
