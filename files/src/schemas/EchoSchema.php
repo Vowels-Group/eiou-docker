@@ -46,15 +46,19 @@ function returnContactDetails($data) {
     // Return contact details in a nice format
     $app = Application::getInstance();
     $currencyUtility = $app->utilityServices->getCurrencyUtility();
-    return "[Contact] Details:\n" .
-           "---------------\n" .
-           "Http Address: " . ($data['http'] ?? 'Http address not available') . "\n" .
-           "Tor Address: " . ($data['tor'] ?? 'Tor address not available'). "\n" .
-           "Name: " . ($data['name'] ?? 'N/A') . "\n" .
-           "Public Key: " . "..." . substr($data['pubkey'], 51, 25) . "...\n" .
-           "Fee: " .  $currencyUtility->convertCentsToDollars(($data['fee_percent'] ?? '0.00')) . "%\n" .
-           "Credit Limit: " . $currencyUtility->convertCentsToDollars(($data['credit_limit'] ?? '0.00')) . "\n" .
-           "Currency: " . $data['currency'] . "\n";
+    $addressTypes = $app->services->getContactService()->getAllAddressTypes();
+    $output = "[Contact] Details:\n" .
+              "---------------\n";
+    foreach ($addressTypes as $type) {
+        $label = ucfirst($type) . " Address";
+        $output .= $label . ": " . ($data[$type] ?? ucfirst($type) . ' address not available') . "\n";
+    }
+    $output .= "Name: " . ($data['name'] ?? 'N/A') . "\n" .
+               "Public Key: " . "..." . substr($data['pubkey'], 51, 25) . "...\n" .
+               "Fee: " .  $currencyUtility->convertCentsToDollars(($data['fee_percent'] ?? '0.00')) . "%\n" .
+               "Credit Limit: " . $currencyUtility->convertCentsToDollars(($data['credit_limit'] ?? '0.00')) . "\n" .
+               "Currency: " . $data['currency'] . "\n";
+    return $output;
 }
 
 function returnContactExists() {
@@ -107,25 +111,35 @@ function returnContactSearchNoResults() {
 
 function returnContactSearchResults ($data) {
     // Return contact information in a nice format
-    return "[Contact] Search Results:\n" .
-            "--------------------------------------------\n" .
-            str_pad("Http address", 56, ' ') . " | " .
-            str_pad("Tor address", 56, ' ') . " | " .
-            str_pad("Name", 20, ' ') . " | " .
-            str_pad("Fee %", 10, ' ') . " | " .
-            str_pad("Credit Limit", 15, ' ') . " | " .
-            "Currency\n" .
-            "--------------------------------------------\n" .
-            implode("\n", array_map(function($contact) {
-                return str_pad($contact['http'] ?? '', 56, ' ') . " | " .
-                        str_pad($contact['tor'] ?? '', 56, ' ') . " | " .
-                        str_pad($contact['name'] ?? 'N/A', 20, ' ') . " | " .
-                        str_pad(($contact['fee_percent'] !== null ? Application::getInstance()->utilityServices->getCurrencyUtility()->convertCentsToDollars($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " .
-                        str_pad(($contact['credit_limit'] !== null ? Application::getInstance()->utilityServices->getCurrencyUtility()->convertCentsToDollars($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " .
-                        ($contact['currency'] ?? 'N/A');
-            }, $data)) . "\n" .
-            "--------------------------------------------\n" .
-            "Total contacts found: " . count($data) ."\n";
+    $app = Application::getInstance();
+    $addressTypes = $app->services->getContactService()->getAllAddressTypes();
+
+    $header = "[Contact] Search Results:\n" .
+              "--------------------------------------------\n";
+    foreach ($addressTypes as $type) {
+        $header .= str_pad(ucfirst($type) . " address", 56, ' ') . " | ";
+    }
+    $header .= str_pad("Name", 20, ' ') . " | " .
+               str_pad("Fee %", 10, ' ') . " | " .
+               str_pad("Credit Limit", 15, ' ') . " | " .
+               "Currency\n" .
+               "--------------------------------------------\n";
+
+    $rows = implode("\n", array_map(function($contact) use ($addressTypes) {
+        $row = '';
+        foreach ($addressTypes as $type) {
+            $row .= str_pad($contact[$type] ?? '', 56, ' ') . " | ";
+        }
+        $row .= str_pad($contact['name'] ?? 'N/A', 20, ' ') . " | " .
+                str_pad(($contact['fee_percent'] !== null ? Application::getInstance()->utilityServices->getCurrencyUtility()->convertCentsToDollars($contact['fee_percent']) : 'N/A'), 10, ' ') . " | " .
+                str_pad(($contact['credit_limit'] !== null ? Application::getInstance()->utilityServices->getCurrencyUtility()->convertCentsToDollars($contact['credit_limit']) : 'N/A'), 15, ' ') . " | " .
+                ($contact['currency'] ?? 'N/A');
+        return $row;
+    }, $data));
+
+    return $header . $rows . "\n" .
+           "--------------------------------------------\n" .
+           "Total contacts found: " . count($data) ."\n";
 }
 
 // ============================================================================
