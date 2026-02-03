@@ -31,10 +31,10 @@ docker run -d --name Bob --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/
 docker run -d --name Carol --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Carol eiou/eiou
 docker run -d --name Daniel --network eiou-network -v "$(pwd)/files/src/:/etc/eiou/src/" -e QUICKSTART=Daniel eiou/eiou
 
-# Alternative absolute path examples (index.html is served from /etc/eiou/www/):
-# Windows: -v "C:\path\to\your\eiou\files\root\www\index.html:/etc/eiou/www/index.html"
-# Linux: -v "/home/user/eiou/files/root/www/index.html:/etc/eiou/www/index.html"
-# macOS: -v "/Users/user/eiou/files/root/www/index.html:/etc/eiou/www/index.html"
+# Alternative absolute path examples (GUI is served from /etc/eiou/www/gui/):
+# Windows: -v "C:\path\to\your\eiou\files\root\www\gui\index.html:/etc/eiou/www/gui/index.html"
+# Linux: -v "/home/user/eiou/files/root/www/gui/index.html:/etc/eiou/www/gui/index.html"
+# macOS: -v "/Users/user/eiou/files/root/www/gui/index.html:/etc/eiou/www/gui/index.html"
 
 
 ### Option 2: Alice, Carol, and Daniel (standard containers)

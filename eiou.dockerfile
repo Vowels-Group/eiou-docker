@@ -79,7 +79,8 @@ RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /etc/eiou/www|' /etc/apach
 # Add GUI assets alias and document root configuration
 # This allows /gui/assets/* to serve Font Awesome and other static assets
 # API requests are rewritten to the api/ subdirectory under DocumentRoot
-RUN echo 'Alias /gui/assets /etc/eiou/src/gui/assets' >> /etc/apache2/sites-available/000-default.conf && \
+RUN echo 'RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/000-default.conf && \
+    echo 'Alias /gui/assets /etc/eiou/src/gui/assets' >> /etc/apache2/sites-available/000-default.conf && \
     echo '<Directory /etc/eiou/src/gui/assets>' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    Require all granted' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    Options -Indexes' >> /etc/apache2/sites-available/000-default.conf && \
@@ -100,6 +101,7 @@ RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf &
     echo '    SSLEngine on' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    SSLCertificateFile /etc/apache2/ssl/server.crt' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    SSLCertificateKeyFile /etc/apache2/ssl/server.key' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '    RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    Alias /gui/assets /etc/eiou/src/gui/assets' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    <Directory /etc/eiou/src/gui/assets>' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        Require all granted' >> /etc/apache2/sites-available/default-ssl.conf && \

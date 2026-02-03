@@ -8,8 +8,9 @@ Quick lookup card for the EIOU Wallet web interface.
 
 | URL | File | Purpose |
 |-----|------|---------|
-| `/` | `index.html` | Main wallet interface (auth + dashboard) |
-| `/?logout` | `index.html` | Logout and clear session |
+| `/` | redirects to `/gui/` | Main wallet interface (auth + dashboard) |
+| `/gui/` | `gui/index.html` | Main wallet interface (auth + dashboard) |
+| `/gui/?logout` | `gui/index.html` | Logout and clear session |
 
 ---
 
@@ -17,7 +18,7 @@ Quick lookup card for the EIOU Wallet web interface.
 
 | Component | Inside Container | Outside Container |
 |-----------|------------------|-------------------|
-| Entry point | `/etc/eiou/www/index.html` | `files/root/www/index.html` |
+| Entry point | `/etc/eiou/www/gui/index.html` | `files/root/www/gui/index.html` |
 | GUI source | `/etc/eiou/src/gui/` | `files/src/gui/` |
 | Controllers | `/etc/eiou/src/gui/controllers/` | `files/src/gui/controllers/` |
 | Helpers | `/etc/eiou/src/gui/helpers/` | `files/src/gui/helpers/` |
