@@ -411,8 +411,9 @@ if [ -d /app/eiou-src-backup ]; then
     fi
 
     # Sync CLI entry point
-    if [ -f /app/eiou-src-backup/eiou.php ]; then
-        cp /app/eiou-src-backup/eiou.php /etc/eiou/eiou.php 2>/dev/null || true
+    if [ -f /app/eiou-src-backup/cli/eiou.php ]; then
+        mkdir -p /etc/eiou/cli
+        cp /app/eiou-src-backup/cli/eiou.php /etc/eiou/cli/eiou.php 2>/dev/null || true
         echo "  CLI entry point updated."
     fi
 
@@ -808,17 +809,17 @@ else
 fi
 
 # Start p2p message processing in background
-nohup php /etc/eiou/P2pMessages.php > /dev/null 2>&1 &
+nohup php /etc/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
 P2P_PID=$!
 echo "P2p message processing started successfully (PID: $P2P_PID)"
 
 # Start transaction message processing in background
-nohup php /etc/eiou/TransactionMessages.php > /dev/null 2>&1 &
+nohup php /etc/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
 TRANSACTION_PID=$!
 echo "Transaction message processing started successfully (PID: $TRANSACTION_PID)"
 
 # Start cleanup message processing in background
-nohup php /etc/eiou/CleanupMessages.php > /dev/null 2>&1 &
+nohup php /etc/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
 CLEANUP_PID=$!
 echo "Cleanup processing started successfully (PID: $CLEANUP_PID)"
 
@@ -826,7 +827,7 @@ echo "Cleanup processing started successfully (PID: $CLEANUP_PID)"
 # Check if contact status is enabled before starting (default: true if not set)
 CONTACT_STATUS_ENABLED="${EIOU_CONTACT_STATUS_ENABLED:-true}"
 if [ "$CONTACT_STATUS_ENABLED" = "true" ] || [ "$CONTACT_STATUS_ENABLED" = "1" ]; then
-    nohup php /etc/eiou/ContactStatusMessages.php > /dev/null 2>&1 &
+    nohup php /etc/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
     CONTACT_STATUS_PID=$!
     echo "Contact status polling started successfully (PID: $CONTACT_STATUS_PID)"
 else
@@ -874,7 +875,7 @@ watchdog() {
                 P2P_RESTARTS=$((P2P_RESTARTS + 1))
                 P2P_LAST_RESTART=$CURRENT_TIME
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages died (was PID $P2P_PID), restarting (attempt $P2P_RESTARTS/$MAX_RESTARTS)..."
-                nohup php /etc/eiou/P2pMessages.php > /dev/null 2>&1 &
+                nohup php /etc/eiou/processors/P2pMessages.php > /dev/null 2>&1 &
                 P2P_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: P2pMessages restarted (new PID: $P2P_PID)"
             elif [ $P2P_RESTARTS -ge $MAX_RESTARTS ]; then
@@ -889,7 +890,7 @@ watchdog() {
                 TRANSACTION_RESTARTS=$((TRANSACTION_RESTARTS + 1))
                 TRANSACTION_LAST_RESTART=$CURRENT_TIME
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages died (was PID $TRANSACTION_PID), restarting (attempt $TRANSACTION_RESTARTS/$MAX_RESTARTS)..."
-                nohup php /etc/eiou/TransactionMessages.php > /dev/null 2>&1 &
+                nohup php /etc/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &
                 TRANSACTION_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: TransactionMessages restarted (new PID: $TRANSACTION_PID)"
             elif [ $TRANSACTION_RESTARTS -ge $MAX_RESTARTS ]; then
@@ -904,7 +905,7 @@ watchdog() {
                 CLEANUP_RESTARTS=$((CLEANUP_RESTARTS + 1))
                 CLEANUP_LAST_RESTART=$CURRENT_TIME
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages died (was PID $CLEANUP_PID), restarting (attempt $CLEANUP_RESTARTS/$MAX_RESTARTS)..."
-                nohup php /etc/eiou/CleanupMessages.php > /dev/null 2>&1 &
+                nohup php /etc/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &
                 CLEANUP_PID=$!
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: CleanupMessages restarted (new PID: $CLEANUP_PID)"
             elif [ $CLEANUP_RESTARTS -ge $MAX_RESTARTS ]; then
@@ -920,7 +921,7 @@ watchdog() {
                     CONTACT_STATUS_RESTARTS=$((CONTACT_STATUS_RESTARTS + 1))
                     CONTACT_STATUS_LAST_RESTART=$CURRENT_TIME
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages died (was PID $CONTACT_STATUS_PID), restarting (attempt $CONTACT_STATUS_RESTARTS/$MAX_RESTARTS)..."
-                    nohup php /etc/eiou/ContactStatusMessages.php > /dev/null 2>&1 &
+                    nohup php /etc/eiou/processors/ContactStatusMessages.php > /dev/null 2>&1 &
                     CONTACT_STATUS_PID=$!
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: ContactStatusMessages restarted (new PID: $CONTACT_STATUS_PID)"
                 elif [ $CONTACT_STATUS_RESTARTS -ge $MAX_RESTARTS ]; then

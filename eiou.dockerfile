@@ -117,9 +117,9 @@ RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf &
 # Enable SSL site (will be activated after certificate is generated in startup.sh)
 RUN a2ensite default-ssl
 
-# Copy Eiou.php to /etc/eiou (covered by volume sync) and create a wrapper in PATH
-COPY files/eiou/Eiou.php /etc/eiou/eiou.php
-RUN echo '#!/bin/bash\nphp /etc/eiou/eiou.php "$@"' > /usr/local/bin/eiou && \
+# Copy Eiou.php to /etc/eiou/cli (covered by volume sync) and create a wrapper in PATH
+COPY files/eiou/Eiou.php /etc/eiou/cli/eiou.php
+RUN echo '#!/bin/bash\nphp /etc/eiou/cli/eiou.php "$@"' > /usr/local/bin/eiou && \
     chmod +x /usr/local/bin/eiou
 
 # Copy wallet and index files to web directory
@@ -141,9 +141,10 @@ RUN cd /etc/eiou && composer install --no-dev --optimize-autoloader --no-interac
 
 RUN chown www-data:www-data /etc/eiou/SecurityInit.php \
     /etc/eiou/Functions.php \
-    /etc/eiou/P2pMessages.php \
-    /etc/eiou/TransactionMessages.php \
-    /etc/eiou/CleanupMessages.php
+    /etc/eiou/processors/P2pMessages.php \
+    /etc/eiou/processors/TransactionMessages.php \
+    /etc/eiou/processors/CleanupMessages.php \
+    /etc/eiou/processors/ContactStatusMessages.php
 
 # Set _directories_ in the /etc/eiou/ directory to 755
 RUN find /etc/eiou/ -type d -exec chmod 755 "{}" \;
@@ -184,7 +185,7 @@ RUN mkdir -p /app/eiou-src-backup
 COPY files/src/ /app/eiou-src-backup/src/
 COPY files/root/ /app/eiou-src-backup/
 COPY files/composer.json /app/eiou-src-backup/composer.json
-COPY files/eiou/Eiou.php /app/eiou-src-backup/eiou.php
+COPY files/eiou/Eiou.php /app/eiou-src-backup/cli/eiou.php
 
 # Copy and set up startup script
 COPY startup.sh /startup.sh

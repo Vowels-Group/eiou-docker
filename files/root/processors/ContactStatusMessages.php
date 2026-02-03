@@ -11,13 +11,13 @@
  * online status and validate transaction chains.
  */
 
-require_once(__DIR__ . "/Functions.php");
+require_once(dirname(__DIR__) . "/Functions.php");
 
 use Eiou\Core\Application;
 use Eiou\Core\Constants;
 
 // Initialize security components for contact status processing
-require_once __DIR__ . '/SecurityInit.php';
+require_once dirname(__DIR__) . '/SecurityInit.php';
 
 // Check if contact status feature is enabled before starting
 if (!Constants::isContactStatusEnabled()) {

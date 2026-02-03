@@ -132,6 +132,6 @@ docker exec httpA cat /var/log/php_errors.log
 echo -e "\nVerifying state..."
 docker exec -it httpA mysql -u root -e "SELECT hash, time, currency, amount, sender_address FROM eiou.rp2p;"
 
-docker exec -it httpA /usr/bin/php /etc/eiou/P2pMessages.php
+docker exec -it httpA /usr/bin/php /etc/eiou/processors/P2pMessages.php
 
 echo -e "\nScript completed successfully."

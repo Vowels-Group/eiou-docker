@@ -8,10 +8,10 @@
  * Entry points that must include this:
  * - files/root/Functions.php
  * - files/root/Api.php
- * - files/root/P2pMessages.php
- * - files/root/TransactionMessages.php
- * - files/root/CleanupMessages.php
- * - files/root/ContactStatusMessages.php
+ * - files/root/processors/P2pMessages.php
+ * - files/root/processors/TransactionMessages.php
+ * - files/root/processors/CleanupMessages.php
+ * - files/root/processors/ContactStatusMessages.php
  * - files/eiou/Eiou.php
  * - files/scripts/backup-cron.php
  * - Any inline PHP in startup.sh

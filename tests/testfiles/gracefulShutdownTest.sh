@@ -217,9 +217,9 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing processors can be restarted after shutdown"
 
 # Start processors again
-docker exec ${testContainer} sh -c "nohup php /etc/eiou/P2pMessages.php > /dev/null 2>&1 &" 2>/dev/null
-docker exec ${testContainer} sh -c "nohup php /etc/eiou/TransactionMessages.php > /dev/null 2>&1 &" 2>/dev/null
-docker exec ${testContainer} sh -c "nohup php /etc/eiou/CleanupMessages.php > /dev/null 2>&1 &" 2>/dev/null
+docker exec ${testContainer} sh -c "nohup php /etc/eiou/processors/P2pMessages.php > /dev/null 2>&1 &" 2>/dev/null
+docker exec ${testContainer} sh -c "nohup php /etc/eiou/processors/TransactionMessages.php > /dev/null 2>&1 &" 2>/dev/null
+docker exec ${testContainer} sh -c "nohup php /etc/eiou/processors/CleanupMessages.php > /dev/null 2>&1 &" 2>/dev/null
 
 # Wait for processors to start (poll instead of fixed sleep)
 wait_for_condition \

@@ -1210,10 +1210,10 @@ review rather than being silently dropped.
          |
          v
 10. Start background message processors
-    - P2pMessages.php
-    - TransactionMessages.php
-    - CleanupMessages.php
-    - ContactStatusMessages.php (if enabled)
+    - processors/P2pMessages.php
+    - processors/TransactionMessages.php
+    - processors/CleanupMessages.php
+    - processors/ContactStatusMessages.php (if enabled)
          |
          v
 11. Start watchdog for process monitoring
