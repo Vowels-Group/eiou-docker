@@ -42,8 +42,8 @@ class DatabaseContext {
      * @return void
      */
     private function loadConfigFromFiles(): void {
-        if (file_exists('/etc/eiou/dbconfig.json')){
-            $this->databaseData = json_decode(file_get_contents('/etc/eiou/dbconfig.json'),true);
+        if (file_exists('/etc/eiou/config/dbconfig.json')){
+            $this->databaseData = json_decode(file_get_contents('/etc/eiou/config/dbconfig.json'),true);
             $this->initialized = true;
         }
     }

@@ -5,12 +5,12 @@
 $run = false;
 try{
     // Check if userconfig.json exists
-    if(!file_exists('/etc/eiou/userconfig.json')){
+    if(!file_exists('/etc/eiou/config/userconfig.json')){
         $run = true;
         return;
     }
     // check if the user keys are available
-    if(!isset(json_decode(file_get_contents('/etc/eiou/userconfig.json'),true)["public"])){
+    if(!isset(json_decode(file_get_contents('/etc/eiou/config/userconfig.json'),true)["public"])){
         $run = true;
     } 
     return;

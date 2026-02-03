@@ -40,7 +40,7 @@ class KeyEncryption {
     /**
      * Master key file location
      */
-    private const MASTER_KEY_FILE = '/etc/eiou/.master.key';
+    private const MASTER_KEY_FILE = '/etc/eiou/config/.master.key';
 
     /**
      * Get or generate master encryption key

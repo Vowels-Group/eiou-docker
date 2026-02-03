@@ -85,7 +85,7 @@ services:
       # Database: transactions, contacts, balances (CRITICAL - backup this)
       - eiou-mysql-data:/var/lib/mysql
 
-      # Config: wallet keys, userconfig.json, encryption data (CRITICAL)
+      # Config: wallet keys, config/ directory (userconfig, dbconfig, etc.) (CRITICAL)
       - eiou-files:/etc/eiou/
 
       # Backups: Encrypted database backups (CRITICAL - off-site storage recommended)

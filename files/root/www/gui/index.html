@@ -13,7 +13,7 @@ use Eiou\Gui\Controllers\ContactController;
 use Eiou\Gui\Controllers\TransactionController;
 use Eiou\Gui\Controllers\SettingsController;
 
-if (!file_exists("/etc/eiou/userconfig.json")) {
+if (!file_exists("/etc/eiou/config/userconfig.json")) {
   echo "eIOU has not yet been initiated. Please run from terminal to initialize the system.";
   die;
 }

@@ -191,8 +191,8 @@ configuration and user-specific settings.
 
 | File | Purpose |
 |------|---------|
-| `/etc/eiou/defaultconfig.json` | System defaults (fee limits, P2P settings) |
-| `/etc/eiou/userconfig.json` | User-specific settings (keys, addresses) |
+| `/etc/eiou/config/defaultconfig.json` | System defaults (fee limits, P2P settings) |
+| `/etc/eiou/config/userconfig.json` | User-specific settings (keys, addresses) |
 
 **Key Methods:**
 
@@ -1241,7 +1241,7 @@ review rather than being silently dropped.
 4. runMigrations()       -> Add new tables if needed
          |
          v
-5. If userconfig.json exists:
+5. If config/userconfig.json exists:
    - loadCurrentUser()   -> UserContext MUST load first
    - loadServiceContainer()
    - loadUtilityServiceContainer()
@@ -1299,8 +1299,8 @@ TorKeyDerivation
 
 | Item | Encryption | File |
 |------|------------|------|
-| Private Key | AES-256-GCM | `/etc/eiou/userconfig.json` |
-| Auth Code | AES-256-GCM | `/etc/eiou/userconfig.json` |
+| Private Key | AES-256-GCM | `/etc/eiou/config/userconfig.json` |
+| Auth Code | AES-256-GCM | `/etc/eiou/config/userconfig.json` |
 | Mnemonic | AES-256-GCM | Displayed once, not stored |
 
 ### Transport Security

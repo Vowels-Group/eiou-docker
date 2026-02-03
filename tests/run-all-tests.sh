@@ -218,8 +218,8 @@ for container in $CONTAINER_LIST; do
                 if [ "$MODE" == 'https' ]; then
                     # HTTPS mode: check hostname_secure field
                     httpAddress=$(docker exec "$container" php -r '
-                        if (file_exists("/etc/eiou/userconfig.json")) {
-                            $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                        if (file_exists("/etc/eiou/config/userconfig.json")) {
+                            $json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
                             if (isset($json["hostname_secure"])){
                                 echo $json["hostname_secure"];
                             }
@@ -230,8 +230,8 @@ for container in $CONTAINER_LIST; do
                 else
                     # HTTP mode: check hostname field
                     httpAddress=$(docker exec "$container" php -r '
-                        if (file_exists("/etc/eiou/userconfig.json")) {
-                            $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                        if (file_exists("/etc/eiou/config/userconfig.json")) {
+                            $json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
                             if (isset($json["hostname"])){
                                 echo $json["hostname"];
                             }
@@ -248,8 +248,8 @@ for container in $CONTAINER_LIST; do
             # Then check Tor connectivity (processors won't start until Tor is ready)
             if [ "$hostname_ready" == "true" ] && [ "$tor_ready" != "true" ]; then
                 torAddress=$(docker exec "$container" php -r '
-                    if (file_exists("/etc/eiou/userconfig.json")) {
-                        $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                    if (file_exists("/etc/eiou/config/userconfig.json")) {
+                        $json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
                         if(isset($json["torAddress"])){
                             echo $json["torAddress"];
                         }
@@ -292,8 +292,8 @@ for container in $CONTAINER_LIST; do
             fi
         elif [ "$MODE" == 'tor' ]; then
             torAddress=$(docker exec "$container" php -r '
-                if (file_exists("/etc/eiou/userconfig.json")) {
-                    $json = json_decode(file_get_contents("/etc/eiou/userconfig.json"), true);
+                if (file_exists("/etc/eiou/config/userconfig.json")) {
+                    $json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
                     if(isset($json["torAddress"])){
                         echo $json["torAddress"];
                     }

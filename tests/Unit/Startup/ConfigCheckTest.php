@@ -20,8 +20,8 @@ class ConfigCheckTest extends TestCase
     {
         // Create a temporary directory for test config files
         $this->testConfigDir = sys_get_temp_dir() . '/eiou-test-' . uniqid();
-        mkdir($this->testConfigDir, 0755, true);
-        $this->testConfigPath = $this->testConfigDir . '/userconfig.json';
+        mkdir($this->testConfigDir . '/config', 0755, true);
+        $this->testConfigPath = $this->testConfigDir . '/config/userconfig.json';
     }
 
     protected function tearDown(): void
@@ -29,6 +29,9 @@ class ConfigCheckTest extends TestCase
         // Clean up test files
         if (file_exists($this->testConfigPath)) {
             unlink($this->testConfigPath);
+        }
+        if (is_dir($this->testConfigDir . '/config')) {
+            rmdir($this->testConfigDir . '/config');
         }
         if (is_dir($this->testConfigDir)) {
             rmdir($this->testConfigDir);

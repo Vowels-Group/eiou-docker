@@ -25,7 +25,7 @@ Quick lookup card for the EIOU Wallet web interface.
 | Layout | `/etc/eiou/src/gui/layout/` | `files/src/gui/layout/` |
 | JavaScript | `/etc/eiou/src/gui/assets/js/script.js` | `files/src/gui/assets/js/script.js` |
 | CSS | `/etc/eiou/src/gui/assets/css/page.css` | `files/src/gui/assets/css/page.css` |
-| User config | `/etc/eiou/defaultconfig.json` | N/A (generated at runtime) |
+| User config | `/etc/eiou/config/defaultconfig.json` | N/A (generated at runtime) |
 
 ---
 

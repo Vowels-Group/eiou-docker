@@ -60,7 +60,7 @@ class BackupService implements BackupServiceInterface
             throw new FatalServiceException(
                 'Database configuration not found',
                 ErrorCodes::DB_CONFIG_NOT_FOUND,
-                ['path' => '/etc/eiou/dbconfig.json']
+                ['path' => '/etc/eiou/config/dbconfig.json']
             );
         }
         $dbHost = $dbConfig['dbHost'];
@@ -206,7 +206,7 @@ class BackupService implements BackupServiceInterface
             throw new FatalServiceException(
                 'Database configuration not found',
                 ErrorCodes::DB_CONFIG_NOT_FOUND,
-                ['path' => '/etc/eiou/dbconfig.json']
+                ['path' => '/etc/eiou/config/dbconfig.json']
             );
         }
         $dbHost = $dbConfig['dbHost'];
@@ -376,7 +376,7 @@ class BackupService implements BackupServiceInterface
         $this->currentUser->set('autoBackupEnabled', $enabled);
 
         // Persist to config file
-        $configFile = '/etc/eiou/defaultconfig.json';
+        $configFile = '/etc/eiou/config/defaultconfig.json';
         $config = [];
         if (file_exists($configFile)) {
             $config = json_decode(file_get_contents($configFile), true) ?? [];
@@ -613,7 +613,7 @@ class BackupService implements BackupServiceInterface
 
     private function getDatabaseCredentials(): ?array
     {
-        $configFile = '/etc/eiou/dbconfig.json';
+        $configFile = '/etc/eiou/config/dbconfig.json';
         if (!file_exists($configFile)) {
             SecureLogger::error("Database config file not found", ['path' => $configFile]);
             return null;

@@ -433,7 +433,7 @@ class ApplicationTest extends TestCase
      */
     public function testRegisterServiceDelegatesToServiceContainer(): void
     {
-        if (!file_exists('/etc/eiou/userconfig.json')) {
+        if (!file_exists('/etc/eiou/config/userconfig.json')) {
             $this->markTestSkipped('Test requires EIOU Docker environment with user config');
         }
 
@@ -450,7 +450,7 @@ class ApplicationTest extends TestCase
      */
     public function testGetServiceDelegatesToServiceContainer(): void
     {
-        if (!file_exists('/etc/eiou/userconfig.json')) {
+        if (!file_exists('/etc/eiou/config/userconfig.json')) {
             $this->markTestSkipped('Test requires EIOU Docker environment with user config');
         }
 
@@ -467,7 +467,7 @@ class ApplicationTest extends TestCase
      */
     public function testServicesPropertyExists(): void
     {
-        if (!file_exists('/etc/eiou/userconfig.json')) {
+        if (!file_exists('/etc/eiou/config/userconfig.json')) {
             $this->markTestSkipped('Test requires EIOU Docker environment with user config');
         }
 
@@ -483,7 +483,7 @@ class ApplicationTest extends TestCase
      */
     public function testUtilityServicesPropertyExists(): void
     {
-        if (!file_exists('/etc/eiou/userconfig.json')) {
+        if (!file_exists('/etc/eiou/config/userconfig.json')) {
             $this->markTestSkipped('Test requires EIOU Docker environment with user config');
         }
 

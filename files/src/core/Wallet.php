@@ -87,9 +87,9 @@ class Wallet{
             'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,                // Auto-refresh for pending transactions (default: off)
             'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED                   // Auto-backup for daily database backups (default: on)
         ]);
-        file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);
-        chown('/etc/eiou/defaultconfig.json', 'www-data');
-        chmod('/etc/eiou/defaultconfig.json', 0600);
+        file_put_contents('/etc/eiou/config/defaultconfig.json', $defaultConfig, LOCK_EX);
+        chown('/etc/eiou/config/defaultconfig.json', 'www-data');
+        chmod('/etc/eiou/config/defaultconfig.json', 0600);
 
         // Generate BIP39 mnemonic seed phrase (24 words)
         $mnemonic = BIP39::generateMnemonic(24);
@@ -167,13 +167,13 @@ class Wallet{
 
         // Set strict file permissions before saving
         $oldUmask = umask(0077); // Ensure 600 permissions
-        file_put_contents('/etc/eiou/userconfig.json', json_encode($userconfig), LOCK_EX);
+        file_put_contents('/etc/eiou/config/userconfig.json', json_encode($userconfig), LOCK_EX);
         umask($oldUmask);
 
-        chown('/etc/eiou/userconfig.json','www-data');
+        chown('/etc/eiou/config/userconfig.json','www-data');
 
         // Verify and set file permissions
-        chmod('/etc/eiou/userconfig.json', 0600);
+        chmod('/etc/eiou/config/userconfig.json', 0600);
 
         // Display seed phrase and authcode prominently with warning BEFORE the success message
         self::displaySeedPhrase($mnemonic, $output, $authCode);
@@ -236,7 +236,7 @@ class Wallet{
         }
 
         // Check if wallet already exists
-        if (file_exists('/etc/eiou/userconfig.json')) {
+        if (file_exists('/etc/eiou/config/userconfig.json')) {
             $output->error(
                 "Wallet already exists. Delete existing wallet first to restore.",
                 'WALLET_EXISTS',
@@ -260,9 +260,9 @@ class Wallet{
             'autoRefreshEnabled' => Constants::AUTO_REFRESH_ENABLED,
             'autoBackupEnabled' => Constants::BACKUP_AUTO_ENABLED
         ]);
-        file_put_contents('/etc/eiou/defaultconfig.json', $defaultConfig, LOCK_EX);
-        chown('/etc/eiou/defaultconfig.json', 'www-data');
-        chmod('/etc/eiou/defaultconfig.json', 0600);
+        file_put_contents('/etc/eiou/config/defaultconfig.json', $defaultConfig, LOCK_EX);
+        chown('/etc/eiou/config/defaultconfig.json', 'www-data');
+        chmod('/etc/eiou/config/defaultconfig.json', 0600);
 
         // Derive deterministic EC key pair from seed using secp256k1
         // This generates the EXACT same key pair as the original wallet
@@ -302,11 +302,11 @@ class Wallet{
 
         // Set strict file permissions before saving
         $oldUmask = umask(0077);
-        file_put_contents('/etc/eiou/userconfig.json', json_encode($userconfig), LOCK_EX);
+        file_put_contents('/etc/eiou/config/userconfig.json', json_encode($userconfig), LOCK_EX);
         umask($oldUmask);
 
-        chown('/etc/eiou/userconfig.json', 'www-data');
-        chmod('/etc/eiou/userconfig.json', 0600);
+        chown('/etc/eiou/config/userconfig.json', 'www-data');
+        chmod('/etc/eiou/config/userconfig.json', 0600);
 
         $walletData = [
             'tor_address' => $torAddress,
