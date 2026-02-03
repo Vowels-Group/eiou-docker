@@ -86,6 +86,7 @@ RUN echo 'RedirectMatch ^/$ /gui/' >> /etc/apache2/sites-available/000-default.c
     echo '    Options -Indexes' >> /etc/apache2/sites-available/000-default.conf && \
     echo '</Directory>' >> /etc/apache2/sites-available/000-default.conf && \
     echo '<Directory /etc/eiou/www>' >> /etc/apache2/sites-available/000-default.conf && \
+    echo '    Require all granted' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    AllowOverride All' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    Options -Indexes +FollowSymLinks' >> /etc/apache2/sites-available/000-default.conf && \
     echo '    RewriteEngine On' >> /etc/apache2/sites-available/000-default.conf && \
@@ -108,6 +109,7 @@ RUN echo '<VirtualHost *:443>' > /etc/apache2/sites-available/default-ssl.conf &
     echo '        Options -Indexes' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    </Directory>' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '    <Directory /etc/eiou/www>' >> /etc/apache2/sites-available/default-ssl.conf && \
+    echo '        Require all granted' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        AllowOverride All' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        Options -Indexes +FollowSymLinks' >> /etc/apache2/sites-available/default-ssl.conf && \
     echo '        RewriteEngine On' >> /etc/apache2/sites-available/default-ssl.conf && \
@@ -193,7 +195,7 @@ RUN chmod +x /startup.sh
 # - start-period: Wait 120 seconds before first check (MariaDB needs 30-60s to initialize)
 # - retries: Mark unhealthy after 5 consecutive failures
 HEALTHCHECK --interval=30s --timeout=20s --start-period=120s --retries=5 \
-    CMD curl -f http://localhost/ || exit 1
+    CMD curl -f http://localhost/gui/ || exit 1
 
 # Start services using the startup script
 ENTRYPOINT ["/startup.sh"]

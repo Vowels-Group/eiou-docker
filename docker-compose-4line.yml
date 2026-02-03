@@ -60,7 +60,7 @@ services:
         reservations:
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -92,7 +92,7 @@ services:
         reservations:
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -124,7 +124,7 @@ services:
         reservations:
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -156,7 +156,7 @@ services:
         reservations:
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5

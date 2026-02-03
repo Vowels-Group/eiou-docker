@@ -63,7 +63,7 @@ services:
       - cluster-a-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -96,7 +96,7 @@ services:
       - cluster-a1-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -128,7 +128,7 @@ services:
       - cluster-a2-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -160,7 +160,7 @@ services:
       - cluster-a3-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -192,7 +192,7 @@ services:
       - cluster-a4-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -225,7 +225,7 @@ services:
       - cluster-a11-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -257,7 +257,7 @@ services:
       - cluster-a12-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -289,7 +289,7 @@ services:
       - cluster-a21-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -321,7 +321,7 @@ services:
       - cluster-a22-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -353,7 +353,7 @@ services:
       - cluster-a31-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -385,7 +385,7 @@ services:
       - cluster-a32-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -417,7 +417,7 @@ services:
       - cluster-a41-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -449,7 +449,7 @@ services:
       - cluster-a42-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5

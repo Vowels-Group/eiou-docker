@@ -50,7 +50,7 @@ services:
       - node-a-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -82,7 +82,7 @@ services:
       - node-b-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -114,7 +114,7 @@ services:
       - node-c-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -146,7 +146,7 @@ services:
       - node-d-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -178,7 +178,7 @@ services:
       - node-e-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -210,7 +210,7 @@ services:
       - node-f-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -242,7 +242,7 @@ services:
       - node-g-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -274,7 +274,7 @@ services:
       - node-h-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -306,7 +306,7 @@ services:
       - node-i-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
@@ -338,7 +338,7 @@ services:
       - node-j-backups:/var/lib/eiou/backups
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost/gui/"]
       interval: 30s
       timeout: 20s
       retries: 5
