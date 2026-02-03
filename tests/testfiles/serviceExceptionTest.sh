@@ -410,8 +410,8 @@ echo -e "\n[Section 5: Exception Handling in Entry Points]"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing Eiou.php imports ServiceException classes"
 
-# CLI entry point is at /etc/eiou/cli/eiou.php
-importsExist=$(docker exec ${testContainer} sh -c "grep -c 'Eiou.Exceptions.ServiceException' /etc/eiou/cli/eiou.php 2>/dev/null || echo 0")
+# CLI entry point is at /etc/eiou/cli/Eiou.php
+importsExist=$(docker exec ${testContainer} sh -c "grep -c 'Eiou.Exceptions.ServiceException' /etc/eiou/cli/Eiou.php 2>/dev/null || echo 0")
 
 if [[ "$importsExist" -ge "1" ]]; then
     printf "\t   Eiou.php imports ServiceException ${GREEN}PASSED${NC}\n"
@@ -425,7 +425,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing Eiou.php has ServiceException catch blocks"
 
-catchExists=$(docker exec ${testContainer} sh -c "grep -c 'catch.*ServiceException' /etc/eiou/cli/eiou.php 2>/dev/null || echo 0")
+catchExists=$(docker exec ${testContainer} sh -c "grep -c 'catch.*ServiceException' /etc/eiou/cli/Eiou.php 2>/dev/null || echo 0")
 
 if [[ "$catchExists" -ge "1" ]]; then
     printf "\t   Eiou.php has ServiceException catch blocks ${GREEN}PASSED${NC}\n"

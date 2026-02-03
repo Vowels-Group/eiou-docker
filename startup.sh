@@ -411,9 +411,9 @@ if [ -d /app/eiou-src-backup ]; then
     fi
 
     # Sync CLI entry point
-    if [ -f /app/eiou-src-backup/cli/eiou.php ]; then
+    if [ -f /app/eiou-src-backup/cli/Eiou.php ]; then
         mkdir -p /etc/eiou/cli
-        cp /app/eiou-src-backup/cli/eiou.php /etc/eiou/cli/eiou.php 2>/dev/null || true
+        cp /app/eiou-src-backup/cli/Eiou.php /etc/eiou/cli/Eiou.php 2>/dev/null || true
         echo "  CLI entry point updated."
     fi
 

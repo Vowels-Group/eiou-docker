@@ -12,7 +12,7 @@
  * - files/root/processors/TransactionMessages.php
  * - files/root/processors/CleanupMessages.php
  * - files/root/processors/ContactStatusMessages.php
- * - files/eiou/Eiou.php
+ * - files/root/cli/Eiou.php
  * - files/scripts/backup-cron.php
  * - Any inline PHP in startup.sh
  */
