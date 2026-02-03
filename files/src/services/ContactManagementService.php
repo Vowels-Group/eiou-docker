@@ -387,7 +387,7 @@ class ContactManagementService implements ContactManagementServiceInterface
             } else {
                 echo "Search Results:\n";
                 foreach ($results as $i => $contact) {
-                    echo "\n\t[" . ($i + 1) . "] " . ($contact['name'] ?? 'N/A') . "\n";
+                    echo "\n\t[" . ($i + 1) . "] Name: " . ($contact['name'] ?? 'N/A') . "\n";
                     foreach ($addressTypes as $type) {
                         if (isset($contact[$type])) echo "\t    " . ucfirst($type) . ": " . $contact[$type] . "\n";
                     }
