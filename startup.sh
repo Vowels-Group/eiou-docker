@@ -28,6 +28,9 @@
 #   SSL_EXTRA_SANS      - Additional Subject Alternative Names for SSL
 #   EIOU_HS_TIMEOUT     - Tor hidden service timeout in seconds (default: 60)
 #   EIOU_TOR_TIMEOUT    - Tor connectivity timeout in seconds (default: 120)
+#   EIOU_NAME           - Display name for the node (what contacts see)
+#   EIOU_HOST           - Externally reachable address (IP or domain)
+#   EIOU_PORT           - Port for HTTP/HTTPS URLs (appended to addresses)
 #   EIOU_TEST_MODE      - Enable test mode for manual message processing
 #   EIOU_CONTACT_STATUS_ENABLED - Enable contact status ping feature
 #
@@ -199,6 +202,44 @@ trap graceful_shutdown SIGTERM SIGINT SIGHUP
 # Check for quickstart flag
 QUICKSTART=${QUICKSTART:-false}
 
+# New optional env vars for address/name separation (issue #579)
+# These allow separating the node's display name from its network address.
+# When omitted, QUICKSTART provides backward-compatible behavior.
+EIOU_NAME=${EIOU_NAME:-false}
+EIOU_HOST=${EIOU_HOST:-false}
+EIOU_PORT=${EIOU_PORT:-false}
+
+# Resolve the effective address host:
+# Priority: EIOU_HOST > QUICKSTART (for address construction)
+if [ "$EIOU_HOST" != "false" ]; then
+    EFFECTIVE_HOST="$EIOU_HOST"
+elif [ "$QUICKSTART" != "false" ]; then
+    EFFECTIVE_HOST="$QUICKSTART"
+else
+    EFFECTIVE_HOST="false"
+fi
+
+# Resolve the effective display name:
+# Priority: EIOU_NAME > QUICKSTART
+if [ "$EIOU_NAME" != "false" ]; then
+    EFFECTIVE_NAME="$EIOU_NAME"
+elif [ "$QUICKSTART" != "false" ]; then
+    EFFECTIVE_NAME="$QUICKSTART"
+else
+    EFFECTIVE_NAME="false"
+fi
+
+# Build the full address URL with optional port
+if [ "$EFFECTIVE_HOST" != "false" ]; then
+    if [ "$EIOU_PORT" != "false" ]; then
+        EFFECTIVE_URL="https://${EFFECTIVE_HOST}:${EIOU_PORT}"
+    else
+        EFFECTIVE_URL="https://${EFFECTIVE_HOST}"
+    fi
+else
+    EFFECTIVE_URL="false"
+fi
+
 # Check for restore flag (24-word seed phrase)
 # Two methods are available for wallet restoration:
 #
@@ -255,7 +296,7 @@ elif [ ! -f /etc/apache2/ssl/server.crt ]; then
 
     # Determine primary CN
     # Priority: SSL_DOMAIN env var > QUICKSTART hostname > localhost
-    SSL_DOMAIN=${SSL_DOMAIN:-${QUICKSTART:-localhost}}
+    SSL_DOMAIN=${SSL_DOMAIN:-${EFFECTIVE_HOST:-localhost}}
     if [ "$SSL_DOMAIN" = "false" ]; then
         SSL_DOMAIN="localhost"
     fi
@@ -534,9 +575,23 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
         echo "Wallet restore completed."
         echo "NOTE: You can now safely unmount and delete the seed phrase file from the host."
 
-        # Apply QUICKSTART hostname to restored wallet if set
-        # Restore only configures Tor address; QUICKSTART adds HTTP/HTTPS addressing
-        if [ "$QUICKSTART" != "false" ]; then
+        # Apply hostname to restored wallet if set
+        # Restore only configures Tor address; QUICKSTART/EIOU_HOST adds HTTP/HTTPS addressing
+        if [ "$EFFECTIVE_URL" != "false" ]; then
+            echo "Applying hostname ($EFFECTIVE_URL) to restored wallet..."
+            HOSTNAME_RESULT=$(eiou changesettings hostname "$EFFECTIVE_URL" 2>&1)
+            HOSTNAME_EXIT_CODE=$?
+            if [ $HOSTNAME_EXIT_CODE -ne 0 ]; then
+                echo "WARNING: Failed to apply hostname to restored wallet:"
+                echo "$HOSTNAME_RESULT"
+            else
+                echo "HTTP/HTTPS hostname configured: $EFFECTIVE_URL"
+            fi
+            if [ "$EFFECTIVE_NAME" != "false" ]; then
+                eiou changesettings name "$EFFECTIVE_NAME" 2>&1
+                echo "Display name configured: $EFFECTIVE_NAME"
+            fi
+        elif [ "$QUICKSTART" != "false" ]; then
             echo "Applying QUICKSTART hostname ($QUICKSTART) to restored wallet..."
             HOSTNAME_RESULT=$(eiou changesettings hostname "https://$QUICKSTART" 2>&1)
             HOSTNAME_EXIT_CODE=$?
@@ -615,9 +670,23 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
         echo "Wallet restore completed."
         echo "NOTE: RESTORE environment variable has been cleared from this shell."
 
-        # Apply QUICKSTART hostname to restored wallet if set
-        # Restore only configures Tor address; QUICKSTART adds HTTP/HTTPS addressing
-        if [ "$QUICKSTART" != "false" ]; then
+        # Apply hostname to restored wallet if set
+        # Restore only configures Tor address; QUICKSTART/EIOU_HOST adds HTTP/HTTPS addressing
+        if [ "$EFFECTIVE_URL" != "false" ]; then
+            echo "Applying hostname ($EFFECTIVE_URL) to restored wallet..."
+            HOSTNAME_RESULT=$(eiou changesettings hostname "$EFFECTIVE_URL" 2>&1)
+            HOSTNAME_EXIT_CODE=$?
+            if [ $HOSTNAME_EXIT_CODE -ne 0 ]; then
+                echo "WARNING: Failed to apply hostname to restored wallet:"
+                echo "$HOSTNAME_RESULT"
+            else
+                echo "HTTP/HTTPS hostname configured: $EFFECTIVE_URL"
+            fi
+            if [ "$EFFECTIVE_NAME" != "false" ]; then
+                eiou changesettings name "$EFFECTIVE_NAME" 2>&1
+                echo "Display name configured: $EFFECTIVE_NAME"
+            fi
+        elif [ "$QUICKSTART" != "false" ]; then
             echo "Applying QUICKSTART hostname ($QUICKSTART) to restored wallet..."
             HOSTNAME_RESULT=$(eiou changesettings hostname "https://$QUICKSTART" 2>&1)
             HOSTNAME_EXIT_CODE=$?
@@ -630,10 +699,14 @@ if [[ $(php -r 'require_once "/etc/eiou/src/startup/ConfigCheck.php"; echo $run;
             fi
         fi
 
-    elif [ "$QUICKSTART" != "false" ]; then
-        echo "Quickstart mode enabled. Running generate command with parameter: $QUICKSTART"
+    elif [ "$EFFECTIVE_URL" != "false" ]; then
+        echo "Quickstart mode enabled. Running generate command with address: $EFFECTIVE_URL"
         # Use HTTPS for secure P2P communication (SSL certificates are auto-generated)
-        eiou generate https://$QUICKSTART
+        if [ "$EFFECTIVE_NAME" != "false" ]; then
+            eiou generate "$EFFECTIVE_URL" "$EFFECTIVE_NAME"
+        else
+            eiou generate "$EFFECTIVE_URL"
+        fi
         echo "Generate command completed."
     else
         # Run automatically without hostname (only tor)

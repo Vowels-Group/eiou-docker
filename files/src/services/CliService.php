@@ -208,6 +208,13 @@ class CliService implements CliServiceInterface {
                     return;
                 }
                 $value = $validation['value'];
+            } elseif(strtolower($argv[2]) === 'name'){
+                $key = 'name';
+                if (!isset($argv[3]) || empty(trim($argv[3]))) {
+                    $output->validationError('name', 'Display name cannot be empty');
+                    return;
+                }
+                $value = trim($argv[3]);
             } else{
                 $output->error('Setting provided does not exist. No changes made.', ErrorCodes::INVALID_SETTING, 400);
                 return;
@@ -391,7 +398,7 @@ class CliService implements CliServiceInterface {
             }
         }
         // Save changes to config file
-        if($key == 'hostname'){
+        if($key == 'hostname' || $key == 'name'){
             $configFile = 'userconfig.json';
 
             // Derive hostname_secure from hostname
@@ -618,7 +625,8 @@ class CliService implements CliServiceInterface {
                     'maxOutput' => 'Maximum lines of output to display (integer or "all")',
                     'defaultTransportMode' => 'Default transport type (http, https, tor)',
                     'autoRefreshEnabled' => 'Enable auto-refresh for pending transactions (true/false)',
-                    'hostname' => 'Node hostname (e.g., http://alice). Setting this automatically derives hostname_secure (HTTPS version)'
+                    'hostname' => 'Node hostname (e.g., http://alice). Setting this automatically derives hostname_secure (HTTPS version)',
+                    'name' => 'Display name for this node (what contacts see)'
                 ]
             ],
             'generate' => [
