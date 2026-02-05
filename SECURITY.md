@@ -78,8 +78,8 @@ Critical vulnerabilities affecting seed phrase or private key exposure will be p
 We ask that reporters:
 
 1. Allow us reasonable time to investigate and address the issue before public disclosure
-2. Avoid accessing, modifying, or deleting data belonging to other users during testing
-3. Test only against your own EIOU Docker instances
+2. Test only against a local node topology that is not connected to the live network (e.g., `docker-compose-4line.yml` on an isolated Docker bridge network)
+3. Do not interact with other users' nodes through the network as part of vulnerability testing
 4. Do not exploit the vulnerability beyond what is necessary to demonstrate the issue
 
 We commit to:
