@@ -25,7 +25,7 @@ Complete reference for environment variables and volume mounts used in EIOU Dock
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
 | `QUICKSTART` | (none) | Yes* | Node hostname for HTTP/HTTPS addressing |
-| `EIOU_NAME` | `$QUICKSTART` | No | Display name for the node (what contacts see) |
+| `EIOU_NAME` | `$QUICKSTART` | No | Display name for the node (shown in local UI) |
 | `EIOU_HOST` | `$QUICKSTART` | No | Externally reachable address (IP or domain) |
 | `EIOU_PORT` | (none) | No | Port for HTTP/HTTPS URLs (appended to addresses) |
 | `RESTORE` | (none) | No | 24-word seed phrase for wallet restoration |
@@ -59,9 +59,11 @@ The node will be accessible at:
 
 These optional variables allow separating the node's display name from its network address. When omitted, `QUICKSTART` provides backward-compatible behavior (hostname = display name = address).
 
+`EIOU_NAME` is purely local — it is never broadcast to contacts or other nodes. It appears in the GUI wallet header, Docker startup logs, and any integration that reads the node's display name.
+
 | Variable | Purpose | Fallback |
 |----------|---------|----------|
-| `EIOU_NAME` | Display name (what contacts see) | Falls back to `QUICKSTART` |
+| `EIOU_NAME` | Display name (shown in local UI) | Falls back to `QUICKSTART` |
 | `EIOU_HOST` | Externally reachable address (IP or domain) | Falls back to `QUICKSTART` |
 | `EIOU_PORT` | Port appended to HTTP/HTTPS URLs | Not appended if omitted |
 
@@ -70,7 +72,7 @@ These optional variables allow separating the node's display name from its netwo
 ```yaml
 environment:
   - QUICKSTART=dave           # Still needed as container hostname
-  - EIOU_NAME=Dave            # Human-readable display name
+  - EIOU_NAME=Dave            # Local display name
   - EIOU_HOST=88.99.69.172   # External IP address
   - EIOU_PORT=1133            # Custom port
 ```

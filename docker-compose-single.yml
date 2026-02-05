@@ -43,7 +43,7 @@ services:
 
       # NODE IDENTITY (optional - override QUICKSTART for production use)
       # -----------------------------------------------------------------
-      # Display name (what contacts see, defaults to QUICKSTART):
+      # Display name (shown in local UI, defaults to QUICKSTART):
       # - EIOU_NAME=My Node
       #
       # External address (IP or domain, defaults to QUICKSTART):

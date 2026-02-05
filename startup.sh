@@ -28,7 +28,7 @@
 #   SSL_EXTRA_SANS      - Additional Subject Alternative Names for SSL
 #   EIOU_HS_TIMEOUT     - Tor hidden service timeout in seconds (default: 60)
 #   EIOU_TOR_TIMEOUT    - Tor connectivity timeout in seconds (default: 120)
-#   EIOU_NAME           - Display name for the node (what contacts see)
+#   EIOU_NAME           - Display name for the node (shown in local UI)
 #   EIOU_HOST           - Externally reachable address (IP or domain)
 #   EIOU_PORT           - Port for HTTP/HTTPS URLs (appended to addresses)
 #   EIOU_TEST_MODE      - Enable test mode for manual message processing
@@ -801,6 +801,7 @@ while true; do
         tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
         pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
         authcode=$(php -r 'require_once("/etc/eiou/src/bootstrap.php"); echo Eiou\Core\UserContext::getInstance()->getAuthCode();')
+        displayname=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["name"])){echo $json["name"];}')
         break
     else
         if $first; then
@@ -865,6 +866,9 @@ fi
 
 # Display user information
 echo "User Information: "
+if [[ ! -z ${displayname} ]]; then
+    echo -e "\t Display name: $displayname"
+fi
 if [[ ! -z ${http} ]]; then
     # Always show both HTTP and HTTPS addresses regardless of configured protocol
     if [[ ${http} == https://* ]]; then

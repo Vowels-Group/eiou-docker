@@ -398,7 +398,7 @@ class CliService implements CliServiceInterface {
             }
         }
         // Save changes to config file
-        if($key == 'hostname' || $key == 'name'){
+        if($key == 'hostname'){
             $configFile = 'userconfig.json';
 
             // Derive hostname_secure from hostname
@@ -413,6 +413,8 @@ class CliService implements CliServiceInterface {
                 $hostnameSecure = 'https://' . $value;
                 $value = 'http://' . $value;
             }
+        } elseif($key == 'name'){
+            $configFile = 'userconfig.json';
         } else{
             $configFile = 'defaultconfig.json';
         }
@@ -626,7 +628,7 @@ class CliService implements CliServiceInterface {
                     'defaultTransportMode' => 'Default transport type (http, https, tor)',
                     'autoRefreshEnabled' => 'Enable auto-refresh for pending transactions (true/false)',
                     'hostname' => 'Node hostname (e.g., http://alice). Setting this automatically derives hostname_secure (HTTPS version)',
-                    'name' => 'Display name for this node (what contacts see)'
+                    'name' => 'Display name for this node (shown in local UI)'
                 ]
             ],
             'generate' => [
