@@ -16,12 +16,12 @@ use PDOException;
  *
  * @package Database\Repository
  *
- * NOTE: Many methods contain `if (!$stmt)` checks after execute(). While PDO is
- * configured with ERRMODE_EXCEPTION, the AbstractRepository::execute() method
- * catches PDOException and returns false (see AbstractRepository.php lines 147-160).
- * These checks ARE required to handle query failures gracefully. To remove them,
- * AbstractRepository::execute() would need to be refactored to throw exceptions
- * instead of returning false, and all callers updated to use try/catch.
+ * NOTE: Methods using `$this->execute()` contain `if (!$stmt)` checks because
+ * AbstractRepository::execute() catches PDOException and returns false
+ * (see AbstractRepository.php). Those checks ARE required.
+ *
+ * Methods using `$this->pdo->prepare()` directly use try/catch(PDOException)
+ * instead, since PDO throws exceptions and would never return a falsy $stmt.
  *
  * @see AbstractRepository::execute() for the error handling implementation
  */
@@ -193,10 +193,11 @@ class TransactionRepository extends AbstractRepository {
                     AND timestamp > ?";
 
         $params = $this->buildInClauseParams($userAddresses, 2, [date(Constants::DISPLAY_DATE_FORMAT, $lastCheckTime)]);
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-        if(!$stmt){
-             return false;
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
+            return false;
         }
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result['count'] > 0;
@@ -260,10 +261,10 @@ class TransactionRepository extends AbstractRepository {
 
         $query .= " ORDER BY timestamp DESC LIMIT ?";
 
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-
-        if(!$stmt){
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
             return [];
         }
 
@@ -298,10 +299,10 @@ class TransactionRepository extends AbstractRepository {
 
         $query .= " ORDER BY timestamp DESC LIMIT ?";
 
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-
-        if(!$stmt){
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
             return [];
         }
 
@@ -338,10 +339,10 @@ class TransactionRepository extends AbstractRepository {
         $additionalParams[] = $limit;
 
         $params = $this->buildInClauseParams($userAddresses, 1, $additionalParams);
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-
-        if(!$stmt){
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
             return [];
         }
 
@@ -379,10 +380,10 @@ class TransactionRepository extends AbstractRepository {
         $additionalParams[] = $limit;
 
         $params = $this->buildInClauseParams($userAddresses, 1, $additionalParams);
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-
-        if(!$stmt){
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
             return [];
         }
 
@@ -413,9 +414,10 @@ class TransactionRepository extends AbstractRepository {
 
         // Bind parameters - addresses twice for both IN clauses, then limit
         $params = $this->buildInClauseParams($userAddresses, 2, [$limit]);
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-        if(!$stmt){
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
             return [];
         }
 
@@ -484,9 +486,10 @@ class TransactionRepository extends AbstractRepository {
 
         // Bind parameters - addresses twice for both IN clauses, then optional currency, then limit
         $params = $this->buildInClauseParams($userAddresses, 2, $additionalParams);
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-        if(!$stmt){
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
             return [];
         }
 

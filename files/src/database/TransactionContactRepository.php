@@ -64,24 +64,23 @@ class TransactionContactRepository extends AbstractRepository {
         $userHash = hash(Constants::HASH_ALGORITHM, $userPubkey);
         $contactHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
 
-        // Calculate sent to this contact
-        $query = "SELECT COALESCE(SUM(amount), 0) as sent FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ? AND status = 'completed'";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([$userHash, $contactHash]);
-        if(!$stmt){
-            return 0;
-        }
-        $sent = $stmt->fetch(PDO::FETCH_ASSOC)['sent'];
+        try {
+            // Calculate sent to this contact
+            $query = "SELECT COALESCE(SUM(amount), 0) as sent FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ? AND status = 'completed'";
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute([$userHash, $contactHash]);
+            $sent = $stmt->fetch(PDO::FETCH_ASSOC)['sent'];
 
-        // Calculate received from this contact
-        $query = "SELECT COALESCE(SUM(amount), 0) as received FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ? AND status = 'completed'";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute([$contactHash, $userHash]);
-        if(!$stmt){
+            // Calculate received from this contact
+            $query = "SELECT COALESCE(SUM(amount), 0) as received FROM {$this->tableName} WHERE sender_public_key_hash = ? AND receiver_public_key_hash = ? AND status = 'completed'";
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute([$contactHash, $userHash]);
+            $received = $stmt->fetch(PDO::FETCH_ASSOC)['received'];
+
+            return $received - $sent;
+        } catch (PDOException $e) {
             return 0;
         }
-        $received = $stmt->fetch(PDO::FETCH_ASSOC)['received'];
-        return $received - $sent;
     }
 
 
@@ -209,10 +208,10 @@ class TransactionContactRepository extends AbstractRepository {
             [$limit]
         );
 
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-
-        if (!$stmt) {
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
             return [];
         }
 

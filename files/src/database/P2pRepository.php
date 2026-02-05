@@ -192,11 +192,12 @@ class P2pRepository extends AbstractRepository {
                     FROM {$this->tableName}
                     WHERE status = :status";
 
-        $stmt = $this->pdo->prepare($query);
-        $stmt->bindValue(':status', $status);
-        $stmt->execute();
-
-        if (!$stmt) {
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->bindValue(':status', $status);
+            $stmt->execute();
+        } catch (PDOException $e) {
+            $this->logError("Failed to count P2P messages with status: {$status}", $e);
             return 0;
         }
 
