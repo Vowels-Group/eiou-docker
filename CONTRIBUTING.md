@@ -132,26 +132,31 @@ eiou-docker/
 Create a new branch for each change. Branch names should follow this format:
 
 ```
-eiou-docker-<type>-<description>
+eiou-docker-<type>-<issue>-<description>
 ```
+
+Include the issue number when the branch relates to a GitHub issue. The description is optional but recommended for clarity.
 
 | Type | Use For | Example |
 |------|---------|---------|
-| `feature` | New functionality | `eiou-docker-feature-backup-encryption` |
-| `fix` | Bug fixes | `eiou-docker-fix-sync-timeout` |
-| `docs` | Documentation | `eiou-docker-docs-550` |
-| `refactor` | Code restructuring | `eiou-docker-refactor-service-split` |
-| `test` | Test additions | `eiou-docker-test-p2p-routing` |
+| `feature` | New functionality | `eiou-docker-feature-580-node-identity` |
+| `fix` | Bug fixes | `eiou-docker-fix-432-sync-timeout` |
+| `docs` | Documentation | `eiou-docker-docs-550-standard-files` |
+| `refactor` | Code restructuring | `eiou-docker-refactor-562-dependency-injection` |
+| `test` | Test additions | `eiou-docker-test-555-p2p-routing` |
 
 ```bash
-# Feature branch
-git checkout -b eiou-docker-feature-contact-status
+# Feature branch for issue #580
+git checkout -b eiou-docker-feature-580-node-identity
 
-# Bug fix referencing an issue number
-git checkout -b eiou-docker-fix-432
+# Bug fix for issue #432
+git checkout -b eiou-docker-fix-432-sync-timeout
 
-# Documentation update
-git checkout -b eiou-docker-docs-api-reference
+# Documentation for issue #550
+git checkout -b eiou-docker-docs-550-standard-files
+
+# Branch without an issue (e.g., minor cleanup)
+git checkout -b eiou-docker-refactor-service-split
 ```
 
 ### Committing
