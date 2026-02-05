@@ -20,6 +20,7 @@ echo -e "  - Seed phrase generate/restore"
 echo -e "  - Secure seedphrase display (security)"
 echo -e "  - Authcode restoration from seedphrase"
 echo -e "  - Restore + QUICKSTART hostname application"
+echo -e "  - Startup authcode temp file creation"
 echo -e "================================================================\n"
 
 testname="seedphraseTestSuite"
@@ -1511,6 +1512,173 @@ echo -e "\t   Tests verify that when QUICKSTART is set alongside"
 echo -e "\t   RESTORE or RESTORE_FILE, the hostname is automatically"
 echo -e "\t   applied to the restored wallet's userconfig.json."
 echo -e "\t   ============================================\n"
+
+################################################################################
+#                    PART 5: STARTUP AUTHCODE TEMP FILE TEST
+################################################################################
+
+echo -e "\n\n[PART 5: Startup Authcode Temp File Test on ${testContainer}]"
+echo -e "================================================================"
+echo -e "Testing that startup.sh creates a secure authcode temp file"
+echo -e "and that docker logs show retrieval instructions."
+echo -e "================================================================"
+
+############################ TEST 5.1: VERIFY DOCKER LOGS SHOW TEMP FILE INSTRUCTIONS ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 5.1: Checking docker logs contain authcode temp file instructions"
+
+# Check that the new format appears in logs (not the old hardcoded "(see secure temp file)" alone)
+startupLogs=$(docker logs ${testContainer} 2>&1)
+
+if echo "$startupLogs" | grep -q "docker exec.*cat.*/dev/shm/eiou_authcode_\|docker exec.*cat.*/tmp/eiou_authcode_\|displayed securely via terminal"; then
+    printf "\t   Docker logs contain authcode retrieval instructions ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    # Check for old hardcoded message (indicates startup.sh was not updated)
+    if echo "$startupLogs" | grep -q "Authentication Code: (see secure temp file)"; then
+        printf "\t   Docker logs contain OLD hardcoded message ${RED}FAILED${NC}\n"
+        printf "\t   startup.sh still uses hardcoded '(see secure temp file)' without creating one\n"
+    else
+        printf "\t   Docker logs missing authcode instructions ${RED}FAILED${NC}\n"
+    fi
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 5.2: VERIFY AUTHCODE NOT IN DOCKER LOGS ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 5.2: Checking that actual authcode value is NOT in docker logs"
+
+# Get the actual authcode
+actualAuthCode=$(docker exec ${testContainer} php -r '
+    require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    if (isset($json["authcode_encrypted"])) {
+        echo \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
+    }
+' 2>&1)
+
+if [[ -n "$actualAuthCode" ]] && [[ "$actualAuthCode" != "ERROR"* ]]; then
+    if echo "$startupLogs" | grep -q "$actualAuthCode"; then
+        printf "\t   Authcode found in docker logs ${RED}FAILED${NC}\n"
+        printf "\t   SECURITY VULNERABILITY: Authcode is exposed in logs!\n"
+        failure=$(( failure + 1 ))
+    else
+        printf "\t   Authcode NOT found in docker logs ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    fi
+else
+    printf "\t   Could not retrieve authcode for comparison ${YELLOW}SKIPPED${NC}\n"
+    passed=$(( passed + 1 ))
+fi
+
+############################ TEST 5.3: CREATE AUTHCODE TEMP FILE AND VERIFY CONTENTS ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 5.3: Creating authcode temp file and verifying contents"
+
+authcodeFileTest=$(docker exec ${testContainer} php -r '
+    require_once "'"${EIOU_DIR}"'/vendor/autoload.php";
+    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+
+    // Get the actual authcode
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"] ?? "");
+    if (empty($authcode)) { echo "NO_AUTHCODE"; exit; }
+
+    // Create temp file via displayAuthcode
+    $result = \Eiou\Utils\SecureSeedphraseDisplay::displayAuthcode($authcode);
+
+    if (!$result["success"] || $result["method"] !== "file") {
+        echo "DISPLAY_FAILED:" . ($result["reason"] ?? $result["method"] ?? "unknown");
+        exit;
+    }
+
+    $filepath = $result["filepath"] ?? "";
+    if (empty($filepath) || !file_exists($filepath)) {
+        echo "FILE_NOT_CREATED";
+        exit;
+    }
+
+    // Read and verify contents
+    $content = file_get_contents($filepath);
+
+    // Verify authcode IS in the file
+    if (strpos($content, $authcode) === false) {
+        unlink($filepath);
+        echo "AUTHCODE_MISSING_FROM_FILE";
+        exit;
+    }
+
+    // Clean up
+    unlink($filepath);
+    echo "VALID";
+' 2>&1)
+
+if [[ "$authcodeFileTest" == "VALID" ]]; then
+    printf "\t   Authcode temp file created with correct contents ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Authcode temp file test ${RED}FAILED${NC}\n"
+    printf "\t   Result: ${authcodeFileTest}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 5.4: VERIFY TEMP FILE DOES NOT CONTAIN SEEDPHRASE ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 5.4: Verifying authcode temp file does NOT contain the seedphrase"
+
+seedInFileTest=$(docker exec ${testContainer} php -r '
+    require_once "'"${EIOU_DIR}"'/vendor/autoload.php";
+    require_once "'"${EIOU_DIR}"'/src/security/KeyEncryption.php";
+
+    $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
+    $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"] ?? "");
+    $mnemonic = \Eiou\Security\KeyEncryption::decrypt($json["mnemonic_encrypted"] ?? "");
+    if (empty($authcode) || empty($mnemonic)) { echo "NO_CREDENTIALS"; exit; }
+
+    // Create temp file via displayAuthcode (authcode-only method)
+    $result = \Eiou\Utils\SecureSeedphraseDisplay::displayAuthcode($authcode);
+
+    if (!$result["success"] || $result["method"] !== "file") {
+        echo "DISPLAY_FAILED";
+        exit;
+    }
+
+    $filepath = $result["filepath"] ?? "";
+    if (empty($filepath) || !file_exists($filepath)) {
+        echo "FILE_NOT_CREATED";
+        exit;
+    }
+
+    $content = file_get_contents($filepath);
+
+    // Check that first 3 words of seedphrase are NOT in the file
+    $words = explode(" ", $mnemonic);
+    $threeWordSeq = $words[0] . " " . $words[1] . " " . $words[2];
+
+    unlink($filepath);
+
+    if (strpos($content, $threeWordSeq) !== false) {
+        echo "SEEDPHRASE_FOUND_IN_AUTHCODE_FILE";
+    } else {
+        echo "CLEAN";
+    }
+' 2>&1)
+
+if [[ "$seedInFileTest" == "CLEAN" ]]; then
+    printf "\t   Authcode temp file does NOT contain seedphrase ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Authcode temp file seedphrase check ${RED}FAILED${NC}\n"
+    printf "\t   Result: ${seedInFileTest}\n"
+    if [[ "$seedInFileTest" == "SEEDPHRASE_FOUND_IN_AUTHCODE_FILE" ]]; then
+        printf "\t   SECURITY VULNERABILITY: Seedphrase leaked into authcode-only file!\n"
+    fi
+    failure=$(( failure + 1 ))
+fi
 
 ##################################################################
 #                    FINAL SUMMARY
