@@ -149,23 +149,25 @@ else
     echo -e "\n\t-> Testing container with EIOU_HOST, EIOU_PORT, EIOU_NAME"
 
     # Clean up any leftover containers from previous runs
-    docker rm -f nodeIdTest 2>/dev/null
-    docker volume rm nodeIdTest-mysql-data nodeIdTest-files nodeIdTest-backups 2>/dev/null
+    remove_container_if_exists nodeIdTest
 
-    # Create temporary container with all three env vars
+    # Create temporary container with all three env vars (volume mounts match build pattern)
     docker run -d \
         --network=eiou-network \
         --name nodeIdTest \
+        -v "nodeIdTest-mysql-data:/var/lib/mysql" \
+        -v "nodeIdTest-files:/etc/eiou/" \
+        -v "nodeIdTest-backups:/var/lib/eiou/backups" \
         -e QUICKSTART=nodeIdTest \
         -e EIOU_NAME="Production Node" \
         -e EIOU_HOST=10.0.0.99 \
         -e EIOU_PORT=8443 \
         -e EIOU_CONTACT_STATUS_ENABLED=false \
-        eiou/eiou 2>&1 >/dev/null
+        eiou/eiou
 
-    # Wait for initialization
+    # Wait for full initialization (MariaDB + PHP + wallet generation)
     echo -e "\t   Waiting for nodeIdTest to initialize..."
-    if wait_for_condition "docker exec nodeIdTest test -f /etc/eiou/config/userconfig.json" ${EIOU_INIT_TIMEOUT:-120} 2 "nodeIdTest init"; then
+    if wait_for_container_initialized "nodeIdTest" ${EIOU_INIT_TIMEOUT:-120}; then
 
         # Sub-test 6a: hostname contains EIOU_HOST:EIOU_PORT
         envHostname=$(docker exec nodeIdTest php -r '
@@ -231,29 +233,30 @@ else
     fi
 
     # Clean up nodeIdTest
-    docker rm -f nodeIdTest 2>/dev/null
-    docker volume rm nodeIdTest-mysql-data nodeIdTest-files nodeIdTest-backups 2>/dev/null
+    remove_container_if_exists nodeIdTest
 
     # Test 7: Container with EIOU_HOST only (no port)
     totaltests=$(( totaltests + 1 ))
     echo -e "\n\t-> Testing container with EIOU_HOST only (no port)"
 
     # Clean up any leftover containers from previous runs
-    docker rm -f nodeIdTest2 2>/dev/null
-    docker volume rm nodeIdTest2-mysql-data nodeIdTest2-files nodeIdTest2-backups 2>/dev/null
+    remove_container_if_exists nodeIdTest2
 
-    # Create temporary container with EIOU_HOST only
+    # Create temporary container with EIOU_HOST only (volume mounts match build pattern)
     docker run -d \
         --network=eiou-network \
         --name nodeIdTest2 \
+        -v "nodeIdTest2-mysql-data:/var/lib/mysql" \
+        -v "nodeIdTest2-files:/etc/eiou/" \
+        -v "nodeIdTest2-backups:/var/lib/eiou/backups" \
         -e QUICKSTART=nodeIdTest2 \
         -e EIOU_HOST=192.168.1.50 \
         -e EIOU_CONTACT_STATUS_ENABLED=false \
-        eiou/eiou 2>&1 >/dev/null
+        eiou/eiou
 
-    # Wait for initialization
+    # Wait for full initialization (MariaDB + PHP + wallet generation)
     echo -e "\t   Waiting for nodeIdTest2 to initialize..."
-    if wait_for_condition "docker exec nodeIdTest2 test -f /etc/eiou/config/userconfig.json" ${EIOU_INIT_TIMEOUT:-120} 2 "nodeIdTest2 init"; then
+    if wait_for_container_initialized "nodeIdTest2" ${EIOU_INIT_TIMEOUT:-120}; then
 
         hostOnlyHostname=$(docker exec nodeIdTest2 php -r '
             $json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
@@ -274,8 +277,7 @@ else
     fi
 
     # Clean up nodeIdTest2
-    docker rm -f nodeIdTest2 2>/dev/null
-    docker volume rm nodeIdTest2-mysql-data nodeIdTest2-files nodeIdTest2-backups 2>/dev/null
+    remove_container_if_exists nodeIdTest2
 
 fi
 
