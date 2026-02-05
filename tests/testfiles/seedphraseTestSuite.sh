@@ -966,11 +966,11 @@ if [[ "$originalAuthCode" != "ERROR_NO_AUTHCODE" ]] && [[ -n "$originalAuthCode"
     # Verify authcode format (should be 20 hex characters)
     if [[ ${#originalAuthCode} -eq 20 ]] && [[ "$originalAuthCode" =~ ^[0-9a-f]+$ ]]; then
         printf "\t   Original authcode retrieved ${GREEN}PASSED${NC}\n"
-        printf "\t   BEFORE - Authcode: ${originalAuthCode}\n"
+        printf "\t   BEFORE - Authcode: ${originalAuthCode:0:4}...${originalAuthCode: -4} (${#originalAuthCode} chars)\n"
         passed=$(( passed + 1 ))
     else
         printf "\t   Original authcode retrieved but invalid format ${YELLOW}WARNING${NC}\n"
-        printf "\t   Authcode: ${originalAuthCode} (length: ${#originalAuthCode})\n"
+        printf "\t   Authcode: ${originalAuthCode:0:4}... (length: ${#originalAuthCode})\n"
         passed=$(( passed + 1 ))
     fi
 else
@@ -1093,7 +1093,7 @@ restoredAuthCode=$(docker exec ${testContainer} php -r '
 
 if [[ "$restoredAuthCode" != "ERROR_NO_AUTHCODE" ]] && [[ -n "$restoredAuthCode" ]]; then
     printf "\t   Restored authcode retrieved ${GREEN}PASSED${NC}\n"
-    printf "\t   AFTER  - Authcode: ${restoredAuthCode}\n"
+    printf "\t   AFTER  - Authcode: ${restoredAuthCode:0:4}...${restoredAuthCode: -4} (${#restoredAuthCode} chars)\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   Restored authcode retrieval ${RED}FAILED${NC}\n"
@@ -1145,8 +1145,9 @@ echo -e "\n\t-> Step 3.9: Comparing original and restored authcodes"
 echo -e "\n\t   ============================================"
 echo -e "\t   AUTHCODE COMPARISON RESULTS"
 echo -e "\t   ============================================"
-echo -e "\t   BEFORE: ${originalAuthCode}"
-echo -e "\t   AFTER:  ${restoredAuthCode}"
+echo -e "\t   BEFORE: ${originalAuthCode:0:4}...${originalAuthCode: -4}"
+echo -e "\t   AFTER:  ${restoredAuthCode:0:4}...${restoredAuthCode: -4}"
+echo -e "\t   Match:  $( [[ "$originalAuthCode" == "$restoredAuthCode" ]] && echo 'YES' || echo 'NO' )"
 echo -e "\t   ============================================\n"
 
 if [[ "$originalAuthCode" == "$restoredAuthCode" ]]; then
@@ -1201,9 +1202,9 @@ iteration3AuthCode=$(docker exec ${testContainer} php -r '
     }
 ' 2>&1)
 
-echo -e "\t   Iteration 1: ${iteration1AuthCode}"
-echo -e "\t   Iteration 2: ${iteration2AuthCode}"
-echo -e "\t   Iteration 3: ${iteration3AuthCode}"
+echo -e "\t   Iteration 1: ${iteration1AuthCode:0:4}...${iteration1AuthCode: -4}"
+echo -e "\t   Iteration 2: ${iteration2AuthCode:0:4}...${iteration2AuthCode: -4}"
+echo -e "\t   Iteration 3: ${iteration3AuthCode:0:4}...${iteration3AuthCode: -4}"
 
 if [[ "$iteration1AuthCode" == "$iteration2AuthCode" ]] && [[ "$iteration2AuthCode" == "$iteration3AuthCode" ]]; then
     printf "\t   ${GREEN}All iterations produce same authcode - deterministic${NC}\n"
@@ -1241,7 +1242,7 @@ newContainerAuthCode=$(docker exec ${authcodeRestoreContainer} php -r '
 ' 2>&1)
 
 if [[ "$newContainerAuthCode" != "ERROR_NO_AUTHCODE" ]] && [[ -n "$newContainerAuthCode" ]]; then
-    printf "\t   New container authcode retrieved: ${newContainerAuthCode}\n"
+    printf "\t   New container authcode retrieved: ${newContainerAuthCode:0:4}...${newContainerAuthCode: -4}\n"
 
     if [[ "$originalAuthCode" == "$newContainerAuthCode" ]]; then
         printf "\t   ${GREEN}New container authcode matches original!${NC}\n"
