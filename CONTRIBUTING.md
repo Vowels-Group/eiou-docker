@@ -1,5 +1,9 @@
 # Contributing to EIOU Docker
 
+**Note: EIOU Docker is not currently accepting external contributions.** This document is a template for future use when the project opens to community contributions.
+
+---
+
 Thank you for your interest in contributing to EIOU Docker. This project is in ALPHA status and we welcome contributions that improve reliability, expand test coverage, and strengthen the codebase.
 
 This guide covers everything you need to get started: setting up your development environment, understanding the codebase, writing and running tests, and submitting pull requests.
