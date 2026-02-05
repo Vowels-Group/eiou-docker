@@ -229,6 +229,48 @@ class TransactionContactRepositoryTest extends TestCase
     }
 
     // =========================================================================
+    // Balance Status Filtering Tests
+    // =========================================================================
+
+    public function testGetContactBalanceQueryFiltersCompletedStatus(): void
+    {
+        $sentStmt = $this->createMock(PDOStatement::class);
+        $sentStmt->method('execute');
+        $sentStmt->method('fetch')->willReturn(['sent' => 5000]);
+
+        $receivedStmt = $this->createMock(PDOStatement::class);
+        $receivedStmt->method('execute');
+        $receivedStmt->method('fetch')->willReturn(['received' => 8000]);
+
+        $callCount = 0;
+        $this->pdo->expects($this->exactly(2))
+            ->method('prepare')
+            ->with($this->stringContains("status = 'completed'"))
+            ->willReturnCallback(function() use (&$callCount, $sentStmt, $receivedStmt) {
+                $callCount++;
+                return $callCount === 1 ? $sentStmt : $receivedStmt;
+            });
+
+        $this->repository->getContactBalance('user', 'contact');
+    }
+
+    public function testGetAllContactBalancesQueryFiltersCompletedStatus(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->with($this->logicalAnd(
+                $this->stringContains('UNION ALL'),
+                $this->stringContains("status = 'completed'")
+            ))
+            ->willReturn($this->stmt);
+
+        $this->stmt->method('execute');
+        $this->stmt->method('fetch')->willReturn(false);
+
+        $this->repository->getAllContactBalances('user', ['contact1']);
+    }
+
+    // =========================================================================
     // getTransactionsWithContact() Tests
     // =========================================================================
 

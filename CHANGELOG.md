@@ -17,6 +17,12 @@ The project is currently in **ALPHA** status.
 - Full codebase migration from `SecureLogger` to `Logger` across 46 source files (#557)
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
+### Fixed
+- GUI Total Balance incorrectly included rejected, expired, and cancelled transactions
+- Balance sync operations (`syncContactBalance`, `syncAllBalances`) counted non-completed transactions
+- `TransactionContactRepository` contact balance queries missing status filter
+- `getAllContactBalances` unhandled PDOException on query failure
+
 ---
 
 ## 2026-02-01 -- 2026-02-05
