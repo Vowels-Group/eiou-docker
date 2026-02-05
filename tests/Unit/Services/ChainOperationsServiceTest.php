@@ -17,7 +17,7 @@ use Eiou\Services\ChainOperationsService;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Core\UserContext;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Contracts\SyncServiceInterface;
 use Exception;
 
@@ -28,7 +28,7 @@ class ChainOperationsServiceTest extends TestCase
     private TransactionChainRepository $mockChainRepo;
     private TransactionRepository $mockTxRepo;
     private UserContext $mockUserContext;
-    private SecureLogger $mockLogger;
+    private Logger $mockLogger;
     private SyncServiceInterface $mockSyncService;
 
     private const TEST_USER_PUBKEY = 'test-user-public-key-12345';
@@ -41,7 +41,7 @@ class ChainOperationsServiceTest extends TestCase
         $this->mockChainRepo = $this->createMock(TransactionChainRepository::class);
         $this->mockTxRepo = $this->createMock(TransactionRepository::class);
         $this->mockUserContext = $this->createMock(UserContext::class);
-        $this->mockLogger = $this->createMock(SecureLogger::class);
+        $this->mockLogger = $this->createMock(Logger::class);
         $this->mockSyncService = $this->createMock(SyncServiceInterface::class);
 
         $this->service = new ChainOperationsService(

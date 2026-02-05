@@ -4,7 +4,7 @@
 namespace Eiou\Database;
 
 use Eiou\Core\DatabaseContext;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
 use RuntimeException;
@@ -38,7 +38,7 @@ function createPDOConnection(): PDO {
 
     // Validate required configuration
     if (!$dbHost || !$dbName || !$dbUser || !$dbPass) {
-        SecureLogger::error("Missing database configuration parameters");
+        Logger::getInstance()->error("Missing database configuration parameters");
         throw new RuntimeException("Database configuration incomplete");
     }
 
@@ -61,7 +61,7 @@ function createPDOConnection(): PDO {
         return $pdo;
     } catch (PDOException $e) {
         // Log the error securely (don't expose connection details)
-        SecureLogger::logException($e, 'CRITICAL');
+        Logger::getInstance()->logException($e, 'CRITICAL');
 
         // Throw exception to let ErrorHandler handle it
         // This allows upper layers to decide how to handle the error

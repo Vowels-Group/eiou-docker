@@ -6,7 +6,7 @@ namespace Eiou\Services;
 use Eiou\Core\ErrorCodes;
 use Eiou\Contracts\ApiAuthServiceInterface;
 use Eiou\Database\ApiKeyRepository;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 
 /**
  * API Authentication Service with HMAC Signature Verification
@@ -40,7 +40,7 @@ class ApiAuthService implements ApiAuthServiceInterface {
      * Constructor
      *
      * @param ApiKeyRepository $apiKeyRepository
-     * @param SecureLogger|null $logger
+     * @param Logger|null $logger
      */
     public function __construct($apiKeyRepository, $logger = null) {
         $this->apiKeyRepository = $apiKeyRepository;

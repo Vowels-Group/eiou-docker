@@ -131,7 +131,7 @@ class Security {
      */
     public static function getSafeErrorMessage($e, $debug = false) {
         // Log the full error internally using SecureLogger
-        SecureLogger::logException($e, 'ERROR');
+        Logger::getInstance()->logException($e, 'ERROR');
 
         // Return generic message to user
         if ($debug && (Constants::get('APP_ENV') === 'development' || Constants::get('APP_DEBUG') === 'true')) {
@@ -221,7 +221,7 @@ class Security {
         try {
             return bin2hex(random_bytes($length));
         } catch (Exception $e) {
-            SecureLogger::error("Failed to generate secure token", [
+            Logger::getInstance()->error("Failed to generate secure token", [
                 'error' => $e->getMessage()
             ]);
             throw new RuntimeException("Failed to generate secure random token");
@@ -354,6 +354,6 @@ class Security {
      */
     public static function logSecurityEvent($event, $context = []) {
         $maskedContext = self::maskSensitiveData($context);
-        SecureLogger::warning("SECURITY EVENT: $event", $maskedContext);
+        Logger::getInstance()->warning("SECURITY EVENT: $event", $maskedContext);
     }
 }

@@ -17,7 +17,7 @@ use Eiou\Exceptions\ValidationServiceException;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Utils\InputValidator;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 
 /**
  * Contact Management Service
@@ -71,9 +71,9 @@ class ContactManagementService implements ContactManagementServiceInterface
     private InputValidator $inputValidator;
 
     /**
-     * @var SecureLogger Secure logger
+     * @var Logger Secure logger
      */
-    private SecureLogger $secureLogger;
+    private Logger $secureLogger;
 
     /**
      * @var UserContext Current user data
@@ -114,7 +114,7 @@ class ContactManagementService implements ContactManagementServiceInterface
         $this->inputValidator = $inputValidator;
         $this->currentUser = $currentUser;
         $this->transportUtility = $this->utilityContainer->getTransportUtility($this->currentUser);
-        $this->secureLogger = new SecureLogger();
+        $this->secureLogger = Logger::getInstance();
     }
 
     /**

@@ -9,7 +9,7 @@ use Eiou\Cli\CliOutputManager;
 use Eiou\Services\ServiceContainer;
 use Eiou\Services\ApiAuthService;
 use Eiou\Database\ApiKeyRepository;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Exceptions\ServiceException;
 
 /**
@@ -64,7 +64,7 @@ class ApiController {
      * @param ApiAuthService $authService
      * @param ApiKeyRepository $apiKeyRepository
      * @param ServiceContainer $services
-     * @param SecureLogger|null $logger
+     * @param Logger|null $logger
      */
     public function __construct(
         $authService,

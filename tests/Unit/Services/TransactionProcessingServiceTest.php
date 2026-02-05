@@ -28,7 +28,7 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Core\UserContext;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Contracts\P2pServiceInterface;
@@ -50,7 +50,7 @@ class TransactionProcessingServiceTest extends TestCase
     private TransportUtilityService $mockTransportUtility;
     private TimeUtilityService $mockTimeUtility;
     private UserContext $mockUserContext;
-    private SecureLogger $mockLogger;
+    private Logger $mockLogger;
     private MessageDeliveryService $mockMessageDeliveryService;
     private SyncTriggerInterface $mockSyncTrigger;
     private P2pServiceInterface $mockP2pService;
@@ -68,7 +68,7 @@ class TransactionProcessingServiceTest extends TestCase
         $this->mockTransportUtility = $this->createMock(TransportUtilityService::class);
         $this->mockTimeUtility = $this->createMock(TimeUtilityService::class);
         $this->mockUserContext = $this->createMock(UserContext::class);
-        $this->mockLogger = $this->createMock(SecureLogger::class);
+        $this->mockLogger = $this->createMock(Logger::class);
         $this->mockMessageDeliveryService = $this->createMock(MessageDeliveryService::class);
         $this->mockSyncTrigger = $this->createMock(SyncTriggerInterface::class);
         $this->mockP2pService = $this->createMock(P2pServiceInterface::class);

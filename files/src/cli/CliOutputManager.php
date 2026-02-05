@@ -4,7 +4,7 @@
 namespace Eiou\Cli;
 
 use Eiou\Core\ErrorCodes;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 
 /**
  * CLI Output Manager
@@ -174,7 +174,7 @@ class CliOutputManager
         $httpStatus = $status ?? ErrorCodes::getHttpStatus($code);
 
         // Log the error to the log file
-        SecureLogger::error($message, [
+        Logger::getInstance()->error($message, [
             'code' => $code,
             'status' => $httpStatus,
             'additional_data' => $additionalData,
@@ -197,7 +197,7 @@ class CliOutputManager
     public function validationError(string $field, string $message): void
     {
         // Log the validation error to the log file
-        SecureLogger::error("Validation error: $message", [
+        Logger::getInstance()->error("Validation error: $message", [
             'code' => ErrorCodes::VALIDATION_ERROR,
             'field' => $field,
             'command' => $this->command

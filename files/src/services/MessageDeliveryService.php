@@ -10,7 +10,7 @@ use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Core\UserContext;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Exception;
 
 /**
@@ -193,27 +193,27 @@ class MessageDeliveryService implements MessageDeliveryServiceInterface {
     }
 
     /**
-     * Log a message using SecureLogger if available
+     * Log a message using Logger if available
      *
      * @param string $level Log level (info, warning, error)
      * @param string $message Log message
      * @param array $context Additional context
      */
     private function log(string $level, string $message, array $context = []): void {
-        if (class_exists('SecureLogger')) {
-            SecureLogger::$level($message, $context);
+        if (class_exists(Logger::class)) {
+            Logger::getInstance()->$level($message, $context);
         }
     }
 
     /**
-     * Log an exception using SecureLogger if available
+     * Log an exception using Logger if available
      *
      * @param Exception $e The exception to log
      * @param array $context Additional context
      */
     private function logException(Exception $e, array $context = []): void {
-        if (class_exists('SecureLogger')) {
-            SecureLogger::logException($e, $context);
+        if (class_exists(Logger::class)) {
+            Logger::getInstance()->logException($e, $context);
         }
     }
 

@@ -3,7 +3,7 @@
 
 namespace Eiou\Services;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\UserContext;
@@ -607,7 +607,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                                 // but for now we accept it so the transactions are not lost.
                                 output("Chain conflict: local wins. Inserting remote transaction {$tx['txid']} with original previous_txid", 'SILENT');
 
-                                SecureLogger::info("Inserting remote transaction that lost chain conflict", [
+                                Logger::getInstance()->info("Inserting remote transaction that lost chain conflict", [
                                     'remote_txid' => $tx['txid'],
                                     'local_winner_txid' => $localConflict['txid'],
                                     'shared_previous_txid' => $remotePreviousTxid,
@@ -616,7 +616,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                                 // Don't skip - insert the transaction even though it lost the conflict
                             }
                         } else {
-                            SecureLogger::warning("Failed to resolve chain conflict", [
+                            Logger::getInstance()->warning("Failed to resolve chain conflict", [
                                 'local_txid' => $localConflict['txid'],
                                 'remote_txid' => $tx['txid'],
                                 'previous_txid' => $remotePreviousTxid
@@ -632,7 +632,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 // logging invalid ones for investigation.
                 if (!$this->verifyTransactionSignature($tx)) {
                     // Log the failure with full details for security audit
-                    SecureLogger::warning("Sync: Transaction signature verification failed - skipping", [
+                    Logger::getInstance()->warning("Sync: Transaction signature verification failed - skipping", [
                         'txid' => $tx['txid'] ?? 'unknown',
                         'sender_address' => $tx['sender_address'] ?? 'unknown',
                         'sender_public_key_hash' => isset($tx['sender_public_key'])
@@ -663,7 +663,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
                 // Verify recipient signature for accepted/completed transactions
                 if (!$this->verifyRecipientSignature($tx)) {
-                    SecureLogger::warning("Sync: Recipient signature verification failed - skipping", [
+                    Logger::getInstance()->warning("Sync: Recipient signature verification failed - skipping", [
                         'txid' => $tx['txid'] ?? 'unknown',
                         'status' => $tx['status'] ?? 'unknown',
                         'has_recipient_signature' => !empty($tx['recipient_signature'])
@@ -717,7 +717,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                     if ($resigned) {
                         output("Re-signed local transaction {$localLoserToResign['txid']} to chain after {$tx['txid']}", 'SILENT');
                     } else {
-                        SecureLogger::warning("Failed to re-sign local transaction after conflict resolution", [
+                        Logger::getInstance()->warning("Failed to re-sign local transaction after conflict resolution", [
                             'local_txid' => $localLoserToResign['txid'],
                             'winner_txid' => $tx['txid']
                         ]);
@@ -743,7 +743,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'syncTransactionChain',
                 'contact' => $contactAddress
             ]);
@@ -767,7 +767,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             );
         } catch (Exception $e) {
             // Log but don't fail - held transaction notification is non-critical
-            SecureLogger::debug("Could not notify HeldTransactionService of sync completion", [
+            Logger::getInstance()->debug("Could not notify HeldTransactionService of sync completion", [
                 'contact' => $contactPublicKey,
                 'error' => $e->getMessage()
             ]);
@@ -829,7 +829,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         } else {
             // Txids are identical - this shouldn't happen with proper txid generation
             // but if it does, we can't resolve the conflict
-            SecureLogger::error("Chain conflict with identical txids - cannot resolve", [
+            Logger::getInstance()->error("Chain conflict with identical txids - cannot resolve", [
                 'txid' => $localTxid
             ]);
             return $result;
@@ -837,7 +837,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         $result['resolved'] = true;
 
-        SecureLogger::info("Chain conflict resolved deterministically", [
+        Logger::getInstance()->info("Chain conflict resolved deterministically", [
             'local_txid' => $localTxid,
             'remote_txid' => $remoteTxid,
             'winner' => $result['winner'],
@@ -867,7 +867,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             $updated = $this->transactionChainRepository->updatePreviousTxid($localTx['txid'], $newPreviousTxid);
 
             if (!$updated) {
-                SecureLogger::warning("Failed to update previous_txid for local transaction", [
+                Logger::getInstance()->warning("Failed to update previous_txid for local transaction", [
                     'txid' => $localTx['txid'],
                     'new_previous_txid' => $newPreviousTxid
                 ]);
@@ -877,7 +877,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             // Get the updated transaction from database
             $updatedTxResult = $this->transactionRepository->getByTxid($localTx['txid']);
             if (!$updatedTxResult || empty($updatedTxResult)) {
-                SecureLogger::warning("Could not retrieve updated transaction for re-signing", [
+                Logger::getInstance()->warning("Could not retrieve updated transaction for re-signing", [
                     'txid' => $localTx['txid']
                 ]);
                 return false;
@@ -897,7 +897,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             $signResult = $this->transportUtility->signWithCapture($payload);
 
             if (!$signResult) {
-                SecureLogger::warning("Failed to re-sign local transaction", [
+                Logger::getInstance()->warning("Failed to re-sign local transaction", [
                     'txid' => $localTx['txid']
                 ]);
                 return false;
@@ -911,7 +911,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             );
 
             if (!$signatureUpdated) {
-                SecureLogger::warning("Failed to update signature for local transaction", [
+                Logger::getInstance()->warning("Failed to update signature for local transaction", [
                     'txid' => $localTx['txid']
                 ]);
                 return false;
@@ -920,7 +920,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             // Update the timestamp to reflect when the re-signing occurred
             $timestampUpdated = $this->transactionRepository->updateTimestamp($localTx['txid']);
             if (!$timestampUpdated) {
-                SecureLogger::warning("Failed to update timestamp for re-signed transaction", [
+                Logger::getInstance()->warning("Failed to update timestamp for re-signed transaction", [
                     'txid' => $localTx['txid']
                 ]);
                 // Don't return false - this is not critical
@@ -936,7 +936,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             );
 
             if (!$statusUpdated) {
-                SecureLogger::warning("Failed to set status to pending for re-signed transaction", [
+                Logger::getInstance()->warning("Failed to set status to pending for re-signed transaction", [
                     'txid' => $localTx['txid']
                 ]);
                 // Don't return false - signature was updated, status is secondary
@@ -947,7 +947,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             // from the original rejection
             $this->releaseHeldTransaction($localTx['txid']);
 
-            SecureLogger::info("Successfully re-signed local transaction after chain conflict", [
+            Logger::getInstance()->info("Successfully re-signed local transaction after chain conflict", [
                 'txid' => $localTx['txid'],
                 'old_previous_txid' => $localTx['previous_txid'] ?? 'null',
                 'new_previous_txid' => $newPreviousTxid,
@@ -959,7 +959,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             return true;
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'resignLocalTransaction',
                 'txid' => $localTx['txid']
             ]);
@@ -990,11 +990,11 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             $released = $heldRepository->releaseTransaction($txid);
 
             if ($released) {
-                SecureLogger::info("Released held transaction after chain conflict resolution", [
+                Logger::getInstance()->info("Released held transaction after chain conflict resolution", [
                     'txid' => $txid
                 ]);
             } else {
-                SecureLogger::warning("Failed to release held transaction", [
+                Logger::getInstance()->warning("Failed to release held transaction", [
                     'txid' => $txid
                 ]);
             }
@@ -1002,7 +1002,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             return $released;
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'releaseHeldTransaction',
                 'txid' => $txid
             ]);
@@ -1110,7 +1110,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             );
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'handleTransactionSyncRequest',
                 'sender' => $senderAddress
             ]);
@@ -1141,7 +1141,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         // Both signature and nonce are required for verification
         if (empty($tx['sender_signature']) || empty($tx['signature_nonce'])) {
             // Log missing signature data
-            SecureLogger::debug("Transaction missing signature data for verification", [
+            Logger::getInstance()->debug("Transaction missing signature data for verification", [
                 'txid' => $tx['txid'] ?? 'unknown',
                 'has_signature' => !empty($tx['sender_signature']),
                 'has_nonce' => !empty($tx['signature_nonce'])
@@ -1173,7 +1173,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         // Get the public key resource
         $publicKeyResource = openssl_pkey_get_public($senderPublicKey);
         if ($publicKeyResource === false) {
-            SecureLogger::warning("Invalid sender public key for transaction signature verification", [
+            Logger::getInstance()->warning("Invalid sender public key for transaction signature verification", [
                 'txid' => $tx['txid'] ?? 'unknown'
             ]);
             return false;
@@ -1188,7 +1188,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         if ($verified !== 1) {
             // Enhanced debug logging for signature verification failures
-            SecureLogger::warning("Transaction signature verification failed", [
+            Logger::getInstance()->warning("Transaction signature verification failed", [
                 'txid' => $tx['txid'] ?? 'unknown',
                 'sender' => $tx['sender_address'] ?? 'unknown',
                 'verify_result' => $verified,
@@ -1247,7 +1247,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         // For accepted/completed, recipient_signature is required
         if (empty($tx['recipient_signature'])) {
-            SecureLogger::warning("Transaction missing required recipient signature", [
+            Logger::getInstance()->warning("Transaction missing required recipient signature", [
                 'txid' => $tx['txid'] ?? 'unknown',
                 'status' => $status
             ]);
@@ -1257,7 +1257,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         // Reconstruct the message that was signed (same as sender signature)
         $messageContent = $this->reconstructSignedMessage($tx);
         if ($messageContent === null) {
-            SecureLogger::debug("Could not reconstruct message for recipient signature verification", [
+            Logger::getInstance()->debug("Could not reconstruct message for recipient signature verification", [
                 'txid' => $tx['txid'] ?? 'unknown'
             ]);
             return false;
@@ -1266,7 +1266,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         // Get receiver's public key
         $receiverPublicKey = $tx['receiver_public_key'] ?? null;
         if (empty($receiverPublicKey)) {
-            SecureLogger::debug("Missing receiver public key for recipient signature verification", [
+            Logger::getInstance()->debug("Missing receiver public key for recipient signature verification", [
                 'txid' => $tx['txid'] ?? 'unknown'
             ]);
             return false;
@@ -1275,7 +1275,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         // Get the public key resource
         $publicKeyResource = openssl_pkey_get_public($receiverPublicKey);
         if ($publicKeyResource === false) {
-            SecureLogger::warning("Invalid receiver public key for recipient signature verification", [
+            Logger::getInstance()->warning("Invalid receiver public key for recipient signature verification", [
                 'txid' => $tx['txid'] ?? 'unknown'
             ]);
             return false;
@@ -1289,7 +1289,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
         );
 
         if ($verified !== 1) {
-            SecureLogger::warning("Recipient signature verification failed", [
+            Logger::getInstance()->warning("Recipient signature verification failed", [
                 'txid' => $tx['txid'] ?? 'unknown',
                 'status' => $status,
                 'verify_result' => $verified
@@ -1321,7 +1321,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         foreach ($requiredFields as $field) {
             if (!isset($tx[$field])) {
-                SecureLogger::debug("Missing field for message reconstruction", [
+                Logger::getInstance()->debug("Missing field for message reconstruction", [
                     'field' => $field,
                     'txid' => $tx['txid'] ?? 'unknown'
                 ]);
@@ -1395,7 +1395,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
      */
     private function reconstructContactSignedMessage(array $tx): ?string {
         if (!isset($tx['signature_nonce'])) {
-            SecureLogger::debug("Missing nonce for contact message reconstruction", [
+            Logger::getInstance()->debug("Missing nonce for contact message reconstruction", [
                 'txid' => $tx['txid'] ?? 'unknown'
             ]);
             return null;
@@ -1498,7 +1498,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'syncContactBalance',
                 'contact_pubkey_hash' => hash(Constants::HASH_ALGORITHM, $contactPubkey)
             ]);
@@ -1549,7 +1549,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 $result['transactions_synced'] = $txSyncResult['synced_count'];
             } else {
                 // Log but continue - transactions may already be in sync
-                SecureLogger::info("Transaction chain sync for re-added contact", [
+                Logger::getInstance()->info("Transaction chain sync for re-added contact", [
                     'address' => $contactAddress,
                     'result' => $txSyncResult
                 ]);
@@ -1573,7 +1573,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'syncReaddedContact',
                 'contact' => $contactAddress
             ]);
@@ -1791,7 +1791,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
                 // Verify signature before inserting
                 if (!$this->verifyTransactionSignature($tx)) {
-                    SecureLogger::warning("Bidirectional sync: Signature verification failed", [
+                    Logger::getInstance()->warning("Bidirectional sync: Signature verification failed", [
                         'txid' => $tx['txid'] ?? 'unknown',
                         'sender' => $tx['sender_address'] ?? 'unknown'
                     ]);
@@ -1800,7 +1800,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
                 // Verify recipient signature for accepted/completed transactions
                 if (!$this->verifyRecipientSignature($tx)) {
-                    SecureLogger::warning("Bidirectional sync: Recipient signature verification failed", [
+                    Logger::getInstance()->warning("Bidirectional sync: Recipient signature verification failed", [
                         'txid' => $tx['txid'] ?? 'unknown',
                         'status' => $tx['status'] ?? 'unknown'
                     ]);
@@ -1830,7 +1830,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'bidirectionalSync',
                 'contact' => $contactAddress
             ]);
@@ -1916,7 +1916,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             );
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'handleSyncNegotiationRequest',
                 'sender' => $senderAddress
             ]);

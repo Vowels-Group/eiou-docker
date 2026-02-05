@@ -15,7 +15,7 @@ use Eiou\Api\ApiController;
 use Eiou\Services\ApiAuthService;
 use Eiou\Database\ApiKeyRepository;
 use Eiou\Services\ServiceContainer;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
 use Eiou\Exceptions\FatalServiceException;
 
@@ -25,7 +25,7 @@ class ApiControllerTest extends TestCase
     private ApiAuthService $mockAuthService;
     private ApiKeyRepository $mockApiKeyRepository;
     private ServiceContainer $mockServices;
-    private ?SecureLogger $mockLogger;
+    private ?Logger $mockLogger;
     private ApiController $controller;
 
     protected function setUp(): void
@@ -33,7 +33,7 @@ class ApiControllerTest extends TestCase
         $this->mockAuthService = $this->createMock(ApiAuthService::class);
         $this->mockApiKeyRepository = $this->createMock(ApiKeyRepository::class);
         $this->mockServices = $this->createMock(ServiceContainer::class);
-        $this->mockLogger = $this->createMock(SecureLogger::class);
+        $this->mockLogger = $this->createMock(Logger::class);
 
         $this->controller = new ApiController(
             $this->mockAuthService,

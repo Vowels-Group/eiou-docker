@@ -3,7 +3,7 @@
 
 namespace Eiou\Services;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Contracts\CleanupServiceInterface;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
@@ -122,7 +122,7 @@ class CleanupService implements CleanupServiceInterface {
 
             return count($expiredMessages);
         } catch (PDOException $e) {
-            SecureLogger::error("Error processing cleanup messages", ['error' => $e->getMessage()]);
+            Logger::getInstance()->error("Error processing cleanup messages", ['error' => $e->getMessage()]);
             return 0;
         }
     }
@@ -165,7 +165,7 @@ class CleanupService implements CleanupServiceInterface {
             if (function_exists('output')) {
                 output("P2P {$hash} marked completed: found local completed transaction", 'SILENT');
             }
-            SecureLogger::info("P2P completion recovered from local transaction", [
+            Logger::getInstance()->info("P2P completion recovered from local transaction", [
                 'hash' => $hash,
                 'recovery_method' => 'local_check'
             ]);
@@ -181,7 +181,7 @@ class CleanupService implements CleanupServiceInterface {
             if (function_exists('output')) {
                 output("P2P {$hash} marked completed: sender confirmed completion", 'SILENT');
             }
-            SecureLogger::info("P2P completion recovered via sender inquiry", [
+            Logger::getInstance()->info("P2P completion recovered via sender inquiry", [
                 'hash' => $hash,
                 'sender_address' => $senderAddress,
                 'recovery_method' => 'sender_inquiry'
@@ -223,7 +223,7 @@ class CleanupService implements CleanupServiceInterface {
             );
 
             if ($response && isset($response['status'])) {
-                SecureLogger::debug("P2P status inquiry response", [
+                Logger::getInstance()->debug("P2P status inquiry response", [
                     'hash' => $hash,
                     'sender_address' => $senderAddress,
                     'response_status' => $response['status']
@@ -233,7 +233,7 @@ class CleanupService implements CleanupServiceInterface {
 
             return null;
         } catch (Exception $e) {
-            SecureLogger::warning("P2P status inquiry failed", [
+            Logger::getInstance()->warning("P2P status inquiry failed", [
                 'hash' => $hash,
                 'sender_address' => $senderAddress,
                 'error' => $e->getMessage()

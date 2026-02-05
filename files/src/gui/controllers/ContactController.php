@@ -10,7 +10,7 @@ use Eiou\Services\ContactService;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Cli\CliOutputManager;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Gui\Helpers\MessageHelper;
 
 /**
@@ -138,8 +138,8 @@ class ContactController
                 if (ob_get_level() > 0) {
                     ob_end_clean();
                 }
-                // Use SecureLogger for exception logging
-                SecureLogger::logException($e, [
+                // Use Logger for exception logging
+                Logger::getInstance()->logException($e, [
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
@@ -240,8 +240,8 @@ class ContactController
                 if (ob_get_level() > 0) {
                     ob_end_clean();
                 }
-                // Use SecureLogger for exception logging
-                SecureLogger::logException($e, [
+                // Use Logger for exception logging
+                Logger::getInstance()->logException($e, [
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
@@ -307,8 +307,8 @@ class ContactController
                 if (ob_get_level() > 0) {
                     ob_end_clean();
                 }
-                // Use SecureLogger for exception logging
-                SecureLogger::logException($e, [
+                // Use Logger for exception logging
+                Logger::getInstance()->logException($e, [
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
@@ -374,8 +374,8 @@ class ContactController
                 if (ob_get_level() > 0) {
                     ob_end_clean();
                 }
-                // Use SecureLogger for exception logging
-                SecureLogger::logException($e, [
+                // Use Logger for exception logging
+                Logger::getInstance()->logException($e, [
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
@@ -441,8 +441,8 @@ class ContactController
                 if (ob_get_level() > 0) {
                     ob_end_clean();
                 }
-                // Use SecureLogger for exception logging
-                SecureLogger::logException($e, [
+                // Use Logger for exception logging
+                Logger::getInstance()->logException($e, [
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
@@ -544,8 +544,8 @@ class ContactController
                 if (ob_get_level() > 0) {
                     ob_end_clean();
                 }
-                // Use SecureLogger for exception logging
-                SecureLogger::logException($e, [
+                // Use Logger for exception logging
+                Logger::getInstance()->logException($e, [
                     'controller' => 'ContactController',
                     'action' => __FUNCTION__
                 ]);
@@ -605,8 +605,8 @@ class ContactController
             echo json_encode($result);
 
         } catch (\Throwable $e) {
-            // Use SecureLogger for exception logging
-            SecureLogger::logException($e, [
+            // Use Logger for exception logging
+            Logger::getInstance()->logException($e, [
                 'controller' => 'ContactController',
                 'action' => __FUNCTION__
             ]);

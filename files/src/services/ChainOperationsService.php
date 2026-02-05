@@ -3,7 +3,7 @@
 
 namespace Eiou\Services;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Contracts\ChainOperationsInterface;
 use Eiou\Contracts\SyncServiceInterface;
 use Eiou\Database\TransactionChainRepository;
@@ -50,9 +50,9 @@ class ChainOperationsService implements ChainOperationsInterface
     private UserContext $currentUser;
 
     /**
-     * @var SecureLogger Secure logger instance
+     * @var Logger Secure logger instance
      */
-    private SecureLogger $secureLogger;
+    private Logger $secureLogger;
 
     /**
      * @var SyncServiceInterface|null Sync service (setter injected for circular dependency)
@@ -65,13 +65,13 @@ class ChainOperationsService implements ChainOperationsInterface
      * @param TransactionChainRepository $transactionChainRepository Transaction chain repository
      * @param TransactionRepository $transactionRepository Transaction repository
      * @param UserContext $currentUser Current user context
-     * @param SecureLogger $secureLogger Secure logger instance
+     * @param Logger $secureLogger Secure logger instance
      */
     public function __construct(
         TransactionChainRepository $transactionChainRepository,
         TransactionRepository $transactionRepository,
         UserContext $currentUser,
-        SecureLogger $secureLogger
+        Logger $secureLogger
     ) {
         $this->transactionChainRepository = $transactionChainRepository;
         $this->transactionRepository = $transactionRepository;

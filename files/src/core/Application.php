@@ -4,6 +4,7 @@
 namespace Eiou\Core;
 
 use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Cli\CliOutputManager;
@@ -84,7 +85,7 @@ class Application {
                         'error' => $e->getMessage()
                     ]);
                 } else {
-                    SecureLogger::logException($e, 'CRITICAL');
+                    Logger::getInstance()->logException($e, 'CRITICAL');
                 }
                 // If database setup fails, we cannot continue initialization
                 throw new RuntimeException("Failed to initialize application: " . $e->getMessage(), 0, $e);

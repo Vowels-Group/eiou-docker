@@ -3,7 +3,7 @@
 
 namespace Eiou\Services;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Core\Constants;
 use Eiou\Core\ErrorHandler;
@@ -73,9 +73,9 @@ class TransactionValidationService implements TransactionValidationServiceInterf
     private UserContext $currentUser;
 
     /**
-     * @var SecureLogger Secure logger instance
+     * @var Logger Logger instance
      */
-    private SecureLogger $secureLogger;
+    private Logger $secureLogger;
 
     /**
      * @var SyncTriggerInterface|null Sync trigger for proactive sync before validation
@@ -105,7 +105,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
      * @param InputValidator $inputValidator Input validator
      * @param TransactionPayload $transactionPayload Transaction payload builder
      * @param UserContext $currentUser Current user context
-     * @param SecureLogger $secureLogger Secure logger
+     * @param Logger $secureLogger Logger
      */
     public function __construct(
         TransactionRepository $transactionRepository,
@@ -114,7 +114,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
         InputValidator $inputValidator,
         TransactionPayload $transactionPayload,
         UserContext $currentUser,
-        SecureLogger $secureLogger
+        Logger $secureLogger
     ) {
         $this->transactionRepository = $transactionRepository;
         $this->contactService = $contactService;
@@ -227,8 +227,8 @@ class TransactionValidationService implements TransactionValidationServiceInterf
 
             return true;
         } catch (PDOException $e) {
-            // Use SecureLogger's exception logging
-            SecureLogger::logException($e, [
+            // Use Logger's exception logging
+            Logger::getInstance()->logException($e, [
                 'method' => 'checkPreviousTxid',
                 'context' => 'transaction_validation'
             ]);
@@ -277,8 +277,8 @@ class TransactionValidationService implements TransactionValidationServiceInterf
             }
             return true;
         } catch (PDOException $e) {
-            // Use SecureLogger's exception logging
-            SecureLogger::logException($e, [
+            // Use Logger's exception logging
+            Logger::getInstance()->logException($e, [
                 'method' => 'checkAvailableFundsTransaction',
                 'context' => 'transaction_funds_validation'
             ]);
@@ -319,7 +319,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
             $receivedPreviousTxid = $request['previousTxid'] ?? null;
 
             // Log the mismatch details for debugging
-            SecureLogger::warning("Rejecting transaction: invalid_previous_txid", [
+            Logger::getInstance()->warning("Rejecting transaction: invalid_previous_txid", [
                 'txid' => $request['txid'] ?? 'unknown',
                 'received_previous_txid' => $receivedPreviousTxid ?? 'NULL',
                 'expected_previous_txid' => $expectedTxid ?? 'NULL',
@@ -358,7 +358,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
             }
 
             if ($shouldSync) {
-                SecureLogger::info("Chain mismatch detected - triggering proactive sync", [
+                Logger::getInstance()->info("Chain mismatch detected - triggering proactive sync", [
                     'sender' => $request['senderAddress'] ?? 'unknown',
                     'received_previous_txid' => $receivedPreviousTxid,
                     'expected_previous_txid' => $expectedTxid,
@@ -374,7 +374,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
                     );
 
                     if ($syncResult['success'] && $syncResult['synced_count'] > 0) {
-                        SecureLogger::info("Proactive sync successful, retrying transaction validation", [
+                        Logger::getInstance()->info("Proactive sync successful, retrying transaction validation", [
                             'synced_count' => $syncResult['synced_count'],
                             'sync_reason' => $syncReason
                         ]);
@@ -422,7 +422,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
                                 // Return false to prevent caller from calling processTransaction again
                                 return false;
                             } catch (Exception $e) {
-                                SecureLogger::logException($e, [
+                                Logger::getInstance()->logException($e, [
                                     'method' => 'checkTransactionPossible',
                                     'context' => 'sync_transaction_processing_failed'
                                 ]);
@@ -434,7 +434,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
                         }
                     }
                 } catch (Exception $e) {
-                    SecureLogger::logException($e, [
+                    Logger::getInstance()->logException($e, [
                         'method' => 'checkTransactionPossible',
                         'context' => 'proactive_sync_attempt'
                     ]);
@@ -481,7 +481,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
 
                     // If previous_txid is different, this might be a chain conflict resolution
                     if ($existingTx && $newPreviousTxid !== $existingPreviousTxid) {
-                        SecureLogger::info("Received transaction with different previous_txid - checking for chain conflict resolution", [
+                        Logger::getInstance()->info("Received transaction with different previous_txid - checking for chain conflict resolution", [
                             'txid' => $request['txid'],
                             'existing_previous_txid' => $existingPreviousTxid,
                             'new_previous_txid' => $newPreviousTxid
@@ -515,7 +515,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
                             );
 
                             if ($updated) {
-                                SecureLogger::info("Chain conflict resolution update accepted", [
+                                Logger::getInstance()->info("Chain conflict resolution update accepted", [
                                     'txid' => $request['txid'],
                                     'old_previous_txid' => $existingPreviousTxid,
                                     'new_previous_txid' => $newPreviousTxid
@@ -529,7 +529,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
                                 return false;
                             }
                         } else {
-                            SecureLogger::warning("Chain conflict resolution rejected - invalid signature", [
+                            Logger::getInstance()->warning("Chain conflict resolution rejected - invalid signature", [
                                 'txid' => $request['txid']
                             ]);
                         }
@@ -558,7 +558,7 @@ class TransactionValidationService implements TransactionValidationServiceInterf
                 // Return false to prevent caller from calling processTransaction again
                 return false;
             } catch (Exception $e) {
-                SecureLogger::logException($e, [
+                Logger::getInstance()->logException($e, [
                     'method' => 'checkTransactionPossible',
                     'context' => 'normal_transaction_processing_failed'
                 ]);
@@ -568,8 +568,8 @@ class TransactionValidationService implements TransactionValidationServiceInterf
                 return false;
             }
         } catch (PDOException $e) {
-            // Use SecureLogger's exception logging
-            SecureLogger::logException($e, [
+            // Use Logger's exception logging
+            Logger::getInstance()->logException($e, [
                 'method' => 'checkTransactionPossible',
                 'context' => 'transaction_existence_check'
             ]);

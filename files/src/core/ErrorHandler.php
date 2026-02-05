@@ -4,7 +4,7 @@
 namespace Eiou\Core;
 
 use Eiou\Exceptions\ServiceException;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Exception;
 use Throwable;
 
@@ -171,9 +171,9 @@ class ErrorHandler {
     private static function logError($type, $message, $file, $line) {
         $logMessage = "[$type] $message in $file:$line";
 
-        // Use SecureLogger if available
-        if (class_exists('SecureLogger')) {
-            SecureLogger::error($logMessage, [
+        // Use Logger if available
+        if (class_exists('Eiou\\Utils\\Logger')) {
+            Logger::getInstance()->error($logMessage, [
                 'type' => $type,
                 'file' => $file,
                 'line' => $line
@@ -197,9 +197,9 @@ class ErrorHandler {
      * @param Throwable $exception
      */
     private static function logException($exception) {
-        // Use SecureLogger first if available
-        if (class_exists('SecureLogger')) {
-            SecureLogger::logException($exception, 'CRITICAL');
+        // Use Logger first if available
+        if (class_exists('Eiou\\Utils\\Logger')) {
+            Logger::getInstance()->logException($exception, 'CRITICAL');
         } else {
             $logMessage = sprintf(
                 "Uncaught %s: %s in %s:%d\nStack trace:\n%s",
@@ -213,10 +213,10 @@ class ErrorHandler {
         }
 
         // Also log to application logger if available
-        if (class_exists('Application') && class_exists('SecureLogger')) {
+        if (class_exists('Application') && class_exists('Eiou\\Utils\\Logger')) {
             $app = Application::getInstance();
             if ($app->getLogger()) {
-                SecureLogger::logException($exception);
+                Logger::getInstance()->logException($exception);
             }
         }
     }

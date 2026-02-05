@@ -4,7 +4,7 @@
 namespace Eiou\Processors;
 
 use Eiou\Utils\AdaptivePoller;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
 use PDO;
 
@@ -133,8 +133,8 @@ abstract class AbstractMessageProcessor {
         echo "WARNING: Graceful shutdown timed out after {$elapsed}s, forcing exit...\n";
 
         // Log timeout event
-        if (class_exists('SecureLogger')) {
-            SecureLogger::warning("Processor shutdown timeout - forcing exit", [
+        if (class_exists(Logger::class)) {
+            Logger::getInstance()->warning("Processor shutdown timeout - forcing exit", [
                 'processor' => $this->getProcessorName(),
                 'pid' => getmypid(),
                 'timeout' => $this->shutdownTimeout,
@@ -168,14 +168,14 @@ abstract class AbstractMessageProcessor {
 
             // Handle empty or unreadable lockfile
             if ($pidContent === false || trim($pidContent) === '') {
-                SecureLogger::info("Removing empty/unreadable lockfile", ['lockfile' => $this->lockfile]);
+                Logger::getInstance()->info("Removing empty/unreadable lockfile", ['lockfile' => $this->lockfile]);
                 @unlink($this->lockfile);
             } else {
                 $pid = trim($pidContent);
 
                 // Validate PID is a positive integer
                 if (!ctype_digit($pid) || (int)$pid <= 0) {
-                    SecureLogger::info("Removing lockfile with invalid PID", [
+                    Logger::getInstance()->info("Removing lockfile with invalid PID", [
                         'lockfile' => $this->lockfile,
                         'invalid_pid' => $pid
                     ]);
@@ -190,19 +190,19 @@ abstract class AbstractMessageProcessor {
                         $cmdline = @file_get_contents("/proc/$pid/cmdline");
                         if ($cmdline !== false && stripos($cmdline, 'php') !== false) {
                             $message = "Another instance is already running (PID: $pid)";
-                            SecureLogger::warning($message, ['lockfile' => $this->lockfile, 'pid' => $pid]);
+                            Logger::getInstance()->warning($message, ['lockfile' => $this->lockfile, 'pid' => $pid]);
                             echo $message . "\n";
                             exit(1); // Exit with error code - another instance is running
                         }
                         // PID exists but is not a PHP process - treat as stale
-                        SecureLogger::info("Removing stale lockfile (PID reused by non-PHP process)", [
+                        Logger::getInstance()->info("Removing stale lockfile (PID reused by non-PHP process)", [
                             'lockfile' => $this->lockfile,
                             'old_pid' => $pid
                         ]);
                         @unlink($this->lockfile);
                     } else {
                         // Process doesn't exist - stale lockfile
-                        SecureLogger::info("Removing stale lockfile", ['lockfile' => $this->lockfile, 'old_pid' => $pid]);
+                        Logger::getInstance()->info("Removing stale lockfile", ['lockfile' => $this->lockfile, 'old_pid' => $pid]);
                         @unlink($this->lockfile);
                     }
                 }
@@ -271,9 +271,9 @@ abstract class AbstractMessageProcessor {
         echo "\n[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
         echo "Received {$signalName}, initiating graceful shutdown (timeout: {$this->shutdownTimeout}s)...\n";
 
-        // Log to SecureLogger if available
-        if (class_exists('SecureLogger')) {
-            SecureLogger::info("Processor shutdown initiated", [
+        // Log to Logger if available
+        if (class_exists(Logger::class)) {
+            Logger::getInstance()->info("Processor shutdown initiated", [
                 'processor' => $this->getProcessorName(),
                 'signal' => $signalName,
                 'pid' => getmypid(),
@@ -294,8 +294,8 @@ abstract class AbstractMessageProcessor {
         echo "Received SIGHUP, reloading configuration...\n";
 
         // Log reload event
-        if (class_exists('SecureLogger')) {
-            SecureLogger::info("Processor configuration reload requested", [
+        if (class_exists(Logger::class)) {
+            Logger::getInstance()->info("Processor configuration reload requested", [
                 'processor' => $this->getProcessorName(),
                 'pid' => getmypid()
             ]);
@@ -315,8 +315,8 @@ abstract class AbstractMessageProcessor {
         echo "Received SIGQUIT, forcing immediate shutdown for debug...\n";
 
         // Log quit event
-        if (class_exists('SecureLogger')) {
-            SecureLogger::warning("Processor SIGQUIT received - debug shutdown", [
+        if (class_exists(Logger::class)) {
+            Logger::getInstance()->warning("Processor SIGQUIT received - debug shutdown", [
                 'processor' => $this->getProcessorName(),
                 'pid' => getmypid(),
                 'total_processed' => $this->totalProcessed
@@ -366,8 +366,8 @@ abstract class AbstractMessageProcessor {
         echo "Starting shutdown cleanup for {$this->getProcessorName()} processor...\n";
 
         // 1. Log shutdown event
-        if (class_exists('SecureLogger')) {
-            SecureLogger::info("Processor shutdown cleanup started", [
+        if (class_exists(Logger::class)) {
+            Logger::getInstance()->info("Processor shutdown cleanup started", [
                 'processor' => $this->getProcessorName(),
                 'pid' => getmypid(),
                 'total_processed_session' => $this->totalProcessed
@@ -396,8 +396,8 @@ abstract class AbstractMessageProcessor {
         echo "[" . date(Constants::DISPLAY_DATE_FORMAT) . "] ";
         echo "{$this->getProcessorName()} processor stopped (cleanup took {$duration}ms)\n";
 
-        if (class_exists('SecureLogger')) {
-            SecureLogger::info("Processor shutdown complete", [
+        if (class_exists(Logger::class)) {
+            Logger::getInstance()->info("Processor shutdown complete", [
                 'processor' => $this->getProcessorName(),
                 'pid' => getmypid(),
                 'cleanup_duration_ms' => $duration

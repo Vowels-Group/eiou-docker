@@ -3,7 +3,7 @@
 
 namespace Eiou\Services;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
 use Eiou\Contracts\HeldTransactionServiceInterface;
@@ -123,7 +123,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
 
             // Check if transaction is already held
             if ($this->heldRepository->isTransactionHeld($txid)) {
-                SecureLogger::info("Transaction already held", [
+                Logger::getInstance()->info("Transaction already held", [
                     'txid' => $txid,
                     'contact_hash' => $contactPubkeyHash
                 ]);
@@ -165,7 +165,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
 
             // Check if sync is already in progress for this contact
             if ($this->heldRepository->isSyncInProgress($contactPubkeyHash)) {
-                SecureLogger::info("Sync already in progress for contact", [
+                Logger::getInstance()->info("Sync already in progress for contact", [
                     'contact_hash' => $contactPubkeyHash,
                     'txid' => $txid
                 ]);
@@ -181,14 +181,14 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             // SyncEvents::SYNC_COMPLETED which this service listens to via the constructor's
             // EventDispatcher subscription. The onSyncCompleted() handler will then process
             // the held transactions.
-            SecureLogger::info("Transaction held, awaiting sync completion via events", [
+            Logger::getInstance()->info("Transaction held, awaiting sync completion via events", [
                 'txid' => $txid,
                 'contact_hash' => $contactPubkeyHash
             ]);
 
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'holdTransactionForSync',
                 'txid' => $transaction['txid'] ?? 'unknown'
             ]);
@@ -241,7 +241,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             );
 
             if (!$chainIntegrity['valid']) {
-                SecureLogger::warning("Chain integrity check failed after sync, cannot resume held transactions", [
+                Logger::getInstance()->warning("Chain integrity check failed after sync, cannot resume held transactions", [
                     'contact_pubkey_hash' => $contactPubkeyHash,
                     'gaps' => $chainIntegrity['gaps'] ?? [],
                     'broken_txids' => $chainIntegrity['broken_txids'] ?? []
@@ -271,7 +271,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
 
                     if (!$resigned) {
                         $result['failed_count']++;
-                        SecureLogger::warning("Failed to re-sign held transaction after previous_txid update", [
+                        Logger::getInstance()->warning("Failed to re-sign held transaction after previous_txid update", [
                             'txid' => $txid,
                             'expected_previous_txid' => $expectedPreviousTxid
                         ]);
@@ -290,7 +290,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                         // Mark held transaction as resolved (release it)
                         $this->heldRepository->releaseTransaction($txid);
 
-                        SecureLogger::info("Held transaction resumed with corrected previous_txid and re-signed", [
+                        Logger::getInstance()->info("Held transaction resumed with corrected previous_txid and re-signed", [
                             'txid' => $txid,
                             'original_previous_txid' => $held['original_previous_txid'] ?? null,
                             'expected_previous_txid' => $expectedPreviousTxid,
@@ -298,7 +298,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                         ]);
                     } else {
                         $result['failed_count']++;
-                        SecureLogger::warning("Failed to resume held transaction", [
+                        Logger::getInstance()->warning("Failed to resume held transaction", [
                             'txid' => $txid,
                             'error' => $resumeResult['error']
                         ]);
@@ -307,7 +307,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                     }
                 } else {
                     $result['failed_count']++;
-                    SecureLogger::warning("Failed to update previous_txid for held transaction", [
+                    Logger::getInstance()->warning("Failed to update previous_txid for held transaction", [
                         'txid' => $txid,
                         'expected_previous_txid' => $expectedPreviousTxid
                     ]);
@@ -317,7 +317,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             }
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'processHeldTransactionsAfterSync',
                 'contact_pubkey_hash' => hash(Constants::HASH_ALGORITHM, $contactPubkey)
             ]);
@@ -363,7 +363,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                 $verifyTx = $this->transactionRepository->getByTxid($txid);
                 $verifiedPreviousTxid = $verifyTx['previous_txid'] ?? 'NOT_FOUND';
 
-                SecureLogger::info("Updated previous_txid for held transaction", [
+                Logger::getInstance()->info("Updated previous_txid for held transaction", [
                     'txid' => $txid,
                     'expected_from_rejection' => $expectedPreviousTxid,
                     'set_to' => $correctPreviousTxid,
@@ -376,7 +376,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             return false;
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'updatePreviousTxid',
                 'txid' => $txid
             ]);
@@ -417,7 +417,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                 $result['success'] = true;
                 $result['new_previous_txid'] = $transaction['previous_txid'] ?? null;
 
-                SecureLogger::info("Transaction resumed for reprocessing", [
+                Logger::getInstance()->info("Transaction resumed for reprocessing", [
                     'txid' => $txid,
                     'previous_txid' => $result['new_previous_txid']
                 ]);
@@ -427,7 +427,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
 
         } catch (Exception $e) {
             $result['error'] = $e->getMessage();
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'resumeTransaction',
                 'txid' => $txid
             ]);
@@ -452,7 +452,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             $transactionData = $this->transactionRepository->getByTxid($txid);
 
             if (!$transactionData) {
-                SecureLogger::warning("Cannot resign: transaction not found", [
+                Logger::getInstance()->warning("Cannot resign: transaction not found", [
                     'txid' => $txid
                 ]);
                 return false;
@@ -475,7 +475,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             $signResult = $transportUtility->signWithCapture($payload);
 
             if (!$signResult || !isset($signResult['signature']) || !isset($signResult['nonce'])) {
-                SecureLogger::warning("Failed to re-sign transaction: signWithCapture returned invalid result", [
+                Logger::getInstance()->warning("Failed to re-sign transaction: signWithCapture returned invalid result", [
                     'txid' => $txid,
                     'has_result' => !empty($signResult)
                 ]);
@@ -490,13 +490,13 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             );
 
             if (!$signatureUpdated) {
-                SecureLogger::warning("Failed to update signature data in database", [
+                Logger::getInstance()->warning("Failed to update signature data in database", [
                     'txid' => $txid
                 ]);
                 return false;
             }
 
-            SecureLogger::info("Successfully re-signed transaction with updated previous_txid", [
+            Logger::getInstance()->info("Successfully re-signed transaction with updated previous_txid", [
                 'txid' => $txid,
                 'new_previous_txid' => $transaction['previous_txid'] ?? null,
                 'new_nonce' => $signResult['nonce']
@@ -505,7 +505,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             return true;
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'resignTransaction',
                 'txid' => $txid
             ]);
@@ -535,7 +535,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             $syncedCount = $data['synced_count'] ?? 0;
 
             if ($contactPubkey === null) {
-                SecureLogger::warning("Received sync completion event without contact_pubkey", [
+                Logger::getInstance()->warning("Received sync completion event without contact_pubkey", [
                     'data_keys' => array_keys($data)
                 ]);
                 return;
@@ -545,7 +545,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             $this->onSyncComplete($contactPubkey, $success, $syncedCount);
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'onSyncCompleted',
                 'event_data_keys' => array_keys($data)
             ]);
@@ -571,7 +571,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                 // Update sync status to completed
                 $completed = $this->heldRepository->markSyncCompleted($contactPubkeyHash);
 
-                SecureLogger::info("Sync completed, processing held transactions", [
+                Logger::getInstance()->info("Sync completed, processing held transactions", [
                     'contact_hash' => $contactPubkeyHash,
                     'synced_count' => $syncedCount
                 ]);
@@ -579,7 +579,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                 // Process held transactions now that sync is complete
                 $processResult = $this->processHeldTransactionsAfterSync($contactPubkey);
 
-                SecureLogger::info("Held transaction processing complete", [
+                Logger::getInstance()->info("Held transaction processing complete", [
                     'contact_hash' => $contactPubkeyHash,
                     'resumed_count' => $processResult['resumed_count'],
                     'failed_count' => $processResult['failed_count']
@@ -588,13 +588,13 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                 // Update sync status to failed
                 $this->heldRepository->markSyncFailed($contactPubkeyHash);
 
-                SecureLogger::warning("Sync failed for contact", [
+                Logger::getInstance()->warning("Sync failed for contact", [
                     'contact_hash' => $contactPubkeyHash
                 ]);
             }
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'onSyncComplete',
                 'contact_pubkey_hash' => hash(Constants::HASH_ALGORITHM, $contactPubkey)
             ]);
@@ -639,7 +639,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                 $transaction = $this->transactionRepository->getByTxid($txid);
                 if (!$transaction) {
                     $result['failed_count']++;
-                    SecureLogger::warning("Transaction not found for held transaction", [
+                    Logger::getInstance()->warning("Transaction not found for held transaction", [
                         'txid' => $txid
                     ]);
                     continue;
@@ -657,7 +657,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
 
                     if (!$resigned) {
                         $result['failed_count']++;
-                        SecureLogger::warning("Failed to re-sign held transaction after previous_txid update", [
+                        Logger::getInstance()->warning("Failed to re-sign held transaction after previous_txid update", [
                             'txid' => $txid,
                             'expected_previous_txid' => $expectedPreviousTxid
                         ]);
@@ -671,7 +671,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                         $result['resumed_count']++;
                         $this->heldRepository->releaseTransaction($txid);
 
-                        SecureLogger::info("Held transaction resumed with corrected previous_txid and re-signed", [
+                        Logger::getInstance()->info("Held transaction resumed with corrected previous_txid and re-signed", [
                             'txid' => $txid,
                             'original_previous_txid' => $held['original_previous_txid'] ?? null,
                             'expected_previous_txid' => $expectedPreviousTxid,
@@ -679,14 +679,14 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
                         ]);
                     } else {
                         $result['failed_count']++;
-                        SecureLogger::warning("Failed to resume held transaction", [
+                        Logger::getInstance()->warning("Failed to resume held transaction", [
                             'txid' => $txid,
                             'error' => $resumeResult['error'] ?? 'unknown'
                         ]);
                     }
                 } else {
                     $result['failed_count']++;
-                    SecureLogger::warning("Failed to update previous_txid for held transaction", [
+                    Logger::getInstance()->warning("Failed to update previous_txid for held transaction", [
                         'txid' => $txid,
                         'expected_previous_txid' => $expectedPreviousTxid
                     ]);
@@ -694,11 +694,11 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             }
 
             if ($result['resumed_count'] > 0) {
-                SecureLogger::info("Processed held transactions batch", $result);
+                Logger::getInstance()->info("Processed held transactions batch", $result);
             }
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'processHeldTransactions'
             ]);
         }
@@ -771,7 +771,7 @@ class HeldTransactionService implements HeldTransactionServiceInterface {
             return $stats;
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'method' => 'getStatistics'
             ]);
             return [

@@ -95,11 +95,14 @@ interface LoggerInterface
      * Log an exception with stack trace
      *
      * Logs the exception class, message, file, line, and masked stack trace.
+     * The second parameter accepts either:
+     * - An array of additional context data, OR
+     * - A string log level (for backward compatibility with SecureLogger)
      *
-     * @param \Throwable $e       The exception to log
-     * @param array      $context Additional context data
-     * @param string     $level   Log level (default: ERROR)
+     * @param \Throwable   $e              The exception to log
+     * @param array|string $contextOrLevel Context array or log level string (default: ERROR)
+     * @param string       $level          Log level when second param is context (default: ERROR)
      * @return void
      */
-    public function logException(\Throwable $e, array $context = [], string $level = 'ERROR'): void;
+    public function logException(\Throwable $e, array|string $contextOrLevel = 'ERROR', string $level = 'ERROR'): void;
 }

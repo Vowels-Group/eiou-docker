@@ -3,7 +3,7 @@
 
 namespace Eiou\Services;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Contracts\LockingServiceInterface;
 use PDO;
 use PDOException;
@@ -81,7 +81,7 @@ class DatabaseLockingService implements LockingServiceInterface
 
         // Check if we already hold this lock
         if ($this->holdsLock($lockName)) {
-            SecureLogger::debug("Lock already held", ['lock_name' => $sanitizedName]);
+            Logger::getInstance()->debug("Lock already held", ['lock_name' => $sanitizedName]);
             return true;
         }
 
@@ -97,7 +97,7 @@ class DatabaseLockingService implements LockingServiceInterface
 
             if ($acquired === 1 || $acquired === '1') {
                 $this->heldLocks[$sanitizedName] = true;
-                SecureLogger::info("Lock acquired", [
+                Logger::getInstance()->info("Lock acquired", [
                     'lock_name' => $sanitizedName,
                     'timeout' => $timeout
                 ]);
@@ -105,12 +105,12 @@ class DatabaseLockingService implements LockingServiceInterface
             }
 
             if ($acquired === null) {
-                SecureLogger::error("Lock acquisition error", [
+                Logger::getInstance()->error("Lock acquisition error", [
                     'lock_name' => $sanitizedName,
                     'error' => 'GET_LOCK returned NULL (internal error)'
                 ]);
             } else {
-                SecureLogger::warning("Lock acquisition timeout", [
+                Logger::getInstance()->warning("Lock acquisition timeout", [
                     'lock_name' => $sanitizedName,
                     'timeout' => $timeout
                 ]);
@@ -119,7 +119,7 @@ class DatabaseLockingService implements LockingServiceInterface
             return false;
 
         } catch (PDOException $e) {
-            SecureLogger::error("Lock acquisition failed", [
+            Logger::getInstance()->error("Lock acquisition failed", [
                 'lock_name' => $sanitizedName,
                 'error' => $e->getMessage()
             ]);
@@ -144,7 +144,7 @@ class DatabaseLockingService implements LockingServiceInterface
 
         // Check if we think we hold this lock
         if (!isset($this->heldLocks[$sanitizedName])) {
-            SecureLogger::debug("Lock not in held list", ['lock_name' => $sanitizedName]);
+            Logger::getInstance()->debug("Lock not in held list", ['lock_name' => $sanitizedName]);
             return false;
         }
 
@@ -159,16 +159,16 @@ class DatabaseLockingService implements LockingServiceInterface
             unset($this->heldLocks[$sanitizedName]);
 
             if ($released === 1 || $released === '1') {
-                SecureLogger::info("Lock released", ['lock_name' => $sanitizedName]);
+                Logger::getInstance()->info("Lock released", ['lock_name' => $sanitizedName]);
                 return true;
             }
 
             if ($released === null) {
-                SecureLogger::warning("Lock release: lock did not exist", [
+                Logger::getInstance()->warning("Lock release: lock did not exist", [
                     'lock_name' => $sanitizedName
                 ]);
             } else {
-                SecureLogger::warning("Lock release: not held by this connection", [
+                Logger::getInstance()->warning("Lock release: not held by this connection", [
                     'lock_name' => $sanitizedName
                 ]);
             }
@@ -178,7 +178,7 @@ class DatabaseLockingService implements LockingServiceInterface
         } catch (PDOException $e) {
             // Still remove from tracking on error
             unset($this->heldLocks[$sanitizedName]);
-            SecureLogger::error("Lock release failed", [
+            Logger::getInstance()->error("Lock release failed", [
                 'lock_name' => $sanitizedName,
                 'error' => $e->getMessage()
             ]);
@@ -209,7 +209,7 @@ class DatabaseLockingService implements LockingServiceInterface
             $isFree = $result['is_free'] ?? null;
 
             if ($isFree === null) {
-                SecureLogger::warning("Lock status check error", [
+                Logger::getInstance()->warning("Lock status check error", [
                     'lock_name' => $sanitizedName,
                     'error' => 'IS_FREE_LOCK returned NULL'
                 ]);
@@ -222,7 +222,7 @@ class DatabaseLockingService implements LockingServiceInterface
             return ($isFree === 0 || $isFree === '0');
 
         } catch (PDOException $e) {
-            SecureLogger::error("Lock status check failed", [
+            Logger::getInstance()->error("Lock status check failed", [
                 'lock_name' => $sanitizedName,
                 'error' => $e->getMessage()
             ]);
@@ -263,7 +263,7 @@ class DatabaseLockingService implements LockingServiceInterface
                     $released++;
                 }
             } catch (PDOException $e) {
-                SecureLogger::error("Failed to release lock during cleanup", [
+                Logger::getInstance()->error("Failed to release lock during cleanup", [
                     'lock_name' => $lockName,
                     'error' => $e->getMessage()
                 ]);
@@ -271,7 +271,7 @@ class DatabaseLockingService implements LockingServiceInterface
         }
 
         if ($released > 0) {
-            SecureLogger::info("Released all locks", ['count' => $released]);
+            Logger::getInstance()->info("Released all locks", ['count' => $released]);
         }
 
         $this->heldLocks = [];

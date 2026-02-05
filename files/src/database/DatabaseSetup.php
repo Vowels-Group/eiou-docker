@@ -3,7 +3,7 @@
 
 namespace Eiou\Database;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
 use RuntimeException;
@@ -54,7 +54,7 @@ function freshInstall(){
             } catch (PDOException $userExists) {
                 // User might already exist - try to use existing credentials
                 // This happens if database exists but dbconfig.json was deleted
-                SecureLogger::warning("Database user creation failed (user might already exist)", [
+                Logger::getInstance()->warning("Database user creation failed (user might already exist)", [
                     'error' => $userExists->getMessage()
                 ]);
                 throw new RuntimeException(
@@ -85,7 +85,7 @@ function freshInstall(){
                 $dbConn->exec(getRateLimitsTableSchema());
                 $dbConn->exec(getHeldTransactionsTableSchema());
             } catch (PDOException $tableError) {
-                SecureLogger::error("Table creation failed", [
+                Logger::getInstance()->error("Table creation failed", [
                     'error' => $tableError->getMessage()
                 ]);
                 throw new RuntimeException(
@@ -106,7 +106,7 @@ function freshInstall(){
 
         } catch (PDOException $e) {
             // Handle database error
-            SecureLogger::logException($e, 'ERROR');
+            Logger::getInstance()->logException($e, 'ERROR');
 
             // Throw exception to let ErrorHandler handle it
             throw new \RuntimeException(
@@ -150,8 +150,8 @@ function runMigrations(PDO $pdo): array {
             }
         } catch (PDOException $e) {
             $results[$tableName] = 'error: ' . $e->getMessage();
-            if (class_exists('SecureLogger')) {
-                SecureLogger::error("Migration failed for table $tableName", [
+            if (class_exists('Eiou\\Utils\\Logger')) {
+                Logger::getInstance()->error("Migration failed for table $tableName", [
                     'error' => $e->getMessage()
                 ]);
             }
@@ -197,8 +197,8 @@ function runColumnMigrations(PDO $pdo): array {
                 }
             } catch (PDOException $e) {
                 $results["{$tableName}.{$columnName}"] = 'error: ' . $e->getMessage();
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::error("Column migration failed for {$tableName}.{$columnName}", [
+                if (class_exists('Eiou\\Utils\\Logger')) {
+                    Logger::getInstance()->error("Column migration failed for {$tableName}.{$columnName}", [
                         'error' => $e->getMessage()
                     ]);
                 }
@@ -221,8 +221,8 @@ function runColumnMigrations(PDO $pdo): array {
                 }
             } catch (PDOException $e) {
                 $results["{$tableName}.{$columnName}"] = 'error: ' . $e->getMessage();
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::error("Column drop failed for {$tableName}.{$columnName}", [
+                if (class_exists('Eiou\\Utils\\Logger')) {
+                    Logger::getInstance()->error("Column drop failed for {$tableName}.{$columnName}", [
                         'error' => $e->getMessage()
                     ]);
                 }
@@ -252,8 +252,8 @@ function runColumnMigrations(PDO $pdo): array {
                 }
             } catch (PDOException $e) {
                 $results["{$tableName}.{$columnName}_enum"] = 'error: ' . $e->getMessage();
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::error("ENUM update failed for {$tableName}.{$columnName}", [
+                if (class_exists('Eiou\\Utils\\Logger')) {
+                    Logger::getInstance()->error("ENUM update failed for {$tableName}.{$columnName}", [
                         'error' => $e->getMessage()
                     ]);
                 }
@@ -280,8 +280,8 @@ function runColumnMigrations(PDO $pdo): array {
                 }
             } catch (PDOException $e) {
                 $results["{$tableName}.{$indexName}"] = 'index_error: ' . $e->getMessage();
-                if (class_exists('SecureLogger')) {
-                    SecureLogger::error("Index creation failed for {$tableName}.{$indexName}", [
+                if (class_exists('Eiou\\Utils\\Logger')) {
+                    Logger::getInstance()->error("Index creation failed for {$tableName}.{$indexName}", [
                         'error' => $e->getMessage()
                     ]);
                 }

@@ -4,7 +4,7 @@
 namespace Eiou\Services;
 
 use Eiou\Utils\InputValidator;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\Constants;
@@ -38,7 +38,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
     private TimeUtilityService $timeUtility;
     private InputValidator $inputValidator;
     private UserContext $currentUser;
-    private SecureLogger $secureLogger;
+    private Logger $secureLogger;
     private ?MessageDeliveryService $messageDeliveryService = null;
     private ?LockingServiceInterface $lockingService = null;
     private ?ContactServiceInterface $contactService = null;
@@ -55,7 +55,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
         TransactionRepository $transactionRepository, AddressRepository $addressRepository,
         P2pRepository $p2pRepository, TransactionPayload $transactionPayload,
         TransportUtilityService $transportUtility, TimeUtilityService $timeUtility,
-        InputValidator $inputValidator, UserContext $currentUser, SecureLogger $secureLogger,
+        InputValidator $inputValidator, UserContext $currentUser, Logger $secureLogger,
         ?MessageDeliveryService $messageDeliveryService = null, ?LockingServiceInterface $lockingService = null
     ) {
         $this->transactionRepository = $transactionRepository;

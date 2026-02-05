@@ -4,7 +4,7 @@
 namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
 
@@ -269,7 +269,7 @@ class HeldTransactionRepository extends AbstractRepository {
         ]);
 
         // Log the failure reason
-        SecureLogger::warning("Held transaction marked as failed and released", [
+        Logger::getInstance()->warning("Held transaction marked as failed and released", [
             'txid' => $txid,
             'reason' => $reason
         ]);
