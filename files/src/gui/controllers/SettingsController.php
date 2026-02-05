@@ -248,7 +248,9 @@ class SettingsController
                 'max_execution_time' => ini_get('max_execution_time'),
                 'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'N/A',
                 'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'N/A',
-                'timestamp' => date('Y-m-d H:i:s')
+                'timestamp' => date('Y-m-d H:i:s'),
+                'docker_image' => (getenv('EIOU_IMAGE_NAME') ?: 'N/A')
+                    . (getenv('EIOU_IMAGE_TAG') ? ':' . getenv('EIOU_IMAGE_TAG') : '')
             ];
 
             // Get MySQL/MariaDB version
@@ -489,7 +491,9 @@ class SettingsController
                 'max_execution_time' => ini_get('max_execution_time'),
                 'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'N/A',
                 'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'N/A',
-                'timestamp' => date('Y-m-d H:i:s')
+                'timestamp' => date('Y-m-d H:i:s'),
+                'docker_image' => (getenv('EIOU_IMAGE_NAME') ?: 'N/A')
+                    . (getenv('EIOU_IMAGE_TAG') ? ':' . getenv('EIOU_IMAGE_TAG') : '')
             ];
 
             // Get MySQL/MariaDB version
