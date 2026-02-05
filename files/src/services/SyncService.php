@@ -1443,6 +1443,11 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             $balancesByCurrency = [];
 
             foreach ($transactions as $transaction) {
+                // Only count completed transactions towards balance
+                if ($transaction['status'] !== Constants::STATUS_COMPLETED) {
+                    continue;
+                }
+
                 $currency = $transaction['currency'];
 
                 // Initialize currency if not exists
@@ -1624,6 +1629,11 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 $balancesByCurrency = [];
 
                 foreach ($transactions as $transaction) {
+                    // Only count completed transactions towards balance
+                    if ($transaction['status'] !== Constants::STATUS_COMPLETED) {
+                        continue;
+                    }
+
                     $currency = $transaction['currency'];
 
                     // Initialize currency if not exists

@@ -64,7 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['authcode'])) {
 
 // Check if user is authenticated
 if (!$secureSession->isAuthenticated()) {
-    // Show authentication form
+    // AJAX requests expect JSON, not the HTML login form
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Session expired. Please refresh the page and log in again.']);
+        exit;
+    }
+    // Show authentication form for normal page loads
     header('Content-Type: text/html; charset=UTF-8');
     require_once("/etc/eiou/src/gui/layout/authenticationForm.html");
     exit;
@@ -72,7 +78,13 @@ if (!$secureSession->isAuthenticated()) {
 
 // User is authenticated, check session timeout
 if (!$secureSession->checkSessionTimeout()) {
-    // Session timed out, redirect to login
+    // AJAX requests expect JSON, not a redirect
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Session timed out. Please refresh the page and log in again.']);
+        exit;
+    }
+    // Redirect normal page loads to login
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }

@@ -459,13 +459,15 @@ class SyncServiceTest extends TestCase
                 'sender_address' => 'http://user.example.com',
                 'receiver_address' => 'http://contact.example.com',
                 'amount' => 1000,
-                'currency' => 'USD'
+                'currency' => 'USD',
+                'status' => Constants::STATUS_COMPLETED
             ],
             [
                 'sender_address' => 'http://contact.example.com',
                 'receiver_address' => 'http://user.example.com',
                 'amount' => 500,
-                'currency' => 'USD'
+                'currency' => 'USD',
+                'status' => Constants::STATUS_COMPLETED
             ]
         ];
 
@@ -510,7 +512,8 @@ class SyncServiceTest extends TestCase
                 'sender_address' => 'http://user.example.com',
                 'receiver_address' => 'http://contact.example.com',
                 'amount' => 1000,
-                'currency' => 'USD'
+                'currency' => 'USD',
+                'status' => Constants::STATUS_COMPLETED
             ]
         ];
 
@@ -727,6 +730,364 @@ class SyncServiceTest extends TestCase
                 'Balances synced',
                 $this->callback(function ($data) {
                     return $data['total_contacts'] === 0;
+                }),
+                $this->anything()
+            );
+
+        $this->service->syncAllBalances($output);
+    }
+
+    // =========================================================================
+    // Balance Status Filtering Tests
+    // =========================================================================
+
+    /**
+     * Test syncContactBalance only counts completed transactions in balance
+     *
+     * Verifies that rejected and expired transactions are excluded from
+     * balance calculations, ensuring only completed transactions contribute
+     * to sent/received totals.
+     */
+    public function testSyncContactBalanceOnlyCountsCompletedTransactions(): void
+    {
+        $contactPubkey = 'contact-public-key';
+        $userPubkey = 'user-public-key';
+        $userAddresses = ['http://user.example.com'];
+
+        // Mix of completed, rejected, and expired transactions
+        $transactions = [
+            [
+                'sender_address' => 'http://user.example.com',
+                'receiver_address' => 'http://contact.example.com',
+                'amount' => 1000,
+                'currency' => 'USD',
+                'status' => Constants::STATUS_COMPLETED
+            ],
+            [
+                'sender_address' => 'http://user.example.com',
+                'receiver_address' => 'http://contact.example.com',
+                'amount' => 2000,
+                'currency' => 'USD',
+                'status' => Constants::STATUS_REJECTED
+            ],
+            [
+                'sender_address' => 'http://contact.example.com',
+                'receiver_address' => 'http://user.example.com',
+                'amount' => 500,
+                'currency' => 'USD',
+                'status' => Constants::STATUS_COMPLETED
+            ],
+            [
+                'sender_address' => 'http://contact.example.com',
+                'receiver_address' => 'http://user.example.com',
+                'amount' => 3000,
+                'currency' => 'USD',
+                'status' => Constants::STATUS_EXPIRED
+            ]
+        ];
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getUserAddresses')
+            ->willReturn($userAddresses);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn($userPubkey);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getTransactionsBetweenPubkeys')
+            ->with($userPubkey, $contactPubkey)
+            ->willReturn($transactions);
+
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('getContactBalance')
+            ->willReturn([]);
+
+        // Only completed transactions should be counted:
+        // sent = 1000 (rejected 2000 excluded), received = 500 (expired 3000 excluded)
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('insertBalance')
+            ->with($contactPubkey, 500, 1000, 'USD');
+
+        $result = $this->service->syncContactBalance($contactPubkey);
+
+        $this->assertTrue($result['success']);
+        $this->assertContains('USD', $result['currencies']);
+    }
+
+    /**
+     * Test syncContactBalance with all rejected transactions results in no balance
+     *
+     * When every transaction is rejected/expired, no balance record should
+     * be inserted at all.
+     */
+    public function testSyncContactBalanceWithAllRejectedTransactionsCreatesNoBalance(): void
+    {
+        $contactPubkey = 'contact-public-key';
+        $userPubkey = 'user-public-key';
+        $userAddresses = ['http://user.example.com'];
+
+        $transactions = [
+            [
+                'sender_address' => 'http://user.example.com',
+                'receiver_address' => 'http://contact.example.com',
+                'amount' => 1000,
+                'currency' => 'USD',
+                'status' => Constants::STATUS_REJECTED
+            ],
+            [
+                'sender_address' => 'http://contact.example.com',
+                'receiver_address' => 'http://user.example.com',
+                'amount' => 2000,
+                'currency' => 'USD',
+                'status' => Constants::STATUS_EXPIRED
+            ]
+        ];
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getUserAddresses')
+            ->willReturn($userAddresses);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn($userPubkey);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getTransactionsBetweenPubkeys')
+            ->with($userPubkey, $contactPubkey)
+            ->willReturn($transactions);
+
+        // No balance should be inserted or updated since all transactions are non-completed
+        $this->mockBalanceRepo->expects($this->never())
+            ->method('insertBalance');
+        $this->mockBalanceRepo->expects($this->never())
+            ->method('updateBothDirectionBalance');
+
+        $result = $this->service->syncContactBalance($contactPubkey);
+
+        $this->assertTrue($result['success']);
+        $this->assertEmpty($result['currencies']);
+    }
+
+    /**
+     * Test syncContactBalance with existing balance updates only with completed transactions
+     *
+     * Verifies that when updating an existing balance record, only completed
+     * transaction amounts are passed to updateBothDirectionBalance.
+     */
+    public function testSyncContactBalanceUpdatesExistingBalanceWithOnlyCompletedTransactions(): void
+    {
+        $contactPubkey = 'contact-public-key';
+        $userPubkey = 'user-public-key';
+        $userAddresses = ['http://user.example.com'];
+
+        $transactions = [
+            [
+                'sender_address' => 'http://user.example.com',
+                'receiver_address' => 'http://contact.example.com',
+                'amount' => 1000,
+                'currency' => 'USD',
+                'status' => Constants::STATUS_COMPLETED
+            ],
+            [
+                'sender_address' => 'http://user.example.com',
+                'receiver_address' => 'http://contact.example.com',
+                'amount' => 5000,
+                'currency' => 'USD',
+                'status' => Constants::STATUS_REJECTED
+            ],
+            [
+                'sender_address' => 'http://contact.example.com',
+                'receiver_address' => 'http://user.example.com',
+                'amount' => 750,
+                'currency' => 'USD',
+                'status' => Constants::STATUS_COMPLETED
+            ]
+        ];
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getUserAddresses')
+            ->willReturn($userAddresses);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn($userPubkey);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getTransactionsBetweenPubkeys')
+            ->willReturn($transactions);
+
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('getContactBalance')
+            ->willReturn([['balance' => 500]]); // Existing balance
+
+        // Only completed: sent=1000 (not 6000), received=750
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('updateBothDirectionBalance')
+            ->with(
+                $this->callback(function ($amounts) {
+                    return $amounts['sent'] === 1000 && $amounts['received'] === 750;
+                }),
+                $this->anything(),
+                'USD'
+            );
+
+        $result = $this->service->syncContactBalance($contactPubkey);
+
+        $this->assertTrue($result['success']);
+    }
+
+    /**
+     * Test syncAllBalances filters non-completed transactions via syncAllBalancesInternal
+     *
+     * Tests the full path through syncAllBalances -> syncAllBalancesInternal
+     * to verify that rejected/expired transactions are excluded from balance
+     * calculations for all contacts.
+     */
+    public function testSyncAllBalancesFiltersNonCompletedTransactions(): void
+    {
+        $output = $this->createMock(CliOutputManager::class);
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('getAllContactsPubkeys')
+            ->willReturn(['contact-pubkey-1']);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getUserAddresses')
+            ->willReturn(['http://user.example.com']);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn('user-public-key');
+
+        // Return mix of completed and rejected transactions
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getTransactionsBetweenPubkeys')
+            ->with('user-public-key', 'contact-pubkey-1')
+            ->willReturn([
+                [
+                    'sender_address' => 'http://user.example.com',
+                    'receiver_address' => 'http://contact.example.com',
+                    'amount' => 2000,
+                    'currency' => 'USD',
+                    'status' => Constants::STATUS_COMPLETED
+                ],
+                [
+                    'sender_address' => 'http://user.example.com',
+                    'receiver_address' => 'http://contact.example.com',
+                    'amount' => 9000,
+                    'currency' => 'USD',
+                    'status' => Constants::STATUS_REJECTED
+                ],
+                [
+                    'sender_address' => 'http://contact.example.com',
+                    'receiver_address' => 'http://user.example.com',
+                    'amount' => 1500,
+                    'currency' => 'USD',
+                    'status' => Constants::STATUS_COMPLETED
+                ],
+                [
+                    'sender_address' => 'http://contact.example.com',
+                    'receiver_address' => 'http://user.example.com',
+                    'amount' => 4000,
+                    'currency' => 'USD',
+                    'status' => Constants::STATUS_EXPIRED
+                ]
+            ]);
+
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('getContactBalance')
+            ->willReturn([]);
+
+        // Only completed: sent=2000 (rejected 9000 excluded), received=1500 (expired 4000 excluded)
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('insertBalance')
+            ->with('contact-pubkey-1', 1500, 2000, 'USD');
+
+        $output->expects($this->once())
+            ->method('success')
+            ->with(
+                'Balances synced',
+                $this->callback(function ($data) {
+                    return $data['total_contacts'] === 1
+                        && $data['synced'] === 1
+                        && $data['failed'] === 0;
+                }),
+                $this->anything()
+            );
+
+        $this->service->syncAllBalances($output);
+    }
+
+    /**
+     * Test syncAllBalances with multiple contacts filters correctly per contact
+     *
+     * Verifies that status filtering works independently for each contact
+     * when syncing all balances.
+     */
+    public function testSyncAllBalancesFiltersPerContactIndependently(): void
+    {
+        $output = $this->createMock(CliOutputManager::class);
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('getAllContactsPubkeys')
+            ->willReturn(['contact-a', 'contact-b']);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getUserAddresses')
+            ->willReturn(['http://user.example.com']);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn('user-public-key');
+
+        $callCount = 0;
+        $this->mockTransactionRepo->expects($this->exactly(2))
+            ->method('getTransactionsBetweenPubkeys')
+            ->willReturnCallback(function ($userPubkey, $contactPubkey) use (&$callCount) {
+                $callCount++;
+                if ($callCount === 1) {
+                    // contact-a: only rejected transactions
+                    return [
+                        [
+                            'sender_address' => 'http://user.example.com',
+                            'receiver_address' => 'http://contact-a.example.com',
+                            'amount' => 5000,
+                            'currency' => 'USD',
+                            'status' => Constants::STATUS_REJECTED
+                        ]
+                    ];
+                } else {
+                    // contact-b: one completed transaction
+                    return [
+                        [
+                            'sender_address' => 'http://user.example.com',
+                            'receiver_address' => 'http://contact-b.example.com',
+                            'amount' => 3000,
+                            'currency' => 'USD',
+                            'status' => Constants::STATUS_COMPLETED
+                        ]
+                    ];
+                }
+            });
+
+        // Only contact-b should trigger a balance lookup and insert
+        // contact-a has no completed transactions, so no balance operation
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('getContactBalance')
+            ->willReturn([]);
+
+        $this->mockBalanceRepo->expects($this->once())
+            ->method('insertBalance')
+            ->with('contact-b', 0, 3000, 'USD');
+
+        $output->expects($this->once())
+            ->method('success')
+            ->with(
+                'Balances synced',
+                $this->callback(function ($data) {
+                    return $data['total_contacts'] === 2
+                        && $data['synced'] === 2;
                 }),
                 $this->anything()
             );

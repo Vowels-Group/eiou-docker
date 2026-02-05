@@ -4,6 +4,7 @@
 namespace Eiou\Database\Traits;
 
 use PDO;
+use PDOException;
 
 /**
  * Query Builder Trait
@@ -73,10 +74,10 @@ trait QueryBuilder
      */
     protected function executeSelectAll(string $query, array $params = []): array
     {
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-
-        if (!$stmt) {
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
             return [];
         }
 
@@ -92,10 +93,10 @@ trait QueryBuilder
      */
     protected function executeSelectOne(string $query, array $params = []): ?array
     {
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute($params);
-
-        if (!$stmt) {
+        try {
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute($params);
+        } catch (PDOException $e) {
             return null;
         }
 
