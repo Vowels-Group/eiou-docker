@@ -213,14 +213,35 @@ else
             envTestPassed=false
         fi
 
-        # Check display name in Docker logs (best-effort)
-        # User Information prints after Tor init (~60-180s after wallet gen),
-        # so we do a quick check - if Tor hasn't finished, this is not a failure
-        envLogs=$(docker logs nodeIdTest 2>&1)
-        if echo "$envLogs" | grep -q "Display name: Production Node"; then
-            printf "\t   display name in Docker logs ${GREEN}PASSED${NC}\n"
+        # Validate User Information section in Docker logs
+        # This section prints after Tor init (~60-180s after wallet gen).
+        # Wait for it, then verify display name and HTTP/HTTPS addresses.
+        printf "\t   Waiting for User Information in logs...\n"
+        if wait_for_condition "docker logs nodeIdTest 2>&1 | grep -q 'User Information'" 180 5 "User Information in logs"; then
+            envLogs=$(docker logs nodeIdTest 2>&1)
+
+            if echo "$envLogs" | grep -q "Display name: Production Node"; then
+                printf "\t   display name in logs ${GREEN}PASSED${NC}\n"
+            else
+                printf "\t   display name in logs ${RED}FAILED${NC}\n"
+                envTestPassed=false
+            fi
+
+            if echo "$envLogs" | grep -q "HTTP address: http://10.0.0.99:8443"; then
+                printf "\t   HTTP address in logs ${GREEN}PASSED${NC}\n"
+            else
+                printf "\t   HTTP address in logs ${RED}FAILED${NC}\n"
+                envTestPassed=false
+            fi
+
+            if echo "$envLogs" | grep -q "HTTPS address: https://10.0.0.99:8443"; then
+                printf "\t   HTTPS address in logs ${GREEN}PASSED${NC}\n"
+            else
+                printf "\t   HTTPS address in logs ${RED}FAILED${NC}\n"
+                envTestPassed=false
+            fi
         else
-            printf "\t   display name in Docker logs ${YELLOW}SKIPPED${NC} (startup still in Tor init)\n"
+            printf "\t   User Information log checks ${YELLOW}SKIPPED${NC} (Tor init timeout)\n"
         fi
 
         if [ "$envTestPassed" = "true" ]; then
