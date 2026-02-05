@@ -54,6 +54,10 @@ services:
       - "8443:443"
     environment:
       - QUICKSTART=cluster-a
+      # Node Identity (optional - override QUICKSTART for production use):
+      # - EIOU_NAME=Cluster Hub  # Display name (defaults to QUICKSTART)
+      # - EIOU_HOST=10.0.0.1     # External address (defaults to QUICKSTART)
+      # - EIOU_PORT=8443         # Port for HTTP/HTTPS URLs
       # WSL2/Slow Environment Timeouts (optional, applies to all nodes):
       # - EIOU_HS_TIMEOUT=60                # Hidden service wait (default: 60s)
       # - EIOU_TOR_TIMEOUT=120              # Tor connection wait (default: 120s)
