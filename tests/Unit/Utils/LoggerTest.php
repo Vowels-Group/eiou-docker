@@ -156,6 +156,53 @@ class LoggerTest extends TestCase
         $this->assertStringContainsString('Still works', $content);
     }
 
+    public function testDebugServiceNotCalledWhenNotRegistered(): void
+    {
+        // Simulate production: no DebugService registered
+        // Use reflection to set debugService to null
+        $ref = new \ReflectionClass(Logger::class);
+        $prop = $ref->getProperty('debugService');
+        $prop->setAccessible(true);
+        $prop->setValue(null, null);
+
+        // Create a mock that should NEVER be called
+        $mockDebug = $this->createMock(DebugServiceInterface::class);
+        $mockDebug->expects($this->never())->method('output');
+
+        // Log a message — file logging works, but debug panel is skipped
+        $logger = Logger::getInstance();
+        $logger->info('Production message');
+
+        $content = file_get_contents($this->testLogFile);
+        $this->assertStringContainsString('Production message', $content);
+    }
+
+    public function testDebugServiceStopsReceivingAfterDeregistration(): void
+    {
+        // Register a debug service, then deregister it (simulate switching to production)
+        $mockDebug = $this->createMock(DebugServiceInterface::class);
+        $mockDebug->expects($this->once())
+            ->method('output')
+            ->with('Before deregistration', 'INFO');
+
+        Logger::registerDebugService($mockDebug);
+
+        $logger = Logger::getInstance();
+        $logger->info('Before deregistration');
+
+        // Deregister by setting to null via reflection
+        $ref = new \ReflectionClass(Logger::class);
+        $prop = $ref->getProperty('debugService');
+        $prop->setAccessible(true);
+        $prop->setValue(null, null);
+
+        // This message should only go to file, not debug service
+        $logger->info('After deregistration');
+
+        $content = file_get_contents($this->testLogFile);
+        $this->assertStringContainsString('After deregistration', $content);
+    }
+
     public function testSensitiveDataIsMaskedInLogFile(): void
     {
         $logger = Logger::getInstance();
