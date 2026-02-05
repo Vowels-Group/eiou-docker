@@ -125,18 +125,29 @@ eiou-docker/
 
 ### Branching
 
-Create a new branch for each change. Branch names should be descriptive or follow the format:
+Create a new branch for each change. Branch names should follow this format:
 
 ```
-claudeflow-ai-dev-YYMMDD-HHmm
+eiou-docker-<type>-<description>
 ```
+
+| Type | Use For | Example |
+|------|---------|---------|
+| `feature` | New functionality | `eiou-docker-feature-backup-encryption` |
+| `fix` | Bug fixes | `eiou-docker-fix-sync-timeout` |
+| `docs` | Documentation | `eiou-docker-docs-550` |
+| `refactor` | Code restructuring | `eiou-docker-refactor-service-split` |
+| `test` | Test additions | `eiou-docker-test-p2p-routing` |
 
 ```bash
-# Create a feature branch
-git checkout -b fix-transaction-validation
+# Feature branch
+git checkout -b eiou-docker-feature-contact-status
 
-# Or use the date-based format
-git checkout -b claudeflow-ai-dev-$(date +%y%m%d-%H%M)
+# Bug fix referencing an issue number
+git checkout -b eiou-docker-fix-432
+
+# Documentation update
+git checkout -b eiou-docker-docs-api-reference
 ```
 
 ### Committing
