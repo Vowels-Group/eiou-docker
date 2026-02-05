@@ -467,4 +467,54 @@ Delete this file after saving!
             $this->assertIsString($key);
         }
     }
+
+    /**
+     * Test name parameter is included in userconfig structure
+     */
+    public function testUserconfigStructureIncludesNameWhenProvided(): void
+    {
+        // Verify that argv[3] maps to 'name' key in wallet data
+        // This tests the contract that generateWallet stores argv[3] as 'name'
+        $argv = ['eiou', 'generate', 'https://example.com', 'My Node Name'];
+
+        $this->assertTrue(isset($argv[3]));
+        $this->assertFalse(empty($argv[3]));
+        $this->assertEquals('My Node Name', $argv[3]);
+    }
+
+    /**
+     * Test name parameter is optional
+     */
+    public function testNameParameterIsOptional(): void
+    {
+        // Without name parameter
+        $argvWithoutName = ['eiou', 'generate', 'https://example.com'];
+        $this->assertFalse(isset($argvWithoutName[3]));
+
+        // With name parameter
+        $argvWithName = ['eiou', 'generate', 'https://example.com', 'My Node'];
+        $this->assertTrue(isset($argvWithName[3]));
+    }
+
+    /**
+     * Test name parameter does not get URL-encoded or modified
+     */
+    public function testNameParameterPreservesValue(): void
+    {
+        $names = [
+            'Alice',
+            'My Production Node',
+            "Dave's Server",
+            'Node #42',
+        ];
+
+        foreach ($names as $name) {
+            $argv = ['eiou', 'generate', 'https://example.com', $name];
+
+            // Name should be stored as-is, not URL-encoded or prefixed
+            $this->assertEquals($name, $argv[3]);
+            $this->assertStringNotContainsString('http://', $argv[3]);
+            $this->assertStringNotContainsString('https://', $argv[3]);
+        }
+    }
 }

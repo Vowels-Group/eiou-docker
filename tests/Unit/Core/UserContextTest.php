@@ -667,6 +667,48 @@ class UserContextTest extends TestCase
     }
 
     /**
+     * Test getName returns name value when set
+     */
+    public function testGetNameReturnsNameValue(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData(['name' => 'My Node']);
+
+        $this->assertEquals('My Node', $instance->getName());
+    }
+
+    /**
+     * Test getName returns null when not set
+     */
+    public function testGetNameReturnsNullWhenNotSet(): void
+    {
+        $instance = UserContext::getInstance();
+        $instance->setUserData([]);
+
+        $this->assertNull($instance->getName());
+    }
+
+    /**
+     * Test getName handles various name formats
+     */
+    public function testGetNameHandlesVariousFormats(): void
+    {
+        $instance = UserContext::getInstance();
+
+        // Test with spaces
+        $instance->setUserData(['name' => 'Production Node Alpha']);
+        $this->assertEquals('Production Node Alpha', $instance->getName());
+
+        // Test with special characters
+        $instance->setUserData(['name' => "Dave's Node"]);
+        $this->assertEquals("Dave's Node", $instance->getName());
+
+        // Test with unicode
+        $instance->setUserData(['name' => 'Nœud Français']);
+        $this->assertEquals('Nœud Français', $instance->getName());
+    }
+
+    /**
      * Data provider for address type detection tests
      */
     public static function addressTypeProvider(): array

@@ -378,6 +378,7 @@ processorLockfileTest
 pingTestSuite
 serviceInterfaceTest
 serviceExceptionTest
+nodeIdentityTest
 performanceBaseline
 "
 
@@ -444,6 +445,7 @@ seedphraseTestSuite
 processorLockfileTest
 serviceInterfaceTest
 serviceExceptionTest
+nodeIdentityTest
 backupTestSuite
 "
 

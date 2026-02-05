@@ -25,9 +25,12 @@ Complete reference for environment variables and volume mounts used in EIOU Dock
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
 | `QUICKSTART` | (none) | Yes* | Node hostname for HTTP/HTTPS addressing |
+| `EIOU_NAME` | `$QUICKSTART` | No | Display name for the node (shown in local UI) |
+| `EIOU_HOST` | `$QUICKSTART` | No | Externally reachable address (IP or domain) |
+| `EIOU_PORT` | (none) | No | Port for HTTP/HTTPS URLs (appended to addresses) |
 | `RESTORE` | (none) | No | 24-word seed phrase for wallet restoration |
 | `RESTORE_FILE` | (none) | No | Path to file containing seed phrase |
-| `SSL_DOMAIN` | `$QUICKSTART` | No | Primary domain for SSL certificate CN |
+| `SSL_DOMAIN` | `$EIOU_HOST` or `$QUICKSTART` | No | Primary domain for SSL certificate CN |
 | `SSL_EXTRA_SANS` | (none) | No | Additional Subject Alternative Names |
 | `EIOU_HS_TIMEOUT` | `60` | No | Tor hidden service wait timeout (seconds) |
 | `EIOU_TOR_TIMEOUT` | `120` | No | Tor connectivity timeout (seconds) |
@@ -51,6 +54,45 @@ environment:
 The node will be accessible at:
 - `http://alice` (within Docker network)
 - `https://alice` (within Docker network)
+
+#### EIOU_NAME / EIOU_HOST / EIOU_PORT
+
+These optional variables allow separating the node's display name from its network address. When omitted, `QUICKSTART` provides backward-compatible behavior (hostname = display name = address).
+
+`EIOU_NAME` is purely local — it is never broadcast to contacts or other nodes. It appears in the GUI wallet header, Docker startup logs, and any integration that reads the node's display name.
+
+| Variable | Purpose | Fallback |
+|----------|---------|----------|
+| `EIOU_NAME` | Display name (shown in local UI) | Falls back to `QUICKSTART` |
+| `EIOU_HOST` | Externally reachable address (IP or domain) | Falls back to `QUICKSTART` |
+| `EIOU_PORT` | Port appended to HTTP/HTTPS URLs | Not appended if omitted |
+
+**Example: Production node with external IP**
+
+```yaml
+environment:
+  - QUICKSTART=dave           # Still needed as container hostname
+  - EIOU_NAME=Dave            # Local display name
+  - EIOU_HOST=88.99.69.172   # External IP address
+  - EIOU_PORT=1133            # Custom port
+```
+
+This generates:
+- `http://88.99.69.172:1133` (HTTP address)
+- `https://88.99.69.172:1133` (HTTPS address)
+- Display name: "Dave"
+
+**Example: Docker-to-Docker (testing)**
+
+```yaml
+environment:
+  - QUICKSTART=alice   # Works exactly as before - no other vars needed
+```
+
+**Priority:**
+- Address: `EIOU_HOST` > `QUICKSTART`
+- Name: `EIOU_NAME` > `QUICKSTART`
+- SSL CN: `SSL_DOMAIN` > `EIOU_HOST` > `QUICKSTART`
 
 #### RESTORE / RESTORE_FILE
 

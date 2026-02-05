@@ -41,6 +41,17 @@ services:
       # Sets the node's hostname. Node will be reachable at http://<value>
       - QUICKSTART=eiou
 
+      # NODE IDENTITY (optional - override QUICKSTART for production use)
+      # -----------------------------------------------------------------
+      # Display name (shown in local UI, defaults to QUICKSTART):
+      # - EIOU_NAME=My Node
+      #
+      # External address (IP or domain, defaults to QUICKSTART):
+      # - EIOU_HOST=192.168.1.100
+      #
+      # Port for HTTP/HTTPS URLs (appended to addresses):
+      # - EIOU_PORT=8443
+
       # WALLET RESTORATION (optional - choose one method)
       # -----------------------------------------------------------------
       # Method 1 - File-based (RECOMMENDED for security):

@@ -210,6 +210,15 @@ class UserContext {
     }
 
     /**
+     * Get display name
+     *
+     * @return string|null
+     */
+    public function getName(): ?string {
+        return $this->get('name') ?? null;
+    }
+
+    /**
      * Get Tor address
      *
      * @return string|null

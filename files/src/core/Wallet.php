@@ -165,6 +165,13 @@ class Wallet{
             }
         }
 
+        // Optional display name parameter (EIOU_NAME)
+        // When provided, stores a human-readable name in userconfig.json
+        if (isset($argv[3]) && !empty($argv[3])) {
+            $userconfig['name'] = $argv[3];
+            $walletData['name'] = $argv[3];
+        }
+
         // Set strict file permissions before saving
         $oldUmask = umask(0077); // Ensure 600 permissions
         file_put_contents('/etc/eiou/config/userconfig.json', json_encode($userconfig), LOCK_EX);
