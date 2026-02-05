@@ -22,6 +22,8 @@ The project is currently in **ALPHA** status.
 - Balance sync operations (`syncContactBalance`, `syncAllBalances`) counted non-completed transactions
 - `TransactionContactRepository` contact balance queries missing status filter
 - `getAllContactBalances` unhandled PDOException on query failure
+- Dead `if(!$stmt)` checks after `pdo->prepare()` replaced with proper try/catch across 4 repository files
+- AJAX requests returning HTML login form instead of JSON when session expired (debug report download error)
 
 ---
 
