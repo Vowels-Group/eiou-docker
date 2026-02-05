@@ -18,6 +18,7 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
+- Startup authcode display: create secure temp file on every container start, not just initial generation
 - GUI Total Balance incorrectly included rejected, expired, and cancelled transactions
 - Balance sync operations (`syncContactBalance`, `syncAllBalances`) counted non-completed transactions
 - `TransactionContactRepository` contact balance queries missing status filter

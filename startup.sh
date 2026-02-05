@@ -800,7 +800,18 @@ while true; do
         http=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["hostname"])){echo $json["hostname"];}')
         tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
         pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
-        authcode=$(php -r 'require_once("/etc/eiou/src/bootstrap.php"); echo Eiou\Core\UserContext::getInstance()->getAuthCode();')
+        # Create secure temp file for authcode via SecureSeedphraseDisplay (returns file path, "tty", or empty)
+        # SECURITY: The authcode never touches a bash variable — it stays inside the PHP process
+        authcode_file=$(php -r '
+            require_once("/etc/eiou/vendor/autoload.php");
+            require_once("/etc/eiou/src/bootstrap.php");
+            $ac = \Eiou\Core\UserContext::getInstance()->getAuthCode();
+            if ($ac) {
+                $r = \Eiou\Utils\SecureSeedphraseDisplay::displayAuthcode($ac);
+                if ($r["success"] && $r["method"] === "tty") { echo "tty"; }
+                elseif ($r["success"] && isset($r["filepath"])) { echo $r["filepath"]; }
+            }
+        ' 2>/dev/null)
         displayname=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["name"])){echo $json["name"];}')
         break
     else
@@ -890,7 +901,15 @@ fi
 echo -e "\t Tor address: $tor"
 readable="${pubkey//$'\n'/$'\n\t\t'}"
 echo -e "\t Public Key: \n\t\t $readable"
-echo -e "\t Authentication Code: (see secure temp file)"
+if [ "$authcode_file" = "tty" ]; then
+    echo -e "\t Authentication Code: (displayed securely via terminal)"
+elif [ -n "$authcode_file" ]; then
+    echo -e "\t Authentication Code: (stored in secure temp file)"
+    echo -e "\t   View: docker exec $(hostname) cat $authcode_file"
+    echo -e "\t   Auto-deletes in 300 seconds"
+else
+    echo -e "\t Authentication Code: (unavailable - see 'eiou info --show-auth')"
+fi
 
 # ========================
 # Backup System Setup
