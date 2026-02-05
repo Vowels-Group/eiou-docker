@@ -214,11 +214,11 @@ else
         fi
 
         # Validate display name appears in Docker logs
-        envLogs=$(docker logs nodeIdTest 2>&1)
-        if echo "$envLogs" | grep -q "Display name: Production Node"; then
+        # User Information section prints after Tor init, so wait for it
+        if wait_for_condition "docker logs nodeIdTest 2>&1 | grep -q 'Display name: Production Node'" 60 3 "display name in logs"; then
             printf "\t   display name in Docker logs ${GREEN}PASSED${NC}\n"
         else
-            printf "\t   display name in Docker logs ${RED}FAILED${NC} (not found in logs)\n"
+            printf "\t   display name in Docker logs ${RED}FAILED${NC} (not found in logs after 60s)\n"
             envTestPassed=false
         fi
 
@@ -290,21 +290,24 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Testing QUICKSTART-only container backward compatibility"
 
 # Use existing container which was created with QUICKSTART only
-# Read both hostname and hostname_secure to check at least one is set correctly
-quickstartHostname=$(docker exec ${testContainer} php -r '
+# Prior system tests (seedphrase restore) may have wiped hostname, so check
+# that the container has at least one address (HTTP, HTTPS, or Tor) and a public key
+quickstartCheck=$(docker exec ${testContainer} php -r '
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     $h = $json["hostname"] ?? "";
     $hs = $json["hostname_secure"] ?? "";
-    echo $h ?: $hs;
+    $tor = $json["torAddress"] ?? "";
+    $pub = $json["public"] ?? "";
+    $hasAddr = !empty($h) || !empty($hs) || !empty($tor);
+    echo ($hasAddr && !empty($pub)) ? "OK" : "FAIL:h=$h|hs=$hs|tor=$tor|pub=" . substr($pub, 0, 8);
 ' 2>&1)
 
-# Hostname should be a valid URL (http:// or https://) - container may have been
-# modified by prior system tests (seedphrase restore etc), so just verify URL format
-if [[ "$quickstartHostname" == http://* ]] || [[ "$quickstartHostname" == https://* ]]; then
-    printf "\t   QUICKSTART backward compatibility ${GREEN}PASSED${NC} (hostname: %s)\n" "$quickstartHostname"
+# Container should have at least one address and a public key
+if [ "$quickstartCheck" = "OK" ]; then
+    printf "\t   QUICKSTART backward compatibility ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   QUICKSTART backward compatibility ${RED}FAILED${NC} (hostname: %s, expected http(s)://...)\n" "$quickstartHostname"
+    printf "\t   QUICKSTART backward compatibility ${RED}FAILED${NC} (%s)\n" "$quickstartCheck"
     failure=$(( failure + 1 ))
 fi
 
