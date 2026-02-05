@@ -2,7 +2,13 @@
 
 <!-- Header -->
 <div class="header fade-in-up">
-    <h1><i class="fas fa-wallet"></i> ₳ Wallet</h1>
+    <h1><i class="fas fa-wallet"></i> ₳ <?php
+        $headerName = $user->getName();
+        if (!$headerName && $user->has('hostname')) {
+            $headerName = parse_url($user->getHttpAddress(), PHP_URL_HOST) ?: null;
+        }
+        echo htmlspecialchars($headerName ?: 'Wallet');
+    ?></h1>
     <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?logout=1'); ?>" class="logout-btn">
         <i class="fas fa-sign-out-alt"></i> Logout
     </a>

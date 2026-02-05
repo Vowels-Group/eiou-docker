@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- GUI wallet header and page titles display node name from `EIOU_NAME`/`QUICKSTART` with hostname fallback
 - Unified `LoggerInterface` and `Logger` facade for consolidated logging (#557)
 - Full codebase migration from `SecureLogger` to `Logger` across 46 source files (#557)
 - `LoggerInterface` contract for dependency injection and testability (#557)
