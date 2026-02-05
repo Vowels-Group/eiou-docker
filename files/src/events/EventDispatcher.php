@@ -102,8 +102,8 @@ class EventDispatcher implements EventDispatcherInterface
             } catch (\Exception $e) {
                 // Log exception but continue dispatching to other listeners
                 // This prevents one failing listener from blocking others
-                if (class_exists('Eiou\\Utils\\SecureLogger')) {
-                    \Eiou\Utils\SecureLogger::warning("Event listener exception during dispatch", [
+                if (class_exists('Eiou\\Utils\\Logger')) {
+                    \Eiou\Utils\Logger::getInstance()->warning("Event listener exception during dispatch", [
                         'event' => $event,
                         'error' => $e->getMessage(),
                         'trace' => $e->getTraceAsString()

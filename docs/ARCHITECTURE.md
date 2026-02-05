@@ -930,7 +930,7 @@ All specialized repositories use the `QueryBuilder` trait for shared query build
 | PDO Injection | Accepts PDO via constructor or creates from config |
 | Prepared Statements | All queries use parameterized statements |
 | Transaction Support | Begin/commit/rollback helpers |
-| Error Handling | Exceptions logged via SecureLogger |
+| Error Handling | Exceptions logged via Logger |
 
 **Repository Access:**
 
@@ -1244,7 +1244,7 @@ review rather than being silently dropped.
 **CRITICAL:** The initialization order in `Application::__construct()` is essential:
 
 ```
-1. getLogger()           -> Initialize SecureLogger
+1. getLogger()           -> Initialize Logger
          |
          v
 2. Database Setup

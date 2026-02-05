@@ -16,7 +16,7 @@ use Eiou\Database\TransactionRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Core\UserContext;
 use Eiou\Schemas\Payloads\ContactPayload;
 use Eiou\Schemas\Payloads\MessagePayload;
@@ -544,7 +544,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
 
                     // Log if acceptance message delivery failed
                     if (!$sendResult['success']) {
-                        SecureLogger::warning("Contact acceptance message delivery failed", [
+                        Logger::getInstance()->warning("Contact acceptance message delivery failed", [
                             'recipient_address' => $address,
                             'message_id' => $messageId,
                             'error' => $sendResult['tracking']['error'] ?? 'unknown'
@@ -634,7 +634,7 @@ class ContactSyncService implements ContactSyncServiceInterface {
                         $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $acceptMessageId, false);
 
                         if (!$sendResult['success']) {
-                            SecureLogger::warning("Contact acceptance message delivery failed", [
+                            Logger::getInstance()->warning("Contact acceptance message delivery failed", [
                                 'recipient_address' => $address,
                                 'message_id' => $acceptMessageId,
                                 'error' => $sendResult['tracking']['error'] ?? 'unknown'

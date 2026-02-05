@@ -18,7 +18,7 @@ use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Utils\InputValidator;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Schemas\Payloads\TransactionPayload;
 use Eiou\Core\UserContext;
 use Eiou\Contracts\SyncTriggerInterface;
@@ -36,7 +36,7 @@ class TransactionValidationServiceTest extends TestCase
     private InputValidator $inputValidator;
     private TransactionPayload $transactionPayload;
     private UserContext $userContext;
-    private SecureLogger $secureLogger;
+    private Logger $logger;
     private SyncTriggerInterface $syncTrigger;
     private TransactionServiceInterface $transactionService;
     private TransactionChainRepository $transactionChainRepository;
@@ -51,9 +51,8 @@ class TransactionValidationServiceTest extends TestCase
         $this->inputValidator = $this->createMock(InputValidator::class);
         $this->transactionPayload = $this->createMock(TransactionPayload::class);
         $this->userContext = $this->createMock(UserContext::class);
-        // SecureLogger uses static methods, so we create a real instance
-        // The static methods will be called but won't have side effects in tests
-        $this->secureLogger = new SecureLogger();
+        // Logger is injected into services, so we create a mock
+        $this->logger = $this->createMock(Logger::class);
 
         // Create mocks for setter-injected dependencies
         $this->syncTrigger = $this->createMock(SyncTriggerInterface::class);
@@ -71,7 +70,7 @@ class TransactionValidationServiceTest extends TestCase
         $this->setPrivateProperty('inputValidator', $this->inputValidator);
         $this->setPrivateProperty('transactionPayload', $this->transactionPayload);
         $this->setPrivateProperty('currentUser', $this->userContext);
-        $this->setPrivateProperty('secureLogger', $this->secureLogger);
+        $this->setPrivateProperty('secureLogger', $this->logger);
         $this->setPrivateProperty('transactionChainRepository', $this->transactionChainRepository);
 
         // Inject optional dependencies via setters

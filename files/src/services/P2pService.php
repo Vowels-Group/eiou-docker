@@ -4,7 +4,7 @@
 namespace Eiou\Services;
 
 use Eiou\Utils\InputValidator;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Database\BalanceRepository;
@@ -104,9 +104,9 @@ class P2pService implements P2pServiceInterface {
     private ?MessageDeliveryService $messageDeliveryService = null;
 
     /**
-     * @var SecureLogger Logger instance
+     * @var Logger Logger instance
      */
-    private SecureLogger $secureLogger;
+    private Logger $secureLogger;
 
     /**
      * Constructor
@@ -139,7 +139,7 @@ class P2pService implements P2pServiceInterface {
         $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
-        $this->secureLogger = new SecureLogger();
+        $this->secureLogger = Logger::getInstance();
 
         $this->p2pPayload = new P2pPayload($this->currentUser, $this->utilityContainer);
         $this->rp2pPayload = new Rp2pPayload($this->currentUser, $this->utilityContainer);
@@ -207,7 +207,7 @@ class P2pService implements P2pServiceInterface {
     public function checkRequestLevel(array $request): bool {
         // Validate input
         if (!isset($request['requestLevel']) || !isset($request['maxRequestLevel'])) {
-            SecureLogger::warning("Missing requestLevel or maxRequestLevel in request", [
+            Logger::getInstance()->warning("Missing requestLevel or maxRequestLevel in request", [
                 'method' => 'checkRequestLevel',
                 'request_keys' => array_keys($request)
             ]);
@@ -234,7 +234,7 @@ class P2pService implements P2pServiceInterface {
         try {
             // Validate required fields
             if (!isset($request['senderAddress'], $request['senderPublicKey'])) {
-                SecureLogger::warning("Missing required fields in P2P request for funds check", [
+                Logger::getInstance()->warning("Missing required fields in P2P request for funds check", [
                     'method' => 'checkAvailableFunds',
                     'request_keys' => array_keys($request)
                 ]);
@@ -259,8 +259,8 @@ class P2pService implements P2pServiceInterface {
             // If you are the end-recipient you do not need to pay
             return true;
         } catch (PDOException $e) {
-            // Use SecureLogger's exception logging
-            SecureLogger::logException($e, [
+            // Use Logger's exception logging
+            Logger::getInstance()->logException($e, [
                 'method' => 'checkAvailableFunds',
                 'context' => 'p2p_funds_validation'
             ]);
@@ -338,7 +338,7 @@ class P2pService implements P2pServiceInterface {
                 // Return false to prevent caller from calling handleP2pRequest again
                 return false;
             } catch (Exception $e) {
-                SecureLogger::logException($e, [
+                Logger::getInstance()->logException($e, [
                     'method' => 'checkP2pPossible',
                     'context' => 'p2p_processing_failed'
                 ]);
@@ -349,7 +349,7 @@ class P2pService implements P2pServiceInterface {
             }
         } catch (PDOException $e) {
             // Handle database error
-            SecureLogger::error("Error retrieving existence of P2P by hash", ['error' => $e->getMessage()]);
+            Logger::getInstance()->error("Error retrieving existence of P2P by hash", ['error' => $e->getMessage()]);
             if($echo){
                 echo json_encode([
                     "status" => "rejected",
@@ -376,7 +376,7 @@ class P2pService implements P2pServiceInterface {
         try {
             // Validate required fields
             if (!isset($request['senderAddress'], $request['hash'], $request['amount'])) {
-                SecureLogger::warning("Missing required fields in P2P request");
+                Logger::getInstance()->warning("Missing required fields in P2P request");
                 throw new InvalidArgumentException("Invalid P2P request structure");
             }
 
@@ -411,10 +411,10 @@ class P2pService implements P2pServiceInterface {
                 $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_QUEUED);
             }
         } catch (PDOException $e) {
-            SecureLogger::logException($e, 'ERROR');
+            Logger::getInstance()->logException($e, [], 'ERROR');
             throw $e;
         } catch (Exception $e) {
-            SecureLogger::error("Error in handleP2pRequest", ['error' => $e->getMessage()]);
+            Logger::getInstance()->error("Error in handleP2pRequest", ['error' => $e->getMessage()]);
             throw $e;
         }
     }
@@ -527,7 +527,7 @@ class P2pService implements P2pServiceInterface {
         try {
             $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
         } catch (Exception $e) {
-            SecureLogger::error("Failed to generate random salt", ['error' => $e->getMessage()]);
+            Logger::getInstance()->error("Failed to generate random salt", ['error' => $e->getMessage()]);
             throw new RuntimeException("Failed to generate secure random data");
         }
 
@@ -568,7 +568,7 @@ class P2pService implements P2pServiceInterface {
         try {
             $data['salt'] = bin2hex(random_bytes(16)); // Generate a random salt
         } catch (Exception $e) {
-            SecureLogger::error("Failed to generate random salt", ['error' => $e->getMessage()]);
+            Logger::getInstance()->error("Failed to generate random salt", ['error' => $e->getMessage()]);
             throw new RuntimeException("Failed to generate secure random data");
         }
 

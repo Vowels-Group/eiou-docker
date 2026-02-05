@@ -4,7 +4,7 @@
 namespace Eiou\Services;
 
 use Eiou\Utils\InputValidator;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\UserContext;
@@ -63,7 +63,7 @@ class TransactionService implements TransactionServiceInterface {
     private CurrencyUtilityService $currencyUtility;
     private TransportUtilityService $transportUtility;
     private TimeUtilityService $timeUtility;
-    private SecureLogger $secureLogger;
+    private Logger $secureLogger;
     private UserContext $currentUser;
     private TransactionPayload $transactionPayload;
     private TransactionChainRepository $transactionChainRepository;
@@ -103,7 +103,7 @@ class TransactionService implements TransactionServiceInterface {
         TransactionStatisticsRepository $transactionStatisticsRepository,
         UtilityServiceContainer $utilityContainer,
         InputValidator $inputValidator,
-        SecureLogger $secureLogger,
+        Logger $secureLogger,
         UserContext $currentUser,
         ?MessageDeliveryService $messageDeliveryService = null,
         ?HeldTransactionService $heldTransactionService = null

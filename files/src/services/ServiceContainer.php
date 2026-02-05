@@ -4,7 +4,7 @@
 namespace Eiou\Services;
 
 use Psr\Container\ContainerInterface;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Core\Constants;
@@ -182,7 +182,7 @@ class ServiceContainer implements ContainerInterface {
             $this->pdo = createPDOConnection();
         } catch (RuntimeException $e) {
             // Log the error
-            SecureLogger::logException($e, 'CRITICAL');
+            Logger::getInstance()->logException($e, [], 'CRITICAL');
             // Set PDO to null to indicate unavailability
             $this->pdo = null;
         }
@@ -1049,15 +1049,14 @@ class ServiceContainer implements ContainerInterface {
     /**
      * Get logger instance
      *
-     * @return SecureLogger
+     * @return Logger
      */
-    public function getLogger(): SecureLogger {
-        if (!isset($this->utils['SecureLogger'])) {
-            $secureLogger = new SecureLogger();
-            $secureLogger->init(Constants::LOG_FILE_APP, Constants::LOG_LEVEL);
-            $this->utils['SecureLogger'] = $secureLogger;
+    public function getLogger(): Logger {
+        if (!isset($this->utils['Logger'])) {
+            Logger::init(Constants::LOG_FILE_APP, Constants::LOG_LEVEL);
+            $this->utils['Logger'] = Logger::getInstance();
         }
-        return $this->utils['SecureLogger'];
+        return $this->utils['Logger'];
     }
     /**
      * Get Security instance

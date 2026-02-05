@@ -3,7 +3,7 @@
 
 namespace Eiou\Services;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Contracts\BackupServiceInterface;
 use Eiou\Security\KeyEncryption;
 use Eiou\Core\Constants;
@@ -141,7 +141,7 @@ class BackupService implements BackupServiceInterface
 
         chmod($filepath, 0600);
 
-        SecureLogger::info("Backup created", ['filename' => $filename, 'size' => filesize($filepath)]);
+        Logger::getInstance()->info("Backup created", ['filename' => $filename, 'size' => filesize($filepath)]);
 
         return [
             'success' => true,
@@ -240,7 +240,7 @@ class BackupService implements BackupServiceInterface
 
         // Check for errors (mysql doesn't always return proper exit codes via shell_exec)
         if ($output && preg_match('/ERROR/i', $output)) {
-            SecureLogger::error("Backup restore failed", ['output' => $output]);
+            Logger::getInstance()->error("Backup restore failed", ['output' => $output]);
             throw new FatalServiceException(
                 'MySQL restore failed: ' . $output,
                 ErrorCodes::RESTORE_FAILED,
@@ -248,7 +248,7 @@ class BackupService implements BackupServiceInterface
             );
         }
 
-        SecureLogger::info("Backup restored", ['filename' => $filename]);
+        Logger::getInstance()->info("Backup restored", ['filename' => $filename]);
 
         return [
             'success' => true,
@@ -297,7 +297,7 @@ class BackupService implements BackupServiceInterface
         }
 
         if (unlink($filepath)) {
-            SecureLogger::info("Backup deleted", ['filename' => $filename]);
+            Logger::getInstance()->info("Backup deleted", ['filename' => $filename]);
             return ['success' => true, 'filename' => $filename];
         }
 
@@ -390,7 +390,7 @@ class BackupService implements BackupServiceInterface
             );
         }
 
-        SecureLogger::info("Auto backup " . ($enabled ? 'enabled' : 'disabled'));
+        Logger::getInstance()->info("Auto backup " . ($enabled ? 'enabled' : 'disabled'));
 
         return ['success' => true, 'enabled' => $enabled];
     }
@@ -615,13 +615,13 @@ class BackupService implements BackupServiceInterface
     {
         $configFile = '/etc/eiou/config/dbconfig.json';
         if (!file_exists($configFile)) {
-            SecureLogger::error("Database config file not found", ['path' => $configFile]);
+            Logger::getInstance()->error("Database config file not found", ['path' => $configFile]);
             return null;
         }
 
         $config = json_decode(file_get_contents($configFile), true);
         if (!$config || !isset($config['dbHost'], $config['dbName'], $config['dbUser'], $config['dbPass'])) {
-            SecureLogger::error("Invalid database config", ['path' => $configFile]);
+            Logger::getInstance()->error("Invalid database config", ['path' => $configFile]);
             return null;
         }
 

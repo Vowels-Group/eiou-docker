@@ -3,7 +3,7 @@
 
 namespace Eiou\Database;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
 
@@ -143,7 +143,7 @@ class RateLimiterRepository {
             ");
             return $stmt->execute([$olderThanSeconds]);
         } catch (PDOException $e) {
-            SecureLogger::warning("Rate limit cleanup failed", [
+            Logger::getInstance()->warning("Rate limit cleanup failed", [
                 'error' => $e->getMessage()
             ]);
             return false;

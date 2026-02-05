@@ -5,7 +5,7 @@ namespace Eiou\Services;
 
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Contracts\TransactionProcessingServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Contracts\P2pServiceInterface;
@@ -48,7 +48,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
     private TransportUtilityService $transportUtility;
     private TimeUtilityService $timeUtility;
     private UserContext $currentUser;
-    private SecureLogger $secureLogger;
+    private Logger $secureLogger;
     private ?MessageDeliveryService $messageDeliveryService;
     /**
      * @var SyncTriggerInterface|null Sync trigger for conflict resolution
@@ -68,7 +68,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
         TransportUtilityService $transportUtility,
         TimeUtilityService $timeUtility,
         UserContext $currentUser,
-        SecureLogger $secureLogger,
+        Logger $secureLogger,
         ?MessageDeliveryService $messageDeliveryService = null
     ) {
         $this->transactionRepository = $transactionRepository;
@@ -146,10 +146,10 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
                 $this->processP2pIncoming($request);
             }
         } catch (PDOException $e) {
-            SecureLogger::logException($e, ['method' => 'processTransaction', 'context' => 'transaction_processing']);
+            Logger::getInstance()->logException($e, ['method' => 'processTransaction', 'context' => 'transaction_processing']);
             throw $e;
         } catch (Exception $e) {
-            SecureLogger::logException($e, ['method' => 'processTransaction', 'context' => 'transaction_processing']);
+            Logger::getInstance()->logException($e, ['method' => 'processTransaction', 'context' => 'transaction_processing']);
             throw $e;
         }
     }
@@ -238,12 +238,12 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
     private function processOutgoingDirect(array $message, string $txid): string
     {
         if (!$this->transactionRecoveryRepository->claimPendingTransaction($txid)) {
-            SecureLogger::info("Transaction already claimed, skipping", ['txid' => $txid]);
+            Logger::getInstance()->info("Transaction already claimed, skipping", ['txid' => $txid]);
             return 'continue';
         }
 
         $payload = $this->transactionPayload->buildStandardFromDatabase($message);
-        SecureLogger::info("Sending standard transaction (claimed)", [
+        Logger::getInstance()->info("Sending standard transaction (claimed)", [
             'txid' => $txid,
             'previous_txid_in_db' => $message['previous_txid'] ?? 'NULL',
             'previous_txid_in_payload' => $payload['previousTxid'] ?? 'NULL',
@@ -299,7 +299,7 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
     private function processOutgoingP2p(array $message, string $memo, string $txid): bool
     {
         if (!$this->transactionRecoveryRepository->claimPendingTransaction($txid)) {
-            SecureLogger::info("P2P transaction already claimed, skipping", ['txid' => $txid, 'memo' => $memo]);
+            Logger::getInstance()->info("P2P transaction already claimed, skipping", ['txid' => $txid, 'memo' => $memo]);
             return false;
         }
 

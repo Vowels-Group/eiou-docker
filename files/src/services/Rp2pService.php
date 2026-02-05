@@ -3,7 +3,7 @@
 
 namespace Eiou\Services;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Contracts\Rp2pServiceInterface;
 use Eiou\Contracts\P2pTransactionSenderInterface;
 use Eiou\Database\ContactRepository;
@@ -266,8 +266,8 @@ class Rp2pService implements Rp2pServiceInterface {
                     $attempts = $trackingResult['attempts'] ?? 'unknown';
                     $lastError = $trackingResult['error'] ?? 'No response received';
 
-                    if (class_exists('SecureLogger')) {
-                        SecureLogger::warning("RP2P message delivery failed", [
+                    if (class_exists(Logger::class)) {
+                        Logger::getInstance()->warning("RP2P message delivery failed", [
                             'hash' => $request['hash'],
                             'sender_address' => $p2p['sender_address'],
                             'attempts' => $attempts,
@@ -312,7 +312,7 @@ class Rp2pService implements Rp2pServiceInterface {
                 // Return false to prevent caller from calling handleRp2pRequest again
                 return false;
             } catch (Exception $e) {
-                SecureLogger::logException($e, [
+                Logger::getInstance()->logException($e, [
                     'method' => 'checkRp2pPossible',
                     'context' => 'rp2p_processing_failed'
                 ]);
@@ -323,7 +323,7 @@ class Rp2pService implements Rp2pServiceInterface {
             }
         } catch (PDOException $e) {
             // Handle database error
-            SecureLogger::error("Error retrieving existence of RP2P by hash", ['error' => $e->getMessage()]);
+            Logger::getInstance()->error("Error retrieving existence of RP2P by hash", ['error' => $e->getMessage()]);
             if($echo){
                 echo json_encode([
                     "status" => "rejected",

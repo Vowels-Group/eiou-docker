@@ -11,7 +11,7 @@ use Eiou\Database\TransactionRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Schemas\Payloads\ContactStatusPayload;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Exception;
 
 /**
@@ -163,7 +163,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
         $contactAddress = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null;
 
         if (!$contactAddress) {
-            SecureLogger::warning("Contact has no address for ping", [
+            Logger::getInstance()->warning("Contact has no address for ping", [
                 'contact_id' => $contact['contact_id'] ?? 'unknown'
             ]);
             return false;
@@ -224,7 +224,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
         } catch (Exception $e) {
             // Connection error - contact is offline
             $this->updateContactOnlineStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_OFFLINE);
-            SecureLogger::warning("Contact ping failed", [
+            Logger::getInstance()->warning("Contact ping failed", [
                 'contact_address' => $contactAddress,
                 'error' => $e->getMessage()
             ]);
@@ -245,7 +245,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                 'last_ping_at' => date('Y-m-d H:i:s.u')
             ]);
         } catch (Exception $e) {
-            SecureLogger::error("Failed to update contact online status", [
+            Logger::getInstance()->error("Failed to update contact online status", [
                 'error' => $e->getMessage()
             ]);
         }
@@ -263,7 +263,7 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                 'valid_chain' => $valid ? 1 : 0
             ]);
         } catch (Exception $e) {
-            SecureLogger::error("Failed to update contact chain status", [
+            Logger::getInstance()->error("Failed to update contact chain status", [
                 'error' => $e->getMessage()
             ]);
         }
@@ -285,11 +285,11 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
             // Use existing sync method
             $this->syncService->syncTransactionChain($address, $pubkey);
 
-            SecureLogger::info("Chain sync triggered from contact status ping", [
+            Logger::getInstance()->info("Chain sync triggered from contact status ping", [
                 'contact_address' => $address
             ]);
         } catch (Exception $e) {
-            SecureLogger::warning("Chain sync failed during contact status ping", [
+            Logger::getInstance()->warning("Chain sync failed during contact status ping", [
                 'contact_address' => $address,
                 'error' => $e->getMessage()
             ]);
@@ -309,9 +309,9 @@ class ContactStatusProcessor extends AbstractMessageProcessor {
                     'valid_chain' => null
                 ]);
             }
-            SecureLogger::info("Reset all contacts to unknown status (feature disabled)");
+            Logger::getInstance()->info("Reset all contacts to unknown status (feature disabled)");
         } catch (Exception $e) {
-            SecureLogger::error("Failed to reset contacts to unknown status", [
+            Logger::getInstance()->error("Failed to reset contacts to unknown status", [
                 'error' => $e->getMessage()
             ]);
         }

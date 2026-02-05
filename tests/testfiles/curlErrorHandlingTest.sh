@@ -212,36 +212,36 @@ else
 fi
 
 # ============================================================================
-# Test 10: SecureLogger Integration for HTTP Errors
+# Test 10: Logger Integration for HTTP Errors
 # ============================================================================
-echo -e "\n[Test 10: SecureLogger Integration for HTTP Errors]"
+echo -e "\n[Test 10: Logger Integration for HTTP Errors]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-loggerCheck=$(docker exec ${container} sh -c "grep -c 'SecureLogger::warning.*HTTP request failed' /etc/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
+loggerCheck=$(docker exec ${container} sh -c "grep -c 'Logger::getInstance()->warning.*HTTP request failed' /etc/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
 
 if [[ "$loggerCheck" -ge "1" ]]; then
-    printf "\t   SecureLogger integration for HTTP errors ${GREEN}PASSED${NC}\n"
+    printf "\t   Logger integration for HTTP errors ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   SecureLogger integration missing ${RED}FAILED${NC}\n"
+    printf "\t   Logger integration missing ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
 
 # ============================================================================
-# Test 11: SecureLogger Integration for Tor Errors
+# Test 11: Logger Integration for Tor Errors
 # ============================================================================
-echo -e "\n[Test 11: SecureLogger Integration for Tor Errors]"
+echo -e "\n[Test 11: Logger Integration for Tor Errors]"
 container="${containers[0]}"
 totaltests=$(( totaltests + 1 ))
 
-torLoggerCheck=$(docker exec ${container} sh -c "grep -c 'SecureLogger::warning.*TOR request failed' /etc/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
+torLoggerCheck=$(docker exec ${container} sh -c "grep -c 'Logger::getInstance()->warning.*TOR request failed' /etc/eiou/src/services/utilities/TransportUtilityService.php" 2>/dev/null || echo "0")
 
 if [[ "$torLoggerCheck" -ge "1" ]]; then
-    printf "\t   SecureLogger integration for Tor errors ${GREEN}PASSED${NC}\n"
+    printf "\t   Logger integration for Tor errors ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   SecureLogger integration for Tor missing ${RED}FAILED${NC}\n"
+    printf "\t   Logger integration for Tor missing ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
 

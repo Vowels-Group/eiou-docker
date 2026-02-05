@@ -17,6 +17,7 @@ use Eiou\Services\DebugService;
 use Eiou\Database\DebugRepository;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Utils\Logger;
 use PDO;
 
 #[CoversClass(DebugService::class)]
@@ -208,32 +209,36 @@ class DebugServiceTest extends TestCase
     // =========================================================================
 
     /**
-     * Test output inserts debug when APP_DEBUG is true
+     * Test output inserts debug record when APP_DEBUG is true
+     *
+     * Constants::APP_DEBUG is true in the test environment, so
+     * calling output() should forward to debugRepository->insertDebug().
      */
     public function testOutputInsertsDebugWhenDebugEnabled(): void
     {
-        // Mock Constants::get to return true for APP_DEBUG
-        // Since Constants::get is a static method, we need to handle this differently
-        // For this test, we'll check if insertDebug is called when debug is enabled
-
-        // Skip if we can't control Constants::get
-        if (!method_exists(Constants::class, 'get')) {
-            $this->markTestSkipped('Constants::get method not available');
+        // APP_DEBUG is true in test env, so insertDebug MUST be called
+        if (!Constants::get('APP_DEBUG')) {
+            $this->markTestSkipped('APP_DEBUG is false in this environment');
         }
 
-        $this->debugRepository->expects($this->any())
+        $this->userContext->method('isInitialized')->willReturn(false);
+        $mockPdo = $this->createMock(PDO::class);
+        $this->debugRepository->method('getPdo')->willReturn($mockPdo);
+
+        $this->debugRepository->expects($this->once())
             ->method('insertDebug')
             ->with($this->callback(function ($data) {
-                return isset($data['level'])
-                    && isset($data['message'])
+                return $data['level'] === 'WARNING'
+                    && $data['message'] === 'Test debug gate'
                     && isset($data['context'])
                     && isset($data['file'])
                     && isset($data['line'])
                     && isset($data['trace']);
             }));
 
-        // This test verifies the structure passed to insertDebug when called
-        $this->assertTrue(true);
+        ob_start();
+        $this->service->output('Test debug gate', 'WARNING');
+        ob_end_clean();
     }
 
     /**
@@ -241,15 +246,20 @@ class DebugServiceTest extends TestCase
      */
     public function testOutputEchosMessageWhenNotSilentInCli(): void
     {
-        // Only test if in CLI mode
         if (php_sapi_name() !== 'cli') {
             $this->markTestSkipped('Test requires CLI mode');
         }
 
-        // This test would require controlling Constants::get('APP_DEBUG')
-        // For now, we test the method doesn't throw
-        $this->service->output('Test message', 'ECHO');
-        $this->assertTrue(true);
+        $this->userContext->method('isInitialized')->willReturn(false);
+        $mockPdo = $this->createMock(PDO::class);
+        $this->debugRepository->method('getPdo')->willReturn($mockPdo);
+        $this->debugRepository->method('insertDebug');
+
+        ob_start();
+        $this->service->output('Visible CLI message', 'ECHO');
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('Visible CLI message', $output);
     }
 
     /**
@@ -267,34 +277,143 @@ class DebugServiceTest extends TestCase
     }
 
     /**
-     * Test output trims message
+     * Test output trims message before inserting
      */
     public function testOutputTrimsMessage(): void
     {
-        // We verify by checking insertDebug receives trimmed message
-        $this->debugRepository->expects($this->any())
+        if (!Constants::get('APP_DEBUG')) {
+            $this->markTestSkipped('APP_DEBUG is false in this environment');
+        }
+
+        $this->userContext->method('isInitialized')->willReturn(false);
+        $mockPdo = $this->createMock(PDO::class);
+        $this->debugRepository->method('getPdo')->willReturn($mockPdo);
+
+        $this->debugRepository->expects($this->once())
             ->method('insertDebug')
             ->with($this->callback(function ($data) {
                 return $data['message'] === 'Test message';
             }));
 
         $this->service->output('  Test message  ', 'SILENT');
-        $this->assertTrue(true);
     }
 
     /**
-     * Test output uses default level ECHO
+     * Test output uses default level ECHO when no level specified
      */
     public function testOutputUsesDefaultLevelEcho(): void
     {
-        $this->debugRepository->expects($this->any())
+        if (!Constants::get('APP_DEBUG')) {
+            $this->markTestSkipped('APP_DEBUG is false in this environment');
+        }
+
+        $this->userContext->method('isInitialized')->willReturn(false);
+        $mockPdo = $this->createMock(PDO::class);
+        $this->debugRepository->method('getPdo')->willReturn($mockPdo);
+
+        $this->debugRepository->expects($this->once())
             ->method('insertDebug')
             ->with($this->callback(function ($data) {
                 return $data['level'] === 'ECHO';
             }));
 
+        ob_start();
         $this->service->output('Test message');
-        $this->assertTrue(true);
+        ob_end_clean();
+    }
+
+    /**
+     * Test output does NOT insert debug record when APP_DEBUG is false (production)
+     *
+     * Runs in a separate process so we can load a Constants class with
+     * APP_DEBUG = false, simulating a production deployment.
+     *
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testOutputDoesNotInsertDebugWhenDebugDisabled(): void
+    {
+        // Define a Constants class with APP_DEBUG = false before autoloader loads the real one
+        eval('namespace Eiou\Core; class Constants { const APP_DEBUG = false; public static function get($key, $default = null) { $c = self::class . "::" . $key; return defined($c) ? constant($c) : $default; } }');
+
+        $debugRepository = $this->createMock(\Eiou\Database\DebugRepository::class);
+        $userContext = $this->createMock(\Eiou\Core\UserContext::class);
+
+        // insertDebug must NEVER be called when APP_DEBUG is false
+        $debugRepository->expects($this->never())->method('insertDebug');
+
+        $service = new \Eiou\Services\DebugService($debugRepository, $userContext);
+        $service->output('This should not reach the database', 'SILENT');
+    }
+
+    /**
+     * Test full Logger → DebugService → Repository chain in development mode
+     *
+     * Verifies that when Logger has a real DebugService registered,
+     * log messages flow all the way through to insertDebug().
+     */
+    public function testLoggerForwardsToDebugServiceRepository(): void
+    {
+        if (!Constants::get('APP_DEBUG')) {
+            $this->markTestSkipped('APP_DEBUG is false in this environment');
+        }
+
+        $this->userContext->method('isInitialized')->willReturn(false);
+        $mockPdo = $this->createMock(PDO::class);
+        $this->debugRepository->method('getPdo')->willReturn($mockPdo);
+
+        // insertDebug MUST be called when Logger forwards to DebugService
+        $this->debugRepository->expects($this->once())
+            ->method('insertDebug')
+            ->with($this->callback(function ($data) {
+                return $data['message'] === 'End-to-end test'
+                    && $data['level'] === 'WARNING';
+            }));
+
+        // Wire up Logger → real DebugService → mock repository
+        $logFile = sys_get_temp_dir() . '/eiou-logger-e2e-' . uniqid() . '.log';
+        Logger::init($logFile, 'DEBUG');
+        Logger::registerDebugService($this->service);
+
+        $logger = Logger::getInstance();
+        ob_start();
+        $logger->warning('End-to-end test');
+        ob_end_clean();
+
+        // Verify file logging also worked
+        $content = file_get_contents($logFile);
+        $this->assertStringContainsString('End-to-end test', $content);
+        unlink($logFile);
+    }
+
+    /**
+     * Test full Logger → (no DebugService) chain in production mode
+     *
+     * Verifies that when Logger has NO DebugService registered,
+     * messages only go to file, and insertDebug is never called.
+     */
+    public function testLoggerSkipsDebugServiceWhenNotRegistered(): void
+    {
+        // insertDebug must NEVER be called
+        $this->debugRepository->expects($this->never())->method('insertDebug');
+
+        // Set Logger's debugService to null (simulates production where
+        // registerDebugService() is never called)
+        $ref = new \ReflectionClass(Logger::class);
+        $prop = $ref->getProperty('debugService');
+        $prop->setAccessible(true);
+        $prop->setValue(null, null);
+
+        $logFile = sys_get_temp_dir() . '/eiou-logger-prod-' . uniqid() . '.log';
+        Logger::init($logFile, 'DEBUG');
+
+        $logger = Logger::getInstance();
+        $logger->error('Production-only message');
+
+        // File logging still works
+        $content = file_get_contents($logFile);
+        $this->assertStringContainsString('Production-only message', $content);
+        unlink($logFile);
     }
 
     // =========================================================================
@@ -449,15 +568,22 @@ class DebugServiceTest extends TestCase
      */
     public function testOutputHandlesMultilineMessage(): void
     {
+        if (!Constants::get('APP_DEBUG')) {
+            $this->markTestSkipped('APP_DEBUG is false in this environment');
+        }
+
+        $this->userContext->method('isInitialized')->willReturn(false);
+        $mockPdo = $this->createMock(PDO::class);
+        $this->debugRepository->method('getPdo')->willReturn($mockPdo);
+
         $multilineMessage = "Line 1\nLine 2\nLine 3";
 
-        $this->debugRepository->expects($this->any())
+        $this->debugRepository->expects($this->once())
             ->method('insertDebug')
             ->with($this->callback(function ($data) use ($multilineMessage) {
                 return $data['message'] === trim($multilineMessage);
             }));
 
         $this->service->output($multilineMessage, 'SILENT');
-        $this->assertTrue(true);
     }
 }

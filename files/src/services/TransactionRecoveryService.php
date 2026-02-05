@@ -3,7 +3,7 @@
 
 namespace Eiou\Services;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
 use Eiou\Contracts\TransactionRecoveryServiceInterface;
 use Eiou\Database\TransactionRecoveryRepository;
@@ -41,7 +41,7 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
     private TransactionRecoveryRepository $transactionRecoveryRepository;
 
     /**
-     * @var SecureLogger Logger instance
+     * @var Logger Logger instance
      */
     private $logger;
 
@@ -75,7 +75,7 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
             'transactions' => []
         ];
 
-        SecureLogger::info("Starting transaction recovery process", [
+        Logger::getInstance()->info("Starting transaction recovery process", [
             'timeout_seconds' => $timeoutSeconds ?: Constants::RECOVERY_SENDING_TIMEOUT_SECONDS,
             'max_retries' => $maxRetries ?: Constants::RECOVERY_MAX_RETRY_COUNT
         ]);
@@ -85,11 +85,11 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
             $stuckTransactions = $this->transactionRecoveryRepository->getStuckSendingTransactions($timeoutSeconds);
 
             if (empty($stuckTransactions)) {
-                SecureLogger::info("No stuck transactions found during recovery");
+                Logger::getInstance()->info("No stuck transactions found during recovery");
                 return $results;
             }
 
-            SecureLogger::warning("Found stuck transactions requiring recovery", [
+            Logger::getInstance()->warning("Found stuck transactions requiring recovery", [
                 'count' => count($stuckTransactions)
             ]);
 
@@ -110,14 +110,14 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
                     if ($recoveryResult['recovered']) {
                         $results['recovered']++;
                         $txResult['action'] = 'recovered';
-                        SecureLogger::info("Transaction recovered successfully", [
+                        Logger::getInstance()->info("Transaction recovered successfully", [
                             'txid' => $txid,
                             'recovery_count' => $recoveryResult['recovery_count']
                         ]);
                     } elseif ($recoveryResult['needs_review']) {
                         $results['needs_review']++;
                         $txResult['action'] = 'needs_review';
-                        SecureLogger::warning("Transaction marked for manual review", [
+                        Logger::getInstance()->warning("Transaction marked for manual review", [
                             'txid' => $txid,
                             'recovery_count' => $recoveryResult['recovery_count']
                         ]);
@@ -130,7 +130,7 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
 
                 } catch (Exception $e) {
                     $results['errors']++;
-                    SecureLogger::logException($e, [
+                    Logger::getInstance()->logException($e, [
                         'context' => 'transaction_recovery',
                         'txid' => $txid
                     ]);
@@ -143,14 +143,14 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
                 }
             }
 
-            SecureLogger::info("Transaction recovery process completed", [
+            Logger::getInstance()->info("Transaction recovery process completed", [
                 'recovered' => $results['recovered'],
                 'needs_review' => $results['needs_review'],
                 'errors' => $results['errors']
             ]);
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'context' => 'transaction_recovery_startup'
             ]);
             $results['errors']++;
@@ -171,7 +171,7 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
         try {
             return $this->transactionRecoveryRepository->getTransactionsNeedingReview();
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'context' => 'get_transactions_needing_review'
             ]);
             return [];
@@ -233,14 +233,14 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
             }
 
             // Log the resolution
-            SecureLogger::info("Transaction manually resolved", [
+            Logger::getInstance()->info("Transaction manually resolved", [
                 'txid' => $txid,
                 'action' => $action,
                 'reason' => $reason
             ]);
 
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'context' => 'resolve_transaction',
                 'txid' => $txid,
                 'action' => $action
@@ -265,7 +265,7 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
             $stuckTransactions = $this->transactionRecoveryRepository->getStuckSendingTransactions(0);
             return !empty($stuckTransactions);
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'context' => 'check_recovery_needed'
             ]);
             // If we can't check, assume recovery might be needed
@@ -290,7 +290,7 @@ class TransactionRecoveryService implements TransactionRecoveryServiceInterface 
 
             return $stats;
         } catch (Exception $e) {
-            SecureLogger::logException($e, [
+            Logger::getInstance()->logException($e, [
                 'context' => 'get_recovery_statistics'
             ]);
             return [

@@ -5,7 +5,7 @@ namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
 
@@ -374,8 +374,8 @@ class MessageDeliveryRepository extends AbstractRepository {
             $stmt->execute();
             $count = $stmt->rowCount();
 
-            if ($count > 0 && class_exists('SecureLogger')) {
-                SecureLogger::info("Marked P2P deliveries as completed by hash", [
+            if ($count > 0 && class_exists('Eiou\\Utils\\Logger')) {
+                Logger::getInstance()->info("Marked P2P deliveries as completed by hash", [
                     'message_type' => $messageType,
                     'hash' => $hash,
                     'updated_count' => $count

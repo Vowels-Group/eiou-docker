@@ -4,7 +4,7 @@
 namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use DateTime;
 use PDO;
 use PDOException;
@@ -86,15 +86,15 @@ class DeadLetterQueueRepository extends AbstractRepository {
     }
 
     /**
-     * Log a message using SecureLogger if available
+     * Log a message using Logger if available
      *
      * @param string $level Log level (info, warning, error)
      * @param string $message Log message
      * @param array $context Additional context
      */
     private function log(string $level, string $message, array $context = []): void {
-        if (class_exists('SecureLogger')) {
-            SecureLogger::$level($message, $context);
+        if (class_exists('Eiou\\Utils\\Logger')) {
+            Logger::getInstance()->$level($message, $context);
         }
     }
 

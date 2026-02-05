@@ -3,7 +3,7 @@
 
 namespace Eiou\Core;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Cli\CliOutputManager;
@@ -79,12 +79,12 @@ class Application {
                 $this->constructDatabase();
                 $this->loadCurrentDatabase();
             } catch (RuntimeException $e) {
-                if ($this->secureLoggerLoaded()) {
+                if ($this->loggerLoaded()) {
                     $this->getLogger()->critical("Application: Database setup failed", [
                         'error' => $e->getMessage()
                     ]);
                 } else {
-                    SecureLogger::logException($e, 'CRITICAL');
+                    Logger::getInstance()->logException($e, [], 'CRITICAL');
                 }
                 // If database setup fails, we cannot continue initialization
                 throw new RuntimeException("Failed to initialize application: " . $e->getMessage(), 0, $e);
@@ -147,7 +147,7 @@ class Application {
         try{
             $this->pdo = createPDOConnection();
         } catch (Exception $e) {
-            $this->utils['SecureLogger']->logException($e,'ERROR');
+            Logger::getInstance()->logException($e, [], 'ERROR');
         }
     }
 
@@ -166,13 +166,13 @@ class Application {
             // Log any newly created tables
             foreach ($results as $table => $status) {
                 if ($status === 'created') {
-                    if ($this->secureLoggerLoaded()) {
+                    if ($this->loggerLoaded()) {
                         $this->getLogger()->info("Migration: Created table $table");
                     }
                 }
             }
         } catch (Exception $e) {
-            if ($this->secureLoggerLoaded()) {
+            if ($this->loggerLoaded()) {
                 $this->getLogger()->warning("Migration failed", [
                     'error' => $e->getMessage()
                 ]);
@@ -199,7 +199,7 @@ class Application {
 
             // Log recovery results
             if ($results['recovered'] > 0 || $results['needs_review'] > 0) {
-                if ($this->secureLoggerLoaded()) {
+                if ($this->loggerLoaded()) {
                     $this->getLogger()->info("Transaction recovery completed on startup", [
                         'recovered' => $results['recovered'],
                         'needs_review' => $results['needs_review'],
@@ -218,7 +218,7 @@ class Application {
                 }
             }
         } catch (Exception $e) {
-            if ($this->secureLoggerLoaded()) {
+            if ($this->loggerLoaded()) {
                 $this->getLogger()->warning("Transaction recovery failed on startup", [
                     'error' => $e->getMessage()
                 ]);
@@ -370,26 +370,25 @@ class Application {
     }
 
     /**
-     * Check if SecureLogger has been loaded
+     * Check if Logger has been loaded
      *
      * @return bool
      */
-    public function secureLoggerLoaded(): bool {
-        return isset($this->utils['SecureLogger']);
+    public function loggerLoaded(): bool {
+        return isset($this->utils['Logger']);
     }
 
     /**
      * Get logger instance
      *
-     * @return SecureLogger
+     * @return Logger
      */
-    public function getLogger(): SecureLogger {
-        if (!isset($this->utils['SecureLogger'])) {
-            $secureLogger = new SecureLogger();
-            $secureLogger->init(Constants::LOG_FILE_APP, Constants::LOG_LEVEL);
-            $this->utils['SecureLogger'] = $secureLogger;
+    public function getLogger(): Logger {
+        if (!isset($this->utils['Logger'])) {
+            Logger::init(Constants::LOG_FILE_APP, Constants::LOG_LEVEL);
+            $this->utils['Logger'] = Logger::getInstance();
         }
-        return $this->utils['SecureLogger'];
+        return $this->utils['Logger'];
     }
 
     /**

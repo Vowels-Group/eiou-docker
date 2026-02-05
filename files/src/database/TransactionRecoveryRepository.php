@@ -5,7 +5,7 @@ namespace Eiou\Database;
 
 use Eiou\Database\Traits\QueryBuilder;
 use Eiou\Core\Constants;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
 
@@ -194,7 +194,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
             $updateStmt->bindValue(':txid', $txid);
             $updateStmt->execute();
 
-            SecureLogger::warning("Transaction exceeded max recovery attempts, marked for manual review", [
+            Logger::getInstance()->warning("Transaction exceeded max recovery attempts, marked for manual review", [
                 'txid' => $txid,
                 'recovery_count' => $newCount,
                 'max_retries' => $maxRetries
@@ -221,7 +221,7 @@ class TransactionRecoveryRepository extends AbstractRepository {
         $recovered = $updateStmt->rowCount() > 0;
 
         if ($recovered) {
-            SecureLogger::info("Transaction recovered from stuck sending state", [
+            Logger::getInstance()->info("Transaction recovered from stuck sending state", [
                 'txid' => $txid,
                 'recovery_count' => $newCount
             ]);

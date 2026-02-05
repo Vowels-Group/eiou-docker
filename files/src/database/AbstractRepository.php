@@ -4,7 +4,7 @@
 namespace Eiou\Database;
 
 use Eiou\Core\UserContext;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use PDO;
 use PDOException;
 use PDOStatement;
@@ -69,7 +69,7 @@ abstract class AbstractRepository {
             try {
                 $this->pdo = createPDOConnection();
             } catch (RuntimeException $e) {
-                SecureLogger::error("[" . static::class . "] Repository initialization failed", [
+                Logger::getInstance()->error("[" . static::class . "] Repository initialization failed", [
                     'error' => $e->getMessage()
                 ]);
                 throw new RuntimeException(
@@ -82,7 +82,7 @@ abstract class AbstractRepository {
 
         if (!$this->pdo) {
             $errorMessage = "Failed to initialize repository: Database connection unavailable";
-            SecureLogger::error("[" . static::class . "] " . $errorMessage);
+            Logger::getInstance()->error("[" . static::class . "] " . $errorMessage);
             throw new RuntimeException($errorMessage);
         }
         $this->loadCurrentUser();
@@ -104,7 +104,7 @@ abstract class AbstractRepository {
     protected function isValidColumn(string $column): bool {
         // If no whitelist defined, warn but allow (backwards compatibility)
         if (empty($this->allowedColumns)) {
-            SecureLogger::warning("[" . static::class . "] No column whitelist defined - column validation skipped", [
+            Logger::getInstance()->warning("[" . static::class . "] No column whitelist defined - column validation skipped", [
                 'column' => $column
             ]);
             return true;
@@ -123,7 +123,7 @@ abstract class AbstractRepository {
     protected function validateColumn(string $column): void {
         if (!$this->isValidColumn($column)) {
             $error = "Invalid column name: '$column' not in whitelist for " . static::class;
-            SecureLogger::warning($error, [
+            Logger::getInstance()->warning($error, [
                 'column' => $column,
                 'allowed' => $this->allowedColumns
             ]);
@@ -441,7 +441,7 @@ abstract class AbstractRepository {
     }
 
     /**
-     * Log database errors using SecureLogger
+     * Log database errors using Logger
      *
      * @param string $message Error message
      * @param PDOException|null $exception Exception object
@@ -458,15 +458,15 @@ abstract class AbstractRepository {
             $context['query'] = $query;
         }
 
-        // Use SecureLogger for consistent error logging
+        // Use Logger for consistent error logging
         if ($exception) {
-            SecureLogger::logException($exception, $context);
+            Logger::getInstance()->logException($exception, $context);
         } else {
             $logMessage = "[" . static::class . "] $message";
             if ($query) {
                 $logMessage .= " | Query: $query";
             }
-            SecureLogger::debug($logMessage);
+            Logger::getInstance()->debug($logMessage);
         }
     }
 

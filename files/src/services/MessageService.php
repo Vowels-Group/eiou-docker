@@ -3,7 +3,7 @@
 
 namespace Eiou\Services;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Contracts\MessageServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Database\TransactionContactRepository;
@@ -238,7 +238,7 @@ class MessageService implements MessageServiceInterface {
 
         // Validate senderPublicKey is present
         if ($senderPublicKey === null) {
-            SecureLogger::warning("Message validity check failed: missing senderPublicKey", [
+            Logger::getInstance()->warning("Message validity check failed: missing senderPublicKey", [
                 'sender_address' => $senderAddress,
                 'type_message' => $typeMessage
             ]);
@@ -265,7 +265,7 @@ class MessageService implements MessageServiceInterface {
         }
 
         // Not a contact nor able to match source - log for debugging contact acceptance issues
-        SecureLogger::info("Message validity check failed: sender not in contacts", [
+        Logger::getInstance()->info("Message validity check failed: sender not in contacts", [
             'sender_address' => $senderAddress,
             'sender_public_key_hash' => substr(hash('sha256', $senderPublicKey), 0, 16),
             'type_message' => $typeMessage
@@ -394,7 +394,7 @@ class MessageService implements MessageServiceInterface {
 
         // Validate required fields
         if ($senderPublicKey === null) {
-            SecureLogger::warning("Contact message missing senderPublicKey", [
+            Logger::getInstance()->warning("Contact message missing senderPublicKey", [
                 'sender_address' => $senderAddress,
                 'status' => $status
             ]);
@@ -412,12 +412,12 @@ class MessageService implements MessageServiceInterface {
             $updateResult = $this->contactRepository->updateStatus($senderPublicKey, $status);
 
             if (!$updateResult) {
-                SecureLogger::warning("Failed to update contact status to accepted", [
+                Logger::getInstance()->warning("Failed to update contact status to accepted", [
                     'sender_address' => $senderAddress,
                     'sender_public_key_hash' => substr(hash('sha256', $senderPublicKey), 0, 16)
                 ]);
             } else {
-                SecureLogger::info("Contact status updated to accepted", [
+                Logger::getInstance()->info("Contact status updated to accepted", [
                     'sender_address' => $senderAddress
                 ]);
             }
@@ -430,7 +430,7 @@ class MessageService implements MessageServiceInterface {
             echo $this->messagePayload->buildContactAcceptanceAcknowledgment($senderAddress);
         } else {
             // Log unexpected status for debugging
-            SecureLogger::info("Received contact message with non-accepted status", [
+            Logger::getInstance()->info("Received contact message with non-accepted status", [
                 'status' => $status,
                 'sender_address' => $senderAddress
             ]);
@@ -627,12 +627,12 @@ class MessageService implements MessageServiceInterface {
      */
     public function validateMessageStructure(array $request): bool {
         if (!isset($request['typeMessage'])) {
-            SecureLogger::warning("Message structure invalid: missing 'typeMessage' field");
+            Logger::getInstance()->warning("Message structure invalid: missing 'typeMessage' field");
             return false;
         }
 
         if (!isset($request['senderAddress'])) {
-            SecureLogger::warning("Message structure invalid: missing 'senderAddress' field");
+            Logger::getInstance()->warning("Message structure invalid: missing 'senderAddress' field");
             return false;
         }
 

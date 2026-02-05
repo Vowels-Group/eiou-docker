@@ -6,7 +6,7 @@ namespace Eiou\Services\Utilities;
 use Eiou\Contracts\TransportServiceInterface;
 use Eiou\Core\Constants;
 use Eiou\Core\UserContext;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Utils\AddressValidator;
 use Eiou\Services\ServiceContainer;
 
@@ -313,7 +313,7 @@ class TransportUtilityService implements TransportServiceInterface
             curl_close($ch);
 
             // Log the error for debugging
-            SecureLogger::warning("HTTP request failed", [
+            Logger::getInstance()->warning("HTTP request failed", [
                 'recipient' => $recipient,
                 'curl_error' => $curlError,
                 'curl_errno' => $curlErrno
@@ -359,7 +359,7 @@ class TransportUtilityService implements TransportServiceInterface
             curl_close($ch);
 
             // Log the error for debugging
-            SecureLogger::warning("TOR request failed", [
+            Logger::getInstance()->warning("TOR request failed", [
                 'recipient' => $recipient,
                 'curl_error' => $curlError,
                 'curl_errno' => $curlErrno
@@ -410,7 +410,7 @@ class TransportUtilityService implements TransportServiceInterface
 
         // Debug: Log the message being signed for sync verification troubleshooting
         if (isset($messageContent['type']) && $messageContent['type'] === 'send') {
-            SecureLogger::debug("Signing transaction message", [
+            Logger::getInstance()->debug("Signing transaction message", [
                 'txid' => $messageContent['txid'] ?? 'unknown',
                 'signed_message' => $message,
                 'nonce' => $nonce
@@ -420,7 +420,7 @@ class TransportUtilityService implements TransportServiceInterface
         // Sign the message
         $signature = '';
         if (!openssl_sign($message, $signature, openssl_pkey_get_private($this->currentUser->getPrivateKey()))) {
-            SecureLogger::error("Failed to sign message", [
+            Logger::getInstance()->error("Failed to sign message", [
                 'txid' => $messageContent['txid'] ?? 'unknown'
             ]);
             return false;

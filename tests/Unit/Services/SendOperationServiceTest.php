@@ -26,7 +26,7 @@ use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\TimeUtilityService;
 use Eiou\Utils\InputValidator;
 use Eiou\Core\UserContext;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Core\Constants;
 use Eiou\Contracts\LockingServiceInterface;
 use Eiou\Contracts\ContactServiceInterface;
@@ -47,7 +47,7 @@ class SendOperationServiceTest extends TestCase
     private TimeUtilityService $mockTimeUtility;
     private InputValidator $mockInputValidator;
     private UserContext $mockUserContext;
-    private SecureLogger $mockLogger;
+    private Logger $mockLogger;
     private MessageDeliveryService $mockMessageDeliveryService;
     private LockingServiceInterface $mockLockingService;
     private ContactServiceInterface $mockContactService;
@@ -66,7 +66,7 @@ class SendOperationServiceTest extends TestCase
         $this->mockTimeUtility = $this->createMock(TimeUtilityService::class);
         $this->mockInputValidator = $this->createMock(InputValidator::class);
         $this->mockUserContext = $this->createMock(UserContext::class);
-        $this->mockLogger = $this->createMock(SecureLogger::class);
+        $this->mockLogger = $this->createMock(Logger::class);
         $this->mockMessageDeliveryService = $this->createMock(MessageDeliveryService::class);
         $this->mockLockingService = $this->createMock(LockingServiceInterface::class);
         $this->mockContactService = $this->createMock(ContactServiceInterface::class);

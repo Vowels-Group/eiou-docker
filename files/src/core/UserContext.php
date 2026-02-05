@@ -5,7 +5,7 @@ namespace Eiou\Core;
 
 use Eiou\Utils\AddressValidator;
 use Eiou\Security\KeyEncryption;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Exception;
 
 /**
@@ -143,7 +143,7 @@ class UserContext {
                 return KeyEncryption::decrypt($this->get('private_encrypted'));
             } catch (Exception $e) {
                 // Log decryption failure but don't expose details
-                SecureLogger::error('Failed to decrypt private key', [
+                Logger::getInstance()->error('Failed to decrypt private key', [
                     'error' => $e->getMessage()
                 ]);
                 return null;
@@ -182,7 +182,7 @@ class UserContext {
                 return KeyEncryption::decrypt($this->get('authcode_encrypted'));
             } catch (Exception $e) {
                 // Log decryption failure but don't expose details
-                SecureLogger::error('Failed to decrypt auth code', [
+                Logger::getInstance()->error('Failed to decrypt auth code', [
                     'error' => $e->getMessage()
                 ]);
                 return null;

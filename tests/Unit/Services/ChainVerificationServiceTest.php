@@ -17,7 +17,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Services\ChainVerificationService;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Core\UserContext;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Contracts\SyncTriggerInterface;
 use RuntimeException;
 
@@ -27,7 +27,7 @@ class ChainVerificationServiceTest extends TestCase
     private ChainVerificationService $service;
     private TransactionChainRepository $mockChainRepo;
     private UserContext $mockUserContext;
-    private SecureLogger $logger;
+    private Logger $logger;
     private SyncTriggerInterface $mockSyncTrigger;
 
     private const TEST_USER_PUBKEY = 'test-user-public-key-12345';
@@ -38,9 +38,8 @@ class ChainVerificationServiceTest extends TestCase
     {
         $this->mockChainRepo = $this->createMock(TransactionChainRepository::class);
         $this->mockUserContext = $this->createMock(UserContext::class);
-        // SecureLogger uses static methods, so we use the real instance
-        // The static methods won't affect test behavior
-        $this->logger = new SecureLogger();
+        // Logger is injected into services via injected instance
+        $this->logger = $this->createMock(Logger::class);
         $this->mockSyncTrigger = $this->createMock(SyncTriggerInterface::class);
 
         $this->service = new ChainVerificationService(
@@ -132,7 +131,7 @@ class ChainVerificationServiceTest extends TestCase
                 'broken_txids' => ['broken-txid-1']
             ]);
 
-        // SecureLogger::info() is called but uses static methods, so we don't mock it
+        // Logger methods are called via injected instance
 
         $this->mockSyncTrigger->expects($this->once())
             ->method('syncTransactionChain')
@@ -411,8 +410,8 @@ class ChainVerificationServiceTest extends TestCase
                 'broken_txids' => []
             ]);
 
-        // SecureLogger::info() is called with context containing gap_count and transaction_count
-        // but uses static methods so we cannot mock it; we verify sync is triggered instead
+        // Logger methods are called via injected instance with context containing gap_count and transaction_count
+        // We verify sync is triggered instead
 
         $this->mockSyncTrigger->expects($this->once())
             ->method('syncTransactionChain')
@@ -581,7 +580,7 @@ class ChainVerificationServiceTest extends TestCase
                 'broken_txids' => []
             ]);
 
-        // SecureLogger uses static methods, so logging happens but we verify sync instead
+        // Logger methods are called via injected instance, we verify sync instead
 
         $this->mockSyncTrigger->expects($this->once())
             ->method('syncTransactionChain')

@@ -9,7 +9,7 @@
  *
  * Initialization Sequence:
  * 1. Load Composer autoloader (if not already loaded)
- * 2. Initialize SecureLogger
+ * 2. Initialize Logger
  * 3. Initialize ErrorHandler
  * 4. Set security headers (web requests only)
  * 5. Configure and start secure session
@@ -33,12 +33,12 @@ require_once __DIR__ . '/src/bootstrap.php';
 use Eiou\Core\Constants;
 use Eiou\Core\ErrorHandler;
 use Eiou\Utils\Security;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Services\RateLimiterService;
 
 // Initialize secure logging
-SecureLogger::init(Constants::LOG_FILE_APP ?: '/var/log/eiou/app.log', Constants::LOG_LEVEL ?: 'INFO');
+Logger::init(Constants::LOG_FILE_APP ?: '/var/log/eiou/app.log', Constants::LOG_LEVEL ?: 'INFO');
 
 // Initialize error handler (must be done early)
 ErrorHandler::init();
@@ -144,7 +144,7 @@ function u($string) {
 }
 
 // Log application start
-SecureLogger::info("Application initialized", [
+Logger::getInstance()->info("Application initialized", [
     'sapi' => php_sapi_name(),
     'ip' => php_sapi_name() !== 'cli' ? RateLimiterService::getClientIp() : 'CLI',
     'request_uri' => $_SERVER['REQUEST_URI'] ?? 'N/A'

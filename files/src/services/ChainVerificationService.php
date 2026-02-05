@@ -3,7 +3,7 @@
 
 namespace Eiou\Services;
 
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Contracts\ChainVerificationServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Database\TransactionChainRepository;
@@ -24,8 +24,8 @@ class ChainVerificationService implements ChainVerificationServiceInterface {
     /** @var UserContext */
     private UserContext $currentUser;
 
-    /** @var SecureLogger */
-    private SecureLogger $secureLogger;
+    /** @var Logger */
+    private Logger $secureLogger;
 
     /**
      * @var SyncTriggerInterface|null Sync trigger for chain repair
@@ -37,12 +37,12 @@ class ChainVerificationService implements ChainVerificationServiceInterface {
      *
      * @param TransactionChainRepository $transactionChainRepository Transaction chain repository
      * @param UserContext $currentUser Current user context
-     * @param SecureLogger $secureLogger Secure logger instance
+     * @param Logger $secureLogger Secure logger instance
      */
     public function __construct(
         TransactionChainRepository $transactionChainRepository,
         UserContext $currentUser,
-        SecureLogger $secureLogger
+        Logger $secureLogger
     ) {
         $this->transactionChainRepository = $transactionChainRepository;
         $this->currentUser = $currentUser;

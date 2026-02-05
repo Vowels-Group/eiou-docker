@@ -8,7 +8,7 @@ use Eiou\Services\ContactService;
 use Eiou\Services\TransactionService;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
@@ -129,7 +129,7 @@ class TransactionController
                 $userContext = UserContext::getInstance();
                 $selfSendValidation = InputValidator::validateNotSelfSend($finalRecipient, $userContext);
                 if (!$selfSendValidation['valid']) {
-                    SecureLogger::warning("Self-send transaction attempted", [
+                    Logger::getInstance()->warning("Self-send transaction attempted", [
                         'recipient' => $finalRecipient,
                         'error' => $selfSendValidation['error']
                     ]);
@@ -174,8 +174,8 @@ class TransactionController
                 if (ob_get_level() > 0) {
                     ob_end_clean();
                 }
-                // Use SecureLogger for exception logging
-                SecureLogger::logException($e, [
+                // Use Logger for exception logging
+                Logger::getInstance()->logException($e, [
                     'controller' => 'TransactionController',
                     'action' => __FUNCTION__
                 ]);
