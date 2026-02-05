@@ -951,26 +951,30 @@ echo -e "================================================================"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3.1: Storing original authcode from userconfig.json"
 
-originalAuthCode=$(docker exec ${testContainer} php -r '
+originalAuthCodeResult=$(docker exec ${testContainer} php -r '
     require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode;
+        echo $authcode . "|" . $json["authcode_encrypted"];
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
 ' 2>&1)
 
+# Split: decrypted for comparison, encrypted for display (SECURITY: never print decrypted)
+originalAuthCode="${originalAuthCodeResult%%|*}"
+originalAuthCodeEnc="${originalAuthCodeResult##*|}"
+
 if [[ "$originalAuthCode" != "ERROR_NO_AUTHCODE" ]] && [[ -n "$originalAuthCode" ]]; then
     # Verify authcode format (should be 20 hex characters)
     if [[ ${#originalAuthCode} -eq 20 ]] && [[ "$originalAuthCode" =~ ^[0-9a-f]+$ ]]; then
         printf "\t   Original authcode retrieved ${GREEN}PASSED${NC}\n"
-        printf "\t   BEFORE - Authcode: ${originalAuthCode:0:4}...${originalAuthCode: -4} (${#originalAuthCode} chars)\n"
+        printf "\t   BEFORE - Authcode (encrypted): ${originalAuthCodeEnc:0:16}... (${#originalAuthCode} chars decrypted)\n"
         passed=$(( passed + 1 ))
     else
         printf "\t   Original authcode retrieved but invalid format ${YELLOW}WARNING${NC}\n"
-        printf "\t   Authcode: ${originalAuthCode:0:4}... (length: ${#originalAuthCode})\n"
+        printf "\t   Authcode (encrypted): ${originalAuthCodeEnc:0:16}... (length: ${#originalAuthCode})\n"
         passed=$(( passed + 1 ))
     fi
 else
@@ -1080,20 +1084,24 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3.6: Retrieving restored authcode"
 
-restoredAuthCode=$(docker exec ${testContainer} php -r '
+restoredAuthCodeResult=$(docker exec ${testContainer} php -r '
     require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode;
+        echo $authcode . "|" . $json["authcode_encrypted"];
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
 ' 2>&1)
 
+# Split: decrypted for comparison, encrypted for display (SECURITY: never print decrypted)
+restoredAuthCode="${restoredAuthCodeResult%%|*}"
+restoredAuthCodeEnc="${restoredAuthCodeResult##*|}"
+
 if [[ "$restoredAuthCode" != "ERROR_NO_AUTHCODE" ]] && [[ -n "$restoredAuthCode" ]]; then
     printf "\t   Restored authcode retrieved ${GREEN}PASSED${NC}\n"
-    printf "\t   AFTER  - Authcode: ${restoredAuthCode:0:4}...${restoredAuthCode: -4} (${#restoredAuthCode} chars)\n"
+    printf "\t   AFTER  - Authcode (encrypted): ${restoredAuthCodeEnc:0:16}... (${#restoredAuthCode} chars decrypted)\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   Restored authcode retrieval ${RED}FAILED${NC}\n"
@@ -1145,8 +1153,8 @@ echo -e "\n\t-> Step 3.9: Comparing original and restored authcodes"
 echo -e "\n\t   ============================================"
 echo -e "\t   AUTHCODE COMPARISON RESULTS"
 echo -e "\t   ============================================"
-echo -e "\t   BEFORE: ${originalAuthCode:0:4}...${originalAuthCode: -4}"
-echo -e "\t   AFTER:  ${restoredAuthCode:0:4}...${restoredAuthCode: -4}"
+echo -e "\t   BEFORE (encrypted): ${originalAuthCodeEnc:0:16}..."
+echo -e "\t   AFTER  (encrypted): ${restoredAuthCodeEnc:0:16}..."
 echo -e "\t   Match:  $( [[ "$originalAuthCode" == "$restoredAuthCode" ]] && echo 'YES' || echo 'NO' )"
 echo -e "\t   ============================================\n"
 
@@ -1167,44 +1175,49 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Step 3.10: Testing consistency across multiple restore iterations"
 
-# Store current authcode
+# Store current authcode (decrypted for comparison, encrypted for display)
 iteration1AuthCode="$restoredAuthCode"
+iteration1AuthCodeEnc="$restoredAuthCodeEnc"
 
 # Delete and restore again
 docker exec ${testContainer} rm -f ${USERCONFIG} ${TOR_SECRET_KEY} ${TOR_PUBLIC_KEY} ${TOR_HOSTNAME} 2>&1
 docker exec ${testContainer} eiou generate restore ${seedPhraseAuth} 2>&1
 wait_for_file ${testContainer} "${USERCONFIG}" 10 || true
 
-iteration2AuthCode=$(docker exec ${testContainer} php -r '
+iteration2AuthCodeResult=$(docker exec ${testContainer} php -r '
     require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode;
+        echo $authcode . "|" . $json["authcode_encrypted"];
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
 ' 2>&1)
+iteration2AuthCode="${iteration2AuthCodeResult%%|*}"
+iteration2AuthCodeEnc="${iteration2AuthCodeResult##*|}"
 
 # Delete and restore a third time
 docker exec ${testContainer} rm -f ${USERCONFIG} ${TOR_SECRET_KEY} ${TOR_PUBLIC_KEY} ${TOR_HOSTNAME} 2>&1
 docker exec ${testContainer} eiou generate restore ${seedPhraseAuth} 2>&1
 wait_for_file ${testContainer} "${USERCONFIG}" 10 || true
 
-iteration3AuthCode=$(docker exec ${testContainer} php -r '
+iteration3AuthCodeResult=$(docker exec ${testContainer} php -r '
     require_once "'"${SECURITY_DIR}"'/KeyEncryption.php";
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode;
+        echo $authcode . "|" . $json["authcode_encrypted"];
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
 ' 2>&1)
+iteration3AuthCode="${iteration3AuthCodeResult%%|*}"
+iteration3AuthCodeEnc="${iteration3AuthCodeResult##*|}"
 
-echo -e "\t   Iteration 1: ${iteration1AuthCode:0:4}...${iteration1AuthCode: -4}"
-echo -e "\t   Iteration 2: ${iteration2AuthCode:0:4}...${iteration2AuthCode: -4}"
-echo -e "\t   Iteration 3: ${iteration3AuthCode:0:4}...${iteration3AuthCode: -4}"
+echo -e "\t   Iteration 1 (encrypted): ${iteration1AuthCodeEnc:0:16}..."
+echo -e "\t   Iteration 2 (encrypted): ${iteration2AuthCodeEnc:0:16}..."
+echo -e "\t   Iteration 3 (encrypted): ${iteration3AuthCodeEnc:0:16}..."
 
 if [[ "$iteration1AuthCode" == "$iteration2AuthCode" ]] && [[ "$iteration2AuthCode" == "$iteration3AuthCode" ]]; then
     printf "\t   ${GREEN}All iterations produce same authcode - deterministic${NC}\n"
@@ -1230,19 +1243,23 @@ authcodeContainerHash=$(docker run -d --network="${network}" --name "${authcodeR
 echo -e "\t   Waiting for container initialization..."
 wait_for_container_initialized ${authcodeRestoreContainer} 60 || true
 
-newContainerAuthCode=$(docker exec ${authcodeRestoreContainer} php -r '
+newContainerAuthCodeResult=$(docker exec ${authcodeRestoreContainer} php -r '
     require_once "/etc/eiou/src/bootstrap.php";
     $json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode;
+        echo $authcode . "|" . $json["authcode_encrypted"];
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
 ' 2>&1)
 
+# Split: decrypted for comparison, encrypted for display (SECURITY: never print decrypted)
+newContainerAuthCode="${newContainerAuthCodeResult%%|*}"
+newContainerAuthCodeEnc="${newContainerAuthCodeResult##*|}"
+
 if [[ "$newContainerAuthCode" != "ERROR_NO_AUTHCODE" ]] && [[ -n "$newContainerAuthCode" ]]; then
-    printf "\t   New container authcode retrieved: ${newContainerAuthCode:0:4}...${newContainerAuthCode: -4}\n"
+    printf "\t   New container authcode retrieved (encrypted): ${newContainerAuthCodeEnc:0:16}...\n"
 
     if [[ "$originalAuthCode" == "$newContainerAuthCode" ]]; then
         printf "\t   ${GREEN}New container authcode matches original!${NC}\n"
