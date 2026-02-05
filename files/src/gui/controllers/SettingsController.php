@@ -249,8 +249,12 @@ class SettingsController
                 'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'N/A',
                 'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'N/A',
                 'timestamp' => date('Y-m-d H:i:s'),
-                'docker_image' => (getenv('EIOU_IMAGE_NAME') ?: 'N/A')
-                    . (getenv('EIOU_IMAGE_TAG') ? ':' . getenv('EIOU_IMAGE_TAG') : '')
+                'docker_image' => (function() {
+                    $di = @json_decode(@file_get_contents('/etc/docker-image-info'), true);
+                    $name = $di['name'] ?? 'N/A';
+                    $tag = $di['tag'] ?? '';
+                    return $name . ($tag ? ':' . $tag : '');
+                })()
             ];
 
             // Get MySQL/MariaDB version
@@ -492,8 +496,12 @@ class SettingsController
                 'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'N/A',
                 'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'N/A',
                 'timestamp' => date('Y-m-d H:i:s'),
-                'docker_image' => (getenv('EIOU_IMAGE_NAME') ?: 'N/A')
-                    . (getenv('EIOU_IMAGE_TAG') ? ':' . getenv('EIOU_IMAGE_TAG') : '')
+                'docker_image' => (function() {
+                    $di = @json_decode(@file_get_contents('/etc/docker-image-info'), true);
+                    $name = $di['name'] ?? 'N/A';
+                    $tag = $di['tag'] ?? '';
+                    return $name . ($tag ? ':' . $tag : '');
+                })()
             ];
 
             // Get MySQL/MariaDB version

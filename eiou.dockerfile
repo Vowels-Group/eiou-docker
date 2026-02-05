@@ -19,10 +19,12 @@
 FROM debian:12-slim
 
 # Docker image identity: baked in at build time via --build-arg
+# Written to /etc/docker-image-info (outside volumes) so PHP under Apache can read it
 ARG EIOU_IMAGE_NAME=eiou/eiou
 ARG EIOU_IMAGE_TAG=latest
 ENV EIOU_IMAGE_NAME=${EIOU_IMAGE_NAME}
 ENV EIOU_IMAGE_TAG=${EIOU_IMAGE_TAG}
+RUN printf '{"name":"%s","tag":"%s"}\n' "${EIOU_IMAGE_NAME}" "${EIOU_IMAGE_TAG}" > /etc/docker-image-info
 
 # Install required packages:
 # - apache2: Web server for GUI and REST API endpoints
