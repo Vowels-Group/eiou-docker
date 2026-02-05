@@ -42,7 +42,7 @@ We take security vulnerabilities seriously, even during the alpha phase. If you 
 
 | Method | Details |
 |--------|---------|
-| Email | [security@eiou.org](mailto:security@eiou.org) |
+| Email | [dockersecurity@eiou.org](mailto:dockersecurity@eiou.org) |
 | GitHub Security Advisories | [github.com/eiou-org/eiou-docker/security/advisories](https://github.com/eiou-org/eiou-docker/security/advisories) |
 
 **Do NOT** file security vulnerabilities as public GitHub issues. Use the private channels listed above.
