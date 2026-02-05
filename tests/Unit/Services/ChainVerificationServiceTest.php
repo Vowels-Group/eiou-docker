@@ -38,7 +38,7 @@ class ChainVerificationServiceTest extends TestCase
     {
         $this->mockChainRepo = $this->createMock(TransactionChainRepository::class);
         $this->mockUserContext = $this->createMock(UserContext::class);
-        // Logger is injected into services, so we create a mock
+        // Logger is injected into services via injected instance
         $this->logger = $this->createMock(Logger::class);
         $this->mockSyncTrigger = $this->createMock(SyncTriggerInterface::class);
 
@@ -131,7 +131,7 @@ class ChainVerificationServiceTest extends TestCase
                 'broken_txids' => ['broken-txid-1']
             ]);
 
-        // SecureLogger::info() is called but uses static methods, so we don't mock it
+        // Logger methods are called via injected instance
 
         $this->mockSyncTrigger->expects($this->once())
             ->method('syncTransactionChain')
@@ -410,8 +410,8 @@ class ChainVerificationServiceTest extends TestCase
                 'broken_txids' => []
             ]);
 
-        // SecureLogger::info() is called with context containing gap_count and transaction_count
-        // but uses static methods so we cannot mock it; we verify sync is triggered instead
+        // Logger methods are called via injected instance with context containing gap_count and transaction_count
+        // We verify sync is triggered instead
 
         $this->mockSyncTrigger->expects($this->once())
             ->method('syncTransactionChain')
@@ -580,7 +580,7 @@ class ChainVerificationServiceTest extends TestCase
                 'broken_txids' => []
             ]);
 
-        // SecureLogger uses static methods, so logging happens but we verify sync instead
+        // Logger methods are called via injected instance, we verify sync instead
 
         $this->mockSyncTrigger->expects($this->once())
             ->method('syncTransactionChain')

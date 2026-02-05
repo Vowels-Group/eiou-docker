@@ -17,7 +17,7 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Eiou\Services\ServiceContainer;
 use Eiou\Core\UserContext;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use PDO;
@@ -336,14 +336,14 @@ class ServiceContainerTest extends TestCase
     }
 
     /**
-     * Test getLogger returns SecureLogger instance
+     * Test getLogger returns Logger instance
      */
-    public function testGetLoggerReturnsSecureLoggerInstance(): void
+    public function testGetLoggerReturnsLoggerInstance(): void
     {
         $container = ServiceContainer::getInstance($this->mockUserContext, $this->mockPdo);
 
         $logger = $container->getLogger();
-        $this->assertInstanceOf(SecureLogger::class, $logger);
+        $this->assertInstanceOf(Logger::class, $logger);
     }
 
     /**

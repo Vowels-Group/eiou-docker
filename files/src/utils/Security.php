@@ -130,8 +130,8 @@ class Security {
      * @return string Safe error message
      */
     public static function getSafeErrorMessage($e, $debug = false) {
-        // Log the full error internally using SecureLogger
-        Logger::getInstance()->logException($e, 'ERROR');
+        // Log the full error internally
+        Logger::getInstance()->logException($e, [], 'ERROR');
 
         // Return generic message to user
         if ($debug && (Constants::get('APP_ENV') === 'development' || Constants::get('APP_DEBUG') === 'true')) {

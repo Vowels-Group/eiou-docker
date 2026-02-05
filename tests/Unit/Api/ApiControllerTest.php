@@ -236,12 +236,12 @@ class ApiControllerTest extends TestCase
         $mockApiKeyRepo = $this->createMock(ApiKeyRepository::class);
         $mockApiKeyRepo->method('logRequest');
 
-        // Create controller WITHOUT logger to avoid static method issues
+        // Create controller WITHOUT logger
         $controller = new ApiController(
             $mockAuth,
             $mockApiKeyRepo,
             $mockServices,
-            null  // No logger - avoids SecureLogger static method call issue
+            null  // No logger provided
         );
 
         $response = $controller->handleRequest(

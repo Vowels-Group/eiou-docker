@@ -14,7 +14,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use Eiou\Core\Application;
-use Eiou\Utils\SecureLogger;
+use Eiou\Utils\Logger;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Security;
 use Eiou\Services\ServiceContainer;
@@ -218,9 +218,9 @@ class ApplicationTest extends TestCase
     }
 
     /**
-     * Test getLogger returns SecureLogger instance
+     * Test getLogger returns Logger instance
      */
-    public function testGetLoggerReturnsSecureLogger(): void
+    public function testGetLoggerReturnsLogger(): void
     {
         if (!file_exists('/etc/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
@@ -229,7 +229,7 @@ class ApplicationTest extends TestCase
         $app = Application::getInstance();
         $result = $app->getLogger();
 
-        $this->assertInstanceOf(SecureLogger::class, $result);
+        $this->assertInstanceOf(Logger::class, $result);
     }
 
     /**
@@ -311,24 +311,24 @@ class ApplicationTest extends TestCase
     }
 
     /**
-     * Test secureLoggerLoaded returns bool
+     * Test loggerLoaded returns bool
      */
-    public function testSecureLoggerLoadedReturnsBool(): void
+    public function testLoggerLoadedReturnsBool(): void
     {
         if (!file_exists('/etc/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
         }
 
         $app = Application::getInstance();
-        $result = $app->secureLoggerLoaded();
+        $result = $app->loggerLoaded();
 
         $this->assertIsBool($result);
     }
 
     /**
-     * Test secureLoggerLoaded returns true after getLogger
+     * Test loggerLoaded returns true after getLogger
      */
-    public function testSecureLoggerLoadedReturnsTrueAfterGetLogger(): void
+    public function testLoggerLoadedReturnsTrueAfterGetLogger(): void
     {
         if (!file_exists('/etc/eiou/')) {
             $this->markTestSkipped('Test requires EIOU Docker environment');
@@ -336,7 +336,7 @@ class ApplicationTest extends TestCase
 
         $app = Application::getInstance();
         $app->getLogger();
-        $result = $app->secureLoggerLoaded();
+        $result = $app->loggerLoaded();
 
         $this->assertTrue($result);
     }

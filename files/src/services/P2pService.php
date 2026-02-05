@@ -411,7 +411,7 @@ class P2pService implements P2pServiceInterface {
                 $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_QUEUED);
             }
         } catch (PDOException $e) {
-            Logger::getInstance()->logException($e, 'ERROR');
+            Logger::getInstance()->logException($e, [], 'ERROR');
             throw $e;
         } catch (Exception $e) {
             Logger::getInstance()->error("Error in handleP2pRequest", ['error' => $e->getMessage()]);

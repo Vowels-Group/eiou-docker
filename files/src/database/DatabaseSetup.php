@@ -106,7 +106,7 @@ function freshInstall(){
 
         } catch (PDOException $e) {
             // Handle database error
-            Logger::getInstance()->logException($e, 'ERROR');
+            Logger::getInstance()->logException($e, [], 'ERROR');
 
             // Throw exception to let ErrorHandler handle it
             throw new \RuntimeException(

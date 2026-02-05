@@ -126,16 +126,8 @@ class Logger implements LoggerInterface
         self::doLog($level, $message, $context);
     }
 
-    public function logException(\Throwable $e, array|string $contextOrLevel = 'ERROR', string $level = 'ERROR'): void
+    public function logException(\Throwable $e, array $context = [], string $level = 'ERROR'): void
     {
-        // Backward compatibility: second param can be a level string or context array
-        if (is_string($contextOrLevel)) {
-            $context = [];
-            $level = $contextOrLevel;
-        } else {
-            $context = $contextOrLevel;
-        }
-
         SecureLogger::logException($e, $context, $level);
         self::writeToDebugService(get_class($e) . ': ' . $e->getMessage(), $level);
     }

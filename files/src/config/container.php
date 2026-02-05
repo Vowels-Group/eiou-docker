@@ -108,7 +108,6 @@ use Eiou\Events\EventDispatcher;
 use Eiou\Core\UserContext;
 use Eiou\Utils\InputValidator;
 use Eiou\Utils\Logger;
-use Eiou\Utils\SecureLogger;
 use Eiou\Utils\Security;
 use Eiou\Schemas\Payloads\TransactionPayload;
 
@@ -178,11 +177,6 @@ function buildContainer(
         InputValidator::class => autowire(),
         Security::class => autowire(),
         TransactionPayload::class => autowire(),
-
-        // SecureLogger is a static utility, but we can still provide instance
-        SecureLogger::class => factory(function () {
-            return new SecureLogger();
-        }),
 
         // Logger facade wraps SecureLogger + optional DebugService bridge
         Logger::class => factory(function () {

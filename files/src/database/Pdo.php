@@ -61,7 +61,7 @@ function createPDOConnection(): PDO {
         return $pdo;
     } catch (PDOException $e) {
         // Log the error securely (don't expose connection details)
-        Logger::getInstance()->logException($e, 'CRITICAL');
+        Logger::getInstance()->logException($e, [], 'CRITICAL');
 
         // Throw exception to let ErrorHandler handle it
         // This allows upper layers to decide how to handle the error

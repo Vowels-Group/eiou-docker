@@ -199,7 +199,7 @@ class ErrorHandler {
     private static function logException($exception) {
         // Use Logger first if available
         if (class_exists('Eiou\\Utils\\Logger')) {
-            Logger::getInstance()->logException($exception, 'CRITICAL');
+            Logger::getInstance()->logException($exception, [], 'CRITICAL');
         } else {
             $logMessage = sprintf(
                 "Uncaught %s: %s in %s:%d\nStack trace:\n%s",

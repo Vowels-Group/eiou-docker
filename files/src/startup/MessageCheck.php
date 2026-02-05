@@ -21,6 +21,6 @@ try{
     $passed = true; // All needed precursors are available and working
     return;
 } catch(\Exception $e){
-    Logger::getInstance()->logException($e, 'ERROR');
+    Logger::getInstance()->logException($e, [], 'ERROR');
     return;
 }

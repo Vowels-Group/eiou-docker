@@ -188,12 +188,11 @@ class TransactionProcessingServiceTest extends TestCase
     /**
      * Test processTransaction with missing required fields throws exception
      *
-     * Note: This test is skipped because SecureLogger::error is a static method
-     * that cannot be mocked in PHPUnit.
+     * Note: This test is skipped because Logger is now injectable but test needs rework to verify logging behavior.
      */
     public function testProcessTransactionWithMissingRequiredFieldsThrowsException(): void
     {
-        $this->markTestSkipped('SecureLogger::error is a static method that cannot be mocked');
+        $this->markTestSkipped('Logger is now injectable but test needs rework to verify logging behavior');
     }
 
     /**
