@@ -55,7 +55,8 @@ Integration tests validate the complete system behavior using Docker containers.
 | **InputValidatorTest.php** | 40+ | All 18 validation methods: amount, currency, address, txid, contact name, fee percent, credit limit, public key, signature, memo, etc. |
 | **SecurityTest.php** | 30 | XSS prevention (htmlEncode, jsEncode), input sanitization, password hashing/verification, CSRF tokens, email/URL/IP validation, filename sanitization, timing-safe comparison |
 | **AddressValidatorTest.php** | 20 | HTTP/HTTPS/Tor address detection, transport type identification, address categorization |
-| **SecureLoggerTest.php** | 18 | Sensitive data masking (passwords, authcodes, API keys, emails, credit cards, SSN, mnemonics), log levels, file rotation |
+| **LoggerTest.php** | 30 | Unified Logger facade: interface compliance, singleton, all log levels, logException, context passing, DebugService bridging, exception isolation, sensitive data masking |
+| **SecureLoggerTest.php** | 18 | SecureLogger backend: sensitive data masking (passwords, authcodes, API keys, emails, credit cards, SSN, mnemonics), log levels, file rotation |
 | **AdaptivePollerTest.php** | 17 | Polling interval calculation, state management, reset, force interval bounds clamping |
 | **SecureSeedphraseDisplayTest.php** | 30+ | Secure file display, availability check, TTL, cleanup |
 
@@ -435,6 +436,7 @@ tests/
 │       ├── AddressValidatorTest.php
 │       ├── AdaptivePollerTest.php
 │       ├── InputValidatorTest.php
+│       ├── LoggerTest.php
 │       ├── SecureLoggerTest.php
 │       └── SecurityTest.php
 └── ...                        # Integration test scripts

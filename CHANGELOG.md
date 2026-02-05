@@ -14,6 +14,8 @@ The project is currently in **ALPHA** status.
 
 ### Added
 - Unified `LoggerInterface` and `Logger` facade for consolidated logging (#557)
+- Full codebase migration from `SecureLogger` to `Logger` across 44 source files (#557)
+- `LoggerInterface` contract for dependency injection and testability (#557)
 
 ---
 
