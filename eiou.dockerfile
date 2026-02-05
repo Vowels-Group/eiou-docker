@@ -18,6 +18,12 @@
 
 FROM debian:12-slim
 
+# Docker image identity: baked in at build time via --build-arg
+ARG EIOU_IMAGE_NAME=eiou/eiou
+ARG EIOU_IMAGE_TAG=latest
+ENV EIOU_IMAGE_NAME=${EIOU_IMAGE_NAME}
+ENV EIOU_IMAGE_TAG=${EIOU_IMAGE_TAG}
+
 # Install required packages:
 # - apache2: Web server for GUI and REST API endpoints
 # - cron: Scheduled task execution for maintenance jobs

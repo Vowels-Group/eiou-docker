@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
+- Docker image name and tag displayed in GUI System Info tab, baked in at build time via `EIOU_IMAGE_NAME` and `EIOU_IMAGE_TAG` env vars
 - Unified `LoggerInterface` and `Logger` facade for consolidated logging (#557)
 - Full codebase migration from `SecureLogger` to `Logger` across 46 source files (#557)
 - `LoggerInterface` contract for dependency injection and testability (#557)
