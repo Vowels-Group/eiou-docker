@@ -12,7 +12,8 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
-Changes on development branches not yet merged to main.
+### Added
+- Unified `LoggerInterface` and `Logger` facade for consolidated logging (#557)
 
 ---
 

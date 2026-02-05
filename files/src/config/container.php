@@ -71,6 +71,7 @@ use Eiou\Contracts\TransactionProcessingServiceInterface;
 use Eiou\Contracts\SendOperationServiceInterface;
 use Eiou\Contracts\ChainOperationsInterface;
 use Eiou\Contracts\EventDispatcherInterface;
+use Eiou\Contracts\LoggerInterface;
 use Eiou\Contracts\P2pTransactionSenderInterface;
 
 // Service implementation imports
@@ -106,6 +107,7 @@ use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Events\EventDispatcher;
 use Eiou\Core\UserContext;
 use Eiou\Utils\InputValidator;
+use Eiou\Utils\Logger;
 use Eiou\Utils\SecureLogger;
 use Eiou\Utils\Security;
 use Eiou\Schemas\Payloads\TransactionPayload;
@@ -182,6 +184,11 @@ function buildContainer(
             return new SecureLogger();
         }),
 
+        // Logger facade wraps SecureLogger + optional DebugService bridge
+        Logger::class => factory(function () {
+            return Logger::getInstance();
+        }),
+
         // =================================================================
         // EVENT DISPATCHER
         // =================================================================
@@ -222,6 +229,7 @@ function buildContainer(
         MessageServiceInterface::class => get(MessageService::class),
         CleanupServiceInterface::class => get(CleanupService::class),
         DebugServiceInterface::class => get(DebugService::class),
+        LoggerInterface::class => get(Logger::class),
         MessageDeliveryServiceInterface::class => get(MessageDeliveryService::class),
         HeldTransactionServiceInterface::class => get(HeldTransactionService::class),
         TransactionRecoveryServiceInterface::class => get(TransactionRecoveryService::class),
