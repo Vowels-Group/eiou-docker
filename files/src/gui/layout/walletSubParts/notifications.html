@@ -39,6 +39,12 @@
         if (typeof showToast === 'function') {
             showToast(title, msg, toastType);
         }
+
+        // Clean URL if legacy message params are present (prevents re-display from bookmarks)
+        if (window.history && window.history.replaceState && window.location.search.indexOf('message=') !== -1) {
+            var cleanUrl = window.location.pathname + window.location.hash;
+            window.history.replaceState(null, '', cleanUrl);
+        }
     });
     </script>
 <?php endif; ?>

@@ -134,9 +134,11 @@ class MessageHelper
             $url = $_SERVER['PHP_SELF'];
         }
 
-        // Build redirect URL with message parameters
-        $redirectUrl = $url . '?message=' . urlencode($message) . '&type=' . urlencode($messageType);
-        header('Location: ' . $redirectUrl);
+        // Store message in session as a flash message (read-once, auto-cleared)
+        // This prevents messages from re-appearing on page refresh
+        $_SESSION['message'] = $message;
+        $_SESSION['message_type'] = $messageType;
+        header('Location: ' . $url);
         exit;
     }
 

@@ -82,11 +82,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['check_updates'])) {
     $transactionController->routeAction();
 }
 
-// Get message from URL parameters (for redirects)
-// Sanitize user input to prevent XSS attacks
-if (isset($_GET['message']) && isset($_GET['type'])) {
-    $messageForDisplay = htmlspecialchars($_GET['message'], ENT_QUOTES, 'UTF-8');
-    $messageTypeForDisplay = htmlspecialchars($_GET['type'], ENT_QUOTES, 'UTF-8');
+// Get message from session flash messages (set by controllers, read-once)
+// Flash messages are cleared after reading so they don't re-appear on refresh
+if (isset($_SESSION['message'])) {
+    $messageForDisplay = htmlspecialchars($_SESSION['message'], ENT_QUOTES, 'UTF-8');
+    $messageTypeForDisplay = htmlspecialchars($_SESSION['message_type'] ?? 'info', ENT_QUOTES, 'UTF-8');
+    unset($_SESSION['message'], $_SESSION['message_type']);
 } else {
     $messageForDisplay = '';
     $messageTypeForDisplay = '';
