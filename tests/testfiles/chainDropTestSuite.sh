@@ -193,9 +193,8 @@ check_chain_integrity() {
         require_once('${BOOTSTRAP_PATH}');
         \$app = \Eiou\Core\Application::getInstance();
         \$chainRepo = \$app->services->getTransactionChainRepository();
-        \$user = \$app->currentUser;
         \$result = \$chainRepo->verifyChainIntegrity(
-            \$user->getPublicKey(),
+            \$app->getPublicKey(),
             base64_decode('${contact_pubkey_b64}')
         );
         echo \$result['valid'] ? 'VALID' : 'INVALID';

@@ -325,7 +325,9 @@ elseif($request === "chaindrop"){
     }
     // Look up contact by address to get pubkey_hash
     $contactRepo = $app->services->getContactRepository();
-    $contact = $contactRepo->lookupByAddress($contactIdentifier);
+    $transportUtility = $app->services->getUtilityContainer()->getTransportUtility();
+    $transportIndex = $transportUtility->determineTransportType($contactIdentifier);
+    $contact = $transportIndex ? $contactRepo->lookupByAddress($transportIndex, $contactIdentifier) : null;
     if (!$contact) {
       $output->error("Contact not found: {$contactIdentifier}", ErrorCodes::CONTACT_NOT_FOUND);
       exit(1);
@@ -374,7 +376,9 @@ elseif($request === "chaindrop"){
     $contactIdentifier = $cleanArgv[3] ?? null;
     if ($contactIdentifier) {
       $contactRepo = $app->services->getContactRepository();
-      $contact = $contactRepo->lookupByAddress($contactIdentifier);
+      $transportUtility = $app->services->getUtilityContainer()->getTransportUtility();
+      $transportIndex = $transportUtility->determineTransportType($contactIdentifier);
+      $contact = $transportIndex ? $contactRepo->lookupByAddress($transportIndex, $contactIdentifier) : null;
       if (!$contact) {
         $output->error("Contact not found: {$contactIdentifier}", ErrorCodes::CONTACT_NOT_FOUND);
         exit(1);
