@@ -620,7 +620,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->getTransactionRepository(),
                 $this->getBalanceRepository(),
                 $this->getUtilityContainer(),
-                $this->currentUser
+                $this->currentUser,
+                $this->getMessageDeliveryService()
             );
         }
         return $this->services['CleanupService'];

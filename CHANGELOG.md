@@ -25,6 +25,7 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
+- Message delivery retry queue not processed: `processRetryQueue()` was never called from any background processor; wired into CleanupMessageProcessor
 - Config file migration in startup.sh for upgrades from pre-#573 images (config moved from `/etc/eiou/` to `/etc/eiou/config/`)
 - Composer dependency installation on upgrade: `startup.sh` now runs `composer install` instead of `dump-autoload` to install new dependencies
 - Composer lock file sync: `composer.lock` now included in source file backup for deterministic dependency installation
