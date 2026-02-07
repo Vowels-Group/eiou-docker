@@ -100,7 +100,7 @@ $totalEarnings = $currencyUtility->convertCentsToDollars($p2pService->getUserTot
 $transactions = $transactionService->getTransactionHistory($maxDisplayLines);
 $inProgressTransactions = $transactionService->getInProgressTransactions(5);
 
-// Track completed transactions for notifications
+// Track completed transactions for notifications (sent transactions)
 // Get previously known in-progress txids from session
 $prevInProgressTxids = $_SESSION['in_progress_txids'] ?? [];
 
@@ -124,6 +124,28 @@ foreach ($completedTxids as $txid) {
 
 // Store current in-progress txids for next comparison
 $_SESSION['in_progress_txids'] = $currentInProgressTxids;
+
+// Track received transactions for notifications
+// Received transactions bypass in-progress tracking (they arrive completed),
+// so we detect them by comparing known txids across page loads
+$currentTxids = array_column($transactions ?? [], 'txid');
+$prevKnownTxids = $_SESSION['known_txids'] ?? null;
+$newlyReceivedTransactions = [];
+
+// Only detect new transactions if we have a previous baseline (skip first page load)
+if ($prevKnownTxids !== null) {
+    $newTxids = array_diff($currentTxids, $prevKnownTxids);
+    foreach ($newTxids as $txid) {
+        foreach ($transactions as $tx) {
+            if (($tx['txid'] ?? '') === $txid && ($tx['type'] ?? '') === 'received' && ($tx['tx_type'] ?? '') !== 'contact') {
+                $newlyReceivedTransactions[] = $tx;
+                break;
+            }
+        }
+    }
+}
+
+$_SESSION['known_txids'] = $currentTxids;
 
 // Contact data
 $allContacts = $contactService->getAllContacts();

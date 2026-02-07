@@ -14,6 +14,7 @@ The project is currently in **ALPHA** status.
 
 ### Changed
 - GUI notifications use session flash messages instead of URL parameters; messages no longer re-appear on page refresh
+- GUI shows toast notification when receiving transactions ("Payment Received" with amount and sender name)
 - GUI recent transactions list shows description instead of counterparty address; click to view full details with address in modal (#589)
 
 ### Added
