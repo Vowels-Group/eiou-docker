@@ -774,6 +774,56 @@ class CliService implements CliServiceInterface {
                 'usage' => 'start',
                 'arguments' => []
             ],
+            'chaindrop' => [
+                'description' => 'Manage chain drop agreements for resolving transaction chain gaps',
+                'usage' => 'chaindrop [action] ([args...])',
+                'arguments' => [
+                    'action' => ['type' => 'required', 'description' => 'Action: propose, accept, reject, list, help'],
+                    'args' => ['type' => 'optional', 'description' => 'Arguments for the action']
+                ],
+                'actions' => [
+                    'propose' => [
+                        'usage' => 'chaindrop propose <contact_address>',
+                        'description' => 'Propose dropping a missing transaction from the chain (auto-detects the gap)',
+                        'arguments' => [
+                            'contact_address' => ['type' => 'required', 'description' => 'Address of the contact with the broken chain']
+                        ]
+                    ],
+                    'accept' => [
+                        'usage' => 'chaindrop accept <proposal_id>',
+                        'description' => 'Accept an incoming chain drop proposal',
+                        'arguments' => [
+                            'proposal_id' => ['type' => 'required', 'description' => 'ID of the proposal to accept']
+                        ]
+                    ],
+                    'reject' => [
+                        'usage' => 'chaindrop reject <proposal_id>',
+                        'description' => 'Reject an incoming chain drop proposal (transactions remain blocked)',
+                        'arguments' => [
+                            'proposal_id' => ['type' => 'required', 'description' => 'ID of the proposal to reject']
+                        ]
+                    ],
+                    'list' => [
+                        'usage' => 'chaindrop list [contact_address]',
+                        'description' => 'List pending chain drop proposals',
+                        'arguments' => [
+                            'contact_address' => ['type' => 'optional', 'description' => 'Filter by contact address (omit to list all incoming)']
+                        ]
+                    ],
+                    'help' => [
+                        'usage' => 'chaindrop help',
+                        'description' => 'Show chain drop help'
+                    ]
+                ],
+                'examples' => [
+                    'chaindrop propose https://bob' => 'Propose dropping a missing transaction with Bob',
+                    'chaindrop accept cdp-abc123...' => 'Accept an incoming proposal',
+                    'chaindrop reject cdp-abc123...' => 'Reject a proposal (chain stays broken)',
+                    'chaindrop list' => 'List all incoming pending proposals',
+                    'chaindrop list https://bob' => 'List proposals for a specific contact'
+                ],
+                'note' => 'While a chain gap exists, transactions with that contact are blocked. Rejecting a proposal leaves the gap unresolved.'
+            ],
             'global_options' => [
                 'description' => 'Global options available for all commands',
                 'options' => [
