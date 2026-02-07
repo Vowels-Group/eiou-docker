@@ -90,7 +90,7 @@ class ChainDropService implements ChainDropServiceInterface
                 return $result;
             }
 
-            $contactPubkey = $contact['public_key'] ?? null;
+            $contactPubkey = $contact['pubkey'] ?? null;
             if (!$contactPubkey) {
                 $result['error'] = 'Contact public key not available';
                 return $result;

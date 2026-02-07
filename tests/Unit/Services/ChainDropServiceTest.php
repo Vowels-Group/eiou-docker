@@ -114,7 +114,7 @@ class ChainDropServiceTest extends TestCase
             ->method('lookupByPubkeyHash')
             ->with($contactPubkeyHash)
             ->willReturn([
-                'public_key' => self::TEST_CONTACT_PUBKEY,
+                'pubkey' => self::TEST_CONTACT_PUBKEY,
                 'http' => self::TEST_CONTACT_ADDRESS
             ]);
 
@@ -170,7 +170,7 @@ class ChainDropServiceTest extends TestCase
             ->method('lookupByPubkeyHash')
             ->with($contactPubkeyHash)
             ->willReturn([
-                'public_key' => self::TEST_CONTACT_PUBKEY,
+                'pubkey' => self::TEST_CONTACT_PUBKEY,
                 'http' => self::TEST_CONTACT_ADDRESS
             ]);
 
