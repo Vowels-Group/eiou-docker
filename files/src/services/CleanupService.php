@@ -5,6 +5,7 @@ namespace Eiou\Services;
 
 use Eiou\Utils\Logger;
 use Eiou\Contracts\CleanupServiceInterface;
+use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\TransactionRepository;
@@ -70,6 +71,11 @@ class CleanupService implements CleanupServiceInterface {
     private MessagePayload $messagePayload;
 
     /**
+     * @var MessageDeliveryServiceInterface Message delivery service for retry queue processing
+     */
+    private MessageDeliveryServiceInterface $messageDeliveryService;
+
+    /**
      * Constructor
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
@@ -77,6 +83,7 @@ class CleanupService implements CleanupServiceInterface {
      * @param BalanceRepository $balanceRepository Balance repository
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
+     * @param MessageDeliveryServiceInterface $messageDeliveryService Message delivery service
      */
     public function __construct(
         P2pRepository $p2pRepository,
@@ -84,7 +91,8 @@ class CleanupService implements CleanupServiceInterface {
         TransactionRepository $transactionRepository,
         BalanceRepository $balanceRepository,
         UtilityServiceContainer $utilityContainer,
-        UserContext $currentUser
+        UserContext $currentUser,
+        MessageDeliveryServiceInterface $messageDeliveryService
     ) {
         $this->p2pRepository = $p2pRepository;
         $this->rp2pRepository = $rp2pRepository;
@@ -94,6 +102,7 @@ class CleanupService implements CleanupServiceInterface {
         $this->timeUtility = $utilityContainer->getTimeUtility();
         $this->transportUtility = $utilityContainer->getTransportUtility();
         $this->currentUser = $currentUser;
+        $this->messageDeliveryService = $messageDeliveryService;
 
         $this->messagePayload = new MessagePayload($this->currentUser, $this->utilityContainer);
     }
@@ -108,6 +117,9 @@ class CleanupService implements CleanupServiceInterface {
      * @throws PDOException If database query fails
      */
     public function processCleanupMessages(): int {
+        $processed = 0;
+
+        // Process expired P2P messages
         try {
             // Get current microtime for accurate comparison with stored expiration values
             $currentMicrotime = $this->timeUtility->getCurrentMicrotime();
@@ -120,11 +132,20 @@ class CleanupService implements CleanupServiceInterface {
                 $this->expireMessage($message);
             }
 
-            return count($expiredMessages);
+            $processed += count($expiredMessages);
         } catch (PDOException $e) {
             Logger::getInstance()->error("Error processing cleanup messages", ['error' => $e->getMessage()]);
-            return 0;
         }
+
+        // Process message delivery retry queue (failed async sends awaiting retry)
+        try {
+            $retryResults = $this->messageDeliveryService->processRetryQueue(10);
+            $processed += $retryResults['processed'];
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Error processing retry queue", ['error' => $e->getMessage()]);
+        }
+
+        return $processed;
     }
 
     /**

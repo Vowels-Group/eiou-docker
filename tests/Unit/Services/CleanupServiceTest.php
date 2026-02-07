@@ -27,6 +27,7 @@ use Eiou\Services\Utilities\CurrencyUtilityService;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
+use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Schemas\Payloads\MessagePayload;
 use PDOException;
 use Exception;
@@ -44,6 +45,7 @@ class CleanupServiceTest extends TestCase
     private MockObject|CurrencyUtilityService $currencyUtility;
     private MockObject|ValidationUtilityService $validationUtility;
     private MockObject|UserContext $userContext;
+    private MockObject|MessageDeliveryServiceInterface $messageDeliveryService;
     private CleanupService $service;
 
     /**
@@ -98,13 +100,20 @@ class CleanupServiceTest extends TestCase
         $this->userContext->method('getPublicKey')
             ->willReturn(self::TEST_PUBLIC_KEY);
 
+        $this->messageDeliveryService = $this->createMock(MessageDeliveryServiceInterface::class);
+
+        // Default: retry queue returns no processed items
+        $this->messageDeliveryService->method('processRetryQueue')
+            ->willReturn(['processed' => 0, 'failed' => 0, 'moved_to_dlq' => 0]);
+
         $this->service = new CleanupService(
             $this->p2pRepository,
             $this->rp2pRepository,
             $this->transactionRepository,
             $this->balanceRepository,
             $this->utilityContainer,
-            $this->userContext
+            $this->userContext,
+            $this->messageDeliveryService
         );
     }
 
@@ -224,6 +233,114 @@ class CleanupServiceTest extends TestCase
 
         $result = $this->service->processCleanupMessages();
 
+        $this->assertEquals(0, $result);
+    }
+
+    /**
+     * Test processCleanupMessages calls processRetryQueue
+     */
+    public function testProcessCleanupMessagesCallsRetryQueue(): void
+    {
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(self::TEST_MICROTIME);
+
+        $this->p2pRepository->method('getExpiredP2p')
+            ->willReturn([]);
+
+        // Re-create service with specific retry queue expectation
+        $messageDeliveryService = $this->createMock(MessageDeliveryServiceInterface::class);
+        $messageDeliveryService->expects($this->once())
+            ->method('processRetryQueue')
+            ->with(10)
+            ->willReturn(['processed' => 3, 'failed' => 0, 'moved_to_dlq' => 0]);
+
+        $service = new CleanupService(
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->transactionRepository,
+            $this->balanceRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $messageDeliveryService
+        );
+
+        $result = $service->processCleanupMessages();
+
+        $this->assertEquals(3, $result);
+    }
+
+    /**
+     * Test processCleanupMessages combines expired and retry counts
+     */
+    public function testProcessCleanupMessagesCombinesExpiredAndRetryCounts(): void
+    {
+        $expiredMessages = [
+            ['hash' => 'hash1', 'sender_address' => 'http://sender1.example.com'],
+            ['hash' => 'hash2', 'sender_address' => 'http://sender2.example.com']
+        ];
+
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(self::TEST_MICROTIME);
+
+        $this->p2pRepository->method('getExpiredP2p')
+            ->willReturn($expiredMessages);
+
+        $this->transactionRepository->method('getByMemo')
+            ->willReturn([]);
+
+        $this->transportUtility->method('send')
+            ->willReturn(json_encode(['status' => null]));
+
+        // Re-create service with retry returning 2 processed
+        $messageDeliveryService = $this->createMock(MessageDeliveryServiceInterface::class);
+        $messageDeliveryService->method('processRetryQueue')
+            ->willReturn(['processed' => 2, 'failed' => 0, 'moved_to_dlq' => 0]);
+
+        $service = new CleanupService(
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->transactionRepository,
+            $this->balanceRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $messageDeliveryService
+        );
+
+        $result = $service->processCleanupMessages();
+
+        // 2 expired + 2 retried = 4
+        $this->assertEquals(4, $result);
+    }
+
+    /**
+     * Test processCleanupMessages handles retry queue exception gracefully
+     */
+    public function testProcessCleanupMessagesHandlesRetryQueueException(): void
+    {
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(self::TEST_MICROTIME);
+
+        $this->p2pRepository->method('getExpiredP2p')
+            ->willReturn([]);
+
+        // Re-create service with retry queue that throws
+        $messageDeliveryService = $this->createMock(MessageDeliveryServiceInterface::class);
+        $messageDeliveryService->method('processRetryQueue')
+            ->willThrowException(new Exception('Retry queue error'));
+
+        $service = new CleanupService(
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->transactionRepository,
+            $this->balanceRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $messageDeliveryService
+        );
+
+        $result = $service->processCleanupMessages();
+
+        // Should return 0 - retry queue exception handled gracefully
         $this->assertEquals(0, $result);
     }
 
