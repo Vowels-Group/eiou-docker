@@ -100,7 +100,7 @@
                 <div class="transaction-item <?php echo ($tx['status'] !== 'completed' && $tx['status'] !== 'rejected' && $tx['status'] !== 'cancelled') ? 'tx-item-in-progress' : ''; ?>" style="cursor: pointer;" onclick="openTransactionModal(<?php echo $index; ?>)" title="Click for details" data-txid="<?php echo htmlspecialchars($tx['txid'] ?? ''); ?>">
                     <div class="transaction-info">
                         <div>
-                            <strong><?php echo $tx['type'] === 'sent' ? 'Sent to' : 'Received from'; ?> <?php echo htmlspecialchars($tx['counterparty']); ?></strong>
+                            <strong><?php echo $tx['type'] === 'sent' ? 'Sent' : 'Received'; ?>:</strong> <?php echo htmlspecialchars(!empty($tx['description']) ? $tx['description'] : 'No Description'); ?>
                         </div>
                         <div style="font-size: 0.9rem; color: #6c757d; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                             <?php echo $tx['date']; ?>
