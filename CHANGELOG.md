@@ -13,7 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Added
-- GUI wallet header displays node name after login (privacy: name hidden from page titles and login screen to prevent identity leakage via Tor)
+- GUI wallet header displays "₳ Wallet of [name]" after login; name hidden from page titles and login screen to prevent identity leakage via Tor (#587)
 - Unified `LoggerInterface` and `Logger` facade for consolidated logging (#557)
 - Full codebase migration from `SecureLogger` to `Logger` across 46 source files (#557)
 - `LoggerInterface` contract for dependency injection and testability (#557)
@@ -50,12 +50,19 @@ Node identity, volume security, and architectural improvements.
 - Resolve circular dependencies with proper dependency injection (#545)
 - Split TransactionService into focused services (#512, #544)
 - Implement Composer classmap autoloading (#546)
+- Use `getAllAddressTypes()` for dynamic address display in viewcontact (#567)
 
 ### Fixed
 - Prevent watchdog from restarting processors after `eiou shutdown` (#576)
 - Apply QUICKSTART hostname after wallet restore (#578)
 - Missing namespace imports across GUI controllers and services (#575)
+- Missing backslash on `ReflectionClass` in `Constants::all()` (#574)
+- MSYS path conversion in insufficient funds test (#564)
+- Add php-xml for ext-dom required by Composer resolution (#566)
 - Remove exit() calls from service methods (#547)
+
+### Docs
+- Update documentation for recent architectural changes (#565)
 
 ### Security
 - Remove /usr/local/bin/ from VOLUME declaration (#568)
@@ -88,6 +95,7 @@ Encrypted backups, healthchecks, contact status pings, and HTTPS transport.
 - Convert UtilityServiceContainer from singleton to managed service (#490)
 - Eliminate Application::getInstance() fallbacks in service getters (#488)
 - Move ApiAuthService and ApiKeyService to ServiceContainer (#327)
+- Extract formatters from TransactionRepository (#543)
 
 ### Fixed
 - GUI balance calculation to exclude pending/relay transactions (#500)
