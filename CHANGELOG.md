@@ -13,7 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Changed
-- GUI recent transactions list shows description instead of counterparty address; click to view full details with address in modal
+- GUI recent transactions list shows description instead of counterparty address; click to view full details with address in modal (#589)
 
 ### Added
 - GUI wallet header displays "₳ Wallet of [name]" after login; name hidden from page titles and login screen to prevent identity leakage via Tor (#587)
