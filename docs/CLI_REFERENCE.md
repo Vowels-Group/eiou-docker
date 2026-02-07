@@ -12,10 +12,11 @@ Complete command-line interface documentation for the EIOU Docker node.
 6. [Settings Commands](#settings-commands)
 7. [System Commands](#system-commands)
 8. [API Key Management](#api-key-management)
-9. [Backup Commands](#backup-commands)
-10. [Test Mode Commands](#test-mode-commands)
-11. [Exit Codes](#exit-codes)
-12. [Rate Limiting](#rate-limiting)
+9. [Chain Drop Commands](#chain-drop-commands)
+10. [Backup Commands](#backup-commands)
+11. [Test Mode Commands](#test-mode-commands)
+12. [Exit Codes](#exit-codes)
+13. [Rate Limiting](#rate-limiting)
 
 ---
 
@@ -884,6 +885,150 @@ eiou apikey enable eiou_abc123
 ```
 
 **Important:** The API secret is only shown once at creation time. Store it securely.
+
+---
+
+## Chain Drop Commands
+
+### chaindrop
+
+Manage chain drop agreements for resolving transaction chain gaps.
+
+When both contacts are missing the same transaction in their shared chain, the chain cannot be repaired via sync. Chain drop resolves this by mutually agreeing to remove the missing transaction and relink the chain.
+
+**Important:** While a chain gap exists, transactions with that contact are **blocked**. The `send` command verifies chain integrity before every transaction and will halt if a gap is detected (after attempting sync repair, which fails when both parties are missing the same transaction). Rejecting a proposal leaves the gap unresolved, meaning the contacts cannot transact until a new proposal is accepted or the missing transaction is recovered.
+
+**Syntax:**
+```bash
+eiou chaindrop <action> [args...]
+```
+
+**Actions:**
+
+| Action | Syntax | Description |
+|--------|--------|-------------|
+| `propose` | `chaindrop propose <contact_address>` | Propose dropping a missing transaction |
+| `accept` | `chaindrop accept <proposal_id>` | Accept an incoming proposal |
+| `reject` | `chaindrop reject <proposal_id>` | Reject an incoming proposal |
+| `list` | `chaindrop list [contact_address]` | List pending proposals |
+| `help` | `chaindrop help` | Show chain drop help |
+
+**Arguments:**
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `contact_address` | required (propose) | Contact's node address (HTTP, HTTPS, or Tor) |
+| `proposal_id` | required (accept/reject) | The proposal ID to act on (format: `cdp-...`) |
+| `contact_address` | optional (list) | Filter proposals by contact address |
+
+**Examples:**
+```bash
+# Propose dropping a missing transaction (auto-detects the gap)
+eiou chaindrop propose https://bob
+
+# List all incoming pending proposals
+eiou chaindrop list
+
+# List proposals for a specific contact
+eiou chaindrop list https://bob
+
+# Accept a proposal (executes drop, re-signs transactions, exchanges data)
+eiou chaindrop accept cdp-2c3c26ba61ab4073
+
+# Reject a proposal (WARNING: gap remains unresolved, transactions stay blocked)
+eiou chaindrop reject cdp-2c3c26ba61ab4073
+
+# JSON output
+eiou chaindrop propose https://bob --json
+eiou chaindrop list --json
+eiou chaindrop accept cdp-2c3c26ba61ab4073 --json
+```
+
+**Flow:**
+1. Contact A detects chain gap (send fails or `ping` shows invalid chain)
+2. Contact A runs: `eiou chaindrop propose <contact_B_address>`
+3. Contact B checks incoming proposals: `eiou chaindrop list`
+4. Contact B runs: `eiou chaindrop accept <proposal_id>`
+5. Both chains are repaired and transactions can resume
+
+For multiple gaps, repeat the propose/accept cycle for each gap.
+
+**JSON Response Examples:**
+
+Propose (success):
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Chain drop proposal sent",
+        "proposal_id": "cdp-2c3c26ba61ab4073...",
+        "missing_txid": "a1b2c3d4..."
+    }
+}
+```
+
+List proposals:
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Chain drop proposals",
+        "count": 1,
+        "proposals": [
+            {
+                "proposal_id": "cdp-2c3c26ba61ab4073...",
+                "contact_pubkey_hash": "abc123...",
+                "missing_txid": "a1b2c3d4...",
+                "broken_txid": "e5f6g7h8...",
+                "status": "pending",
+                "direction": "incoming",
+                "created_at": "2026-02-07 12:00:00"
+            }
+        ]
+    }
+}
+```
+
+Accept (success):
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Chain drop proposal accepted and executed",
+        "proposal_id": "cdp-2c3c26ba61ab4073..."
+    }
+}
+```
+
+Reject (success):
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Chain drop proposal rejected",
+        "proposal_id": "cdp-2c3c26ba61ab4073..."
+    },
+    "warning": "The chain gap remains unresolved. Transactions with this contact are blocked until a new chain drop proposal is accepted."
+}
+```
+
+**On Failure (JSON):**
+```json
+{
+    "success": false,
+    "error": {
+        "code": "CONTACT_NOT_FOUND",
+        "message": "Contact not found: https://unknown"
+    }
+}
+```
+
+**Notes:**
+- `propose` auto-detects the chain gap by verifying chain integrity with the specified contact
+- `accept` executes the chain drop locally, re-signs affected transactions, and exchanges re-signed copies with the proposer
+- `reject` leaves the chain gap unresolved — transactions remain blocked until a new proposal is accepted
+- Proposals expire automatically after their configured timeout
+- Rate limited: 10 chain drop operations per minute
 
 ---
 

@@ -17,6 +17,8 @@ use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
 use Eiou\Events\ChainDropEvents;
 use Eiou\Events\EventDispatcher;
+use Eiou\Cli\CliOutputManager;
+use Eiou\Core\ErrorCodes;
 use PDOException;
 use Exception;
 
@@ -585,6 +587,162 @@ class ChainDropService implements ChainDropServiceInterface
     {
         return $this->proposalRepository->expireOldProposals();
     }
+
+    // =========================================================================
+    // CLI COMMAND HANDLING
+    // =========================================================================
+
+    /**
+     * Handle CLI chain drop subcommands
+     *
+     * @param array $argv Command line arguments
+     * @param CliOutputManager $output CLI output manager
+     * @return void
+     */
+    public function handleCommand(array $argv, CliOutputManager $output): void
+    {
+        $subcommand = $argv[2] ?? 'help';
+
+        switch ($subcommand) {
+            case 'propose':
+                $this->handleProposeCommand($argv, $output);
+                break;
+            case 'accept':
+                $this->handleAcceptCommand($argv, $output);
+                break;
+            case 'reject':
+                $this->handleRejectCommand($argv, $output);
+                break;
+            case 'list':
+                $this->handleListCommand($argv, $output);
+                break;
+            case 'help':
+            default:
+                $this->showCommandHelp($output);
+                break;
+        }
+    }
+
+    /**
+     * Handle 'chaindrop propose' subcommand
+     */
+    private function handleProposeCommand(array $argv, CliOutputManager $output): void
+    {
+        $contactIdentifier = $argv[3] ?? null;
+        if (!$contactIdentifier) {
+            $output->error("Contact address required. Usage: eiou chaindrop propose <contact_address>", ErrorCodes::MISSING_ARGUMENT);
+            exit(1);
+        }
+
+        $transportIndex = $this->transportUtility->determineTransportType($contactIdentifier);
+        $contact = $transportIndex ? $this->contactRepository->lookupByAddress($transportIndex, $contactIdentifier) : null;
+        if (!$contact) {
+            $output->error("Contact not found: {$contactIdentifier}", ErrorCodes::CONTACT_NOT_FOUND);
+            exit(1);
+        }
+
+        $result = $this->proposeChainDrop($contact['pubkey_hash']);
+        if ($result['success']) {
+            $output->success("Chain drop proposal sent", [
+                'proposal_id' => $result['proposal_id'],
+                'missing_txid' => $result['missing_txid'] ?? null
+            ]);
+        } else {
+            $output->error($result['error'] ?? 'Proposal failed', ErrorCodes::GENERAL_ERROR);
+            exit(1);
+        }
+    }
+
+    /**
+     * Handle 'chaindrop accept' subcommand
+     */
+    private function handleAcceptCommand(array $argv, CliOutputManager $output): void
+    {
+        $proposalId = $argv[3] ?? null;
+        if (!$proposalId) {
+            $output->error("Proposal ID required. Usage: eiou chaindrop accept <proposal_id>", ErrorCodes::MISSING_ARGUMENT);
+            exit(1);
+        }
+
+        $result = $this->acceptProposal($proposalId);
+        if ($result['success']) {
+            $output->success("Chain drop proposal accepted and executed", [
+                'proposal_id' => $proposalId
+            ]);
+        } else {
+            $output->error($result['error'] ?? 'Accept failed', ErrorCodes::GENERAL_ERROR);
+            exit(1);
+        }
+    }
+
+    /**
+     * Handle 'chaindrop reject' subcommand
+     */
+    private function handleRejectCommand(array $argv, CliOutputManager $output): void
+    {
+        $proposalId = $argv[3] ?? null;
+        if (!$proposalId) {
+            $output->error("Proposal ID required. Usage: eiou chaindrop reject <proposal_id>", ErrorCodes::MISSING_ARGUMENT);
+            exit(1);
+        }
+
+        $result = $this->rejectProposal($proposalId);
+        if ($result['success']) {
+            $output->success("Chain drop proposal rejected", [
+                'proposal_id' => $proposalId
+            ]);
+            $output->info("Note: The chain gap remains unresolved. Transactions with this contact are blocked until a new chain drop proposal is accepted.");
+        } else {
+            $output->error($result['error'] ?? 'Reject failed', ErrorCodes::GENERAL_ERROR);
+            exit(1);
+        }
+    }
+
+    /**
+     * Handle 'chaindrop list' subcommand
+     */
+    private function handleListCommand(array $argv, CliOutputManager $output): void
+    {
+        $contactIdentifier = $argv[3] ?? null;
+
+        if ($contactIdentifier) {
+            $transportIndex = $this->transportUtility->determineTransportType($contactIdentifier);
+            $contact = $transportIndex ? $this->contactRepository->lookupByAddress($transportIndex, $contactIdentifier) : null;
+            if (!$contact) {
+                $output->error("Contact not found: {$contactIdentifier}", ErrorCodes::CONTACT_NOT_FOUND);
+                exit(1);
+            }
+            $proposals = $this->getProposalsForContact($contact['pubkey_hash']);
+        } else {
+            $proposals = $this->getIncomingPendingProposals();
+        }
+
+        $output->success("Chain drop proposals", [
+            'count' => count($proposals),
+            'proposals' => $proposals
+        ]);
+    }
+
+    /**
+     * Show chain drop help for CLI
+     */
+    private function showCommandHelp(CliOutputManager $output): void
+    {
+        $output->info("Chain Drop Agreement Commands:");
+        $output->info("  eiou chaindrop propose <contact_address>  - Propose dropping a missing transaction");
+        $output->info("  eiou chaindrop accept <proposal_id>       - Accept an incoming proposal");
+        $output->info("  eiou chaindrop reject <proposal_id>       - Reject an incoming proposal");
+        $output->info("  eiou chaindrop list [contact_address]     - List pending proposals");
+        $output->info("  eiou chaindrop help                       - Show this help");
+        $output->info("");
+        $output->info("When a chain gap exists, transactions with that contact are blocked.");
+        $output->info("Rejecting a proposal leaves the gap unresolved. A new proposal must");
+        $output->info("be accepted to restore the ability to transact.");
+    }
+
+    // =========================================================================
+    // CHAIN DROP EXECUTION
+    // =========================================================================
 
     /**
      * Execute the chain drop: update previous_txid and re-sign affected transactions
