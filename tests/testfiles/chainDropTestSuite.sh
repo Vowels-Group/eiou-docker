@@ -266,33 +266,56 @@ clean_chain() {
         local sValid=$(echo "$sStatus" | cut -d: -f1)
         local sGaps=$(echo "$sStatus" | cut -d: -f2)
 
-        if [ "$sValid" = "VALID" ]; then
-            local rStatus=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
-            local rValid=$(echo "$rStatus" | cut -d: -f1)
-            if [ "$rValid" = "VALID" ]; then
-                return 0
-            fi
+        local rStatus=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+        local rValid=$(echo "$rStatus" | cut -d: -f1)
+        local rGaps=$(echo "$rStatus" | cut -d: -f2)
+
+        if [ "$sValid" = "VALID" ] && [ "$rValid" = "VALID" ]; then
+            return 0
         fi
 
-        echo -ne "\r\t   Resolving gap ${iteration}/${sGaps}...    "
+        echo -ne "\r\t   Resolving gaps: sender=${sGaps} receiver=${rGaps} (iteration ${iteration})...    "
 
-        # Propose from sender
-        docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1 > /dev/null
-        wait_for_queue_processed ${sender} 2
-        wait_for_queue_processed ${receiver} 2
-
-        # Get and accept proposal on receiver
-        local pid=$(get_pending_proposal ${receiver})
-        if [ "$pid" = "NONE" ] || [ -z "$pid" ]; then
-            wait_for_queue_processed ${sender} 3
-            wait_for_queue_processed ${receiver} 3
-            pid=$(get_pending_proposal ${receiver})
-        fi
-
-        if [ "$pid" != "NONE" ] && [ -n "$pid" ]; then
-            docker exec ${receiver} eiou chaindrop accept ${pid} 2>&1 > /dev/null
+        if [ "$sGaps" -gt 0 ] 2>/dev/null; then
+            # Sender has gaps - propose from sender, accept on receiver
+            docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1 > /dev/null
             wait_for_queue_processed ${sender} 2
             wait_for_queue_processed ${receiver} 2
+
+            local pid=$(get_pending_proposal ${receiver})
+            if [ "$pid" = "NONE" ] || [ -z "$pid" ]; then
+                wait_for_queue_processed ${sender} 3
+                wait_for_queue_processed ${receiver} 3
+                pid=$(get_pending_proposal ${receiver})
+            fi
+
+            if [ "$pid" != "NONE" ] && [ -n "$pid" ]; then
+                docker exec ${receiver} eiou chaindrop accept ${pid} 2>&1 > /dev/null
+                wait_for_queue_processed ${sender} 2
+                wait_for_queue_processed ${receiver} 2
+            fi
+        elif [ "$rGaps" -gt 0 ] 2>/dev/null; then
+            # Only receiver has gaps - propose from receiver, accept on sender
+            docker exec ${receiver} eiou chaindrop propose ${senderAddress} 2>&1 > /dev/null
+            wait_for_queue_processed ${receiver} 2
+            wait_for_queue_processed ${sender} 2
+
+            local pid=$(get_pending_proposal ${sender})
+            if [ "$pid" = "NONE" ] || [ -z "$pid" ]; then
+                wait_for_queue_processed ${receiver} 3
+                wait_for_queue_processed ${sender} 3
+                pid=$(get_pending_proposal ${sender})
+            fi
+
+            if [ "$pid" != "NONE" ] && [ -n "$pid" ]; then
+                docker exec ${sender} eiou chaindrop accept ${pid} 2>&1 > /dev/null
+                wait_for_queue_processed ${receiver} 2
+                wait_for_queue_processed ${sender} 2
+            fi
+        else
+            # Both show 0 gaps but not VALID - process queues and retry
+            wait_for_queue_processed ${sender} 3
+            wait_for_queue_processed ${receiver} 3
         fi
 
         iteration=$(( iteration + 1 ))
