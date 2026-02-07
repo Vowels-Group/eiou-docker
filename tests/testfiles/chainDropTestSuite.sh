@@ -221,24 +221,6 @@ get_pending_proposal() {
     " 2>/dev/null
 }
 
-# Clean up test transactions from both containers
-# Usage: cleanup_test_txs <pattern>
-cleanup_test_txs() {
-    local pattern="$1"
-    docker exec ${sender} php -r "
-        require_once('${BOOTSTRAP_PATH}');
-        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-        \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '${pattern}'\");
-        \$pdo->exec(\"DELETE FROM chain_drop_proposals WHERE 1=1\");
-    " 2>/dev/null
-    docker exec ${receiver} php -r "
-        require_once('${BOOTSTRAP_PATH}');
-        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
-        \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE '${pattern}'\");
-        \$pdo->exec(\"DELETE FROM chain_drop_proposals WHERE 1=1\");
-    " 2>/dev/null
-}
-
 # Get the previous_txid of a specific transaction
 # Usage: get_previous_txid <container> <txid>
 get_previous_txid() {
@@ -257,72 +239,33 @@ get_previous_txid() {
 # Resolve all existing chain gaps between sender and receiver
 # Repeatedly proposes and accepts chain drops until the chain is valid
 # Returns 0 on success, 1 if max iterations exceeded
+# Delete all transactions between sender and receiver on a specific node
+# Starting fresh ensures previous_txid=NULL for the first new transaction
+# Usage: clean_chain_on <container> <my_pubkey_hash> <contact_pubkey_hash>
+clean_chain_on() {
+    local container="$1"
+    local myHash="$2"
+    local contactHash="$3"
+    docker exec ${container} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->prepare('DELETE FROM transactions
+            WHERE (sender_public_key_hash = :myHash AND receiver_public_key_hash = :contactHash)
+               OR (sender_public_key_hash = :contactHash2 AND receiver_public_key_hash = :myHash2)');
+        \$stmt->execute([
+            'myHash' => '${myHash}', 'contactHash' => '${contactHash}',
+            'contactHash2' => '${contactHash}', 'myHash2' => '${myHash}'
+        ]);
+        echo \$stmt->rowCount();
+    " 2>/dev/null
+}
+
+# Delete all transactions between sender and receiver on both nodes
 clean_chain() {
-    local max_iterations=50
-    local iteration=0
-
-    while [ $iteration -lt $max_iterations ]; do
-        local sStatus=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
-        local sValid=$(echo "$sStatus" | cut -d: -f1)
-        local sGaps=$(echo "$sStatus" | cut -d: -f2)
-
-        local rStatus=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
-        local rValid=$(echo "$rStatus" | cut -d: -f1)
-        local rGaps=$(echo "$rStatus" | cut -d: -f2)
-
-        if [ "$sValid" = "VALID" ] && [ "$rValid" = "VALID" ]; then
-            return 0
-        fi
-
-        echo -ne "\r\t   Resolving gaps: sender=${sGaps} receiver=${rGaps} (iteration ${iteration})...    "
-
-        if [ "$sGaps" -gt 0 ] 2>/dev/null; then
-            # Sender has gaps - propose from sender, accept on receiver
-            docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1 > /dev/null
-            wait_for_queue_processed ${sender} 2
-            wait_for_queue_processed ${receiver} 2
-
-            local pid=$(get_pending_proposal ${receiver})
-            if [ "$pid" = "NONE" ] || [ -z "$pid" ]; then
-                wait_for_queue_processed ${sender} 3
-                wait_for_queue_processed ${receiver} 3
-                pid=$(get_pending_proposal ${receiver})
-            fi
-
-            if [ "$pid" != "NONE" ] && [ -n "$pid" ]; then
-                docker exec ${receiver} eiou chaindrop accept ${pid} 2>&1 > /dev/null
-                wait_for_queue_processed ${sender} 2
-                wait_for_queue_processed ${receiver} 2
-            fi
-        elif [ "$rGaps" -gt 0 ] 2>/dev/null; then
-            # Only receiver has gaps - propose from receiver, accept on sender
-            docker exec ${receiver} eiou chaindrop propose ${senderAddress} 2>&1 > /dev/null
-            wait_for_queue_processed ${receiver} 2
-            wait_for_queue_processed ${sender} 2
-
-            local pid=$(get_pending_proposal ${sender})
-            if [ "$pid" = "NONE" ] || [ -z "$pid" ]; then
-                wait_for_queue_processed ${receiver} 3
-                wait_for_queue_processed ${sender} 3
-                pid=$(get_pending_proposal ${sender})
-            fi
-
-            if [ "$pid" != "NONE" ] && [ -n "$pid" ]; then
-                docker exec ${sender} eiou chaindrop accept ${pid} 2>&1 > /dev/null
-                wait_for_queue_processed ${receiver} 2
-                wait_for_queue_processed ${sender} 2
-            fi
-        else
-            # Both show 0 gaps but not VALID - process queues and retry
-            wait_for_queue_processed ${sender} 3
-            wait_for_queue_processed ${receiver} 3
-        fi
-
-        iteration=$(( iteration + 1 ))
-    done
-
-    echo ""
-    return 1
+    local senderDeleted=$(clean_chain_on ${sender} ${senderPubkeyHash} ${receiverPubkeyHash})
+    local receiverDeleted=$(clean_chain_on ${receiver} ${receiverPubkeyHash} ${senderPubkeyHash})
+    cleanup_proposals
+    echo -e "\t   Deleted ${senderDeleted:-0} sender txs, ${receiverDeleted:-0} receiver txs"
 }
 
 # Clean up only chain drop proposals (not transactions, to avoid creating gaps)
@@ -345,22 +288,14 @@ if [[ "$PUBKEYS_AVAILABLE" != "true" ]]; then
     exit 0
 fi
 
-# Clean pre-existing chain gaps before testing
-echo -e "[Pre-test: Cleaning pre-existing chain gaps]"
-senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
-echo -e "\t   Initial chain state: ${senderIntegrity}"
+# Delete all existing transactions between sender and receiver for a clean baseline
+echo -e "[Pre-test: Cleaning transaction chain between contacts]"
+clean_chain
 
-if [[ "$senderIntegrity" != VALID:* ]]; then
-    if clean_chain; then
-        senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
-        echo -e "\n\t   Chain cleaned: ${senderIntegrity}"
-    else
-        echo -e "\n\t   ${YELLOW}Warning: Could not clean all chain gaps${NC}"
-    fi
-    cleanup_proposals
-else
-    echo -e "\t   Chain already valid, no cleanup needed"
-fi
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+echo -e "\t   Sender chain: ${senderIntegrity}"
+echo -e "\t   Receiver chain: ${receiverIntegrity}"
 
 #################### TEST 1: Single Gap (3 tx, 1 missing) ####################
 
@@ -552,8 +487,8 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Cleanup test 1 (only proposals - deleting txs would create new gaps)
-cleanup_proposals
+# Cleanup test 1 (delete all transactions + proposals for clean baseline)
+clean_chain > /dev/null
 
 ############## TEST 2: Non-Consecutive Gaps (5 tx, 2 non-adjacent missing) ##############
 
@@ -736,8 +671,8 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Cleanup test 2 (only proposals)
-cleanup_proposals
+# Cleanup test 2
+clean_chain > /dev/null
 
 ############## TEST 3: Consecutive Gaps (5 tx, 2 adjacent missing) ##############
 
@@ -892,8 +827,8 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Cleanup test 3 (only proposals)
-cleanup_proposals
+# Cleanup test 3
+clean_chain > /dev/null
 
 #################### TEST 4: Rejection Flow ####################
 
@@ -1051,14 +986,8 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Cleanup test 4 (only proposals)
-cleanup_proposals
-
-# Final cleanup: remove all test transactions
-cleanup_test_txs "chaindrop-t1-%"
-cleanup_test_txs "chaindrop-t2-%"
-cleanup_test_txs "chaindrop-t3-%"
-cleanup_test_txs "chaindrop-t4-%"
+# Cleanup test 4
+clean_chain > /dev/null
 
 # ========================= Summary =========================
 succesrate "${totaltests}" "${passed}" "${failure}" "'chain drop test suite'"
