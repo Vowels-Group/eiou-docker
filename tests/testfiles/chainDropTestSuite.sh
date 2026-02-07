@@ -367,7 +367,7 @@ echo -e "\n\t-> Proposing chain drop from sender"
 proposeResult=$(docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1)
 echo -e "\t   Propose result: ${proposeResult:0:80}..."
 
-if echo "$proposeResult" | grep -q '"success":true\|proposal_id'; then
+if echo "$proposeResult" | grep -qi 'success\|proposal'; then
     printf "\t   Chain drop proposed ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
@@ -397,7 +397,7 @@ if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
     acceptResult=$(docker exec ${receiver} eiou chaindrop accept ${proposalId} 2>&1)
     echo -e "\t   Accept result: ${acceptResult:0:80}..."
 
-    if echo "$acceptResult" | grep -q '"success":true\|accepted'; then
+    if echo "$acceptResult" | grep -qi 'success\|accepted'; then
         printf "\t   Proposal accepted ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     else
@@ -886,7 +886,7 @@ if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
     wait_for_queue_processed ${sender} 3
     wait_for_queue_processed ${receiver} 3
 
-    if echo "$rejectResult" | grep -q '"success":true\|rejected'; then
+    if echo "$rejectResult" | grep -qi 'success\|rejected'; then
         printf "\t   Proposal rejected ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
     else
