@@ -254,10 +254,89 @@ get_previous_txid() {
     " 2>/dev/null
 }
 
+# Resolve all existing chain gaps between sender and receiver
+# Repeatedly proposes and accepts chain drops until the chain is valid
+# Returns 0 on success, 1 if max iterations exceeded
+clean_chain() {
+    local max_iterations=50
+    local iteration=0
+
+    while [ $iteration -lt $max_iterations ]; do
+        local sStatus=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+        local sValid=$(echo "$sStatus" | cut -d: -f1)
+        local sGaps=$(echo "$sStatus" | cut -d: -f2)
+
+        if [ "$sValid" = "VALID" ]; then
+            local rStatus=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+            local rValid=$(echo "$rStatus" | cut -d: -f1)
+            if [ "$rValid" = "VALID" ]; then
+                return 0
+            fi
+        fi
+
+        echo -ne "\r\t   Resolving gap ${iteration}/${sGaps}...    "
+
+        # Propose from sender
+        docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1 > /dev/null
+        wait_for_queue_processed ${sender} 2
+        wait_for_queue_processed ${receiver} 2
+
+        # Get and accept proposal on receiver
+        local pid=$(get_pending_proposal ${receiver})
+        if [ "$pid" = "NONE" ] || [ -z "$pid" ]; then
+            wait_for_queue_processed ${sender} 3
+            wait_for_queue_processed ${receiver} 3
+            pid=$(get_pending_proposal ${receiver})
+        fi
+
+        if [ "$pid" != "NONE" ] && [ -n "$pid" ]; then
+            docker exec ${receiver} eiou chaindrop accept ${pid} 2>&1 > /dev/null
+            wait_for_queue_processed ${sender} 2
+            wait_for_queue_processed ${receiver} 2
+        fi
+
+        iteration=$(( iteration + 1 ))
+    done
+
+    echo ""
+    return 1
+}
+
+# Clean up only chain drop proposals (not transactions, to avoid creating gaps)
+cleanup_proposals() {
+    docker exec ${sender} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$pdo->exec(\"DELETE FROM chain_drop_proposals WHERE 1=1\");
+    " 2>/dev/null
+    docker exec ${receiver} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$pdo->exec(\"DELETE FROM chain_drop_proposals WHERE 1=1\");
+    " 2>/dev/null
+}
+
 if [[ "$PUBKEYS_AVAILABLE" != "true" ]]; then
     echo -e "${YELLOW}\t   Skipping all chain drop tests - pubkeys not available${NC}"
     succesrate "${totaltests}" "${passed}" "${failure}" "'chain drop test suite'"
     exit 0
+fi
+
+# Clean pre-existing chain gaps before testing
+echo -e "[Pre-test: Cleaning pre-existing chain gaps]"
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+echo -e "\t   Initial chain state: ${senderIntegrity}"
+
+if [[ "$senderIntegrity" != VALID:* ]]; then
+    if clean_chain; then
+        senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+        echo -e "\n\t   Chain cleaned: ${senderIntegrity}"
+    else
+        echo -e "\n\t   ${YELLOW}Warning: Could not clean all chain gaps${NC}"
+    fi
+    cleanup_proposals
+else
+    echo -e "\t   Chain already valid, no cleanup needed"
 fi
 
 #################### TEST 1: Single Gap (3 tx, 1 missing) ####################
@@ -450,8 +529,8 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Cleanup test 1
-cleanup_test_txs "chaindrop-t1-%"
+# Cleanup test 1 (only proposals - deleting txs would create new gaps)
+cleanup_proposals
 
 ############## TEST 2: Non-Consecutive Gaps (5 tx, 2 non-adjacent missing) ##############
 
@@ -634,8 +713,8 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Cleanup test 2
-cleanup_test_txs "chaindrop-t2-%"
+# Cleanup test 2 (only proposals)
+cleanup_proposals
 
 ############## TEST 3: Consecutive Gaps (5 tx, 2 adjacent missing) ##############
 
@@ -790,8 +869,8 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Cleanup test 3
-cleanup_test_txs "chaindrop-t3-%"
+# Cleanup test 3 (only proposals)
+cleanup_proposals
 
 #################### TEST 4: Rejection Flow ####################
 
@@ -949,7 +1028,13 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Cleanup test 4
+# Cleanup test 4 (only proposals)
+cleanup_proposals
+
+# Final cleanup: remove all test transactions
+cleanup_test_txs "chaindrop-t1-%"
+cleanup_test_txs "chaindrop-t2-%"
+cleanup_test_txs "chaindrop-t3-%"
 cleanup_test_txs "chaindrop-t4-%"
 
 # ========================= Summary =========================
