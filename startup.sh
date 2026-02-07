@@ -411,6 +411,28 @@ else
 fi
 
 # =============================================================================
+# CONFIG FILE MIGRATION (Pre-#573 → Post-#573)
+# =============================================================================
+# Prior to PR #573, config files lived at /etc/eiou/ root level. After #573
+# they moved to /etc/eiou/config/. When upgrading from an older image, the
+# volume still has files at the old location. Migrate them before anything
+# else checks for config.
+# =============================================================================
+
+if [ -f /etc/eiou/userconfig.json ] && [ ! -f /etc/eiou/config/userconfig.json ]; then
+    echo "Migrating config files from legacy location to /etc/eiou/config/..."
+    mkdir -p /etc/eiou/config
+    for f in userconfig.json dbconfig.json defaultconfig.json .master.key; do
+        if [ -f "/etc/eiou/$f" ]; then
+            cp -p "/etc/eiou/$f" "/etc/eiou/config/$f"
+            rm "/etc/eiou/$f"
+            echo "  Migrated $f"
+        fi
+    done
+    echo "Config migration completed."
+fi
+
+# =============================================================================
 # SOURCE FILE SYNC (Docker Volume Update)
 # =============================================================================
 # The /etc/eiou directory is a Docker volume. When the image is updated, the
@@ -448,10 +470,14 @@ if [ -d /app/eiou-src-backup ]; then
         echo "  Root files updated."
     fi
 
-    # Sync composer.json
+    # Sync composer.json and composer.lock
     if [ -f /app/eiou-src-backup/composer.json ]; then
         cp /app/eiou-src-backup/composer.json /etc/eiou/composer.json 2>/dev/null || true
         echo "  Composer config updated."
+    fi
+    if [ -f /app/eiou-src-backup/composer.lock ]; then
+        cp /app/eiou-src-backup/composer.lock /etc/eiou/composer.lock 2>/dev/null || true
+        echo "  Composer lock file updated."
     fi
 
     # Reapply permissions after sync (mirroring dockerfile build steps)
@@ -508,8 +534,8 @@ if [ -d /app/eiou-src-backup ] || [ ! -f /etc/eiou/vendor/autoload.php ]; then
 COMPOSEREOF
     fi
 
-    # Run composer install/dump-autoload to generate autoloader
-    cd /etc/eiou && composer dump-autoload --optimize --no-interaction 2>&1 | while read line; do
+    # Run composer install to install/update dependencies and regenerate autoloader
+    cd /etc/eiou && composer install --no-dev --optimize-autoloader --no-interaction 2>&1 | while read line; do
         echo "  $line"
     done
 
