@@ -387,8 +387,8 @@ function getChainDropProposalsTableSchema() {
             'failed'
         ) DEFAULT 'pending',
         gap_context JSON,
-        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6),
-        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         expires_at TIMESTAMP(6) NOT NULL,
         resolved_at TIMESTAMP(6) NULL,
         INDEX idx_cdp_proposal_id (proposal_id),
