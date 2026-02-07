@@ -2,10 +2,10 @@
 
 <!-- Header -->
 <div class="header fade-in-up">
-    <h1><i class="fas fa-wallet"></i> ₳ <?php
+    <h1><i class="fas fa-wallet"></i> ₳ Wallet<?php
         $headerName = $user->getName();
-        echo $headerName ? htmlspecialchars($headerName) . ' ' : '';
-    ?>Wallet</h1>
+        echo $headerName ? ' of ' . htmlspecialchars($headerName) : '';
+    ?></h1>
     <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?logout=1'); ?>" class="logout-btn">
         <i class="fas fa-sign-out-alt"></i> Logout
     </a>
