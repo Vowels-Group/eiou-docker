@@ -143,23 +143,6 @@ class MessageHelper
     }
 
     /**
-     * Get message from URL parameters
-     *
-     * @return array|null ['message' => string, 'type' => string]
-     */
-    public static function getMessageFromUrl(): ?array
-    {
-        if (isset($_GET['message']) && isset($_GET['type'])) {
-            // Sanitize user input to prevent XSS attacks
-            return [
-                'message' => htmlspecialchars($_GET['message'], ENT_QUOTES, 'UTF-8'),
-                'type' => htmlspecialchars($_GET['type'], ENT_QUOTES, 'UTF-8')
-            ];
-        }
-        return null;
-    }
-
-    /**
      * Display flash message if available
      *
      * @param Session $session
@@ -170,12 +153,6 @@ class MessageHelper
         $message = $session->getMessage();
         if ($message) {
             return self::formatMessage($message['text'], $message['type']);
-        }
-
-        // Check URL parameters as fallback
-        $urlMessage = self::getMessageFromUrl();
-        if ($urlMessage) {
-            return self::formatMessage($urlMessage['message'], $urlMessage['type']);
         }
 
         return '';
