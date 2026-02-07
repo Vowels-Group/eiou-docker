@@ -14,11 +14,15 @@ The project is currently in **ALPHA** status.
 
 ### Added
 - GUI wallet header displays "₳ Wallet of [name]" after login; name hidden from page titles and login screen to prevent identity leakage via Tor (#587)
+- Upgrade guide documentation (`docs/UPGRADE_GUIDE.md`)
 - Unified `LoggerInterface` and `Logger` facade for consolidated logging (#557)
 - Full codebase migration from `SecureLogger` to `Logger` across 46 source files (#557)
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
+- Config file migration in startup.sh for upgrades from pre-#573 images (config moved from `/etc/eiou/` to `/etc/eiou/config/`)
+- Composer dependency installation on upgrade: `startup.sh` now runs `composer install` instead of `dump-autoload` to install new dependencies
+- Composer lock file sync: `composer.lock` now included in source file backup for deterministic dependency installation
 - Startup authcode display: create secure temp file on every container start, not just initial generation
 - GUI Total Balance incorrectly included rejected, expired, and cancelled transactions
 - Balance sync operations (`syncContactBalance`, `syncAllBalances`) counted non-completed transactions

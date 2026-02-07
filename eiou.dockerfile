@@ -186,6 +186,7 @@ RUN mkdir -p /app/eiou-src-backup
 COPY files/src/ /app/eiou-src-backup/src/
 COPY files/root/ /app/eiou-src-backup/root/
 COPY files/composer.json /app/eiou-src-backup/composer.json
+COPY files/composer.lock /app/eiou-src-backup/composer.lock
 
 # Copy and set up startup script
 COPY startup.sh /startup.sh

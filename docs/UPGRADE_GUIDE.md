@@ -71,21 +71,25 @@ Your wallet, contacts, transaction history, and settings are preserved automatic
 
 ## How It Works
 
-The upgrade mechanism relies on three components working together:
+The upgrade mechanism relies on four components working together:
 
 ### 1. Named Volumes Survive Container Recreation
 
 Docker named volumes persist independently of containers. When `docker-compose up` recreates a container, the named volumes are reattached to the new container at the same mount points. The data on the volumes is untouched.
 
-### 2. Source File Sync on Startup
+### 2. Config File Migration
+
+Older images stored config files at `/etc/eiou/` (root level). Current images expect them at `/etc/eiou/config/`. On startup, `startup.sh` detects config files at the legacy location and migrates them to `/etc/eiou/config/` automatically. This ensures upgrades from any prior version work without manual intervention.
+
+### 3. Source File Sync on Startup
 
 Because `/etc/eiou/` is both a volume and the location for application code, old code would persist from the previous image if not handled. The solution:
 
 - **At build time**: The Dockerfile copies source files into both `/etc/eiou/` (the volume target) and `/app/eiou-src-backup/` (a non-volume directory baked into the image layer).
 - **At startup**: `startup.sh` copies from `/app/eiou-src-backup/` into the `/etc/eiou/` volume, overwriting old source code while leaving the `config/` subdirectory untouched.
-- **After sync**: Composer regenerates the autoloader to reflect any new or renamed classes.
+- **After sync**: `composer install` runs to install any new dependencies and regenerate the autoloader.
 
-### 3. Database Migrations on Application Init
+### 4. Database Migrations on Application Init
 
 `Application.php` calls `DatabaseSetup::runMigrations()` on every startup. This adds any new tables or columns required by the updated code without affecting existing data.
 
@@ -103,10 +107,16 @@ Old Container (running v1)
          │  (container removed, volumes kept, new image built)
          ▼
 
-New Container (running v2)
+New Container (running v2) — startup.sh runs:
+  1. Config migration    — moves legacy config files to /etc/eiou/config/ if needed
+  2. Source file sync    — copies v2 code from image into volume
+  3. Composer install    — installs new dependencies, regenerates autoloader
+  4. Database migrations — adds new tables/columns as needed
+
+Result:
   ├── /var/lib/mysql          ← same volume reattached (data intact)
   ├── /etc/eiou/              ← same volume reattached
-  │   ├── config/             ← YOUR DATA (unchanged)
+  │   ├── config/             ← YOUR DATA (unchanged, migrated if needed)
   │   └── src/, www/, ...     ← v2 code (synced from /app/eiou-src-backup/)
   └── /var/lib/eiou/backups   ← same volume reattached (backups intact)
 ```
