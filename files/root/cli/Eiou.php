@@ -308,7 +308,7 @@ elseif($request === "apikey"){
 elseif($request === "backup"){
   $debugService->output("Executing backup request", 'SILENT');
   $backupService = $app->services->getBackupService();
-  $backupService->handleBackupCommand($cleanArgv, $output);
+  $backupService->handleCommand($cleanArgv, $output);
 }
 // Chain Drop Agreement
 elseif($request === "chaindrop"){

@@ -437,7 +437,7 @@ class BackupService implements BackupServiceInterface
         ];
     }
 
-    public function handleBackupCommand(array $argv, $output): void
+    public function handleCommand(array $argv, $output): void
     {
         // argv format: ['eiou', 'backup', 'subcommand', 'arg1', 'arg2', ...]
         $subcommand = $argv[2] ?? 'help';

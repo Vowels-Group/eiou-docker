@@ -618,7 +618,7 @@ class ChainDropService implements ChainDropServiceInterface
                 break;
             case 'help':
             default:
-                $this->showCommandHelp($output);
+                $this->showHelp($output);
                 break;
         }
     }
@@ -726,7 +726,7 @@ class ChainDropService implements ChainDropServiceInterface
     /**
      * Show chain drop help for CLI
      */
-    private function showCommandHelp(CliOutputManager $output): void
+    private function showHelp(CliOutputManager $output): void
     {
         $output->info("Chain Drop Agreement Commands:");
         $output->info("  eiou chaindrop propose <contact_address>  - Propose dropping a missing transaction");

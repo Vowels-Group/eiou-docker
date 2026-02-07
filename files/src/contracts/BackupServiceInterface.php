@@ -96,5 +96,5 @@ interface BackupServiceInterface
      * @param CliOutputManager $output Output manager
      * @return void
      */
-    public function handleBackupCommand(array $args, $output): void;
+    public function handleCommand(array $args, $output): void;
 }
