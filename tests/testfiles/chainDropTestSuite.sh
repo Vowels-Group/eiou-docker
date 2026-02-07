@@ -203,6 +203,25 @@ check_chain_integrity() {
     " 2>/dev/null
 }
 
+# Format chain status for human-readable display
+# Input: "VALID:0:3" or "INVALID:1:2"
+# Output: "VALID (0 gaps, 3 txs)" or "INVALID (1 gap, 2 txs remaining, 3 expected)"
+format_chain_status() {
+    local raw="$1"
+    local status=$(echo "$raw" | cut -d: -f1)
+    local gaps=$(echo "$raw" | cut -d: -f2)
+    local txs=$(echo "$raw" | cut -d: -f3)
+    local gapWord="gaps"
+    [ "$gaps" = "1" ] && gapWord="gap"
+
+    if [ "$status" = "VALID" ]; then
+        echo "${status} (${gaps} ${gapWord}, ${txs} txs)"
+    else
+        local expected=$(( txs + gaps ))
+        echo "${status} (${gaps} ${gapWord}, ${txs} txs remaining, ${expected} expected)"
+    fi
+}
+
 # Get the first incoming pending proposal ID
 # Usage: get_pending_proposal <container>
 # Returns: proposal_id or "NONE"
@@ -294,8 +313,8 @@ clean_chain
 
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
-echo -e "\t   Sender chain: ${senderIntegrity}"
-echo -e "\t   Receiver chain: ${receiverIntegrity}"
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
 
 #################### TEST 1: Single Gap (3 tx, 1 missing) ####################
 
@@ -362,8 +381,8 @@ echo -e "\n\t-> Verifying chain is initially valid"
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
 
-echo -e "\t   Sender chain: ${senderIntegrity}"
-echo -e "\t   Receiver chain: ${receiverIntegrity}"
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
 
 if [[ "$senderIntegrity" == VALID:* ]] && [[ "$receiverIntegrity" == VALID:* ]]; then
     printf "\t   Initial chain valid ${GREEN}PASSED${NC}\n"
@@ -386,8 +405,8 @@ delete_txids ${receiver} "$tx2"
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
 
-echo -e "\t   Sender chain after delete: ${senderIntegrity}"
-echo -e "\t   Receiver chain after delete: ${receiverIntegrity}"
+echo -e "\t   Sender chain after delete: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain after delete: $(format_chain_status ${receiverIntegrity})"
 
 if [[ "$senderIntegrity" == INVALID:1:* ]] && [[ "$receiverIntegrity" == INVALID:1:* ]]; then
     printf "\t   Chain broken with 1 gap ${GREEN}PASSED${NC}\n"
@@ -456,8 +475,8 @@ wait_for_queue_processed ${receiver} 3
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
 
-echo -e "\t   Sender chain after drop: ${senderIntegrity}"
-echo -e "\t   Receiver chain after drop: ${receiverIntegrity}"
+echo -e "\t   Sender chain after drop: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain after drop: $(format_chain_status ${receiverIntegrity})"
 
 if [[ "$senderIntegrity" == VALID:* ]] && [[ "$receiverIntegrity" == VALID:* ]]; then
     printf "\t   Chain repaired ${GREEN}PASSED${NC}\n"
@@ -555,8 +574,8 @@ delete_txids ${receiver} "$tx2" "$tx4"
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
 
-echo -e "\t   Sender chain: ${senderIntegrity}"
-echo -e "\t   Receiver chain: ${receiverIntegrity}"
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
 
 if [[ "$senderIntegrity" == INVALID:2:* ]] && [[ "$receiverIntegrity" == INVALID:2:* ]]; then
     printf "\t   2 non-consecutive gaps detected ${GREEN}PASSED${NC}\n"
@@ -590,8 +609,8 @@ fi
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
 
-echo -e "\t   After first drop - Sender: ${senderIntegrity}"
-echo -e "\t   After first drop - Receiver: ${receiverIntegrity}"
+echo -e "\t   After first drop - Sender: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   After first drop - Receiver: $(format_chain_status ${receiverIntegrity})"
 
 # Should have 1 gap remaining (tx4 still missing)
 if [[ "$senderIntegrity" == INVALID:1:* ]] && [[ "$receiverIntegrity" == INVALID:1:* ]]; then
@@ -642,8 +661,8 @@ fi
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
 
-echo -e "\t   After second drop - Sender: ${senderIntegrity}"
-echo -e "\t   After second drop - Receiver: ${receiverIntegrity}"
+echo -e "\t   After second drop - Sender: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   After second drop - Receiver: $(format_chain_status ${receiverIntegrity})"
 
 if [[ "$senderIntegrity" == VALID:* ]] && [[ "$receiverIntegrity" == VALID:* ]]; then
     printf "\t   Second chain drop (all gaps resolved) ${GREEN}PASSED${NC}\n"
@@ -739,8 +758,8 @@ delete_txids ${receiver} "$tx2" "$tx3"
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
 
-echo -e "\t   Sender chain: ${senderIntegrity}"
-echo -e "\t   Receiver chain: ${receiverIntegrity}"
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
 
 # Consecutive missing: tx4 points to tx3 (missing) -> 1 detected gap
 # tx2 is also gone but tx3 (which referenced it) is gone too, so no reference to tx2
@@ -776,8 +795,8 @@ fi
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
 
-echo -e "\t   After drop - Sender: ${senderIntegrity}"
-echo -e "\t   After drop - Receiver: ${receiverIntegrity}"
+echo -e "\t   After drop - Sender: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   After drop - Receiver: $(format_chain_status ${receiverIntegrity})"
 
 if [[ "$senderIntegrity" == VALID:* ]] && [[ "$receiverIntegrity" == VALID:* ]]; then
     printf "\t   Consecutive gap resolved ${GREEN}PASSED${NC}\n"
@@ -942,8 +961,8 @@ echo -e "\n\t-> Verifying chain is still broken after rejection"
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
 
-echo -e "\t   Sender chain: ${senderIntegrity}"
-echo -e "\t   Receiver chain: ${receiverIntegrity}"
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
 
 if [[ "$senderIntegrity" == INVALID:1:* ]] && [[ "$receiverIntegrity" == INVALID:1:* ]]; then
     printf "\t   Chain still broken after reject ${GREEN}PASSED${NC}\n"
