@@ -32,6 +32,7 @@ See [Testing Guide](docs/TESTING.md) for detailed documentation.
 |----------|-------------|
 | [Architecture](docs/ARCHITECTURE.md) | System architecture and design |
 | [Docker Configuration](docs/DOCKER_CONFIGURATION.md) | Environment variables and volume mounts |
+| [Upgrade Guide](docs/UPGRADE_GUIDE.md) | How to update your node while preserving data |
 | [API Reference](docs/API_REFERENCE.md) | REST API documentation |
 | [API Quick Reference](docs/API_QUICK_REFERENCE.md) | API endpoint summary |
 | [GUI Reference](docs/GUI_REFERENCE.md) | Web interface documentation |
