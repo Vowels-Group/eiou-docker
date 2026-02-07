@@ -19,6 +19,7 @@ The project is currently in **ALPHA** status.
 
 ### Added
 - Chain drop agreement protocol for resolving mutual transaction chain gaps with two-party consent
+- Chain drop integration test suite (`chainDropTestSuite.sh`) with 4 scenarios: single gap, non-consecutive gaps, consecutive gaps, and rejection flow
 - GUI wallet header displays "₳ Wallet of [name]" after login; name hidden from page titles and login screen to prevent identity leakage via Tor (#587)
 - Upgrade guide documentation (`docs/UPGRADE_GUIDE.md`)
 - Unified `LoggerInterface` and `Logger` facade for consolidated logging (#557)
@@ -26,6 +27,7 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
+- `proposeChainDrop()` signature mismatch: interface/service had 4-param signature but CLI/GUI called with 1 param; changed to auto-detect signature accepting `contactPubkeyHash`
 - Message delivery retry queue not processed: `processRetryQueue()` was never called from any background processor; wired into CleanupMessageProcessor
 - Config file migration in startup.sh for upgrades from pre-#573 images (config moved from `/etc/eiou/` to `/etc/eiou/config/`)
 - Composer dependency installation on upgrade: `startup.sh` now runs `composer install` instead of `dump-autoload` to install new dependencies

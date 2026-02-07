@@ -24,13 +24,13 @@ interface ChainDropServiceInterface
     /**
      * Propose dropping a missing transaction from the chain
      *
-     * @param string $contactAddress Contact's network address
-     * @param string $contactPubkey Contact's public key
-     * @param string $missingTxid The txid that is missing from both chains
-     * @param string $brokenTxid The txid whose previous_txid points to the missing one
-     * @return array Result with keys: success (bool), proposal_id (string|null), error (string|null)
+     * Auto-detects the gap by looking up the contact and verifying chain integrity.
+     * Picks the first detected gap for the proposal.
+     *
+     * @param string $contactPubkeyHash Contact's public key hash
+     * @return array Result with keys: success (bool), proposal_id (string|null), missing_txid (string|null), broken_txid (string|null), error (string|null)
      */
-    public function proposeChainDrop(string $contactAddress, string $contactPubkey, string $missingTxid, string $brokenTxid): array;
+    public function proposeChainDrop(string $contactPubkeyHash): array;
 
     /**
      * Handle an incoming chain drop proposal from a contact

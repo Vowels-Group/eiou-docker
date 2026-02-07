@@ -109,11 +109,14 @@ class ChainDropServiceTest extends TestCase
     {
         $contactPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
 
-        // No existing active proposal
-        $this->proposalRepository->expects($this->once())
-            ->method('getActiveProposalForGap')
-            ->with($contactPubkeyHash, self::TEST_MISSING_TXID)
-            ->willReturn(null);
+        // Contact lookup returns contact with pubkey
+        $this->contactRepository->expects($this->atLeastOnce())
+            ->method('lookupByPubkeyHash')
+            ->with($contactPubkeyHash)
+            ->willReturn([
+                'public_key' => self::TEST_CONTACT_PUBKEY,
+                'http' => self::TEST_CONTACT_ADDRESS
+            ]);
 
         // Chain integrity shows a gap
         $this->transactionChainRepository->expects($this->once())
@@ -125,6 +128,12 @@ class ChainDropServiceTest extends TestCase
                 'broken_txids' => [self::TEST_BROKEN_TXID],
                 'transaction_count' => 10
             ]);
+
+        // No existing active proposal
+        $this->proposalRepository->expects($this->once())
+            ->method('getActiveProposalForGap')
+            ->with($contactPubkeyHash, self::TEST_MISSING_TXID)
+            ->willReturn(null);
 
         // Chain lookup for findPreviousTxidBeforeGap
         $this->transactionChainRepository->expects($this->once())
@@ -140,16 +149,13 @@ class ChainDropServiceTest extends TestCase
             ->method('createProposal')
             ->willReturn(true);
 
-        $result = $this->service->proposeChainDrop(
-            self::TEST_CONTACT_ADDRESS,
-            self::TEST_CONTACT_PUBKEY,
-            self::TEST_MISSING_TXID,
-            self::TEST_BROKEN_TXID
-        );
+        $result = $this->service->proposeChainDrop($contactPubkeyHash);
 
         $this->assertTrue($result['success']);
         $this->assertNotNull($result['proposal_id']);
         $this->assertNull($result['error']);
+        $this->assertEquals(self::TEST_MISSING_TXID, $result['missing_txid']);
+        $this->assertEquals(self::TEST_BROKEN_TXID, $result['broken_txid']);
     }
 
     /**
@@ -159,11 +165,14 @@ class ChainDropServiceTest extends TestCase
     {
         $contactPubkeyHash = hash('sha256', self::TEST_CONTACT_PUBKEY);
 
-        // No existing active proposal
-        $this->proposalRepository->expects($this->once())
-            ->method('getActiveProposalForGap')
-            ->with($contactPubkeyHash, self::TEST_MISSING_TXID)
-            ->willReturn(null);
+        // Contact lookup returns contact with pubkey
+        $this->contactRepository->expects($this->once())
+            ->method('lookupByPubkeyHash')
+            ->with($contactPubkeyHash)
+            ->willReturn([
+                'public_key' => self::TEST_CONTACT_PUBKEY,
+                'http' => self::TEST_CONTACT_ADDRESS
+            ]);
 
         // Chain integrity reports valid chain
         $this->transactionChainRepository->expects($this->once())
@@ -180,12 +189,7 @@ class ChainDropServiceTest extends TestCase
         $this->proposalRepository->expects($this->never())
             ->method('createProposal');
 
-        $result = $this->service->proposeChainDrop(
-            self::TEST_CONTACT_ADDRESS,
-            self::TEST_CONTACT_PUBKEY,
-            self::TEST_MISSING_TXID,
-            self::TEST_BROKEN_TXID
-        );
+        $result = $this->service->proposeChainDrop($contactPubkeyHash);
 
         $this->assertFalse($result['success']);
         $this->assertNull($result['proposal_id']);

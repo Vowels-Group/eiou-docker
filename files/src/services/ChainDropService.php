@@ -78,22 +78,25 @@ class ChainDropService implements ChainDropServiceInterface
     /**
      * {@inheritdoc}
      */
-    public function proposeChainDrop(string $contactAddress, string $contactPubkey, string $missingTxid, string $brokenTxid): array
+    public function proposeChainDrop(string $contactPubkeyHash): array
     {
-        $result = ['success' => false, 'proposal_id' => null, 'error' => null];
+        $result = ['success' => false, 'proposal_id' => null, 'missing_txid' => null, 'broken_txid' => null, 'error' => null];
 
         try {
-            $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactPubkey);
-
-            // Check for existing active proposal for this gap
-            $existing = $this->proposalRepository->getActiveProposalForGap($contactPubkeyHash, $missingTxid);
-            if ($existing) {
-                $result['error'] = 'An active proposal already exists for this gap';
-                $result['proposal_id'] = $existing['proposal_id'];
+            // Look up contact to get pubkey and address
+            $contact = $this->contactRepository->lookupByPubkeyHash($contactPubkeyHash);
+            if (!$contact) {
+                $result['error'] = 'Contact not found';
                 return $result;
             }
 
-            // Verify the gap exists locally
+            $contactPubkey = $contact['public_key'] ?? null;
+            if (!$contactPubkey) {
+                $result['error'] = 'Contact public key not available';
+                return $result;
+            }
+
+            // Verify the chain and auto-detect the first gap
             $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
                 $this->currentUser->getPublicKey(),
                 $contactPubkey
@@ -104,13 +107,23 @@ class ChainDropService implements ChainDropServiceInterface
                 return $result;
             }
 
-            if (!in_array($missingTxid, $chainStatus['gaps'] ?? [])) {
-                $result['error'] = 'Specified missing_txid is not a detected gap';
+            $gaps = $chainStatus['gaps'] ?? [];
+            $brokenTxids = $chainStatus['broken_txids'] ?? [];
+
+            if (empty($gaps) || empty($brokenTxids)) {
+                $result['error'] = 'No gap detected in chain';
                 return $result;
             }
 
-            if (!in_array($brokenTxid, $chainStatus['broken_txids'] ?? [])) {
-                $result['error'] = 'Specified broken_txid does not reference the missing transaction';
+            // Pick the first gap
+            $missingTxid = $gaps[0];
+            $brokenTxid = $brokenTxids[0];
+
+            // Check for existing active proposal for this gap
+            $existing = $this->proposalRepository->getActiveProposalForGap($contactPubkeyHash, $missingTxid);
+            if ($existing) {
+                $result['error'] = 'An active proposal already exists for this gap';
+                $result['proposal_id'] = $existing['proposal_id'];
                 return $result;
             }
 
@@ -132,13 +145,20 @@ class ChainDropService implements ChainDropServiceInterface
                 'direction' => 'outgoing',
                 'gap_context' => [
                     'chain_transaction_count' => $chainStatus['transaction_count'],
-                    'total_gaps' => count($chainStatus['gaps']),
+                    'total_gaps' => count($gaps),
                     'proposed_at' => date('c')
                 ]
             ]);
 
             if (!$created) {
                 $result['error'] = 'Failed to create proposal record';
+                return $result;
+            }
+
+            // Resolve contact address for sending proposal
+            $contactAddress = $this->resolveContactAddress($contactPubkeyHash);
+            if (!$contactAddress) {
+                $result['error'] = 'Could not resolve contact address';
                 return $result;
             }
 
@@ -163,13 +183,15 @@ class ChainDropService implements ChainDropServiceInterface
 
             EventDispatcher::getInstance()->dispatch(ChainDropEvents::CHAIN_DROP_PROPOSED, [
                 'proposal_id' => $proposalId,
-                'contact_pubkey' => $contactPubkey,
+                'contact_pubkey_hash' => $contactPubkeyHash,
                 'missing_txid' => $missingTxid,
                 'broken_txid' => $brokenTxid
             ]);
 
             $result['success'] = true;
             $result['proposal_id'] = $proposalId;
+            $result['missing_txid'] = $missingTxid;
+            $result['broken_txid'] = $brokenTxid;
 
         } catch (Exception $e) {
             $result['error'] = 'Failed to propose chain drop: ' . $e->getMessage();
