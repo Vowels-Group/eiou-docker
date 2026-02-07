@@ -4,26 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php
-        $titleName = $user->getName();
-        if (!$titleName && $user->has('hostname')) {
-            $titleName = parse_url($user->getHttpAddress(), PHP_URL_HOST) ?: $user->getHttpAddress();
-        }
-        echo $titleName ? htmlspecialchars($titleName) . ' - ' : '';
-    ?>eIOU Wallet - Authentication</title>
+    <title>₳ Wallet - Authentication</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>₳</text></svg>">
     <link href="/gui/assets/fontawesome/css/all.min.css" rel="stylesheet">
     <style><?php require_once("/etc/eiou/src/gui/assets/css/authentication-form.css");?></style>
 </head>
 <body>
     <div class="auth-container">
-        <h1><i class="fas fa-wallet"></i> ₳ <?php
-            $authHeaderName = $user->getName();
-            if (!$authHeaderName && $user->has('hostname')) {
-                $authHeaderName = parse_url($user->getHttpAddress(), PHP_URL_HOST) ?: null;
-            }
-            echo htmlspecialchars($authHeaderName ?: 'Wallet');
-        ?></h1>
+        <h1><i class="fas fa-wallet"></i> ₳ Wallet</h1>
         <p>Please enter your authentication code to access your wallet</p>
         
         <form class="auth-form" method="POST">
