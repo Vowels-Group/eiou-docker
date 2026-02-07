@@ -749,6 +749,9 @@ class ContactController
             $app = Application::getInstance();
             $chainDropService = $app->services->getChainDropService();
             $result = $chainDropService->rejectProposal($proposalId);
+            if ($result['success']) {
+                $result['warning'] = 'The chain gap remains unresolved. Transactions with this contact are blocked until a new chain drop proposal is accepted.';
+            }
             echo json_encode($result);
         } catch (\Throwable $e) {
             Logger::getInstance()->logException($e, ['controller' => 'ContactController', 'action' => __FUNCTION__]);

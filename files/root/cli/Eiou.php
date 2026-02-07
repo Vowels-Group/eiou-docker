@@ -368,6 +368,7 @@ elseif($request === "chaindrop"){
       $output->success("Chain drop proposal rejected", [
         'proposal_id' => $proposalId
       ]);
+      $output->info("Note: The chain gap remains unresolved. Transactions with this contact are blocked until a new chain drop proposal is accepted.");
     } else {
       $output->error($result['error'] ?? 'Reject failed', ErrorCodes::GENERAL_ERROR);
       exit(1);
@@ -399,6 +400,10 @@ elseif($request === "chaindrop"){
     $output->info("  eiou chaindrop reject <proposal_id>       - Reject an incoming proposal");
     $output->info("  eiou chaindrop list [contact_address]     - List pending proposals");
     $output->info("  eiou chaindrop help                       - Show this help");
+    $output->info("");
+    $output->info("When a chain gap exists, transactions with that contact are blocked.");
+    $output->info("Rejecting a proposal leaves the gap unresolved. A new proposal must");
+    $output->info("be accepted to restore the ability to transact.");
   }
 }
 else{

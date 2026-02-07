@@ -18,6 +18,12 @@ namespace Eiou\Contracts;
  * 4. Contact B calls acceptProposal() -> executes drop, re-signs own txs, sends acceptance with re-signed data
  * 5. Contact A receives acceptance via handleIncomingAcceptance() -> executes drop, re-signs own txs, sends ack
  * 6. Contact B receives acknowledgment via handleIncomingAcknowledgment() -> stores A's re-signed txs
+ *
+ * Important: While a chain gap exists, transactions between the two contacts are blocked.
+ * SendOperationService verifies chain integrity before every send and halts if a gap is
+ * detected (after attempting sync repair, which fails when both parties are missing the
+ * same transaction). Rejecting a proposal leaves the gap unresolved, meaning the contacts
+ * cannot transact until a new proposal is accepted or the missing transaction is recovered.
  */
 interface ChainDropServiceInterface
 {
@@ -50,6 +56,11 @@ interface ChainDropServiceInterface
 
     /**
      * Reject an incoming chain drop proposal
+     *
+     * Warning: Rejecting leaves the chain gap unresolved. While the gap exists,
+     * transactions between these contacts are blocked (SendOperationService
+     * verifies chain integrity before every send). A new proposal must be
+     * accepted to restore the ability to transact.
      *
      * @param string $proposalId The proposal ID to reject
      * @return array Result with keys: success (bool), error (string|null)
