@@ -93,6 +93,7 @@ if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
         'add' => ['max' => 20, 'window' => 60, 'block' => 300],       // 20 contact additions per minute
         'generate' => ['max' => 5, 'window' => 300, 'block' => 900],  // 5 wallet generations per 5 minutes
         'backup' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 backup operations per minute
+        'chaindrop' => ['max' => 10, 'window' => 60, 'block' => 300], // 10 chain drop operations per minute
         'default' => ['max' => 100, 'window' => 60, 'block' => 300]   // Default for other commands
     ];
 
@@ -308,6 +309,93 @@ elseif($request === "backup"){
   $debugService->output("Executing backup request", 'SILENT');
   $backupService = $app->services->getBackupService();
   $backupService->handleBackupCommand($cleanArgv, $output);
+}
+// Chain Drop Agreement
+elseif($request === "chaindrop"){
+  $debugService->output("Executing chain drop request", 'SILENT');
+  $chainDropService = $app->services->getChainDropService();
+
+  $subcommand = $cleanArgv[2] ?? 'help';
+
+  if ($subcommand === 'propose') {
+    $contactIdentifier = $cleanArgv[3] ?? null;
+    if (!$contactIdentifier) {
+      $output->error("Contact address required. Usage: eiou chaindrop propose <contact_address>", ErrorCodes::MISSING_ARGUMENT);
+      exit(1);
+    }
+    // Look up contact by address to get pubkey_hash
+    $contactRepo = $app->services->getContactRepository();
+    $contact = $contactRepo->lookupByAddress($contactIdentifier);
+    if (!$contact) {
+      $output->error("Contact not found: {$contactIdentifier}", ErrorCodes::CONTACT_NOT_FOUND);
+      exit(1);
+    }
+    $result = $chainDropService->proposeChainDrop($contact['pubkey_hash']);
+    if ($result['success']) {
+      $output->success("Chain drop proposal sent", [
+        'proposal_id' => $result['proposal_id'],
+        'missing_txid' => $result['missing_txid'] ?? null
+      ]);
+    } else {
+      $output->error($result['error'] ?? 'Proposal failed', ErrorCodes::GENERAL_ERROR);
+      exit(1);
+    }
+  } elseif ($subcommand === 'accept') {
+    $proposalId = $cleanArgv[3] ?? null;
+    if (!$proposalId) {
+      $output->error("Proposal ID required. Usage: eiou chaindrop accept <proposal_id>", ErrorCodes::MISSING_ARGUMENT);
+      exit(1);
+    }
+    $result = $chainDropService->acceptProposal($proposalId);
+    if ($result['success']) {
+      $output->success("Chain drop proposal accepted and executed", [
+        'proposal_id' => $proposalId
+      ]);
+    } else {
+      $output->error($result['error'] ?? 'Accept failed', ErrorCodes::GENERAL_ERROR);
+      exit(1);
+    }
+  } elseif ($subcommand === 'reject') {
+    $proposalId = $cleanArgv[3] ?? null;
+    if (!$proposalId) {
+      $output->error("Proposal ID required. Usage: eiou chaindrop reject <proposal_id>", ErrorCodes::MISSING_ARGUMENT);
+      exit(1);
+    }
+    $result = $chainDropService->rejectProposal($proposalId);
+    if ($result['success']) {
+      $output->success("Chain drop proposal rejected", [
+        'proposal_id' => $proposalId
+      ]);
+    } else {
+      $output->error($result['error'] ?? 'Reject failed', ErrorCodes::GENERAL_ERROR);
+      exit(1);
+    }
+  } elseif ($subcommand === 'list') {
+    $contactIdentifier = $cleanArgv[3] ?? null;
+    if ($contactIdentifier) {
+      $contactRepo = $app->services->getContactRepository();
+      $contact = $contactRepo->lookupByAddress($contactIdentifier);
+      if (!$contact) {
+        $output->error("Contact not found: {$contactIdentifier}", ErrorCodes::CONTACT_NOT_FOUND);
+        exit(1);
+      }
+      $proposals = $chainDropService->getProposalsForContact($contact['pubkey_hash']);
+    } else {
+      $proposals = $chainDropService->getIncomingPendingProposals();
+    }
+    $output->success("Chain drop proposals", [
+      'count' => count($proposals),
+      'proposals' => $proposals
+    ]);
+  } else {
+    // Show chain drop help
+    $output->info("Chain Drop Agreement Commands:");
+    $output->info("  eiou chaindrop propose <contact_address>  - Propose dropping a missing transaction");
+    $output->info("  eiou chaindrop accept <proposal_id>       - Accept an incoming proposal");
+    $output->info("  eiou chaindrop reject <proposal_id>       - Reject an incoming proposal");
+    $output->info("  eiou chaindrop list [contact_address]     - List pending proposals");
+    $output->info("  eiou chaindrop help                       - Show this help");
+  }
 }
 else{
   // If no known input, display commands possible for input

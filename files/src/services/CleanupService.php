@@ -6,6 +6,7 @@ namespace Eiou\Services;
 use Eiou\Utils\Logger;
 use Eiou\Contracts\CleanupServiceInterface;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
+use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\TransactionRepository;
@@ -76,6 +77,11 @@ class CleanupService implements CleanupServiceInterface {
     private MessageDeliveryServiceInterface $messageDeliveryService;
 
     /**
+     * @var ChainDropServiceInterface|null Chain drop service for proposal expiration
+     */
+    private ?ChainDropServiceInterface $chainDropService = null;
+
+    /**
      * Constructor
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
@@ -105,6 +111,18 @@ class CleanupService implements CleanupServiceInterface {
         $this->messageDeliveryService = $messageDeliveryService;
 
         $this->messagePayload = new MessagePayload($this->currentUser, $this->utilityContainer);
+    }
+
+    /**
+     * Set the ChainDropService for proposal expiration
+     * Uses setter injection to avoid circular dependencies
+     *
+     * @param ChainDropServiceInterface $chainDropService
+     * @return void
+     */
+    public function setChainDropService(ChainDropServiceInterface $chainDropService): void
+    {
+        $this->chainDropService = $chainDropService;
     }
 
     /**
@@ -143,6 +161,16 @@ class CleanupService implements CleanupServiceInterface {
             $processed += $retryResults['processed'];
         } catch (Exception $e) {
             Logger::getInstance()->error("Error processing retry queue", ['error' => $e->getMessage()]);
+        }
+
+        // Expire stale chain drop proposals (7-day timeout)
+        try {
+            if ($this->chainDropService !== null) {
+                $expiredCount = $this->chainDropService->expireStaleProposals();
+                $processed += $expiredCount;
+            }
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Error expiring chain drop proposals", ['error' => $e->getMessage()]);
         }
 
         return $processed;

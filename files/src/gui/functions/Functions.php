@@ -75,6 +75,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         exit; // Ensure we don't continue to render HTML
     }
+
+    // AJAX-only chain drop actions (returns JSON, exits immediately)
+    if (in_array($action, ['proposeChainDrop', 'acceptChainDrop', 'rejectChainDrop'])) {
+        try {
+            $contactController->routeAction();
+        } catch (Exception $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => 'Server error: ' . $e->getMessage()]);
+        }
+        exit;
+    }
 }
 
 // Handle GET requests for update checking
@@ -156,6 +167,16 @@ $blockedContacts = $transactionService->contactBalanceConversion($contactService
 
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
+
+// Chain drop proposals for contacts
+$chainDropProposals = [];
+try {
+    $chainDropService = $serviceContainer->getChainDropService();
+    $chainDropProposals = $chainDropService->getIncomingPendingProposals();
+} catch (Exception $e) {
+    // Non-critical - proposals loading failure shouldn't block page
+    $chainDropProposals = [];
+}
 
 // Dead Letter Queue - track newly added items for notification
 $newlyAddedToDlq = [];

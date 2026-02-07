@@ -1214,6 +1214,7 @@ function showManualCopyModal(text, successMessage) {
 
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
 var currentContactId = null;
+var currentContactPubkeyHash = null;
 var contactTransactionData = [];
 var contactsShowAll = false;
 var CONTACTS_DEFAULT_LIMIT = 16;
@@ -1486,6 +1487,49 @@ function openContactModal(contact, openTab) {
         chainStatusEl.className = 'chain-badge ' + chainClass;
     }
 
+    // Show chain drop section if chain is invalid
+    var chainDropSection = document.getElementById('chain_drop_section');
+    var chainDropPropose = document.getElementById('chain_drop_propose');
+    var chainDropAwaiting = document.getElementById('chain_drop_awaiting');
+    var chainDropIncoming = document.getElementById('chain_drop_incoming');
+
+    if (chainDropSection) {
+        // Reset all sub-sections
+        if (chainDropPropose) chainDropPropose.style.display = 'none';
+        if (chainDropAwaiting) chainDropAwaiting.style.display = 'none';
+        if (chainDropIncoming) chainDropIncoming.style.display = 'none';
+        currentChainDropProposalId = null;
+
+        if (contact.chain_drop_proposal) {
+            chainDropSection.style.display = 'block';
+            var proposal = contact.chain_drop_proposal;
+            if (proposal.direction === 'incoming' && proposal.status === 'pending') {
+                if (chainDropIncoming) {
+                    chainDropIncoming.style.display = 'block';
+                    var incomingIdEl = document.getElementById('chain_drop_incoming_id');
+                    if (incomingIdEl) {
+                        incomingIdEl.textContent = 'Proposal: ' + proposal.proposal_id;
+                    }
+                }
+                currentChainDropProposalId = proposal.proposal_id;
+            } else if (proposal.direction === 'outgoing' && proposal.status === 'pending') {
+                if (chainDropAwaiting) {
+                    chainDropAwaiting.style.display = 'block';
+                    var awaitingIdEl = document.getElementById('chain_drop_awaiting_id');
+                    if (awaitingIdEl) {
+                        awaitingIdEl.textContent = 'Proposal: ' + proposal.proposal_id;
+                    }
+                }
+            }
+        } else if (validChain === false || validChain === 0) {
+            // Chain is invalid and no proposal exists - show propose button
+            chainDropSection.style.display = 'block';
+            if (chainDropPropose) chainDropPropose.style.display = 'block';
+        } else {
+            chainDropSection.style.display = 'none';
+        }
+    }
+
     // Set form values
     document.getElementById('edit_contact_address').value = contact.address;
     document.getElementById('edit_contact_name').value = contact.name;
@@ -1500,6 +1544,9 @@ function openContactModal(contact, openTab) {
 
     // Store current contact address for ping function
     currentContactAddress = contact.address;
+
+    // Store current contact pubkey hash for chain drop
+    currentContactPubkeyHash = contact.pubkey_hash || null;
 
     // Reset ping button state and result message
     resetPingButton();
@@ -2081,6 +2128,313 @@ window.addEventListener('DOMContentLoaded', function() {
     // Initialize contacts display limit (show only first 16 by default)
     initContactsDisplay();
 });
+
+// Chain Drop Resolution state
+var currentChainDropProposalId = null;
+
+/**
+ * Proposes a chain drop to the current contact.
+ * Sends AJAX POST with the contact's pubkey hash.
+ * @returns {void}
+ */
+function proposeChainDrop() {
+    var btn = document.getElementById('chain_drop_propose_btn');
+    var icon = document.getElementById('chain_drop_propose_icon');
+    var btnText = document.getElementById('chain_drop_propose_text');
+    var resultMsg = document.getElementById('chain_drop_propose_result');
+
+    if (!currentContactPubkeyHash) {
+        if (resultMsg) {
+            resultMsg.textContent = 'Contact information not available';
+            resultMsg.style.color = '#dc3545';
+        }
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+    if (icon) icon.className = 'fas fa-spinner fa-spin';
+    if (btnText) btnText.textContent = 'Sending...';
+    if (resultMsg) resultMsg.textContent = '';
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        if (resultMsg) {
+            resultMsg.textContent = 'CSRF token not found';
+            resultMsg.style.color = '#dc3545';
+        }
+        resetChainDropProposeButton();
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('action', 'proposeChainDrop');
+    formData.append('contact_pubkey_hash', currentContactPubkeyHash);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+
+    xhr.ontimeout = function() {
+        resetChainDropProposeButton();
+        if (resultMsg) {
+            resultMsg.textContent = 'Request timed out';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onerror = function() {
+        resetChainDropProposeButton();
+        if (resultMsg) {
+            resultMsg.textContent = 'Network error';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            resetChainDropProposeButton();
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        if (resultMsg) {
+                            resultMsg.textContent = 'Proposal sent successfully';
+                            resultMsg.style.color = '#28a745';
+                        }
+                        showToast('Chain Drop', 'Chain drop proposal sent to contact.', 'success');
+                        // Switch to awaiting state
+                        var proposeEl = document.getElementById('chain_drop_propose');
+                        var awaitingEl = document.getElementById('chain_drop_awaiting');
+                        if (proposeEl) proposeEl.style.display = 'none';
+                        if (awaitingEl) {
+                            awaitingEl.style.display = 'block';
+                            var awaitingIdEl = document.getElementById('chain_drop_awaiting_id');
+                            if (awaitingIdEl && response.proposal_id) {
+                                awaitingIdEl.textContent = 'Proposal: ' + response.proposal_id;
+                            }
+                        }
+                    } else {
+                        if (resultMsg) {
+                            resultMsg.textContent = response.message || 'Proposal failed';
+                            resultMsg.style.color = '#dc3545';
+                        }
+                    }
+                } catch (e) {
+                    if (resultMsg) {
+                        resultMsg.textContent = 'Invalid response';
+                        resultMsg.style.color = '#dc3545';
+                    }
+                }
+            } else if (xhr.status !== 0) {
+                if (resultMsg) {
+                    resultMsg.textContent = 'Request failed';
+                    resultMsg.style.color = '#dc3545';
+                }
+            }
+        }
+    };
+    xhr.send(formData);
+}
+
+function resetChainDropProposeButton() {
+    var btn = document.getElementById('chain_drop_propose_btn');
+    var icon = document.getElementById('chain_drop_propose_icon');
+    var btnText = document.getElementById('chain_drop_propose_text');
+    if (btn) btn.disabled = false;
+    if (icon) icon.className = 'fas fa-handshake';
+    if (btnText) btnText.textContent = 'Propose Chain Drop';
+}
+
+/**
+ * Accepts an incoming chain drop proposal.
+ * @returns {void}
+ */
+function acceptChainDrop() {
+    if (!currentChainDropProposalId) return;
+
+    var btn = document.getElementById('chain_drop_accept_btn');
+    var icon = document.getElementById('chain_drop_accept_icon');
+    var btnText = document.getElementById('chain_drop_accept_text');
+    var resultMsg = document.getElementById('chain_drop_action_result');
+
+    if (btn) btn.disabled = true;
+    if (icon) icon.className = 'fas fa-spinner fa-spin';
+    if (btnText) btnText.textContent = 'Accepting...';
+    if (resultMsg) resultMsg.textContent = '';
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        if (resultMsg) {
+            resultMsg.textContent = 'CSRF token not found';
+            resultMsg.style.color = '#dc3545';
+        }
+        resetChainDropActionButtons();
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('action', 'acceptChainDrop');
+    formData.append('proposal_id', currentChainDropProposalId);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+
+    xhr.ontimeout = function() {
+        resetChainDropActionButtons();
+        if (resultMsg) {
+            resultMsg.textContent = 'Request timed out';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onerror = function() {
+        resetChainDropActionButtons();
+        if (resultMsg) {
+            resultMsg.textContent = 'Network error';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            resetChainDropActionButtons();
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        showToast('Chain Drop Accepted', 'The chain gap has been resolved.', 'success');
+                        var incomingEl = document.getElementById('chain_drop_incoming');
+                        if (incomingEl) incomingEl.style.display = 'none';
+                        var sectionEl = document.getElementById('chain_drop_section');
+                        if (sectionEl) sectionEl.style.display = 'none';
+                    } else {
+                        if (resultMsg) {
+                            resultMsg.textContent = response.message || 'Accept failed';
+                            resultMsg.style.color = '#dc3545';
+                        }
+                    }
+                } catch (e) {
+                    if (resultMsg) {
+                        resultMsg.textContent = 'Invalid response';
+                        resultMsg.style.color = '#dc3545';
+                    }
+                }
+            } else if (xhr.status !== 0) {
+                if (resultMsg) {
+                    resultMsg.textContent = 'Request failed';
+                    resultMsg.style.color = '#dc3545';
+                }
+            }
+        }
+    };
+    xhr.send(formData);
+}
+
+/**
+ * Rejects an incoming chain drop proposal.
+ * @returns {void}
+ */
+function rejectChainDrop() {
+    if (!currentChainDropProposalId) return;
+
+    var btn = document.getElementById('chain_drop_reject_btn');
+    var icon = document.getElementById('chain_drop_reject_icon');
+    var btnText = document.getElementById('chain_drop_reject_text');
+    var resultMsg = document.getElementById('chain_drop_action_result');
+
+    if (btn) btn.disabled = true;
+    if (icon) icon.className = 'fas fa-spinner fa-spin';
+    if (btnText) btnText.textContent = 'Rejecting...';
+    if (resultMsg) resultMsg.textContent = '';
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        if (resultMsg) {
+            resultMsg.textContent = 'CSRF token not found';
+            resultMsg.style.color = '#dc3545';
+        }
+        resetChainDropActionButtons();
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('action', 'rejectChainDrop');
+    formData.append('proposal_id', currentChainDropProposalId);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+
+    xhr.ontimeout = function() {
+        resetChainDropActionButtons();
+        if (resultMsg) {
+            resultMsg.textContent = 'Request timed out';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onerror = function() {
+        resetChainDropActionButtons();
+        if (resultMsg) {
+            resultMsg.textContent = 'Network error';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            resetChainDropActionButtons();
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        showToast('Chain Drop Rejected', 'The chain drop proposal has been rejected.', 'info');
+                        var incomingEl = document.getElementById('chain_drop_incoming');
+                        if (incomingEl) incomingEl.style.display = 'none';
+                        var sectionEl = document.getElementById('chain_drop_section');
+                        if (sectionEl) sectionEl.style.display = 'none';
+                    } else {
+                        if (resultMsg) {
+                            resultMsg.textContent = response.message || 'Reject failed';
+                            resultMsg.style.color = '#dc3545';
+                        }
+                    }
+                } catch (e) {
+                    if (resultMsg) {
+                        resultMsg.textContent = 'Invalid response';
+                        resultMsg.style.color = '#dc3545';
+                    }
+                }
+            } else if (xhr.status !== 0) {
+                if (resultMsg) {
+                    resultMsg.textContent = 'Request failed';
+                    resultMsg.style.color = '#dc3545';
+                }
+            }
+        }
+    };
+    xhr.send(formData);
+}
+
+function resetChainDropActionButtons() {
+    var acceptBtn = document.getElementById('chain_drop_accept_btn');
+    var acceptIcon = document.getElementById('chain_drop_accept_icon');
+    var acceptText = document.getElementById('chain_drop_accept_text');
+    var rejectBtn = document.getElementById('chain_drop_reject_btn');
+    var rejectIcon = document.getElementById('chain_drop_reject_icon');
+    var rejectText = document.getElementById('chain_drop_reject_text');
+
+    if (acceptBtn) acceptBtn.disabled = false;
+    if (acceptIcon) acceptIcon.className = 'fas fa-check';
+    if (acceptText) acceptText.textContent = 'Accept';
+    if (rejectBtn) rejectBtn.disabled = false;
+    if (rejectIcon) rejectIcon.className = 'fas fa-times';
+    if (rejectText) rejectText.textContent = 'Reject';
+}
 
 // ============================================================================
 // SETTINGS SECTION FUNCTIONS

@@ -18,6 +18,7 @@ The project is currently in **ALPHA** status.
 - GUI recent transactions list shows description instead of counterparty address; click to view full details with address in modal (#589)
 
 ### Added
+- Chain drop agreement protocol for resolving mutual transaction chain gaps with two-party consent
 - GUI wallet header displays "₳ Wallet of [name]" after login; name hidden from page titles and login screen to prevent identity leakage via Tor (#587)
 - Upgrade guide documentation (`docs/UPGRADE_GUIDE.md`)
 - Unified `LoggerInterface` and `Logger` facade for consolidated logging (#557)
