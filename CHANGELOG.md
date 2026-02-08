@@ -16,8 +16,19 @@ The project is currently in **ALPHA** status.
 - GUI notifications use session flash messages instead of URL parameters; messages no longer re-appear on page refresh
 - GUI shows toast notification when receiving transactions ("Payment Received" with amount and sender name)
 - GUI recent transactions list shows description instead of counterparty address; click to view full details with address in modal (#589)
+- GUI chain drop terminology changed from "chain drop" to "drop missing transaction(s)" in all user-facing text
+- GUI Check Status (ping) now reloads the page and reopens the contact modal so updated values persist
+- GUI chain drop propose/accept/reject actions reload page and reopen contact modal after completion
 
 ### Added
+- GUI chain drop proposal badges on contact cards: red "Action Required" (incoming), blue "Awaiting Response" (outgoing), orange "Blocked" (rejected)
+- GUI chain status badge in contact modal is now proposal-aware: shows "Action Required", "Awaiting Acceptance", or "Blocked" with clickable scroll to chain drop section
+- GUI chain drop resolution section in contact modal with four states: propose, awaiting acceptance, incoming (accept/reject), rejected (repropose)
+- GUI notification banner for incoming chain drop proposals at top of page (red alert, similar to pending contacts banner)
+- GUI funds warning on all chain drop UI sections: dropping a transaction removes its transferred funds from both balances
+- Auto-propose chain drop when ping/Check Status detects mutual gaps after sync (ContactStatusService → ChainDropService)
+- Balance recalculation after chain drop execution via `SyncTriggerInterface::syncContactBalance()`
+- Chain status (`valid_chain`) updated to valid after successful chain drop execution on both sides
 - Chain drop agreement protocol for resolving mutual transaction chain gaps with two-party consent
 - Chain drop integration test suite (`chainDropTestSuite.sh`) with 4 scenarios: single gap, non-consecutive gaps, consecutive gaps, and rejection flow
 - Backup recovery during sync: SyncService checks local backups for missing transactions before contacting remote, and includes a `missingTxids` field so the remote side can check its backups too — both sides repair in a single round trip
@@ -29,6 +40,10 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
+- Chain status stuck on "Needs Sync" after accepting chain drop proposal: `valid_chain` now updated after execution
+- Balance not recalculating after chain drop: `syncContactBalance()` now called after `executeChainDrop()`
+- Rejected chain drop proposals not visible in GUI: `getRecentRejected()` query added to data loading
+- Stale rejected proposal blocking GUI after newer proposal accepted: `NOT EXISTS` clause filters superseded rejections
 - Chain gap detection not triggering on send: `verifySenderChainAndSync()` skipped re-verification when sync reported success, missing mutual gaps where both sides lack the same transactions
 - Chain gap detection not triggering on sync: `syncTransactionChain()` unconditionally returned success without verifying chain integrity after sync completion
 - Chain gap detection not triggering on ping: `handlePingRequest()` and `pingContact()` only compared chain heads (last txid), missing internal gaps when both sides had same chain head

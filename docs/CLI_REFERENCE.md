@@ -954,7 +954,7 @@ eiou chaindrop accept cdp-2c3c26ba61ab4073 --json
 Chain gaps are detected locally by three commands:
 - **`send`** — verifies chain integrity before every transaction; triggers sync to repair (which includes backup recovery on both sides); auto-proposes a chain drop only if sync fails to repair the gap
 - **`sync`** — verifies chain integrity, attempts local backup recovery before contacting the remote node, and asks the remote to check its backups for any remaining gaps
-- **`ping`** — verifies local chain integrity (not just chain head comparison); reports `chain_valid: false` if gaps exist
+- **`ping`** — verifies local chain integrity (not just chain head comparison); triggers sync if chains don't match; auto-proposes a chain drop if sync detects mutual gaps (both sides missing same transaction)
 
 All detection is local — no transaction lists are sent over the wire.
 
@@ -964,12 +964,12 @@ All detection is local — no transaction lists are sent over the wire.
 3. **Chain drop** — only if neither side has the transaction in any backup
 
 **Flow (when backup recovery fails):**
-1. Contact A detects chain gap (`send` auto-proposes, or `ping`/`sync` reveals the gap)
+1. Contact A detects chain gap (`send` or `ping` auto-proposes, or `sync` reveals the gap)
 2. Sync attempts backup recovery on both sides (automatic, no user action needed)
-3. If recovery fails, Contact A runs: `eiou chaindrop propose <contact_B_address>` (or auto-proposed by `send`)
-4. Contact B checks incoming proposals: `eiou chaindrop list`
-5. Contact B runs: `eiou chaindrop accept <proposal_id>`
-6. Both chains are repaired and transactions can resume
+3. If recovery fails, a chain drop is auto-proposed by `send` or `ping`; alternatively, Contact A runs: `eiou chaindrop propose <contact_B_address>`
+4. Contact B checks incoming proposals: `eiou chaindrop list` (or sees GUI notification banner)
+5. Contact B runs: `eiou chaindrop accept <proposal_id>` (or accepts via GUI)
+6. Both chains are repaired, balances recalculated, and transactions can resume
 
 For multiple gaps, repeat the propose/accept cycle for each gap.
 

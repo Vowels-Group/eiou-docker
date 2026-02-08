@@ -68,7 +68,7 @@ Browser Request
 | State Management | Session-based with CSRF protection |
 | Styling | Inline CSS via `page.css` include |
 | Forms | Traditional POST form submissions with redirect |
-| AJAX | Limited use for specific features (ping, debug report) |
+| AJAX | Limited use for specific features (ping, chain drop, debug report) |
 
 ---
 
@@ -139,6 +139,9 @@ Handles all contact-related operations.
 | `handleUnblockContact()` | `unblockContact` | Unblock contact | `contact_address` |
 | `handleEditContact()` | `editContact` | Update contact settings | `contact_address`, `contact_name`, `contact_fee`, `contact_credit`, `contact_currency` |
 | `handlePingContact()` | `pingContact` | Check contact status (AJAX) | `contact_address` |
+| `handleProposeChainDrop()` | `proposeChainDrop` | Propose dropping missing tx (AJAX) | `contact_pubkey_hash` |
+| `handleAcceptChainDrop()` | `acceptChainDrop` | Accept chain drop proposal (AJAX) | `proposal_id` |
+| `handleRejectChainDrop()` | `rejectChainDrop` | Reject chain drop proposal (AJAX) | `proposal_id` |
 
 **AJAX Response Format (pingContact):**
 
@@ -249,7 +252,9 @@ Main layout container that includes all subpart components.
 | Operation result toasts | Success/error messages from redirects |
 | In-progress banner | Shows pending transaction count |
 | Pending contacts banner | Shows pending contact request count |
+| Chain drop proposal banner | Incoming proposals requiring action (red alert) |
 | Completed transaction toasts | Notifications for finished transactions |
+| Received transaction toasts | Notifications for incoming payments |
 | DLQ notifications | Dead letter queue failure alerts |
 
 ---
@@ -319,14 +324,25 @@ Quick navigation cards linking to main sections:
 - Blocked contacts
 - Search/filter functionality
 - Show more toggle (>16 contacts)
+- Chain drop proposal badges on contact cards:
+  - Red "Action Required" — incoming proposal needs acceptance
+  - Blue "Awaiting Response" — outgoing proposal pending
+  - Orange "Blocked" — rejected proposal, transactions blocked
+  - Yellow triangle — chain invalid, no proposal yet
 
 **Contact Modal (Tabbed):**
 
 | Tab | Contents |
 |-----|----------|
-| Info | Balance, credit limit, fee, online status, chain status, addresses, public key |
+| Info | Balance, credit limit, fee, online status, chain status (proposal-aware, clickable), addresses, public key, chain drop resolution section |
 | Transactions | Recent transactions with this contact |
 | Settings | Edit form, block/unblock/delete buttons |
+
+**Chain Drop Resolution Section (in Info tab):**
+- Shown when chain has a gap or active proposal
+- Sub-sections: propose, awaiting acceptance, incoming (accept/reject), rejected (repropose)
+- Funds warning: dropping a transaction removes its funds from both balances
+- Chain status badge clicks scroll to this section
 
 **Pending Contact Requests Section:**
 - Lists incoming requests

@@ -315,9 +315,9 @@ if ($container->has(ContactServiceInterface::class)) {
 | `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
-| `ContactStatusService` | Contact ping/status checking | ContactRepo, TransactionRepo, SyncTriggerProxy, TransactionChainRepo, RateLimiterService |
+| `ContactStatusService` | Contact ping/status checking | ContactRepo, TransactionRepo, SyncTriggerProxy, TransactionChainRepo, RateLimiterService, ChainDropService |
 | `SyncService` | Transaction chain synchronization | ContactRepo, AddressRepo, P2pRepo, Rp2pRepo, TransactionRepo, TransactionChainRepo, TransactionContactRepo, BalanceRepo, UtilityContainer, HeldTransactionService, BackupService |
-| `ChainDropService` | Chain drop agreement protocol | ChainDropProposalRepo, TransactionChainRepo, TransactionRepo, ContactRepo, UtilityContainer, BackupService |
+| `ChainDropService` | Chain drop agreement protocol | ChainDropProposalRepo, TransactionChainRepo, TransactionRepo, ContactRepo, UtilityContainer, BackupService, SyncTriggerProxy |
 | `ChainOperationsService` | Centralized chain verification/repair | SyncService |
 | `MessageDeliveryService` | Reliable delivery with retry/DLQ | MessageDeliveryRepo, DeadLetterQueueRepo, TransportUtility |
 | `HeldTransactionService` | Pending transaction queue for sync | HeldTransactionRepo, TransactionRepo, TransactionChainRepo (uses EventDispatcher for sync notifications) |
@@ -652,6 +652,7 @@ public function wireCircularDependencies(): void {
     $this->services['ContactSyncService']->setMessageDeliveryService($this->services['MessageDeliveryService']);
     $this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
     $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServiceProxy());
+    $this->services['ContactStatusService']->setChainDropService($this->services['ChainDropService']);
 
     // Message service handles sync and chain drop routing
     $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
@@ -670,6 +671,7 @@ public function wireCircularDependencies(): void {
     $this->services['ChainOperationsService']->setSyncService($this->services['SyncService']);
     $this->services['SyncService']->setBackupService($this->getBackupService());
     $this->services['ChainDropService']->setBackupService($this->getBackupService());
+    $this->services['ChainDropService']->setSyncTrigger($this->getSyncServiceProxy());
     $this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
 }
 ```
@@ -858,6 +860,7 @@ chains. Operates in 5-minute cycles.
 - Updates contact online status (online/offline/unknown)
 - Validates transaction chain integrity (prev_txid matching)
 - Triggers sync if chains don't match
+- Auto-proposes chain drop if sync detects mutual gaps (both sides missing same transaction)
 - Respects `EIOU_CONTACT_STATUS_ENABLED` environment variable
 
 ### Watchdog Monitoring
@@ -1381,18 +1384,31 @@ drop protocol coordinates mutual agreement to remove the gap and relink the chai
            |                       |     +-- Relink broken_txid's                           |
            |                       |     +-- previous_txid to skip gap                      |
            |                       |     +-- Re-sign affected tx                            |
+           |                       +-- syncContactBalance()                                 |
+           |                       +-- updateChainStatus(valid=true)                        |
            |                       +-- Send acceptance + resigned txs ---->|                 |
            |                                                              |                 |
   7. handleIncomingAcceptance()                                           |                 |
      +-- executeChainDrop() locally                                       |                 |
      +-- processResignedTransactions()                                    |                 |
+     +-- syncContactBalance()                                             |                 |
+     +-- updateChainStatus(valid=true)                                    |                 |
      +-- Mark proposal executed                                           |                 |
      +-- Send acknowledgment + our resigned txs ------------------------->|                 |
            |                                                              |                 |
            |                                             8. handleIncomingAcknowledgment()
            |                                                +-- processResignedTransactions()
+           |                                                +-- updateChainStatus(valid=true)
            |                                                +-- Mark proposal fully executed
 ```
+
+**Auto-Propose:** The `send` command and `ping` (Check Status) both auto-propose a chain drop
+when sync detects mutual gaps. The `ContactStatusService` calls `proposeChainDrop()` after
+`syncTransactionChain()` returns with unresolved `chain_gaps`.
+
+**Post-Drop Actions:** After successful execution, `ChainDropService` recalculates the contact
+balance (via `SyncTriggerInterface::syncContactBalance()`) and updates `valid_chain` in the
+contacts table so the GUI immediately reflects the repaired chain.
 
 **Proposal States:** `pending` → `accepted` → `executed` (or `rejected` / `expired` / `failed`)
 
