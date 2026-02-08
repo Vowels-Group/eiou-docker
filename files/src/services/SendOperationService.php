@@ -15,6 +15,7 @@ use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Contracts\P2pTransactionSenderInterface;
 use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\P2pRepository;
@@ -49,6 +50,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
     private ?SyncTriggerInterface $syncTrigger = null;
     private ?TransactionChainRepository $transactionChainRepository = null;
     private ?TransactionService $transactionService = null;
+    private ?ChainDropServiceInterface $chainDropService = null;
     private static array $contactSendLocks = [];
 
     public function __construct(
@@ -83,6 +85,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
     public function setLockingService(LockingServiceInterface $lockingService): void { $this->lockingService = $lockingService; }
     public function setTransactionChainRepository(TransactionChainRepository $repo): void { $this->transactionChainRepository = $repo; }
     public function setTransactionService(TransactionService $transactionService): void { $this->transactionService = $transactionService; }
+    public function setChainDropService(ChainDropServiceInterface $chainDropService): void { $this->chainDropService = $chainDropService; }
 
     private function getContactService(): ContactServiceInterface {
         if ($this->contactService === null) throw new RuntimeException('ContactService not injected.');
@@ -285,6 +288,31 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
             if ($contactAddress !== null && isset($contactInfo['receiverPublicKey'])) {
                 $chainVerification = $this->verifySenderChainAndSync($contactAddress, $contactInfo['receiverPublicKey']);
                 if (!$chainVerification['success']) {
+                    // Auto-propose chain drop if sync couldn't repair the gap
+                    if ($chainVerification['synced'] && $this->chainDropService !== null) {
+                        $proposalResult = $this->chainDropService->proposeChainDrop($contactPubkeyHash);
+                        if ($proposalResult['success']) {
+                            $output->error("Cannot send: chain gap detected. A chain drop proposal has been sent to your contact.",
+                                ErrorCodes::CHAIN_INTEGRITY_FAILED, 500, [
+                                    'recipient' => $request[2] ?? null,
+                                    'chain_drop_proposed' => true,
+                                    'proposal_id' => $proposalResult['proposal_id'],
+                                    'missing_txid' => $proposalResult['missing_txid'],
+                                    'broken_txid' => $proposalResult['broken_txid']
+                                ]);
+                            return;
+                        } elseif (isset($proposalResult['proposal_id'])) {
+                            // Active proposal already exists for this gap
+                            $output->error("Cannot send: chain gap detected. A chain drop proposal is already pending.",
+                                ErrorCodes::CHAIN_INTEGRITY_FAILED, 500, [
+                                    'recipient' => $request[2] ?? null,
+                                    'chain_drop_pending' => true,
+                                    'proposal_id' => $proposalResult['proposal_id']
+                                ]);
+                            return;
+                        }
+                    }
+                    // Fallback: no chain drop service or proposal failed
                     $output->error("Cannot send transaction: " . ($chainVerification['error'] ?? 'Chain verification failed'),
                         ErrorCodes::CHAIN_INTEGRITY_FAILED, 500, ['recipient' => $request[2] ?? null, 'synced' => $chainVerification['synced']]);
                     return;

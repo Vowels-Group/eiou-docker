@@ -32,6 +32,7 @@ use Eiou\Contracts\LockingServiceInterface;
 use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Contracts\P2pServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Cli\CliOutputManager;
 use RuntimeException;
 
@@ -55,6 +56,7 @@ class SendOperationServiceTest extends TestCase
     private SyncTriggerInterface $mockSyncTrigger;
     private TransactionChainRepository $mockChainRepo;
     private TransactionService $mockTransactionService;
+    private ChainDropServiceInterface $mockChainDropService;
 
     protected function setUp(): void
     {
@@ -74,6 +76,7 @@ class SendOperationServiceTest extends TestCase
         $this->mockSyncTrigger = $this->createMock(SyncTriggerInterface::class);
         $this->mockChainRepo = $this->createMock(TransactionChainRepository::class);
         $this->mockTransactionService = $this->createMock(TransactionService::class);
+        $this->mockChainDropService = $this->createMock(ChainDropServiceInterface::class);
 
         $this->service = new SendOperationService(
             $this->mockTransactionRepo,
@@ -674,6 +677,214 @@ class SendOperationServiceTest extends TestCase
                 $this->anything(),
                 429,
                 $this->anything()
+            );
+
+        $request = ['eiou', 'send', 'http://test.example.com', '10', 'USD'];
+        $this->service->handleDirectRoute($request, $contactInfo, $output);
+    }
+
+    /**
+     * Test setChainDropService sets the chain drop service
+     */
+    public function testSetChainDropServiceSetsTheChainDropService(): void
+    {
+        $this->service->setChainDropService($this->mockChainDropService);
+        $this->expectNotToPerformAssertions();
+    }
+
+    /**
+     * Test handleDirectRoute auto-proposes chain drop when sync fails to repair
+     */
+    public function testHandleDirectRouteAutoProposesChainDropWhenSyncFails(): void
+    {
+        $output = $this->createMock(CliOutputManager::class);
+
+        $contactInfo = [
+            'receiverPublicKey' => 'test-receiver-public-key',
+            'receiverName' => 'TestContact',
+            'status' => Constants::CONTACT_STATUS_ACCEPTED,
+            'receiverAddress' => 'http://test.example.com'
+        ];
+
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactInfo['receiverPublicKey']);
+
+        // Lock succeeds
+        $this->mockLockingService->expects($this->once())
+            ->method('acquireLock')
+            ->willReturn(true);
+        $this->mockLockingService->expects($this->once())
+            ->method('releaseLock');
+
+        // Transport returns a valid index
+        $this->mockTransportUtility->expects($this->once())
+            ->method('fallbackTransportType')
+            ->willReturn('receiverAddress');
+
+        // Chain verification fails after sync
+        $this->service->setTransactionChainRepository($this->mockChainRepo);
+        $this->service->setSyncTrigger($this->mockSyncTrigger);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn('user-public-key');
+
+        $this->mockChainRepo->expects($this->any())
+            ->method('verifyChainIntegrity')
+            ->willReturn(['valid' => false, 'gaps' => ['gap1'], 'transaction_count' => 5]);
+
+        $this->mockSyncTrigger->expects($this->once())
+            ->method('syncTransactionChain')
+            ->willReturn(['success' => false, 'error' => 'Neither side has tx']);
+
+        // ChainDropService proposes successfully
+        $this->service->setChainDropService($this->mockChainDropService);
+        $this->mockChainDropService->expects($this->once())
+            ->method('proposeChainDrop')
+            ->with($contactPubkeyHash)
+            ->willReturn([
+                'success' => true,
+                'proposal_id' => 'proposal-123',
+                'missing_txid' => 'missing-tx-456',
+                'broken_txid' => 'broken-tx-789'
+            ]);
+
+        $output->expects($this->once())
+            ->method('error')
+            ->with(
+                $this->stringContains('chain drop proposal has been sent'),
+                $this->anything(),
+                500,
+                $this->callback(function ($data) {
+                    return $data['chain_drop_proposed'] === true
+                        && $data['proposal_id'] === 'proposal-123'
+                        && $data['missing_txid'] === 'missing-tx-456'
+                        && $data['broken_txid'] === 'broken-tx-789';
+                })
+            );
+
+        $request = ['eiou', 'send', 'http://test.example.com', '10', 'USD'];
+        $this->service->handleDirectRoute($request, $contactInfo, $output);
+    }
+
+    /**
+     * Test handleDirectRoute shows pending proposal when one already exists
+     */
+    public function testHandleDirectRouteShowsPendingProposalWhenAlreadyExists(): void
+    {
+        $output = $this->createMock(CliOutputManager::class);
+
+        $contactInfo = [
+            'receiverPublicKey' => 'test-receiver-public-key',
+            'receiverName' => 'TestContact',
+            'status' => Constants::CONTACT_STATUS_ACCEPTED,
+            'receiverAddress' => 'http://test.example.com'
+        ];
+
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactInfo['receiverPublicKey']);
+
+        $this->mockLockingService->expects($this->once())
+            ->method('acquireLock')
+            ->willReturn(true);
+        $this->mockLockingService->expects($this->once())
+            ->method('releaseLock');
+
+        $this->mockTransportUtility->expects($this->once())
+            ->method('fallbackTransportType')
+            ->willReturn('receiverAddress');
+
+        $this->service->setTransactionChainRepository($this->mockChainRepo);
+        $this->service->setSyncTrigger($this->mockSyncTrigger);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn('user-public-key');
+
+        $this->mockChainRepo->expects($this->any())
+            ->method('verifyChainIntegrity')
+            ->willReturn(['valid' => false, 'gaps' => ['gap1'], 'transaction_count' => 5]);
+
+        $this->mockSyncTrigger->expects($this->once())
+            ->method('syncTransactionChain')
+            ->willReturn(['success' => false, 'error' => 'Neither side has tx']);
+
+        // ChainDropService returns existing proposal (success=false but proposal_id set)
+        $this->service->setChainDropService($this->mockChainDropService);
+        $this->mockChainDropService->expects($this->once())
+            ->method('proposeChainDrop')
+            ->with($contactPubkeyHash)
+            ->willReturn([
+                'success' => false,
+                'proposal_id' => 'existing-proposal-456',
+                'error' => 'Active proposal already exists'
+            ]);
+
+        $output->expects($this->once())
+            ->method('error')
+            ->with(
+                $this->stringContains('chain drop proposal is already pending'),
+                $this->anything(),
+                500,
+                $this->callback(function ($data) {
+                    return $data['chain_drop_pending'] === true
+                        && $data['proposal_id'] === 'existing-proposal-456';
+                })
+            );
+
+        $request = ['eiou', 'send', 'http://test.example.com', '10', 'USD'];
+        $this->service->handleDirectRoute($request, $contactInfo, $output);
+    }
+
+    /**
+     * Test handleDirectRoute falls back to generic error when chain drop service is null
+     */
+    public function testHandleDirectRouteFallsBackWhenChainDropServiceIsNull(): void
+    {
+        $output = $this->createMock(CliOutputManager::class);
+
+        $contactInfo = [
+            'receiverPublicKey' => 'test-receiver-public-key',
+            'receiverName' => 'TestContact',
+            'status' => Constants::CONTACT_STATUS_ACCEPTED,
+            'receiverAddress' => 'http://test.example.com'
+        ];
+
+        $this->mockLockingService->expects($this->once())
+            ->method('acquireLock')
+            ->willReturn(true);
+        $this->mockLockingService->expects($this->once())
+            ->method('releaseLock');
+
+        $this->mockTransportUtility->expects($this->once())
+            ->method('fallbackTransportType')
+            ->willReturn('receiverAddress');
+
+        $this->service->setTransactionChainRepository($this->mockChainRepo);
+        $this->service->setSyncTrigger($this->mockSyncTrigger);
+        // Do NOT set chainDropService — it remains null
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn('user-public-key');
+
+        $this->mockChainRepo->expects($this->any())
+            ->method('verifyChainIntegrity')
+            ->willReturn(['valid' => false, 'gaps' => ['gap1'], 'transaction_count' => 5]);
+
+        $this->mockSyncTrigger->expects($this->once())
+            ->method('syncTransactionChain')
+            ->willReturn(['success' => false, 'error' => 'Neither side has tx']);
+
+        $output->expects($this->once())
+            ->method('error')
+            ->with(
+                $this->stringContains('Cannot send transaction:'),
+                $this->anything(),
+                500,
+                $this->callback(function ($data) {
+                    return $data['synced'] === true
+                        && !isset($data['chain_drop_proposed'])
+                        && !isset($data['chain_drop_pending']);
+                })
             );
 
         $request = ['eiou', 'send', 'http://test.example.com', '10', 'USD'];

@@ -1326,6 +1326,10 @@ class ServiceContainer implements ContainerInterface {
             }
             // Set TransactionChainRepository for chain verification
             $this->services['SendOperationService']->setTransactionChainRepository($this->getTransactionChainRepository());
+            // Set ChainDropService for auto-proposing chain drops when sync fails
+            if (isset($this->services['ChainDropService'])) {
+                $this->services['SendOperationService']->setChainDropService($this->services['ChainDropService']);
+            }
         }
 
         // =========================================================================
