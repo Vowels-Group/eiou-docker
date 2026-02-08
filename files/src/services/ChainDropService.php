@@ -18,6 +18,7 @@ use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
 use Eiou\Events\ChainDropEvents;
 use Eiou\Events\EventDispatcher;
+use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Core\ErrorCodes;
 use PDOException;
@@ -49,6 +50,7 @@ class ChainDropService implements ChainDropServiceInterface
     private MessagePayload $messagePayload;
     private TransactionPayload $transactionPayload;
     private ?BackupServiceInterface $backupService = null;
+    private ?SyncTriggerInterface $syncTrigger = null;
 
     /**
      * Set the backup service for transaction recovery from backups
@@ -58,6 +60,16 @@ class ChainDropService implements ChainDropServiceInterface
     public function setBackupService(BackupServiceInterface $backupService): void
     {
         $this->backupService = $backupService;
+    }
+
+    /**
+     * Set the sync trigger for balance recalculation after chain drops
+     *
+     * @param SyncTriggerInterface $syncTrigger Sync trigger
+     */
+    public function setSyncTrigger(SyncTriggerInterface $syncTrigger): void
+    {
+        $this->syncTrigger = $syncTrigger;
     }
 
     /**
@@ -375,6 +387,9 @@ class ChainDropService implements ChainDropServiceInterface
                 return $result;
             }
 
+            // Recalculate balance now that chain has been modified
+            $this->syncContactBalanceAfterDrop($proposal['contact_pubkey_hash']);
+
             // Update proposal status
             $this->proposalRepository->updateStatus($proposalId, 'accepted');
 
@@ -448,6 +463,9 @@ class ChainDropService implements ChainDropServiceInterface
 
             // Process the contact's re-signed transactions
             $this->processResignedTransactions($resignedTransactions);
+
+            // Recalculate balance now that chain has been modified
+            $this->syncContactBalanceAfterDrop($proposal['contact_pubkey_hash']);
 
             // Update proposal status
             $this->proposalRepository->updateStatus($proposalId, 'accepted');
@@ -936,6 +954,40 @@ class ChainDropService implements ChainDropServiceInterface
         }
 
         return $result;
+    }
+
+    /**
+     * Recalculate the contact balance after a chain drop
+     *
+     * The dropped transaction no longer exists in the transactions table, so
+     * syncContactBalance will recompute the balance from the remaining
+     * completed transactions, producing the correct total.
+     *
+     * @param string $contactPubkeyHash The contact's public key hash
+     */
+    private function syncContactBalanceAfterDrop(string $contactPubkeyHash): void
+    {
+        if (!$this->syncTrigger) {
+            Logger::getInstance()->warning("Cannot sync balance after chain drop: no sync trigger configured");
+            return;
+        }
+
+        try {
+            $contact = $this->contactRepository->lookupByPubkeyHash($contactPubkeyHash);
+            if ($contact && !empty($contact['pubkey'])) {
+                $syncResult = $this->syncTrigger->syncContactBalance($contact['pubkey']);
+                Logger::getInstance()->info("Balance recalculated after chain drop", [
+                    'contact_pubkey_hash' => substr($contactPubkeyHash, 0, 16) . '...',
+                    'success' => $syncResult['success'] ?? false,
+                    'currencies' => $syncResult['currencies'] ?? []
+                ]);
+            }
+        } catch (Exception $e) {
+            Logger::getInstance()->warning("Failed to sync balance after chain drop", [
+                'contact_pubkey_hash' => substr($contactPubkeyHash, 0, 16) . '...',
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**

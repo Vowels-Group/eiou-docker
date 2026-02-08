@@ -1243,6 +1243,12 @@ class ServiceContainer implements ContainerInterface {
             }
         }
 
+        // Wire ChainDropService -> SyncTriggerInterface (via proxy)
+        // Reason: ChainDropService needs to recalculate balances after dropping transactions
+        if (isset($this->services['ChainDropService'])) {
+            $this->services['ChainDropService']->setSyncTrigger($this->getSyncServiceProxy());
+        }
+
         // =========================================================================
         // Transaction-related circular dependencies
         // =========================================================================
