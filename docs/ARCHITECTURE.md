@@ -122,23 +122,23 @@ Nodes provide three interfaces for interaction:
 ### Background Processors
 
 ```
-                       +---------------------------+
-                       |       startup.sh          |
-                       |    (Container Entry)      |
-                       +-------------+-------------+
-                                     |
-       +------------+----------------+----------------+-------------+
-       |            |                |                |             |
-+------v-------+ +--v-----------+ +--v-----------+ +--v------------v--+
-| Transaction  | |     P2P      | |   Cleanup    | |  ContactStatus   |
-|  Processor   | |  Processor   | |  Processor   | |    Processor     |
-| (100ms-5s)   | | (100ms-5s)   | | (1s-30s)     | |  (5 min cycle)   |
-+--------------+ +--------------+ +--------------+ +------------------+
-                                     |
-                       +-------------v-------------+
-                       |        Watchdog           |
-                       |  (Process Monitor 30s)    |
-                       +---------------------------+
+                    +---------------------------+
+                    |       startup.sh          |
+                    |    (Container Entry)      |
+                    +-------------+-------------+
+                                  |
+          +-----------------------+------------------------+
+          |             |                |                  |
++---------v----+ +------v-------+ +------v-------+ +-------v--------+
+| Transaction  | |     P2P      | |   Cleanup    | | ContactStatus  |
+|  Processor   | |  Processor   | |  Processor   | |   Processor    |
+| (100ms-5s)   | | (100ms-5s)   | | (1s-30s)     | |  (5 min cycle) |
++--------------+ +--------------+ +--------------+ +----------------+
+                                  |
+                    +-------------v-------------+
+                    |        Watchdog           |
+                    |  (Process Monitor 30s)    |
+                    +---------------------------+
 ```
 
 ---
@@ -592,31 +592,33 @@ class TransactionService
 ### Dependency Graph
 
 ```
-                        +------------------+
-                        | ServiceContainer |
-                        +--------+---------+
-                                 |
-   +-----------+-----------+-----+------+-----------+----------+
-   |           |           |            |           |          |
-+--v---+  +----v-----+  +-v--------+  +v--------+  +v------+  +v-------+
-| Sync |  |  Trans-  |  | Contact  |  |Message |  |Cleanup|  |ChainDrp|
-| Svc  |  |  action  |  | Service  |  |Service |  |Service|  |Service |
-+--+---+  +----+-----+  +----+-----+  +---+----+  +---+---+  +---+----+
-   |           |              |            |           |          |
-   |    +------+------+      |            |           |          |
-   |    |      |      |      |            |           |          |
-+--v-+  v  +---v--+ +-v-+   |            |         +-v------+ +-v------+
-|Held|  |  | Send | |Chn|   |            |         |Backup  | |ChainOps|
-| Tx |  |  |  Op  | |Vrf|   |            |         |Service | |Service |
-+----+  |  +------+ +---+   |            |         +--------+ +--------+
-     +--v---+
-     |Balnce|
-     |  Svc |
-     +------+
+                         +------------------+
+                         | ServiceContainer |
+                         +--------+---------+
+                                  |
+     +-------------+--------------+--------------+-------------+
+     |             |              |              |             |
++----v----+  +-----v------+ +----v-----+  +-----v------+ +----v-----+
+|  Sync   |  |Transaction |  | Contact |  |  Message  | | Cleanup  |
+| Service |  |  Service   |  | Service |  |  Service  | | Service  |
++----+----+  +-----+------+ +----+-----+  +-----+-----+ +----+-----+
+     |             |              |              |             |
+     |    +--------+--------+    |              |             |
+     |    |        |        |    |              |             |
++----v--+ v   +----v---+ +--v---v--+   +-------v------+ +----v------+
+| Held  | |   |  Send  | | Chain  |   | ChainDrop    | | Backup    |
+|  Tx   | |   |  Op    | | Verif  |   |   Service    | | Service   |
+|Service| |   |Service | |Service |   +--------------+ +-----------+
++-------+ |   +----+---+ +--------+         ^               ^
+          |        |                         |               |
+     +----v----+   +--- ChainDropService     +--- Setter     |
+     | Balance |   +--- SyncTriggerProxy     +--- Setter ----+
+     | Service |
+     +---------+
 
-Constructor dependencies flow top-to-bottom.
-Setter-injected circular dependencies use SyncTriggerInterface proxy.
-BackupService is setter-injected into SyncService and ChainDropService.
+Legend:
+  -----> Constructor injection
+  ··· > Setter injection via SyncTriggerInterface proxy (loose coupling)
 ```
 
 ---
@@ -771,14 +773,14 @@ Four background processors handle asynchronous message processing. Each extends
                     | + handleShutdownSignal()  |
                     | # processMessages()       |  <- Abstract
                     | # getProcessorName()      |  <- Abstract
-                    +-------------+-------------+
-                                  ^
-          +-----------+-----------+-----------+-----------+
-          |           |                       |           |
-+---------+--+ +------+------+ +-------------+--+ +------+------+
-| Transaction | |     P2P    | |    Cleanup     | |ContactStatus|
-|  Processor  | |  Processor | |   Processor    | |  Processor  |
-+-------------+ +------------+ +----------------+ +-------------+
+                    +---------------------------+
+                              ^
+          +-------------------+-------------------+
+          |         |                   |         |
++---------+-+ +-----+-------+ +---------+-+ +-----+-------+
+|Transaction| |     P2P     | |  Cleanup  | |ContactStatus|
+| Processor | |  Processor  | | Processor | |  Processor  |
++-----------+ +-------------+ +-----------+ +-------------+
 ```
 
 ### TransactionMessageProcessor
@@ -1644,38 +1646,38 @@ The application uses a layered error handling approach with specialized exceptio
 business logic errors and a global safety net for unexpected failures.
 
 ```
-        +-------------------------------------------+
-        |           ErrorHandler.php                |
-        |  (Global safety net - set_exception_      |
-        |   handler for truly uncaught errors)      |
-        +-------------------------------------------+
-                           ^
-                           | (only if not caught below)
-                    +------+------+
-                    |             |
-  +-----------------+---+   +----+----------------------------+
-  |      Eiou.php       |   |      ApiController              |
-  |    (CLI Entry)       |   |      (API Entry)                |
-  +----------------------+   +--------------------------------+
-  | catch Validation ->  |   | catch ServiceException ->      |
-  |   format + exit(1)   |   |   use getMessage()             |
-  |                      |   |   use getHttpStatus()          |
-  | catch Fatal ->       |   |   use getErrorCode()           |
-  |   format + exit(1)   |   |                                |
-  |                      |   | catch Exception ->             |
-  | catch Recoverable -> |   |   generic 500 error            |
-  |   format + exit(0)   |   |                                |
-  +----------+-----------+   +---------------+----------------+
-             |                               |
-             +-------------------------------+
-                             |
-  +--------------------------+-----------------------------+
-  |                    Service Layer                        |
-  |  ContactService, MessageService, WalletService, etc.   |
-  |                                                        |
-  |  throw ValidationServiceException("Invalid name", ...) |
-  |  throw FatalServiceException("Wallet not found", ...)  |
-  +--------------------------------------------------------+
+                    +------------------------------------------+
+                    |            ErrorHandler.php               |
+                    |   (Global safety net - set_exception_     |
+                    |    handler for truly uncaught errors)     |
+                    +------------------------------------------+
+                                        ^
+                                        | (only if not caught below)
+                    +-------------------+-------------------+
+                    |                                       |
+        +-----------+------------+          +---------------+----------------+
+        |      Eiou.php          |          |         ApiController          |
+        |    (CLI Entry)         |          |         (API Entry)            |
+        +------------------------+          +--------------------------------+
+        | catch Validation ->    |          | catch ServiceException ->      |
+        |   format + exit(1)     |          |   use getMessage()             |
+        |                        |          |   use getHttpStatus()          |
+        | catch Fatal ->         |          |   use getErrorCode()           |
+        |   format + exit(1)     |          |                                |
+        |                        |          | catch Exception ->             |
+        | catch Recoverable ->   |          |   generic 500 error            |
+        |   format + exit(0)     |          |                                |
+        +-----------+------------+          +---------------+----------------+
+                    |                                       |
+                    +-------------------+-------------------+
+                                        |
+        +-------------------------------+-------------------------------+
+        |                        Service Layer                          |
+        |   ContactService, MessageService, WalletService, etc.         |
+        |                                                               |
+        |   throw ValidationServiceException("Invalid name", ...)       |
+        |   throw FatalServiceException("Wallet not found", ...)        |
+        +---------------------------------------------------------------+
 ```
 
 ### ServiceException Hierarchy
