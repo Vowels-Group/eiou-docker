@@ -188,6 +188,35 @@ class ContactPayload extends BasePayload
     }
 
     /**
+     * Generate recipient signature for a contact transaction
+     *
+     * Signs the same message content that the sender signed: {'type':'create','nonce':N}
+     * This provides cryptographic proof that the recipient accepted the contact request.
+     *
+     * @param int $nonce The signature nonce from the contact transaction
+     * @return string|null Base64-encoded signature, or null if signing fails
+     */
+    public function generateRecipientSignature(int $nonce): ?string
+    {
+        $messageContent = ['type' => 'create', 'nonce' => $nonce];
+        $message = json_encode($messageContent);
+
+        $privateKey = $this->currentUser->getPrivateKey();
+        if (empty($privateKey)) {
+            return null;
+        }
+
+        $signature = null;
+        $signed = openssl_sign($message, $signature, openssl_pkey_get_private($privateKey));
+
+        if (!$signed || $signature === null) {
+            return null;
+        }
+
+        return base64_encode($signature);
+    }
+
+    /**
      * Filter addresses array to return only transport addresses with values
      *
      * Removes pubkey_hash and any empty/null address fields.

@@ -482,6 +482,18 @@ class MessageService implements MessageServiceInterface {
             // Complete the contact transaction (update status from 'sent' to 'completed')
             $this->transactionContactRepository->completeContactTransaction($senderPublicKey);
 
+            // Store recipient signature from the acceptance message (dual-signature protocol)
+            // currentUser is the original sender; senderPublicKey (from the message) is the recipient who accepted
+            $recipientSignature = $decodedMessage['recipientSignature'] ?? null;
+            if ($recipientSignature !== null) {
+                $contactTx = $this->transactionContactRepository->getContactTransactionByParties(
+                    $this->currentUser->getPublicKey(), $senderPublicKey
+                );
+                if ($contactTx && isset($contactTx['txid'])) {
+                    $this->transactionRepository->updateRecipientSignature($contactTx['txid'], $recipientSignature);
+                }
+            }
+
             // Return acknowledgment for delivery tracking
             // This confirms the acceptance message was received and processed
             echo $this->messagePayload->buildContactAcceptanceAcknowledgment($senderAddress);
