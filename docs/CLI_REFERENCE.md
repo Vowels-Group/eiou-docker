@@ -901,7 +901,7 @@ Manage chain drop agreements for resolving transaction chain gaps.
 
 When both contacts are missing the same transaction in their shared chain, the chain cannot be repaired via sync. Chain drop resolves this by mutually agreeing to remove the missing transaction and relink the chain.
 
-**Important:** While a chain gap exists, transactions with that contact are **blocked**. Chain gaps are detected locally by `send`, `sync`, and `ping` — all three commands verify chain integrity without exchanging transaction lists over the wire. The `send` command will auto-propose a chain drop when a gap is detected and sync cannot repair it. Rejecting a proposal leaves the gap unresolved, meaning the contacts cannot transact until a new proposal is accepted or the missing transaction is recovered.
+**Important:** While a chain gap exists, transactions with that contact are **blocked**. Chain gaps are detected locally by `send`, `sync`, and `ping` — all three commands verify chain integrity without exchanging transaction lists over the wire. Before resorting to a chain drop, the sync flow attempts **backup recovery**: the local node checks its own backups first (self-repair), then tells the remote node which txids are still missing so it can check its backups too. If either side has the transaction in a backup, the chain is repaired without a chain drop. Only when neither side has a backup does the `send` command auto-propose a chain drop. Rejecting a proposal leaves the gap unresolved, meaning the contacts cannot transact until a new proposal is accepted or the missing transaction is recovered.
 
 **Syntax:**
 ```bash
@@ -949,21 +949,27 @@ eiou chaindrop list --json
 eiou chaindrop accept cdp-2c3c26ba61ab4073 --json
 ```
 
-**Gap Detection:**
+**Gap Detection and Recovery:**
 
 Chain gaps are detected locally by three commands:
-- **`send`** — verifies chain integrity before every transaction; auto-proposes a chain drop if sync fails to repair the gap
-- **`sync`** — verifies chain integrity after syncing transactions; reports gap count in output
+- **`send`** — verifies chain integrity before every transaction; auto-proposes a chain drop if sync and backup recovery both fail
+- **`sync`** — verifies chain integrity, attempts local backup recovery before contacting the remote node, and asks the remote to check its backups for any remaining gaps
 - **`ping`** — verifies local chain integrity (not just chain head comparison); reports `chain_valid: false` if gaps exist
 
 All detection is local — no transaction lists are sent over the wire.
 
-**Flow:**
+**Recovery priority:**
+1. **Local backup recovery** — during sync, the node checks its own database backups for missing transactions
+2. **Remote backup recovery** — remaining missing txids are sent to the contact, who checks its DB and backups
+3. **Chain drop** — only if neither side has the transaction in any backup
+
+**Flow (when backup recovery fails):**
 1. Contact A detects chain gap (`send` auto-proposes, or `ping`/`sync` reveals the gap)
-2. Contact A runs: `eiou chaindrop propose <contact_B_address>` (if not auto-proposed by `send`)
-3. Contact B checks incoming proposals: `eiou chaindrop list`
-4. Contact B runs: `eiou chaindrop accept <proposal_id>`
-5. Both chains are repaired and transactions can resume
+2. Sync attempts backup recovery on both sides (automatic, no user action needed)
+3. If recovery fails, Contact A runs: `eiou chaindrop propose <contact_B_address>` (or auto-proposed by `send`)
+4. Contact B checks incoming proposals: `eiou chaindrop list`
+5. Contact B runs: `eiou chaindrop accept <proposal_id>`
+6. Both chains are repaired and transactions can resume
 
 For multiple gaps, repeat the propose/accept cycle for each gap.
 

@@ -20,6 +20,8 @@ The project is currently in **ALPHA** status.
 ### Added
 - Chain drop agreement protocol for resolving mutual transaction chain gaps with two-party consent
 - Chain drop integration test suite (`chainDropTestSuite.sh`) with 4 scenarios: single gap, non-consecutive gaps, consecutive gaps, and rejection flow
+- Backup recovery during sync: SyncService checks local backups for missing transactions before contacting remote, and includes a `missingTxids` field so the remote side can check its backups too — both sides repair in a single round trip
+- Chain drop backup checks demoted to fallback safety net (sync-level recovery handles the primary path)
 - GUI wallet header displays "₳ Wallet of [name]" after login; name hidden from page titles and login screen to prevent identity leakage via Tor (#587)
 - Upgrade guide documentation (`docs/UPGRADE_GUIDE.md`)
 - Unified `LoggerInterface` and `Logger` facade for consolidated logging (#557)

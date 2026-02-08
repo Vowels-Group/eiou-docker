@@ -1145,6 +1145,15 @@ Transactions form a chain linked by `prev_txid`:
 Both parties maintain their own view of the chain. The `ContactStatusProcessor`
 validates chain consistency and triggers sync if discrepancies are found.
 
+When a chain gap is detected during sync, the `SyncService` attempts backup
+recovery before falling through to a chain drop:
+1. **Local self-repair** — checks local database backups for missing transactions
+2. **Remote backup request** — sends remaining missing txids to the contact via the
+   `missingTxids` field in the sync request; the contact checks its DB and backups
+3. **Chain drop fallback** — only if neither side has the transaction in any backup,
+   the `ChainDropService` coordinates mutual agreement to drop the missing transaction
+   and relink the chain
+
 ### HeldTransactionService
 
 When a transaction arrives with an unknown `prev_txid`, it cannot be immediately
