@@ -430,6 +430,7 @@ serviceExceptionTest
 TESTS_SYNC="
 addContactsTest
 sendMessageTest
+pingTestSuite
 syncTestSuite
 chainDropTestSuite
 "
