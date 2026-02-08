@@ -1940,6 +1940,183 @@ fi
 cleanup_test_transactions "$timestamp3b"
 
 ################################################################################
+# Test 3c: Mutual gap resolved via chain drop - verify previous_txid correction
+# Extends the mutual gap scenario: after sync fails, use chain drop to resolve
+# the gap, then verify the chain is relinked correctly on BOTH sides.
+#
+# Chain before: AB0(contact) -> AB1 -> AB2 -> AB3
+# After delete AB1+AB3 from both: AB0 -> [AB1 missing] -> AB2 (gap)
+# After chain drop: AB0 -> AB2 (AB2.previous_txid relinked to AB0)
+################################################################################
+echo -e "\n[10.1.5 Test 3c: Mutual gap resolved via chain drop - verify chain correction]"
+totaltests=$(( totaltests + 1 ))
+
+timestamp3c=$(date +%s%N)
+
+# Setup: Create AB chain
+setup_ab_chain "$timestamp3c"
+
+countA_3c=$(get_tx_count ${contactA} "AB%-${timestamp3c}")
+countB_3c=$(get_tx_count ${contactB} "AB%-${timestamp3c}")
+echo -e "\t   Before deletion: A has ${countA_3c} AB txs, B has ${countB_3c} AB txs"
+
+# Get txids BEFORE deletion so we know the chain structure
+txidsA_before=$(docker exec ${contactA} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$stmt = \$pdo->prepare(\"SELECT txid, description, previous_txid FROM transactions
+        WHERE description LIKE :pattern ORDER BY COALESCE(time, 0) ASC, timestamp ASC\");
+    \$stmt->execute(['pattern' => 'AB%-${timestamp3c}']);
+    \$rows = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+    foreach (\$rows as \$r) {
+        echo \$r['description'] . '|' . substr(\$r['txid'], 0, 16) . '|' . substr(\$r['previous_txid'] ?? 'NULL', 0, 16) . '\n';
+    }
+" 2>/dev/null)
+echo -e "\t   Chain before (A): txid | previous_txid"
+while IFS= read -r line; do
+    if [[ -n "$line" ]]; then
+        desc=$(echo "$line" | cut -d'|' -f1)
+        txid=$(echo "$line" | cut -d'|' -f2)
+        prev=$(echo "$line" | cut -d'|' -f3)
+        echo -e "\t     ${desc}: ${txid}... -> prev: ${prev}..."
+    fi
+done <<< "$txidsA_before"
+
+# Delete AB1 and AB3 from BOTH sides (mutual gap)
+echo -e "\t   Deleting AB1 and AB3 from BOTH A and B..."
+delete_specific_transactions ${contactA} "AB1-${timestamp3c}"
+delete_specific_transactions ${contactA} "AB3-${timestamp3c}"
+delete_specific_transactions ${contactB} "AB1-${timestamp3c}"
+delete_specific_transactions ${contactB} "AB3-${timestamp3c}"
+
+countA_3c_del=$(get_tx_count ${contactA} "AB%-${timestamp3c}")
+countB_3c_del=$(get_tx_count ${contactB} "AB%-${timestamp3c}")
+echo -e "\t   After deletion:  A has ${countA_3c_del} AB txs, B has ${countB_3c_del} AB txs"
+
+# Show the broken chain - AB2's previous_txid points to missing AB1
+ab2_prev_A=$(docker exec ${contactA} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$stmt = \$pdo->prepare(\"SELECT previous_txid FROM transactions WHERE description = :desc\");
+    \$stmt->execute(['desc' => 'AB2-${timestamp3c}']);
+    echo substr(\$stmt->fetchColumn() ?: 'NULL', 0, 16);
+" 2>/dev/null)
+echo -e "\t   Broken chain: AB2.previous_txid = ${ab2_prev_A}... (points to missing AB1)"
+
+# Propose chain drop from A
+echo -e "\t   A proposing chain drop..."
+proposeResult=$(docker exec ${contactA} eiou chaindrop propose ${addressB} 2>&1)
+echo -e "\t   Propose result: ${proposeResult:0:60}..."
+
+# Process queues for proposal delivery
+for i in {1..3}; do
+    process_all_queues
+done
+
+# B accepts the proposal
+proposalId=$(docker exec ${contactB} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$chainDropService = \$app->services->getChainDropService();
+    \$proposals = \$chainDropService->getIncomingPendingProposals();
+    echo !empty(\$proposals) ? \$proposals[0]['proposal_id'] : 'NONE';
+" 2>/dev/null)
+
+if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
+    echo -e "\t   B accepting proposal ${proposalId:0:16}..."
+    acceptResult=$(docker exec ${contactB} eiou chaindrop accept ${proposalId} 2>&1)
+    echo -e "\t   Accept result: ${acceptResult:0:60}..."
+
+    # Process queues for acceptance + acknowledgment exchange
+    for i in {1..5}; do
+        process_all_queues
+    done
+
+    # Now verify the chain is corrected on BOTH sides
+    # Get AB2's previous_txid on both sides (should now point to contact tx, not AB1)
+    chainA=$(docker exec ${contactA} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->prepare(\"SELECT txid, description, previous_txid FROM transactions
+            WHERE description LIKE :pattern ORDER BY COALESCE(time, 0) ASC, timestamp ASC\");
+        \$stmt->execute(['pattern' => 'AB%-${timestamp3c}']);
+        \$rows = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach (\$rows as \$r) {
+            echo \$r['description'] . '|' . substr(\$r['txid'], 0, 16) . '|' . substr(\$r['previous_txid'] ?? 'NULL', 0, 16) . '\n';
+        }
+    " 2>/dev/null)
+
+    chainB=$(docker exec ${contactB} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->prepare(\"SELECT txid, description, previous_txid FROM transactions
+            WHERE description LIKE :pattern ORDER BY COALESCE(time, 0) ASC, timestamp ASC\");
+        \$stmt->execute(['pattern' => 'AB%-${timestamp3c}']);
+        \$rows = \$stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach (\$rows as \$r) {
+            echo \$r['description'] . '|' . substr(\$r['txid'], 0, 16) . '|' . substr(\$r['previous_txid'] ?? 'NULL', 0, 16) . '\n';
+        }
+    " 2>/dev/null)
+
+    echo -e "\t   Chain after drop (A): txid | previous_txid"
+    while IFS= read -r line; do
+        if [[ -n "$line" ]]; then
+            desc=$(echo "$line" | cut -d'|' -f1)
+            txid=$(echo "$line" | cut -d'|' -f2)
+            prev=$(echo "$line" | cut -d'|' -f3)
+            echo -e "\t     ${desc}: ${txid}... -> prev: ${prev}..."
+        fi
+    done <<< "$chainA"
+
+    echo -e "\t   Chain after drop (B): txid | previous_txid"
+    while IFS= read -r line; do
+        if [[ -n "$line" ]]; then
+            desc=$(echo "$line" | cut -d'|' -f1)
+            txid=$(echo "$line" | cut -d'|' -f2)
+            prev=$(echo "$line" | cut -d'|' -f3)
+            echo -e "\t     ${desc}: ${txid}... -> prev: ${prev}..."
+        fi
+    done <<< "$chainB"
+
+    # Verify AB2's previous_txid no longer points to the deleted AB1
+    ab2_prev_A_after=$(docker exec ${contactA} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->prepare(\"SELECT previous_txid FROM transactions WHERE description = :desc\");
+        \$stmt->execute(['desc' => 'AB2-${timestamp3c}']);
+        echo \$stmt->fetchColumn() ?: 'NULL';
+    " 2>/dev/null)
+
+    ab2_prev_B_after=$(docker exec ${contactB} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->prepare(\"SELECT previous_txid FROM transactions WHERE description = :desc\");
+        \$stmt->execute(['desc' => 'AB2-${timestamp3c}']);
+        echo \$stmt->fetchColumn() ?: 'NULL';
+    " 2>/dev/null)
+
+    echo -e "\t   AB2.previous_txid (A): ${ab2_prev_A_after:0:16}..."
+    echo -e "\t   AB2.previous_txid (B): ${ab2_prev_B_after:0:16}..."
+
+    # Both sides should have the same previous_txid and it should NOT be the old AB1 txid
+    if [[ "${ab2_prev_A_after}" == "${ab2_prev_B_after}" ]] && [[ "${ab2_prev_A_after:0:16}" != "${ab2_prev_A}" ]]; then
+        printf "\t   Test 3c (chain drop correction) ${GREEN}PASSED${NC} - AB2.previous_txid relinked, matches on both sides\n"
+        passed=$(( passed + 1 ))
+    elif [[ "${ab2_prev_A_after:0:16}" == "${ab2_prev_A}" ]]; then
+        printf "\t   Test 3c (chain drop correction) ${RED}FAILED${NC} - AB2.previous_txid unchanged (still points to missing AB1)\n"
+        failure=$(( failure + 1 ))
+    else
+        printf "\t   Test 3c (chain drop correction) ${RED}FAILED${NC} - A and B have different previous_txid (A: ${ab2_prev_A_after:0:16}, B: ${ab2_prev_B_after:0:16})\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   Test 3c (chain drop correction) ${RED}FAILED${NC} - no pending proposal found on B\n"
+    failure=$(( failure + 1 ))
+fi
+
+cleanup_test_transactions "$timestamp3c"
+
+################################################################################
 # STANDARD (DIRECT) TESTS - Loss of transactions B to A (Tests 4-6)
 ################################################################################
 
