@@ -43,6 +43,7 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
+- Contact request transaction not syncing during wallet restore: `verifyRecipientSignature()` rejected contact transactions (memo='contact') for missing recipient signature, but contact requests don't use recipient signatures
 - Balance not recalculating after accepting a restored prior contact: `acceptContact()` now calls `syncContactBalance()` after `insertInitialContactBalances()` to recalculate from synced transactions
 - Chain status stuck on "Needs Sync" after accepting chain drop proposal: `valid_chain` now updated after execution
 - Balance not recalculating after chain drop: `syncContactBalance()` now called after `executeChainDrop()`

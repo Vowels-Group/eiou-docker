@@ -1421,6 +1421,13 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             return true; // Not required for this status
         }
 
+        // Contact request transactions (memo='contact') don't use recipient signatures —
+        // they follow a different protocol where only the sender signs the request
+        $memo = $tx['memo'] ?? '';
+        if ($memo === 'contact') {
+            return true;
+        }
+
         // For accepted/completed, recipient_signature is required
         if (empty($tx['recipient_signature'])) {
             Logger::getInstance()->warning("Transaction missing required recipient signature", [
