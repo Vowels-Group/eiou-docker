@@ -1124,35 +1124,668 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 5.4: Verify a chain drop proposal was auto-created by send
+# Cleanup detection-only tests before full flow tests
+clean_chain > /dev/null
+
+#################### TEST 6: Send-Triggered Full Flow (single gap) ####################
+# Full end-to-end: send detects gap -> auto-proposes -> accept -> verify relink -> new send works
+########################################################################################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 6: Send-Triggered Full Chain Drop Flow"
+echo "========================================================================"
+echo -e "\n"
+
+echo -e "[6.1 Send detects single gap, auto-proposes, both agree, chain repaired]"
+
+timestamp=$(date +%s%N)
+testPattern="chaindrop-t6-%${timestamp}"
+
+# Setup: Send 5 transactions
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Test 5.4: Verifying auto-proposal was delivered to receiver"
+echo -e "\n\t-> Sending 5 transactions to build chain"
+
+for i in 1 2 3 4 5; do
+    docker exec ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t6-tx${i}-${timestamp}" 2>&1 > /dev/null
+    sleep 1
+done
+
+wait_for_queue_processed ${sender}
+wait_for_queue_processed ${receiver}
+
+receiverTxCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+if [[ "$receiverTxCount" -lt 5 ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+fi
+
+senderTxids=$(get_test_txids ${sender} "${testPattern}")
+IFS=',' read -ra txArr <<< "$senderTxids"
+
+if [[ "${#txArr[@]}" -ge 5 ]]; then
+    printf "\t   Setup: 5 transactions sent ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Setup: send transactions ${RED}FAILED${NC} (got ${#txArr[@]})\n"
+    failure=$(( failure + 1 ))
+fi
+
+tx1="${txArr[0]}"
+tx2="${txArr[1]}"
+tx3="${txArr[2]}"
+tx4="${txArr[3]}"
+tx5="${txArr[4]}"
+
+# Create single gap: delete tx3 from both (tx4 -> tx3(missing) -> tx2)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Deleting tx3 from BOTH nodes (single mutual gap)"
+delete_txids ${sender} "$tx3"
+delete_txids ${receiver} "$tx3"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
+
+if [[ "$senderIntegrity" == INVALID:1:* ]] && [[ "$receiverIntegrity" == INVALID:1:* ]]; then
+    printf "\t   Single gap created on both nodes ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Gap creation ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 6.1: Send triggers gap detection and auto-proposes chain drop
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Attempting send (should fail and auto-propose chain drop)"
+
+sendOutput=$(docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t6-blocked-${timestamp}" --json 2>&1)
+echo -e "\t   Send output (first 150 chars): ${sendOutput:0:150}..."
+
+if echo "$sendOutput" | grep -q 'CHAIN_INTEGRITY_FAILED\|chain_drop_proposed\|chain.*gap.*detected\|chain drop proposal'; then
+    printf "\t   Send detected gap and auto-proposed ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Send gap detection ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 6.2: Receiver gets the auto-proposal
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Waiting for auto-proposal delivery to receiver"
 
 wait_for_queue_processed ${sender} 3
 wait_for_queue_processed ${receiver} 3
 
 proposalId=$(get_pending_proposal ${receiver})
-
-# Retry if proposal hasn't arrived yet
 if [[ "$proposalId" == "NONE" ]]; then
     wait_for_queue_processed ${sender} 5
     wait_for_queue_processed ${receiver} 5
     proposalId=$(get_pending_proposal ${receiver})
 fi
 
-echo -e "\t   Receiver pending proposal: ${proposalId:0:40}..."
+echo -e "\t   Receiver proposal ID: ${proposalId:0:40}..."
 
 if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
-    printf "\t   Auto-proposal delivered to receiver ${GREEN}PASSED${NC}\n"
+    printf "\t   Auto-proposal delivered ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Auto-proposal delivery ${RED}FAILED${NC} (no pending proposal)\n"
+    printf "\t   Auto-proposal delivery ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
 
-# Test 5.5: Accept the auto-proposal and verify chain is repaired
+# Test 6.3: Receiver accepts the proposal
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Test 5.5: Accept auto-proposal and verify chain repair"
+echo -e "\n\t-> Receiver accepts chain drop proposal"
+
+if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
+    acceptResult=$(docker exec ${receiver} eiou chaindrop accept ${proposalId} 2>&1)
+    echo -e "\t   Accept result: ${acceptResult:0:80}..."
+
+    wait_for_queue_processed ${sender} 3
+    wait_for_queue_processed ${receiver} 3
+
+    if echo "$acceptResult" | grep -qi 'success\|accepted'; then
+        printf "\t   Proposal accepted ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   Proposal accept ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   Cannot accept: no proposal ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 6.4: Chain is valid on BOTH nodes after drop
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying chain is valid on both nodes"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
+
+if [[ "$senderIntegrity" == VALID:* ]] && [[ "$receiverIntegrity" == VALID:* ]]; then
+    printf "\t   Chain valid on both nodes ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain validity ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 6.5: Verify chain relink - tx4.previous_txid should now point to tx2
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying chain relink: tx4.previous_txid = tx2 (skipping dropped tx3)"
+
+senderPrev=$(get_previous_txid ${sender} "$tx4")
+receiverPrev=$(get_previous_txid ${receiver} "$tx4")
+
+echo -e "\t   Sender tx4.previous_txid:   ${senderPrev:0:40}..."
+echo -e "\t   Receiver tx4.previous_txid: ${receiverPrev:0:40}..."
+echo -e "\t   Expected (tx2):              ${tx2:0:40}..."
+
+if [[ "$senderPrev" == "$tx2" ]] && [[ "$receiverPrev" == "$tx2" ]]; then
+    printf "\t   Chain relink correct on both nodes ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain relink ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 6.6: Verify remaining chain order: tx1 -> tx2 -> tx4 -> tx5 (tx3 gone)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying full chain order: tx1 -> tx2 -> tx4 -> tx5"
+
+tx1Prev=$(get_previous_txid ${sender} "$tx1")
+tx2Prev=$(get_previous_txid ${sender} "$tx2")
+tx4Prev=$(get_previous_txid ${sender} "$tx4")
+tx5Prev=$(get_previous_txid ${sender} "$tx5")
+
+echo -e "\t   tx1.previous_txid: ${tx1Prev} (expect NULL)"
+echo -e "\t   tx2.previous_txid: ${tx2Prev:0:40}... (expect tx1)"
+echo -e "\t   tx4.previous_txid: ${tx4Prev:0:40}... (expect tx2)"
+echo -e "\t   tx5.previous_txid: ${tx5Prev:0:40}... (expect tx4)"
+
+if [[ "$tx1Prev" == "NULL" ]] && [[ "$tx2Prev" == "$tx1" ]] && [[ "$tx4Prev" == "$tx2" ]] && [[ "$tx5Prev" == "$tx4" ]]; then
+    printf "\t   Full chain order correct ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Full chain order ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 6.7: Transaction count is 4 on both nodes (tx3 is gone)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying transaction count is 4 (tx3 dropped)"
+
+senderCount=$(docker exec ${sender} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+receiverCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+echo -e "\t   Sender: ${senderCount} txs, Receiver: ${receiverCount} txs"
+
+if [[ "$senderCount" == "4" ]] && [[ "$receiverCount" == "4" ]]; then
+    printf "\t   Transaction count correct on both ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Transaction count ${RED}FAILED${NC} (expected 4/4)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 6.8: New send succeeds after chain repair
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Sending new transaction after repair (should succeed)"
+
+sendOutput=$(docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t6-post-repair-${timestamp}" --json 2>&1)
+echo -e "\t   Send output (first 120 chars): ${sendOutput:0:120}..."
+
+wait_for_queue_processed ${sender} 3
+wait_for_queue_processed ${receiver} 3
+
+# Verify send succeeded (no CHAIN_INTEGRITY_FAILED error)
+if echo "$sendOutput" | grep -q 'CHAIN_INTEGRITY_FAILED'; then
+    printf "\t   Post-repair send ${RED}FAILED${NC} (still blocked by chain gap)\n"
+    failure=$(( failure + 1 ))
+elif echo "$sendOutput" | grep -qi 'success\|queued\|sent'; then
+    printf "\t   Post-repair send succeeded ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Post-repair send ${RED}FAILED${NC} (unexpected output)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 6.9: Ping reports chain_valid: true after repair
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Ping after repair (should report chain_valid: true)"
+
+wait_for_queue_processed ${sender} 3
+wait_for_queue_processed ${receiver} 3
+
+pingOutput=$(docker exec ${sender} eiou ping ${receiverAddress} --json 2>&1)
+echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
+
+if echo "$pingOutput" | grep -q '"chain_valid":true\|"chain_valid": true'; then
+    printf "\t   Ping reports chain valid after repair ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+elif echo "$pingOutput" | grep -qi 'chain is valid'; then
+    printf "\t   Ping reports chain valid (message) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Ping chain_valid after repair ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Cleanup test 6
+clean_chain > /dev/null
+
+#################### TEST 7: Ping-Triggered Full Flow (consecutive gaps) ####################
+# Full end-to-end: ping detects gap -> manual propose -> accept -> verify relink -> new send works
+# Uses consecutive gaps (tx2 + tx3 deleted) which result in a single chain drop
+##############################################################################################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 7: Ping-Triggered Full Chain Drop Flow (consecutive gaps)"
+echo "========================================================================"
+echo -e "\n"
+
+echo -e "[7.1 Ping detects consecutive gaps, manual propose, both agree, chain repaired]"
+
+timestamp=$(date +%s%N)
+testPattern="chaindrop-t7-%${timestamp}"
+
+# Setup: Send 5 transactions
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Sending 5 transactions to build chain"
+
+for i in 1 2 3 4 5; do
+    docker exec ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t7-tx${i}-${timestamp}" 2>&1 > /dev/null
+    sleep 1
+done
+
+wait_for_queue_processed ${sender}
+wait_for_queue_processed ${receiver}
+
+receiverTxCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+if [[ "$receiverTxCount" -lt 5 ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+fi
+
+senderTxids=$(get_test_txids ${sender} "${testPattern}")
+IFS=',' read -ra txArr <<< "$senderTxids"
+
+if [[ "${#txArr[@]}" -ge 5 ]]; then
+    printf "\t   Setup: 5 transactions sent ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Setup: send transactions ${RED}FAILED${NC} (got ${#txArr[@]})\n"
+    failure=$(( failure + 1 ))
+fi
+
+tx1="${txArr[0]}"
+tx2="${txArr[1]}"
+tx3="${txArr[2]}"
+tx4="${txArr[3]}"
+tx5="${txArr[4]}"
+
+# Create consecutive gap: delete tx2 + tx3 from both
+# Chain becomes: tx1 -> ?(tx2 missing) -> ?(tx3 missing) -> tx4 -> tx5
+# Since tx3 (which pointed to tx2) is also gone, only 1 gap detected: tx4 -> tx3(missing)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Deleting tx2 + tx3 from BOTH nodes (consecutive mutual gap)"
+delete_txids ${sender} "$tx2" "$tx3"
+delete_txids ${receiver} "$tx2" "$tx3"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+
+if [[ "$senderIntegrity" == INVALID:1:* ]]; then
+    printf "\t   Consecutive gap created (1 detected gap) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Gap creation ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7.1: Ping detects the gap
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Ping to detect chain gap"
+
+pingOutput=$(docker exec ${sender} eiou ping ${receiverAddress} --json 2>&1)
+echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
+
+if echo "$pingOutput" | grep -q '"chain_valid":false\|"chain_valid": false' || echo "$pingOutput" | grep -qi 'chain.*sync\|chain.*gap'; then
+    printf "\t   Ping detects gap ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Ping gap detection ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7.2: Manual chain drop propose (triggered by user after seeing ping result)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Manual chain drop propose after ping detection"
+
+proposeResult=$(docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1)
+echo -e "\t   Propose result: ${proposeResult:0:80}..."
+
+wait_for_queue_processed ${sender} 3
+wait_for_queue_processed ${receiver} 3
+
+if echo "$proposeResult" | grep -qi 'success\|proposal'; then
+    printf "\t   Chain drop proposed ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain drop propose ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7.3: Receiver accepts
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Receiver accepts proposal"
+
+proposalId=$(get_pending_proposal ${receiver})
+if [[ "$proposalId" == "NONE" ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+    proposalId=$(get_pending_proposal ${receiver})
+fi
+
+if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
+    acceptResult=$(docker exec ${receiver} eiou chaindrop accept ${proposalId} 2>&1)
+    echo -e "\t   Accept result: ${acceptResult:0:80}..."
+
+    wait_for_queue_processed ${sender} 3
+    wait_for_queue_processed ${receiver} 3
+
+    if echo "$acceptResult" | grep -qi 'success\|accepted'; then
+        printf "\t   Proposal accepted ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   Proposal accept ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   No proposal to accept ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7.4: Chain valid on both nodes
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying chain is valid on both nodes"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
+
+if [[ "$senderIntegrity" == VALID:* ]] && [[ "$receiverIntegrity" == VALID:* ]]; then
+    printf "\t   Chain valid on both ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain validity ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7.5: Verify chain relink: tx4.previous_txid = tx1 (tx2 and tx3 both gone)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying relink: tx4.previous_txid = tx1 (skipping tx2 + tx3)"
+
+senderPrev=$(get_previous_txid ${sender} "$tx4")
+receiverPrev=$(get_previous_txid ${receiver} "$tx4")
+
+echo -e "\t   Sender tx4.previous_txid:   ${senderPrev:0:40}..."
+echo -e "\t   Receiver tx4.previous_txid: ${receiverPrev:0:40}..."
+echo -e "\t   Expected (tx1):              ${tx1:0:40}..."
+
+if [[ "$senderPrev" == "$tx1" ]] && [[ "$receiverPrev" == "$tx1" ]]; then
+    printf "\t   Chain relink correct on both ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain relink ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7.6: Verify full chain: tx1 -> tx4 -> tx5 and tx count = 3
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying full chain: tx1 -> tx4 -> tx5, count = 3"
+
+tx1Prev=$(get_previous_txid ${sender} "$tx1")
+tx5Prev=$(get_previous_txid ${sender} "$tx5")
+
+senderCount=$(docker exec ${sender} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+echo -e "\t   tx1.previous_txid: ${tx1Prev} (expect NULL)"
+echo -e "\t   tx5.previous_txid: ${tx5Prev:0:40}... (expect tx4)"
+echo -e "\t   Transaction count: ${senderCount} (expect 3)"
+
+if [[ "$tx1Prev" == "NULL" ]] && [[ "$tx5Prev" == "$tx4" ]] && [[ "$senderCount" == "3" ]]; then
+    printf "\t   Full chain and count correct ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Full chain/count ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7.7: New send works after repair
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Sending new transaction after chain repair"
+
+sendOutput=$(docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t7-post-repair-${timestamp}" --json 2>&1)
+wait_for_queue_processed ${sender} 3
+wait_for_queue_processed ${receiver} 3
+
+echo -e "\t   Send output (first 120 chars): ${sendOutput:0:120}..."
+
+if echo "$sendOutput" | grep -q 'CHAIN_INTEGRITY_FAILED'; then
+    printf "\t   Post-repair send ${RED}FAILED${NC} (still blocked)\n"
+    failure=$(( failure + 1 ))
+elif echo "$sendOutput" | grep -qi 'success\|queued\|sent'; then
+    printf "\t   Post-repair send succeeded ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Post-repair send ${RED}FAILED${NC} (unexpected output)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 7.8: Ping reports chain valid after repair + new send
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Final ping to confirm chain validity"
+
+pingOutput=$(docker exec ${sender} eiou ping ${receiverAddress} --json 2>&1)
+echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
+
+if echo "$pingOutput" | grep -q '"chain_valid":true\|"chain_valid": true' || echo "$pingOutput" | grep -qi 'chain is valid'; then
+    printf "\t   Final ping: chain valid ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Final ping chain validity ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Cleanup test 7
+clean_chain > /dev/null
+
+#################### TEST 8: Sync-Triggered Full Flow (non-consecutive, 2 drops) ####################
+# Full end-to-end: sync detects gaps -> two propose/accept rounds -> verify relink -> new send works
+# Uses non-consecutive gaps (tx2 + tx4 deleted) requiring 2 sequential chain drops
+######################################################################################################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 8: Sync-Triggered Full Chain Drop Flow (2 rounds)"
+echo "========================================================================"
+echo -e "\n"
+
+echo -e "[8.1 Sync detects non-consecutive gaps, 2 rounds of propose/accept, chain repaired]"
+
+timestamp=$(date +%s%N)
+testPattern="chaindrop-t8-%${timestamp}"
+
+# Setup: Send 6 transactions
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Sending 6 transactions to build chain"
+
+for i in 1 2 3 4 5 6; do
+    docker exec ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t8-tx${i}-${timestamp}" 2>&1 > /dev/null
+    sleep 1
+done
+
+wait_for_queue_processed ${sender}
+wait_for_queue_processed ${receiver}
+
+receiverTxCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+if [[ "$receiverTxCount" -lt 6 ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+fi
+
+senderTxids=$(get_test_txids ${sender} "${testPattern}")
+IFS=',' read -ra txArr <<< "$senderTxids"
+
+if [[ "${#txArr[@]}" -ge 6 ]]; then
+    printf "\t   Setup: 6 transactions sent ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Setup: send transactions ${RED}FAILED${NC} (got ${#txArr[@]})\n"
+    failure=$(( failure + 1 ))
+fi
+
+tx1="${txArr[0]}"
+tx2="${txArr[1]}"
+tx3="${txArr[2]}"
+tx4="${txArr[3]}"
+tx5="${txArr[4]}"
+tx6="${txArr[5]}"
+
+# Create non-consecutive gaps: delete tx2 + tx4 from both
+# Chain becomes: tx1 -> ?(tx2 missing) -> tx3 -> ?(tx4 missing) -> tx5 -> tx6
+# Two gaps detected: tx3 -> tx2(missing) and tx5 -> tx4(missing)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Deleting tx2 + tx4 from BOTH nodes (non-consecutive gaps)"
+delete_txids ${sender} "$tx2" "$tx4"
+delete_txids ${receiver} "$tx2" "$tx4"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+
+if [[ "$senderIntegrity" == INVALID:2:* ]]; then
+    printf "\t   2 non-consecutive gaps created ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Gap creation ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 8.1: Sync detects the gaps
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Running sync (should detect and report gaps)"
+
+syncOutput=$(docker exec ${sender} eiou sync transactions --json 2>&1)
+echo -e "\t   Sync output (first 150 chars): ${syncOutput:0:150}..."
+
+if echo "$syncOutput" | grep -q '"chain_gaps":[1-9]\|"synced_with_gaps"\|chain.*gap'; then
+    printf "\t   Sync detected gaps ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Sync gap detection ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 8.2: First chain drop round (resolves first gap)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Round 1: Propose and accept first chain drop"
+
+proposeResult=$(docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1)
+echo -e "\t   Propose result: ${proposeResult:0:80}..."
+
+wait_for_queue_processed ${sender} 3
+wait_for_queue_processed ${receiver} 3
+
+proposalId=$(get_pending_proposal ${receiver})
+if [[ "$proposalId" == "NONE" ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+    proposalId=$(get_pending_proposal ${receiver})
+fi
+
+if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
+    docker exec ${receiver} eiou chaindrop accept ${proposalId} 2>&1 > /dev/null
+    wait_for_queue_processed ${sender} 3
+    wait_for_queue_processed ${receiver} 3
+fi
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+echo -e "\t   After round 1: $(format_chain_status ${senderIntegrity})"
+
+if [[ "$senderIntegrity" == INVALID:1:* ]]; then
+    printf "\t   Round 1: 1 gap remaining ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Round 1 ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 8.3: Second chain drop round (resolves second gap)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Round 2: Propose and accept second chain drop"
+
+proposeResult=$(docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1)
+echo -e "\t   Propose result: ${proposeResult:0:80}..."
+
+wait_for_queue_processed ${sender} 3
+wait_for_queue_processed ${receiver} 3
+
+proposalId=$(get_pending_proposal ${receiver})
+if [[ "$proposalId" == "NONE" ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+    proposalId=$(get_pending_proposal ${receiver})
+fi
 
 if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
     docker exec ${receiver} eiou chaindrop accept ${proposalId} 2>&1 > /dev/null
@@ -1163,29 +1796,104 @@ fi
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
 
-echo -e "\t   Sender chain after repair: $(format_chain_status ${senderIntegrity})"
-echo -e "\t   Receiver chain after repair: $(format_chain_status ${receiverIntegrity})"
+echo -e "\t   After round 2 - Sender: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   After round 2 - Receiver: $(format_chain_status ${receiverIntegrity})"
 
-# Chain may still have 1 gap if only the first gap was resolved (consecutive gap case)
-# but should have fewer gaps than before
 if [[ "$senderIntegrity" == VALID:* ]] && [[ "$receiverIntegrity" == VALID:* ]]; then
-    printf "\t   Chain repaired via auto-proposal ${GREEN}PASSED${NC}\n"
+    printf "\t   Round 2: all gaps resolved ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    # If there's still a gap, it means only the first of potentially 2 gaps was resolved
-    # (non-consecutive: tx3 and tx4 deleted creates 1 gap since tx5->tx4(missing))
-    # Accept remaining gap resolution
-    senderGaps=$(echo "$senderIntegrity" | cut -d: -f2)
-    if [[ "$senderGaps" -lt 2 ]]; then
-        printf "\t   Chain partially repaired (${senderGaps} gap remaining) ${GREEN}PASSED${NC}\n"
-        passed=$(( passed + 1 ))
-    else
-        printf "\t   Chain repair ${RED}FAILED${NC}\n"
-        failure=$(( failure + 1 ))
-    fi
+    printf "\t   Round 2 ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
 fi
 
-# Cleanup test 5
+# Test 8.4: Verify final chain: tx1 -> tx3 -> tx5 -> tx6
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying final chain: tx1 -> tx3 -> tx5 -> tx6"
+
+tx1Prev=$(get_previous_txid ${sender} "$tx1")
+tx3Prev=$(get_previous_txid ${sender} "$tx3")
+tx5Prev=$(get_previous_txid ${sender} "$tx5")
+tx6Prev=$(get_previous_txid ${sender} "$tx6")
+
+echo -e "\t   tx1.previous_txid: ${tx1Prev} (expect NULL)"
+echo -e "\t   tx3.previous_txid: ${tx3Prev:0:40}... (expect tx1)"
+echo -e "\t   tx5.previous_txid: ${tx5Prev:0:40}... (expect tx3)"
+echo -e "\t   tx6.previous_txid: ${tx6Prev:0:40}... (expect tx5)"
+
+# Also verify on receiver side
+rx3Prev=$(get_previous_txid ${receiver} "$tx3")
+rx5Prev=$(get_previous_txid ${receiver} "$tx5")
+rx6Prev=$(get_previous_txid ${receiver} "$tx6")
+
+echo -e "\t   [Receiver] tx3.prev: ${rx3Prev:0:40}... tx5.prev: ${rx5Prev:0:40}..."
+
+if [[ "$tx1Prev" == "NULL" ]] && [[ "$tx3Prev" == "$tx1" ]] && [[ "$tx5Prev" == "$tx3" ]] && [[ "$tx6Prev" == "$tx5" ]] \
+    && [[ "$rx3Prev" == "$tx1" ]] && [[ "$rx5Prev" == "$tx3" ]] && [[ "$rx6Prev" == "$tx5" ]]; then
+    printf "\t   Final chain order correct on both nodes ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Final chain order ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 8.5: Transaction count is 4 on both (tx2 + tx4 dropped)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying transaction count is 4 on both nodes"
+
+senderCount=$(docker exec ${sender} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+receiverCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+echo -e "\t   Sender: ${senderCount}, Receiver: ${receiverCount} (expect 4)"
+
+if [[ "$senderCount" == "4" ]] && [[ "$receiverCount" == "4" ]]; then
+    printf "\t   Transaction count correct on both ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Transaction count ${RED}FAILED${NC} (expected 4/4)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 8.6: New send + ping both work after multi-round repair
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Sending new transaction + ping after 2-round repair"
+
+sendOutput=$(docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t8-post-repair-${timestamp}" --json 2>&1)
+wait_for_queue_processed ${sender} 3
+wait_for_queue_processed ${receiver} 3
+
+if echo "$sendOutput" | grep -q 'CHAIN_INTEGRITY_FAILED'; then
+    printf "\t   Post-repair send ${RED}FAILED${NC} (still blocked)\n"
+    failure=$(( failure + 1 ))
+elif echo "$sendOutput" | grep -qi 'success\|queued\|sent'; then
+    # Also verify ping
+    pingOutput=$(docker exec ${sender} eiou ping ${receiverAddress} --json 2>&1)
+    if echo "$pingOutput" | grep -q '"chain_valid":true\|"chain_valid": true' || echo "$pingOutput" | grep -qi 'chain is valid'; then
+        printf "\t   Post-repair send + ping both OK ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   Post-repair send OK but ping ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   Post-repair send ${RED}FAILED${NC} (unexpected output)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Cleanup test 8
 clean_chain > /dev/null
 
 # ========================= Summary =========================
