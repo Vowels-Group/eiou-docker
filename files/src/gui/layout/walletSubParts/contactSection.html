@@ -267,6 +267,10 @@
                         A chain gap was detected that cannot be resolved by sync.
                         Both you and this contact are missing the same transaction.
                     </p>
+                    <p style="color: #664d03; font-size: 0.85rem; margin-bottom: 0.75rem; background: #fff3cd; padding: 0.5rem; border-radius: 4px;">
+                        <i class="fas fa-coins"></i>
+                        <strong>Note:</strong> Dropping a transaction means the funds it transferred will also be removed from both balances.
+                    </p>
                     <button id="chain_drop_propose_btn" class="btn btn-warning btn-sm" onclick="proposeChainDrop()" title="Propose dropping the missing transaction(s) to repair the chain">
                         <i class="fas fa-handshake" id="chain_drop_propose_icon"></i> <span id="chain_drop_propose_text">Propose Dropping Missing Transaction(s)</span>
                     </button>
@@ -295,6 +299,10 @@
                             This contact has proposed dropping the missing transaction(s) to repair the chain.
                             <strong>Sending transactions is blocked</strong> until this proposal is accepted or rejected.
                         </p>
+                        <p style="color: #664d03; font-size: 0.85rem; margin: 0.5rem 0; background: #fff3cd; padding: 0.5rem; border-radius: 4px;">
+                            <i class="fas fa-coins"></i>
+                            <strong>Note:</strong> Accepting will remove the dropped transaction and the funds it transferred from both balances.
+                        </p>
                         <div id="chain_drop_incoming_id" style="font-family: monospace; font-size: 0.8rem; margin-bottom: 0.75rem; word-break: break-all;"></div>
                         <div style="display: flex; gap: 0.5rem;">
                             <button id="chain_drop_accept_btn" class="btn btn-success btn-sm" onclick="acceptChainDrop()">
@@ -317,6 +325,10 @@
                             The previous proposal to drop missing transaction(s) was rejected.
                             The chain gap still exists and <strong>sending transactions remains blocked</strong>.
                             A new proposal can be submitted to try again.
+                        </p>
+                        <p style="color: #664d03; font-size: 0.85rem; margin: 0.5rem 0; background: #fff3cd; padding: 0.5rem; border-radius: 4px;">
+                            <i class="fas fa-coins"></i>
+                            <strong>Note:</strong> Dropping a transaction means the funds it transferred will also be removed from both balances.
                         </p>
                         <button id="chain_drop_repropose_btn" class="btn btn-warning btn-sm" onclick="proposeChainDrop()" title="Propose dropping the missing transaction(s) to repair the chain">
                             <i class="fas fa-handshake"></i> Propose Dropping Missing Transaction(s)

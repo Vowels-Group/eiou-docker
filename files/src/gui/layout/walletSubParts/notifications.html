@@ -118,7 +118,7 @@ foreach ($acceptedContacts as $c) {
             <p style="margin: 0.5rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
                 <?php foreach ($incomingChainDropContacts as $i => $c): ?>
                     <strong><?php echo htmlspecialchars($c['name']); ?></strong> has proposed dropping missing transaction(s) to repair the chain.
-                    Sending is blocked until resolved.<?php echo $i < count($incomingChainDropContacts) - 1 ? '<br>' : ''; ?>
+                    Sending is blocked until resolved. Accepting will remove the dropped transaction and its funds from both balances.<?php echo $i < count($incomingChainDropContacts) - 1 ? '<br>' : ''; ?>
                 <?php endforeach; ?>
             </p>
         </div>
