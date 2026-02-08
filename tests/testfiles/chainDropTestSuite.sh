@@ -308,7 +308,7 @@ if [[ "$PUBKEYS_AVAILABLE" != "true" ]]; then
 fi
 
 # Delete all existing transactions between sender and receiver for a clean baseline
-echo -e "[Pre-test: Cleaning transaction chain between contacts]"
+echo -e "\n[Pre-test: Cleaning transaction chain between contacts]"
 clean_chain
 
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
