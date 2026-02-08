@@ -95,7 +95,7 @@ Nodes provide three interfaces for interaction:
           +-----------------------+------------------------+
           |                       |                        |
 +---------v---------+   +---------v---------+   +----------v----------+
-|   UserContext     |   | ServiceContainer  |   |    UtilityContainer |
+|   UserContext     |   | ServiceContainer  |   |   UtilityContainer  |
 |  (Wallet Config)  |   |   (DI Container)  |   |  (Helper Services)  |
 +-------------------+   +---------+---------+   +---------------------+
                                   |
@@ -128,7 +128,7 @@ Nodes provide three interfaces for interaction:
                     +-------------+-------------+
                                   |
           +-----------------------+------------------------+
-          |             |                |                  |
+          |             |                |                 |
 +---------v----+ +------v-------+ +------v-------+ +-------v--------+
 | Transaction  | |     P2P      | |   Cleanup    | | ContactStatus  |
 |  Processor   | |  Processor   | |  Processor   | |   Processor    |
@@ -596,20 +596,20 @@ class TransactionService
                          | ServiceContainer |
                          +--------+---------+
                                   |
-     +-------------+--------------+--------------+-------------+
-     |             |              |              |             |
-+----v----+  +-----v------+ +----v-----+  +-----v------+ +----v-----+
+     +-------------+--------------+--------------+------------+
+     |             |              |              |            |
++----v----+  +-----v------+ +----v-----+  +------v----+ +-----v----+
 |  Sync   |  |Transaction |  | Contact |  |  Message  | | Cleanup  |
 | Service |  |  Service   |  | Service |  |  Service  | | Service  |
-+----+----+  +-----+------+ +----+-----+  +-----+-----+ +----+-----+
-     |             |              |              |             |
++----+----+  +-----+------+ +----+-----+  +-----+-----+ +-----+----+
+     |             |             |              |             |
      |    +--------+--------+    |              |             |
      |    |        |        |    |              |             |
-+----v--+ v   +----v---+ +--v---v--+   +-------v------+ +----v------+
-| Held  | |   |  Send  | | Chain  |   | ChainDrop    | | Backup    |
-|  Tx   | |   |  Op    | | Verif  |   |   Service    | | Service   |
-|Service| |   |Service | |Service |   +--------------+ +-----------+
-+-------+ |   +----+---+ +--------+         ^               ^
++----v--+ v   +----v---+ +--v----v-+   +--------v----+ +------v----+
+| Held  | |   |  Send  | |  Chain  |   |  ChainDrop  | | Backup    |
+|  Tx   | |   |  Op    | |  Verif  |   |  Service    | | Service   |
+|Service| |   |Service | | Service |   +-------------+ +-----------+
++-------+ |   +----+---+ +--------+          ^               ^
           |        |                         |               |
      +----v----+   +--- ChainDropService     +--- Setter     |
      | Balance |   +--- SyncTriggerProxy     +--- Setter ----+
@@ -1381,21 +1381,21 @@ drop protocol coordinates mutual agreement to remove the gap and relink the chai
            |                             |                                     |
            |                    6. acceptProposal()                   rejectProposal()
            |                       +-- executeChainDrop()              +-- Send rejection -->|
-           |                       |     +-- Relink broken_txid's                           |
-           |                       |     +-- previous_txid to skip gap                      |
-           |                       |     +-- Re-sign affected tx                            |
-           |                       +-- syncContactBalance()                                 |
-           |                       +-- updateChainStatus(valid=true)                        |
+           |                       |     +-- Relink broken_txid's                            |
+           |                       |     +-- previous_txid to skip gap                       |
+           |                       |     +-- Re-sign affected tx                             |
+           |                       +-- syncContactBalance()                                  |
+           |                       +-- updateChainStatus(valid=true)                         | 
            |                       +-- Send acceptance + resigned txs ---->|                 |
-           |                                                              |                 |
-  7. handleIncomingAcceptance()                                           |                 |
-     +-- executeChainDrop() locally                                       |                 |
-     +-- processResignedTransactions()                                    |                 |
-     +-- syncContactBalance()                                             |                 |
-     +-- updateChainStatus(valid=true)                                    |                 |
-     +-- Mark proposal executed                                           |                 |
-     +-- Send acknowledgment + our resigned txs ------------------------->|                 |
-           |                                                              |                 |
+           |                                                               |                 |
+  7. handleIncomingAcceptance()                                            |                 |
+     +-- executeChainDrop() locally                                        |                 |
+     +-- processResignedTransactions()                                     |                 |
+     +-- syncContactBalance()                                              |                 |
+     +-- updateChainStatus(valid=true)                                     |                 |
+     +-- Mark proposal executed                                            |                 |
+     +-- Send acknowledgment + our resigned txs -------------------------->|                 |
+           |                                                               |                 |
            |                                             8. handleIncomingAcknowledgment()
            |                                                +-- processResignedTransactions()
            |                                                +-- updateChainStatus(valid=true)
