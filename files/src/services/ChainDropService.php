@@ -133,9 +133,13 @@ class ChainDropService implements ChainDropServiceInterface
             $missingTxid = $gaps[0];
             $brokenTxid = $brokenTxids[0];
 
-            // Attempt to recover the missing transaction from database backups
-            // before resorting to a chain drop
+            // Fallback: attempt backup recovery at propose level
+            // This is a safety net — sync-level recovery should have caught this already
             if ($this->backupService !== null) {
+                Logger::getInstance()->info("Backup recovery fallback triggered at propose level (sync-level recovery should have handled this)", [
+                    'missing_txid' => substr($missingTxid, 0, 16) . '...',
+                    'contact_address' => $contactAddress ?? 'unknown'
+                ]);
                 $recoveryResult = $this->attemptBackupRecovery($missingTxid, $contactPubkeyHash, $contactPubkey);
                 if ($recoveryResult['success']) {
                     $result['success'] = true;
@@ -281,8 +285,13 @@ class ChainDropService implements ChainDropServiceInterface
                 return;
             }
 
-            // Attempt to recover the missing transaction from database backups
+            // Fallback: attempt backup recovery at incoming-proposal level
+            // This is a safety net — sync-level recovery should have caught this already
             if ($this->backupService !== null) {
+                Logger::getInstance()->info("Backup recovery fallback triggered at incoming-proposal level (sync-level recovery should have handled this)", [
+                    'proposal_id' => $proposalId,
+                    'missing_txid' => substr($missingTxid, 0, 16) . '...'
+                ]);
                 $recoveryResult = $this->attemptBackupRecovery($missingTxid, $contactPubkeyHash, $senderPubkey);
                 if ($recoveryResult['success']) {
                     // Chain repaired from backup — reject the proposal

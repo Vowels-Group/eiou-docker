@@ -1976,7 +1976,7 @@ count_backups() {
 
 echo -e "\n"
 echo "========================================================================"
-echo "Section 9: Backup Recovery on Propose (Sender Side)"
+echo "Section 9: Backup Recovery During Sync (Sender Side)"
 echo "========================================================================"
 echo -e "\n"
 
@@ -2068,23 +2068,27 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 9.4: Propose chain drop -- should recover tx2 from sender's backup instead
+# Test 9.4: Sync transactions -- should recover tx2 from sender's local backup during sync
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Proposing chain drop (should recover from backup instead)"
+echo -e "\n\t-> Running sync transactions (should recover from local backup during sync)"
 
-proposeResult=$(docker exec ${sender} eiou chaindrop propose ${receiverAddress} --json 2>&1)
-echo -e "\t   Propose result: ${proposeResult:0:120}..."
+syncResult=$(docker exec ${sender} eiou sync transactions --json 2>&1)
+echo -e "\t   Sync result: ${syncResult:0:120}..."
 
-# The system should either report recovery or report chain is valid (because it fixed it)
-if echo "$proposeResult" | grep -qi 'recover\|restored\|backup\|no gap'; then
-    printf "\t   Backup recovery triggered ${GREEN}PASSED${NC}\n"
+wait_for_queue_processed ${sender} 2
+
+# After sync, the sender's local backup recovery should have restored tx2
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+
+if [[ "$senderIntegrity" == VALID:* ]]; then
+    printf "\t   Backup recovery during sync ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Backup recovery detection ${RED}FAILED${NC} (may have proposed instead of recovering)\n"
+    printf "\t   Backup recovery during sync ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
 
-# Test 9.5: Verify sender chain is valid again
+# Test 9.5: Verify sender chain is valid after sync recovery
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Verifying sender chain repaired from backup"
 
@@ -2142,7 +2146,7 @@ proposalId=$(get_pending_proposal ${receiver})
 echo -e "\t   Receiver pending proposals: ${proposalId}"
 
 if [[ "$proposalId" == "NONE" ]] || [[ -z "$proposalId" ]]; then
-    printf "\t   No proposal created (backup recovery worked) ${GREEN}PASSED${NC}\n"
+    printf "\t   No proposal created (sync-level recovery worked) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   Unexpected proposal created ${RED}FAILED${NC}\n"
@@ -2158,7 +2162,7 @@ cleanup_backups ${receiver}
 
 echo -e "\n"
 echo "========================================================================"
-echo "Section 10: Backup Recovery on Propose (Receiver Side)"
+echo "Section 10: Backup Recovery During Sync (Receiver Side)"
 echo "========================================================================"
 echo -e "\n"
 
@@ -2228,18 +2232,22 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 10.3: Propose chain drop from RECEIVER -- should recover from receiver's backup
+# Test 10.3: Sync from RECEIVER -- should recover from receiver's local backup during sync
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Proposing chain drop from receiver (should recover from backup)"
+echo -e "\n\t-> Running sync from receiver (should recover from local backup during sync)"
 
-proposeResult=$(docker exec ${receiver} eiou chaindrop propose ${senderAddress} --json 2>&1)
-echo -e "\t   Propose result: ${proposeResult:0:120}..."
+syncResult=$(docker exec ${receiver} eiou sync transactions --json 2>&1)
+echo -e "\t   Sync result: ${syncResult:0:120}..."
 
-if echo "$proposeResult" | grep -qi 'recover\|restored\|backup\|no gap'; then
-    printf "\t   Receiver backup recovery triggered ${GREEN}PASSED${NC}\n"
+wait_for_queue_processed ${receiver} 2
+
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+
+if [[ "$receiverIntegrity" == VALID:* ]]; then
+    printf "\t   Receiver sync-level backup recovery ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Receiver backup recovery ${RED}FAILED${NC}\n"
+    printf "\t   Receiver sync-level backup recovery ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -2363,29 +2371,26 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 11.3: Run sync on sender -- gap detected, backup recovery should trigger
+# Test 11.3: Run sync on sender -- gap detected, backup recovery should trigger during sync
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Running sync on sender (should detect gap + attempt backup recovery)"
+echo -e "\n\t-> Running sync transactions directly (should recover from local backup during sync)"
 
-# Sync will detect the gap. Since both sides miss the same tx, normal sync fails.
-# The send path triggers chain drop auto-proposal with backup check. For sync itself,
-# the gap is reported. To trigger backup recovery, we try a send which calls
-# verifySenderChainAndSync -> proposeChainDrop (which checks backup first).
-sendResult=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t11-trigger-${timestamp}" --json 2>&1)
-echo -e "\t   Send result: ${sendResult:0:120}..."
+# Sync now checks local backups before contacting the remote node.
+# Since sender has a backup with tx2, it should self-repair during sync.
+syncResult=$(docker exec ${sender} eiou sync transactions --json 2>&1)
+echo -e "\t   Sync result: ${syncResult:0:120}..."
 
 wait_for_queue_processed ${sender} 3
-wait_for_queue_processed ${receiver} 3
 
-# After the send, the system should have recovered tx2 from backup
+# After sync, local backup recovery should have restored tx2
 senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
-echo -e "\t   Sender chain after trigger: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Sender chain after sync: $(format_chain_status ${senderIntegrity})"
 
 if [[ "$senderIntegrity" == VALID:* ]]; then
-    printf "\t   Backup recovery via send trigger ${GREEN}PASSED${NC}\n"
+    printf "\t   Backup recovery during direct sync ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Backup recovery via send ${RED}FAILED${NC}\n"
+    printf "\t   Backup recovery during sync ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -2396,7 +2401,7 @@ echo -e "\n\t-> Verifying tx2 restored in sender database"
 tx2Exists=$(verify_tx_exists ${sender} "$tx2")
 
 if [[ "$tx2Exists" == "1" ]]; then
-    printf "\t   tx2 restored during sync/send path ${GREEN}PASSED${NC}\n"
+    printf "\t   tx2 restored during sync path ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   tx2 restore ${RED}FAILED${NC}\n"
@@ -2501,16 +2506,16 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 12.3: Trigger backup recovery via send (which checks chain + backup before proposing)
-# Ping detects gaps but doesn't auto-propose chain drops. Send does.
-# After send triggers backup recovery, then ping should report chain valid.
+# Test 12.3: Trigger backup recovery via sync, then verify with ping
+# Sync now self-repairs from local backups. Ping triggers sync when chain mismatch detected.
+# We run sync first to trigger recovery, then ping to verify chain is valid.
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Triggering backup recovery via send, then verifying with ping"
+echo -e "\n\t-> Triggering backup recovery via sync, then verifying with ping"
 
-sendResult=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t12-trigger-${timestamp}" --json 2>&1)
+syncResult=$(docker exec ${sender} eiou sync transactions --json 2>&1)
 wait_for_queue_processed ${sender} 3
 
-# Now ping should show chain valid (backup recovery should have restored tx2)
+# Now ping should show chain valid (backup recovery during sync should have restored tx2)
 pingResult=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou ping ${receiverAddress} --json 2>&1)
 echo -e "\t   Ping result: ${pingResult:0:120}..."
 
@@ -2518,10 +2523,10 @@ senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
 echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
 
 if [[ "$senderIntegrity" == VALID:* ]]; then
-    printf "\t   Chain valid after backup recovery + ping ${GREEN}PASSED${NC}\n"
+    printf "\t   Chain valid after sync recovery + ping ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Ping after backup recovery ${RED}FAILED${NC}\n"
+    printf "\t   Ping after sync recovery ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -2532,7 +2537,7 @@ echo -e "\n\t-> Verifying tx2 exists after backup recovery"
 tx2Exists=$(verify_tx_exists ${sender} "$tx2")
 
 if [[ "$tx2Exists" == "1" ]]; then
-    printf "\t   tx2 present after ping path ${GREEN}PASSED${NC}\n"
+    printf "\t   tx2 present after sync + ping path ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   tx2 presence ${RED}FAILED${NC}\n"

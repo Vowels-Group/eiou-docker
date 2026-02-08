@@ -1346,8 +1346,14 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ChainOperationsService']->setSyncService($this->services['SyncService']);
         }
 
+        // Wire SyncService -> BackupService
+        // Reason: SyncService checks local/remote backups for missing transactions during sync exchange
+        if (isset($this->services['SyncService'])) {
+            $this->services['SyncService']->setBackupService($this->getBackupService());
+        }
+
         // Wire ChainDropService -> BackupService
-        // Reason: ChainDropService checks backups for missing transactions before proposing a chain drop
+        // Reason: ChainDropService checks backups as fallback safety net when sync-level recovery missed
         if (isset($this->services['ChainDropService'])) {
             $this->services['ChainDropService']->setBackupService($this->getBackupService());
         }
