@@ -432,8 +432,7 @@ if [[ "$receiverTxCount" -lt 3 ]]; then
     " 2>/dev/null || echo "0")
 fi
 
-echo -e "\t   Sender has ${senderTxCount} test transactions"
-echo -e "\t   Receiver has ${receiverTxCount} test transactions"
+echo -e "\t   Before deletion: Sender has ${senderTxCount} txs, Receiver has ${receiverTxCount} txs"
 
 if [[ "$senderTxCount" -ge 3 ]] && [[ "$receiverTxCount" -ge 3 ]]; then
     printf "\t   Sent 3 transactions ${GREEN}PASSED${NC}\n"
@@ -461,7 +460,7 @@ senderTxCountAfterDelete=$(docker exec ${sender} php -r "
     \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'chain-sync-test-tx%${timestamp}'\")->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
-echo -e "\t   Sender now has ${senderTxCountAfterDelete} test transactions"
+echo -e "\t   After deletion:  Sender has ${senderTxCountAfterDelete} txs, Receiver has ${receiverTxCount} txs (deleted ${senderTxCount} from sender)"
 
 if [[ "$senderTxCountAfterDelete" == "0" ]]; then
     printf "\t   Delete sender transactions ${GREEN}PASSED${NC}\n"
@@ -525,7 +524,8 @@ if [[ "$senderTxCountAfterSync" -lt 3 ]]; then
     " 2>/dev/null || echo "0")
 fi
 
-echo -e "\t   Sender now has ${senderTxCountAfterSync} test transactions after sync"
+echo -e "\t   After sync:      Sender has ${senderTxCountAfterSync} txs, Receiver has ${receiverTxCount} txs"
+echo -e "\t   Summary: Sender ${senderTxCount} -> deleted to ${senderTxCountAfterDelete} -> synced back to ${senderTxCountAfterSync}"
 
 if [[ "$senderTxCountAfterSync" -ge 3 ]]; then
     printf "\t   Transactions recovered ${GREEN}PASSED${NC}\n"
@@ -660,7 +660,7 @@ if [[ "$initialCountReceiver" -lt 2 ]]; then
     " 2>/dev/null || echo "0")
 fi
 
-echo -e "\t   Sender has ${initialCountSender}, Receiver has ${initialCountReceiver}"
+echo -e "\t   Before deletion: Sender has ${initialCountSender} txs, Receiver has ${initialCountReceiver} txs"
 
 if [[ "$initialCountSender" -ge 2 ]] && [[ "$initialCountReceiver" -ge 2 ]]; then
     printf "\t   Initial transactions ${GREEN}PASSED${NC}\n"
@@ -681,6 +681,15 @@ docker exec ${sender} php -r "
     \$pdo = \$app->services->getPdo();
     \$pdo->exec(\"DELETE FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\");
 " 2>/dev/null
+
+countAfterDelete=$(docker exec ${sender} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE 'cycle-test%${timestamp2}'\")->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+echo -e "\t   After deletion:  Sender has ${countAfterDelete} txs, Receiver has ${initialCountReceiver} txs (deleted ${initialCountSender} from sender)"
 
 # Send new transaction (triggers resync due to previous_txid mismatch)
 docker exec ${sender} eiou send ${receiverAddress} 10 USD "cycle-test-3-${timestamp2}" 2>&1 > /dev/null
@@ -720,7 +729,8 @@ if [[ "$countAfterCycle" -lt 2 ]]; then
     " 2>/dev/null || echo "0")
 fi
 
-echo -e "\t   Sender has ${countAfterCycle} transactions after cycle"
+echo -e "\t   After resync:    Sender has ${countAfterCycle} txs (includes new send)"
+echo -e "\t   Summary: Sender ${initialCountSender} -> deleted to ${countAfterDelete} -> new send + resync -> ${countAfterCycle}"
 
 if [[ "$countAfterCycle" -ge 2 ]]; then
     printf "\t   Sync cycle ${GREEN}PASSED${NC}\n"
@@ -1741,7 +1751,7 @@ echo -e "\t   Before: A has ${countA_before}, B has ${countB_before} AB transact
 echo -e "\t   Simulating B losing all transactions..."
 delete_all_transactions ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp1}"
 countB_after_delete=$(get_tx_count ${contactB} "AB%-${timestamp1}")
-echo -e "\t   After deletion: B has ${countB_after_delete} AB transactions"
+echo -e "\t   After deletion:  A has ${countA_before} txs, B has ${countB_after_delete} txs (B lost all ${countB_before})"
 
 # A sends new transactions AB4, AB5, AB6
 echo -e "\t   A sending AB4, AB5, AB6 to B..."
@@ -1755,7 +1765,8 @@ done
 
 # Verify B recovered transactions (with retry for time-dependent operations)
 countB_final=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp1}" 3 10)
-echo -e "\t   Final: B has ${countB_final} AB transactions"
+echo -e "\t   After sync:      A has ${countA_before} txs, B has ${countB_final} txs"
+echo -e "\t   Summary: B ${countB_before} -> deleted to ${countB_after_delete} -> synced back to ${countB_final}"
 
 # B should have recovered at least the new transactions + some synced ones
 if [[ "$countB_final" -ge 3 ]]; then
@@ -1779,11 +1790,15 @@ timestamp2=$(date +%s%N)
 # Setup: Create AB chain
 setup_ab_chain "$timestamp2"
 
+countA_t2=$(get_tx_count ${contactA} "AB%-${timestamp2}")
+countB_t2=$(get_tx_count ${contactB} "AB%-${timestamp2}")
+echo -e "\t   Before deletion: A has ${countA_t2} txs, B has ${countB_t2} txs"
+
 # Simulate: B loses all transactions except contact (AB0)
 echo -e "\t   Simulating B losing transactions after AB0..."
 delete_transactions_except_contact ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp2}"
 countB_after_delete=$(get_tx_count ${contactB} "AB%-${timestamp2}")
-echo -e "\t   After deletion: B has ${countB_after_delete} AB test transactions"
+echo -e "\t   After deletion:  A has ${countA_t2} txs, B has ${countB_after_delete} txs (B lost all except contact)"
 
 # A sends new transactions
 echo -e "\t   A sending AB4, AB5, AB6 to B..."
@@ -1797,7 +1812,8 @@ done
 
 # Verify (with retry for time-dependent operations)
 countB_final=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp2}" 3 10)
-echo -e "\t   Final: B has ${countB_final} AB test transactions"
+echo -e "\t   After sync:      B has ${countB_final} txs"
+echo -e "\t   Summary: B ${countB_t2} -> deleted to ${countB_after_delete} -> synced back to ${countB_final}"
 
 if [[ "$countB_final" -ge 3 ]]; then
     printf "\t   Test 2 (B lost after AB0) ${GREEN}PASSED${NC} - B recovered ${countB_final} transactions\n"
@@ -1820,12 +1836,16 @@ timestamp3=$(date +%s%N)
 # Setup: Create AB chain
 setup_ab_chain "$timestamp3"
 
+countA_t3=$(get_tx_count ${contactA} "AB%-${timestamp3}")
+countB_t3=$(get_tx_count ${contactB} "AB%-${timestamp3}")
+echo -e "\t   Before deletion: A has ${countA_t3} txs, B has ${countB_t3} txs"
+
 # Simulate: B loses AB1 and AB3 (creates a gap)
-echo -e "\t   Simulating B losing AB1 (creating chain gap)..."
+echo -e "\t   Simulating B losing AB1 and AB3 (creating chain gap)..."
 delete_specific_transactions ${contactB} "AB1-${timestamp3}"
 delete_specific_transactions ${contactB} "AB3-${timestamp3}"
 countB_after_delete=$(get_tx_count ${contactB} "AB%-${timestamp3}")
-echo -e "\t   After deletion: B has ${countB_after_delete} AB test transactions (with gap)"
+echo -e "\t   After deletion:  A has ${countA_t3} txs, B has ${countB_after_delete} txs (B lost 2, has gap)"
 
 # A sends new transactions
 echo -e "\t   A sending AB4, AB5, AB6 to B..."
@@ -1839,7 +1859,8 @@ done
 
 # Verify (with retry for time-dependent operations)
 countB_final=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp3}" 4 10)
-echo -e "\t   Final: B has ${countB_final} AB test transactions"
+echo -e "\t   After sync:      B has ${countB_final} txs"
+echo -e "\t   Summary: B ${countB_t3} -> deleted 2 to ${countB_after_delete} -> synced back to ${countB_final}"
 
 if [[ "$countB_final" -ge 4 ]]; then
     printf "\t   Test 3 (B has gap) ${GREEN}PASSED${NC} - B recovered ${countB_final} transactions\n"
@@ -1934,9 +1955,15 @@ timestamp4=$(date +%s%N)
 # Setup: Create AB chain from A
 setup_ab_chain "$timestamp4"
 
+countA_t4=$(get_tx_count ${contactA} "AB%-${timestamp4}")
+countB_t4=$(get_tx_count ${contactB} "AB%-${timestamp4}")
+echo -e "\t   Before deletion: A has ${countA_t4} AB txs, B has ${countB_t4} AB txs"
+
 # Simulate: B loses ALL transactions
 echo -e "\t   Simulating B losing all transactions..."
 delete_all_transactions ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp4}"
+countB_t4_del=$(get_tx_count ${contactB} "AB%-${timestamp4}")
+echo -e "\t   After deletion:  A has ${countA_t4} AB txs, B has ${countB_t4_del} AB txs (B lost all ${countB_t4})"
 
 # B sends transactions to A (acts as new contact request in a way)
 echo -e "\t   B sending BA1 to A..."
@@ -1950,7 +1977,7 @@ done
 
 # Verify A received the transaction (with retry for timing)
 countA_ba=$(check_tx_count_with_retry ${contactA} "BA%-${timestamp4}" 1 10)
-echo -e "\t   A has ${countA_ba} BA test transactions"
+echo -e "\t   After sync:      A has ${countA_ba} BA txs (B sent 1 new)"
 
 if [[ "$countA_ba" -ge 1 ]]; then
     printf "\t   Test 4 (B lost all, sends to A) ${GREEN}PASSED${NC}\n"
@@ -1973,9 +2000,15 @@ timestamp5=$(date +%s%N)
 # Setup
 setup_ab_chain "$timestamp5"
 
+countA_t5=$(get_tx_count ${contactA} "AB%-${timestamp5}")
+countB_t5=$(get_tx_count ${contactB} "AB%-${timestamp5}")
+echo -e "\t   Before deletion: A has ${countA_t5} AB txs, B has ${countB_t5} AB txs"
+
 # Simulate: B loses transactions except contact
 echo -e "\t   Simulating B losing transactions after AB0..."
 delete_transactions_except_contact ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp5}"
+countB_t5_del=$(get_tx_count ${contactB} "AB%-${timestamp5}")
+echo -e "\t   After deletion:  A has ${countA_t5} AB txs, B has ${countB_t5_del} AB txs"
 
 # B sends BA1, BA2, BA3 to A
 echo -e "\t   B sending BA1, BA2, BA3 to A..."
@@ -1989,7 +2022,7 @@ done
 
 # Verify (with retry for timing)
 countA_ba=$(check_tx_count_with_retry ${contactA} "BA%-${timestamp5}" 3 10)
-echo -e "\t   A has ${countA_ba} BA test transactions"
+echo -e "\t   After sync:      A has ${countA_ba} BA txs (B sent 3 new)"
 
 if [[ "$countA_ba" -ge 3 ]]; then
     printf "\t   Test 5 (B sends BA1-3 after loss) ${GREEN}PASSED${NC}\n"
@@ -2012,9 +2045,15 @@ timestamp6=$(date +%s%N)
 # Setup
 setup_ab_chain "$timestamp6"
 
+countA_t6=$(get_tx_count ${contactA} "AB%-${timestamp6}")
+countB_t6=$(get_tx_count ${contactB} "AB%-${timestamp6}")
+echo -e "\t   Before deletion: A has ${countA_t6} AB txs, B has ${countB_t6} AB txs"
+
 # Simulate: B loses AB1 creating gap
 echo -e "\t   Simulating B losing AB1 (creating gap)..."
 delete_specific_transactions ${contactB} "AB1-${timestamp6}"
+countB_t6_del=$(get_tx_count ${contactB} "AB%-${timestamp6}")
+echo -e "\t   After deletion:  A has ${countA_t6} AB txs, B has ${countB_t6_del} AB txs (B lost 1, has gap)"
 
 # B sends to A
 echo -e "\t   B sending BA1, BA2, BA3 to A..."
@@ -2028,7 +2067,7 @@ done
 
 # Verify (with retry for timing)
 countA_ba=$(check_tx_count_with_retry ${contactA} "BA%-${timestamp6}" 3 10)
-echo -e "\t   A has ${countA_ba} BA test transactions"
+echo -e "\t   After sync:      A has ${countA_ba} BA txs (B sent 3 new)"
 
 if [[ "$countA_ba" -ge 3 ]]; then
     printf "\t   Test 6 (B has gap, sends BA1-3) ${GREEN}PASSED${NC}\n"
@@ -2060,8 +2099,12 @@ timestamp7=$(date +%s%N)
 # Setup
 setup_ab_chain "$timestamp7"
 
+countA_t7=$(get_tx_count ${contactA} "AB%-${timestamp7}")
+countB_t7=$(get_tx_count ${contactB} "AB%-${timestamp7}")
+echo -e "\t   Before sends:    A has ${countA_t7} AB txs, B has ${countB_t7} AB txs (full chains)"
+
 # Both send simultaneously
-echo -e "\t   A and B sending simultaneously..."
+echo -e "\t   A and B sending simultaneously (A sends AB4-6, B sends BA1-3)..."
 send_multiple_transactions ${contactA} ${addressB} "$timestamp7" "AB" 4 3 &
 send_multiple_transactions ${contactB} ${addressA} "$timestamp7" "BA" 1 3 &
 wait
@@ -2075,7 +2118,7 @@ done
 # Verify both sides received transactions (with retry for time-dependent operations)
 countA_ba=$(check_tx_count_with_retry ${contactA} "BA%-${timestamp7}" 2 10)
 countB_ab=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp7}" 5 10)
-echo -e "\t   A has ${countA_ba} BA, B has ${countB_ab} AB test transactions"
+echo -e "\t   After sync:      A has ${countA_ba} BA txs, B has ${countB_ab} AB txs"
 
 if [[ "$countA_ba" -ge 2 ]] && [[ "$countB_ab" -ge 5 ]]; then
     printf "\t   Test 7 (simultaneous, full chains) ${GREEN}PASSED${NC}\n"
@@ -2098,12 +2141,18 @@ timestamp8=$(date +%s%N)
 # Setup
 setup_ab_chain "$timestamp8"
 
+countA_t8=$(get_tx_count ${contactA} "AB%-${timestamp8}")
+countB_t8=$(get_tx_count ${contactB} "AB%-${timestamp8}")
+echo -e "\t   Before deletion: A has ${countA_t8} AB txs, B has ${countB_t8} AB txs"
+
 # B loses AB3
 echo -e "\t   Simulating B losing AB3..."
 delete_specific_transactions ${contactB} "AB3-${timestamp8}"
+countB_t8_del=$(get_tx_count ${contactB} "AB%-${timestamp8}")
+echo -e "\t   After deletion:  A has ${countA_t8} AB txs, B has ${countB_t8_del} AB txs (B lost 1)"
 
 # Both send simultaneously
-echo -e "\t   A and B sending simultaneously..."
+echo -e "\t   A and B sending simultaneously (A sends AB4-6, B sends BA1-3)..."
 send_multiple_transactions ${contactA} ${addressB} "$timestamp8" "AB" 4 3 &
 send_multiple_transactions ${contactB} ${addressA} "$timestamp8" "BA" 1 3 &
 wait
@@ -2117,7 +2166,7 @@ done
 # Verify (with retry for time-dependent operations)
 countA_ba=$(check_tx_count_with_retry ${contactA} "BA%-${timestamp8}" 2 10)
 countB_ab=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp8}" 4 10)
-echo -e "\t   A has ${countA_ba} BA, B has ${countB_ab} AB test transactions"
+echo -e "\t   After sync:      A has ${countA_ba} BA txs, B has ${countB_ab} AB txs"
 
 if [[ "$countA_ba" -ge 2 ]] && [[ "$countB_ab" -ge 4 ]]; then
     printf "\t   Test 8 (simultaneous, B missing AB3) ${GREEN}PASSED${NC}\n"
@@ -2140,13 +2189,19 @@ timestamp9=$(date +%s%N)
 # Setup
 setup_ab_chain "$timestamp9"
 
+countA_t9=$(get_tx_count ${contactA} "AB%-${timestamp9}")
+countB_t9=$(get_tx_count ${contactB} "AB%-${timestamp9}")
+echo -e "\t   Before deletion: A has ${countA_t9} AB txs, B has ${countB_t9} AB txs"
+
 # B loses AB1 and AB3 (broken chain - AB2 points to missing prev)
 echo -e "\t   Simulating B losing AB1 and AB3 (broken chain)..."
 delete_specific_transactions ${contactB} "AB1-${timestamp9}"
 delete_specific_transactions ${contactB} "AB3-${timestamp9}"
+countB_t9_del=$(get_tx_count ${contactB} "AB%-${timestamp9}")
+echo -e "\t   After deletion:  A has ${countA_t9} AB txs, B has ${countB_t9_del} AB txs (B lost 2, broken chain)"
 
 # Both send simultaneously
-echo -e "\t   A and B sending simultaneously..."
+echo -e "\t   A and B sending simultaneously (A sends AB4-6, B sends BA1-3)..."
 send_multiple_transactions ${contactA} ${addressB} "$timestamp9" "AB" 4 3 &
 send_multiple_transactions ${contactB} ${addressA} "$timestamp9" "BA" 1 3 &
 wait
@@ -2160,7 +2215,7 @@ done
 # Verify (with retry for time-dependent operations)
 countA_ba=$(check_tx_count_with_retry ${contactA} "BA%-${timestamp9}" 2 10)
 countB_ab=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp9}" 3 10)
-echo -e "\t   A has ${countA_ba} BA, B has ${countB_ab} AB test transactions"
+echo -e "\t   After sync:      A has ${countA_ba} BA txs, B has ${countB_ab} AB txs"
 
 if [[ "$countA_ba" -ge 2 ]] && [[ "$countB_ab" -ge 3 ]]; then
     printf "\t   Test 9 (simultaneous, broken chain) ${GREEN}PASSED${NC}\n"
@@ -2204,9 +2259,15 @@ timestamp10=$(date +%s%N)
 # Setup AB chain
 setup_ab_chain "$timestamp10"
 
+countA_t10=$(get_tx_count ${contactA} "AB%-${timestamp10}")
+countB_t10=$(get_tx_count ${contactB} "AB%-${timestamp10}")
+echo -e "\t   Before deletion: A has ${countA_t10} AB txs, B has ${countB_t10} AB txs"
+
 # B loses all AB transactions
 echo -e "\t   Simulating B losing all AB transactions..."
 delete_all_transactions ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp10}"
+countB_t10_del=$(get_tx_count ${contactB} "AB%-${timestamp10}")
+echo -e "\t   After deletion:  B has ${countB_t10_del} AB txs (lost all ${countB_t10})"
 
 # A sends P2P transaction to C through B
 # First need to establish P2P mapping
@@ -2245,9 +2306,15 @@ timestamp11=$(date +%s%N)
 # Setup
 setup_ab_chain "$timestamp11"
 
+countA_t11=$(get_tx_count ${contactA} "AB%-${timestamp11}")
+countB_t11=$(get_tx_count ${contactB} "AB%-${timestamp11}")
+echo -e "\t   Before deletion: A has ${countA_t11} AB txs, B has ${countB_t11} AB txs"
+
 # B loses transactions except contact
 echo -e "\t   Simulating B losing transactions after AB0..."
 delete_transactions_except_contact ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp11}"
+countB_t11_del=$(get_tx_count ${contactB} "AB%-${timestamp11}")
+echo -e "\t   After deletion:  B has ${countB_t11_del} AB txs (kept contact only)"
 
 # A sends P2P to C
 echo -e "\t   A sending P2P transaction to C through B..."
@@ -2284,9 +2351,15 @@ timestamp12=$(date +%s%N)
 # Setup
 setup_ab_chain "$timestamp12"
 
+countA_t12=$(get_tx_count ${contactA} "AB%-${timestamp12}")
+countB_t12=$(get_tx_count ${contactB} "AB%-${timestamp12}")
+echo -e "\t   Before deletion: A has ${countA_t12} AB txs, B has ${countB_t12} AB txs"
+
 # B loses AB1 (gap)
-echo -e "\t   Simulating B losing AB1 (gap)..."
+echo -e "\t   Simulating B losing AB1 (gap in chain)..."
 delete_specific_transactions ${contactB} "AB1-${timestamp12}"
+countB_t12_del=$(get_tx_count ${contactB} "AB%-${timestamp12}")
+echo -e "\t   After deletion:  B has ${countB_t12_del} AB txs (gap: AB1 missing)"
 
 # A sends P2P to C
 echo -e "\t   A sending P2P transaction to C through B..."
@@ -2333,9 +2406,16 @@ timestamp13=$(date +%s%N)
 setup_ab_chain "$timestamp13"
 setup_cb_chain "$timestamp13"
 
+countA_t13=$(get_tx_count ${contactA} "AB%-${timestamp13}")
+countB_ab_t13=$(get_tx_count ${contactB} "AB%-${timestamp13}")
+countB_cb_t13=$(get_tx_count ${contactB} "CB%-${timestamp13}")
+echo -e "\t   Before deletion: A has ${countA_t13} AB txs, B has ${countB_ab_t13} AB + ${countB_cb_t13} CB txs"
+
 # B loses all AB transactions
 echo -e "\t   Simulating B losing all AB transactions..."
 delete_all_transactions ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp13}"
+countB_ab_t13_del=$(get_tx_count ${contactB} "AB%-${timestamp13}")
+echo -e "\t   After deletion:  B has ${countB_ab_t13_del} AB txs (lost all ${countB_ab_t13}), CB chain intact"
 
 # C sends P2P to A through B
 echo -e "\t   C sending P2P transaction to A through B..."
@@ -2373,9 +2453,16 @@ timestamp14=$(date +%s%N)
 setup_ab_chain "$timestamp14"
 setup_cb_chain "$timestamp14"
 
+countA_t14=$(get_tx_count ${contactA} "AB%-${timestamp14}")
+countB_ab_t14=$(get_tx_count ${contactB} "AB%-${timestamp14}")
+countB_cb_t14=$(get_tx_count ${contactB} "CB%-${timestamp14}")
+echo -e "\t   Before deletion: A has ${countA_t14} AB txs, B has ${countB_ab_t14} AB + ${countB_cb_t14} CB txs"
+
 # B loses AB transactions except contact
 echo -e "\t   Simulating B losing transactions after AB0..."
 delete_transactions_except_contact ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp14}"
+countB_ab_t14_del=$(get_tx_count ${contactB} "AB%-${timestamp14}")
+echo -e "\t   After deletion:  B has ${countB_ab_t14_del} AB txs (kept contact only), CB chain intact"
 
 # C sends P2P to A
 echo -e "\t   C sending P2P transaction to A through B..."
@@ -2413,9 +2500,16 @@ timestamp15=$(date +%s%N)
 setup_ab_chain "$timestamp15"
 setup_cb_chain "$timestamp15"
 
+countA_t15=$(get_tx_count ${contactA} "AB%-${timestamp15}")
+countB_ab_t15=$(get_tx_count ${contactB} "AB%-${timestamp15}")
+countB_cb_t15=$(get_tx_count ${contactB} "CB%-${timestamp15}")
+echo -e "\t   Before deletion: A has ${countA_t15} AB txs, B has ${countB_ab_t15} AB + ${countB_cb_t15} CB txs"
+
 # B loses AB1 (gap)
-echo -e "\t   Simulating B losing AB1 (gap)..."
+echo -e "\t   Simulating B losing AB1 (gap in chain)..."
 delete_specific_transactions ${contactB} "AB1-${timestamp15}"
+countB_ab_t15_del=$(get_tx_count ${contactB} "AB%-${timestamp15}")
+echo -e "\t   After deletion:  B has ${countB_ab_t15_del} AB txs (gap: AB1 missing), CB chain intact"
 
 # C sends P2P to A
 echo -e "\t   C sending P2P transaction to A through B..."
@@ -2462,6 +2556,10 @@ timestamp16=$(date +%s%N)
 setup_ab_chain "$timestamp16"
 setup_cb_chain "$timestamp16"
 
+countB_ab_t16=$(get_tx_count ${contactB} "AB%-${timestamp16}")
+countB_cb_t16=$(get_tx_count ${contactB} "CB%-${timestamp16}")
+echo -e "\t   Before send: B has ${countB_ab_t16} AB + ${countB_cb_t16} CB txs (full chains)"
+
 # A and C send P2P simultaneously through B
 echo -e "\t   A and C sending P2P simultaneously through B..."
 docker exec ${contactA} eiou send ${addressC} 1 USD "P2P-AC-${timestamp16}" 2>&1 > /dev/null &
@@ -2501,9 +2599,15 @@ timestamp17=$(date +%s%N)
 setup_ab_chain "$timestamp17"
 setup_cb_chain "$timestamp17"
 
+countB_ab_t17=$(get_tx_count ${contactB} "AB%-${timestamp17}")
+countB_cb_t17=$(get_tx_count ${contactB} "CB%-${timestamp17}")
+echo -e "\t   Before deletion: B has ${countB_ab_t17} AB + ${countB_cb_t17} CB txs"
+
 # B loses AB3
 echo -e "\t   Simulating B losing AB3..."
 delete_specific_transactions ${contactB} "AB3-${timestamp17}"
+countB_ab_t17_del=$(get_tx_count ${contactB} "AB%-${timestamp17}")
+echo -e "\t   After deletion:  B has ${countB_ab_t17_del} AB txs (lost AB3), CB chain intact"
 
 # Simultaneous P2P
 echo -e "\t   A and C sending P2P simultaneously..."
@@ -2544,10 +2648,16 @@ timestamp18=$(date +%s%N)
 setup_ab_chain "$timestamp18"
 setup_cb_chain "$timestamp18"
 
+countB_ab_t18=$(get_tx_count ${contactB} "AB%-${timestamp18}")
+countB_cb_t18=$(get_tx_count ${contactB} "CB%-${timestamp18}")
+echo -e "\t   Before deletion: B has ${countB_ab_t18} AB + ${countB_cb_t18} CB txs"
+
 # B loses AB1 and AB3
 echo -e "\t   Simulating B losing AB1 and AB3 (broken chain)..."
 delete_specific_transactions ${contactB} "AB1-${timestamp18}"
 delete_specific_transactions ${contactB} "AB3-${timestamp18}"
+countB_ab_t18_del=$(get_tx_count ${contactB} "AB%-${timestamp18}")
+echo -e "\t   After deletion:  B has ${countB_ab_t18_del} AB txs (2 gaps: AB1+AB3 missing), CB chain intact"
 
 # Simultaneous P2P
 echo -e "\t   A and C sending P2P simultaneously..."
@@ -2599,10 +2709,17 @@ timestamp19=$(date +%s%N)
 setup_ab_chain "$timestamp19"
 setup_cb_chain "$timestamp19"
 
+countB_ab_t19=$(get_tx_count ${contactB} "AB%-${timestamp19}")
+countB_cb_t19=$(get_tx_count ${contactB} "CB%-${timestamp19}")
+echo -e "\t   Before deletion: B has ${countB_ab_t19} AB + ${countB_cb_t19} CB txs"
+
 # B loses ALL transactions from both chains
 echo -e "\t   Simulating B losing all AB and CB transactions..."
 delete_all_transactions ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp19}"
 delete_all_transactions ${contactB} "$pubkeyHash_C_fromB" "CB%-${timestamp19}"
+countB_ab_t19_del=$(get_tx_count ${contactB} "AB%-${timestamp19}")
+countB_cb_t19_del=$(get_tx_count ${contactB} "CB%-${timestamp19}")
+echo -e "\t   After deletion:  B has ${countB_ab_t19_del} AB + ${countB_cb_t19_del} CB txs (lost all)"
 
 # A and C send P2P simultaneously
 echo -e "\t   A and C sending P2P simultaneously through B..."
@@ -2643,10 +2760,17 @@ timestamp20=$(date +%s%N)
 setup_ab_chain "$timestamp20"
 setup_cb_chain "$timestamp20"
 
+countB_ab_t20=$(get_tx_count ${contactB} "AB%-${timestamp20}")
+countB_cb_t20=$(get_tx_count ${contactB} "CB%-${timestamp20}")
+echo -e "\t   Before deletion: B has ${countB_ab_t20} AB + ${countB_cb_t20} CB txs"
+
 # B loses all except contact transactions
 echo -e "\t   Simulating B losing all except AB0 and CB0..."
 delete_transactions_except_contact ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp20}"
 delete_transactions_except_contact ${contactB} "$pubkeyHash_C_fromB" "CB%-${timestamp20}"
+countB_ab_t20_del=$(get_tx_count ${contactB} "AB%-${timestamp20}")
+countB_cb_t20_del=$(get_tx_count ${contactB} "CB%-${timestamp20}")
+echo -e "\t   After deletion:  B has ${countB_ab_t20_del} AB + ${countB_cb_t20_del} CB txs (contacts only)"
 
 # A and C send P2P simultaneously
 echo -e "\t   A and C sending P2P simultaneously through B..."
