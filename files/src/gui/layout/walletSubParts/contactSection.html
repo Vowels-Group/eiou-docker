@@ -475,7 +475,14 @@
     <?php foreach ($pendingContacts as $index => $contact): ?>
         <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; border-left: 4px solid #0d6efd;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <strong style="color: #0d6efd;">Contact Request #<?php echo $index + 1; ?></strong>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <strong style="color: #0d6efd;">Contact Request #<?php echo $index + 1; ?></strong>
+                    <?php if (!empty($contact['has_prior_history'])): ?>
+                    <span class="badge badge-prior-contact" title="This contact has prior transaction history — likely a previously known contact">
+                        <i class="fas fa-history"></i> Prior Contact
+                    </span>
+                    <?php endif; ?>
+                </div>
                 <span class="badge badge-pending">Pending</span>
             </div>
 

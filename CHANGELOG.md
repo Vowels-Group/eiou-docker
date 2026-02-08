@@ -27,6 +27,9 @@ The project is currently in **ALPHA** status.
 - GUI notification banner for incoming chain drop proposals at top of page (red alert, similar to pending contacts banner)
 - GUI funds warning on all chain drop UI sections: dropping a transaction removes its transferred funds from both balances
 - Auto-propose chain drop when ping/Check Status detects mutual gaps after sync (ContactStatusService → ChainDropService)
+- Wallet restore contact re-establishment: ping from unknown contact auto-creates pending contact and triggers sync to restore transaction chain (handles seed-only restore without backups)
+- GUI "Prior Contact" badge on pending contact cards when transaction history exists (distinguishes restored contacts from fresh requests)
+- GUI pending contacts notification banner shows count of prior contacts with existing history
 - Balance recalculation after chain drop execution via `SyncTriggerInterface::syncContactBalance()`
 - Chain status (`valid_chain`) updated to valid after successful chain drop execution on both sides
 - Chain drop agreement protocol for resolving mutual transaction chain gaps with two-party consent

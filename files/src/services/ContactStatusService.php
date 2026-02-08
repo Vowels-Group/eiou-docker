@@ -7,6 +7,7 @@ use Eiou\Utils\Logger;
 use Eiou\Contracts\ContactStatusServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Contracts\ChainDropServiceInterface;
+use Eiou\Database\AddressRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\TransactionChainRepository;
@@ -76,6 +77,11 @@ class ContactStatusService implements ContactStatusServiceInterface {
     private ?ChainDropServiceInterface $chainDropService = null;
 
     /**
+     * @var AddressRepository|null Address repository for auto-creating contacts on ping
+     */
+    private ?AddressRepository $addressRepository = null;
+
+    /**
      * Set the sync trigger (accepts interface for loose coupling)
      *
      * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
@@ -122,6 +128,15 @@ class ContactStatusService implements ContactStatusServiceInterface {
      */
     public function setChainDropService(ChainDropServiceInterface $service): void {
         $this->chainDropService = $service;
+    }
+
+    /**
+     * Set the address repository for auto-creating contacts from pings
+     *
+     * @param AddressRepository $repo Address repository
+     */
+    public function setAddressRepository(AddressRepository $repo): void {
+        $this->addressRepository = $repo;
     }
 
     /**
@@ -193,7 +208,55 @@ class ContactStatusService implements ContactStatusServiceInterface {
                 echo $this->contactStatusPayload->buildRejection($request, 'blocked');
                 return;
             }
-            // Contact doesn't exist or is pending
+
+            // Check if contact exists at all (pending or otherwise)
+            if ($this->contactRepository->contactExistsPubkey($senderPubkey)) {
+                // Contact exists but is not accepted (pending) — reject normally
+                echo $this->contactStatusPayload->buildRejection($request, 'unknown_contact');
+                return;
+            }
+
+            // Contact is completely unknown — possible wallet restore scenario
+            // Auto-create as pending contact and trigger sync to restore transaction history
+            if ($this->addressRepository !== null) {
+                $senderAddress = $request['senderAddress'] ?? '';
+                $transportIndexAssociative = $this->transportUtility->determineTransportTypeAssociative($senderAddress);
+
+                if ($transportIndexAssociative !== null) {
+                    try {
+                        $this->contactRepository->addPendingContact($senderPubkey);
+                        $this->addressRepository->insertAddress($senderPubkey, $transportIndexAssociative);
+
+                        Logger::getInstance()->info("Auto-created pending contact from ping (possible wallet restore)", [
+                            'sender_address' => $senderAddress
+                        ]);
+
+                        // Trigger sync to restore transaction chain from the remote side
+                        $this->triggerSync($senderAddress, $senderPubkey);
+
+                        // After sync, get updated chain state
+                        $localPrevTxid = $this->transactionRepository->getPreviousTxid(
+                            $this->currentUser->getPublicKey(),
+                            $senderPubkey
+                        );
+
+                        // Update online status for the newly created contact
+                        $this->updateContactOnlineStatus($senderPubkey);
+
+                        // Respond with pong so remote knows we're alive
+                        // Chain is marked invalid since we just restored from scratch
+                        echo $this->contactStatusPayload->buildResponse($request, $localPrevTxid, false);
+                        return;
+                    } catch (\Exception $e) {
+                        Logger::getInstance()->warning("Failed to auto-create pending contact from ping", [
+                            'sender_address' => $senderAddress,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
+            }
+
+            // Fallback: reject if auto-creation failed or dependencies not available
             echo $this->contactStatusPayload->buildRejection($request, 'unknown_contact');
             return;
         }

@@ -397,6 +397,15 @@ body {
     padding: 0.15rem 0.4rem;
 }
 
+/* Prior contact badge for wallet restore scenarios */
+.badge-prior-contact {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.4rem;
+    border: 1px solid #bee5eb;
+}
+
 /* Clickable chain status badge in modal */
 .chain-badge.chain-clickable {
     cursor: pointer;
