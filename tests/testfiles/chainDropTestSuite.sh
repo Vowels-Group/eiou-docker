@@ -1941,5 +1941,801 @@ fi
 # Cleanup test 8
 clean_chain > /dev/null
 
+# ========================= Helper: Backup cleanup =========================
+
+# Remove all backup files from a container
+# Usage: cleanup_backups <container>
+cleanup_backups() {
+    local container="$1"
+    docker exec ${container} sh -c "rm -f /var/lib/eiou/backups/*.eiou.enc" 2>/dev/null
+}
+
+# Check if a specific txid exists in a container's database
+# Usage: verify_tx_exists <container> <txid>
+# Returns: "1" if exists, "0" if not
+verify_tx_exists() {
+    local container="$1"
+    local txid="$2"
+    docker exec ${container} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->prepare('SELECT COUNT(*) FROM transactions WHERE txid = :txid');
+        \$stmt->execute(['txid' => '${txid}']);
+        echo \$stmt->fetchColumn();
+    " 2>/dev/null
+}
+
+# Count backup files on a container
+# Usage: count_backups <container>
+count_backups() {
+    local container="$1"
+    docker exec ${container} sh -c "ls -1 /var/lib/eiou/backups/*.eiou.enc 2>/dev/null | wc -l" 2>/dev/null
+}
+
+#################### TEST 9: Backup Recovery on Propose (Sender Side) ####################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 9: Backup Recovery on Propose (Sender Side)"
+echo "========================================================================"
+echo -e "\n"
+
+echo -e "[9.0 Setup: Clean backups on both nodes]"
+cleanup_backups ${sender}
+cleanup_backups ${receiver}
+
+timestamp=$(date +%s%N)
+testPattern="chaindrop-t9-%${timestamp}"
+
+# Test 9.1: Send 3 transactions and create backup on sender
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Sending 3 transactions and creating backup on sender"
+
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t9-tx1-${timestamp}" 2>&1 > /dev/null
+sleep 1
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t9-tx2-${timestamp}" 2>&1 > /dev/null
+sleep 1
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t9-tx3-${timestamp}" 2>&1 > /dev/null
+
+wait_for_queue_processed ${sender}
+wait_for_queue_processed ${receiver}
+
+# Retry delivery if needed
+receiverTxCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+if [[ "$receiverTxCount" -lt 3 ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+fi
+
+# Create backup on sender AFTER transactions are confirmed
+backupResult=$(docker exec ${sender} eiou backup create "chaindrop-t9-${timestamp}" 2>&1)
+echo -e "\t   Backup: ${backupResult:0:80}..."
+
+senderTxids=$(get_test_txids ${sender} "${testPattern}")
+IFS=',' read -ra senderTxArr <<< "$senderTxids"
+backupCount=$(count_backups ${sender})
+
+if [[ "${#senderTxArr[@]}" -ge 3 ]] && [[ "$backupCount" -ge 1 ]]; then
+    printf "\t   3 txs sent + backup created ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Setup ${RED}FAILED${NC} (txs=${#senderTxArr[@]}, backups=${backupCount})\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 9.2: Verify chain is initially valid
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying chain is initially valid"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+
+if [[ "$senderIntegrity" == VALID:* ]] && [[ "$receiverIntegrity" == VALID:* ]]; then
+    printf "\t   Initial chain valid ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Initial chain valid ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 9.3: Delete tx2 from BOTH nodes
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Deleting tx2 from both nodes"
+
+tx1="${senderTxArr[0]}"
+tx2="${senderTxArr[1]}"
+tx3="${senderTxArr[2]}"
+echo -e "\t   Deleting txid: ${tx2:0:40}..."
+
+delete_txids ${sender} "$tx2"
+delete_txids ${receiver} "$tx2"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+
+if [[ "$senderIntegrity" == INVALID:1:* ]] && [[ "$receiverIntegrity" == INVALID:1:* ]]; then
+    printf "\t   Chain broken with 1 gap ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain broken detection ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 9.4: Propose chain drop -- should recover tx2 from sender's backup instead
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Proposing chain drop (should recover from backup instead)"
+
+proposeResult=$(docker exec ${sender} eiou chaindrop propose ${receiverAddress} --json 2>&1)
+echo -e "\t   Propose result: ${proposeResult:0:120}..."
+
+# The system should either report recovery or report chain is valid (because it fixed it)
+if echo "$proposeResult" | grep -qi 'recover\|restored\|backup\|no gap'; then
+    printf "\t   Backup recovery triggered ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Backup recovery detection ${RED}FAILED${NC} (may have proposed instead of recovering)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 9.5: Verify sender chain is valid again
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying sender chain repaired from backup"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+
+if [[ "$senderIntegrity" == VALID:* ]]; then
+    printf "\t   Sender chain repaired ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Sender chain repair ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 9.6: Verify tx2 exists in sender's database again
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying tx2 restored in sender database"
+
+tx2Exists=$(verify_tx_exists ${sender} "$tx2")
+echo -e "\t   tx2 exists: ${tx2Exists}"
+
+if [[ "$tx2Exists" == "1" ]]; then
+    printf "\t   tx2 restored from backup ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   tx2 restore ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 9.7: Verify chain links: tx3.previous_txid = tx2
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying chain links preserved (tx3 -> tx2 -> tx1)"
+
+tx3Prev=$(get_previous_txid ${sender} "$tx3")
+tx2Prev=$(get_previous_txid ${sender} "$tx2")
+echo -e "\t   tx3.previous_txid: ${tx3Prev:0:40}... (expect tx2)"
+echo -e "\t   tx2.previous_txid: ${tx2Prev:0:40}... (expect tx1)"
+
+if [[ "$tx3Prev" == "$tx2" ]] && [[ "$tx2Prev" == "$tx1" ]]; then
+    printf "\t   Chain links correct ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain links ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 9.8: No chain drop proposal should have been created on receiver
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying no proposal was sent to receiver"
+
+wait_for_queue_processed ${sender} 2
+wait_for_queue_processed ${receiver} 2
+
+proposalId=$(get_pending_proposal ${receiver})
+echo -e "\t   Receiver pending proposals: ${proposalId}"
+
+if [[ "$proposalId" == "NONE" ]] || [[ -z "$proposalId" ]]; then
+    printf "\t   No proposal created (backup recovery worked) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Unexpected proposal created ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Cleanup test 9
+clean_chain > /dev/null
+cleanup_backups ${sender}
+cleanup_backups ${receiver}
+
+#################### TEST 10: Backup Recovery on Propose (Receiver Side) ####################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 10: Backup Recovery on Propose (Receiver Side)"
+echo "========================================================================"
+echo -e "\n"
+
+timestamp=$(date +%s%N)
+testPattern="chaindrop-t10-%${timestamp}"
+
+# Test 10.1: Send 3 transactions and create backup on receiver
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Sending 3 transactions and creating backup on receiver"
+
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t10-tx1-${timestamp}" 2>&1 > /dev/null
+sleep 1
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t10-tx2-${timestamp}" 2>&1 > /dev/null
+sleep 1
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t10-tx3-${timestamp}" 2>&1 > /dev/null
+
+wait_for_queue_processed ${sender}
+wait_for_queue_processed ${receiver}
+
+receiverTxCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+if [[ "$receiverTxCount" -lt 3 ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+fi
+
+# Create backup on RECEIVER
+backupResult=$(docker exec ${receiver} eiou backup create "chaindrop-t10-${timestamp}" 2>&1)
+
+senderTxids=$(get_test_txids ${sender} "${testPattern}")
+IFS=',' read -ra senderTxArr <<< "$senderTxids"
+backupCount=$(count_backups ${receiver})
+
+if [[ "${#senderTxArr[@]}" -ge 3 ]] && [[ "$backupCount" -ge 1 ]]; then
+    printf "\t   3 txs sent + receiver backup created ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Setup ${RED}FAILED${NC} (txs=${#senderTxArr[@]}, backups=${backupCount})\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 10.2: Delete tx2 from both nodes
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Deleting tx2 from both nodes"
+
+tx1="${senderTxArr[0]}"
+tx2="${senderTxArr[1]}"
+tx3="${senderTxArr[2]}"
+
+delete_txids ${sender} "$tx2"
+delete_txids ${receiver} "$tx2"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+
+if [[ "$senderIntegrity" == INVALID:1:* ]] && [[ "$receiverIntegrity" == INVALID:1:* ]]; then
+    printf "\t   Chain broken ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain broken detection ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 10.3: Propose chain drop from RECEIVER -- should recover from receiver's backup
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Proposing chain drop from receiver (should recover from backup)"
+
+proposeResult=$(docker exec ${receiver} eiou chaindrop propose ${senderAddress} --json 2>&1)
+echo -e "\t   Propose result: ${proposeResult:0:120}..."
+
+if echo "$proposeResult" | grep -qi 'recover\|restored\|backup\|no gap'; then
+    printf "\t   Receiver backup recovery triggered ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Receiver backup recovery ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 10.4: Verify receiver chain is valid
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying receiver chain repaired from backup"
+
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
+
+if [[ "$receiverIntegrity" == VALID:* ]]; then
+    printf "\t   Receiver chain repaired ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Receiver chain repair ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 10.5: Verify tx2 exists in receiver's database
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying tx2 restored in receiver database"
+
+tx2Exists=$(verify_tx_exists ${receiver} "$tx2")
+
+if [[ "$tx2Exists" == "1" ]]; then
+    printf "\t   tx2 restored from receiver backup ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   tx2 restore ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 10.6: Verify chain links on receiver
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying receiver chain links preserved"
+
+tx3Prev=$(get_previous_txid ${receiver} "$tx3")
+tx2Prev=$(get_previous_txid ${receiver} "$tx2")
+
+if [[ "$tx3Prev" == "$tx2" ]] && [[ "$tx2Prev" == "$tx1" ]]; then
+    printf "\t   Receiver chain links correct ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Receiver chain links ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Cleanup test 10
+clean_chain > /dev/null
+cleanup_backups ${sender}
+cleanup_backups ${receiver}
+
+#################### TEST 11: Backup Recovery During Sync ####################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 11: Backup Recovery During Sync"
+echo "========================================================================"
+echo -e "\n"
+
+timestamp=$(date +%s%N)
+testPattern="chaindrop-t11-%${timestamp}"
+
+# Test 11.1: Send 3 transactions, backup on sender
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Sending 3 transactions, creating backup on sender"
+
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t11-tx1-${timestamp}" 2>&1 > /dev/null
+sleep 1
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t11-tx2-${timestamp}" 2>&1 > /dev/null
+sleep 1
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t11-tx3-${timestamp}" 2>&1 > /dev/null
+
+wait_for_queue_processed ${sender}
+wait_for_queue_processed ${receiver}
+
+receiverTxCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+if [[ "$receiverTxCount" -lt 3 ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+fi
+
+backupResult=$(docker exec ${sender} eiou backup create "chaindrop-t11-${timestamp}" 2>&1)
+
+senderTxids=$(get_test_txids ${sender} "${testPattern}")
+IFS=',' read -ra senderTxArr <<< "$senderTxids"
+
+if [[ "${#senderTxArr[@]}" -ge 3 ]]; then
+    printf "\t   Setup complete ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Setup ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 11.2: Delete tx2 from both nodes
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Deleting tx2 from both nodes"
+
+tx1="${senderTxArr[0]}"
+tx2="${senderTxArr[1]}"
+tx3="${senderTxArr[2]}"
+
+delete_txids ${sender} "$tx2"
+delete_txids ${receiver} "$tx2"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+
+if [[ "$senderIntegrity" == INVALID:1:* ]]; then
+    printf "\t   Chain broken ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain broken detection ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 11.3: Run sync on sender -- gap detected, backup recovery should trigger
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Running sync on sender (should detect gap + attempt backup recovery)"
+
+# Sync will detect the gap. Since both sides miss the same tx, normal sync fails.
+# The send path triggers chain drop auto-proposal with backup check. For sync itself,
+# the gap is reported. To trigger backup recovery, we try a send which calls
+# verifySenderChainAndSync -> proposeChainDrop (which checks backup first).
+sendResult=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t11-trigger-${timestamp}" --json 2>&1)
+echo -e "\t   Send result: ${sendResult:0:120}..."
+
+wait_for_queue_processed ${sender} 3
+wait_for_queue_processed ${receiver} 3
+
+# After the send, the system should have recovered tx2 from backup
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+echo -e "\t   Sender chain after trigger: $(format_chain_status ${senderIntegrity})"
+
+if [[ "$senderIntegrity" == VALID:* ]]; then
+    printf "\t   Backup recovery via send trigger ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Backup recovery via send ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 11.4: Verify tx2 was restored
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying tx2 restored in sender database"
+
+tx2Exists=$(verify_tx_exists ${sender} "$tx2")
+
+if [[ "$tx2Exists" == "1" ]]; then
+    printf "\t   tx2 restored during sync/send path ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   tx2 restore ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 11.5: Verify full tx count (3 original + possibly 1 new send)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying all 3 original transactions present"
+
+senderCount=$(docker exec ${sender} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+echo -e "\t   Sender test tx count: ${senderCount} (expect 3)"
+
+if [[ "$senderCount" -ge 3 ]]; then
+    printf "\t   All original transactions present ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Transaction count ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Cleanup test 11
+clean_chain > /dev/null
+cleanup_backups ${sender}
+cleanup_backups ${receiver}
+
+#################### TEST 12: Backup Recovery During Ping ####################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 12: Backup Recovery During Ping"
+echo "========================================================================"
+echo -e "\n"
+
+timestamp=$(date +%s%N)
+testPattern="chaindrop-t12-%${timestamp}"
+
+# Test 12.1: Send 3 transactions, backup on sender
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Sending 3 transactions, creating backup on sender"
+
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t12-tx1-${timestamp}" 2>&1 > /dev/null
+sleep 1
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t12-tx2-${timestamp}" 2>&1 > /dev/null
+sleep 1
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t12-tx3-${timestamp}" 2>&1 > /dev/null
+
+wait_for_queue_processed ${sender}
+wait_for_queue_processed ${receiver}
+
+receiverTxCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+if [[ "$receiverTxCount" -lt 3 ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+fi
+
+backupResult=$(docker exec ${sender} eiou backup create "chaindrop-t12-${timestamp}" 2>&1)
+
+senderTxids=$(get_test_txids ${sender} "${testPattern}")
+IFS=',' read -ra senderTxArr <<< "$senderTxids"
+
+if [[ "${#senderTxArr[@]}" -ge 3 ]]; then
+    printf "\t   Setup complete ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Setup ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 12.2: Delete tx2 from both nodes
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Deleting tx2 from both nodes"
+
+tx1="${senderTxArr[0]}"
+tx2="${senderTxArr[1]}"
+tx3="${senderTxArr[2]}"
+
+delete_txids ${sender} "$tx2"
+delete_txids ${receiver} "$tx2"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+
+if [[ "$senderIntegrity" == INVALID:1:* ]]; then
+    printf "\t   Chain broken ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain broken detection ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 12.3: Trigger backup recovery via send (which checks chain + backup before proposing)
+# Ping detects gaps but doesn't auto-propose chain drops. Send does.
+# After send triggers backup recovery, then ping should report chain valid.
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Triggering backup recovery via send, then verifying with ping"
+
+sendResult=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t12-trigger-${timestamp}" --json 2>&1)
+wait_for_queue_processed ${sender} 3
+
+# Now ping should show chain valid (backup recovery should have restored tx2)
+pingResult=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou ping ${receiverAddress} --json 2>&1)
+echo -e "\t   Ping result: ${pingResult:0:120}..."
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+
+if [[ "$senderIntegrity" == VALID:* ]]; then
+    printf "\t   Chain valid after backup recovery + ping ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Ping after backup recovery ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 12.4: Verify tx2 restored
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying tx2 exists after backup recovery"
+
+tx2Exists=$(verify_tx_exists ${sender} "$tx2")
+
+if [[ "$tx2Exists" == "1" ]]; then
+    printf "\t   tx2 present after ping path ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   tx2 presence ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Cleanup test 12
+clean_chain > /dev/null
+cleanup_backups ${sender}
+cleanup_backups ${receiver}
+
+#################### TEST 13: No Backup -- Normal Chain Drop Fallback ####################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 13: No Backup Available -- Normal Chain Drop Fallback"
+echo "========================================================================"
+echo -e "\n"
+
+timestamp=$(date +%s%N)
+testPattern="chaindrop-t13-%${timestamp}"
+
+# Ensure no backups exist
+cleanup_backups ${sender}
+cleanup_backups ${receiver}
+
+# Test 13.1: Send 3 transactions (no backup)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Sending 3 transactions (NO backup created)"
+
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t13-tx1-${timestamp}" 2>&1 > /dev/null
+sleep 1
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 2 USD "chaindrop-t13-tx2-${timestamp}" 2>&1 > /dev/null
+sleep 1
+docker exec -e EIOU_TEST_MODE=true ${sender} eiou send ${receiverAddress} 3 USD "chaindrop-t13-tx3-${timestamp}" 2>&1 > /dev/null
+
+wait_for_queue_processed ${sender}
+wait_for_queue_processed ${receiver}
+
+receiverTxCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+if [[ "$receiverTxCount" -lt 3 ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+fi
+
+senderTxids=$(get_test_txids ${sender} "${testPattern}")
+IFS=',' read -ra senderTxArr <<< "$senderTxids"
+backupCount=$(count_backups ${sender})
+
+if [[ "${#senderTxArr[@]}" -ge 3 ]] && [[ "$backupCount" == "0" ]]; then
+    printf "\t   3 txs sent, no backups ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Setup ${RED}FAILED${NC} (txs=${#senderTxArr[@]}, backups=${backupCount})\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 13.2: Delete tx2 from both nodes
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Deleting tx2 from both nodes"
+
+tx1="${senderTxArr[0]}"
+tx2="${senderTxArr[1]}"
+tx3="${senderTxArr[2]}"
+
+delete_txids ${sender} "$tx2"
+delete_txids ${receiver} "$tx2"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+
+if [[ "$senderIntegrity" == INVALID:1:* ]]; then
+    printf "\t   Chain broken ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain broken detection ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 13.3: Propose chain drop -- no backup, should fall through to normal proposal
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Proposing chain drop (no backup, should propose normally)"
+
+proposeResult=$(docker exec ${sender} eiou chaindrop propose ${receiverAddress} 2>&1)
+echo -e "\t   Propose result: ${proposeResult:0:80}..."
+
+if echo "$proposeResult" | grep -qi 'success\|proposal'; then
+    printf "\t   Normal chain drop proposed ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain drop propose ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 13.4: Receiver accepts proposal
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Receiver accepting chain drop proposal"
+
+wait_for_queue_processed ${sender} 3
+wait_for_queue_processed ${receiver} 3
+
+proposalId=$(get_pending_proposal ${receiver})
+if [[ "$proposalId" == "NONE" ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+    proposalId=$(get_pending_proposal ${receiver})
+fi
+
+if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
+    acceptResult=$(docker exec ${receiver} eiou chaindrop accept ${proposalId} 2>&1)
+    echo -e "\t   Accept result: ${acceptResult:0:80}..."
+
+    if echo "$acceptResult" | grep -qi 'success\|accepted'; then
+        printf "\t   Proposal accepted (no backup fallback) ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   Proposal accept ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+else
+    printf "\t   Proposal delivery ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 13.5: Verify chain is valid after normal chain drop
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying chain repaired via normal chain drop"
+
+wait_for_queue_processed ${sender} 3
+wait_for_queue_processed ${receiver} 3
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+
+echo -e "\t   Sender: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver: $(format_chain_status ${receiverIntegrity})"
+
+if [[ "$senderIntegrity" == VALID:* ]] && [[ "$receiverIntegrity" == VALID:* ]]; then
+    printf "\t   Chain repaired via chain drop ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Chain repair ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 13.6: Verify chain relink: tx3.previous_txid = tx1 (tx2 was DROPPED, not recovered)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying tx2 was dropped (not recovered) and chain relinked"
+
+tx3Prev=$(get_previous_txid ${sender} "$tx3")
+tx2Exists=$(verify_tx_exists ${sender} "$tx2")
+
+echo -e "\t   tx3.previous_txid: ${tx3Prev:0:40}... (expect tx1)"
+echo -e "\t   tx2 exists: ${tx2Exists} (expect 0 -- dropped)"
+
+if [[ "$tx3Prev" == "$tx1" ]] && [[ "$tx2Exists" == "0" ]]; then
+    printf "\t   tx2 dropped, chain relinked ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Drop verification ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 13.7: Transaction count is 2 on both (tx2 permanently dropped)
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Verifying transaction count is 2 (tx2 dropped)"
+
+senderCount=$(docker exec ${sender} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+receiverCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+echo -e "\t   Sender: ${senderCount}, Receiver: ${receiverCount} (expect 2)"
+
+if [[ "$senderCount" == "2" ]] && [[ "$receiverCount" == "2" ]]; then
+    printf "\t   Transaction count correct ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Transaction count ${RED}FAILED${NC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Cleanup test 13
+clean_chain > /dev/null
+cleanup_backups ${sender}
+cleanup_backups ${receiver}
+
 # ========================= Summary =========================
 succesrate "${totaltests}" "${passed}" "${failure}" "'chain drop test suite'"

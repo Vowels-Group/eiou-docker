@@ -53,4 +53,15 @@ class ChainDropEvents
      *   - new_previous_txid: string|null - The new previous_txid value
      */
     public const CHAIN_DROP_EXECUTED = 'chain_drop.executed';
+
+    /**
+     * Dispatched when a missing transaction is recovered from a database backup
+     * instead of requiring a chain drop
+     *
+     * Event data:
+     *   - missing_txid: string - The recovered transaction ID
+     *   - contact_pubkey_hash: string - Contact's public key hash
+     *   - backup_filename: string - The backup file that contained the transaction
+     */
+    public const TRANSACTION_RECOVERED_FROM_BACKUP = 'chain_drop.transaction_recovered_from_backup';
 }

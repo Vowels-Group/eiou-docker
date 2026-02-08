@@ -5,6 +5,7 @@ namespace Eiou\Services;
 
 use Eiou\Utils\Logger;
 use Eiou\Contracts\ChainDropServiceInterface;
+use Eiou\Contracts\BackupServiceInterface;
 use Eiou\Database\ChainDropProposalRepository;
 use Eiou\Database\TransactionChainRepository;
 use Eiou\Database\TransactionRepository;
@@ -47,6 +48,17 @@ class ChainDropService implements ChainDropServiceInterface
     private UserContext $currentUser;
     private MessagePayload $messagePayload;
     private TransactionPayload $transactionPayload;
+    private ?BackupServiceInterface $backupService = null;
+
+    /**
+     * Set the backup service for transaction recovery from backups
+     *
+     * @param BackupServiceInterface $backupService Backup service
+     */
+    public function setBackupService(BackupServiceInterface $backupService): void
+    {
+        $this->backupService = $backupService;
+    }
 
     /**
      * Constructor
@@ -120,6 +132,19 @@ class ChainDropService implements ChainDropServiceInterface
             // Pick the first gap
             $missingTxid = $gaps[0];
             $brokenTxid = $brokenTxids[0];
+
+            // Attempt to recover the missing transaction from database backups
+            // before resorting to a chain drop
+            if ($this->backupService !== null) {
+                $recoveryResult = $this->attemptBackupRecovery($missingTxid, $contactPubkeyHash, $contactPubkey);
+                if ($recoveryResult['success']) {
+                    $result['success'] = true;
+                    $result['recovered_from_backup'] = true;
+                    $result['missing_txid'] = $missingTxid;
+                    $result['backup_filename'] = $recoveryResult['filename'] ?? null;
+                    return $result;
+                }
+            }
 
             // Check for existing active proposal for this gap
             $existing = $this->proposalRepository->getActiveProposalForGap($contactPubkeyHash, $missingTxid);
@@ -254,6 +279,28 @@ class ChainDropService implements ChainDropServiceInterface
                     $this->transportUtility->send($senderAddress, $rejectPayload);
                 }
                 return;
+            }
+
+            // Attempt to recover the missing transaction from database backups
+            if ($this->backupService !== null) {
+                $recoveryResult = $this->attemptBackupRecovery($missingTxid, $contactPubkeyHash, $senderPubkey);
+                if ($recoveryResult['success']) {
+                    // Chain repaired from backup — reject the proposal
+                    Logger::getInstance()->info("Transaction recovered from backup, rejecting chain drop proposal", [
+                        'proposal_id' => $proposalId,
+                        'missing_txid' => substr($missingTxid, 0, 16) . '...',
+                        'backup' => $recoveryResult['filename'] ?? 'unknown'
+                    ]);
+                    if ($senderAddress) {
+                        $rejectPayload = $this->messagePayload->buildChainDropRejection(
+                            $senderAddress,
+                            $proposalId,
+                            'recovered_from_backup'
+                        );
+                        $this->transportUtility->send($senderAddress, $rejectPayload);
+                    }
+                    return;
+                }
             }
 
             // Determine our view of the previous_txid_before_gap
@@ -738,6 +785,76 @@ class ChainDropService implements ChainDropServiceInterface
         $output->info("When a chain gap exists, transactions with that contact are blocked.");
         $output->info("Rejecting a proposal leaves the gap unresolved. A new proposal must");
         $output->info("be accepted to restore the ability to transact.");
+    }
+
+    // =========================================================================
+    // BACKUP RECOVERY
+    // =========================================================================
+
+    /**
+     * Attempt to recover a missing transaction from database backups
+     *
+     * Searches all available backups (newest first) for the missing transaction.
+     * If found, restores just that single transaction and verifies the chain is repaired.
+     *
+     * @param string $missingTxid The txid of the missing transaction
+     * @param string $contactPubkeyHash The contact's public key hash
+     * @param string $contactPubkey The contact's public key
+     * @return array Result with keys: success (bool), filename (string|null)
+     */
+    private function attemptBackupRecovery(string $missingTxid, string $contactPubkeyHash, string $contactPubkey): array
+    {
+        $result = ['success' => false, 'filename' => null];
+
+        try {
+            Logger::getInstance()->info("Attempting to recover missing transaction from backups", [
+                'missing_txid' => substr($missingTxid, 0, 16) . '...'
+            ]);
+
+            $restoreResult = $this->backupService->restoreTransactionFromBackup($missingTxid);
+
+            if (!$restoreResult['success']) {
+                Logger::getInstance()->info("Transaction not found in any backup", [
+                    'missing_txid' => substr($missingTxid, 0, 16) . '...',
+                    'error' => $restoreResult['error'] ?? 'unknown'
+                ]);
+                return $result;
+            }
+
+            // Verify the chain is now valid after restoring the transaction
+            $recheckStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                $this->currentUser->getPublicKey(),
+                $contactPubkey
+            );
+
+            if ($recheckStatus['valid']) {
+                Logger::getInstance()->info("Chain repaired by restoring transaction from backup", [
+                    'missing_txid' => substr($missingTxid, 0, 16) . '...',
+                    'backup' => $restoreResult['filename']
+                ]);
+
+                EventDispatcher::getInstance()->dispatch(ChainDropEvents::TRANSACTION_RECOVERED_FROM_BACKUP, [
+                    'missing_txid' => $missingTxid,
+                    'contact_pubkey_hash' => $contactPubkeyHash,
+                    'backup_filename' => $restoreResult['filename']
+                ]);
+
+                $result['success'] = true;
+                $result['filename'] = $restoreResult['filename'];
+            } else {
+                Logger::getInstance()->info("Transaction restored from backup but chain still has gaps", [
+                    'missing_txid' => substr($missingTxid, 0, 16) . '...',
+                    'remaining_gaps' => count($recheckStatus['gaps'] ?? [])
+                ]);
+            }
+        } catch (Exception $e) {
+            Logger::getInstance()->warning("Backup recovery attempt failed", [
+                'missing_txid' => substr($missingTxid, 0, 16) . '...',
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $result;
     }
 
     // =========================================================================

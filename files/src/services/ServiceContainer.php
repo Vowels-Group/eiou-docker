@@ -1346,6 +1346,12 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ChainOperationsService']->setSyncService($this->services['SyncService']);
         }
 
+        // Wire ChainDropService -> BackupService
+        // Reason: ChainDropService checks backups for missing transactions before proposing a chain drop
+        if (isset($this->services['ChainDropService'])) {
+            $this->services['ChainDropService']->setBackupService($this->getBackupService());
+        }
+
         // Wire CleanupService -> ChainDropService
         // Reason: CleanupService needs to expire stale chain drop proposals
         if (isset($this->services['CleanupService']) && isset($this->services['ChainDropService'])) {
