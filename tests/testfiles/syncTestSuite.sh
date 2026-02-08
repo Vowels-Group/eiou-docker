@@ -1799,7 +1799,7 @@ echo -e "\t   Before deletion: A has ${countA_t2} AB txs, B has ${countB_t2} AB 
 echo -e "\t   Simulating B losing transactions after AB0..."
 delete_transactions_except_contact ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp2}"
 countB_after_delete=$(get_tx_count ${contactB} "AB%-${timestamp2}")
-echo -e "\t   After deletion:  B has ${countB_after_delete} AB txs (lost all except contact)"
+echo -e "\t   After deletion:  B has ${countB_after_delete} AB send txs (AB0 contact tx kept, not counted)"
 
 # A sends new transactions
 echo -e "\t   A sending AB4, AB5, AB6 to B..."
@@ -2013,7 +2013,7 @@ echo -e "\t   Before deletion: A has ${countA_t5} AB txs, B has ${countB_t5} AB 
 echo -e "\t   Simulating B losing transactions after AB0..."
 delete_transactions_except_contact ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp5}"
 countB_t5_del=$(get_tx_count ${contactB} "AB%-${timestamp5}")
-echo -e "\t   After deletion:  B has ${countB_t5_del} AB txs (lost all except contact)"
+echo -e "\t   After deletion:  B has ${countB_t5_del} AB send txs (AB0 contact tx kept, not counted)"
 
 # B sends BA1, BA2, BA3 to A
 echo -e "\t   B sending BA1, BA2, BA3 to A..."
@@ -2344,7 +2344,7 @@ echo -e "\t   Before deletion: A has ${countA_t11} AB txs, B has ${countB_t11} A
 echo -e "\t   Simulating B losing transactions after AB0..."
 delete_transactions_except_contact ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp11}"
 countB_t11_del=$(get_tx_count ${contactB} "AB%-${timestamp11}")
-echo -e "\t   After deletion:  B has ${countB_t11_del} AB txs (kept contact only)"
+echo -e "\t   After deletion:  B has ${countB_t11_del} AB send txs (AB0 contact tx kept, not counted)"
 
 # A sends P2P to C
 echo -e "\t   A sending P2P transaction to C through B..."
@@ -2492,7 +2492,7 @@ echo -e "\t   Before deletion: A has ${countA_t14} AB txs, B has ${countB_ab_t14
 echo -e "\t   Simulating B losing transactions after AB0..."
 delete_transactions_except_contact ${contactB} "$pubkeyHash_A_fromB" "AB%-${timestamp14}"
 countB_ab_t14_del=$(get_tx_count ${contactB} "AB%-${timestamp14}")
-echo -e "\t   After deletion:  B has ${countB_ab_t14_del} AB txs (kept contact only), CB chain intact"
+echo -e "\t   After deletion:  B has ${countB_ab_t14_del} AB send txs (AB0 contact tx kept, not counted), CB chain intact"
 
 # C sends P2P to A
 echo -e "\t   C sending P2P transaction to A through B..."
