@@ -122,23 +122,23 @@ Nodes provide three interfaces for interaction:
 ### Background Processors
 
 ```
-                    +---------------------------+
-                    |       startup.sh          |
-                    |    (Container Entry)      |
-                    +-------------+-------------+
-                                  |
-          +-----------------------+------------------------+
-          |             |                |                  |
-+---------v----+ +------v-------+ +------v-------+ +-------v--------+
-| Transaction  | |     P2P      | |   Cleanup    | | ContactStatus  |
-|  Processor   | |  Processor   | |  Processor   | |   Processor    |
-| (100ms-5s)   | | (100ms-5s)   | | (1s-30s)     | |  (5 min cycle) |
-+--------------+ +--------------+ +--------------+ +----------------+
-                                  |
-                    +-------------v-------------+
-                    |        Watchdog           |
-                    |  (Process Monitor 30s)    |
-                    +---------------------------+
+                       +---------------------------+
+                       |       startup.sh          |
+                       |    (Container Entry)      |
+                       +-------------+-------------+
+                                     |
+       +------------+----------------+----------------+-------------+
+       |            |                |                |             |
++------v-------+ +--v-----------+ +--v-----------+ +--v------------v--+
+| Transaction  | |     P2P      | |   Cleanup    | |  ContactStatus   |
+|  Processor   | |  Processor   | |  Processor   | |    Processor     |
+| (100ms-5s)   | | (100ms-5s)   | | (1s-30s)     | |  (5 min cycle)   |
++--------------+ +--------------+ +--------------+ +------------------+
+                                     |
+                       +-------------v-------------+
+                       |        Watchdog           |
+                       |  (Process Monitor 30s)    |
+                       +---------------------------+
 ```
 
 ---
@@ -592,33 +592,31 @@ class TransactionService
 ### Dependency Graph
 
 ```
-                         +------------------+
-                         | ServiceContainer |
-                         +--------+---------+
-                                  |
-     +-------------+--------------+--------------+-------------+
-     |             |              |              |             |
-+----v----+  +-----v------+ +----v-----+  +-----v------+ +----v-----+
-|  Sync   |  |Transaction |  | Contact |  |  Message  | | Cleanup  |
-| Service |  |  Service   |  | Service |  |  Service  | | Service  |
-+----+----+  +-----+------+ +----+-----+  +-----+-----+ +----+-----+
-     |             |              |              |             |
-     |    +--------+--------+    |              |             |
-     |    |        |        |    |              |             |
-+----v--+ v   +----v---+ +--v---v--+   +-------v------+ +----v------+
-| Held  | |   |  Send  | | Chain  |   | ChainDrop    | | Backup    |
-|  Tx   | |   |  Op    | | Verif  |   |   Service    | | Service   |
-|Service| |   |Service | |Service |   +--------------+ +-----------+
-+-------+ |   +----+---+ +--------+         ^               ^
-          |        |                         |               |
-     +----v----+   +--- ChainDropService     +--- Setter     |
-     | Balance |   +--- SyncTriggerProxy     +--- Setter ----+
-     | Service |
-     +---------+
+                        +------------------+
+                        | ServiceContainer |
+                        +--------+---------+
+                                 |
+   +-----------+-----------+-----+------+-----------+----------+
+   |           |           |            |           |          |
++--v---+  +----v-----+  +-v--------+  +v--------+  +v------+  +v-------+
+| Sync |  |  Trans-  |  | Contact  |  |Message |  |Cleanup|  |ChainDrp|
+| Svc  |  |  action  |  | Service  |  |Service |  |Service|  |Service |
++--+---+  +----+-----+  +----+-----+  +---+----+  +---+---+  +---+----+
+   |           |              |            |           |          |
+   |    +------+------+      |            |           |          |
+   |    |      |      |      |            |           |          |
++--v-+  v  +---v--+ +-v-+   |            |         +-v------+ +-v------+
+|Held|  |  | Send | |Chn|   |            |         |Backup  | |ChainOps|
+| Tx |  |  |  Op  | |Vrf|   |            |         |Service | |Service |
++----+  |  +------+ +---+   |            |         +--------+ +--------+
+     +--v---+
+     |Balnce|
+     |  Svc |
+     +------+
 
-Legend:
-  -----> Constructor injection
-  ··· > Setter injection via SyncTriggerInterface proxy (loose coupling)
+Constructor dependencies flow top-to-bottom.
+Setter-injected circular dependencies use SyncTriggerInterface proxy.
+BackupService is setter-injected into SyncService and ChainDropService.
 ```
 
 ---
@@ -773,14 +771,14 @@ Four background processors handle asynchronous message processing. Each extends
                     | + handleShutdownSignal()  |
                     | # processMessages()       |  <- Abstract
                     | # getProcessorName()      |  <- Abstract
-                    +---------------------------+
-                              ^
-          +-------------------+-------------------+
-          |         |                   |         |
-+---------+-+ +-----+-------+ +---------+-+ +-----+-------+
-|Transaction| |     P2P     | |  Cleanup  | |ContactStatus|
-| Processor | |  Processor  | | Processor | |  Processor  |
-+-----------+ +-------------+ +-----------+ +-------------+
+                    +-------------+-------------+
+                                  ^
+          +-----------+-----------+-----------+-----------+
+          |           |                       |           |
++---------+--+ +------+------+ +-------------+--+ +------+------+
+| Transaction | |     P2P    | |    Cleanup     | |ContactStatus|
+|  Processor  | |  Processor | |   Processor    | |  Processor  |
++-------------+ +------------+ +----------------+ +-------------+
 ```
 
 ### TransactionMessageProcessor
@@ -1222,22 +1220,22 @@ attempted automatically. The transaction only proceeds once the chain is valid:
 
 ```
 sendEiou()
-  ├── Validate inputs (address, amount, currency, etc.)
-  ├── verifySenderChainAndSync()
-  │     ├── verifyChainIntegrity() → if valid, return success
-  │     ├── syncTransactionChain()
-  │     │     ├── Local backup recovery (self-repair)
-  │     │     ├── Sync with contact (+ missingTxids for remote backup recovery)
-  │     │     └── Post-sync chain integrity check
-  │     ├── Re-verify chain after sync
-  │     └── Return success if chain repaired, failure if gaps remain
-  │
-  ├── If chain verification failed:
-  │     ├── Auto-propose chain drop (if sync completed but gaps remain)
-  │     └── Return error to user (transaction NOT created)
-  │
-  ├── If chain valid → prepareStandardTransactionData() (tx created here)
-  └── Send transaction to contact
+  +-- Validate inputs (address, amount, currency, etc.)
+  +-- verifySenderChainAndSync()
+  |     +-- verifyChainIntegrity() -> if valid, return success
+  |     +-- syncTransactionChain()
+  |     |     +-- Local backup recovery (self-repair)
+  |     |     +-- Sync with contact (+ missingTxids for remote backup recovery)
+  |     |     +-- Post-sync chain integrity check
+  |     +-- Re-verify chain after sync
+  |     +-- Return success if chain repaired, failure if gaps remain
+  |
+  +-- If chain verification failed:
+  |     +-- Auto-propose chain drop (if sync completed but gaps remain)
+  |     +-- Return error to user (transaction NOT created)
+  |
+  +-- If chain valid -> prepareStandardTransactionData() (tx created here)
+  +-- Send transaction to contact
 ```
 
 The transaction is never created or held during chain repair — if backup recovery
@@ -1271,31 +1269,31 @@ through validation, chain integrity checks, storage, and acceptance response:
 
 ```
 HTTP Request (from sender)
-  │
-  ├── index.html (Entry Point)
-  │     ├── Verify envelope signature (secp256k1)
-  │     ├── Validate required fields (senderPublicKey, senderAddress)
-  │     ├── Validate public key and address format
-  │     └── Route by type === "send"
-  │
-  ├── TransactionValidationService.checkTransactionPossible()
-  │     ├── Is sender blocked? → reject with 'contact_blocked'
-  │     ├── checkPreviousTxid()
-  │     │     ├── Get expected: getPreviousTxid(senderPubkey, receiverPubkey)
-  │     │     ├── Compare with request['previousTxid']
-  │     │     └── Mismatch? → Proactive sync with sender
-  │     │           ├── syncTransactionChain() (with backup recovery)
-  │     │           └── Retry previousTxid check after sync
-  │     ├── checkAvailableFundsTransaction()
-  │     │     └── (balance + credit_limit) >= amount? → reject if not
-  │     ├── Check for duplicate txid → reject if exists
-  │     └── Generate recipient signature
-  │
-  ├── TransactionProcessingService.processStandardIncoming()
-  │     ├── INSERT transaction with status='received'
-  │     └── UPDATE tracking fields (initial_sender, end_recipient)
-  │
-  └── Response: Echo acceptance JSON with recipientSignature
+  |
+  +-- index.html (Entry Point)
+  |     +-- Verify envelope signature (secp256k1)
+  |     +-- Validate required fields (senderPublicKey, senderAddress)
+  |     +-- Validate public key and address format
+  |     +-- Route by type === "send"
+  |
+  +-- TransactionValidationService.checkTransactionPossible()
+  |     +-- Is sender blocked? -> reject with 'contact_blocked'
+  |     +-- checkPreviousTxid()
+  |     |     +-- Get expected: getPreviousTxid(senderPubkey, receiverPubkey)
+  |     |     +-- Compare with request['previousTxid']
+  |     |     +-- Mismatch? -> Proactive sync with sender
+  |     |           +-- syncTransactionChain() (with backup recovery)
+  |     |           +-- Retry previousTxid check after sync
+  |     +-- checkAvailableFundsTransaction()
+  |     |     +-- (balance + credit_limit) >= amount? -> reject if not
+  |     +-- Check for duplicate txid -> reject if exists
+  |     +-- Generate recipient signature
+  |
+  +-- TransactionProcessingService.processStandardIncoming()
+  |     +-- INSERT transaction with status='received'
+  |     +-- UPDATE tracking fields (initial_sender, end_recipient)
+  |
+  +-- Response: Echo acceptance JSON with recipientSignature
 ```
 
 The proactive sync in the `checkPreviousTxid` step uses the same backup recovery
@@ -1309,43 +1307,43 @@ includes bilateral backup recovery so both sides can self-repair in a single rou
 
 ```
 syncTransactionChain(contactAddress, contactPublicKey)
-  │
-  ├── 1. Get lastKnownTxid (our latest tx with this contact)
-  │
-  ├── 2. Local self-repair (if BackupService available)
-  │     ├── verifyChainIntegrity() → get list of gaps
-  │     ├── For each missing txid:
-  │     │     └── restoreTransactionFromBackup() → recovered? remove from gaps list
-  │     └── Re-verify chain, update lastKnownTxid and remaining gaps
-  │
-  ├── 3. Build sync request
-  │     ├── buildTransactionSyncRequest(contactAddress, contactPubkey, lastKnownTxid)
-  │     └── Append missingTxids[] (remaining gaps for remote to check)
-  │
-  ├── 4. Send request to contact → contact's handleTransactionSyncRequest()
-  │
-  └── 5. Process sync response
-        ├── For each transaction in response:
-        │     ├── Skip if already exists locally
-        │     ├── Check for chain conflict (same previous_txid)
-        │     │     └── Deterministic resolution: lower txid wins
-        │     ├── Verify sender signature
-        │     └── Insert transaction
-        ├── Dispatch SYNC_COMPLETED event
-        └── HeldTransactionService processes any unblocked held transactions
+  |
+  +-- 1. Get lastKnownTxid (our latest tx with this contact)
+  |
+  +-- 2. Local self-repair (if BackupService available)
+  |     +-- verifyChainIntegrity() -> get list of gaps
+  |     +-- For each missing txid:
+  |     |     +-- restoreTransactionFromBackup() -> recovered? remove from gaps list
+  |     +-- Re-verify chain, update lastKnownTxid and remaining gaps
+  |
+  +-- 3. Build sync request
+  |     +-- buildTransactionSyncRequest(contactAddress, contactPubkey, lastKnownTxid)
+  |     +-- Append missingTxids[] (remaining gaps for remote to check)
+  |
+  +-- 4. Send request to contact -> contact's handleTransactionSyncRequest()
+  |
+  +-- 5. Process sync response
+        +-- For each transaction in response:
+        |     +-- Skip if already exists locally
+        |     +-- Check for chain conflict (same previous_txid)
+        |     |     +-- Deterministic resolution: lower txid wins
+        |     +-- Verify sender signature
+        |     +-- Insert transaction
+        +-- Dispatch SYNC_COMPLETED event
+        +-- HeldTransactionService processes any unblocked held transactions
 
 
 handleTransactionSyncRequest(request)  [Contact's side]
-  │
-  ├── 1. Verify sender is known contact
-  ├── 2. Get transactions newer than request's lastKnownTxid
-  ├── 3. Filter and format via formatTransactionForSync()
-  │     └── Description privacy: only include description for 'contact' or 'standard' memo
-  ├── 4. Check missingTxids[] from requester (cap at 10)
-  │     ├── For each missing txid not already in response:
-  │     │     ├── Check local DB → if found, format and include
-  │     │     └── Check local backups → if restored, format and include
-  └── 5. Return filtered transactions (oldest first)
+  |
+  +-- 1. Verify sender is known contact
+  +-- 2. Get transactions newer than request's lastKnownTxid
+  +-- 3. Filter and format via formatTransactionForSync()
+  |     +-- Description privacy: only include description for 'contact' or 'standard' memo
+  +-- 4. Check missingTxids[] from requester (cap at 10)
+  |     +-- For each missing txid not already in response:
+  |     |     +-- Check local DB -> if found, format and include
+  |     |     +-- Check local backups -> if restored, format and include
+  +-- 5. Return filtered transactions (oldest first)
 ```
 
 ### Chain Drop Agreement Flow
@@ -1354,44 +1352,44 @@ When neither side has a missing transaction in their database or backups, the ch
 drop protocol coordinates mutual agreement to remove the gap and relink the chain:
 
 ```
-      PROPOSER (A)                                  RECEIVER (B)
-           │                                             │
-  1. verifyChainIntegrity()                              │
-     → gap detected, missing txid                        │
-           │                                             │
-  2. Sync attempted (with backup recovery)               │
-     → neither side has it                               │
-           │                                             │
-  3. proposeChainDrop(contactPubkeyHash)                  │
-     ├── Backup recovery fallback (safety net)           │
-     ├── Create proposal record (direction=outgoing)     │
-     └── Send proposal ──────────────────────────────────>│
-           │                                    4. handleIncomingProposal()
-           │                                       ├── Verify gap exists locally
-           │                                       ├── Backup recovery fallback
-           │                                       └── Store proposal (direction=incoming)
-           │                                             │
-           │                                    5. User reviews via CLI/GUI
-           │                                             │
-           │                          ┌──────────────────┴──────────────────┐
-           │                     Accept                                Reject
-           │                          │                                     │
-           │                 6. acceptProposal()                   rejectProposal()
-           │                    ├── executeChainDrop()              └── Send rejection ──>│
-           │                    │     ├── Update broken_txid's                            │
-           │                    │     │   previous_txid to skip gap                       │
-           │                    │     └── Re-sign affected tx                             │
-           │                    └── Send acceptance + resigned txs ────>│                  │
-           │                                                           │                  │
-  7. handleIncomingAcceptance()                                        │                  │
-     ├── executeChainDrop() locally                                    │                  │
-     ├── processResignedTransactions()                                 │                  │
-     ├── Mark proposal executed                                        │                  │
-     └── Send acknowledgment + our resigned txs ──────────────────────>│                  │
-           │                                                           │                  │
-           │                                              8. handleIncomingAcknowledgment()
-           │                                                 ├── processResignedTransactions()
-           │                                                 └── Mark proposal fully executed
+      PROPOSER (A)                                     RECEIVER (B)
+           |                                                |
+  1. verifyChainIntegrity()                                 |
+     -> gap detected, missing txid                          |
+           |                                                |
+  2. Sync attempted (with backup recovery)                  |
+     -> neither side has it                                 |
+           |                                                |
+  3. proposeChainDrop(contactPubkeyHash)                    |
+     +-- Backup recovery fallback (safety net)              |
+     +-- Create proposal record (direction=outgoing)        |
+     +-- Send proposal ----------------------------------->-|
+           |                                   4. handleIncomingProposal()
+           |                                      +-- Verify gap exists locally
+           |                                      +-- Backup recovery fallback
+           |                                      +-- Store proposal (direction=incoming)
+           |                                                |
+           |                                   5. User reviews via CLI/GUI
+           |                                                |
+           |                             +------------------+------------------+
+           |                        Accept                                Reject
+           |                             |                                     |
+           |                    6. acceptProposal()                   rejectProposal()
+           |                       +-- executeChainDrop()              +-- Send rejection -->|
+           |                       |     +-- Relink broken_txid's                           |
+           |                       |     +-- previous_txid to skip gap                      |
+           |                       |     +-- Re-sign affected tx                            |
+           |                       +-- Send acceptance + resigned txs ---->|                 |
+           |                                                              |                 |
+  7. handleIncomingAcceptance()                                           |                 |
+     +-- executeChainDrop() locally                                       |                 |
+     +-- processResignedTransactions()                                    |                 |
+     +-- Mark proposal executed                                           |                 |
+     +-- Send acknowledgment + our resigned txs ------------------------->|                 |
+           |                                                              |                 |
+           |                                             8. handleIncomingAcknowledgment()
+           |                                                +-- processResignedTransactions()
+           |                                                +-- Mark proposal fully executed
 ```
 
 **Proposal States:** `pending` → `accepted` → `executed` (or `rejected` / `expired` / `failed`)
@@ -1404,18 +1402,18 @@ Contacts progress through states managed by the `contacts` table:
                               +----------+
      Contact request sent --> |  pending |
                               +----+-----+
-                                   │
-                      ┌────────────┴────────────┐
-                      │                         │
+                                   |
+                      +------------+------------+
+                      |                         |
                       v                         v
                +----------+             +-----------+
                | accepted |             |  blocked  |
                +----+-----+             +-----------+
-                    │                         ^
-                    │                         │
-                    +--- eiou block ──────────+
-                    │
-                    +--- eiou delete ──> (row deleted from DB)
+                    |                         ^
+                    |                         |
+                    +--- eiou block ----------+
+                    |
+                    +--- eiou delete --> (row deleted from DB)
 ```
 
 | State | Description |
@@ -1432,17 +1430,17 @@ don't match.
 **Contact Request Flow:**
 
 ```
-  Node A                                       Node B
-    │                                            │
-    ├── eiou add <address>                       │
-    │     └── Send contact request ─────────────>│
-    │         (tx_type='contact', amount=0)       ├── Contact appears as 'pending'
-    │                                            │
-    │                                            ├── eiou accept <name>
-    │                                            │     ├── Update contact to 'accepted'
-    │<───────── Send acceptance message ─────────┤     └── Complete contact transaction
-    ├── Update contact to 'accepted'             │
-    └── Complete contact transaction             │
+  Node A                                        Node B
+    |                                             |
+    +-- eiou add <address>                        |
+    |     +-- Send contact request -------------->|
+    |         (tx_type='contact', amount=0)       +-- Contact appears as 'pending'
+    |                                             |
+    |                                             +-- eiou accept <name>
+    |                                             |     +-- Update contact to 'accepted'
+    |<---------- Send acceptance message ---------+     +-- Complete contact transaction
+    +-- Update contact to 'accepted'              |
+    +-- Complete contact transaction              |
 ```
 
 ### Error Handling
@@ -1646,37 +1644,38 @@ The application uses a layered error handling approach with specialized exceptio
 business logic errors and a global safety net for unexpected failures.
 
 ```
-                    ┌─────────────────────────────────────────┐
-                    │           ErrorHandler.php              │
-                    │  (Global safety net - set_exception_    │
-                    │   handler for truly uncaught errors)    │
-                    └─────────────────────────────────────────┘
-                                       ▲
-                                       │ (only if not caught below)
-                    ┌──────────────────┴──────────────────┐
-                    │                                     │
-        ┌───────────┴───────────┐         ┌──────────────┴──────────────┐
-        │      Eiou.php         │         │      ApiController          │
-        │    (CLI Entry)        │         │      (API Entry)            │
-        ├───────────────────────┤         ├─────────────────────────────┤
-        │ catch Validation →    │         │ catch ServiceException →    │
-        │   format + exit(1)    │         │   use getMessage()          │
-        │                       │         │   use getHttpStatus()       │
-        │ catch Fatal →         │         │   use getErrorCode()        │
-        │   format + exit(1)    │         │                             │
-        │                       │         │ catch Exception →           │
-        │ catch Recoverable →   │         │   generic 500 error         │
-        │   format + exit(0)    │         │                             │
-        └───────────────────────┘         └─────────────────────────────┘
-                    ▲                                     ▲
-                    │                                     │
-        ┌───────────┴─────────────────────────────────────┴───────────┐
-        │                    Service Layer                             │
-        │  ContactService, MessageService, WalletService, etc.        │
-        │                                                              │
-        │  throw ValidationServiceException("Invalid name", ...)       │
-        │  throw FatalServiceException("Wallet not found", ...)        │
-        └──────────────────────────────────────────────────────────────┘
+        +-------------------------------------------+
+        |           ErrorHandler.php                |
+        |  (Global safety net - set_exception_      |
+        |   handler for truly uncaught errors)      |
+        +-------------------------------------------+
+                           ^
+                           | (only if not caught below)
+                    +------+------+
+                    |             |
+  +-----------------+---+   +----+----------------------------+
+  |      Eiou.php       |   |      ApiController              |
+  |    (CLI Entry)       |   |      (API Entry)                |
+  +----------------------+   +--------------------------------+
+  | catch Validation ->  |   | catch ServiceException ->      |
+  |   format + exit(1)   |   |   use getMessage()             |
+  |                      |   |   use getHttpStatus()          |
+  | catch Fatal ->       |   |   use getErrorCode()           |
+  |   format + exit(1)   |   |                                |
+  |                      |   | catch Exception ->             |
+  | catch Recoverable -> |   |   generic 500 error            |
+  |   format + exit(0)   |   |                                |
+  +----------+-----------+   +---------------+----------------+
+             |                               |
+             +-------------------------------+
+                             |
+  +--------------------------+-----------------------------+
+  |                    Service Layer                        |
+  |  ContactService, MessageService, WalletService, etc.   |
+  |                                                        |
+  |  throw ValidationServiceException("Invalid name", ...) |
+  |  throw FatalServiceException("Wallet not found", ...)  |
+  +--------------------------------------------------------+
 ```
 
 ### ServiceException Hierarchy
@@ -1686,19 +1685,19 @@ for business logic errors, replacing direct `exit()` calls in service methods.
 
 ```
 ServiceException (abstract)
-    │
-    ├── FatalServiceException
-    │   └── Unrecoverable errors (missing wallet, unauthorized access)
-    │   └── Exit code: 1
-    │
-    ├── RecoverableServiceException
-    │   └── Retryable errors (network timeouts, temporary unavailability)
-    │   └── Exit code: 0 (configurable)
-    │
-    └── ValidationServiceException
-        └── Input validation errors (invalid address, invalid name)
-        └── Exit code: 1
-        └── Includes field name for targeted error display
+    |
+    +-- FatalServiceException
+    |     Unrecoverable errors (missing wallet, unauthorized access)
+    |     Exit code: 1
+    |
+    +-- RecoverableServiceException
+    |     Retryable errors (network timeouts, temporary unavailability)
+    |     Exit code: 0 (configurable)
+    |
+    +-- ValidationServiceException
+          Input validation errors (invalid address, invalid name)
+          Exit code: 1
+          Includes field name for targeted error display
 ```
 
 **ServiceException Properties:**
