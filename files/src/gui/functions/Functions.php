@@ -176,8 +176,9 @@ try {
 
     $incomingProposals = $chainDropService->getIncomingPendingProposals();
     $outgoingProposals = $chainDropProposalRepo->getOutgoingPending();
+    $rejectedProposals = $chainDropProposalRepo->getRecentRejected();
 
-    // Index by contact_pubkey_hash (incoming takes priority - requires user action)
+    // Index by contact_pubkey_hash (incoming pending > outgoing pending > rejected)
     foreach ($incomingProposals as $proposal) {
         $hash = $proposal['contact_pubkey_hash'];
         if (!isset($chainDropProposalsByContact[$hash])) {
@@ -185,6 +186,12 @@ try {
         }
     }
     foreach ($outgoingProposals as $proposal) {
+        $hash = $proposal['contact_pubkey_hash'];
+        if (!isset($chainDropProposalsByContact[$hash])) {
+            $chainDropProposalsByContact[$hash] = $proposal;
+        }
+    }
+    foreach ($rejectedProposals as $proposal) {
         $hash = $proposal['contact_pubkey_hash'];
         if (!isset($chainDropProposalsByContact[$hash])) {
             $chainDropProposalsByContact[$hash] = $proposal;

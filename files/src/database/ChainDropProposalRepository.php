@@ -169,6 +169,35 @@ class ChainDropProposalRepository extends AbstractRepository {
     }
 
     /**
+     * Get the most recent rejected proposal per contact
+     *
+     * Returns only the latest rejected proposal for each contact so the GUI
+     * can show that the chain gap is unresolved after a rejection.
+     *
+     * @return array List of rejected proposals (one per contact)
+     */
+    public function getRecentRejected(): array {
+        $query = "SELECT p1.* FROM {$this->tableName} p1
+                  INNER JOIN (
+                      SELECT contact_pubkey_hash, MAX(resolved_at) as max_resolved
+                      FROM {$this->tableName}
+                      WHERE status = 'rejected'
+                      GROUP BY contact_pubkey_hash
+                  ) p2 ON p1.contact_pubkey_hash = p2.contact_pubkey_hash
+                      AND p1.resolved_at = p2.max_resolved
+                  WHERE p1.status = 'rejected'
+                  ORDER BY p1.resolved_at DESC";
+
+        $stmt = $this->execute($query, []);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
      * Update proposal status
      *
      * @param string $proposalId The proposal ID
