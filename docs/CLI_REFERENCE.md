@@ -952,7 +952,7 @@ eiou chaindrop accept cdp-2c3c26ba61ab4073 --json
 **Gap Detection and Recovery:**
 
 Chain gaps are detected locally by three commands:
-- **`send`** — verifies chain integrity before every transaction; auto-proposes a chain drop if sync and backup recovery both fail
+- **`send`** — verifies chain integrity before every transaction; triggers sync to repair (which includes backup recovery on both sides); auto-proposes a chain drop only if sync fails to repair the gap
 - **`sync`** — verifies chain integrity, attempts local backup recovery before contacting the remote node, and asks the remote to check its backups for any remaining gaps
 - **`ping`** — verifies local chain integrity (not just chain head comparison); reports `chain_valid: false` if gaps exist
 
