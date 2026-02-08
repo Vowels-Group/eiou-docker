@@ -1521,10 +1521,6 @@ function openContactModal(contact, openTab) {
                     }
                 }
             }
-        } else if (validChain === false || validChain === 0) {
-            // Chain is invalid and no proposal exists - show propose button
-            chainDropSection.style.display = 'block';
-            if (chainDropPropose) chainDropPropose.style.display = 'block';
         } else {
             chainDropSection.style.display = 'none';
         }
