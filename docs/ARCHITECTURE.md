@@ -1075,13 +1075,16 @@ no direct connection exists.
    (Sender)              (Intermediary)          (Intermediary)          (Recipient)
       |                       |                       |                       |
       |   P2P Request         |                       |                       |
-      |  level=500            |                       |                       |
+      |  level=201            |                       |                       |
+      |  max=207              |                       |                       |
       |---------------------->|                       |                       |
       |                       |   P2P Request         |                       |
-      |                       |  level=499            |                       |
+      |                       |  level=202            |                       |
+      |                       |  max=207              |                       |
       |                       |---------------------->|                       |
       |                       |                       |   P2P Request         |
-      |                       |                       |  level=498            |
+      |                       |                       |  level=203            |
+      |                       |                       |  max=207              |
       |                       |                       |---------------------->|
       |                       |                       |                       |
       |                       |                       |  RP2P Response        |
@@ -1123,8 +1126,8 @@ request patterns.
 2. P2pService creates P2P record with randomized level
 3. P2pMessageProcessor picks up pending messages
 4. Message sent to all accepted contacts (broadcast)
-5. Each contact forwards to their contacts (level--)
-6. Process continues until recipient found or level=0
+5. Each contact forwards to their contacts (level++)
+6. Process continues until recipient found or level exceeds maxRequestLevel
 
 **Inbound Response (Rp2pService):**
 
@@ -1368,7 +1371,7 @@ drop protocol coordinates mutual agreement to remove the gap and relink the chai
   3. proposeChainDrop(contactPubkeyHash)                    |
      +-- Backup recovery fallback (safety net)              |
      +-- Create proposal record (direction=outgoing)        |
-     +-- Send proposal ----------------------------------->-|
+     +-- Send proposal ---------------------------------->--|
            |                                   4. handleIncomingProposal()
            |                                      +-- Verify gap exists locally
            |                                      +-- Backup recovery fallback
@@ -1379,27 +1382,39 @@ drop protocol coordinates mutual agreement to remove the gap and relink the chai
            |                             +------------------+------------------+
            |                        Accept                                Reject
            |                             |                                     |
-           |                    6. acceptProposal()                   rejectProposal()
-           |                       +-- executeChainDrop()              +-- Send rejection -->|
-           |                       |     +-- Relink broken_txid's                            |
-           |                       |     +-- previous_txid to skip gap                       |
-           |                       |     +-- Re-sign affected tx                             |
-           |                       +-- syncContactBalance()                                  |
-           |                       +-- updateChainStatus(valid=true)                         | 
-           |                       +-- Send acceptance + resigned txs ---->|                 |
-           |                                                               |                 |
-  7. handleIncomingAcceptance()                                            |                 |
-     +-- executeChainDrop() locally                                        |                 |
-     +-- processResignedTransactions()                                     |                 |
-     +-- syncContactBalance()                                              |                 |
-     +-- updateChainStatus(valid=true)                                     |                 |
-     +-- Mark proposal executed                                            |                 |
-     +-- Send acknowledgment + our resigned txs -------------------------->|                 |
-           |                                                               |                 |
-           |                                             8. handleIncomingAcknowledgment()
-           |                                                +-- processResignedTransactions()
-           |                                                +-- updateChainStatus(valid=true)
-           |                                                +-- Mark proposal fully executed
+           |                    6. acceptProposal()              6r. rejectProposal()
+           |                       +-- executeChainDrop()            +-- Update status: rejected
+           |                       |     +-- Relink broken_txid's    +-- Send rejection -----+
+           |                       |     +-- previous_txid to skip   |                       |
+           |                       |     +-- Re-sign affected tx     |                       |
+           |                       +-- syncContactBalance()          |                       |
+           |                       +-- updateChainStatus(valid=true) |                       |
+           |                       +-- Update status: accepted       |                       |
+           |                       +-- Send acceptance               |                       |
+           |                       |   + resigned txs                |                       |
+           |<----------------------+                                 |                       |
+           |                                                         |                       |
+  7. handleIncomingAcceptance()                                      |                       |
+     +-- executeChainDrop() locally                                  |                       |
+     +-- processResignedTransactions()                               |                       |
+     +-- syncContactBalance()                                        |                       |
+     +-- updateChainStatus(valid=true)                               |                       |
+     +-- Update status: accepted                                     |                       |
+     +-- Mark proposal executed                                      |                       |
+     +-- Send acknowledgment + our resigned txs ------------------->-|                       |
+           |                                                         |                       |
+           |                                          8. handleIncomingAcknowledgment()      |
+           |                                             +-- processResignedTransactions()    |
+           |                                             +-- updateChainStatus(valid=true)    |
+           |                                             +-- Mark proposal fully executed     |
+           |                                                                                 |
+           |<--------------------------------------------------------------------------------+
+           |
+  7r. handleIncomingRejection()
+      +-- Update status: rejected
+      +-- Log rejection reason
+           |
+         (done -- gap remains unresolved)
 ```
 
 **Auto-Propose:** The `send` command and `ping` (Check Status) both auto-propose a chain drop
