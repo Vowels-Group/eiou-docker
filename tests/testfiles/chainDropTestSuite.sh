@@ -1077,7 +1077,7 @@ echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Test 5.1: Ping should detect chain gap"
 
-pingOutput=$(docker exec ${sender} eiou ping ${receiverAddress} --json 2>&1)
+pingOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou ping ${receiverAddress} --json 2>&1)
 echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
 
 # Check for chain_valid: false in the JSON output
@@ -1383,7 +1383,7 @@ echo -e "\n\t-> Ping after repair (should report chain_valid: true)"
 wait_for_queue_processed ${sender} 3
 wait_for_queue_processed ${receiver} 3
 
-pingOutput=$(docker exec ${sender} eiou ping ${receiverAddress} --json 2>&1)
+pingOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou ping ${receiverAddress} --json 2>&1)
 echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
 
 if echo "$pingOutput" | grep -q '"chain_valid":true\|"chain_valid": true'; then
@@ -1481,7 +1481,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Ping to detect chain gap"
 
-pingOutput=$(docker exec ${sender} eiou ping ${receiverAddress} --json 2>&1)
+pingOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou ping ${receiverAddress} --json 2>&1)
 echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
 
 if echo "$pingOutput" | grep -q '"chain_valid":false\|"chain_valid": false' || echo "$pingOutput" | grep -qi 'chain.*sync\|chain.*gap'; then
@@ -1629,7 +1629,7 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n\t-> Final ping to confirm chain validity"
 
-pingOutput=$(docker exec ${sender} eiou ping ${receiverAddress} --json 2>&1)
+pingOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou ping ${receiverAddress} --json 2>&1)
 echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
 
 if echo "$pingOutput" | grep -q '"chain_valid":true\|"chain_valid": true' || echo "$pingOutput" | grep -qi 'chain is valid'; then
@@ -1880,7 +1880,7 @@ if echo "$sendOutput" | grep -q 'CHAIN_INTEGRITY_FAILED'; then
     failure=$(( failure + 1 ))
 elif echo "$sendOutput" | grep -qi 'success\|queued\|sent'; then
     # Also verify ping
-    pingOutput=$(docker exec ${sender} eiou ping ${receiverAddress} --json 2>&1)
+    pingOutput=$(docker exec -e EIOU_TEST_MODE=true ${sender} eiou ping ${receiverAddress} --json 2>&1)
     if echo "$pingOutput" | grep -q '"chain_valid":true\|"chain_valid": true' || echo "$pingOutput" | grep -qi 'chain is valid'; then
         printf "\t   Post-repair send + ping both OK ${GREEN}PASSED${NC}\n"
         passed=$(( passed + 1 ))
