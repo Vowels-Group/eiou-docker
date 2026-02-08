@@ -2245,22 +2245,9 @@ function proposeChainDrop() {
                 try {
                     var response = JSON.parse(xhr.responseText);
                     if (response.success) {
-                        if (resultMsg) {
-                            resultMsg.textContent = 'Proposal sent successfully';
-                            resultMsg.style.color = '#28a745';
-                        }
-                        showToast('Proposal Sent', 'Proposal to drop missing transaction(s) sent to contact.', 'success');
-                        // Switch to awaiting state
-                        var proposeEl = document.getElementById('chain_drop_propose');
-                        var awaitingEl = document.getElementById('chain_drop_awaiting');
-                        if (proposeEl) proposeEl.style.display = 'none';
-                        if (awaitingEl) {
-                            awaitingEl.style.display = 'block';
-                            var awaitingIdEl = document.getElementById('chain_drop_awaiting_id');
-                            if (awaitingIdEl && response.proposal_id) {
-                                awaitingIdEl.textContent = 'Proposal: ' + response.proposal_id;
-                            }
-                        }
+                        // Reload and reopen modal so all statuses refresh
+                        reloadAndReopenContactModal();
+                        return;
                     } else {
                         if (resultMsg) {
                             resultMsg.textContent = response.message || 'Proposal failed';
@@ -2352,11 +2339,9 @@ function acceptChainDrop() {
                 try {
                     var response = JSON.parse(xhr.responseText);
                     if (response.success) {
-                        showToast('Proposal Accepted', 'Missing transaction(s) dropped — chain gap resolved.', 'success');
-                        var incomingEl = document.getElementById('chain_drop_incoming');
-                        if (incomingEl) incomingEl.style.display = 'none';
-                        var sectionEl = document.getElementById('chain_drop_section');
-                        if (sectionEl) sectionEl.style.display = 'none';
+                        // Reload and reopen modal so all statuses refresh
+                        reloadAndReopenContactModal();
+                        return;
                     } else {
                         if (resultMsg) {
                             resultMsg.textContent = response.message || 'Accept failed';
@@ -2439,11 +2424,9 @@ function rejectChainDrop() {
                 try {
                     var response = JSON.parse(xhr.responseText);
                     if (response.success) {
-                        showToast('Proposal Rejected', 'The proposal to drop missing transaction(s) has been rejected.', 'info');
-                        var incomingEl = document.getElementById('chain_drop_incoming');
-                        if (incomingEl) incomingEl.style.display = 'none';
-                        var sectionEl = document.getElementById('chain_drop_section');
-                        if (sectionEl) sectionEl.style.display = 'none';
+                        // Reload and reopen modal so all statuses refresh
+                        reloadAndReopenContactModal();
+                        return;
                     } else {
                         if (resultMsg) {
                             resultMsg.textContent = response.message || 'Reject failed';
@@ -2481,6 +2464,29 @@ function resetChainDropActionButtons() {
     if (rejectBtn) rejectBtn.disabled = false;
     if (rejectIcon) rejectIcon.className = 'fas fa-times';
     if (rejectText) rejectText.textContent = 'Reject';
+}
+
+/**
+ * Reloads the page and reopens the current contact modal on the info tab.
+ * Used after chain drop propose/accept/reject so all statuses refresh from
+ * server data (badges, chain status, notification banner).
+ * @returns {void}
+ */
+function reloadAndReopenContactModal() {
+    if (currentContactId) {
+        var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
+        var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'info-tab');
+        if (storedId && storedTab) {
+            window.location.reload();
+        } else {
+            // Tor Browser fallback
+            var currentUrl = window.location.href.split('#')[0];
+            window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=info';
+            window.location.reload();
+        }
+    } else {
+        window.location.reload();
+    }
 }
 
 // ============================================================================
