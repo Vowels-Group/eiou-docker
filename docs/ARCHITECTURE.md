@@ -1384,31 +1384,31 @@ drop protocol coordinates mutual agreement to remove the gap and relink the chai
            |                             |                                     |
            |                    6. acceptProposal()              6r. rejectProposal()
            |                       +-- executeChainDrop()            +-- Update status: rejected
-           |                       |     +-- Relink broken_txid's    +-- Send rejection -----+
-           |                       |     +-- previous_txid to skip   |                       |
-           |                       |     +-- Re-sign affected tx     |                       |
-           |                       +-- syncContactBalance()          |                       |
-           |                       +-- updateChainStatus(valid=true) |                       |
-           |                       +-- Update status: accepted       |                       |
-           |                       +-- Send acceptance               |                       |
-           |                       |   + resigned txs                |                       |
-           |<----------------------+                                 |                       |
-           |                                                         |                       |
-  7. handleIncomingAcceptance()                                      |                       |
-     +-- executeChainDrop() locally                                  |                       |
-     +-- processResignedTransactions()                               |                       |
-     +-- syncContactBalance()                                        |                       |
-     +-- updateChainStatus(valid=true)                               |                       |
-     +-- Update status: accepted                                     |                       |
-     +-- Mark proposal executed                                      |                       |
-     +-- Send acknowledgment + our resigned txs ------------------->-|                       |
-           |                                                         |                       |
-           |                                          8. handleIncomingAcknowledgment()      |
-           |                                             +-- processResignedTransactions()    |
-           |                                             +-- updateChainStatus(valid=true)    |
-           |                                             +-- Mark proposal fully executed     |
-           |                                                                                 |
-           |<--------------------------------------------------------------------------------+
+           |                       |     +-- Relink broken_txid's    +-- Send rejection --+
+           |                       |     +-- previous_txid to skip                        |
+           |                       |     +-- Re-sign affected tx                          |
+           |                       +-- syncContactBalance()                               |
+           |                       +-- updateChainStatus(valid=true)                      |
+           |                       +-- Update status: accepted                            |
+           |                       +-- Send acceptance                                    |
+           |                       |   + resigned txs                                     |
+           |<----------------------+                                                      |
+           |                                                                              |
+  7. handleIncomingAcceptance()                                                           |
+     +-- executeChainDrop() locally                                                       |
+     +-- processResignedTransactions()                                                    |
+     +-- syncContactBalance()                                                             |
+     +-- updateChainStatus(valid=true)                                                    |
+     +-- Update status: accepted                                                          |
+     +-- Mark proposal executed                                                           |
+     +-- Send acknowledgment + our resigned txs ------->-|                                |
+           |                                             |                                |
+           |                          8. handleIncomingAcknowledgment()                   |
+           |                             +-- processResignedTransactions()                 |
+           |                             +-- updateChainStatus(valid=true)                 |
+           |                             +-- Mark proposal fully executed                  |
+           |                                                                              |
+           |<-----------------------------------------------------------------------------+
            |
   7r. handleIncomingRejection()
       +-- Update status: rejected
