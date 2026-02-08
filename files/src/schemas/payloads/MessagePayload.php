@@ -486,4 +486,108 @@ class MessagePayload extends BasePayload
             'senderPublicKey' => $this->currentUser->getPublicKey(),
         ]);
     }
+
+    /**
+     * Build chain drop proposal payload
+     *
+     * @param string $address Contact's address
+     * @param string $proposalId Unique proposal identifier
+     * @param string $missingTxid The missing transaction ID
+     * @param string $brokenTxid The transaction with the broken chain link
+     * @param string|null $previousTxidBeforeGap The txid before the gap
+     * @param array $gapContext Additional gap context
+     * @return array The chain drop proposal payload
+     */
+    public function buildChainDropProposal(
+        string $address,
+        string $proposalId,
+        string $missingTxid,
+        string $brokenTxid,
+        ?string $previousTxidBeforeGap,
+        array $gapContext
+    ): array {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return [
+            'type' => 'message',
+            'typeMessage' => 'chain_drop',
+            'action' => 'propose',
+            'proposalId' => $proposalId,
+            'missingTxid' => $missingTxid,
+            'brokenTxid' => $brokenTxid,
+            'previousTxidBeforeGap' => $previousTxidBeforeGap,
+            'gapContext' => $gapContext,
+            'message' => 'Chain drop proposal for missing transaction',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+    }
+
+    /**
+     * Build chain drop acceptance payload
+     *
+     * @param string $address Contact's address
+     * @param string $proposalId The proposal being accepted
+     * @param array $resignedTransactions Re-signed transaction data to exchange
+     * @return array The chain drop acceptance payload
+     */
+    public function buildChainDropAcceptance(string $address, string $proposalId, array $resignedTransactions): array
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return [
+            'type' => 'message',
+            'typeMessage' => 'chain_drop',
+            'action' => 'accept',
+            'proposalId' => $proposalId,
+            'resignedTransactions' => $resignedTransactions,
+            'message' => 'Chain drop proposal accepted',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+    }
+
+    /**
+     * Build chain drop rejection payload
+     *
+     * @param string $address Contact's address
+     * @param string $proposalId The proposal being rejected
+     * @param string $reason Rejection reason
+     * @return array The chain drop rejection payload
+     */
+    public function buildChainDropRejection(string $address, string $proposalId, string $reason): array
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return [
+            'type' => 'message',
+            'typeMessage' => 'chain_drop',
+            'action' => 'reject',
+            'proposalId' => $proposalId,
+            'reason' => $reason,
+            'message' => 'Chain drop proposal rejected: ' . $reason,
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+    }
+
+    /**
+     * Build chain drop acknowledgment payload
+     *
+     * @param string $address Contact's address
+     * @param string $proposalId The proposal being acknowledged
+     * @param array $resignedTransactions Re-signed transaction data to exchange
+     * @return array The chain drop acknowledgment payload
+     */
+    public function buildChainDropAcknowledgment(string $address, string $proposalId, array $resignedTransactions): array
+    {
+        $myAddress = $this->transportUtility->resolveUserAddressForTransport($address);
+        return [
+            'type' => 'message',
+            'typeMessage' => 'chain_drop',
+            'action' => 'acknowledge',
+            'proposalId' => $proposalId,
+            'resignedTransactions' => $resignedTransactions,
+            'message' => 'Chain drop acknowledgment with re-signed transactions',
+            'senderAddress' => $myAddress,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+    }
 }

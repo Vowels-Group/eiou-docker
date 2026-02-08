@@ -36,6 +36,7 @@ use Eiou\Contracts\ApiKeyServiceInterface;
 use Eiou\Contracts\BackupServiceInterface;
 use Eiou\Contracts\BalanceServiceInterface;
 use Eiou\Contracts\ChainVerificationServiceInterface;
+use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Contracts\TransactionValidationServiceInterface;
 use Eiou\Contracts\TransactionProcessingServiceInterface;
 use Eiou\Contracts\SendOperationServiceInterface;
@@ -57,6 +58,7 @@ use Eiou\Database\MessageDeliveryRepository;
 use Eiou\Database\DeadLetterQueueRepository;
 use Eiou\Database\DeliveryMetricsRepository;
 use Eiou\Database\HeldTransactionRepository;
+use Eiou\Database\ChainDropProposalRepository;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Database\TransactionStatisticsRepository;
 use Eiou\Database\TransactionChainRepository;
@@ -366,6 +368,20 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->repositories['HeldTransactionRepository'];
+    }
+
+    /**
+     * Get ChainDropProposalRepository instance
+     *
+     * @return ChainDropProposalRepository
+     */
+    public function getChainDropProposalRepository(): ChainDropProposalRepository {
+        if (!isset($this->repositories['ChainDropProposalRepository'])) {
+            $this->repositories['ChainDropProposalRepository'] = new ChainDropProposalRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['ChainDropProposalRepository'];
     }
 
     /**
@@ -987,6 +1003,31 @@ class ServiceContainer implements ContainerInterface {
     }
 
     /**
+     * Get ChainDropService instance
+     *
+     * Manages mutual agreement protocol for dropping missing transactions
+     * from the chain between two contacts.
+     *
+     * Note: MessageService dependency is wired via setter injection in
+     * wireCircularDependencies() to avoid circular dependency.
+     *
+     * @return ChainDropServiceInterface
+     */
+    public function getChainDropService(): ChainDropServiceInterface {
+        if (!isset($this->services['ChainDropService'])) {
+            $this->services['ChainDropService'] = new ChainDropService(
+                $this->getChainDropProposalRepository(),
+                $this->getTransactionChainRepository(),
+                $this->getTransactionRepository(),
+                $this->getContactRepository(),
+                $this->getUtilityContainer(),
+                $this->currentUser
+            );
+        }
+        return $this->services['ChainDropService'];
+    }
+
+    /**
      * Get SyncServiceProxy instance
      *
      * Returns a lazy-loading proxy for SyncService that implements SyncTriggerInterface.
@@ -1109,7 +1150,7 @@ class ServiceContainer implements ContainerInterface {
      * - TransactionService --> SyncTriggerInterface (via proxy)
      * - ContactService --> SyncTriggerInterface (via proxy)
      * - ContactStatusService --> SyncTriggerInterface (via proxy), RateLimiterService
-     * - MessageService --> SyncTriggerInterface (via proxy)
+     * - MessageService --> SyncTriggerInterface (via proxy), ChainDropService
      * - ChainVerificationService --> SyncTriggerInterface (via proxy)
      * - TransactionValidationService --> SyncTriggerInterface (via proxy), TransactionService
      * - TransactionProcessingService --> SyncTriggerInterface (via proxy), P2pService, HeldTransactionService
@@ -1181,21 +1222,34 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
-        // Wire ContactStatusService -> SyncTriggerInterface (via proxy), RateLimiterService
-        // Reason: ContactStatusService validates chains and needs rate limiting
+        // Wire ContactStatusService -> SyncTriggerInterface (via proxy), RateLimiterService, TransactionChainRepository, ChainDropService
+        // Reason: ContactStatusService validates chains, needs rate limiting, detects internal gaps, and auto-proposes chain drops
         // Note: Uses SyncTriggerInterface for loose coupling
         if (isset($this->services['ContactStatusService'])) {
             $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServiceProxy());
+            $this->services['ContactStatusService']->setTransactionChainRepository($this->getTransactionChainRepository());
             if (isset($this->services['RateLimiterService'])) {
                 $this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
             }
+            if (isset($this->services['ChainDropService'])) {
+                $this->services['ContactStatusService']->setChainDropService($this->services['ChainDropService']);
+            }
         }
 
-        // Wire MessageService -> SyncTriggerInterface (via proxy)
-        // Reason: MessageService handles incoming sync requests
+        // Wire MessageService -> SyncTriggerInterface (via proxy), ChainDropService
+        // Reason: MessageService handles incoming sync requests and chain drop messages
         // Note: Uses SyncTriggerInterface for loose coupling - breaks circular dependency
         if (isset($this->services['MessageService'])) {
             $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
+            if (isset($this->services['ChainDropService'])) {
+                $this->services['MessageService']->setChainDropService($this->services['ChainDropService']);
+            }
+        }
+
+        // Wire ChainDropService -> SyncTriggerInterface (via proxy)
+        // Reason: ChainDropService needs to recalculate balances after dropping transactions
+        if (isset($this->services['ChainDropService'])) {
+            $this->services['ChainDropService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
         // =========================================================================
@@ -1282,6 +1336,10 @@ class ServiceContainer implements ContainerInterface {
             }
             // Set TransactionChainRepository for chain verification
             $this->services['SendOperationService']->setTransactionChainRepository($this->getTransactionChainRepository());
+            // Set ChainDropService for auto-proposing chain drops when sync fails
+            if (isset($this->services['ChainDropService'])) {
+                $this->services['SendOperationService']->setChainDropService($this->services['ChainDropService']);
+            }
         }
 
         // =========================================================================
@@ -1295,6 +1353,24 @@ class ServiceContainer implements ContainerInterface {
         //       services instead of them directly depending on SyncService for chain repair
         if (isset($this->services['ChainOperationsService']) && isset($this->services['SyncService'])) {
             $this->services['ChainOperationsService']->setSyncService($this->services['SyncService']);
+        }
+
+        // Wire SyncService -> BackupService
+        // Reason: SyncService checks local/remote backups for missing transactions during sync exchange
+        if (isset($this->services['SyncService'])) {
+            $this->services['SyncService']->setBackupService($this->getBackupService());
+        }
+
+        // Wire ChainDropService -> BackupService
+        // Reason: ChainDropService checks backups as fallback safety net when sync-level recovery missed
+        if (isset($this->services['ChainDropService'])) {
+            $this->services['ChainDropService']->setBackupService($this->getBackupService());
+        }
+
+        // Wire CleanupService -> ChainDropService
+        // Reason: CleanupService needs to expire stale chain drop proposals
+        if (isset($this->services['CleanupService']) && isset($this->services['ChainDropService'])) {
+            $this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
         }
     }
 
@@ -1322,6 +1398,7 @@ class ServiceContainer implements ContainerInterface {
         $this->getMessageService();
         $this->getContactStatusService();
         $this->getRateLimiterService();
+        $this->getCleanupService();
         $this->getTransactionRecoveryService();
 
         // Initialize new refactored services
@@ -1333,6 +1410,7 @@ class ServiceContainer implements ContainerInterface {
 
         // Initialize new dependency injection pattern services
         $this->getChainOperationsService();
+        $this->getChainDropService();
         $this->getEventDispatcher();
 
         // Wire circular dependencies

@@ -12,10 +12,11 @@ Complete command-line interface documentation for the EIOU Docker node.
 6. [Settings Commands](#settings-commands)
 7. [System Commands](#system-commands)
 8. [API Key Management](#api-key-management)
-9. [Backup Commands](#backup-commands)
-10. [Test Mode Commands](#test-mode-commands)
-11. [Exit Codes](#exit-codes)
-12. [Rate Limiting](#rate-limiting)
+9. [Chain Drop Commands](#chain-drop-commands)
+10. [Backup Commands](#backup-commands)
+11. [Test Mode Commands](#test-mode-commands)
+12. [Exit Codes](#exit-codes)
+13. [Rate Limiting](#rate-limiting)
 
 ---
 
@@ -382,6 +383,8 @@ eiou search alice --json
 
 Check if a contact is online and verify chain validity.
 
+Ping compares chain heads with the remote contact and also verifies local chain integrity to detect internal gaps (e.g., deleted transactions in the middle of the chain). All gap detection is performed locally — no transaction lists are exchanged over the wire.
+
 **Syntax:**
 ```bash
 eiou ping <address|name>
@@ -402,7 +405,7 @@ eiou ping --json Alice
 
 **Output includes:**
 - Online status (online/offline)
-- Chain validity status
+- Chain validity status (includes internal gap detection)
 - Response message
 
 ---
@@ -554,6 +557,7 @@ eiou send Alice 25.50 USD --json
 
 **Notes:**
 - Transaction may be direct or routed through intermediaries (P2P relay)
+- Chain integrity is verified locally before every send; if a gap is detected, sync is attempted and then a chain drop is auto-proposed if the gap persists
 - Rate limited: 30 transactions per minute
 
 **On Failure (JSON):**
@@ -736,6 +740,8 @@ eiou changesettings defaultFee 1.5 --json
 
 Synchronize data with contacts.
 
+After syncing transactions, chain integrity is verified locally for each contact. If gaps remain (e.g., both sides are missing the same transactions), the output reports the gap count and recommends using `chaindrop` to resolve.
+
 **Syntax:**
 ```bash
 eiou sync [type]
@@ -884,6 +890,165 @@ eiou apikey enable eiou_abc123
 ```
 
 **Important:** The API secret is only shown once at creation time. Store it securely.
+
+---
+
+## Chain Drop Commands
+
+### chaindrop
+
+Manage chain drop agreements for resolving transaction chain gaps.
+
+When both contacts are missing the same transaction in their shared chain, the chain cannot be repaired via sync. Chain drop resolves this by mutually agreeing to remove the missing transaction and relink the chain.
+
+**Important:** While a chain gap exists, transactions with that contact are **blocked**. Chain gaps are detected locally by `send`, `sync`, and `ping` — all three commands verify chain integrity without exchanging transaction lists over the wire. Before resorting to a chain drop, the sync flow attempts **backup recovery**: the local node checks its own backups first (self-repair), then tells the remote node which txids are still missing so it can check its backups too. If either side has the transaction in a backup, the chain is repaired without a chain drop. Only when neither side has a backup does the `send` command auto-propose a chain drop. Rejecting a proposal leaves the gap unresolved, meaning the contacts cannot transact until a new proposal is accepted or the missing transaction is recovered.
+
+**Syntax:**
+```bash
+eiou chaindrop <action> [args...]
+```
+
+**Actions:**
+
+| Action | Syntax | Description |
+|--------|--------|-------------|
+| `propose` | `chaindrop propose <contact_address>` | Propose dropping a missing transaction |
+| `accept` | `chaindrop accept <proposal_id>` | Accept an incoming proposal |
+| `reject` | `chaindrop reject <proposal_id>` | Reject an incoming proposal |
+| `list` | `chaindrop list [contact_address]` | List pending proposals |
+| `help` | `chaindrop help` | Show chain drop help |
+
+**Arguments:**
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `contact_address` | required (propose) | Contact's node address (HTTP, HTTPS, or Tor) |
+| `proposal_id` | required (accept/reject) | The proposal ID to act on (format: `cdp-...`) |
+| `contact_address` | optional (list) | Filter proposals by contact address |
+
+**Examples:**
+```bash
+# Propose dropping a missing transaction (auto-detects the gap)
+eiou chaindrop propose https://bob
+
+# List all incoming pending proposals
+eiou chaindrop list
+
+# List proposals for a specific contact
+eiou chaindrop list https://bob
+
+# Accept a proposal (executes drop, re-signs transactions, exchanges data)
+eiou chaindrop accept cdp-2c3c26ba61ab4073
+
+# Reject a proposal (WARNING: gap remains unresolved, transactions stay blocked)
+eiou chaindrop reject cdp-2c3c26ba61ab4073
+
+# JSON output
+eiou chaindrop propose https://bob --json
+eiou chaindrop list --json
+eiou chaindrop accept cdp-2c3c26ba61ab4073 --json
+```
+
+**Gap Detection and Recovery:**
+
+Chain gaps are detected locally by three commands:
+- **`send`** — verifies chain integrity before every transaction; triggers sync to repair (which includes backup recovery on both sides); auto-proposes a chain drop only if sync fails to repair the gap
+- **`sync`** — verifies chain integrity, attempts local backup recovery before contacting the remote node, and asks the remote to check its backups for any remaining gaps
+- **`ping`** — verifies local chain integrity (not just chain head comparison); triggers sync if chains don't match; auto-proposes a chain drop if sync detects mutual gaps (both sides missing same transaction)
+
+All detection is local — no transaction lists are sent over the wire.
+
+**Recovery priority:**
+1. **Local backup recovery** — during sync, the node checks its own database backups for missing transactions
+2. **Remote backup recovery** — remaining missing txids are sent to the contact, who checks its DB and backups
+3. **Chain drop** — only if neither side has the transaction in any backup
+
+**Flow (when backup recovery fails):**
+1. Contact A detects chain gap (`send` or `ping` auto-proposes, or `sync` reveals the gap)
+2. Sync attempts backup recovery on both sides (automatic, no user action needed)
+3. If recovery fails, a chain drop is auto-proposed by `send` or `ping`; alternatively, Contact A runs: `eiou chaindrop propose <contact_B_address>`
+4. Contact B checks incoming proposals: `eiou chaindrop list` (or sees GUI notification banner)
+5. Contact B runs: `eiou chaindrop accept <proposal_id>` (or accepts via GUI)
+6. Both chains are repaired, balances recalculated, and transactions can resume
+
+For multiple gaps, repeat the propose/accept cycle for each gap.
+
+**JSON Response Examples:**
+
+Propose (success):
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Chain drop proposal sent",
+        "proposal_id": "cdp-2c3c26ba61ab4073...",
+        "missing_txid": "a1b2c3d4..."
+    }
+}
+```
+
+List proposals:
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Chain drop proposals",
+        "count": 1,
+        "proposals": [
+            {
+                "proposal_id": "cdp-2c3c26ba61ab4073...",
+                "contact_pubkey_hash": "abc123...",
+                "missing_txid": "a1b2c3d4...",
+                "broken_txid": "e5f6g7h8...",
+                "status": "pending",
+                "direction": "incoming",
+                "created_at": "2026-02-07 12:00:00"
+            }
+        ]
+    }
+}
+```
+
+Accept (success):
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Chain drop proposal accepted and executed",
+        "proposal_id": "cdp-2c3c26ba61ab4073..."
+    }
+}
+```
+
+Reject (success):
+```json
+{
+    "success": true,
+    "data": {
+        "message": "Chain drop proposal rejected",
+        "proposal_id": "cdp-2c3c26ba61ab4073..."
+    },
+    "warning": "The chain gap remains unresolved. Transactions with this contact are blocked until a new chain drop proposal is accepted."
+}
+```
+
+**On Failure (JSON):**
+```json
+{
+    "success": false,
+    "error": {
+        "code": "CONTACT_NOT_FOUND",
+        "message": "Contact not found: https://unknown"
+    }
+}
+```
+
+**Notes:**
+- `propose` auto-detects the chain gap by verifying chain integrity with the specified contact
+- `accept` executes the chain drop locally, re-signs affected transactions, and exchanges re-signed copies with the proposer
+- `reject` leaves the chain gap unresolved — transactions remain blocked until a new proposal is accepted
+- Proposals expire automatically after their configured timeout
+- Rate limited: 10 chain drop operations per minute
 
 ---
 

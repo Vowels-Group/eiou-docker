@@ -33,7 +33,7 @@ Quick lookup card for the EIOU Wallet web interface.
 
 | Controller | File | Actions | Purpose |
 |------------|------|---------|---------|
-| `ContactController` | `controllers/ContactController.php` | add, accept, delete, block, unblock, edit, ping | Contact management |
+| `ContactController` | `controllers/ContactController.php` | add, accept, delete, block, unblock, edit, ping, proposeChainDrop, acceptChainDrop, rejectChainDrop | Contact management |
 | `TransactionController` | `controllers/TransactionController.php` | sendEIOU, checkUpdates | Sending transactions |
 | `SettingsController` | `controllers/SettingsController.php` | updateSettings, clearDebugLogs, sendDebugReport, getDebugReportJson | User settings & debug |
 
@@ -54,6 +54,9 @@ All POST actions require CSRF token.
 | `unblockContact` | `contact_address` | Redirect with message |
 | `editContact` | `contact_address`, `contact_name`, `contact_fee`, `contact_credit`, `contact_currency` | Redirect with message |
 | `pingContact` | `contact_address` | JSON (AJAX) |
+| `proposeChainDrop` | `contact_pubkey_hash` | JSON (AJAX) |
+| `acceptChainDrop` | `proposal_id` | JSON (AJAX) |
+| `rejectChainDrop` | `proposal_id` | JSON (AJAX) |
 
 ### Transaction Actions (TransactionController)
 
@@ -128,6 +131,13 @@ fetch(window.location.href, {
 | `closeEditContactModal()` | Close edit modal | Modal close button |
 | `openTransactionModal(index)` | Show transaction details | Transaction list item |
 | `escapeHtml(text)` | XSS prevention | Sanitize user input |
+| `openContactModal(contact)` | Show contact detail modal | Contact card click |
+| `openContactByContactId(id, tab)` | Open modal by contact ID | Notification banner |
+| `pingContact()` | Check status + reload page | Contact modal button |
+| `proposeChainDrop()` | Propose dropping missing tx | Chain drop section |
+| `acceptChainDrop()` | Accept incoming proposal | Chain drop section |
+| `rejectChainDrop()` | Reject incoming proposal | Chain drop section |
+| `reloadAndReopenContactModal()` | Reload page, reopen modal | After AJAX actions |
 | `safeStorageSet(key, value)` | Tor-safe sessionStorage | Store preferences |
 | `safeStorageGet(key)` | Tor-safe sessionStorage | Retrieve preferences |
 | `safeStorageRemove(key)` | Tor-safe sessionStorage | Clear preferences |
@@ -149,6 +159,7 @@ fetch(window.location.href, {
 | CSRF token | `$_SESSION['csrf_token']` | 1 hour |
 | Session regeneration | `$_SESSION['last_regeneration']` | 5 min |
 | In-progress txids | `$_SESSION['in_progress_txids']` | Session lifetime |
+| Known txids | `$_SESSION['known_txids']` | Session lifetime |
 | DLQ tracking | `$_SESSION['known_dlq_ids']` | Session lifetime |
 
 ### Session Cookie

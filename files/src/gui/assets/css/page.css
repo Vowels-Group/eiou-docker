@@ -382,6 +382,63 @@ body {
     padding: 0.15rem 0.4rem;
 }
 
+/* Chain drop proposal badges on contact card */
+.badge-danger {
+    background-color: #f8d7da;
+    color: #842029;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.4rem;
+}
+
+.badge-info-outline {
+    background-color: #cff4fc;
+    color: #055160;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.4rem;
+}
+
+/* Clickable chain status badge in modal */
+.chain-badge.chain-clickable {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+}
+
+.chain-badge.chain-clickable:hover {
+    filter: brightness(0.9);
+}
+
+/* Chain status: proposal received (action required) */
+.chain-badge.chain-action-required {
+    background-color: #f8d7da;
+    color: #842029;
+    border: 1px solid #f5c2c7;
+}
+
+/* Chain status: proposal sent (awaiting acceptance) */
+.chain-badge.chain-awaiting {
+    background-color: #cff4fc;
+    color: #055160;
+    border: 1px solid #b6effb;
+}
+
+/* Chain status: proposal rejected (chain gap unresolved) */
+.chain-badge.chain-rejected {
+    background-color: #fff3cd;
+    color: #664d03;
+    border: 1px solid #ffeeba;
+}
+
+/* Badge for rejected proposal on contact card */
+.badge-warning-strong {
+    background-color: #fff3cd;
+    color: #664d03;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.4rem;
+    border: 1px solid #ffc107;
+}
+
 .contact-avatar {
     width: 50px;
     height: 50px;

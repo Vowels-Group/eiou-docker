@@ -84,6 +84,7 @@ function freshInstall(){
                 $dbConn->exec(getDeliveryMetricsTableSchema());
                 $dbConn->exec(getRateLimitsTableSchema());
                 $dbConn->exec(getHeldTransactionsTableSchema());
+                $dbConn->exec(getChainDropProposalsTableSchema());
             } catch (PDOException $tableError) {
                 Logger::getInstance()->error("Table creation failed", [
                     'error' => $tableError->getMessage()
@@ -135,7 +136,9 @@ function runMigrations(PDO $pdo): array {
     $results = [];
 
     // List of migration tables to create (added after initial release)
-    $migrations = [];
+    $migrations = [
+        'chain_drop_proposals' => 'getChainDropProposalsTableSchema',
+    ];
 
     foreach ($migrations as $tableName => $schemaFunction) {
         try {

@@ -367,3 +367,35 @@ function getHeldTransactionsTableSchema() {
         INDEX idx_held_next_retry (next_retry_at, sync_status)
     )";
 }
+
+// Chain Drop Proposals table - tracks mutual agreements to drop missing transactions
+function getChainDropProposalsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS chain_drop_proposals (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        proposal_id VARCHAR(255) NOT NULL UNIQUE,
+        contact_pubkey_hash VARCHAR(64) NOT NULL,
+        missing_txid VARCHAR(255) NOT NULL,
+        broken_txid VARCHAR(255) NOT NULL,
+        previous_txid_before_gap VARCHAR(255),
+        direction ENUM('outgoing', 'incoming') NOT NULL,
+        status ENUM(
+            'pending',
+            'accepted',
+            'executed',
+            'rejected',
+            'expired',
+            'failed'
+        ) DEFAULT 'pending',
+        gap_context JSON,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP(6) NOT NULL,
+        resolved_at TIMESTAMP(6) NULL,
+        INDEX idx_cdp_proposal_id (proposal_id),
+        INDEX idx_cdp_contact (contact_pubkey_hash),
+        INDEX idx_cdp_status (status),
+        INDEX idx_cdp_contact_status (contact_pubkey_hash, status),
+        INDEX idx_cdp_missing_txid (missing_txid),
+        INDEX idx_cdp_expires (expires_at, status)
+    )";
+}

@@ -6,6 +6,7 @@ namespace Eiou\Services;
 use Eiou\Utils\Logger;
 use Eiou\Contracts\MessageServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Database\TransactionContactRepository;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\BalanceRepository;
@@ -101,6 +102,11 @@ class MessageService implements MessageServiceInterface {
     private ?SyncTriggerInterface $syncTrigger = null;
 
     /**
+     * @var ChainDropServiceInterface|null Chain drop service (setter injected)
+     */
+    private ?ChainDropServiceInterface $chainDropService = null;
+
+    /**
      * @var TransactionContactRepository Transaction contact repository for contact transaction operations
      */
     private TransactionContactRepository $transactionContactRepository;
@@ -173,6 +179,16 @@ class MessageService implements MessageServiceInterface {
      */
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Set the chain drop service (setter injection to avoid circular dependency)
+     *
+     * @param ChainDropServiceInterface $service The chain drop service
+     * @return void
+     */
+    public function setChainDropService(ChainDropServiceInterface $service): void {
+        $this->chainDropService = $service;
     }
 
     /**
@@ -319,6 +335,47 @@ class MessageService implements MessageServiceInterface {
         // Handle Sync messages
         elseif($request['typeMessage'] === "sync"){
             $this->handleSyncMessageRequest($request);
+        }
+        // Handle Chain Drop messages
+        elseif($request['typeMessage'] === "chain_drop"){
+            $this->handleChainDropMessageRequest($request);
+        }
+    }
+
+    /**
+     * Handle chain drop message requests
+     *
+     * Routes chain drop actions (propose, accept, reject, acknowledge) to
+     * the ChainDropService.
+     *
+     * @param array $request The decoded message data
+     * @return void
+     */
+    private function handleChainDropMessageRequest(array $request): void {
+        if ($this->chainDropService === null) {
+            Logger::getInstance()->warning("Chain drop message received but ChainDropService not injected");
+            return;
+        }
+
+        $action = $request['action'] ?? null;
+
+        switch ($action) {
+            case 'propose':
+                $this->chainDropService->handleIncomingProposal($request);
+                break;
+            case 'accept':
+                $this->chainDropService->handleIncomingAcceptance($request);
+                break;
+            case 'reject':
+                $this->chainDropService->handleIncomingRejection($request);
+                break;
+            case 'acknowledge':
+                $this->chainDropService->handleIncomingAcknowledgment($request);
+                break;
+            default:
+                Logger::getInstance()->warning("Unknown chain drop action", [
+                    'action' => $action
+                ]);
         }
     }
 

@@ -660,6 +660,106 @@ class ContactController
             case 'pingContact':
                 $this->handlePingContact();
                 break;
+
+            case 'proposeChainDrop':
+                $this->handleProposeChainDrop();
+                break;
+            case 'acceptChainDrop':
+                $this->handleAcceptChainDrop();
+                break;
+            case 'rejectChainDrop':
+                $this->handleRejectChainDrop();
+                break;
+        }
+    }
+
+    /**
+     * Handle propose chain drop request (AJAX - returns JSON)
+     *
+     * @return void
+     */
+    public function handleProposeChainDrop(): void
+    {
+        header('Content-Type: application/json');
+        try {
+            $this->session->verifyCSRFToken();
+            $contactPubkeyHash = Security::sanitizeInput($_POST['contact_pubkey_hash'] ?? '');
+            if (empty($contactPubkeyHash)) {
+                echo json_encode(['success' => false, 'error' => 'missing_pubkey_hash', 'message' => 'Contact pubkey hash is required']);
+                return;
+            }
+            $app = Application::getInstance();
+            $chainDropService = $app->services->getChainDropService();
+            $result = $chainDropService->proposeChainDrop($contactPubkeyHash);
+            echo json_encode($result);
+        } catch (\Throwable $e) {
+            Logger::getInstance()->logException($e, ['controller' => 'ContactController', 'action' => __FUNCTION__]);
+            echo json_encode([
+                'success' => false,
+                'error' => 'internal_error',
+                'message' => Constants::APP_ENV !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
+            ]);
+        }
+    }
+
+    /**
+     * Handle accept chain drop request (AJAX - returns JSON)
+     *
+     * @return void
+     */
+    public function handleAcceptChainDrop(): void
+    {
+        header('Content-Type: application/json');
+        try {
+            $this->session->verifyCSRFToken();
+            $proposalId = Security::sanitizeInput($_POST['proposal_id'] ?? '');
+            if (empty($proposalId)) {
+                echo json_encode(['success' => false, 'error' => 'missing_proposal_id', 'message' => 'Proposal ID is required']);
+                return;
+            }
+            $app = Application::getInstance();
+            $chainDropService = $app->services->getChainDropService();
+            $result = $chainDropService->acceptProposal($proposalId);
+            echo json_encode($result);
+        } catch (\Throwable $e) {
+            Logger::getInstance()->logException($e, ['controller' => 'ContactController', 'action' => __FUNCTION__]);
+            echo json_encode([
+                'success' => false,
+                'error' => 'internal_error',
+                'message' => Constants::APP_ENV !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
+            ]);
+        }
+    }
+
+    /**
+     * Handle reject chain drop request (AJAX - returns JSON)
+     *
+     * @return void
+     */
+    public function handleRejectChainDrop(): void
+    {
+        header('Content-Type: application/json');
+        try {
+            $this->session->verifyCSRFToken();
+            $proposalId = Security::sanitizeInput($_POST['proposal_id'] ?? '');
+            if (empty($proposalId)) {
+                echo json_encode(['success' => false, 'error' => 'missing_proposal_id', 'message' => 'Proposal ID is required']);
+                return;
+            }
+            $app = Application::getInstance();
+            $chainDropService = $app->services->getChainDropService();
+            $result = $chainDropService->rejectProposal($proposalId);
+            if ($result['success']) {
+                $result['warning'] = 'The chain gap remains unresolved. Transactions with this contact are blocked until a new chain drop proposal is accepted.';
+            }
+            echo json_encode($result);
+        } catch (\Throwable $e) {
+            Logger::getInstance()->logException($e, ['controller' => 'ContactController', 'action' => __FUNCTION__]);
+            echo json_encode([
+                'success' => false,
+                'error' => 'internal_error',
+                'message' => Constants::APP_ENV !== 'production' ? 'Internal server error: ' . $e->getMessage() : 'Internal server error'
+            ]);
         }
     }
 }

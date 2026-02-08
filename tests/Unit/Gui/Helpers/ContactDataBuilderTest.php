@@ -131,7 +131,9 @@ class ContactDataBuilderTest extends TestCase
             'contact_id' => 'contact-001',
             'transactions' => [['txid' => 'tx1'], ['txid' => 'tx2']],
             'online_status' => 'online',
-            'valid_chain' => true
+            'valid_chain' => true,
+            'pubkey_hash' => 'hash123',
+            'chain_drop_proposal' => ['proposal_id' => 'cdp-test', 'direction' => 'incoming', 'status' => 'pending']
         ];
 
         $result = $builder->buildContactData($contact, 'accepted');
@@ -148,6 +150,8 @@ class ContactDataBuilderTest extends TestCase
         $this->assertCount(2, $result['transactions']);
         $this->assertEquals('online', $result['online_status']);
         $this->assertTrue($result['valid_chain']);
+        $this->assertEquals('hash123', $result['pubkey_hash']);
+        $this->assertEquals('cdp-test', $result['chain_drop_proposal']['proposal_id']);
     }
 
     /**
@@ -174,6 +178,8 @@ class ContactDataBuilderTest extends TestCase
         $this->assertEquals([], $result['transactions']);
         $this->assertEquals('unknown', $result['online_status']);
         $this->assertNull($result['valid_chain']);
+        $this->assertEquals('', $result['pubkey_hash']);
+        $this->assertNull($result['chain_drop_proposal']);
         $this->assertEquals('', $result['http']);
     }
 
@@ -432,6 +438,32 @@ class ContactDataBuilderTest extends TestCase
         $result = $builder->buildContactData($contact, 'accepted');
 
         $this->assertFalse($result['valid_chain']);
+    }
+
+    /**
+     * Test buildContactData includes chain drop proposal intact
+     */
+    public function testBuildContactDataIncludesChainDropProposal(): void
+    {
+        $builder = new ContactDataBuilder(['http']);
+
+        $proposal = [
+            'proposal_id' => 'cdp-456',
+            'direction' => 'outgoing',
+            'status' => 'pending',
+            'contact_pubkey_hash' => 'hash-abc'
+        ];
+
+        $contact = [
+            'http' => 'http://example.com',
+            'pubkey_hash' => 'hash-abc',
+            'chain_drop_proposal' => $proposal
+        ];
+
+        $result = $builder->buildContactData($contact, 'accepted');
+
+        $this->assertEquals($proposal, $result['chain_drop_proposal']);
+        $this->assertEquals('hash-abc', $result['pubkey_hash']);
     }
 
     /**

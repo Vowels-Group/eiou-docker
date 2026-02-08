@@ -75,6 +75,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         exit; // Ensure we don't continue to render HTML
     }
+
+    // AJAX-only chain drop actions (returns JSON, exits immediately)
+    if (in_array($action, ['proposeChainDrop', 'acceptChainDrop', 'rejectChainDrop'])) {
+        try {
+            $contactController->routeAction();
+        } catch (Exception $e) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'server_error', 'message' => 'Server error: ' . $e->getMessage()]);
+        }
+        exit;
+    }
 }
 
 // Handle GET requests for update checking
@@ -156,6 +167,52 @@ $blockedContacts = $transactionService->contactBalanceConversion($contactService
 
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
+
+// Chain drop proposals - fetch both directions, index by contact hash
+$chainDropProposalsByContact = [];
+try {
+    $chainDropService = $serviceContainer->getChainDropService();
+    $chainDropProposalRepo = $serviceContainer->getChainDropProposalRepository();
+
+    $incomingProposals = $chainDropService->getIncomingPendingProposals();
+    $outgoingProposals = $chainDropProposalRepo->getOutgoingPending();
+    $rejectedProposals = $chainDropProposalRepo->getRecentRejected();
+
+    // Index by contact_pubkey_hash (incoming pending > outgoing pending > rejected)
+    foreach ($incomingProposals as $proposal) {
+        $hash = $proposal['contact_pubkey_hash'];
+        if (!isset($chainDropProposalsByContact[$hash])) {
+            $chainDropProposalsByContact[$hash] = $proposal;
+        }
+    }
+    foreach ($outgoingProposals as $proposal) {
+        $hash = $proposal['contact_pubkey_hash'];
+        if (!isset($chainDropProposalsByContact[$hash])) {
+            $chainDropProposalsByContact[$hash] = $proposal;
+        }
+    }
+    foreach ($rejectedProposals as $proposal) {
+        $hash = $proposal['contact_pubkey_hash'];
+        if (!isset($chainDropProposalsByContact[$hash])) {
+            $chainDropProposalsByContact[$hash] = $proposal;
+        }
+    }
+} catch (Exception $e) {
+    $chainDropProposalsByContact = [];
+}
+
+// Merge chain drop proposals into contact arrays by pubkey_hash
+$contactArrays = [&$acceptedContacts, &$pendingUserContacts, &$blockedContacts];
+foreach ($contactArrays as &$contacts) {
+    foreach ($contacts as &$contact) {
+        $hash = $contact['pubkey_hash'] ?? '';
+        if ($hash && isset($chainDropProposalsByContact[$hash])) {
+            $contact['chain_drop_proposal'] = $chainDropProposalsByContact[$hash];
+        }
+    }
+    unset($contact);
+}
+unset($contacts);
 
 // Dead Letter Queue - track newly added items for notification
 $newlyAddedToDlq = [];

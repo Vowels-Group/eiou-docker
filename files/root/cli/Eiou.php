@@ -93,6 +93,7 @@ if ($app->currentPdoLoaded() && getenv('EIOU_TEST_MODE') !== 'true') {
         'add' => ['max' => 20, 'window' => 60, 'block' => 300],       // 20 contact additions per minute
         'generate' => ['max' => 5, 'window' => 300, 'block' => 900],  // 5 wallet generations per 5 minutes
         'backup' => ['max' => 10, 'window' => 60, 'block' => 300],    // 10 backup operations per minute
+        'chaindrop' => ['max' => 10, 'window' => 60, 'block' => 300], // 10 chain drop operations per minute
         'default' => ['max' => 100, 'window' => 60, 'block' => 300]   // Default for other commands
     ];
 
@@ -307,7 +308,13 @@ elseif($request === "apikey"){
 elseif($request === "backup"){
   $debugService->output("Executing backup request", 'SILENT');
   $backupService = $app->services->getBackupService();
-  $backupService->handleBackupCommand($cleanArgv, $output);
+  $backupService->handleCommand($cleanArgv, $output);
+}
+// Chain Drop Agreement
+elseif($request === "chaindrop"){
+  $debugService->output("Executing chain drop request", 'SILENT');
+  $chainDropService = $app->services->getChainDropService();
+  $chainDropService->handleCommand($cleanArgv, $output);
 }
 else{
   // If no known input, display commands possible for input

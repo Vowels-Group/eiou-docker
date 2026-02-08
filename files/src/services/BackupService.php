@@ -437,7 +437,7 @@ class BackupService implements BackupServiceInterface
         ];
     }
 
-    public function handleBackupCommand(array $argv, $output): void
+    public function handleCommand(array $argv, $output): void
     {
         // argv format: ['eiou', 'backup', 'subcommand', 'arg1', 'arg2', ...]
         $subcommand = $argv[2] ?? 'help';
@@ -609,6 +609,272 @@ class BackupService implements BackupServiceInterface
         }
 
         return $next->format('c');
+    }
+
+    public function searchTransactionInBackups(string $txid): ?array
+    {
+        $backups = $this->listBackups();
+        if (empty($backups)) {
+            return null;
+        }
+
+        foreach ($backups as $backup) {
+            try {
+                $filepath = $this->backupDirectory . '/' . $backup['filename'];
+                if (!file_exists($filepath)) {
+                    continue;
+                }
+
+                $jsonData = file_get_contents($filepath);
+                $backupData = json_decode($jsonData, true);
+
+                if (!$backupData || !isset($backupData['encrypted'])) {
+                    continue;
+                }
+
+                $sqlDump = KeyEncryption::decrypt($backupData['encrypted']);
+
+                $insertSql = $this->extractTransactionInsert($sqlDump, $txid);
+                KeyEncryption::secureClear($sqlDump);
+
+                if ($insertSql !== null) {
+                    Logger::getInstance()->info("Transaction found in backup", [
+                        'txid' => substr($txid, 0, 16) . '...',
+                        'backup' => $backup['filename']
+                    ]);
+                    return [
+                        'found' => true,
+                        'filename' => $backup['filename'],
+                        'sql_insert' => $insertSql,
+                        'backup_created_at' => $backupData['created_at'] ?? $backup['created_at']
+                    ];
+                }
+            } catch (Exception $e) {
+                Logger::getInstance()->warning("Failed to search backup for transaction", [
+                    'backup' => $backup['filename'],
+                    'error' => $e->getMessage()
+                ]);
+                continue;
+            }
+        }
+
+        return null;
+    }
+
+    public function restoreTransactionFromBackup(string $txid): array
+    {
+        $result = ['success' => false, 'filename' => null, 'restored_txid' => null, 'backup_created_at' => null, 'error' => null];
+
+        $searchResult = $this->searchTransactionInBackups($txid);
+        if ($searchResult === null) {
+            $result['error'] = 'Transaction not found in any backup';
+            return $result;
+        }
+
+        try {
+            $stmt = $this->pdo->exec($searchResult['sql_insert']);
+
+            // Verify the transaction now exists
+            $checkStmt = $this->pdo->prepare('SELECT COUNT(*) FROM transactions WHERE txid = :txid');
+            $checkStmt->execute(['txid' => $txid]);
+            $exists = (int) $checkStmt->fetchColumn() > 0;
+
+            if ($exists) {
+                Logger::getInstance()->info("Transaction restored from backup", [
+                    'txid' => substr($txid, 0, 16) . '...',
+                    'backup' => $searchResult['filename']
+                ]);
+                $result['success'] = true;
+                $result['filename'] = $searchResult['filename'];
+                $result['restored_txid'] = $txid;
+                $result['backup_created_at'] = $searchResult['backup_created_at'];
+            } else {
+                $result['error'] = 'INSERT executed but transaction not found in database';
+            }
+        } catch (\PDOException $e) {
+            $result['error'] = 'Failed to restore transaction: ' . $e->getMessage();
+            Logger::getInstance()->error("Failed to restore transaction from backup", [
+                'txid' => substr($txid, 0, 16) . '...',
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Extract a single transaction INSERT statement from a mysqldump SQL
+     *
+     * Parses the dump to find the transaction row matching the given txid
+     * and constructs a single-row INSERT IGNORE statement.
+     *
+     * @param string $sqlDump The full SQL dump content
+     * @param string $txid The transaction ID to find
+     * @return string|null The INSERT IGNORE SQL statement, or null if not found
+     */
+    private function extractTransactionInsert(string $sqlDump, string $txid): ?string
+    {
+        // Quick check: if txid doesn't appear anywhere in the dump, skip parsing
+        if (strpos($sqlDump, $txid) === false) {
+            return null;
+        }
+
+        // Find INSERT INTO `transactions` statements
+        // mysqldump produces extended inserts like:
+        // INSERT INTO `transactions` VALUES (1,'standard',...,'txid_value',...),(2,...);
+        $pattern = '/INSERT INTO `transactions` VALUES\s*(.+?);/s';
+        if (!preg_match_all($pattern, $sqlDump, $matches)) {
+            return null;
+        }
+
+        foreach ($matches[1] as $valuesBlock) {
+            // Quick check if our txid is in this block at all
+            if (strpos($valuesBlock, $txid) === false) {
+                continue;
+            }
+
+            // Parse individual value tuples from the extended insert
+            // Each tuple is (...) separated by commas
+            // We need to handle nested quotes and escaped characters
+            $tuples = $this->parseValueTuples($valuesBlock);
+
+            foreach ($tuples as $tuple) {
+                // Verify the txid is in the correct column position (column index 13)
+                // Column order: id(0), tx_type(1), type(2), status(3), sender_address(4),
+                // sender_public_key(5), sender_public_key_hash(6), receiver_address(7),
+                // receiver_public_key(8), receiver_public_key_hash(9), amount(10),
+                // currency(11), timestamp(12), txid(13), ...
+                if ($this->tupleHasTxidAtPosition($tuple, $txid, 13)) {
+                    return "INSERT IGNORE INTO `transactions` VALUES {$tuple};";
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Parse value tuples from an extended INSERT VALUES block
+     *
+     * Handles quoted strings, escaped quotes, and nested parentheses.
+     *
+     * @param string $valuesBlock The VALUES portion of the INSERT statement
+     * @return array Array of complete tuple strings including parentheses
+     */
+    private function parseValueTuples(string $valuesBlock): array
+    {
+        $tuples = [];
+        $len = strlen($valuesBlock);
+        $i = 0;
+        $depth = 0;
+        $inString = false;
+        $stringChar = '';
+        $tupleStart = -1;
+
+        while ($i < $len) {
+            $char = $valuesBlock[$i];
+
+            if ($inString) {
+                if ($char === '\\') {
+                    $i += 2; // Skip escaped character
+                    continue;
+                }
+                if ($char === $stringChar) {
+                    $inString = false;
+                }
+                $i++;
+                continue;
+            }
+
+            if ($char === '\'' || $char === '"') {
+                $inString = true;
+                $stringChar = $char;
+            } elseif ($char === '(') {
+                if ($depth === 0) {
+                    $tupleStart = $i;
+                }
+                $depth++;
+            } elseif ($char === ')') {
+                $depth--;
+                if ($depth === 0 && $tupleStart >= 0) {
+                    $tuples[] = substr($valuesBlock, $tupleStart, $i - $tupleStart + 1);
+                    $tupleStart = -1;
+                }
+            }
+            $i++;
+        }
+
+        return $tuples;
+    }
+
+    /**
+     * Check if a SQL value tuple has the given txid at the specified column position
+     *
+     * @param string $tuple The tuple string e.g. "(1,'standard',...,'txid_value',...)"
+     * @param string $txid The txid to match
+     * @param int $position The expected column index (0-based)
+     * @return bool True if the txid matches at the given position
+     */
+    private function tupleHasTxidAtPosition(string $tuple, string $txid, int $position): bool
+    {
+        // Remove outer parentheses
+        $inner = substr($tuple, 1, -1);
+
+        // Parse column values respecting quotes
+        $columns = [];
+        $len = strlen($inner);
+        $i = 0;
+        $colStart = 0;
+        $inString = false;
+        $stringChar = '';
+
+        while ($i < $len) {
+            $char = $inner[$i];
+
+            if ($inString) {
+                if ($char === '\\') {
+                    $i += 2;
+                    continue;
+                }
+                if ($char === $stringChar) {
+                    $inString = false;
+                }
+                $i++;
+                continue;
+            }
+
+            if ($char === '\'' || $char === '"') {
+                $inString = true;
+                $stringChar = $char;
+            } elseif ($char === ',') {
+                $columns[] = substr($inner, $colStart, $i - $colStart);
+                $colStart = $i + 1;
+                if (count($columns) > $position) {
+                    break; // We have enough columns
+                }
+            }
+            $i++;
+        }
+
+        // Add the last column if we haven't broken out
+        if (count($columns) <= $position) {
+            $columns[] = substr($inner, $colStart);
+        }
+
+        if (!isset($columns[$position])) {
+            return false;
+        }
+
+        // Extract the value (trim quotes and whitespace)
+        $value = trim($columns[$position]);
+        if ((str_starts_with($value, "'") && str_ends_with($value, "'")) ||
+            (str_starts_with($value, '"') && str_ends_with($value, '"'))) {
+            $value = substr($value, 1, -1);
+            // Unescape
+            $value = str_replace(['\\\\', "\\'", '\\"'], ['\\', "'", '"'], $value);
+        }
+
+        return $value === $txid;
     }
 
     private function getDatabaseCredentials(): ?array

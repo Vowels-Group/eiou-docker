@@ -10,6 +10,7 @@ use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
 use Eiou\Contracts\SyncServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Contracts\BackupServiceInterface;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\AddressRepository;
 use Eiou\Database\P2pRepository;
@@ -117,6 +118,11 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
     private ?HeldTransactionService $heldTransactionService = null;
 
     /**
+     * @var BackupServiceInterface|null Backup service for transaction recovery during sync
+     */
+    private ?BackupServiceInterface $backupService = null;
+
+    /**
      * @var TransactionChainRepository Transaction chain repository instance
      */
     private TransactionChainRepository $transactionChainRepository;
@@ -133,6 +139,15 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
      */
     public function setHeldTransactionService(HeldTransactionService $service): void {
         $this->heldTransactionService = $service;
+    }
+
+    /**
+     * Set the backup service (setter injection for circular dependency)
+     *
+     * @param BackupServiceInterface $backupService Backup service
+     */
+    public function setBackupService(BackupServiceInterface $backupService): void {
+        $this->backupService = $backupService;
     }
 
     /**
@@ -402,14 +417,24 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             'synced' => 0,
             'failed' => 0,
             'total_transactions' => 0,
+            'chain_gaps' => 0,
             'details' => []
         ];
 
         foreach ($contacts as $contact) {
             $address = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null;
-            $pubkey = $contact['pubkey'] ?? null;
+            $pubkeyHash = $contact['pubkey_hash'] ?? null;
 
-            if (!$address || !$pubkey) {
+            if (!$address || !$pubkeyHash) {
+                continue;
+            }
+
+            // Look up full contact info (pubkey, status) via joined query
+            $contactInfo = $this->contactRepository->lookupByPubkeyHash($pubkeyHash);
+            $pubkey = $contactInfo['pubkey'] ?? null;
+            $status = $contactInfo['status'] ?? null;
+
+            if (!$pubkey || $status !== Constants::CONTACT_STATUS_ACCEPTED) {
                 continue;
             }
 
@@ -425,11 +450,22 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                     $this->syncContactBalance($pubkey);
                 }
 
-                $results['details'][] = [
+                $detail = [
                     'address' => $address,
                     'status' => 'synced',
                     'transactions' => $syncResult['synced_count']
                 ];
+
+                // Report chain gaps that persist after sync
+                if (isset($syncResult['chain_valid']) && !$syncResult['chain_valid']) {
+                    $gapCount = count($syncResult['chain_gaps'] ?? []);
+                    $results['chain_gaps'] += $gapCount;
+                    $detail['chain_gaps'] = $gapCount;
+                    $detail['status'] = 'synced_with_gaps';
+                    $detail['message'] = "Chain has {$gapCount} gap(s) - both sides missing same transactions. Use 'chaindrop' to resolve.";
+                }
+
+                $results['details'][] = $detail;
             } else {
                 $results['failed']++;
                 $results['details'][] = [
@@ -503,12 +539,64 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                 $contactPublicKey
             );
 
+            // Self-repair: check local backups for any chain gaps before contacting remote
+            $remainingMissingTxids = [];
+            if ($this->backupService !== null) {
+                $preCheckStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                    $this->currentUser->getPublicKey(),
+                    $contactPublicKey
+                );
+
+                if (!$preCheckStatus['valid'] && !empty($preCheckStatus['gaps'])) {
+                    $localRecoveredCount = 0;
+                    foreach ($preCheckStatus['gaps'] as $missingTxid) {
+                        $restoreResult = $this->backupService->restoreTransactionFromBackup($missingTxid);
+                        if ($restoreResult['success']) {
+                            $localRecoveredCount++;
+                            Logger::getInstance()->info("Recovered missing transaction from local backup during sync", [
+                                'missing_txid' => substr($missingTxid, 0, 16) . '...',
+                                'backup' => $restoreResult['filename'] ?? 'unknown'
+                            ]);
+                        } else {
+                            $remainingMissingTxids[] = $missingTxid;
+                        }
+                    }
+
+                    if ($localRecoveredCount > 0) {
+                        // Re-verify and update lastKnownTxid since local recovery may have changed it
+                        $recheckStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                            $this->currentUser->getPublicKey(),
+                            $contactPublicKey
+                        );
+
+                        $lastKnownTxid = $this->transactionRepository->getPreviousTxid(
+                            $this->currentUser->getPublicKey(),
+                            $contactPublicKey
+                        );
+
+                        // Update remaining gaps after re-verification
+                        $remainingMissingTxids = $recheckStatus['gaps'] ?? [];
+
+                        Logger::getInstance()->info("Local backup recovery completed during sync", [
+                            'recovered' => $localRecoveredCount,
+                            'remaining_gaps' => count($remainingMissingTxids),
+                            'contact_address' => $contactAddress
+                        ]);
+                    }
+                }
+            }
+
             // Build and send sync request
             $syncRequest = $this->messagePayload->buildTransactionSyncRequest(
                 $contactAddress,
                 $contactPublicKey,
                 $lastKnownTxid
             );
+
+            // Include remaining missing txids so the remote side can check its backups
+            if (!empty($remainingMissingTxids)) {
+                $syncRequest['missingTxids'] = $remainingMissingTxids;
+            }
 
             output("Requesting transaction chain sync with {$contactAddress}", 'SILENT');
 
@@ -731,14 +819,50 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             $result['signature_failure'] = false;
             $result['conflicts_resolved'] = $conflictsResolved;
 
-            output("Transaction chain sync completed: {$syncedCount} transactions synced, {$conflictsResolved} conflicts resolved", 'SILENT');
+            // Verify chain integrity after sync to detect remaining gaps
+            // When both sides are missing the same transactions, sync exchanges nothing
+            // but the chain still has internal gaps that need to be reported
+            $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                $this->currentUser->getPublicKey(),
+                $contactPublicKey
+            );
+
+            $result['chain_valid'] = $chainStatus['valid'];
+            $result['chain_gaps'] = $chainStatus['gaps'];
+            $result['chain_broken_txids'] = $chainStatus['broken_txids'];
+
+            if (!$chainStatus['valid']) {
+                $gapCount = count($chainStatus['gaps']);
+                output("Transaction chain sync completed but {$gapCount} gap(s) remain - both sides missing same transactions", 'SILENT');
+
+                Logger::getInstance()->warning("Chain gaps remain after sync - mutual gap detected", [
+                    'contact_address' => $contactAddress,
+                    'gap_count' => $gapCount,
+                    'gaps' => $chainStatus['gaps'],
+                    'broken_txids' => $chainStatus['broken_txids'],
+                    'synced_count' => $syncedCount
+                ]);
+
+                // Dispatch chain gap detected event
+                EventDispatcher::getInstance()->dispatch(SyncEvents::CHAIN_GAP_DETECTED, [
+                    'contact_pubkey' => $contactPublicKey,
+                    'contact_address' => $contactAddress,
+                    'gap_count' => $gapCount,
+                    'gaps' => $chainStatus['gaps'],
+                    'broken_txids' => $chainStatus['broken_txids']
+                ]);
+            } else {
+                output("Transaction chain sync completed: {$syncedCount} transactions synced, {$conflictsResolved} conflicts resolved", 'SILENT');
+            }
 
             // Dispatch sync completed event
             EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_COMPLETED, [
                 'contact_pubkey' => $contactPublicKey,
                 'contact_address' => $contactAddress,
                 'synced_count' => $syncedCount,
-                'success' => true
+                'success' => true,
+                'chain_valid' => $chainStatus['valid'],
+                'chain_gaps' => count($chainStatus['gaps'])
             ]);
 
         } catch (Exception $e) {
@@ -1062,38 +1186,50 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                     continue;
                 }
 
-                // Include necessary fields for security and signature verification
-                $txData = [
-                    'txid' => $tx['txid'],
-                    'previous_txid' => $tx['previous_txid'],
-                    'sender_address' => $tx['sender_address'],
-                    'sender_public_key' => $tx['sender_public_key'],
-                    'receiver_address' => $tx['receiver_address'],
-                    'receiver_public_key' => $tx['receiver_public_key'],
-                    'amount' => $tx['amount'],
-                    'currency' => $tx['currency'],
-                    'memo' => $tx['memo'],
-                    'timestamp' => $tx['timestamp'],
-                    'time' => $tx['time'] ?? null,
-                    'status' => $tx['status'],
-                    // Include signature data for verification
-                    'sender_signature' => $tx['sender_signature'] ?? null,
-                    'signature_nonce' => $tx['signature_nonce'] ?? null,
-                    'recipient_signature' => $tx['recipient_signature'] ?? null
-                ];
+                $filteredTransactions[] = $this->formatTransactionForSync($tx);
+            }
 
-                // Privacy: Only include description for contact or standard (direct) transactions
-                // P2P transactions (memo is a hash) should NOT have descriptions shared during sync
-                // as the description is only meant for the end recipient, not intermediaries
-                $memo = $tx['memo'] ?? '';
-                if ($memo === 'contact' || $memo === 'standard') {
-                    $txData['description'] = $tx['description'] ?? null;
-                } else {
-                    // For P2P transactions, explicitly set description to null
-                    $txData['description'] = null;
+            // Check if the requester asked us to look up missing txids from our backups
+            $missingTxids = $request['missingTxids'] ?? [];
+            if (!empty($missingTxids) && $this->backupService !== null) {
+                // Cap at 10 to prevent abuse
+                $missingTxids = array_slice($missingTxids, 0, 10);
+
+                // Build set of txids already in the response
+                $includedTxids = [];
+                foreach ($filteredTransactions as $ft) {
+                    $includedTxids[$ft['txid']] = true;
                 }
 
-                $filteredTransactions[] = $txData;
+                foreach ($missingTxids as $missingTxid) {
+                    if (isset($includedTxids[$missingTxid])) {
+                        continue;
+                    }
+
+                    // Check if we have it in our DB
+                    if ($this->transactionRepository->transactionExistsTxid($missingTxid)) {
+                        $rows = $this->transactionRepository->getByTxid($missingTxid);
+                        if ($rows && isset($rows[0])) {
+                            $filteredTransactions[] = $this->formatTransactionForSync($rows[0]);
+                            $includedTxids[$missingTxid] = true;
+                            continue;
+                        }
+                    }
+
+                    // Not in DB — try restoring from our backups
+                    $restoreResult = $this->backupService->restoreTransactionFromBackup($missingTxid);
+                    if ($restoreResult['success']) {
+                        $rows = $this->transactionRepository->getByTxid($missingTxid);
+                        if ($rows && isset($rows[0])) {
+                            $filteredTransactions[] = $this->formatTransactionForSync($rows[0]);
+                            $includedTxids[$missingTxid] = true;
+                            Logger::getInstance()->info("Recovered missing transaction from backup for remote sync request", [
+                                'missing_txid' => substr($missingTxid, 0, 16) . '...',
+                                'requester' => $senderAddress
+                            ]);
+                        }
+                    }
+                }
             }
 
             // Get latest txid from non-cancelled transactions
@@ -1116,6 +1252,46 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             ]);
             echo $this->messagePayload->buildTransactionSyncRejection($senderAddress, 'internal_error');
         }
+    }
+
+    /**
+     * Format a transaction row for inclusion in a sync response
+     *
+     * Extracts the necessary fields for security and signature verification,
+     * and applies privacy rules for descriptions.
+     *
+     * @param array $tx Transaction row from database
+     * @return array Formatted transaction data for sync
+     */
+    private function formatTransactionForSync(array $tx): array {
+        $txData = [
+            'txid' => $tx['txid'],
+            'previous_txid' => $tx['previous_txid'],
+            'sender_address' => $tx['sender_address'],
+            'sender_public_key' => $tx['sender_public_key'],
+            'receiver_address' => $tx['receiver_address'],
+            'receiver_public_key' => $tx['receiver_public_key'],
+            'amount' => $tx['amount'],
+            'currency' => $tx['currency'],
+            'memo' => $tx['memo'],
+            'timestamp' => $tx['timestamp'],
+            'time' => $tx['time'] ?? null,
+            'status' => $tx['status'],
+            'sender_signature' => $tx['sender_signature'] ?? null,
+            'signature_nonce' => $tx['signature_nonce'] ?? null,
+            'recipient_signature' => $tx['recipient_signature'] ?? null
+        ];
+
+        // Privacy: Only include description for contact or standard (direct) transactions
+        // P2P transactions (memo is a hash) should NOT have descriptions shared during sync
+        $memo = $tx['memo'] ?? '';
+        if ($memo === 'contact' || $memo === 'standard') {
+            $txData['description'] = $tx['description'] ?? null;
+        } else {
+            $txData['description'] = null;
+        }
+
+        return $txData;
     }
 
     // =========================================================================

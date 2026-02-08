@@ -101,7 +101,7 @@ if [ ${#containersLinkKeys[@]} -gt 0 ]; then
 
     if [[ -n "$contactName" ]]; then
         totaltests=$(( totaltests + 1 ))
-        echo -e "\t-> ${senderContainer} sending 3 USD to '${contactName}' (by name)"
+        echo -e "\n\t-> ${senderContainer} sending 3 USD to '${contactName}' (by name)"
 
         # Get initial balance of recipient
         initialBalanceByName=$(docker exec ${receiverContainer} php -r "
@@ -153,7 +153,7 @@ if [ ${#containers[@]} -gt 0 ]; then
 
     # Test: send to non-existing ADDRESS (must return valid JSON, may attempt P2P)
     totaltests=$(( totaltests + 1 ))
-    echo -e "\t-> Testing send to non-existing address"
+    echo -e "\n\t-> Testing send to non-existing address"
     sendNonExistAddrResult=$(docker exec ${testSender} eiou send ${nonExistingAddress} 5 USD --json 2>&1)
 
     # Must return valid JSON response (not crash)
@@ -168,7 +168,7 @@ if [ ${#containers[@]} -gt 0 ]; then
 
     # Test: send to non-existing NAME (must return valid JSON)
     totaltests=$(( totaltests + 1 ))
-    echo -e "\t-> Testing send to non-existing name"
+    echo -e "\n\t-> Testing send to non-existing name"
     sendNonExistNameResult=$(docker exec ${testSender} eiou send "${nonExistingName}" 5 USD --json 2>&1)
 
     if [[ "$sendNonExistNameResult" =~ '"success"' ]] && [[ "$sendNonExistNameResult" =~ '"' ]]; then
@@ -182,7 +182,7 @@ if [ ${#containers[@]} -gt 0 ]; then
 fi
 
 # Test multi-hop routing (A->D requires routing through B and C)
-echo -e "\t-> Testing multi-hop: httpA sending to httpD (should route through httpB and httpC)"
+echo -e "\n\t-> Testing multi-hop: httpA sending to httpD (should route through httpB and httpC)"
 if [[ "${containerAddresses[httpA]}" ]] && [[ "${containerAddresses[httpD]}" ]]; then
 
     # Get initial balance of httpD

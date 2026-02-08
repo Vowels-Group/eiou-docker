@@ -1214,6 +1214,7 @@ function showManualCopyModal(text, successMessage) {
 
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
 var currentContactId = null;
+var currentContactPubkeyHash = null;
 var contactTransactionData = [];
 var contactsShowAll = false;
 var CONTACTS_DEFAULT_LIMIT = 16;
@@ -1466,13 +1467,29 @@ function openContactModal(contact, openTab) {
         onlineStatusEl.className = 'status-badge status-' + onlineStatus;
     }
 
-    // Set chain status (valid/invalid/not checked)
+    // Set chain status (valid/invalid/not checked) — proposal takes priority
     var chainStatusEl = document.getElementById('modal_chain_status');
     if (chainStatusEl) {
         var validChain = contact.valid_chain;
+        var proposal = contact.chain_drop_proposal;
         var chainText;
         var chainClass;
-        if (validChain === null || validChain === undefined) {
+        var isClickable = false;
+
+        // Proposal state overrides chain validity display
+        if (proposal && proposal.direction === 'incoming' && proposal.status === 'pending') {
+            chainText = 'Action Required';
+            chainClass = 'chain-action-required';
+            isClickable = true;
+        } else if (proposal && proposal.direction === 'outgoing' && proposal.status === 'pending') {
+            chainText = 'Awaiting Acceptance';
+            chainClass = 'chain-awaiting';
+            isClickable = true;
+        } else if (proposal && proposal.status === 'rejected') {
+            chainText = 'Blocked';
+            chainClass = 'chain-rejected';
+            isClickable = true;
+        } else if (validChain === null || validChain === undefined) {
             chainText = 'Not Checked';
             chainClass = 'chain-unknown';
         } else if (validChain === true || validChain === 1) {
@@ -1483,7 +1500,64 @@ function openContactModal(contact, openTab) {
             chainClass = 'chain-invalid';
         }
         chainStatusEl.textContent = chainText;
-        chainStatusEl.className = 'chain-badge ' + chainClass;
+        chainStatusEl.className = 'chain-badge ' + chainClass + (isClickable ? ' chain-clickable' : '');
+
+        // Make clickable to scroll to chain drop section
+        if (isClickable) {
+            chainStatusEl.onclick = function() {
+                var section = document.getElementById('chain_drop_section');
+                if (section && section.style.display !== 'none') {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            };
+            chainStatusEl.title = 'Click to view chain gap resolution';
+        } else {
+            chainStatusEl.onclick = null;
+            chainStatusEl.title = '';
+        }
+    }
+
+    // Show chain drop section if chain is invalid
+    var chainDropSection = document.getElementById('chain_drop_section');
+    var chainDropPropose = document.getElementById('chain_drop_propose');
+    var chainDropAwaiting = document.getElementById('chain_drop_awaiting');
+    var chainDropIncoming = document.getElementById('chain_drop_incoming');
+    var chainDropRejected = document.getElementById('chain_drop_rejected');
+
+    if (chainDropSection) {
+        // Reset all sub-sections
+        if (chainDropPropose) chainDropPropose.style.display = 'none';
+        if (chainDropAwaiting) chainDropAwaiting.style.display = 'none';
+        if (chainDropIncoming) chainDropIncoming.style.display = 'none';
+        if (chainDropRejected) chainDropRejected.style.display = 'none';
+        currentChainDropProposalId = null;
+
+        if (contact.chain_drop_proposal) {
+            chainDropSection.style.display = 'block';
+            var proposal = contact.chain_drop_proposal;
+            if (proposal.direction === 'incoming' && proposal.status === 'pending') {
+                if (chainDropIncoming) {
+                    chainDropIncoming.style.display = 'block';
+                    var incomingIdEl = document.getElementById('chain_drop_incoming_id');
+                    if (incomingIdEl) {
+                        incomingIdEl.textContent = 'Proposal: ' + proposal.proposal_id;
+                    }
+                }
+                currentChainDropProposalId = proposal.proposal_id;
+            } else if (proposal.direction === 'outgoing' && proposal.status === 'pending') {
+                if (chainDropAwaiting) {
+                    chainDropAwaiting.style.display = 'block';
+                    var awaitingIdEl = document.getElementById('chain_drop_awaiting_id');
+                    if (awaitingIdEl) {
+                        awaitingIdEl.textContent = 'Proposal: ' + proposal.proposal_id;
+                    }
+                }
+            } else if (proposal.status === 'rejected') {
+                if (chainDropRejected) chainDropRejected.style.display = 'block';
+            }
+        } else {
+            chainDropSection.style.display = 'none';
+        }
     }
 
     // Set form values
@@ -1500,6 +1574,9 @@ function openContactModal(contact, openTab) {
 
     // Store current contact address for ping function
     currentContactAddress = contact.address;
+
+    // Store current contact pubkey hash for chain drop
+    currentContactPubkeyHash = contact.pubkey_hash || null;
 
     // Reset ping button state and result message
     resetPingButton();
@@ -1677,41 +1754,35 @@ function pingContact() {
 
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
-            resetPingButton();
-
             if (xhr.status === 200) {
                 try {
                     var response = JSON.parse(xhr.responseText);
 
                     if (response.success) {
-                        // Update online status indicator
+                        // Show brief success message then reload to persist changes
                         var onlineStatus = response.online_status || 'unknown';
-                        var statusText = onlineStatus.charAt(0).toUpperCase() + onlineStatus.slice(1);
-                        if (onlineStatusEl) {
-                            onlineStatusEl.textContent = statusText;
-                            onlineStatusEl.className = 'status-badge status-' + onlineStatus;
-                        }
-
-                        // Update chain status if available
-                        if (chainStatusEl && response.chain_valid !== null && response.chain_valid !== undefined) {
-                            var chainText, chainClass;
-                            if (response.chain_valid === true || response.chain_valid === 1) {
-                                chainText = 'Valid';
-                                chainClass = 'chain-valid';
-                            } else {
-                                chainText = 'Needs Sync';
-                                chainClass = 'chain-invalid';
-                            }
-                            chainStatusEl.textContent = chainText;
-                            chainStatusEl.className = 'chain-badge ' + chainClass;
-                        }
-
-                        // Show success message
                         if (resultMsg) {
-                            resultMsg.textContent = response.message || 'Ping complete';
+                            resultMsg.textContent = response.message || 'Status updated, reloading...';
                             resultMsg.style.color = onlineStatus === 'online' ? '#28a745' : '#dc3545';
                         }
+                        // Reload and reopen modal on info tab so updated values persist
+                        if (currentContactId) {
+                            var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
+                            var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'info-tab');
+                            if (storedId && storedTab) {
+                                window.location.reload();
+                            } else {
+                                // Tor Browser fallback
+                                var currentUrl = window.location.href.split('#')[0];
+                                window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=info';
+                                window.location.reload();
+                            }
+                        } else {
+                            window.location.reload();
+                        }
+                        return;
                     } else {
+                        resetPingButton();
                         // Show error message
                         if (resultMsg) {
                             resultMsg.textContent = response.message || 'Ping failed';
@@ -1719,12 +1790,14 @@ function pingContact() {
                         }
                     }
                 } catch (e) {
+                    resetPingButton();
                     if (resultMsg) {
                         resultMsg.textContent = 'Invalid response';
                         resultMsg.style.color = '#dc3545';
                     }
                 }
             } else if (xhr.status !== 0) {
+                resetPingButton();
                 // Status 0 means aborted/timeout (handled separately)
                 if (resultMsg) {
                     resultMsg.textContent = 'Request failed';
@@ -1855,6 +1928,34 @@ function checkReopenContactModal() {
         }
     } catch (e) {
         // Silently fail - don't break the page if something goes wrong
+    }
+}
+
+/**
+ * Opens a contact modal by contact ID.
+ *
+ * Finds the contact card with matching data-contact-id attribute and clicks
+ * it to open the modal. Used by notification banners to link directly to a
+ * specific contact.
+ *
+ * @param {string} contactId - The contact ID to open
+ * @param {string} [tab] - Optional tab to switch to after opening (e.g. 'info-tab')
+ * @returns {void}
+ */
+function openContactByContactId(contactId, tab) {
+    var contactCards = document.querySelectorAll('.contact-card');
+    for (var i = 0; i < contactCards.length; i++) {
+        var card = contactCards[i];
+        var cardContactId = card.getAttribute('data-contact-id');
+        if (cardContactId && cardContactId === contactId) {
+            card.click();
+            if (tab) {
+                setTimeout(function() {
+                    showModalTab(tab, null);
+                }, 150);
+            }
+            return;
+        }
     }
 }
 
@@ -2081,6 +2182,319 @@ window.addEventListener('DOMContentLoaded', function() {
     // Initialize contacts display limit (show only first 16 by default)
     initContactsDisplay();
 });
+
+// Chain Drop Resolution state
+var currentChainDropProposalId = null;
+
+/**
+ * Proposes a chain drop to the current contact.
+ * Sends AJAX POST with the contact's pubkey hash.
+ * @returns {void}
+ */
+function proposeChainDrop() {
+    var btn = document.getElementById('chain_drop_propose_btn');
+    var icon = document.getElementById('chain_drop_propose_icon');
+    var btnText = document.getElementById('chain_drop_propose_text');
+    var resultMsg = document.getElementById('chain_drop_propose_result');
+
+    if (!currentContactPubkeyHash) {
+        if (resultMsg) {
+            resultMsg.textContent = 'Contact information not available';
+            resultMsg.style.color = '#dc3545';
+        }
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+    if (icon) icon.className = 'fas fa-spinner fa-spin';
+    if (btnText) btnText.textContent = 'Sending...';
+    if (resultMsg) resultMsg.textContent = '';
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        if (resultMsg) {
+            resultMsg.textContent = 'CSRF token not found';
+            resultMsg.style.color = '#dc3545';
+        }
+        resetChainDropProposeButton();
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('action', 'proposeChainDrop');
+    formData.append('contact_pubkey_hash', currentContactPubkeyHash);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+
+    xhr.ontimeout = function() {
+        resetChainDropProposeButton();
+        if (resultMsg) {
+            resultMsg.textContent = 'Request timed out';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onerror = function() {
+        resetChainDropProposeButton();
+        if (resultMsg) {
+            resultMsg.textContent = 'Network error';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            resetChainDropProposeButton();
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        // Reload and reopen modal so all statuses refresh
+                        reloadAndReopenContactModal();
+                        return;
+                    } else {
+                        if (resultMsg) {
+                            resultMsg.textContent = response.message || 'Proposal failed';
+                            resultMsg.style.color = '#dc3545';
+                        }
+                    }
+                } catch (e) {
+                    if (resultMsg) {
+                        resultMsg.textContent = 'Invalid response';
+                        resultMsg.style.color = '#dc3545';
+                    }
+                }
+            } else if (xhr.status !== 0) {
+                if (resultMsg) {
+                    resultMsg.textContent = 'Request failed';
+                    resultMsg.style.color = '#dc3545';
+                }
+            }
+        }
+    };
+    xhr.send(formData);
+}
+
+function resetChainDropProposeButton() {
+    var btn = document.getElementById('chain_drop_propose_btn');
+    var icon = document.getElementById('chain_drop_propose_icon');
+    var btnText = document.getElementById('chain_drop_propose_text');
+    if (btn) btn.disabled = false;
+    if (icon) icon.className = 'fas fa-handshake';
+    if (btnText) btnText.textContent = 'Propose Dropping Missing Transaction(s)';
+}
+
+/**
+ * Accepts an incoming chain drop proposal.
+ * @returns {void}
+ */
+function acceptChainDrop() {
+    if (!currentChainDropProposalId) return;
+
+    var btn = document.getElementById('chain_drop_accept_btn');
+    var icon = document.getElementById('chain_drop_accept_icon');
+    var btnText = document.getElementById('chain_drop_accept_text');
+    var resultMsg = document.getElementById('chain_drop_action_result');
+
+    if (btn) btn.disabled = true;
+    if (icon) icon.className = 'fas fa-spinner fa-spin';
+    if (btnText) btnText.textContent = 'Accepting...';
+    if (resultMsg) resultMsg.textContent = '';
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        if (resultMsg) {
+            resultMsg.textContent = 'CSRF token not found';
+            resultMsg.style.color = '#dc3545';
+        }
+        resetChainDropActionButtons();
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('action', 'acceptChainDrop');
+    formData.append('proposal_id', currentChainDropProposalId);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+
+    xhr.ontimeout = function() {
+        resetChainDropActionButtons();
+        if (resultMsg) {
+            resultMsg.textContent = 'Request timed out';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onerror = function() {
+        resetChainDropActionButtons();
+        if (resultMsg) {
+            resultMsg.textContent = 'Network error';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            resetChainDropActionButtons();
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        // Reload and reopen modal so all statuses refresh
+                        reloadAndReopenContactModal();
+                        return;
+                    } else {
+                        if (resultMsg) {
+                            resultMsg.textContent = response.message || 'Accept failed';
+                            resultMsg.style.color = '#dc3545';
+                        }
+                    }
+                } catch (e) {
+                    if (resultMsg) {
+                        resultMsg.textContent = 'Invalid response';
+                        resultMsg.style.color = '#dc3545';
+                    }
+                }
+            } else if (xhr.status !== 0) {
+                if (resultMsg) {
+                    resultMsg.textContent = 'Request failed';
+                    resultMsg.style.color = '#dc3545';
+                }
+            }
+        }
+    };
+    xhr.send(formData);
+}
+
+/**
+ * Rejects an incoming chain drop proposal.
+ * @returns {void}
+ */
+function rejectChainDrop() {
+    if (!currentChainDropProposalId) return;
+
+    var btn = document.getElementById('chain_drop_reject_btn');
+    var icon = document.getElementById('chain_drop_reject_icon');
+    var btnText = document.getElementById('chain_drop_reject_text');
+    var resultMsg = document.getElementById('chain_drop_action_result');
+
+    if (btn) btn.disabled = true;
+    if (icon) icon.className = 'fas fa-spinner fa-spin';
+    if (btnText) btnText.textContent = 'Rejecting...';
+    if (resultMsg) resultMsg.textContent = '';
+
+    var csrfToken = document.querySelector('input[name="csrf_token"]');
+    if (!csrfToken || !csrfToken.value) {
+        if (resultMsg) {
+            resultMsg.textContent = 'CSRF token not found';
+            resultMsg.style.color = '#dc3545';
+        }
+        resetChainDropActionButtons();
+        return;
+    }
+
+    var formData = new FormData();
+    formData.append('action', 'rejectChainDrop');
+    formData.append('proposal_id', currentChainDropProposalId);
+    formData.append('csrf_token', csrfToken.value);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname, true);
+    xhr.timeout = 60000;
+
+    xhr.ontimeout = function() {
+        resetChainDropActionButtons();
+        if (resultMsg) {
+            resultMsg.textContent = 'Request timed out';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onerror = function() {
+        resetChainDropActionButtons();
+        if (resultMsg) {
+            resultMsg.textContent = 'Network error';
+            resultMsg.style.color = '#dc3545';
+        }
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            resetChainDropActionButtons();
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        // Reload and reopen modal so all statuses refresh
+                        reloadAndReopenContactModal();
+                        return;
+                    } else {
+                        if (resultMsg) {
+                            resultMsg.textContent = response.message || 'Reject failed';
+                            resultMsg.style.color = '#dc3545';
+                        }
+                    }
+                } catch (e) {
+                    if (resultMsg) {
+                        resultMsg.textContent = 'Invalid response';
+                        resultMsg.style.color = '#dc3545';
+                    }
+                }
+            } else if (xhr.status !== 0) {
+                if (resultMsg) {
+                    resultMsg.textContent = 'Request failed';
+                    resultMsg.style.color = '#dc3545';
+                }
+            }
+        }
+    };
+    xhr.send(formData);
+}
+
+function resetChainDropActionButtons() {
+    var acceptBtn = document.getElementById('chain_drop_accept_btn');
+    var acceptIcon = document.getElementById('chain_drop_accept_icon');
+    var acceptText = document.getElementById('chain_drop_accept_text');
+    var rejectBtn = document.getElementById('chain_drop_reject_btn');
+    var rejectIcon = document.getElementById('chain_drop_reject_icon');
+    var rejectText = document.getElementById('chain_drop_reject_text');
+
+    if (acceptBtn) acceptBtn.disabled = false;
+    if (acceptIcon) acceptIcon.className = 'fas fa-check';
+    if (acceptText) acceptText.textContent = 'Accept';
+    if (rejectBtn) rejectBtn.disabled = false;
+    if (rejectIcon) rejectIcon.className = 'fas fa-times';
+    if (rejectText) rejectText.textContent = 'Reject';
+}
+
+/**
+ * Reloads the page and reopens the current contact modal on the info tab.
+ * Used after chain drop propose/accept/reject so all statuses refresh from
+ * server data (badges, chain status, notification banner).
+ * @returns {void}
+ */
+function reloadAndReopenContactModal() {
+    if (currentContactId) {
+        var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
+        var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'info-tab');
+        if (storedId && storedTab) {
+            window.location.reload();
+        } else {
+            // Tor Browser fallback
+            var currentUrl = window.location.href.split('#')[0];
+            window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=info';
+            window.location.reload();
+        }
+    } else {
+        window.location.reload();
+    }
+}
 
 // ============================================================================
 // SETTINGS SECTION FUNCTIONS

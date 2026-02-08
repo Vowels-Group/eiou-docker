@@ -370,6 +370,7 @@ apiEndpointsTest
 securityTestSuite
 apiInputValidationTest
 syncTestSuite
+chainDropTestSuite
 gracefulShutdownTest
 transactionRecoveryTest
 seedphraseTestSuite
@@ -429,7 +430,9 @@ serviceExceptionTest
 TESTS_SYNC="
 addContactsTest
 sendMessageTest
+pingTestSuite
 syncTestSuite
+chainDropTestSuite
 "
 
 # Connection tests (SSL/Tor)

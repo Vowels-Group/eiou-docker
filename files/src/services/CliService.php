@@ -774,6 +774,56 @@ class CliService implements CliServiceInterface {
                 'usage' => 'start',
                 'arguments' => []
             ],
+            'chaindrop' => [
+                'description' => 'Manage chain drop agreements for resolving transaction chain gaps',
+                'usage' => 'chaindrop [action] ([args...])',
+                'arguments' => [
+                    'action' => ['type' => 'required', 'description' => 'Action: propose, accept, reject, list, help'],
+                    'args' => ['type' => 'optional', 'description' => 'Arguments for the action']
+                ],
+                'actions' => [
+                    'propose' => [
+                        'usage' => 'chaindrop propose <contact_address>',
+                        'description' => 'Propose dropping a missing transaction from the chain (auto-detects the gap)',
+                        'arguments' => [
+                            'contact_address' => ['type' => 'required', 'description' => 'Address of the contact with the broken chain']
+                        ]
+                    ],
+                    'accept' => [
+                        'usage' => 'chaindrop accept <proposal_id>',
+                        'description' => 'Accept an incoming chain drop proposal',
+                        'arguments' => [
+                            'proposal_id' => ['type' => 'required', 'description' => 'ID of the proposal to accept']
+                        ]
+                    ],
+                    'reject' => [
+                        'usage' => 'chaindrop reject <proposal_id>',
+                        'description' => 'Reject an incoming chain drop proposal (transactions remain blocked)',
+                        'arguments' => [
+                            'proposal_id' => ['type' => 'required', 'description' => 'ID of the proposal to reject']
+                        ]
+                    ],
+                    'list' => [
+                        'usage' => 'chaindrop list [contact_address]',
+                        'description' => 'List pending chain drop proposals',
+                        'arguments' => [
+                            'contact_address' => ['type' => 'optional', 'description' => 'Filter by contact address (omit to list all incoming)']
+                        ]
+                    ],
+                    'help' => [
+                        'usage' => 'chaindrop help',
+                        'description' => 'Show chain drop help'
+                    ]
+                ],
+                'examples' => [
+                    'chaindrop propose https://bob' => 'Propose dropping a missing transaction with Bob',
+                    'chaindrop accept cdp-abc123...' => 'Accept an incoming proposal',
+                    'chaindrop reject cdp-abc123...' => 'Reject a proposal (chain stays broken)',
+                    'chaindrop list' => 'List all incoming pending proposals',
+                    'chaindrop list https://bob' => 'List proposals for a specific contact'
+                ],
+                'note' => 'While a chain gap exists, transactions with that contact are blocked. Rejecting a proposal leaves the gap unresolved.'
+            ],
             'global_options' => [
                 'description' => 'Global options available for all commands',
                 'options' => [
@@ -801,9 +851,11 @@ class CliService implements CliServiceInterface {
                 if (isset($commands[$specificCommand])) {
                     echo "\t" . $commands[$specificCommand]['usage'] . " - " . $commands[$specificCommand]['description'] . "\n";
 
-                    // Show detailed help for apikey command
+                    // Show detailed help for commands with subcommands
                     if ($specificCommand === 'apikey') {
                         $this->showApiKeyDetailedHelp();
+                    } elseif ($specificCommand === 'chaindrop') {
+                        $this->showChainDropDetailedHelp();
                     }
                 } else {
                     echo "\tcommand does not exist.\n";
@@ -884,6 +936,70 @@ Example endpoints:
   POST /api/v1/contacts/ping/:addr  - Ping contact
   GET  /api/v1/system/status        - System status
   GET  /api/v1/system/settings      - System settings
+
+HELP;
+
+        echo $help;
+    }
+
+    /**
+     * Display detailed help for chain drop agreement commands
+     */
+    private function showChainDropDetailedHelp(): void {
+        $help = <<<HELP
+
+Chain Drop Agreement Commands
+=============================
+
+When both contacts are missing the same transaction in their shared chain,
+the chain cannot be repaired via sync. Chain drop resolves this by mutually
+agreeing to remove the missing transaction and relink the chain.
+
+IMPORTANT: While a chain gap exists, transactions with that contact are
+blocked. The send command verifies chain integrity before every transaction
+and will halt if a gap is detected.
+
+Propose dropping a missing transaction:
+  eiou chaindrop propose <contact_address>
+
+  Auto-detects the chain gap and sends a proposal to the contact.
+  Example:
+    eiou chaindrop propose https://bob
+
+Accept an incoming proposal:
+  eiou chaindrop accept <proposal_id>
+
+  Executes the chain drop, re-signs affected transactions, and
+  exchanges re-signed copies with the proposer.
+  Example:
+    eiou chaindrop accept cdp-2c3c26ba61ab4073...
+
+Reject an incoming proposal:
+  eiou chaindrop reject <proposal_id>
+
+  WARNING: Rejecting leaves the chain gap unresolved. Transactions
+  with this contact remain blocked until a new proposal is accepted.
+  Example:
+    eiou chaindrop reject cdp-2c3c26ba61ab4073...
+
+List pending proposals:
+  eiou chaindrop list [contact_address]
+
+  Without an address, lists all incoming pending proposals.
+  With an address, lists proposals for that specific contact.
+  Examples:
+    eiou chaindrop list
+    eiou chaindrop list https://bob
+
+Flow
+====
+
+1. Contact A runs: eiou chaindrop propose <contact_B_address>
+2. Contact B receives the proposal (visible via: eiou chaindrop list)
+3. Contact B runs: eiou chaindrop accept <proposal_id>
+4. Both chains are repaired and transactions can resume
+
+For multiple gaps, repeat the propose/accept cycle for each gap.
 
 HELP;
 

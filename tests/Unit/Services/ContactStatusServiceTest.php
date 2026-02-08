@@ -19,6 +19,7 @@ use Eiou\Services\ContactStatusService;
 use Eiou\Services\RateLimiterService;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\TransactionRepository;
+use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Services\Utilities\CurrencyUtilityService;
@@ -36,6 +37,7 @@ class ContactStatusServiceTest extends TestCase
     private ContactStatusService $service;
     private ContactRepository $mockContactRepo;
     private TransactionRepository $mockTransactionRepo;
+    private TransactionChainRepository $mockChainRepo;
     private UtilityServiceContainer $mockUtilityContainer;
     private TransportUtilityService $mockTransportUtility;
     private CurrencyUtilityService $mockCurrencyUtility;
@@ -55,6 +57,7 @@ class ContactStatusServiceTest extends TestCase
     {
         $this->mockContactRepo = $this->createMock(ContactRepository::class);
         $this->mockTransactionRepo = $this->createMock(TransactionRepository::class);
+        $this->mockChainRepo = $this->createMock(TransactionChainRepository::class);
         $this->mockUtilityContainer = $this->createMock(UtilityServiceContainer::class);
 
         // Mock all concrete utility services (required by BasePayload typed properties)
@@ -1056,5 +1059,210 @@ class ContactStatusServiceTest extends TestCase
 
         $this->assertTrue($result['success']);
         $this->assertEquals('online', $result['online_status']);
+    }
+
+    // =========================================================================
+    // Internal Chain Gap Detection Tests (chain heads match but internal gaps)
+    // =========================================================================
+
+    /**
+     * Test handlePingRequest detects internal chain gaps even when chain heads match
+     *
+     * Scenario: Both sides have TX1->TX2->?->?->TX5->TX6
+     * Chain heads match (both have TX6) but TX3, TX4 are missing from both sides
+     */
+    public function testHandlePingRequestDetectsInternalGapsWhenHeadsMatch(): void
+    {
+        $request = [
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS,
+            'prevTxid' => self::TEST_PREV_TXID,  // Same as local - heads match
+            'requestSync' => false
+        ];
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('isAcceptedContactPubkey')
+            ->with(self::TEST_CONTACT_PUBKEY)
+            ->willReturn(true);
+
+        // Local prevTxid matches remote (same chain head)
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(self::TEST_PREV_TXID);
+
+        // Inject chain repo and set it to return internal gaps
+        $this->service->setTransactionChainRepository($this->mockChainRepo);
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
+            ->willReturn([
+                'valid' => false,
+                'has_transactions' => true,
+                'transaction_count' => 4,
+                'gaps' => ['tx-3-id', 'tx-4-id'],
+                'broken_txids' => ['tx-5-id']
+            ]);
+
+        ob_start();
+        $this->service->handlePingRequest($request);
+        $output = ob_get_clean();
+
+        $response = json_decode($output, true);
+        $this->assertNotNull($response, 'Response should be valid JSON');
+        $this->assertFalse($response['chainValid'] ?? true, 'chainValid should be false when internal gaps exist');
+    }
+
+    /**
+     * Test handlePingRequest reports chain valid when no internal gaps exist
+     */
+    public function testHandlePingRequestReportsValidWhenNoInternalGaps(): void
+    {
+        $request = [
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS,
+            'prevTxid' => self::TEST_PREV_TXID,
+            'requestSync' => false
+        ];
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('isAcceptedContactPubkey')
+            ->willReturn(true);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(self::TEST_PREV_TXID);
+
+        $this->service->setTransactionChainRepository($this->mockChainRepo);
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => true,
+                'has_transactions' => true,
+                'transaction_count' => 6,
+                'gaps' => [],
+                'broken_txids' => []
+            ]);
+
+        ob_start();
+        $this->service->handlePingRequest($request);
+        $output = ob_get_clean();
+
+        $response = json_decode($output, true);
+        $this->assertNotNull($response);
+        $this->assertTrue($response['chainValid'] ?? false, 'chainValid should be true when no gaps');
+    }
+
+    /**
+     * Test handlePingRequest triggers sync when internal gap detected and requestSync is true
+     */
+    public function testHandlePingRequestTriggersSyncOnInternalGap(): void
+    {
+        $this->service->setSyncTrigger($this->mockSyncTrigger);
+        $this->service->setTransactionChainRepository($this->mockChainRepo);
+
+        $request = [
+            'senderPublicKey' => self::TEST_CONTACT_PUBKEY,
+            'senderAddress' => self::TEST_CONTACT_ADDRESS,
+            'prevTxid' => self::TEST_PREV_TXID,
+            'requestSync' => true
+        ];
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('isAcceptedContactPubkey')
+            ->willReturn(true);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(self::TEST_PREV_TXID);
+
+        // Internal gap detected
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->willReturn([
+                'valid' => false,
+                'has_transactions' => true,
+                'transaction_count' => 4,
+                'gaps' => ['tx-3-id'],
+                'broken_txids' => ['tx-5-id']
+            ]);
+
+        // Sync should be triggered
+        $this->mockSyncTrigger->expects($this->once())
+            ->method('syncTransactionChain')
+            ->with(self::TEST_CONTACT_ADDRESS, self::TEST_CONTACT_PUBKEY);
+
+        ob_start();
+        $this->service->handlePingRequest($request);
+        ob_get_clean();
+    }
+
+    /**
+     * Test pingContact detects internal gaps even when remote reports chain valid
+     */
+    public function testPingContactDetectsInternalGapsWhenRemoteReportsValid(): void
+    {
+        $this->service->setSyncTrigger($this->mockSyncTrigger);
+        $this->service->setRateLimiterService($this->mockRateLimiter);
+        $this->service->setTransactionChainRepository($this->mockChainRepo);
+
+        $this->mockRateLimiter->expects($this->once())
+            ->method('checkLimit')
+            ->willReturn(['allowed' => true]);
+
+        $this->mockContactRepo->expects($this->once())
+            ->method('getContactByNameOrAddress')
+            ->willReturn([
+                'name' => 'TestContact',
+                'pubkey' => self::TEST_CONTACT_PUBKEY,
+                'status' => 'accepted',
+                'https' => self::TEST_CONTACT_ADDRESS
+            ]);
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('getPreviousTxid')
+            ->willReturn(self::TEST_PREV_TXID);
+
+        // Remote responds: pong, chain valid, same prevTxid
+        $this->mockTransportUtility->expects($this->once())
+            ->method('send')
+            ->willReturn(json_encode([
+                'status' => 'pong',
+                'chainValid' => true,
+                'prevTxid' => self::TEST_PREV_TXID
+            ]));
+
+        // Local chain has internal gaps
+        $this->mockChainRepo->expects($this->once())
+            ->method('verifyChainIntegrity')
+            ->with(self::TEST_USER_PUBKEY, self::TEST_CONTACT_PUBKEY)
+            ->willReturn([
+                'valid' => false,
+                'has_transactions' => true,
+                'transaction_count' => 4,
+                'gaps' => ['tx-3-id', 'tx-4-id'],
+                'broken_txids' => ['tx-5-id']
+            ]);
+
+        $result = $this->service->pingContact('TestContact');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('online', $result['online_status']);
+        $this->assertFalse($result['chain_valid'], 'chain_valid should be false when internal gaps exist');
+    }
+
+    /**
+     * Test setTransactionChainRepository sets the repository
+     */
+    public function testSetTransactionChainRepositorySetsTheRepository(): void
+    {
+        $service = new ContactStatusService(
+            $this->mockContactRepo,
+            $this->mockTransactionRepo,
+            $this->mockUtilityContainer,
+            $this->mockUserContext
+        );
+
+        $service->setTransactionChainRepository($this->mockChainRepo);
+        $this->assertInstanceOf(ContactStatusService::class, $service);
     }
 }

@@ -96,5 +96,27 @@ interface BackupServiceInterface
      * @param CliOutputManager $output Output manager
      * @return void
      */
-    public function handleBackupCommand(array $args, $output): void;
+    public function handleCommand(array $args, $output): void;
+
+    /**
+     * Search all backups for a specific transaction by txid
+     *
+     * Iterates through backups (newest first), decrypts each, and searches
+     * the mysqldump SQL for the transaction row matching the given txid.
+     *
+     * @param string $txid The transaction ID to search for
+     * @return array|null Result with 'found', 'filename', 'sql_insert', 'backup_created_at', or null if not found
+     */
+    public function searchTransactionInBackups(string $txid): ?array;
+
+    /**
+     * Restore a single transaction from backup by txid
+     *
+     * Searches all backups for the transaction and inserts it into the live database.
+     * Uses INSERT IGNORE to prevent duplicate key errors.
+     *
+     * @param string $txid The transaction ID to restore
+     * @return array Result with 'success', 'filename', 'restored_txid', 'backup_created_at', 'error'
+     */
+    public function restoreTransactionFromBackup(string $txid): array;
 }

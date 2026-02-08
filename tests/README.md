@@ -22,6 +22,19 @@ Automated test suite for validating EIOU Docker node deployments. The suite test
 - Bash shell environment
 - For WSL2 users: May require increased initialization timeouts
 
+> **WARNING: Running the test suite will destroy containers and volumes matching the
+> test topology names.** The build scripts remove and recreate containers along with
+> their associated volumes (`<name>-mysql-data`, `<name>-files`, `<name>-backups`).
+> Container names per topology:
+> - `http4`: `httpA`, `httpB`, `httpC`, `httpD`
+> - `http10`: `httpA` through `httpJ`
+> - `http13`: `A0`, `A1`, `A11`, `A12`, `A2`, `A21`, `A22`, `A3`, `A31`, `A32`, `A4`, `A41`, `A42`
+>
+> The Docker network `eiou-network` is also created if it does not exist. If you have
+> any existing containers or volumes with these names, **they will be permanently
+> deleted**. The `eiou/eiou` Docker image will also be rebuilt, overwriting any
+> existing image with that tag.
+
 ## Quick Start
 
 ```bash
@@ -52,6 +65,7 @@ tests/
     ├── syncTestSuite.sh          # Chain synchronization
     ├── torTestSuite.sh           # Tor network tests
     ├── sslCertificateTest.sh     # SSL certificate validation
+    ├── chainDropTestSuite.sh     # Chain drop agreement + backup recovery (13 sections)
     ├── apiInputValidationTest.sh # API input validation (15+ test cases)
     ├── negativeFinancialTest.sh  # Financial error scenarios (14+ test cases)
     ├── performanceBaseline.sh    # Performance benchmarks
