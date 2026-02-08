@@ -1467,36 +1467,34 @@ function openContactModal(contact, openTab) {
         onlineStatusEl.className = 'status-badge status-' + onlineStatus;
     }
 
-    // Set chain status (valid/invalid/not checked) — proposal-aware
+    // Set chain status (valid/invalid/not checked) — proposal takes priority
     var chainStatusEl = document.getElementById('modal_chain_status');
     if (chainStatusEl) {
         var validChain = contact.valid_chain;
+        var proposal = contact.chain_drop_proposal;
         var chainText;
         var chainClass;
         var isClickable = false;
 
-        if (validChain === null || validChain === undefined) {
+        // Pending proposal overrides chain validity display
+        if (proposal && proposal.direction === 'incoming' && proposal.status === 'pending') {
+            chainText = 'Action Required';
+            chainClass = 'chain-action-required';
+            isClickable = true;
+        } else if (proposal && proposal.direction === 'outgoing' && proposal.status === 'pending') {
+            chainText = 'Awaiting Acceptance';
+            chainClass = 'chain-awaiting';
+            isClickable = true;
+        } else if (validChain === null || validChain === undefined) {
             chainText = 'Not Checked';
             chainClass = 'chain-unknown';
         } else if (validChain === true || validChain === 1) {
             chainText = 'Valid';
             chainClass = 'chain-valid';
         } else {
-            // Chain invalid — check for proposal state
-            var proposal = contact.chain_drop_proposal;
-            if (proposal && proposal.direction === 'incoming' && proposal.status === 'pending') {
-                chainText = 'Action Required';
-                chainClass = 'chain-action-required';
-                isClickable = true;
-            } else if (proposal && proposal.direction === 'outgoing' && proposal.status === 'pending') {
-                chainText = 'Awaiting Acceptance';
-                chainClass = 'chain-awaiting';
-                isClickable = true;
-            } else {
-                chainText = 'Needs Sync';
-                chainClass = 'chain-invalid';
-                isClickable = true;
-            }
+            chainText = 'Needs Sync';
+            chainClass = 'chain-invalid';
+            isClickable = true;
         }
         chainStatusEl.textContent = chainText;
         chainStatusEl.className = 'chain-badge ' + chainClass + (isClickable ? ' chain-clickable' : '');

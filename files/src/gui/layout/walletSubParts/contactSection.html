@@ -42,7 +42,6 @@
                         <div class="contact-name"><?php echo htmlspecialchars($contact['name']); ?></div>
                         <div class="contact-badges">
                             <span class="badge badge-accepted">Accepted</span>
-                            <?php if ($validChain === 0): ?>
                             <?php
                                 $proposal = $contact['chain_drop_proposal'] ?? null;
                                 $isIncoming = $proposal && $proposal['direction'] === 'incoming' && $proposal['status'] === 'pending';
@@ -56,9 +55,8 @@
                             <span class="badge badge-info-outline" title="Awaiting contact's response to proposal to drop missing transaction(s)">
                                 <i class="fas fa-clock"></i> Awaiting Response
                             </span>
-                            <?php else: ?>
+                            <?php elseif ($validChain === 0): ?>
                             <span class="badge badge-warning" title="Transaction chain needs sync"><i class="fas fa-exclamation-triangle"></i></span>
-                            <?php endif; ?>
                             <?php endif; ?>
                         </div>
                         <div class="contact-address-icons">
