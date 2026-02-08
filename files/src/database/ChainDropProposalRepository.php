@@ -186,6 +186,12 @@ class ChainDropProposalRepository extends AbstractRepository {
                   ) p2 ON p1.contact_pubkey_hash = p2.contact_pubkey_hash
                       AND p1.resolved_at = p2.max_resolved
                   WHERE p1.status = 'rejected'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM {$this->tableName} p3
+                      WHERE p3.contact_pubkey_hash = p1.contact_pubkey_hash
+                      AND p3.status IN ('accepted', 'executed')
+                      AND p3.updated_at > p1.resolved_at
+                  )
                   ORDER BY p1.resolved_at DESC";
 
         $stmt = $this->execute($query, []);
