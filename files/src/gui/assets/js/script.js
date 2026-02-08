@@ -1467,12 +1467,14 @@ function openContactModal(contact, openTab) {
         onlineStatusEl.className = 'status-badge status-' + onlineStatus;
     }
 
-    // Set chain status (valid/invalid/not checked)
+    // Set chain status (valid/invalid/not checked) — proposal-aware
     var chainStatusEl = document.getElementById('modal_chain_status');
     if (chainStatusEl) {
         var validChain = contact.valid_chain;
         var chainText;
         var chainClass;
+        var isClickable = false;
+
         if (validChain === null || validChain === undefined) {
             chainText = 'Not Checked';
             chainClass = 'chain-unknown';
@@ -1480,11 +1482,38 @@ function openContactModal(contact, openTab) {
             chainText = 'Valid';
             chainClass = 'chain-valid';
         } else {
-            chainText = 'Needs Sync';
-            chainClass = 'chain-invalid';
+            // Chain invalid — check for proposal state
+            var proposal = contact.chain_drop_proposal;
+            if (proposal && proposal.direction === 'incoming' && proposal.status === 'pending') {
+                chainText = 'Action Required';
+                chainClass = 'chain-action-required';
+                isClickable = true;
+            } else if (proposal && proposal.direction === 'outgoing' && proposal.status === 'pending') {
+                chainText = 'Awaiting Acceptance';
+                chainClass = 'chain-awaiting';
+                isClickable = true;
+            } else {
+                chainText = 'Needs Sync';
+                chainClass = 'chain-invalid';
+                isClickable = true;
+            }
         }
         chainStatusEl.textContent = chainText;
-        chainStatusEl.className = 'chain-badge ' + chainClass;
+        chainStatusEl.className = 'chain-badge ' + chainClass + (isClickable ? ' chain-clickable' : '');
+
+        // Make clickable to scroll to chain drop section
+        if (isClickable) {
+            chainStatusEl.onclick = function() {
+                var section = document.getElementById('chain_drop_section');
+                if (section && section.style.display !== 'none') {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            };
+            chainStatusEl.title = 'Click to view chain gap resolution';
+        } else {
+            chainStatusEl.onclick = null;
+            chainStatusEl.title = '';
+        }
     }
 
     // Show chain drop section if chain is invalid
@@ -1521,6 +1550,10 @@ function openContactModal(contact, openTab) {
                     }
                 }
             }
+        } else if (contact.valid_chain === 0 || contact.valid_chain === false) {
+            // Chain invalid but no proposal yet — show propose button
+            chainDropSection.style.display = 'block';
+            if (chainDropPropose) chainDropPropose.style.display = 'block';
         } else {
             chainDropSection.style.display = 'none';
         }
@@ -1720,41 +1753,35 @@ function pingContact() {
 
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
-            resetPingButton();
-
             if (xhr.status === 200) {
                 try {
                     var response = JSON.parse(xhr.responseText);
 
                     if (response.success) {
-                        // Update online status indicator
+                        // Show brief success message then reload to persist changes
                         var onlineStatus = response.online_status || 'unknown';
-                        var statusText = onlineStatus.charAt(0).toUpperCase() + onlineStatus.slice(1);
-                        if (onlineStatusEl) {
-                            onlineStatusEl.textContent = statusText;
-                            onlineStatusEl.className = 'status-badge status-' + onlineStatus;
-                        }
-
-                        // Update chain status if available
-                        if (chainStatusEl && response.chain_valid !== null && response.chain_valid !== undefined) {
-                            var chainText, chainClass;
-                            if (response.chain_valid === true || response.chain_valid === 1) {
-                                chainText = 'Valid';
-                                chainClass = 'chain-valid';
-                            } else {
-                                chainText = 'Needs Sync';
-                                chainClass = 'chain-invalid';
-                            }
-                            chainStatusEl.textContent = chainText;
-                            chainStatusEl.className = 'chain-badge ' + chainClass;
-                        }
-
-                        // Show success message
                         if (resultMsg) {
-                            resultMsg.textContent = response.message || 'Ping complete';
+                            resultMsg.textContent = response.message || 'Status updated, reloading...';
                             resultMsg.style.color = onlineStatus === 'online' ? '#28a745' : '#dc3545';
                         }
+                        // Reload and reopen modal on info tab so updated values persist
+                        if (currentContactId) {
+                            var storedId = safeStorageSet('eiou_reopen_contact_id', currentContactId);
+                            var storedTab = safeStorageSet('eiou_reopen_contact_tab', 'info-tab');
+                            if (storedId && storedTab) {
+                                window.location.reload();
+                            } else {
+                                // Tor Browser fallback
+                                var currentUrl = window.location.href.split('#')[0];
+                                window.location.href = currentUrl + '#reopen_contact=' + encodeURIComponent(currentContactId) + '&tab=info';
+                                window.location.reload();
+                            }
+                        } else {
+                            window.location.reload();
+                        }
+                        return;
                     } else {
+                        resetPingButton();
                         // Show error message
                         if (resultMsg) {
                             resultMsg.textContent = response.message || 'Ping failed';
@@ -1762,12 +1789,14 @@ function pingContact() {
                         }
                     }
                 } catch (e) {
+                    resetPingButton();
                     if (resultMsg) {
                         resultMsg.textContent = 'Invalid response';
                         resultMsg.style.color = '#dc3545';
                     }
                 }
             } else if (xhr.status !== 0) {
+                resetPingButton();
                 // Status 0 means aborted/timeout (handled separately)
                 if (resultMsg) {
                     resultMsg.textContent = 'Request failed';
@@ -2198,7 +2227,7 @@ function proposeChainDrop() {
                             resultMsg.textContent = 'Proposal sent successfully';
                             resultMsg.style.color = '#28a745';
                         }
-                        showToast('Chain Drop', 'Chain drop proposal sent to contact.', 'success');
+                        showToast('Proposal Sent', 'Proposal to drop missing transaction(s) sent to contact.', 'success');
                         // Switch to awaiting state
                         var proposeEl = document.getElementById('chain_drop_propose');
                         var awaitingEl = document.getElementById('chain_drop_awaiting');
@@ -2239,7 +2268,7 @@ function resetChainDropProposeButton() {
     var btnText = document.getElementById('chain_drop_propose_text');
     if (btn) btn.disabled = false;
     if (icon) icon.className = 'fas fa-handshake';
-    if (btnText) btnText.textContent = 'Propose Chain Drop';
+    if (btnText) btnText.textContent = 'Propose Dropping Missing Transaction(s)';
 }
 
 /**
@@ -2301,7 +2330,7 @@ function acceptChainDrop() {
                 try {
                     var response = JSON.parse(xhr.responseText);
                     if (response.success) {
-                        showToast('Chain Drop Accepted', 'The chain gap has been resolved.', 'success');
+                        showToast('Proposal Accepted', 'Missing transaction(s) dropped — chain gap resolved.', 'success');
                         var incomingEl = document.getElementById('chain_drop_incoming');
                         if (incomingEl) incomingEl.style.display = 'none';
                         var sectionEl = document.getElementById('chain_drop_section');
@@ -2388,7 +2417,7 @@ function rejectChainDrop() {
                 try {
                     var response = JSON.parse(xhr.responseText);
                     if (response.success) {
-                        showToast('Chain Drop Rejected', 'The chain drop proposal has been rejected.', 'info');
+                        showToast('Proposal Rejected', 'The proposal to drop missing transaction(s) has been rejected.', 'info');
                         var incomingEl = document.getElementById('chain_drop_incoming');
                         if (incomingEl) incomingEl.style.display = 'none';
                         var sectionEl = document.getElementById('chain_drop_section');
