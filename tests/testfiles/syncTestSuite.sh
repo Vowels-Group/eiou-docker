@@ -1868,7 +1868,7 @@ setup_ab_chain "$timestamp3b"
 # Verify both sides have the same transactions
 countA_before=$(get_tx_count ${contactA} "AB%-${timestamp3b}")
 countB_before=$(get_tx_count ${contactB} "AB%-${timestamp3b}")
-echo -e "\t   Before: A has ${countA_before}, B has ${countB_before} AB transactions"
+echo -e "\t   Before deletion: A has ${countA_before} txs, B has ${countB_before} txs (expected: both have 3)"
 
 # Delete AB1 and AB3 from BOTH sides (mutual gap)
 echo -e "\t   Deleting AB1 and AB3 from BOTH A and B (creating mutual gap)..."
@@ -1879,7 +1879,8 @@ delete_specific_transactions ${contactB} "AB3-${timestamp3b}"
 
 countA_after_delete=$(get_tx_count ${contactA} "AB%-${timestamp3b}")
 countB_after_delete=$(get_tx_count ${contactB} "AB%-${timestamp3b}")
-echo -e "\t   After deletion: A has ${countA_after_delete}, B has ${countB_after_delete} (both missing same txs)"
+expectedAfterDelete=$(( countA_before - 2 ))
+echo -e "\t   After deletion:  A has ${countA_after_delete} txs, B has ${countB_after_delete} txs (expected: both have ${expectedAfterDelete}, deleted 2 of ${countA_before})"
 
 # Run sync from A - should complete but report gaps
 echo -e "\t   Running sync from A (should report chain gaps)..."
@@ -1893,20 +1894,21 @@ done
 # Verify counts haven't changed (sync can't recover mutual gaps)
 countA_after_sync=$(get_tx_count ${contactA} "AB%-${timestamp3b}")
 countB_after_sync=$(get_tx_count ${contactB} "AB%-${timestamp3b}")
-echo -e "\t   After sync: A has ${countA_after_sync}, B has ${countB_after_sync} (unchanged expected)"
+echo -e "\t   After sync:      A has ${countA_after_sync} txs, B has ${countB_after_sync} txs (expected: unchanged at ${expectedAfterDelete})"
+echo -e "\t   Summary: ${countA_before}/${countB_before} -> deleted 2 each -> ${countA_after_delete}/${countB_after_delete} -> sync -> ${countA_after_sync}/${countB_after_sync} (A/B)"
 
 # Check sync output mentions chain gaps
 echo -e "\t   Sync output (first 150 chars): ${syncOutput:0:150}..."
 
 if echo "$syncOutput" | grep -q '"chain_gaps":[1-9]\|"synced_with_gaps"\|chain.*gap'; then
-    printf "\t   Test 3b (mutual gap) ${GREEN}PASSED${NC} - sync reports chain gaps\n"
+    printf "\t   Test 3b (mutual gap) ${GREEN}PASSED${NC} - sync reports chain gaps, counts unchanged (${countA_before} -> ${countA_after_sync})\n"
     passed=$(( passed + 1 ))
 elif [[ "$countA_after_sync" -eq "$countA_after_delete" ]] && [[ "$countB_after_sync" -eq "$countB_after_delete" ]]; then
     # Sync didn't recover anything (correct behavior) but may not have JSON gap reporting
-    printf "\t   Test 3b (mutual gap) ${GREEN}PASSED${NC} - sync cannot recover mutual gap (counts unchanged)\n"
+    printf "\t   Test 3b (mutual gap) ${GREEN}PASSED${NC} - sync cannot recover mutual gap, counts unchanged (${countA_before} -> ${countA_after_sync})\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Test 3b (mutual gap) ${RED}FAILED${NC} - unexpected state\n"
+    printf "\t   Test 3b (mutual gap) ${RED}FAILED${NC} - counts changed unexpectedly (A: ${countA_before}->${countA_after_sync}, B: ${countB_before}->${countB_after_sync})\n"
     failure=$(( failure + 1 ))
 fi
 
