@@ -1476,7 +1476,7 @@ function openContactModal(contact, openTab) {
         var chainClass;
         var isClickable = false;
 
-        // Pending proposal overrides chain validity display
+        // Proposal state overrides chain validity display
         if (proposal && proposal.direction === 'incoming' && proposal.status === 'pending') {
             chainText = 'Action Required';
             chainClass = 'chain-action-required';
@@ -1484,6 +1484,10 @@ function openContactModal(contact, openTab) {
         } else if (proposal && proposal.direction === 'outgoing' && proposal.status === 'pending') {
             chainText = 'Awaiting Acceptance';
             chainClass = 'chain-awaiting';
+            isClickable = true;
+        } else if (proposal && proposal.status === 'rejected') {
+            chainText = 'Blocked';
+            chainClass = 'chain-rejected';
             isClickable = true;
         } else if (validChain === null || validChain === undefined) {
             chainText = 'Not Checked';
@@ -1494,7 +1498,6 @@ function openContactModal(contact, openTab) {
         } else {
             chainText = 'Needs Sync';
             chainClass = 'chain-invalid';
-            isClickable = true;
         }
         chainStatusEl.textContent = chainText;
         chainStatusEl.className = 'chain-badge ' + chainClass + (isClickable ? ' chain-clickable' : '');
@@ -1519,12 +1522,14 @@ function openContactModal(contact, openTab) {
     var chainDropPropose = document.getElementById('chain_drop_propose');
     var chainDropAwaiting = document.getElementById('chain_drop_awaiting');
     var chainDropIncoming = document.getElementById('chain_drop_incoming');
+    var chainDropRejected = document.getElementById('chain_drop_rejected');
 
     if (chainDropSection) {
         // Reset all sub-sections
         if (chainDropPropose) chainDropPropose.style.display = 'none';
         if (chainDropAwaiting) chainDropAwaiting.style.display = 'none';
         if (chainDropIncoming) chainDropIncoming.style.display = 'none';
+        if (chainDropRejected) chainDropRejected.style.display = 'none';
         currentChainDropProposalId = null;
 
         if (contact.chain_drop_proposal) {
@@ -1547,6 +1552,8 @@ function openContactModal(contact, openTab) {
                         awaitingIdEl.textContent = 'Proposal: ' + proposal.proposal_id;
                     }
                 }
+            } else if (proposal.status === 'rejected') {
+                if (chainDropRejected) chainDropRejected.style.display = 'block';
             }
         } else {
             chainDropSection.style.display = 'none';

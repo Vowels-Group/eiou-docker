@@ -46,6 +46,7 @@
                                 $proposal = $contact['chain_drop_proposal'] ?? null;
                                 $isIncoming = $proposal && $proposal['direction'] === 'incoming' && $proposal['status'] === 'pending';
                                 $isOutgoing = $proposal && $proposal['direction'] === 'outgoing' && $proposal['status'] === 'pending';
+                                $isRejected = $proposal && $proposal['status'] === 'rejected';
                             ?>
                             <?php if ($isIncoming): ?>
                             <span class="badge badge-danger" title="Proposal to drop missing transaction(s) received — action required">
@@ -54,6 +55,10 @@
                             <?php elseif ($isOutgoing): ?>
                             <span class="badge badge-info-outline" title="Awaiting contact's response to proposal to drop missing transaction(s)">
                                 <i class="fas fa-clock"></i> Awaiting Response
+                            </span>
+                            <?php elseif ($isRejected): ?>
+                            <span class="badge badge-warning-strong" title="Chain gap unresolved — proposal was rejected, transactions blocked">
+                                <i class="fas fa-ban"></i> Blocked
                             </span>
                             <?php elseif ($validChain === 0): ?>
                             <span class="badge badge-warning" title="Transaction chain needs sync"><i class="fas fa-exclamation-triangle"></i></span>
@@ -300,6 +305,23 @@
                             </button>
                         </div>
                         <span id="chain_drop_action_result" class="ping-result-message"></span>
+                    </div>
+                </div>
+
+                <!-- Proposal was rejected - chain gap still unresolved -->
+                <div id="chain_drop_rejected" style="display: none;">
+                    <div class="alert alert-warning" style="padding: 0.75rem; font-size: 0.9rem; border-left: 4px solid #ffc107;">
+                        <i class="fas fa-ban" style="color: #664d03;"></i>
+                        <strong>Proposal Rejected — Chain Gap Unresolved</strong>
+                        <p style="margin: 0.5rem 0; font-size: 0.85rem;">
+                            The previous proposal to drop missing transaction(s) was rejected.
+                            The chain gap still exists and <strong>sending transactions remains blocked</strong>.
+                            A new proposal can be submitted to try again.
+                        </p>
+                        <button id="chain_drop_repropose_btn" class="btn btn-warning btn-sm" onclick="proposeChainDrop()" title="Propose dropping the missing transaction(s) to repair the chain">
+                            <i class="fas fa-handshake"></i> Propose Dropping Missing Transaction(s)
+                        </button>
+                        <span id="chain_drop_repropose_result" class="ping-result-message"></span>
                     </div>
                 </div>
             </div>
