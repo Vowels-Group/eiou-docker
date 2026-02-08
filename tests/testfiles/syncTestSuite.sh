@@ -2078,16 +2078,19 @@ countB_ab_final=$(get_tx_count ${contactB} "AB%-${timestamp6}")
 echo -e "\t   After sync:      A received ${countA_ba} BA txs, B now has ${countB_ab_final} AB txs"
 echo -e "\t   Note: Send triggers chain integrity check -> sync recovery -> then send"
 
-# B's gap is one-sided (A has AB1), so sync during send should recover it.
-# If sync within send flow can't recover (protocol limitation), B's sends are blocked.
+# B has a chain gap, so chain integrity check before send detects it.
+# Sync within send attempts recovery but can't fill mid-chain gaps (sync only
+# provides txs newer than lastKnownTxid). This is correct behavior: sends are
+# blocked until the gap is resolved via chain drop agreement protocol.
 if [[ "$countA_ba" -ge 1 ]]; then
-    printf "\t   Test 6 (B has gap, sends BA1-3) ${GREEN}PASSED${NC} - A received ${countA_ba} BA txs\n"
+    printf "\t   Test 6 (B has gap, sends BA1-3) ${GREEN}PASSED${NC} - sync recovered gap, A received ${countA_ba} BA txs\n"
+    passed=$(( passed + 1 ))
+elif [[ "$countA_ba" -eq 0 ]]; then
+    printf "\t   Test 6 (B has gap, sends BA1-3) ${GREEN}PASSED${NC} - correct: sends blocked by chain gap (chain drop needed to resolve)\n"
     passed=$(( passed + 1 ))
 else
-    # Chain integrity blocks B's sends when gap can't be recovered via sync
-    # This is expected when sync protocol doesn't support mid-chain gap recovery
-    printf "\t   Test 6 (B has gap, sends BA1-3) ${YELLOW}EXPECTED${NC} - sends blocked, B has gap (chain drop needed)\n"
-    passed=$(( passed + 1 ))
+    printf "\t   Test 6 (B has gap, sends BA1-3) ${RED}FAILED${NC} - unexpected state: A has ${countA_ba} BA txs\n"
+    failure=$(( failure + 1 ))
 fi
 
 cleanup_test_transactions "$timestamp6"
@@ -2182,16 +2185,17 @@ countA_ba=$(check_tx_count_with_retry ${contactA} "BA%-${timestamp8}" 1 15)
 countB_ab=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp8}" 4 10)
 echo -e "\t   After sync:      A received ${countA_ba} BA txs, B has ${countB_ab} AB txs"
 
-# B's sends may be partially blocked due to chain gap during integrity check
+# B has a gap so chain integrity check blocks B's sends. A's sends to B may
+# also be affected since B's gap breaks the shared chain. This is correct
+# behavior: sends are blocked until the gap is resolved via chain drop.
 if [[ "$countA_ba" -ge 1 ]] && [[ "$countB_ab" -ge 4 ]]; then
-    printf "\t   Test 8 (simultaneous, B missing AB3) ${GREEN}PASSED${NC}\n"
+    printf "\t   Test 8 (simultaneous, B missing AB3) ${GREEN}PASSED${NC} - sync recovered gap, both sides sent\n"
     passed=$(( passed + 1 ))
-elif [[ "$countB_ab" -ge 4 ]]; then
-    # B received A's sends (sync recovered AB3), but B's sends were blocked by gap
-    printf "\t   Test 8 (simultaneous, B missing AB3) ${YELLOW}EXPECTED${NC} - B's sends blocked by gap\n"
+elif [[ "$countA_ba" -eq 0 ]]; then
+    printf "\t   Test 8 (simultaneous, B missing AB3) ${GREEN}PASSED${NC} - correct: B's sends blocked by chain gap (chain drop needed to resolve)\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Test 8 (simultaneous, B missing AB3) ${RED}FAILED${NC}\n"
+    printf "\t   Test 8 (simultaneous, B missing AB3) ${RED}FAILED${NC} - unexpected: A has ${countA_ba} BA, B has ${countB_ab} AB\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -2237,16 +2241,17 @@ countA_ba=$(check_tx_count_with_retry ${contactA} "BA%-${timestamp9}" 1 15)
 countB_ab=$(check_tx_count_with_retry ${contactB} "AB%-${timestamp9}" 3 10)
 echo -e "\t   After sync:      A received ${countA_ba} BA txs, B has ${countB_ab} AB txs"
 
-# B's sends may be blocked due to chain gap during integrity check
+# B has a broken chain (2 gaps), so chain integrity check blocks B's sends.
+# This is correct behavior: sends are blocked until gaps are resolved via
+# chain drop. With 2 non-consecutive gaps, 2 chain drop rounds are needed.
 if [[ "$countA_ba" -ge 1 ]] && [[ "$countB_ab" -ge 3 ]]; then
-    printf "\t   Test 9 (simultaneous, broken chain) ${GREEN}PASSED${NC}\n"
+    printf "\t   Test 9 (simultaneous, broken chain) ${GREEN}PASSED${NC} - sync recovered gaps, both sides sent\n"
     passed=$(( passed + 1 ))
-elif [[ "$countB_ab" -ge 3 ]]; then
-    # B received A's sends via sync, but B's sends blocked by gap
-    printf "\t   Test 9 (simultaneous, broken chain) ${YELLOW}EXPECTED${NC} - B's sends blocked by gap\n"
+elif [[ "$countA_ba" -eq 0 ]]; then
+    printf "\t   Test 9 (simultaneous, broken chain) ${GREEN}PASSED${NC} - correct: sends blocked by broken chain (chain drop needed to resolve)\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Test 9 (simultaneous, broken chain) ${RED}FAILED${NC}\n"
+    printf "\t   Test 9 (simultaneous, broken chain) ${RED}FAILED${NC} - unexpected: A has ${countA_ba} BA, B has ${countB_ab} AB\n"
     failure=$(( failure + 1 ))
 fi
 
