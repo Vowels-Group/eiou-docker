@@ -48,27 +48,27 @@ This runs the full test suite against a 4-node linear topology using HTTP mode.
 
 ```
 tests/
-├── run-all-tests.sh          # Main test runner script
+├── run-all-tests.sh                  # Main test runner script
 ├── baseconfig/
-│   ├── config.sh             # Shared configuration and utility functions
-│   └── testHelpers.sh        # Common test helper functions
+│   ├── config.sh                     # Shared configuration and utility functions
+│   └── testHelpers.sh                # Common test helper functions
 ├── buildfiles/
-│   ├── http4.sh              # 4-node linear topology
-│   ├── http10.sh             # 10-node linear topology
-│   └── http13.sh             # 13-node hierarchical cluster
+│   ├── http4.sh                      # 4-node linear topology
+│   ├── http10.sh                     # 10-node linear topology
+│   └── http13.sh                     # 13-node hierarchical cluster
 └── testfiles/
-    ├── hostnameTest.sh           # HTTP/HTTPS prerequisite test
-    ├── addContactsTest.sh        # Contact addition workflow
-    ├── sendMessageTest.sh        # Basic messaging
-    ├── balanceTest.sh            # Balance operations
-    ├── transactionTestSuite.sh   # Transaction tests
-    ├── syncTestSuite.sh          # Chain synchronization
-    ├── torTestSuite.sh           # Tor network tests
-    ├── sslCertificateTest.sh     # SSL certificate validation
-    ├── chainDropTestSuite.sh     # Chain drop agreement + backup recovery (13 sections)
-    ├── apiInputValidationTest.sh # API input validation (15+ test cases)
-    ├── negativeFinancialTest.sh  # Financial error scenarios (14+ test cases)
-    ├── performanceBaseline.sh    # Performance benchmarks
+    ├── hostnameTest.sh               # HTTP/HTTPS prerequisite test
+    ├── addContactsTest.sh            # Contact addition workflow
+    ├── sendMessageTest.sh            # Basic messaging
+    ├── balanceTest.sh                # Balance operations
+    ├── transactionTestSuite.sh       # Transaction tests
+    ├── syncTestSuite.sh              # Chain synchronization
+    ├── torTestSuite.sh               # Tor network tests
+    ├── sslCertificateTest.sh         # SSL certificate validation
+    ├── chainDropTestSuite.sh         # Chain drop agreement + backup recovery (13 sections)
+    ├── apiInputValidationTest.sh     # API input validation (15+ test cases)
+    ├── negativeFinancialTest.sh      # Financial error scenarios (14+ test cases)
+    ├── performanceBaseline.sh        # Performance benchmarks
     └── ... (additional test files)
 ```
 
@@ -87,11 +87,11 @@ tests/
 
 **Examples:**
 ```bash
-./run-all-tests.sh http4              # All tests, HTTP mode
-./run-all-tests.sh http4 https        # All tests, HTTPS mode
-./run-all-tests.sh http4 http quick   # Quick validation tests
-./run-all-tests.sh http4 http contacts # Contact management tests
-./run-all-tests.sh http10 tor all     # Full suite with Tor on 10-node topology
+./run-all-tests.sh http4                  # All tests, HTTP mode
+./run-all-tests.sh http4 https            # All tests, HTTPS mode
+./run-all-tests.sh http4 http quick       # Quick validation tests
+./run-all-tests.sh http4 http contacts    # Contact management tests
+./run-all-tests.sh http10 tor all         # Full suite with Tor on 10-node topology
 ```
 
 ### Available Topologies
