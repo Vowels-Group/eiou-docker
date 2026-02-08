@@ -304,22 +304,27 @@ if ($container->has(ContactServiceInterface::class)) {
 
 | Service | Purpose | Key Dependencies |
 |---------|---------|------------------|
-| `TransactionService` | **Facade** for transaction operations, delegates to specialized services | BalanceService, ChainVerificationService, TransactionValidationService, TransactionProcessingService, SendOperationService, P2pService, SyncService |
+| `TransactionService` | **Facade** for transaction operations, delegates to specialized services | BalanceService, ChainVerificationService, TransactionValidationService, TransactionProcessingService, SendOperationService, P2pService, ContactService, SyncTriggerProxy |
 | `BalanceService` | Balance calculations and currency conversions | BalanceRepo, TransactionContactRepo, AddressRepo, CurrencyUtility |
-| `ChainVerificationService` | Transaction chain integrity verification | TransactionChainRepo, SyncService |
-| `TransactionValidationService` | Transaction validation with proactive sync | TransactionRepo, ContactRepo, ValidationUtility, SyncService |
-| `TransactionProcessingService` | Transaction processing with atomic claiming | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncService, HeldTransactionService |
-| `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, ContactService, LockingService |
+| `ChainVerificationService` | Transaction chain integrity verification | TransactionChainRepo, SyncTriggerProxy |
+| `TransactionValidationService` | Transaction validation with proactive sync | TransactionRepo, ContactRepo, ValidationUtility, SyncTriggerProxy, TransactionService |
+| `TransactionProcessingService` | Transaction processing with atomic claiming | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncTriggerProxy, P2pService, HeldTransactionService |
+| `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, LockingService, ContactService, P2pService, SyncTriggerProxy, TransactionService, TransactionChainRepo, ChainDropService |
 | `P2pService` | Peer-to-peer message routing | ContactRepo, P2pRepo, TransportUtility, MessageDeliveryService |
-| `Rp2pService` | Return P2P (response) message handling | ContactRepo, Rp2pRepo, TransactionService |
-| `ContactService` | Contact management and messaging | ContactRepo, AddressRepo, TransactionContactRepo, SyncService, MessageDeliveryService |
-| `SyncService` | Transaction chain synchronization | ContactRepo, TransactionRepo, TransactionChainRepo, HeldTransactionService |
+| `Rp2pService` | Return P2P (response) message handling | ContactRepo, Rp2pRepo, SendOperationService (via P2pTransactionSenderInterface) |
+| `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
+| `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
+| `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
+| `ContactStatusService` | Contact ping/status checking | ContactRepo, TransactionRepo, SyncTriggerProxy, TransactionChainRepo, RateLimiterService |
+| `SyncService` | Transaction chain synchronization | ContactRepo, AddressRepo, P2pRepo, Rp2pRepo, TransactionRepo, TransactionChainRepo, TransactionContactRepo, BalanceRepo, UtilityContainer, HeldTransactionService, BackupService |
+| `ChainDropService` | Chain drop agreement protocol | ChainDropProposalRepo, TransactionChainRepo, TransactionRepo, ContactRepo, UtilityContainer, BackupService |
+| `ChainOperationsService` | Centralized chain verification/repair | SyncService |
 | `MessageDeliveryService` | Reliable delivery with retry/DLQ | MessageDeliveryRepo, DeadLetterQueueRepo, TransportUtility |
-| `HeldTransactionService` | Pending transaction queue for sync | HeldTransactionRepo, TransactionRepo, TransactionChainRepo, SyncService |
-| `CleanupService` | Expired message cleanup | P2pRepo, Rp2pRepo, TransactionRepo |
+| `HeldTransactionService` | Pending transaction queue for sync | HeldTransactionRepo, TransactionRepo, TransactionChainRepo (uses EventDispatcher for sync notifications) |
+| `CleanupService` | Expired message/proposal cleanup | P2pRepo, Rp2pRepo, TransactionRepo, ChainDropService |
+| `BackupService` | Encrypted backup and restore | TransactionRepo |
 | `WalletService` | Wallet information access | UserContext |
-| `MessageService` | Incoming message handling | ContactRepo, P2pRepo, TransactionRepo, TransactionContactRepo, SyncService |
-| `ContactStatusService` | Contact ping/status checking | ContactRepo, TransactionRepo, SyncService |
+| `MessageService` | Incoming message routing | ContactRepo, BalanceRepo, P2pRepo, TransactionRepo, TransactionContactRepo, SyncTriggerProxy, ChainDropService |
 | `ApiAuthService` | API authentication (HMAC-SHA256) | ApiKeyRepo |
 | `ApiKeyService` | API key management | ApiKeyRepo |
 | `TransactionRecoveryService` | Stuck transaction recovery | TransactionRecoveryRepo |
@@ -346,23 +351,54 @@ and vice versa). These are resolved via setter injection:
 ```php
 // In ServiceContainer::wireCircularDependencies()
 
-// Core circular dependencies
-$this->services['TransactionService']->setSyncService($this->services['SyncService']);
+// Core sync-related dependencies (via SyncTriggerInterface proxy for loose coupling)
+$this->services['TransactionService']->setSyncTrigger($this->getSyncServiceProxy());
 $this->services['SyncService']->setHeldTransactionService($this->services['HeldTransactionService']);
-$this->services['Rp2pService']->setTransactionService($this->services['TransactionService']);
 
-// TransactionService facade receives its 5 specialized services
+// Contact services
+$this->services['ContactManagementService']->setContactSyncService($this->services['ContactSyncService']);
+$this->services['ContactSyncService']->setSyncTrigger($this->getSyncServiceProxy());
+$this->services['ContactSyncService']->setMessageDeliveryService($this->services['MessageDeliveryService']);
+$this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
+$this->services['ContactStatusService']->setSyncTrigger($this->getSyncServiceProxy());
+$this->services['ContactStatusService']->setTransactionChainRepository($this->getTransactionChainRepository());
+$this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
+
+// MessageService handles sync requests and chain drop messages
+$this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
+$this->services['MessageService']->setChainDropService($this->services['ChainDropService']);
+
+// RP2P uses P2pTransactionSenderInterface to break circular dependency
+$this->services['Rp2pService']->setP2pTransactionSender($this->services['SendOperationService']);
+
+// TransactionService facade receives P2p, Contact, and 5 specialized services
+$this->services['TransactionService']->setP2pService($this->services['P2pService']);
+$this->services['TransactionService']->setContactService($this->services['ContactService']);
 $this->services['TransactionService']->setBalanceService($this->services['BalanceService']);
 $this->services['TransactionService']->setChainVerificationService($this->services['ChainVerificationService']);
 $this->services['TransactionService']->setTransactionValidationService($this->services['TransactionValidationService']);
 $this->services['TransactionService']->setTransactionProcessingService($this->services['TransactionProcessingService']);
 $this->services['TransactionService']->setSendOperationService($this->services['SendOperationService']);
 
-// Specialized services also have circular dependencies
-$this->services['ChainVerificationService']->setSyncService($this->services['SyncService']);
-$this->services['TransactionValidationService']->setSyncService($this->services['SyncService']);
-$this->services['TransactionProcessingService']->setSyncService($this->services['SyncService']);
+// Specialized services use SyncTriggerInterface proxy
+$this->services['ChainVerificationService']->setSyncTrigger($this->getSyncServiceProxy());
+$this->services['TransactionValidationService']->setSyncTrigger($this->getSyncServiceProxy());
+$this->services['TransactionValidationService']->setTransactionService($this->services['TransactionService']);
+$this->services['TransactionProcessingService']->setSyncTrigger($this->getSyncServiceProxy());
+$this->services['TransactionProcessingService']->setP2pService($this->services['P2pService']);
+$this->services['TransactionProcessingService']->setHeldTransactionService($this->services['HeldTransactionService']);
 $this->services['SendOperationService']->setContactService($this->services['ContactService']);
+$this->services['SendOperationService']->setP2pService($this->services['P2pService']);
+$this->services['SendOperationService']->setSyncTrigger($this->getSyncServiceProxy());
+$this->services['SendOperationService']->setTransactionService($this->services['TransactionService']);
+$this->services['SendOperationService']->setTransactionChainRepository($this->getTransactionChainRepository());
+$this->services['SendOperationService']->setChainDropService($this->services['ChainDropService']);
+
+// Chain operations and backup recovery
+$this->services['ChainOperationsService']->setSyncService($this->services['SyncService']);
+$this->services['SyncService']->setBackupService($this->getBackupService());
+$this->services['ChainDropService']->setBackupService($this->getBackupService());
+$this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
 ```
 
 ---
@@ -535,20 +571,20 @@ class BalanceService
 ```php
 class TransactionService
 {
-    private ?SyncServiceInterface $syncService = null;
+    private ?SyncTriggerInterface $syncTrigger = null;
 
-    public function setSyncService(SyncServiceInterface $syncService): void {
-        $this->syncService = $syncService;
+    public function setSyncTrigger(SyncTriggerInterface $syncTrigger): void {
+        $this->syncTrigger = $syncTrigger;
     }
 
-    private function getSyncService(): SyncServiceInterface {
-        if ($this->syncService === null) {
+    private function getSyncTrigger(): SyncTriggerInterface {
+        if ($this->syncTrigger === null) {
             throw new RuntimeException(
-                'SyncService not injected. Call setSyncService() or ensure ' .
+                'SyncTrigger not injected. Call setSyncTrigger() or ensure ' .
                 'ServiceContainer::wireCircularDependencies() is called.'
             );
         }
-        return $this->syncService;
+        return $this->syncTrigger;
     }
 }
 ```
@@ -556,28 +592,33 @@ class TransactionService
 ### Dependency Graph
 
 ```
-                    +------------------+
-                    | ServiceContainer |
-                    +--------+---------+
-                             |
-      +----------------------+----------------------+
-      |                      |                      |
-+-----v------+       +-------v-------+      +-------v-------+
-|  Sync      |       | Transaction   |      |   Contact     |
-|  Service   |<----->|   Service     |<---->|   Service     |
-+-----+------+       +-------+-------+      +-------+-------+
-      |                      |                      |
-      |              +-------+-------+              |
-      |              |               |              |
-+-----v------+ +-----v-----+ +------v-----+ +------v------+
-|   Held     | | Balance   | |   Chain    | |   Message   |
-| Transaction| | Service   | |Verification| |   Service   |
-|  Service   | +-----------+ |  Service   | +-------------+
-+------------+               +------------+
+                         +------------------+
+                         | ServiceContainer |
+                         +--------+---------+
+                                  |
+     +-------------+--------------+--------------+-------------+
+     |             |              |              |             |
++----v----+  +-----v------+ +----v-----+  +-----v------+ +----v-----+
+|  Sync   |  |Transaction |  | Contact |  |  Message  | | Cleanup  |
+| Service |  |  Service   |  | Service |  |  Service  | | Service  |
++----+----+  +-----+------+ +----+-----+  +-----+-----+ +----+-----+
+     |             |              |              |             |
+     |    +--------+--------+    |              |             |
+     |    |        |        |    |              |             |
++----v--+ v   +----v---+ +--v---v--+   +-------v------+ +----v------+
+| Held  | |   |  Send  | | Chain  |   | ChainDrop    | | Backup    |
+|  Tx   | |   |  Op    | | Verif  |   |   Service    | | Service   |
+|Service| |   |Service | |Service |   +--------------+ +-----------+
++-------+ |   +----+---+ +--------+         ^               ^
+          |        |                         |               |
+     +----v----+   +--- ChainDropService     +--- Setter     |
+     | Balance |   +--- SyncTriggerProxy     +--- Setter ----+
+     | Service |
+     +---------+
 
 Legend:
   -----> Constructor injection
-  <----> Setter injection (circular dependency)
+  ··· > Setter injection via SyncTriggerInterface proxy (loose coupling)
 ```
 
 ---
@@ -600,23 +641,36 @@ constructed to wire up setter-injected dependencies:
 
 ```php
 public function wireCircularDependencies(): void {
-    // Core sync-related dependencies - now use SyncTriggerInterface via proxy
+    // Core sync-related dependencies (SyncTriggerInterface via proxy)
     $this->services['TransactionService']->setSyncTrigger($this->getSyncServiceProxy());
     $this->services['SyncService']->setHeldTransactionService($this->services['HeldTransactionService']);
     // Note: HeldTransactionService uses EventDispatcher for sync notifications (no setter injection)
 
-    // Contact and message service dependencies - use SyncTriggerInterface via proxy
+    // Contact services
+    $this->services['ContactManagementService']->setContactSyncService($this->services['ContactSyncService']);
+    $this->services['ContactSyncService']->setSyncTrigger($this->getSyncServiceProxy());
+    $this->services['ContactSyncService']->setMessageDeliveryService($this->services['MessageDeliveryService']);
     $this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
-    $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
+    $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServiceProxy());
 
-    // RP2P uses interface-based injection (breaks circular dependency)
+    // Message service handles sync and chain drop routing
+    $this->services['MessageService']->setSyncTrigger($this->getSyncServiceProxy());
+    $this->services['MessageService']->setChainDropService($this->services['ChainDropService']);
+
+    // RP2P uses P2pTransactionSenderInterface (breaks circular dependency)
     $this->services['Rp2pService']->setP2pTransactionSender($this->services['SendOperationService']);
 
-    // Refactored service dependencies (still use direct SyncService for specialized needs)
-    $this->services['ChainVerificationService']->setSyncService($this->services['SyncService']);
-    $this->services['TransactionProcessingService']->setSyncService($this->services['SyncService']);
+    // Specialized services use SyncTriggerInterface via proxy
+    $this->services['ChainVerificationService']->setSyncTrigger($this->getSyncServiceProxy());
+    $this->services['TransactionProcessingService']->setSyncTrigger($this->getSyncServiceProxy());
     $this->services['SendOperationService']->setContactService($this->services['ContactService']);
-    // ... additional wiring
+    $this->services['SendOperationService']->setChainDropService($this->services['ChainDropService']);
+
+    // Chain operations and backup recovery
+    $this->services['ChainOperationsService']->setSyncService($this->services['SyncService']);
+    $this->services['SyncService']->setBackupService($this->getBackupService());
+    $this->services['ChainDropService']->setBackupService($this->getBackupService());
+    $this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
 }
 ```
 
@@ -867,6 +921,7 @@ Each node maintains a MariaDB database with these primary tables:
 | `contacts` | Known peers with public keys, addresses, status |
 | `addresses` | Contact address variants (HTTP, HTTPS, Tor) |
 | `balances` | Current balance with each contact |
+| `debug` | Debug log entries and diagnostics |
 | `transactions` | Transaction history and chain links |
 | `p2p` | Outbound P2P routing messages |
 | `rp2p` | Return P2P (response) messages |
@@ -875,7 +930,9 @@ Each node maintains a MariaDB database with these primary tables:
 | `delivery_metrics` | Message delivery statistics |
 | `held_transactions` | Transactions pending sync completion |
 | `api_keys` | API authentication keys |
-| `rate_limiter` | Rate limiting state |
+| `api_request_log` | API request audit trail |
+| `rate_limits` | Rate limiting state |
+| `chain_drop_proposals` | Mutual chain drop agreement tracking |
 
 ### Repository Pattern
 
@@ -1107,10 +1164,12 @@ request patterns.
          |   sent   |          | rejected |          |  failed  |
          +----+-----+          +----------+          +----------+
                |
-               v
-         +----------+
-         | accepted |
-         +----+-----+
+               +---------------------+
+               |                     |
+               v                     v
+         +----------+          +-----------+
+         | accepted |          | cancelled |
+         +----+-----+          +-----------+
                |
                v
          +----------+
@@ -1128,6 +1187,7 @@ request patterns.
 | `accepted` | Recipient acknowledged receipt |
 | `completed` | Transaction finalized, balances updated |
 | `rejected` | Recipient declined (various reasons) |
+| `cancelled` | Not received by peer in time (timeout) |
 | `failed` | Delivery failed after max retries |
 
 ### Chain Integrity
@@ -1202,6 +1262,187 @@ Incoming Transaction (prev_txid=unknown)
 | 4. Process held when      |
 |    chain complete         |
 +---------------------------+
+```
+
+### Receive Flow (Incoming Transaction)
+
+When a node receives a standard direct transaction from a contact, the request passes
+through validation, chain integrity checks, storage, and acceptance response:
+
+```
+HTTP Request (from sender)
+  │
+  ├── index.html (Entry Point)
+  │     ├── Verify envelope signature (secp256k1)
+  │     ├── Validate required fields (senderPublicKey, senderAddress)
+  │     ├── Validate public key and address format
+  │     └── Route by type === "send"
+  │
+  ├── TransactionValidationService.checkTransactionPossible()
+  │     ├── Is sender blocked? → reject with 'contact_blocked'
+  │     ├── checkPreviousTxid()
+  │     │     ├── Get expected: getPreviousTxid(senderPubkey, receiverPubkey)
+  │     │     ├── Compare with request['previousTxid']
+  │     │     └── Mismatch? → Proactive sync with sender
+  │     │           ├── syncTransactionChain() (with backup recovery)
+  │     │           └── Retry previousTxid check after sync
+  │     ├── checkAvailableFundsTransaction()
+  │     │     └── (balance + credit_limit) >= amount? → reject if not
+  │     ├── Check for duplicate txid → reject if exists
+  │     └── Generate recipient signature
+  │
+  ├── TransactionProcessingService.processStandardIncoming()
+  │     ├── INSERT transaction with status='received'
+  │     └── UPDATE tracking fields (initial_sender, end_recipient)
+  │
+  └── Response: Echo acceptance JSON with recipientSignature
+```
+
+The proactive sync in the `checkPreviousTxid` step uses the same backup recovery
+mechanism described in the [Chain Integrity](#chain-integrity) section: local backup
+check, then remote backup request via `missingTxids`, then chain drop as last resort.
+
+### Sync Flow (SyncService)
+
+Transaction chain synchronization repairs chain gaps between two contacts. The flow
+includes bilateral backup recovery so both sides can self-repair in a single round trip:
+
+```
+syncTransactionChain(contactAddress, contactPublicKey)
+  │
+  ├── 1. Get lastKnownTxid (our latest tx with this contact)
+  │
+  ├── 2. Local self-repair (if BackupService available)
+  │     ├── verifyChainIntegrity() → get list of gaps
+  │     ├── For each missing txid:
+  │     │     └── restoreTransactionFromBackup() → recovered? remove from gaps list
+  │     └── Re-verify chain, update lastKnownTxid and remaining gaps
+  │
+  ├── 3. Build sync request
+  │     ├── buildTransactionSyncRequest(contactAddress, contactPubkey, lastKnownTxid)
+  │     └── Append missingTxids[] (remaining gaps for remote to check)
+  │
+  ├── 4. Send request to contact → contact's handleTransactionSyncRequest()
+  │
+  └── 5. Process sync response
+        ├── For each transaction in response:
+        │     ├── Skip if already exists locally
+        │     ├── Check for chain conflict (same previous_txid)
+        │     │     └── Deterministic resolution: lower txid wins
+        │     ├── Verify sender signature
+        │     └── Insert transaction
+        ├── Dispatch SYNC_COMPLETED event
+        └── HeldTransactionService processes any unblocked held transactions
+
+
+handleTransactionSyncRequest(request)  [Contact's side]
+  │
+  ├── 1. Verify sender is known contact
+  ├── 2. Get transactions newer than request's lastKnownTxid
+  ├── 3. Filter and format via formatTransactionForSync()
+  │     └── Description privacy: only include description for 'contact' or 'standard' memo
+  ├── 4. Check missingTxids[] from requester (cap at 10)
+  │     ├── For each missing txid not already in response:
+  │     │     ├── Check local DB → if found, format and include
+  │     │     └── Check local backups → if restored, format and include
+  └── 5. Return filtered transactions (oldest first)
+```
+
+### Chain Drop Agreement Flow
+
+When neither side has a missing transaction in their database or backups, the chain
+drop protocol coordinates mutual agreement to remove the gap and relink the chain:
+
+```
+      PROPOSER (A)                                  RECEIVER (B)
+           │                                             │
+  1. verifyChainIntegrity()                              │
+     → gap detected, missing txid                        │
+           │                                             │
+  2. Sync attempted (with backup recovery)               │
+     → neither side has it                               │
+           │                                             │
+  3. proposeChainDrop(contactPubkeyHash)                  │
+     ├── Backup recovery fallback (safety net)           │
+     ├── Create proposal record (direction=outgoing)     │
+     └── Send proposal ──────────────────────────────────>│
+           │                                    4. handleIncomingProposal()
+           │                                       ├── Verify gap exists locally
+           │                                       ├── Backup recovery fallback
+           │                                       └── Store proposal (direction=incoming)
+           │                                             │
+           │                                    5. User reviews via CLI/GUI
+           │                                             │
+           │                          ┌──────────────────┴──────────────────┐
+           │                     Accept                                Reject
+           │                          │                                     │
+           │                 6. acceptProposal()                   rejectProposal()
+           │                    ├── executeChainDrop()              └── Send rejection ──>│
+           │                    │     ├── Update broken_txid's                            │
+           │                    │     │   previous_txid to skip gap                       │
+           │                    │     └── Re-sign affected tx                             │
+           │                    └── Send acceptance + resigned txs ────>│                  │
+           │                                                           │                  │
+  7. handleIncomingAcceptance()                                        │                  │
+     ├── executeChainDrop() locally                                    │                  │
+     ├── processResignedTransactions()                                 │                  │
+     ├── Mark proposal executed                                        │                  │
+     └── Send acknowledgment + our resigned txs ──────────────────────>│                  │
+           │                                                           │                  │
+           │                                              8. handleIncomingAcknowledgment()
+           │                                                 ├── processResignedTransactions()
+           │                                                 └── Mark proposal fully executed
+```
+
+**Proposal States:** `pending` → `accepted` → `executed` (or `rejected` / `expired` / `failed`)
+
+### Contact Lifecycle
+
+Contacts progress through states managed by the `contacts` table:
+
+```
+                              +----------+
+     Contact request sent --> |  pending |
+                              +----+-----+
+                                   │
+                      ┌────────────┴────────────┐
+                      │                         │
+                      v                         v
+               +----------+             +-----------+
+               | accepted |             |  blocked  |
+               +----+-----+             +-----------+
+                    │                         ^
+                    │                         │
+                    +--- eiou block ──────────+
+                    │
+                    +--- eiou delete ──> (row deleted from DB)
+```
+
+| State | Description |
+|-------|-------------|
+| `pending` | Contact request created, awaiting acceptance by other party |
+| `accepted` | Both parties confirmed; transactions and sync are enabled |
+| `blocked` | Contact blocked; incoming messages rejected |
+
+**Online Status:** Accepted contacts also have an `online_status` field updated by
+the `ContactStatusProcessor`: `online`, `offline`, or `unknown` (default). The processor
+pings one contact per cycle, validates chain integrity, and triggers sync if chains
+don't match.
+
+**Contact Request Flow:**
+
+```
+  Node A                                       Node B
+    │                                            │
+    ├── eiou add <address>                       │
+    │     └── Send contact request ─────────────>│
+    │         (tx_type='contact', amount=0)       ├── Contact appears as 'pending'
+    │                                            │
+    │                                            ├── eiou accept <name>
+    │                                            │     ├── Update contact to 'accepted'
+    │<───────── Send acceptance message ─────────┤     └── Complete contact transaction
+    ├── Update contact to 'accepted'             │
+    └── Complete contact transaction             │
 ```
 
 ### Error Handling
