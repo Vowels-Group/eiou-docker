@@ -621,16 +621,18 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 2.4: Verify tx3.previous_txid = tx1 (first gap resolved)
+# Test 2.4: Verify tx3.previous_txid = tx1 (first gap resolved) on BOTH sides
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Verifying first gap resolved: tx3.previous_txid = tx1"
+echo -e "\n\t-> Verifying first gap resolved: tx3.previous_txid = tx1 (both sides)"
 
-prevTxid=$(get_previous_txid ${sender} "$tx3")
-echo -e "\t   tx3.previous_txid: ${prevTxid:0:40}..."
-echo -e "\t   Expected (tx1): ${tx1:0:40}..."
+senderPrevTx3=$(get_previous_txid ${sender} "$tx3")
+receiverPrevTx3=$(get_previous_txid ${receiver} "$tx3")
+echo -e "\t   Sender   tx3.previous_txid: ${senderPrevTx3:0:40}..."
+echo -e "\t   Receiver tx3.previous_txid: ${receiverPrevTx3:0:40}..."
+echo -e "\t   Expected (tx1):              ${tx1:0:40}..."
 
-if [[ "$prevTxid" == "$tx1" ]]; then
-    printf "\t   First gap relink ${GREEN}PASSED${NC}\n"
+if [[ "$senderPrevTx3" == "$tx1" ]] && [[ "$receiverPrevTx3" == "$tx1" ]]; then
+    printf "\t   First gap relink correct on both nodes ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   First gap relink ${RED}FAILED${NC}\n"
@@ -672,18 +674,22 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 2.6: Verify final chain: tx1 -> tx3 -> tx5
+# Test 2.6: Verify final chain: tx1 -> tx3 -> tx5 on BOTH sides
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Verifying final chain: tx1 -> tx3 -> tx5"
+echo -e "\n\t-> Verifying final chain: tx1 -> tx3 -> tx5 (both sides)"
 
-tx3Prev=$(get_previous_txid ${sender} "$tx3")
-tx5Prev=$(get_previous_txid ${sender} "$tx5")
+sTx3Prev=$(get_previous_txid ${sender} "$tx3")
+sTx5Prev=$(get_previous_txid ${sender} "$tx5")
+rTx3Prev=$(get_previous_txid ${receiver} "$tx3")
+rTx5Prev=$(get_previous_txid ${receiver} "$tx5")
 
-echo -e "\t   tx3.previous_txid: ${tx3Prev:0:40}... (expect tx1)"
-echo -e "\t   tx5.previous_txid: ${tx5Prev:0:40}... (expect tx3)"
+echo -e "\t   Sender   tx3.previous_txid: ${sTx3Prev:0:40}... (expect tx1)"
+echo -e "\t   Sender   tx5.previous_txid: ${sTx5Prev:0:40}... (expect tx3)"
+echo -e "\t   Receiver tx3.previous_txid: ${rTx3Prev:0:40}... (expect tx1)"
+echo -e "\t   Receiver tx5.previous_txid: ${rTx5Prev:0:40}... (expect tx3)"
 
-if [[ "$tx3Prev" == "$tx1" ]] && [[ "$tx5Prev" == "$tx3" ]]; then
-    printf "\t   Final chain order correct ${GREEN}PASSED${NC}\n"
+if [[ "$sTx3Prev" == "$tx1" ]] && [[ "$sTx5Prev" == "$tx3" ]] && [[ "$rTx3Prev" == "$tx1" ]] && [[ "$rTx5Prev" == "$tx3" ]]; then
+    printf "\t   Final chain order correct on both nodes ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   Final chain order ${RED}FAILED${NC}\n"
@@ -806,27 +812,31 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 3.4: Verify final chain: tx1 -> tx4 -> tx5 (tx2 and tx3 are gone)
+# Test 3.4: Verify final chain: tx1 -> tx4 -> tx5 (tx2 and tx3 are gone) on BOTH sides
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Verifying chain: tx1 -> tx4 -> tx5"
+echo -e "\n\t-> Verifying chain: tx1 -> tx4 -> tx5 (both sides)"
 
-tx4Prev=$(get_previous_txid ${sender} "$tx4")
-tx5Prev=$(get_previous_txid ${sender} "$tx5")
+sTx4Prev=$(get_previous_txid ${sender} "$tx4")
+sTx5Prev=$(get_previous_txid ${sender} "$tx5")
+rTx4Prev=$(get_previous_txid ${receiver} "$tx4")
+rTx5Prev=$(get_previous_txid ${receiver} "$tx5")
 
-echo -e "\t   tx4.previous_txid: ${tx4Prev:0:40}... (expect tx1)"
-echo -e "\t   tx5.previous_txid: ${tx5Prev:0:40}... (expect tx4)"
+echo -e "\t   Sender   tx4.previous_txid: ${sTx4Prev:0:40}... (expect tx1)"
+echo -e "\t   Sender   tx5.previous_txid: ${sTx5Prev:0:40}... (expect tx4)"
+echo -e "\t   Receiver tx4.previous_txid: ${rTx4Prev:0:40}... (expect tx1)"
+echo -e "\t   Receiver tx5.previous_txid: ${rTx5Prev:0:40}... (expect tx4)"
 
-if [[ "$tx4Prev" == "$tx1" ]] && [[ "$tx5Prev" == "$tx4" ]]; then
-    printf "\t   Chain order correct ${GREEN}PASSED${NC}\n"
+if [[ "$sTx4Prev" == "$tx1" ]] && [[ "$sTx5Prev" == "$tx4" ]] && [[ "$rTx4Prev" == "$tx1" ]] && [[ "$rTx5Prev" == "$tx4" ]]; then
+    printf "\t   Chain order correct on both nodes ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   Chain order ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
 
-# Test 3.5: Verify transaction count is 3 (tx2 and tx3 gone)
+# Test 3.5: Verify transaction count is 3 on BOTH sides (tx2 and tx3 gone)
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Verifying transaction count is 3"
+echo -e "\n\t-> Verifying transaction count is 3 (both sides)"
 
 senderTxCount=$(docker exec ${sender} php -r "
     require_once('${BOOTSTRAP_PATH}');
@@ -836,13 +846,21 @@ senderTxCount=$(docker exec ${sender} php -r "
     echo \$count;
 " 2>/dev/null || echo "0")
 
-echo -e "\t   Remaining transactions: ${senderTxCount}"
+receiverTxCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
 
-if [[ "$senderTxCount" == "3" ]]; then
-    printf "\t   Transaction count correct ${GREEN}PASSED${NC}\n"
+echo -e "\t   Sender: ${senderTxCount} txs, Receiver: ${receiverTxCount} txs (expect 3/3)"
+
+if [[ "$senderTxCount" == "3" ]] && [[ "$receiverTxCount" == "3" ]]; then
+    printf "\t   Transaction count correct on both ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Transaction count ${RED}FAILED${NC} (expected 3, got ${senderTxCount})\n"
+    printf "\t   Transaction count ${RED}FAILED${NC} (expected 3/3, got ${senderTxCount}/${receiverTxCount})\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -1302,22 +1320,33 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 6.6: Verify remaining chain order: tx1 -> tx2 -> tx4 -> tx5 (tx3 gone)
+# Test 6.6: Verify remaining chain order: tx1 -> tx2 -> tx4 -> tx5 (tx3 gone) on BOTH sides
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Verifying full chain order: tx1 -> tx2 -> tx4 -> tx5"
+echo -e "\n\t-> Verifying full chain order: tx1 -> tx2 -> tx4 -> tx5 (both sides)"
 
-tx1Prev=$(get_previous_txid ${sender} "$tx1")
-tx2Prev=$(get_previous_txid ${sender} "$tx2")
-tx4Prev=$(get_previous_txid ${sender} "$tx4")
-tx5Prev=$(get_previous_txid ${sender} "$tx5")
+sTx1Prev=$(get_previous_txid ${sender} "$tx1")
+sTx2Prev=$(get_previous_txid ${sender} "$tx2")
+sTx4Prev=$(get_previous_txid ${sender} "$tx4")
+sTx5Prev=$(get_previous_txid ${sender} "$tx5")
+rTx1Prev=$(get_previous_txid ${receiver} "$tx1")
+rTx2Prev=$(get_previous_txid ${receiver} "$tx2")
+rTx4Prev=$(get_previous_txid ${receiver} "$tx4")
+rTx5Prev=$(get_previous_txid ${receiver} "$tx5")
 
-echo -e "\t   tx1.previous_txid: ${tx1Prev} (expect NULL)"
-echo -e "\t   tx2.previous_txid: ${tx2Prev:0:40}... (expect tx1)"
-echo -e "\t   tx4.previous_txid: ${tx4Prev:0:40}... (expect tx2)"
-echo -e "\t   tx5.previous_txid: ${tx5Prev:0:40}... (expect tx4)"
+echo -e "\t   Sender chain:"
+echo -e "\t     tx1.previous_txid: ${sTx1Prev} (expect NULL)"
+echo -e "\t     tx2.previous_txid: ${sTx2Prev:0:40}... (expect tx1)"
+echo -e "\t     tx4.previous_txid: ${sTx4Prev:0:40}... (expect tx2)"
+echo -e "\t     tx5.previous_txid: ${sTx5Prev:0:40}... (expect tx4)"
+echo -e "\t   Receiver chain:"
+echo -e "\t     tx1.previous_txid: ${rTx1Prev} (expect NULL)"
+echo -e "\t     tx2.previous_txid: ${rTx2Prev:0:40}... (expect tx1)"
+echo -e "\t     tx4.previous_txid: ${rTx4Prev:0:40}... (expect tx2)"
+echo -e "\t     tx5.previous_txid: ${rTx5Prev:0:40}... (expect tx4)"
 
-if [[ "$tx1Prev" == "NULL" ]] && [[ "$tx2Prev" == "$tx1" ]] && [[ "$tx4Prev" == "$tx2" ]] && [[ "$tx5Prev" == "$tx4" ]]; then
-    printf "\t   Full chain order correct ${GREEN}PASSED${NC}\n"
+if [[ "$sTx1Prev" == "NULL" ]] && [[ "$sTx2Prev" == "$tx1" ]] && [[ "$sTx4Prev" == "$tx2" ]] && [[ "$sTx5Prev" == "$tx4" ]] && \
+   [[ "$rTx1Prev" == "NULL" ]] && [[ "$rTx2Prev" == "$tx1" ]] && [[ "$rTx4Prev" == "$tx2" ]] && [[ "$rTx5Prev" == "$tx4" ]]; then
+    printf "\t   Full chain order correct on both nodes ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   Full chain order ${RED}FAILED${NC}\n"
@@ -1577,12 +1606,14 @@ else
     failure=$(( failure + 1 ))
 fi
 
-# Test 7.6: Verify full chain: tx1 -> tx4 -> tx5 and tx count = 3
+# Test 7.6: Verify full chain: tx1 -> tx4 -> tx5 and tx count = 3 on BOTH sides
 totaltests=$(( totaltests + 1 ))
-echo -e "\n\t-> Verifying full chain: tx1 -> tx4 -> tx5, count = 3"
+echo -e "\n\t-> Verifying full chain: tx1 -> tx4 -> tx5, count = 3 (both sides)"
 
-tx1Prev=$(get_previous_txid ${sender} "$tx1")
-tx5Prev=$(get_previous_txid ${sender} "$tx5")
+sTx1Prev=$(get_previous_txid ${sender} "$tx1")
+sTx5Prev=$(get_previous_txid ${sender} "$tx5")
+rTx1Prev=$(get_previous_txid ${receiver} "$tx1")
+rTx5Prev=$(get_previous_txid ${receiver} "$tx5")
 
 senderCount=$(docker exec ${sender} php -r "
     require_once('${BOOTSTRAP_PATH}');
@@ -1592,12 +1623,26 @@ senderCount=$(docker exec ${sender} php -r "
     echo \$count;
 " 2>/dev/null || echo "0")
 
-echo -e "\t   tx1.previous_txid: ${tx1Prev} (expect NULL)"
-echo -e "\t   tx5.previous_txid: ${tx5Prev:0:40}... (expect tx4)"
-echo -e "\t   Transaction count: ${senderCount} (expect 3)"
+receiverCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
 
-if [[ "$tx1Prev" == "NULL" ]] && [[ "$tx5Prev" == "$tx4" ]] && [[ "$senderCount" == "3" ]]; then
-    printf "\t   Full chain and count correct ${GREEN}PASSED${NC}\n"
+echo -e "\t   Sender chain:"
+echo -e "\t     tx1.previous_txid: ${sTx1Prev} (expect NULL)"
+echo -e "\t     tx5.previous_txid: ${sTx5Prev:0:40}... (expect tx4)"
+echo -e "\t     Transaction count: ${senderCount} (expect 3)"
+echo -e "\t   Receiver chain:"
+echo -e "\t     tx1.previous_txid: ${rTx1Prev} (expect NULL)"
+echo -e "\t     tx5.previous_txid: ${rTx5Prev:0:40}... (expect tx4)"
+echo -e "\t     Transaction count: ${receiverCount} (expect 3)"
+
+if [[ "$sTx1Prev" == "NULL" ]] && [[ "$sTx5Prev" == "$tx4" ]] && [[ "$senderCount" == "3" ]] && \
+   [[ "$rTx1Prev" == "NULL" ]] && [[ "$rTx5Prev" == "$tx4" ]] && [[ "$receiverCount" == "3" ]]; then
+    printf "\t   Full chain and count correct on both nodes ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
     printf "\t   Full chain/count ${RED}FAILED${NC}\n"
