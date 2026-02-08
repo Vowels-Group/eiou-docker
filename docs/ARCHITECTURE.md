@@ -1154,6 +1154,36 @@ recovery before falling through to a chain drop:
    the `ChainDropService` coordinates mutual agreement to drop the missing transaction
    and relink the chain
 
+### Send Flow (SendOperationService)
+
+When a user sends a transaction, chain integrity is verified **before** the
+transaction is created. If the chain has gaps, sync (with backup recovery) is
+attempted automatically. The transaction only proceeds once the chain is valid:
+
+```
+sendEiou()
+  ├── Validate inputs (address, amount, currency, etc.)
+  ├── verifySenderChainAndSync()
+  │     ├── verifyChainIntegrity() → if valid, return success
+  │     ├── syncTransactionChain()
+  │     │     ├── Local backup recovery (self-repair)
+  │     │     ├── Sync with contact (+ missingTxids for remote backup recovery)
+  │     │     └── Post-sync chain integrity check
+  │     ├── Re-verify chain after sync
+  │     └── Return success if chain repaired, failure if gaps remain
+  │
+  ├── If chain verification failed:
+  │     ├── Auto-propose chain drop (if sync completed but gaps remain)
+  │     └── Return error to user (transaction NOT created)
+  │
+  ├── If chain valid → prepareStandardTransactionData() (tx created here)
+  └── Send transaction to contact
+```
+
+The transaction is never created or held during chain repair — if backup recovery
+or sync repairs the chain, the send proceeds immediately. If the chain cannot be
+repaired, the user receives an error and no transaction is created.
+
 ### HeldTransactionService
 
 When a transaction arrives with an unknown `prev_txid`, it cannot be immediately
