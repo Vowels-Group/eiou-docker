@@ -390,6 +390,9 @@ class ChainDropService implements ChainDropServiceInterface
             // Recalculate balance now that chain has been modified
             $this->syncContactBalanceAfterDrop($proposal['contact_pubkey_hash']);
 
+            // Update chain validity status (chain should now be valid after drop)
+            $this->updateChainStatusAfterDrop($proposal['contact_pubkey_hash']);
+
             // Update proposal status
             $this->proposalRepository->updateStatus($proposalId, 'accepted');
 
@@ -467,6 +470,9 @@ class ChainDropService implements ChainDropServiceInterface
             // Recalculate balance now that chain has been modified
             $this->syncContactBalanceAfterDrop($proposal['contact_pubkey_hash']);
 
+            // Update chain validity status (chain should now be valid after drop)
+            $this->updateChainStatusAfterDrop($proposal['contact_pubkey_hash']);
+
             // Update proposal status
             $this->proposalRepository->updateStatus($proposalId, 'accepted');
 
@@ -523,6 +529,9 @@ class ChainDropService implements ChainDropServiceInterface
 
             // Process the proposer's re-signed transactions
             $this->processResignedTransactions($resignedTransactions);
+
+            // Update chain validity status (chain should now be fully valid)
+            $this->updateChainStatusAfterDrop($proposal['contact_pubkey_hash']);
 
             // Mark as fully executed
             $this->proposalRepository->markExecuted($proposalId);
@@ -954,6 +963,44 @@ class ChainDropService implements ChainDropServiceInterface
         }
 
         return $result;
+    }
+
+    /**
+     * Verify chain integrity after a drop and update the contact's valid_chain flag
+     *
+     * After a chain drop, the chain should be valid (the gap has been bridged).
+     * This method verifies and updates the contact record so the GUI shows
+     * the correct chain status.
+     *
+     * @param string $contactPubkeyHash The contact's public key hash
+     */
+    private function updateChainStatusAfterDrop(string $contactPubkeyHash): void
+    {
+        try {
+            $contact = $this->contactRepository->lookupByPubkeyHash($contactPubkeyHash);
+            if (!$contact || empty($contact['pubkey'])) {
+                return;
+            }
+
+            $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                $this->currentUser->getPublicKey(),
+                $contact['pubkey']
+            );
+
+            $this->contactRepository->updateContactFields($contact['pubkey'], [
+                'valid_chain' => $chainStatus['valid'] ? 1 : 0
+            ]);
+
+            Logger::getInstance()->info("Chain status updated after chain drop", [
+                'contact_pubkey_hash' => substr($contactPubkeyHash, 0, 16) . '...',
+                'valid' => $chainStatus['valid']
+            ]);
+        } catch (Exception $e) {
+            Logger::getInstance()->warning("Failed to update chain status after chain drop", [
+                'contact_pubkey_hash' => substr($contactPubkeyHash, 0, 16) . '...',
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**

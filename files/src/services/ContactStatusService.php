@@ -6,6 +6,7 @@ namespace Eiou\Services;
 use Eiou\Utils\Logger;
 use Eiou\Contracts\ContactStatusServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
+use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\TransactionChainRepository;
@@ -70,6 +71,11 @@ class ContactStatusService implements ContactStatusServiceInterface {
     private ?TransactionChainRepository $transactionChainRepository = null;
 
     /**
+     * @var ChainDropServiceInterface|null Chain drop service for auto-proposing drops on mutual gaps
+     */
+    private ?ChainDropServiceInterface $chainDropService = null;
+
+    /**
      * Set the sync trigger (accepts interface for loose coupling)
      *
      * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
@@ -107,6 +113,15 @@ class ContactStatusService implements ContactStatusServiceInterface {
      */
     public function setTransactionChainRepository(TransactionChainRepository $repo): void {
         $this->transactionChainRepository = $repo;
+    }
+
+    /**
+     * Set the chain drop service for auto-proposing drops on mutual gaps
+     *
+     * @param ChainDropServiceInterface $service Chain drop service
+     */
+    public function setChainDropService(ChainDropServiceInterface $service): void {
+        $this->chainDropService = $service;
     }
 
     /**
@@ -245,20 +260,24 @@ class ContactStatusService implements ContactStatusServiceInterface {
      *
      * @param string $address Contact address
      * @param string $pubkey Contact public key
+     * @return array|null Sync result or null on failure
      */
-    private function triggerSync(string $address, string $pubkey): void {
+    private function triggerSync(string $address, string $pubkey): ?array {
         try {
             // Use existing sync method
-            $this->getSyncTrigger()->syncTransactionChain($address, $pubkey);
+            $result = $this->getSyncTrigger()->syncTransactionChain($address, $pubkey);
 
             Logger::getInstance()->info("Chain sync triggered from incoming ping request", [
                 'contact_address' => $address
             ]);
+
+            return $result;
         } catch (\Exception $e) {
             Logger::getInstance()->warning("Chain sync failed during incoming ping", [
                 'contact_address' => $address,
                 'error' => $e->getMessage()
             ]);
+            return null;
         }
     }
 
@@ -383,8 +402,28 @@ class ContactStatusService implements ContactStatusServiceInterface {
                         $this->updateChainStatus($contact['pubkey'], false);
 
                         // Trigger sync if enabled
+                        $syncResult = null;
                         if (Constants::CONTACT_STATUS_SYNC_ON_PING) {
-                            $this->triggerSync($contactAddress, $contact['pubkey']);
+                            $syncResult = $this->triggerSync($contactAddress, $contact['pubkey']);
+                        }
+
+                        // Auto-propose chain drop if sync completed but mutual gaps remain
+                        if ($syncResult && !($syncResult['chain_valid'] ?? true) && !empty($syncResult['chain_gaps'] ?? []) && $this->chainDropService) {
+                            $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contact['pubkey']);
+                            try {
+                                $proposeResult = $this->chainDropService->proposeChainDrop($contactPubkeyHash);
+                                if ($proposeResult['success']) {
+                                    Logger::getInstance()->info("Auto-proposed chain drop after sync detected mutual gap", [
+                                        'contact_name' => $contact['name'],
+                                        'proposal_id' => $proposeResult['proposal_id']
+                                    ]);
+                                }
+                            } catch (\Exception $e) {
+                                Logger::getInstance()->warning("Auto-propose chain drop failed", [
+                                    'contact_name' => $contact['name'],
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
                         }
 
                         return [
