@@ -1550,10 +1550,6 @@ function openContactModal(contact, openTab) {
                     }
                 }
             }
-        } else if (contact.valid_chain === 0 || contact.valid_chain === false) {
-            // Chain invalid but no proposal yet — show propose button
-            chainDropSection.style.display = 'block';
-            if (chainDropPropose) chainDropPropose.style.display = 'block';
         } else {
             chainDropSection.style.display = 'none';
         }
