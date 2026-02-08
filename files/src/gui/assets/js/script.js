@@ -1925,6 +1925,34 @@ function checkReopenContactModal() {
 }
 
 /**
+ * Opens a contact modal by contact ID.
+ *
+ * Finds the contact card with matching data-contact-id attribute and clicks
+ * it to open the modal. Used by notification banners to link directly to a
+ * specific contact.
+ *
+ * @param {string} contactId - The contact ID to open
+ * @param {string} [tab] - Optional tab to switch to after opening (e.g. 'info-tab')
+ * @returns {void}
+ */
+function openContactByContactId(contactId, tab) {
+    var contactCards = document.querySelectorAll('.contact-card');
+    for (var i = 0; i < contactCards.length; i++) {
+        var card = contactCards[i];
+        var cardContactId = card.getAttribute('data-contact-id');
+        if (cardContactId && cardContactId === contactId) {
+            card.click();
+            if (tab) {
+                setTimeout(function() {
+                    showModalTab(tab, null);
+                }, 150);
+            }
+            return;
+        }
+    }
+}
+
+/**
  * Switches to a specific tab within a modal.
  *
  * Hides all tab contents, deactivates all tab buttons, then shows the

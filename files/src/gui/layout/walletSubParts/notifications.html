@@ -97,6 +97,44 @@
 </div>
 <?php endif; ?>
 
+<!-- Incoming Chain Drop Proposal Notification -->
+<?php
+$incomingChainDropContacts = [];
+foreach ($acceptedContacts as $c) {
+    $p = $c['chain_drop_proposal'] ?? null;
+    if ($p && ($p['direction'] ?? '') === 'incoming' && ($p['status'] ?? '') === 'pending') {
+        $incomingChainDropContacts[] = $c;
+    }
+}
+?>
+<?php if (!empty($incomingChainDropContacts)): ?>
+<div class="alert alert-error fade-in-up" style="margin-bottom: 2rem; border-left: 4px solid #dc3545;">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <i class="fas fa-exclamation-triangle" style="font-size: 1.5rem; color: #dc3545;"></i>
+        <div style="flex: 1;">
+            <h4 style="margin: 0; color: #842029;">
+                <?php echo count($incomingChainDropContacts); ?> Chain Gap Resolution<?php echo count($incomingChainDropContacts) > 1 ? 's' : ''; ?> — Action Required
+            </h4>
+            <p style="margin: 0.5rem 0 0 0; color: #6c757d; font-size: 0.9rem;">
+                <?php foreach ($incomingChainDropContacts as $i => $c): ?>
+                    <strong><?php echo htmlspecialchars($c['name']); ?></strong> has proposed dropping missing transaction(s) to repair the chain.
+                    Sending is blocked until resolved.<?php echo $i < count($incomingChainDropContacts) - 1 ? '<br>' : ''; ?>
+                <?php endforeach; ?>
+            </p>
+        </div>
+        <?php if (count($incomingChainDropContacts) === 1): ?>
+        <button type="button" class="btn btn-danger" style="padding: 0.5rem 1rem; white-space: nowrap;" onclick="openContactByContactId('<?php echo htmlspecialchars($incomingChainDropContacts[0]['contact_id'] ?? '', ENT_QUOTES); ?>')">
+            <i class="fas fa-eye"></i> View
+        </button>
+        <?php else: ?>
+        <a href="#contacts" class="btn btn-danger" style="padding: 0.5rem 1rem; white-space: nowrap;">
+            <i class="fas fa-eye"></i> View Contacts
+        </a>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Toast notifications for newly completed transactions (sent by user) -->
 <?php if (!empty($newlyCompletedTransactions)): ?>
 <script>
