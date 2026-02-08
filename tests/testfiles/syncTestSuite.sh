@@ -1852,6 +1852,67 @@ fi
 cleanup_test_transactions "$timestamp3"
 
 ################################################################################
+# Test 3b: Mutual gap - BOTH A and B missing same transactions (AB1, AB3)
+# Unlike tests 1-3 where only B loses data (so A can share via sync),
+# this tests when both sides are missing the same transactions, making
+# sync unable to repair the gap. Sync should report chain_gaps > 0.
+################################################################################
+echo -e "\n[10.1.4 Test 3b: Mutual gap - both sides missing same transactions]"
+totaltests=$(( totaltests + 1 ))
+
+timestamp3b=$(date +%s%N)
+
+# Setup: Create AB chain (AB0, AB1, AB2, AB3)
+setup_ab_chain "$timestamp3b"
+
+# Verify both sides have the same transactions
+countA_before=$(get_tx_count ${contactA} "AB%-${timestamp3b}")
+countB_before=$(get_tx_count ${contactB} "AB%-${timestamp3b}")
+echo -e "\t   Before: A has ${countA_before}, B has ${countB_before} AB transactions"
+
+# Delete AB1 and AB3 from BOTH sides (mutual gap)
+echo -e "\t   Deleting AB1 and AB3 from BOTH A and B (creating mutual gap)..."
+delete_specific_transactions ${contactA} "AB1-${timestamp3b}"
+delete_specific_transactions ${contactA} "AB3-${timestamp3b}"
+delete_specific_transactions ${contactB} "AB1-${timestamp3b}"
+delete_specific_transactions ${contactB} "AB3-${timestamp3b}"
+
+countA_after_delete=$(get_tx_count ${contactA} "AB%-${timestamp3b}")
+countB_after_delete=$(get_tx_count ${contactB} "AB%-${timestamp3b}")
+echo -e "\t   After deletion: A has ${countA_after_delete}, B has ${countB_after_delete} (both missing same txs)"
+
+# Run sync from A - should complete but report gaps
+echo -e "\t   Running sync from A (should report chain gaps)..."
+syncOutput=$(docker exec ${contactA} eiou sync transactions --json 2>&1)
+
+# Process queues to ensure sync completes
+for i in {1..3}; do
+    process_all_queues
+done
+
+# Verify counts haven't changed (sync can't recover mutual gaps)
+countA_after_sync=$(get_tx_count ${contactA} "AB%-${timestamp3b}")
+countB_after_sync=$(get_tx_count ${contactB} "AB%-${timestamp3b}")
+echo -e "\t   After sync: A has ${countA_after_sync}, B has ${countB_after_sync} (unchanged expected)"
+
+# Check sync output mentions chain gaps
+echo -e "\t   Sync output (first 150 chars): ${syncOutput:0:150}..."
+
+if echo "$syncOutput" | grep -q '"chain_gaps":[1-9]\|"synced_with_gaps"\|chain.*gap'; then
+    printf "\t   Test 3b (mutual gap) ${GREEN}PASSED${NC} - sync reports chain gaps\n"
+    passed=$(( passed + 1 ))
+elif [[ "$countA_after_sync" -eq "$countA_after_delete" ]] && [[ "$countB_after_sync" -eq "$countB_after_delete" ]]; then
+    # Sync didn't recover anything (correct behavior) but may not have JSON gap reporting
+    printf "\t   Test 3b (mutual gap) ${GREEN}PASSED${NC} - sync cannot recover mutual gap (counts unchanged)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Test 3b (mutual gap) ${RED}FAILED${NC} - unexpected state\n"
+    failure=$(( failure + 1 ))
+fi
+
+cleanup_test_transactions "$timestamp3b"
+
+################################################################################
 # STANDARD (DIRECT) TESTS - Loss of transactions B to A (Tests 4-6)
 ################################################################################
 

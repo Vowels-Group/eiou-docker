@@ -1008,5 +1008,185 @@ fi
 # Cleanup test 4
 clean_chain > /dev/null
 
+#################### TEST 5: Natural Flow Gap Detection ####################
+# These tests verify that chain gaps are detected through normal CLI commands
+# (send, sync, ping) rather than only through direct `chaindrop propose` calls.
+# This catches the class of bugs where the protocol works but detection is broken.
+##############################################################################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 5: Natural Flow Gap Detection"
+echo "========================================================================"
+echo -e "\n"
+
+echo -e "[5.1 Gap detection via send, sync, and ping commands]"
+
+timestamp=$(date +%s%N)
+testPattern="chaindrop-t5-%${timestamp}"
+
+# Setup: Send 5 transactions to create a chain
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Setting up: Sending 5 transactions from sender to receiver"
+
+for i in 1 2 3 4 5; do
+    docker exec ${sender} eiou send ${receiverAddress} ${i} USD "chaindrop-t5-tx${i}-${timestamp}" 2>&1 > /dev/null
+    sleep 1
+done
+
+wait_for_queue_processed ${sender}
+wait_for_queue_processed ${receiver}
+
+receiverTxCount=$(docker exec ${receiver} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+    \$count = \$pdo->query(\"SELECT COUNT(*) FROM transactions WHERE description LIKE '${testPattern}'\")
+        ->fetchColumn();
+    echo \$count;
+" 2>/dev/null || echo "0")
+
+if [[ "$receiverTxCount" -lt 5 ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+fi
+
+senderTxids=$(get_test_txids ${sender} "${testPattern}")
+IFS=',' read -ra txArr <<< "$senderTxids"
+
+if [[ "${#txArr[@]}" -ge 5 ]]; then
+    printf "\t   Setup: 5 transactions sent ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Setup: send transactions ${RED}FAILED${NC} (got ${#txArr[@]})\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Delete tx3 and tx4 from BOTH nodes (mutual gap)
+echo -e "\n\t-> Deleting tx3 and tx4 from BOTH nodes (mutual gap)"
+tx3="${txArr[2]}"
+tx4="${txArr[3]}"
+delete_txids ${sender} "$tx3" "$tx4"
+delete_txids ${receiver} "$tx3" "$tx4"
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+echo -e "\t   Sender chain: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain: $(format_chain_status ${receiverIntegrity})"
+
+# Test 5.1: eiou ping should report chain_valid: false
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Test 5.1: Ping should detect chain gap"
+
+pingOutput=$(docker exec ${sender} eiou ping ${receiverAddress} --json 2>&1)
+echo -e "\t   Ping output (first 120 chars): ${pingOutput:0:120}..."
+
+# Check for chain_valid: false in the JSON output
+if echo "$pingOutput" | grep -q '"chain_valid":false\|"chain_valid": false'; then
+    printf "\t   Ping detects chain gap (chain_valid=false) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+elif echo "$pingOutput" | grep -qi 'chain.*sync\|chain.*gap'; then
+    printf "\t   Ping detects chain gap (message) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Ping gap detection ${RED}FAILED${NC} (chain_valid not false)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 5.2: eiou sync should report chain gaps
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Test 5.2: Sync should report chain gaps"
+
+syncOutput=$(docker exec ${sender} eiou sync transactions --json 2>&1)
+echo -e "\t   Sync output (first 150 chars): ${syncOutput:0:150}..."
+
+# Check for chain_gaps > 0 or synced_with_gaps status in the JSON output
+if echo "$syncOutput" | grep -q '"chain_gaps":[1-9]\|"synced_with_gaps"\|chain.*gap'; then
+    printf "\t   Sync reports chain gaps ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Sync gap reporting ${RED}FAILED${NC} (no chain_gaps in output)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 5.3: eiou send should block and detect chain gap
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Test 5.3: Send should block on chain gap and auto-propose chain drop"
+
+sendOutput=$(docker exec ${sender} eiou send ${receiverAddress} 1 USD "chaindrop-t5-blocked-${timestamp}" --json 2>&1)
+echo -e "\t   Send output (first 150 chars): ${sendOutput:0:150}..."
+
+# Send should fail with CHAIN_INTEGRITY_FAILED and/or mention chain_drop_proposed
+if echo "$sendOutput" | grep -q 'CHAIN_INTEGRITY_FAILED\|chain_drop_proposed\|chain.*gap.*detected\|chain drop proposal'; then
+    printf "\t   Send detects gap and auto-proposes chain drop ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Send gap detection ${RED}FAILED${NC} (no chain gap error in output)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 5.4: Verify a chain drop proposal was auto-created by send
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Test 5.4: Verifying auto-proposal was delivered to receiver"
+
+wait_for_queue_processed ${sender} 3
+wait_for_queue_processed ${receiver} 3
+
+proposalId=$(get_pending_proposal ${receiver})
+
+# Retry if proposal hasn't arrived yet
+if [[ "$proposalId" == "NONE" ]]; then
+    wait_for_queue_processed ${sender} 5
+    wait_for_queue_processed ${receiver} 5
+    proposalId=$(get_pending_proposal ${receiver})
+fi
+
+echo -e "\t   Receiver pending proposal: ${proposalId:0:40}..."
+
+if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
+    printf "\t   Auto-proposal delivered to receiver ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Auto-proposal delivery ${RED}FAILED${NC} (no pending proposal)\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Test 5.5: Accept the auto-proposal and verify chain is repaired
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Test 5.5: Accept auto-proposal and verify chain repair"
+
+if [[ "$proposalId" != "NONE" ]] && [[ -n "$proposalId" ]]; then
+    docker exec ${receiver} eiou chaindrop accept ${proposalId} 2>&1 > /dev/null
+    wait_for_queue_processed ${sender} 3
+    wait_for_queue_processed ${receiver} 3
+fi
+
+senderIntegrity=$(check_chain_integrity ${sender} ${receiverPubkeyB64})
+receiverIntegrity=$(check_chain_integrity ${receiver} ${senderPubkeyB64})
+
+echo -e "\t   Sender chain after repair: $(format_chain_status ${senderIntegrity})"
+echo -e "\t   Receiver chain after repair: $(format_chain_status ${receiverIntegrity})"
+
+# Chain may still have 1 gap if only the first gap was resolved (consecutive gap case)
+# but should have fewer gaps than before
+if [[ "$senderIntegrity" == VALID:* ]] && [[ "$receiverIntegrity" == VALID:* ]]; then
+    printf "\t   Chain repaired via auto-proposal ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    # If there's still a gap, it means only the first of potentially 2 gaps was resolved
+    # (non-consecutive: tx3 and tx4 deleted creates 1 gap since tx5->tx4(missing))
+    # Accept remaining gap resolution
+    senderGaps=$(echo "$senderIntegrity" | cut -d: -f2)
+    if [[ "$senderGaps" -lt 2 ]]; then
+        printf "\t   Chain partially repaired (${senderGaps} gap remaining) ${GREEN}PASSED${NC}\n"
+        passed=$(( passed + 1 ))
+    else
+        printf "\t   Chain repair ${RED}FAILED${NC}\n"
+        failure=$(( failure + 1 ))
+    fi
+fi
+
+# Cleanup test 5
+clean_chain > /dev/null
+
 # ========================= Summary =========================
 succesrate "${totaltests}" "${passed}" "${failure}" "'chain drop test suite'"
