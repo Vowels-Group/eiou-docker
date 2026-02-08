@@ -1371,7 +1371,7 @@ drop protocol coordinates mutual agreement to remove the gap and relink the chai
   3. proposeChainDrop(contactPubkeyHash)                    |
      +-- Backup recovery fallback (safety net)              |
      +-- Create proposal record (direction=outgoing)        |
-     +-- Send proposal ---------------------------------->--|
+     +-- Send proposal ------------------------------------>|
            |                                   4. handleIncomingProposal()
            |                                      +-- Verify gap exists locally
            |                                      +-- Backup recovery fallback
@@ -1380,7 +1380,7 @@ drop protocol coordinates mutual agreement to remove the gap and relink the chai
            |                                   5. User reviews via CLI/GUI
            |                                                |
            |                             +------------------+------------------+
-           |                        Accept                                Reject
+           |                           Accept                                Reject
            |                             |                                     |
            |                    6. acceptProposal()                      6r. rejectProposal()
            |                       +-- executeChainDrop()                    +-- Update status: rejected
