@@ -8,6 +8,7 @@ use Eiou\Contracts\ContactStatusServiceInterface;
 use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Database\ContactRepository;
 use Eiou\Database\TransactionRepository;
+use Eiou\Database\TransactionChainRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\TransportUtilityService;
 use Eiou\Core\UserContext;
@@ -64,6 +65,11 @@ class ContactStatusService implements ContactStatusServiceInterface {
     private ?RateLimiterService $rateLimiterService = null;
 
     /**
+     * @var TransactionChainRepository|null Chain repository for internal gap detection
+     */
+    private ?TransactionChainRepository $transactionChainRepository = null;
+
+    /**
      * Set the sync trigger (accepts interface for loose coupling)
      *
      * @param SyncTriggerInterface $sync Sync trigger (can be proxy or actual service)
@@ -92,6 +98,15 @@ class ContactStatusService implements ContactStatusServiceInterface {
      */
     public function setRateLimiterService(RateLimiterService $service): void {
         $this->rateLimiterService = $service;
+    }
+
+    /**
+     * Set the transaction chain repository (setter injection)
+     *
+     * @param TransactionChainRepository $repo Chain repository
+     */
+    public function setTransactionChainRepository(TransactionChainRepository $repo): void {
+        $this->transactionChainRepository = $repo;
     }
 
     /**
@@ -179,13 +194,25 @@ class ContactStatusService implements ContactStatusServiceInterface {
         $chainValid = true;
 
         if ($remotePrevTxid !== null && $localPrevTxid !== null) {
-            // Both have transactions - compare
+            // Both have transactions - compare chain heads
             $chainValid = ($localPrevTxid === $remotePrevTxid);
+        }
 
-            // If chains don't match and sync was requested, trigger sync
-            if (!$chainValid && ($request['requestSync'] ?? false)) {
-                $this->triggerSync($request['senderAddress'], $senderPubkey);
+        // Also check for internal chain gaps (e.g., deleted transactions in the middle)
+        // Chain heads can match even when internal transactions are missing
+        if ($chainValid && $this->transactionChainRepository !== null) {
+            $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                $this->currentUser->getPublicKey(),
+                $senderPubkey
+            );
+            if (!$chainStatus['valid']) {
+                $chainValid = false;
             }
+        }
+
+        // If chains don't match and sync was requested, trigger sync
+        if (!$chainValid && ($request['requestSync'] ?? false)) {
+            $this->triggerSync($request['senderAddress'] ?? '', $senderPubkey);
         }
 
         // Update the sender's online status since they pinged us
@@ -335,9 +362,21 @@ class ContactStatusService implements ContactStatusServiceInterface {
                     // Contact is online
                     $this->updateContactStatus($contact['pubkey'], Constants::CONTACT_ONLINE_STATUS_ONLINE);
 
-                    // Check chain validity
+                    // Check chain validity from remote response
                     $chainValid = $response['chainValid'] ?? true;
                     $remotePrevTxid = $response['prevTxid'] ?? null;
+
+                    // Also verify local chain integrity for internal gaps
+                    // Chain heads can match even when transactions in the middle are deleted
+                    if ($chainValid && $this->transactionChainRepository !== null) {
+                        $localChainStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                            $this->currentUser->getPublicKey(),
+                            $contact['pubkey']
+                        );
+                        if (!$localChainStatus['valid']) {
+                            $chainValid = false;
+                        }
+                    }
 
                     // If chains don't match, update status and optionally trigger sync
                     if (!$chainValid || ($prevTxid !== $remotePrevTxid && $prevTxid !== null && $remotePrevTxid !== null)) {

@@ -27,6 +27,10 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
+- Chain gap detection not triggering on send: `verifySenderChainAndSync()` skipped re-verification when sync reported success, missing mutual gaps where both sides lack the same transactions
+- Chain gap detection not triggering on sync: `syncTransactionChain()` unconditionally returned success without verifying chain integrity after sync completion
+- Chain gap detection not triggering on ping: `handlePingRequest()` and `pingContact()` only compared chain heads (last txid), missing internal gaps when both sides had same chain head
+- CLI sync not reporting chain gaps: `syncAllTransactionsInternal()` now includes gap count and chaindrop guidance in sync results
 - `proposeChainDrop()` signature mismatch: interface/service had 4-param signature but CLI/GUI called with 1 param; changed to auto-detect signature accepting `contactPubkeyHash`
 - Message delivery retry queue not processed: `processRetryQueue()` was never called from any background processor; wired into CleanupMessageProcessor
 - Config file migration in startup.sh for upgrades from pre-#573 images (config moved from `/etc/eiou/` to `/etc/eiou/config/`)

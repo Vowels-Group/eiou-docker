@@ -184,12 +184,17 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
         $syncResult = $this->syncTrigger->syncTransactionChain($contactAddress, $contactPublicKey);
         $result['synced'] = true;
 
-        if (!$syncResult['success']) {
-            $recheckStatus = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey);
-            if (!$recheckStatus['valid']) {
-                return ['success' => false, 'synced' => true, 'error' => 'Failed to repair chain: ' . ($syncResult['error'] ?? 'unknown')];
-            }
+        // ALWAYS re-verify chain integrity after sync, regardless of sync success.
+        // Sync can return success=true with 0 transactions synced when both sides
+        // are missing the same transactions (mutual gap). In that case the gap persists.
+        $recheckStatus = $this->transactionChainRepository->verifyChainIntegrity($this->currentUser->getPublicKey(), $contactPublicKey);
+        if (!$recheckStatus['valid']) {
+            $errorMsg = !$syncResult['success']
+                ? 'Failed to repair chain: ' . ($syncResult['error'] ?? 'unknown')
+                : 'Chain gap remains after sync (both sides missing same transactions)';
+            return ['success' => false, 'synced' => true, 'error' => $errorMsg];
         }
+
         output(outputSyncChainRepaired(), 'SILENT');
         return $result;
     }

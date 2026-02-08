@@ -402,6 +402,7 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             'synced' => 0,
             'failed' => 0,
             'total_transactions' => 0,
+            'chain_gaps' => 0,
             'details' => []
         ];
 
@@ -425,11 +426,22 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
                     $this->syncContactBalance($pubkey);
                 }
 
-                $results['details'][] = [
+                $detail = [
                     'address' => $address,
                     'status' => 'synced',
                     'transactions' => $syncResult['synced_count']
                 ];
+
+                // Report chain gaps that persist after sync
+                if (isset($syncResult['chain_valid']) && !$syncResult['chain_valid']) {
+                    $gapCount = count($syncResult['chain_gaps'] ?? []);
+                    $results['chain_gaps'] += $gapCount;
+                    $detail['chain_gaps'] = $gapCount;
+                    $detail['status'] = 'synced_with_gaps';
+                    $detail['message'] = "Chain has {$gapCount} gap(s) - both sides missing same transactions. Use 'chaindrop' to resolve.";
+                }
+
+                $results['details'][] = $detail;
             } else {
                 $results['failed']++;
                 $results['details'][] = [
@@ -731,14 +743,50 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             $result['signature_failure'] = false;
             $result['conflicts_resolved'] = $conflictsResolved;
 
-            output("Transaction chain sync completed: {$syncedCount} transactions synced, {$conflictsResolved} conflicts resolved", 'SILENT');
+            // Verify chain integrity after sync to detect remaining gaps
+            // When both sides are missing the same transactions, sync exchanges nothing
+            // but the chain still has internal gaps that need to be reported
+            $chainStatus = $this->transactionChainRepository->verifyChainIntegrity(
+                $this->currentUser->getPublicKey(),
+                $contactPublicKey
+            );
+
+            $result['chain_valid'] = $chainStatus['valid'];
+            $result['chain_gaps'] = $chainStatus['gaps'];
+            $result['chain_broken_txids'] = $chainStatus['broken_txids'];
+
+            if (!$chainStatus['valid']) {
+                $gapCount = count($chainStatus['gaps']);
+                output("Transaction chain sync completed but {$gapCount} gap(s) remain - both sides missing same transactions", 'SILENT');
+
+                Logger::getInstance()->warning("Chain gaps remain after sync - mutual gap detected", [
+                    'contact_address' => $contactAddress,
+                    'gap_count' => $gapCount,
+                    'gaps' => $chainStatus['gaps'],
+                    'broken_txids' => $chainStatus['broken_txids'],
+                    'synced_count' => $syncedCount
+                ]);
+
+                // Dispatch chain gap detected event
+                EventDispatcher::getInstance()->dispatch(SyncEvents::CHAIN_GAP_DETECTED, [
+                    'contact_pubkey' => $contactPublicKey,
+                    'contact_address' => $contactAddress,
+                    'gap_count' => $gapCount,
+                    'gaps' => $chainStatus['gaps'],
+                    'broken_txids' => $chainStatus['broken_txids']
+                ]);
+            } else {
+                output("Transaction chain sync completed: {$syncedCount} transactions synced, {$conflictsResolved} conflicts resolved", 'SILENT');
+            }
 
             // Dispatch sync completed event
             EventDispatcher::getInstance()->dispatch(SyncEvents::SYNC_COMPLETED, [
                 'contact_pubkey' => $contactPublicKey,
                 'contact_address' => $contactAddress,
                 'synced_count' => $syncedCount,
-                'success' => true
+                'success' => true,
+                'chain_valid' => $chainStatus['valid'],
+                'chain_gaps' => count($chainStatus['gaps'])
             ]);
 
         } catch (Exception $e) {

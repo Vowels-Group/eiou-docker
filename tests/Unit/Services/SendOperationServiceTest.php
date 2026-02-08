@@ -890,4 +890,81 @@ class SendOperationServiceTest extends TestCase
         $request = ['eiou', 'send', 'http://test.example.com', '10', 'USD'];
         $this->service->handleDirectRoute($request, $contactInfo, $output);
     }
+
+    /**
+     * Test handleDirectRoute detects chain gap even when sync reports success
+     *
+     * This covers the critical mutual gap scenario: both sides are missing the same
+     * transactions, so sync exchanges nothing and reports success=true with synced_count=0.
+     * The chain must still be re-verified and the gap detected.
+     */
+    public function testHandleDirectRouteDetectsGapWhenSyncSucceedsButChainStillInvalid(): void
+    {
+        $output = $this->createMock(CliOutputManager::class);
+
+        $contactInfo = [
+            'receiverPublicKey' => 'test-receiver-public-key',
+            'receiverName' => 'TestContact',
+            'status' => Constants::CONTACT_STATUS_ACCEPTED,
+            'receiverAddress' => 'http://test.example.com'
+        ];
+
+        $contactPubkeyHash = hash(Constants::HASH_ALGORITHM, $contactInfo['receiverPublicKey']);
+
+        // Lock succeeds
+        $this->mockLockingService->expects($this->once())
+            ->method('acquireLock')
+            ->willReturn(true);
+        $this->mockLockingService->expects($this->once())
+            ->method('releaseLock');
+
+        // Transport returns a valid index
+        $this->mockTransportUtility->expects($this->once())
+            ->method('fallbackTransportType')
+            ->willReturn('receiverAddress');
+
+        $this->service->setTransactionChainRepository($this->mockChainRepo);
+        $this->service->setSyncTrigger($this->mockSyncTrigger);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getPublicKey')
+            ->willReturn('user-public-key');
+
+        // Chain verification ALWAYS returns invalid (gap persists after sync)
+        $this->mockChainRepo->expects($this->any())
+            ->method('verifyChainIntegrity')
+            ->willReturn(['valid' => false, 'gaps' => ['missing-tx-3', 'missing-tx-4'], 'transaction_count' => 4]);
+
+        // Sync reports SUCCESS with 0 transactions - this is the mutual gap case
+        $this->mockSyncTrigger->expects($this->once())
+            ->method('syncTransactionChain')
+            ->willReturn(['success' => true, 'synced_count' => 0, 'error' => null]);
+
+        // ChainDropService should be called to propose chain drop
+        $this->service->setChainDropService($this->mockChainDropService);
+        $this->mockChainDropService->expects($this->once())
+            ->method('proposeChainDrop')
+            ->with($contactPubkeyHash)
+            ->willReturn([
+                'success' => true,
+                'proposal_id' => 'proposal-mutual-gap',
+                'missing_txid' => 'missing-tx-3',
+                'broken_txid' => 'broken-tx-5'
+            ]);
+
+        $output->expects($this->once())
+            ->method('error')
+            ->with(
+                $this->stringContains('chain drop proposal has been sent'),
+                $this->anything(),
+                500,
+                $this->callback(function ($data) {
+                    return $data['chain_drop_proposed'] === true
+                        && $data['proposal_id'] === 'proposal-mutual-gap';
+                })
+            );
+
+        $request = ['eiou', 'send', 'http://test.example.com', '10', 'USD'];
+        $this->service->handleDirectRoute($request, $contactInfo, $output);
+    }
 }

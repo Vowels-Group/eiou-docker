@@ -1222,11 +1222,12 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
-        // Wire ContactStatusService -> SyncTriggerInterface (via proxy), RateLimiterService
-        // Reason: ContactStatusService validates chains and needs rate limiting
+        // Wire ContactStatusService -> SyncTriggerInterface (via proxy), RateLimiterService, TransactionChainRepository
+        // Reason: ContactStatusService validates chains, needs rate limiting, and detects internal gaps
         // Note: Uses SyncTriggerInterface for loose coupling
         if (isset($this->services['ContactStatusService'])) {
             $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServiceProxy());
+            $this->services['ContactStatusService']->setTransactionChainRepository($this->getTransactionChainRepository());
             if (isset($this->services['RateLimiterService'])) {
                 $this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
             }
