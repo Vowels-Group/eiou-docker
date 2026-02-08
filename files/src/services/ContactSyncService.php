@@ -980,6 +980,19 @@ class ContactSyncService implements ContactSyncServiceInterface {
         if($success){
             // Addresses already saved, just need to add initial contact balances
             $this->balanceRepository->insertInitialContactBalances($pubkey, $currency);
+
+            // Recalculate balances from existing transactions (wallet restore scenario:
+            // transactions were synced during ping but balances are still zero)
+            $syncTrigger = $this->getSyncTrigger();
+            if ($syncTrigger !== null) {
+                try {
+                    $syncTrigger->syncContactBalance($pubkey);
+                } catch (\Exception $e) {
+                    Logger::getInstance()->warning("Failed to sync contact balance after acceptance", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
         }
         return $success;
     }

@@ -1197,10 +1197,14 @@ class ServiceContainer implements ContainerInterface {
         // These now use SyncTriggerInterface via proxy for loose coupling
         // =========================================================================
 
-        // Wire ContactManagementService with ContactSyncService
+        // Wire ContactManagementService with ContactSyncService and SyncTriggerInterface
         // Reason: ContactManagementService needs to trigger sync operations after contact changes
-        if (isset($this->services['ContactManagementService']) && isset($this->services['ContactSyncService'])) {
-            $this->services['ContactManagementService']->setContactSyncService($this->services['ContactSyncService']);
+        //         and recalculate balances after accepting contacts (wallet restore scenario)
+        if (isset($this->services['ContactManagementService'])) {
+            if (isset($this->services['ContactSyncService'])) {
+                $this->services['ContactManagementService']->setContactSyncService($this->services['ContactSyncService']);
+            }
+            $this->services['ContactManagementService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
         // Wire ContactSyncService -> SyncTriggerInterface (via proxy)
