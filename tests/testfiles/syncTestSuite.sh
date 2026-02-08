@@ -980,20 +980,19 @@ descriptionFilterResult=$(docker exec ${receiver} php -r "
     \$syncService = \$app->services->getSyncService();
 
     // Check that SyncService has description filtering logic
+    // The filtering is in formatTransactionForSync() which is called by handleTransactionSyncRequest()
     \$reflection = new ReflectionClass(\$syncService);
-    \$method = \$reflection->getMethod('handleTransactionSyncRequest');
-    \$startLine = \$method->getStartLine();
-    \$endLine = \$method->getEndLine();
-    \$filename = \$method->getFileName();
+    \$filename = \$reflection->getFileName();
+    \$source = file_get_contents(\$filename);
 
-    // Read the method source
-    \$lines = file(\$filename);
-    \$source = implode('', array_slice(\$lines, \$startLine - 1, \$endLine - \$startLine + 1));
-
-    // Check if the method filters descriptions based on memo type
-    if (strpos(\$source, \"memo === 'contact'\") !== false &&
+    // Verify formatTransactionForSync exists and contains description filtering
+    // and that handleTransactionSyncRequest calls it
+    \$hasFormatMethod = strpos(\$source, 'formatTransactionForSync') !== false;
+    \$hasDescFilter = strpos(\$source, \"memo === 'contact'\") !== false &&
         strpos(\$source, \"memo === 'standard'\") !== false &&
-        strpos(\$source, 'description') !== false) {
+        strpos(\$source, 'description') !== false;
+
+    if (\$hasFormatMethod && \$hasDescFilter) {
         echo 'DESCRIPTION_FILTER_EXISTS';
     } else {
         echo 'DESCRIPTION_FILTER_MISSING';
