@@ -423,9 +423,18 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
 
         foreach ($contacts as $contact) {
             $address = $contact['tor'] ?? $contact['https'] ?? $contact['http'] ?? null;
-            $pubkey = $contact['pubkey'] ?? null;
+            $pubkeyHash = $contact['pubkey_hash'] ?? null;
 
-            if (!$address || !$pubkey) {
+            if (!$address || !$pubkeyHash) {
+                continue;
+            }
+
+            // Look up full contact info (pubkey, status) via joined query
+            $contactInfo = $this->contactRepository->lookupByPubkeyHash($pubkeyHash);
+            $pubkey = $contactInfo['pubkey'] ?? null;
+            $status = $contactInfo['status'] ?? null;
+
+            if (!$pubkey || $status !== Constants::CONTACT_STATUS_ACCEPTED) {
                 continue;
             }
 
