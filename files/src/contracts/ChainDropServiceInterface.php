@@ -11,8 +11,13 @@ namespace Eiou\Contracts;
  * this service coordinates the mutual agreement to drop the missing transaction
  * and relink the chain, including exchange of re-signed transaction copies.
  *
+ * Gap Detection (all local — no transaction lists sent over the wire):
+ * - send: verifies chain integrity before every send; auto-proposes chain drop if sync fails
+ * - sync: verifies chain integrity after syncing transactions; reports gaps in output
+ * - ping: verifies local chain integrity (not just chain head comparison); reports chain_valid
+ *
  * Flow:
- * 1. Contact A detects chain gap via verifyChainIntegrity()
+ * 1. Contact A detects chain gap (send auto-proposes, or ping/sync reveals the gap)
  * 2. Contact A calls proposeChainDrop() -> sends proposal to Contact B
  * 3. Contact B receives proposal via handleIncomingProposal() -> verifies gap exists locally
  * 4. Contact B calls acceptProposal() -> executes drop, re-signs own txs, sends acceptance with re-signed data

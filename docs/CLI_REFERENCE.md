@@ -383,6 +383,8 @@ eiou search alice --json
 
 Check if a contact is online and verify chain validity.
 
+Ping compares chain heads with the remote contact and also verifies local chain integrity to detect internal gaps (e.g., deleted transactions in the middle of the chain). All gap detection is performed locally — no transaction lists are exchanged over the wire.
+
 **Syntax:**
 ```bash
 eiou ping <address|name>
@@ -403,7 +405,7 @@ eiou ping --json Alice
 
 **Output includes:**
 - Online status (online/offline)
-- Chain validity status
+- Chain validity status (includes internal gap detection)
 - Response message
 
 ---
@@ -555,6 +557,7 @@ eiou send Alice 25.50 USD --json
 
 **Notes:**
 - Transaction may be direct or routed through intermediaries (P2P relay)
+- Chain integrity is verified locally before every send; if a gap is detected, sync is attempted and then a chain drop is auto-proposed if the gap persists
 - Rate limited: 30 transactions per minute
 
 **On Failure (JSON):**
@@ -737,6 +740,8 @@ eiou changesettings defaultFee 1.5 --json
 
 Synchronize data with contacts.
 
+After syncing transactions, chain integrity is verified locally for each contact. If gaps remain (e.g., both sides are missing the same transactions), the output reports the gap count and recommends using `chaindrop` to resolve.
+
 **Syntax:**
 ```bash
 eiou sync [type]
@@ -896,7 +901,7 @@ Manage chain drop agreements for resolving transaction chain gaps.
 
 When both contacts are missing the same transaction in their shared chain, the chain cannot be repaired via sync. Chain drop resolves this by mutually agreeing to remove the missing transaction and relink the chain.
 
-**Important:** While a chain gap exists, transactions with that contact are **blocked**. The `send` command verifies chain integrity before every transaction and will halt if a gap is detected (after attempting sync repair, which fails when both parties are missing the same transaction). Rejecting a proposal leaves the gap unresolved, meaning the contacts cannot transact until a new proposal is accepted or the missing transaction is recovered.
+**Important:** While a chain gap exists, transactions with that contact are **blocked**. Chain gaps are detected locally by `send`, `sync`, and `ping` — all three commands verify chain integrity without exchanging transaction lists over the wire. The `send` command will auto-propose a chain drop when a gap is detected and sync cannot repair it. Rejecting a proposal leaves the gap unresolved, meaning the contacts cannot transact until a new proposal is accepted or the missing transaction is recovered.
 
 **Syntax:**
 ```bash
@@ -944,9 +949,18 @@ eiou chaindrop list --json
 eiou chaindrop accept cdp-2c3c26ba61ab4073 --json
 ```
 
+**Gap Detection:**
+
+Chain gaps are detected locally by three commands:
+- **`send`** — verifies chain integrity before every transaction; auto-proposes a chain drop if sync fails to repair the gap
+- **`sync`** — verifies chain integrity after syncing transactions; reports gap count in output
+- **`ping`** — verifies local chain integrity (not just chain head comparison); reports `chain_valid: false` if gaps exist
+
+All detection is local — no transaction lists are sent over the wire.
+
 **Flow:**
-1. Contact A detects chain gap (send fails or `ping` shows invalid chain)
-2. Contact A runs: `eiou chaindrop propose <contact_B_address>`
+1. Contact A detects chain gap (`send` auto-proposes, or `ping`/`sync` reveals the gap)
+2. Contact A runs: `eiou chaindrop propose <contact_B_address>` (if not auto-proposed by `send`)
 3. Contact B checks incoming proposals: `eiou chaindrop list`
 4. Contact B runs: `eiou chaindrop accept <proposal_id>`
 5. Both chains are repaired and transactions can resume
