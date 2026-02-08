@@ -71,7 +71,9 @@ class ContactDataBuilder
             'contact_id' => $contact['contact_id'] ?? '',
             'transactions' => $contact['transactions'] ?? [],
             'online_status' => $contact['online_status'] ?? 'unknown',
-            'valid_chain' => $contact['valid_chain'] ?? null
+            'valid_chain' => $contact['valid_chain'] ?? null,
+            'pubkey_hash' => $contact['pubkey_hash'] ?? '',
+            'chain_drop_proposal' => $contact['chain_drop_proposal'] ?? null
         ], $addresses);
     }
 

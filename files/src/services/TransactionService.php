@@ -357,7 +357,8 @@ class TransactionService implements TransactionServiceInterface {
                 'contact_id' => $contact['contact_id'] ?? '',
                 'transactions' => $transactions,
                 'online_status' => $contact['online_status'] ?? 'unknown',
-                'valid_chain' => $contact['valid_chain'] ?? null
+                'valid_chain' => $contact['valid_chain'] ?? null,
+                'pubkey_hash' => $contact['pubkey_hash'] ?? ''
             ]);
         }
         return $result;

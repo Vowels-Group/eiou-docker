@@ -74,6 +74,7 @@ class BalanceServiceTest extends TestCase
             'contact_id' => 'contact-1',
             'online_status' => 'online',
             'valid_chain' => true,
+            'pubkey_hash' => 'test-hash-123',
             'http' => 'http://test.example.com',
             'https' => 'https://test.example.com',
             'tor' => ''
@@ -115,6 +116,7 @@ class BalanceServiceTest extends TestCase
         $this->assertEquals('contact-1', $result[0]['contact_id']);
         $this->assertEquals('online', $result[0]['online_status']);
         $this->assertTrue($result[0]['valid_chain']);
+        $this->assertEquals('test-hash-123', $result[0]['pubkey_hash']);
     }
 
     /**

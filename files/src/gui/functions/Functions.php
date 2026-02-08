@@ -168,15 +168,44 @@ $blockedContacts = $transactionService->contactBalanceConversion($contactService
 // Address types (dynamic from database schema)
 $addressTypes = $contactService->getAllAddressTypes();
 
-// Chain drop proposals for contacts
-$chainDropProposals = [];
+// Chain drop proposals - fetch both directions, index by contact hash
+$chainDropProposalsByContact = [];
 try {
     $chainDropService = $serviceContainer->getChainDropService();
-    $chainDropProposals = $chainDropService->getIncomingPendingProposals();
+    $chainDropProposalRepo = $serviceContainer->getChainDropProposalRepository();
+
+    $incomingProposals = $chainDropService->getIncomingPendingProposals();
+    $outgoingProposals = $chainDropProposalRepo->getOutgoingPending();
+
+    // Index by contact_pubkey_hash (incoming takes priority - requires user action)
+    foreach ($incomingProposals as $proposal) {
+        $hash = $proposal['contact_pubkey_hash'];
+        if (!isset($chainDropProposalsByContact[$hash])) {
+            $chainDropProposalsByContact[$hash] = $proposal;
+        }
+    }
+    foreach ($outgoingProposals as $proposal) {
+        $hash = $proposal['contact_pubkey_hash'];
+        if (!isset($chainDropProposalsByContact[$hash])) {
+            $chainDropProposalsByContact[$hash] = $proposal;
+        }
+    }
 } catch (Exception $e) {
-    // Non-critical - proposals loading failure shouldn't block page
-    $chainDropProposals = [];
+    $chainDropProposalsByContact = [];
 }
+
+// Merge chain drop proposals into contact arrays by pubkey_hash
+$contactArrays = [&$acceptedContacts, &$pendingUserContacts, &$blockedContacts];
+foreach ($contactArrays as &$contacts) {
+    foreach ($contacts as &$contact) {
+        $hash = $contact['pubkey_hash'] ?? '';
+        if ($hash && isset($chainDropProposalsByContact[$hash])) {
+            $contact['chain_drop_proposal'] = $chainDropProposalsByContact[$hash];
+        }
+    }
+    unset($contact);
+}
+unset($contacts);
 
 // Dead Letter Queue - track newly added items for notification
 $newlyAddedToDlq = [];
