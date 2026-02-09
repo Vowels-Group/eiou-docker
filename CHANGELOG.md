@@ -12,6 +12,15 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- Best-fee routing mode (`--best` flag): collects all RP2P responses and selects the lowest accumulated fee route (experimental)
+- `rp2p_candidates` table for storing RP2P candidate responses during best-fee selection
+- `p2p_senders` table for tracking all upstream P2P senders in multi-path routing
+- Multi-path RP2P forwarding: relay nodes forward RP2P responses to all upstream senders, not just the first
+- Per-hop expiration for best-fee mode: leaf nodes expire first, cascading selection upstream
+- Orphaned candidate recovery: `CleanupService` triggers best-fee selection when P2P expires with available candidates
+- `contacts_sent_count`, `contacts_responded_count`, `hop_wait`, and `fast` columns on `p2p` table for routing mode tracking
+
 ### Changed
 - GUI notifications use session flash messages instead of URL parameters; messages no longer re-appear on page refresh
 - GUI shows toast notification when receiving transactions ("Payment Received" with amount and sender name)
@@ -43,6 +52,7 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
+- P2P `sender_address` not updated when relay receives transaction from a different upstream node than the original P2P sender (multi-path routing)
 - Contact request transactions now use dual-signature protocol: recipient signs `{'type':'create','nonce':N}` on acceptance, matching the sender's signature; `verifyRecipientSignature()` uses `reconstructContactSignedMessage()` for contact transactions instead of bypassing verification
 - Balance not recalculating after accepting a restored prior contact: `acceptContact()` now calls `syncContactBalance()` after `insertInitialContactBalances()` to recalculate from synced transactions
 - Chain status stuck on "Needs Sync" after accepting chain drop proposal: `valid_chain` now updated after execution

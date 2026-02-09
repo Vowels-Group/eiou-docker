@@ -540,7 +540,7 @@ Send an eIOU transaction to a contact.
 
 **Syntax:**
 ```bash
-eiou send <address|name> <amount> <currency>
+eiou send <address|name> <amount> <currency> [--best]
 ```
 
 **Arguments:**
@@ -551,13 +551,22 @@ eiou send <address|name> <amount> <currency>
 | `amount` | required | Amount to send (positive number) |
 | `currency` | required | Currency code (e.g., USD, EUR) |
 
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--best` | Use best-fee routing (experimental). Collects all P2P route responses and selects the one with the lowest accumulated fee. Higher latency than default fast mode. |
+
 **Examples:**
 ```bash
-# Send by contact name
+# Send by contact name (fast mode, default)
 eiou send Bob 50 USD
 
 # Send by address
 eiou send http://bob:8080 100 EUR
+
+# Send with best-fee routing (experimental)
+eiou send Bob 50 USD --best
 
 # JSON output
 eiou send Alice 25.50 USD --json
@@ -565,6 +574,8 @@ eiou send Alice 25.50 USD --json
 
 **Notes:**
 - Transaction may be direct or routed through intermediaries (P2P relay)
+- Default routing uses fast mode: the first RP2P response wins (lowest latency)
+- With `--best`, all RP2P responses are collected and the lowest-fee route is selected (higher latency, lower cost)
 - Chain integrity is verified locally before every send; if a gap is detected, sync is attempted and then a chain drop is auto-proposed if the gap persists
 - Rate limited: 30 transactions per minute
 
