@@ -63,13 +63,13 @@ declare -A containersLinks=(
 
 declare -A expectedContacts=(
     [A0]=2   # Connected to A1 and A2
-    [A1]=4   # Connected to A0, A3, A4 and A5
-    [A2]=4   # Connected to A0, A3, A4 and A5
-    [A3]=4   # Connected to A1, A2, A6 and A7
+    [A1]=3   # Connected to A0, A3, A4
+    [A2]=3   # Connected to A0, A4 and A5
+    [A3]=2   # Connected to A1, A6
     [A4]=4   # Connected to A1, A2, A6 and A7
-    [A5]=4   # Connected to A1, A2, A6 and A7
-    [A6]=4   # Connected to A3, A4, A5 and A8
-    [A7]=4   # Connected to A3, A4, A5 and A8
+    [A5]=2   # Connected to A2 and A7
+    [A6]=3   # Connected to A3, A4 and A8
+    [A7]=3   # Connected to A4, A5 and A8
     [A8]=2   # Only connected to A6 and A7
 
 )
@@ -90,14 +90,14 @@ declare -A expectedContacts=(
 #Best Fee Route from A0 to A8 should be A0->A2->A4->A7->A8
 
 # Test A0->A3 (should route through A1)
-# Test A0->A8 (should route through A3,A4 and A7)
+# Test A0->A8 (should route through A3, A4 and A7)
 # Test A8->A2 (should route through A7 and A2)
-# Test A2->A3 (should route through A5, A7 and A8)
+# Test A2->A3 (should route through A5, A7, A8 and A6)
 declare -A routingTests=(
     [A0,A3]="A1"
     [A0,A8]="A1,A4,A7"
     [A8,A2]="A7,A5"
-    [A2,A3]="A5,A7,A8"
+    [A2,A3]="A5,A7,A8,A6"
 )
 
 echo "Removing existing containers and associated volumes (if any)..."
