@@ -52,6 +52,8 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
+- Best-fee mode `contacts_sent_count` not set on direct-match path: relay nodes with the end-recipient as a direct contact used the `matchContact` shortcut without tracking sent count, blocking the "all contacts responded" trigger and forcing per-hop expiration fallback
+- Best-fee mode `contacts_sent_count` not counting `already_relayed` responses: contacts that already had the P2P via another path record the sender in `p2p_senders` and forward RP2P back via multi-path, but were not counted as expected respondents
 - P2P `sender_address` not updated when relay receives transaction from a different upstream node than the original P2P sender (multi-path routing)
 - Contact request transactions now use dual-signature protocol: recipient signs `{'type':'create','nonce':N}` on acceptance, matching the sender's signature; `verifyRecipientSignature()` uses `reconstructContactSignedMessage()` for contact transactions instead of bypassing verification
 - Balance not recalculating after accepting a restored prior contact: `acceptContact()` now calls `syncContactBalance()` after `insertInitialContactBalances()` to recalculate from synced transactions

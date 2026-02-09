@@ -516,9 +516,6 @@ done
 
 # Cleaning up all made containers and volumes
 printf "\n"
-printf "================================================================\n"
-printf "                    Cleaning up\n"
-printf "================================================================\n"
 printf "Removing existing test containers and associated volumes (if any)..."
 for container in "${containers[@]}"; do
     remove_container_if_exists $container
@@ -530,7 +527,6 @@ remove_container_if_exists "httpRestoreFileTest"
 remove_container_if_exists "httpRestoreEnvTest"
 remove_container_if_exists "httpRestoreQuickstartTest"
 remove_container_if_exists "httpRestoreFileQsTest"
-printf "================================================================\n"
 
 # Final summary
 printf "\n"

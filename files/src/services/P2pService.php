@@ -657,11 +657,17 @@ class P2pService implements P2pServiceInterface {
                     $this->messageDeliveryService->updateStageToForwarded('p2p', $messageId, $matchedContact[$transportIndex]);
                 }
 
+                // Track sent count for best-fee mode: the matched contact will send
+                // an RP2P response, so we expect exactly 1 response
+                if (isset($response['status']) && $response['status'] === 'inserted') {
+                    $this->p2pRepository->updateContactsSentCount($p2pHash, 1);
+                }
+
                 output(outputP2pSendResult($response),'SILENT');
             } else{
                 $contactsToSend = $contactsCount; // Reset sendable contact count
                 $sentMessages = 0;
-                $acceptedContacts = 0; // Only contacts that accepted P2P ('inserted')
+                $acceptedContacts = 0; // Contacts that will send RP2P back ('inserted' or 'already_relayed')
                 $successfulSends = [];
 
                 // Send p2p request to all accepted contacts
@@ -698,10 +704,11 @@ class P2pService implements P2pServiceInterface {
                     }
 
                     $sentMessages += 1;
-                    // Track contacts that accepted the P2P for best-fee response counting.
-                    // Contacts responding 'already_relayed' won't send RP2Ps back via this
-                    // path, so they must not be counted as expected respondents.
-                    if ($response['status'] === 'inserted') {
+                    // Track contacts that may send RP2P responses for best-fee counting.
+                    // Both 'inserted' (new P2P accepted) and 'already_relayed' (P2P exists
+                    // via another path) contacts record this sender in p2p_senders and will
+                    // forward RP2P responses back via multi-path routing.
+                    if ($response['status'] === 'inserted' || $response['status'] === 'already_relayed') {
                         $acceptedContacts += 1;
                     }
                     if ($sendResult['success']) {

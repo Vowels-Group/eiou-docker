@@ -1680,6 +1680,153 @@ class P2pServiceTest extends TestCase
     }
 
     /**
+     * Test direct-match path sets contacts_sent_count for best-fee mode
+     *
+     * When a relay node has the end-recipient as a direct contact and sends
+     * via the matchContact shortcut, contacts_sent_count must be set to 1
+     * so that best-fee "all responded" trigger works without waiting for
+     * per-hop expiration.
+     */
+    public function testProcessQueuedP2pMessagesDirectMatchSetsContactsSentCount(): void
+    {
+        $contactAddress = 'http://direct-contact.test';
+        $salt = 'test-salt';
+        $time = '1234567890';
+        $hash = hash(Constants::HASH_ALGORITHM, $contactAddress . $salt . $time);
+
+        $queuedMessage = [
+            'hash' => $hash,
+            'salt' => $salt,
+            'time' => $time,
+            'sender_address' => self::TEST_ADDRESS,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'request_level' => 1,
+            'max_request_level' => 5,
+            'fee_amount' => 100,
+            'expiration' => '1234567890000000',
+            'status' => Constants::STATUS_QUEUED
+            // No destination_address - relay node
+        ];
+
+        $matchingContact = [
+            'name' => 'DirectContact',
+            'http' => $contactAddress,
+            'pubkey' => 'direct-pubkey'
+        ];
+
+        $this->p2pRepository->method('getQueuedP2pMessages')
+            ->willReturn([$queuedMessage]);
+
+        $this->contactService->method('getAllAcceptedAddresses')
+            ->willReturn([$matchingContact]);
+
+        $this->contactService->method('getAllContacts')
+            ->willReturn([$matchingContact]);
+
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        $this->transportUtility->method('getAllAddressTypes')
+            ->willReturn(['http', 'https', 'tor']);
+
+        // Direct match sends to matched contact and gets 'inserted'
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{"status":"inserted"}',
+                'messageId' => 'direct-' . $hash . '-abc12345'
+            ]);
+
+        // Verify contacts_sent_count is set to 1 for best-fee response tracking
+        $this->p2pRepository->expects($this->once())
+            ->method('updateContactsSentCount')
+            ->with($hash, 1);
+
+        ob_start();
+        $this->service->processQueuedP2pMessages();
+        ob_get_clean();
+    }
+
+    /**
+     * Test broadcast path counts already_relayed responses in contacts_sent_count
+     *
+     * When a contact already has the P2P via another route, it responds
+     * 'already_relayed' and records the sender in p2p_senders. Since
+     * multi-path RP2P forwarding will send RP2P back to all recorded
+     * senders, already_relayed contacts must be counted as expected
+     * respondents for best-fee mode.
+     */
+    public function testProcessQueuedP2pMessagesBroadcastCountsAlreadyRelayed(): void
+    {
+        $p2pHash = self::TEST_HASH;
+        $queuedMessage = [
+            'hash' => $p2pHash,
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'sender_address' => self::TEST_ADDRESS,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'request_level' => 1,
+            'max_request_level' => 5,
+            'fee_amount' => 100,
+            'expiration' => '1234567890000000',
+            'status' => Constants::STATUS_QUEUED
+        ];
+
+        $contacts = [
+            ['http' => 'http://contact1.test', 'pubkey' => 'pubkey1'],
+            ['http' => 'http://contact2.test', 'pubkey' => 'pubkey2']
+        ];
+
+        $this->p2pRepository->method('getQueuedP2pMessages')
+            ->willReturn([$queuedMessage]);
+
+        $this->contactService->method('getAllAcceptedAddresses')
+            ->willReturn($contacts);
+
+        $this->contactService->method('getAllContacts')
+            ->willReturn([]);
+
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+
+        $this->transportUtility->method('getAllAddressTypes')
+            ->willReturn(['http', 'https', 'tor']);
+
+        // First contact accepts (inserted), second already has it (already_relayed)
+        $this->messageDeliveryService->expects($this->exactly(2))
+            ->method('sendMessage')
+            ->willReturnOnConsecutiveCalls(
+                [
+                    'success' => true,
+                    'response' => ['status' => 'inserted'],
+                    'raw' => '{"status":"inserted"}',
+                    'messageId' => 'broadcast-' . $p2pHash . '-contact1'
+                ],
+                [
+                    'success' => true,
+                    'response' => ['status' => 'already_relayed'],
+                    'raw' => '{"status":"already_relayed"}',
+                    'messageId' => 'broadcast-' . $p2pHash . '-contact2'
+                ]
+            );
+
+        // Both should be counted: inserted + already_relayed = 2 expected respondents
+        $this->p2pRepository->expects($this->once())
+            ->method('updateContactsSentCount')
+            ->with($p2pHash, 2);
+
+        ob_start();
+        $this->service->processQueuedP2pMessages();
+        ob_get_clean();
+    }
+
+    /**
      * Test P2P cancellation when no viable route exists
      *
      * Verifies that when all contacts are either incompatible (wrong transport),
