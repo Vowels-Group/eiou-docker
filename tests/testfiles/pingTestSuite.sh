@@ -710,8 +710,16 @@ pubkeyAfromBforSync=$(docker exec ${containerB} php -r "
     }
 " 2>/dev/null || echo "ERROR")
 
-# Trigger sync from B to A (B requests its transaction history from A)
-# B was wiped so it needs to pull transactions FROM A, not the other way around
+# Delete contact transactions from B so getPreviousTxid returns null.
+# B was wiped and only has new contact txs from the re-add — these cause
+# syncTransactionChain to think B is already up-to-date (A has the same txid).
+docker exec ${containerB} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$app->services->getPdo()->exec(\"DELETE FROM transactions WHERE memo = 'contact'\");
+" 2>/dev/null || true
+
+# Trigger sync from B to A (B requests its full transaction history from A)
 syncResultBA=$(trigger_sync "${containerB}" "${addressA}" "${pubkeyAfromBforSync}")
 
 if [[ "$syncResultBA" == SYNC_SUCCESS* ]]; then
@@ -761,7 +769,14 @@ pubkeyCfromBforSync=$(docker exec ${containerB} php -r "
     }
 " 2>/dev/null || echo "ERROR")
 
-# Trigger sync from B to C (B requests its transaction history from C)
+# Delete contact transactions from B so getPreviousTxid returns null for C chain
+docker exec ${containerB} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$app->services->getPdo()->exec(\"DELETE FROM transactions WHERE memo = 'contact'\");
+" 2>/dev/null || true
+
+# Trigger sync from B to C (B requests its full transaction history from C)
 syncResultBC=$(trigger_sync "${containerB}" "${addressC}" "${pubkeyCfromBforSync}")
 
 if [[ "$syncResultBC" == SYNC_SUCCESS* ]]; then
