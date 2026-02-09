@@ -671,137 +671,78 @@ else
     passed=$(( passed + 1 ))
 fi
 
-############################ TEST 3.7: TRIGGER SYNC FROM A TO B ############################
+############################ TEST 3.7: A PINGS B (TRIGGERS AUTO-RESTORE SYNC) ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n[3.7 Trigger sync B->A (B requests transaction history from A)]"
+echo -e "\n[3.7 A pings B - triggers auto-restore sync]"
 
-# Delete B from A's contacts so eiou add sends a fresh create request
-# (A still has B as 'accepted', which causes eiou add to short-circuit with "already exists")
-docker exec ${containerA} php -r "
-    require_once('${BOOTSTRAP_PATH}');
-    \$app = \Eiou\Core\Application::getInstance();
-    \$pdo = \$app->services->getPdo();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
-    if (\$pubkey) {
-        \$hash = hash('sha256', \$pubkey);
-        \$pdo->exec(\"DELETE FROM contacts WHERE pubkey_hash = '\" . \$hash . \"'\");
-        \$pdo->exec(\"DELETE FROM addresses WHERE pubkey_hash = '\" . \$hash . \"'\");
+# A pings B. B was wiped and doesn't know A, so handlePingRequest detects an
+# unknown contact, auto-creates pending contact, and triggers sync to restore
+# transaction history from A. This is the core feature added by this PR.
+pingResultA=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
+    try {
+        require_once('/etc/eiou/Functions.php');
+        \$app = \Eiou\Core\Application::getInstance();
+        \$contactStatusService = \$app->services->getContactStatusService();
+        \$result = \$contactStatusService->pingContact('${addressB}');
+        echo json_encode(\$result);
+    } catch (Throwable \$e) {
+        echo json_encode(['success' => false, 'error' => 'exception', 'message' => \$e->getMessage()]);
     }
-" 2>/dev/null || true
+" 2>&1 || echo '{"success":false,"error":"php_failed"}')
 
-# Both sides add each other before processing queues (mirrors initial setup pattern)
-docker exec ${containerA} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerB} eiou add ${addressA} ${containerA} 0.1 1000 USD 2>&1 > /dev/null || true
+pingSuccessA=$(echo "$pingResultA" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
 
-# Process queues - mutual create exchange completes acceptance
-wait_for_queue_processed ${containerA} 2
-wait_for_queue_processed ${containerB} 2
-
-# Get A's pubkey from B's perspective for sync
-pubkeyAfromBforSync=$(docker exec ${containerB} php -r "
-    require_once('${BOOTSTRAP_PATH}');
-    \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportA}', '${addressA}');
-    if (\$pubkey) {
-        echo base64_encode(\$pubkey);
-    } else {
-        echo 'ERROR';
-    }
-" 2>/dev/null || echo "ERROR")
-
-# Delete contact transactions from B so getPreviousTxid returns null.
-# B was wiped and only has new contact txs from the re-add — these cause
-# syncTransactionChain to think B is already up-to-date (A has the same txid).
-docker exec ${containerB} php -r "
-    require_once('${BOOTSTRAP_PATH}');
-    \$app = \Eiou\Core\Application::getInstance();
-    \$app->services->getPdo()->exec(\"DELETE FROM transactions WHERE memo = 'contact'\");
-" 2>/dev/null || true
-
-# Trigger sync from B to A (B requests its full transaction history from A)
-syncResultBA=$(trigger_sync "${containerB}" "${addressA}" "${pubkeyAfromBforSync}")
-
-if [[ "$syncResultBA" == SYNC_SUCCESS* ]]; then
-    syncedCount=$(echo "$syncResultBA" | cut -d':' -f2)
-    printf "\t   Sync B->A succeeded, synced ${syncedCount} transactions ${GREEN}PASSED${NC}\n"
+if [[ "$pingSuccessA" == "true" ]]; then
+    printf "\t   A->B ping succeeded (auto-restore triggered) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Sync B->A ${YELLOW}WARNING${NC} - ${syncResultBA}\n"
-    passed=$(( passed + 1 ))  # Non-critical
+    printf "\t   A->B ping ${RED}FAILED${NC} - Result: ${pingResultA}\n"
+    failure=$(( failure + 1 ))
 fi
 
-############################ TEST 3.8: TRIGGER SYNC FROM C TO B ############################
+############################ TEST 3.8: C PINGS B (TRIGGERS AUTO-RESTORE SYNC) ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n[3.8 Trigger sync B->C (B requests transaction history from C)]"
+echo -e "\n[3.8 C pings B - triggers auto-restore sync]"
 
-# Delete B from C's contacts (same reason as 3.7)
-docker exec ${containerC} php -r "
-    require_once('${BOOTSTRAP_PATH}');
-    \$app = \Eiou\Core\Application::getInstance();
-    \$pdo = \$app->services->getPdo();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
-    if (\$pubkey) {
-        \$hash = hash('sha256', \$pubkey);
-        \$pdo->exec(\"DELETE FROM contacts WHERE pubkey_hash = '\" . \$hash . \"'\");
-        \$pdo->exec(\"DELETE FROM addresses WHERE pubkey_hash = '\" . \$hash . \"'\");
+# C pings B. Same flow: B doesn't know C, auto-creates pending contact, syncs.
+pingResultC=$(docker exec -e EIOU_TEST_MODE=true ${containerC} php -r "
+    try {
+        require_once('/etc/eiou/Functions.php');
+        \$app = \Eiou\Core\Application::getInstance();
+        \$contactStatusService = \$app->services->getContactStatusService();
+        \$result = \$contactStatusService->pingContact('${addressB}');
+        echo json_encode(\$result);
+    } catch (Throwable \$e) {
+        echo json_encode(['success' => false, 'error' => 'exception', 'message' => \$e->getMessage()]);
     }
-" 2>/dev/null || true
+" 2>&1 || echo '{"success":false,"error":"php_failed"}')
 
-# Both sides add each other before processing queues
-docker exec ${containerC} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
-docker exec ${containerB} eiou add ${addressC} ${containerC} 0.1 1000 USD 2>&1 > /dev/null || true
+pingSuccessC=$(echo "$pingResultC" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
 
-# Process queues - mutual create exchange completes acceptance
-wait_for_queue_processed ${containerC} 2
-wait_for_queue_processed ${containerB} 2
-
-# Get C's pubkey from B's perspective for sync
-pubkeyCfromBforSync=$(docker exec ${containerB} php -r "
-    require_once('${BOOTSTRAP_PATH}');
-    \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportC}', '${addressC}');
-    if (\$pubkey) {
-        echo base64_encode(\$pubkey);
-    } else {
-        echo 'ERROR';
-    }
-" 2>/dev/null || echo "ERROR")
-
-# Delete contact transactions from B so getPreviousTxid returns null for C chain
-docker exec ${containerB} php -r "
-    require_once('${BOOTSTRAP_PATH}');
-    \$app = \Eiou\Core\Application::getInstance();
-    \$app->services->getPdo()->exec(\"DELETE FROM transactions WHERE memo = 'contact'\");
-" 2>/dev/null || true
-
-# Trigger sync from B to C (B requests its full transaction history from C)
-syncResultBC=$(trigger_sync "${containerB}" "${addressC}" "${pubkeyCfromBforSync}")
-
-if [[ "$syncResultBC" == SYNC_SUCCESS* ]]; then
-    syncedCount=$(echo "$syncResultBC" | cut -d':' -f2)
-    printf "\t   Sync B->C succeeded, synced ${syncedCount} transactions ${GREEN}PASSED${NC}\n"
+if [[ "$pingSuccessC" == "true" ]]; then
+    printf "\t   C->B ping succeeded (auto-restore triggered) ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Sync B->C ${YELLOW}WARNING${NC} - ${syncResultBC}\n"
-    passed=$(( passed + 1 ))  # Non-critical
+    printf "\t   C->B ping ${RED}FAILED${NC} - Result: ${pingResultC}\n"
+    failure=$(( failure + 1 ))
 fi
+
+# Process queues to ensure all sync operations complete
+wait_for_queue_processed ${containerA}
+wait_for_queue_processed ${containerB}
+wait_for_queue_processed ${containerC}
 
 ############################ TEST 3.9: VERIFY B HAS CONTACTS RESTORED ############################
 
 totaltests=$(( totaltests + 1 ))
 echo -e "\n[3.9 Verify B has contacts restored after sync]"
 
-# Process all queues to ensure sync completes
-wait_for_queue_processed ${containerA}
-wait_for_queue_processed ${containerB}
-wait_for_queue_processed ${containerC}
-
 finalContactCountB=$(docker exec ${containerB} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$count = \$app->services->getPdo()->query(\"SELECT COUNT(*) FROM contacts WHERE status = 'accepted'\")->fetchColumn();
+    \$count = \$app->services->getPdo()->query('SELECT COUNT(*) FROM contacts')->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
 
