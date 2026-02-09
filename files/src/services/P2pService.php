@@ -408,12 +408,16 @@ class P2pService implements P2pServiceInterface {
                 $request['feeAmount'] = $requestedAmount - $request['amount'];
                 $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
 
-                // In best-fee mode, relay nodes use per-hop expiration so downstream
-                // nodes expire first and cascade their best candidates upstream
+                // In best-fee mode, scale relay expiration proportionally to remaining hops.
+                // Deeper nodes (high requestLevel, few remaining hops) expire sooner,
+                // guaranteeing downstream nodes always expire before upstream ones.
+                // This cascades best-fee selection from leaves back to originator.
                 $hopWait = (int) ($request['hopWait'] ?? 0);
                 if ($hopWait > 0 && !($request['fast'] ?? true)) {
+                    $remainingHops = max(1, (int)($request['maxRequestLevel'] ?? 1) - (int)($request['requestLevel'] ?? 0));
+                    $scaledWait = $hopWait * $remainingHops;
                     $request['expiration'] = $this->timeUtility->getCurrentMicrotime()
-                        + $this->timeUtility->convertMicrotimeToInt((float) $hopWait);
+                        + $this->timeUtility->convertMicrotimeToInt((float) $scaledWait);
                 }
 
                 $this->p2pRepository->insertP2pRequest($request, NULL);
@@ -764,7 +768,7 @@ class P2pService implements P2pServiceInterface {
         $p2pPayload = $this->p2pPayload->build($this->prepareP2pRequestData($data));
         output(outputInsertingP2pRequest($address), 'SILENT');
         // Privacy: Store description locally but don't include in P2P payload sent to relays
-        $description = isset($data[5]) && !empty($data[5]) ? $data[5] : null;
+        $description = isset($data[5]) && !empty($data[5]) && strncmp($data[5], '--', 2) !== 0 ? $data[5] : null;
         $this->p2pRepository->insertP2pRequest($p2pPayload, $address, $description);
         $this->p2pRepository->updateStatus($p2pPayload['hash'], Constants::STATUS_QUEUED);
     }

@@ -282,7 +282,11 @@ totaltests=$(( totaltests + 1 ))
 
 # Set a short P2P expiration for testing (60s instead of default 300s)
 # With hop_wait = floor(60/20) - 2 = 1 → clamped to min 3s per hop
-# Relay nodes expire after ~3s, originator after 60s max
+# Relay expiration is proportional to remaining hops (hopWait * remainingHops):
+#   - Deepest relay (1 hop remaining): 3s
+#   - Mid-chain relay (5 hops remaining): 15s
+#   - First relay (10 hops remaining): 30s
+# This guarantees deeper nodes expire before upstream ones, cascading correctly.
 testExpiration=60
 echo -e "\t-> Setting P2P expiration to ${testExpiration}s on ${testSender}"
 docker exec ${testSender} php -r "

@@ -401,6 +401,14 @@ class Rp2pService implements Rp2pServiceInterface {
         // Atomically increment responded count
         $this->p2pRepository->incrementContactsRespondedCount($request['hash']);
 
+        // If the P2P already expired (hop-wait elapsed), select immediately since
+        // cleanup already ran and won't re-process this P2P. Waiting for all contacts
+        // to respond would block indefinitely if some paths have no route.
+        if ($p2p['status'] === Constants::STATUS_EXPIRED) {
+            $this->selectAndForwardBestRp2p($request['hash']);
+            return;
+        }
+
         // Check if all contacts have responded
         $tracking = $this->p2pRepository->getTrackingCounts($request['hash']);
         if ($tracking
@@ -423,6 +431,12 @@ class Rp2pService implements Rp2pServiceInterface {
      */
     public function selectAndForwardBestRp2p(string $hash): void {
         if ($this->rp2pCandidateRepository === null) {
+            return;
+        }
+
+        // Prevent duplicate forwarding: if we already processed an rp2p for this hash, skip
+        if ($this->rp2pRepository->rp2pExists($hash)) {
+            $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
             return;
         }
 

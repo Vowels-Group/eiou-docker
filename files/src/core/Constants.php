@@ -144,7 +144,15 @@ class Constants {
     const P2P_REQUEST_LEVEL_VALIDATION_MAX = 1000; // Maximum valid request level for input validation
     const P2P_MAX_ROUTING_LEVEL = 20; // Maximum allowed P2P routing hops (prevents infinite routing)
     const P2P_HOP_PROCESSING_BUFFER_SECONDS = 2; // Per-hop buffer for network latency and processing time
-    const P2P_MIN_HOP_WAIT_SECONDS = 3; // Minimum per-hop wait time for best-fee candidate collection
+
+    // Transport timeouts (single HTTP/TOR request to a node)
+    const HTTP_TRANSPORT_TIMEOUT_SECONDS = 15; // Max time for one HTTP request between nodes
+    const TOR_TRANSPORT_TIMEOUT_SECONDS = 30;  // Max time for one TOR request between nodes
+
+    // Minimum per-hop wait: based on a single HTTP round-trip (send P2P + receive RP2P).
+    // Must be at least the transport timeout so a relay never expires before a
+    // back-and-forth with its direct contact can complete.
+    const P2P_MIN_HOP_WAIT_SECONDS = self::HTTP_TRANSPORT_TIMEOUT_SECONDS;
 
     // Contact management
     const CONTACT_DEFAULT_FEE_PERCENT = 0.1;
