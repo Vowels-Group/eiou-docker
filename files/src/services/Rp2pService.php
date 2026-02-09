@@ -10,6 +10,7 @@ use Eiou\Database\ContactRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
+use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -80,6 +81,11 @@ class Rp2pService implements Rp2pServiceInterface {
     private Rp2pPayload $rp2pPayload;
 
     /**
+     * @var Rp2pCandidateRepository|null Repository for rp2p candidates in best-fee mode
+     */
+    private ?Rp2pCandidateRepository $rp2pCandidateRepository = null;
+
+    /**
      * @var MessageDeliveryService|null Message delivery service for reliable delivery
      */
     private ?MessageDeliveryService $messageDeliveryService = null;
@@ -137,7 +143,8 @@ class Rp2pService implements Rp2pServiceInterface {
         RP2pRepository $rp2pRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser,
-        ?MessageDeliveryService $messageDeliveryService = null
+        ?MessageDeliveryService $messageDeliveryService = null,
+        ?Rp2pCandidateRepository $rp2pCandidateRepository = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->balanceRepository = $balanceRepository;
@@ -149,6 +156,7 @@ class Rp2pService implements Rp2pServiceInterface {
         $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
+        $this->rp2pCandidateRepository = $rp2pCandidateRepository;
 
         $this->rp2pPayload = new Rp2pPayload($this->currentUser,$this->utilityContainer);
     }
@@ -299,7 +307,29 @@ class Rp2pService implements Rp2pServiceInterface {
                 return false;
             }
 
-            // All validations passed - process RP2P and echo acceptance
+            // Check if P2P is in best-fee mode (fast=0)
+            $p2p = $this->p2pRepository->getByHash($request['hash']);
+            if ($p2p && !((int)($p2p['fast'] ?? 1)) && $this->rp2pCandidateRepository !== null) {
+                // Best-fee mode: store as candidate instead of processing immediately
+                try {
+                    $this->handleRp2pCandidate($request, $p2p);
+                    if ($echo) {
+                        echo $this->rp2pPayload->buildInserted($request);
+                    }
+                    return false;
+                } catch (Exception $e) {
+                    Logger::getInstance()->logException($e, [
+                        'method' => 'checkRp2pPossible',
+                        'context' => 'rp2p_candidate_storage_failed'
+                    ]);
+                    if ($echo) {
+                        echo $this->rp2pPayload->buildRejection($request, 'processing_error');
+                    }
+                    return false;
+                }
+            }
+
+            // Fast mode (default): process RP2P immediately
             // IMPORTANT: Storage MUST succeed before acceptance is sent
             // to prevent false positives from acceptance-before-storage bug
             // (follows same pattern as TransactionService.checkTransactionPossible)
@@ -332,6 +362,103 @@ class Rp2pService implements Rp2pServiceInterface {
             }
             return false;
         }
+    }
+
+    /**
+     * Handle an RP2P response as a candidate in best-fee mode
+     *
+     * Stores the rp2p response as a candidate rather than processing immediately.
+     * Increments the responded count and triggers best-fee selection when all
+     * contacts have responded.
+     *
+     * @param array $request The RP2P request data
+     * @param array $p2p The corresponding P2P record from database
+     * @return void
+     */
+    public function handleRp2pCandidate(array $request, array $p2p): void {
+        // Add user's fee to the rp2p amount (same as handleRp2pRequest)
+        $feeAmount = $p2p['my_fee_amount'] ?? 0;
+        $request['amount'] += $feeAmount;
+
+        // Check if previous sender can afford the rp2p amount (same validation as handleRp2pRequest)
+        if (!isset($p2p['destination_address'])) {
+            $availableFunds = $this->validationUtility->calculateAvailableFunds($p2p);
+            $creditLimit = $this->contactRepository->getCreditLimit($p2p['sender_public_key']);
+            if (($creditLimit + $availableFunds) < $request['amount']) {
+                output(outputP2pUnableToAffordRp2p($p2p, $request), 'SILENT');
+                return;
+            }
+        }
+
+        // Store as candidate
+        $this->rp2pCandidateRepository->insertCandidate($request, $feeAmount);
+
+        // Atomically increment responded count
+        $this->p2pRepository->incrementContactsRespondedCount($request['hash']);
+
+        // Check if all contacts have responded
+        $tracking = $this->p2pRepository->getTrackingCounts($request['hash']);
+        if ($tracking
+            && $tracking['contacts_sent_count'] > 0
+            && $tracking['contacts_responded_count'] >= $tracking['contacts_sent_count']
+        ) {
+            // All contacts responded - select and forward best route
+            $this->selectAndForwardBestRp2p($request['hash']);
+        }
+    }
+
+    /**
+     * Select the best (lowest fee) RP2P candidate and process it
+     *
+     * Called when all contacts have responded in best-fee mode, or when
+     * the P2P is about to expire with pending candidates.
+     *
+     * @param string $hash The P2P hash
+     * @return void
+     */
+    public function selectAndForwardBestRp2p(string $hash): void {
+        if ($this->rp2pCandidateRepository === null) {
+            return;
+        }
+
+        $bestCandidate = $this->rp2pCandidateRepository->getBestCandidate($hash);
+        if (!$bestCandidate) {
+            Logger::getInstance()->warning("No rp2p candidates found for best-fee selection", ['hash' => $hash]);
+            return;
+        }
+
+        Logger::getInstance()->info("Best-fee route selected", [
+            'hash' => $hash,
+            'amount' => $bestCandidate['amount'],
+            'fee_amount' => $bestCandidate['fee_amount'],
+            'sender_address' => $bestCandidate['sender_address'],
+            'total_candidates' => $this->rp2pCandidateRepository->getCandidateCount($hash),
+        ]);
+
+        // Convert candidate back to rp2p request format for handleRp2pRequest
+        $request = [
+            'hash' => $bestCandidate['hash'],
+            'time' => $bestCandidate['time'],
+            'amount' => (int) $bestCandidate['amount'],
+            'currency' => $bestCandidate['currency'],
+            'senderPublicKey' => $bestCandidate['sender_public_key'],
+            'senderAddress' => $bestCandidate['sender_address'],
+            'signature' => $bestCandidate['sender_signature'],
+        ];
+
+        // Process the best candidate via normal rp2p handling
+        // Note: handleRp2pRequest adds the fee again, but the candidate amount
+        // already includes our fee from handleRp2pCandidate, so we need to
+        // subtract it before passing to handleRp2pRequest
+        $p2p = $this->p2pRepository->getByHash($hash);
+        if ($p2p) {
+            $request['amount'] -= ($p2p['my_fee_amount'] ?? 0);
+        }
+
+        $this->handleRp2pRequest($request);
+
+        // Clean up all candidates for this hash
+        $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
     }
 
     /**

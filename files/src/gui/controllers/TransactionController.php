@@ -146,8 +146,15 @@ class TransactionController
             $description = Security::sanitizeInput($_POST['description'] ?? '');
             $description = !empty($description) ? $description : null;
 
+            // Check fast send option
+            $fastSend = !empty($_POST['fast_send']);
+
             // Create argv array with --json flag for structured output
             $argv = ['eiou', 'send', $finalRecipient, $amount, $currency, $description, '--json'];
+
+            if ($fastSend) {
+                $argv[] = '--fast';
+            }
 
             // Create CliOutputManager with JSON mode enabled
             CliOutputManager::resetInstance();

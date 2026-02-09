@@ -350,6 +350,10 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
         $output = $output ?? CliOutputManager::getInstance();
         $txData = ['recipient' => $request[2] ?? null, 'amount' => $request[3] ?? null, 'currency' => $request[4] ?? 'USD', 'description' => $request[5] ?? null];
 
+        // Detect --fast flag: when present, use fast routing (first response wins)
+        // When absent, use best-fee mode (collect all responses, pick cheapest)
+        $request['fast'] = in_array('--fast', $request, true);
+
         try {
             $this->getP2pService()->sendP2pRequest($request);
             $output->success("Searching for route via P2P network to " . $request[2],

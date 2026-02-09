@@ -40,6 +40,7 @@ class P2pPayload extends BasePayload
             'maxRequestLevel' => (int) $data['maxRequestLevel'],
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
+            'fast' => (bool) ($data['fast'] ?? true),
         ];
     }
 
@@ -70,7 +71,31 @@ class P2pPayload extends BasePayload
             'maxRequestLevel' => (int) $data['max_request_level'],
             'senderAddress' => $userAddress,
             'senderPublicKey' => $this->currentUser->getPublicKey(),
+            'fast' => (bool) ($data['fast'] ?? true),
         ];
+    }
+
+    /**
+     * Build P2P "already relayed" payload when this node already has the P2P from another route
+     *
+     * Used in best-fee mode: instead of rejecting as duplicate, inform sender
+     * that this node is already relaying the same P2P hash via a different path.
+     *
+     * @param array $request The P2P request data
+     * @return string JSON encoded already_relayed payload
+     */
+    public function buildAlreadyRelayed(array $request): string
+    {
+        $this->ensureRequiredFields($request, ['hash', 'senderAddress']);
+
+        $receiver = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+
+        return json_encode([
+            'status' => 'already_relayed',
+            'message' => "hash {$request['hash']} for P2P already being relayed by {$receiver}",
+            'senderAddress' => $receiver,
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ]);
     }
 
     /**

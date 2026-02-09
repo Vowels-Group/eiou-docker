@@ -85,6 +85,7 @@ function freshInstall(){
                 $dbConn->exec(getRateLimitsTableSchema());
                 $dbConn->exec(getHeldTransactionsTableSchema());
                 $dbConn->exec(getChainDropProposalsTableSchema());
+                $dbConn->exec(getRp2pCandidatesTableSchema());
             } catch (PDOException $tableError) {
                 Logger::getInstance()->error("Table creation failed", [
                     'error' => $tableError->getMessage()
@@ -138,6 +139,7 @@ function runMigrations(PDO $pdo): array {
     // List of migration tables to create (added after initial release)
     $migrations = [
         'chain_drop_proposals' => 'getChainDropProposalsTableSchema',
+        'rp2p_candidates' => 'getRp2pCandidatesTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {
@@ -179,7 +181,13 @@ function runColumnMigrations(PDO $pdo): array {
     $results = [];
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
-    $columnsToAdd = [];
+    $columnsToAdd = [
+        'p2p' => [
+            'fast' => 'TINYINT(1) DEFAULT 1 AFTER description',
+            'contacts_sent_count' => 'INT DEFAULT 0 AFTER fast',
+            'contacts_responded_count' => 'INT DEFAULT 0 AFTER contacts_sent_count',
+        ],
+    ];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
     $columnsToDrop = [];

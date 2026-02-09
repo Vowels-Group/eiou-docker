@@ -58,6 +58,7 @@ use Eiou\Database\MessageDeliveryRepository;
 use Eiou\Database\DeadLetterQueueRepository;
 use Eiou\Database\DeliveryMetricsRepository;
 use Eiou\Database\HeldTransactionRepository;
+use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\ChainDropProposalRepository;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Database\TransactionStatisticsRepository;
@@ -271,6 +272,20 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->repositories['Rp2pRepository'];
+    }
+
+    /**
+     * Get Rp2pCandidateRepository instance
+     *
+     * @return Rp2pCandidateRepository
+     */
+    public function getRp2pCandidateRepository(): Rp2pCandidateRepository {
+        if (!isset($this->repositories['Rp2pCandidateRepository'])) {
+            $this->repositories['Rp2pCandidateRepository'] = new Rp2pCandidateRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['Rp2pCandidateRepository'];
     }
 
     /**
@@ -582,7 +597,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->getRp2pRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser,
-                $this->getMessageDeliveryService()
+                $this->getMessageDeliveryService(),
+                $this->getRp2pCandidateRepository()
             );
         }
         return $this->services['Rp2pService'];
@@ -1377,6 +1393,15 @@ class ServiceContainer implements ContainerInterface {
         // Reason: CleanupService needs to expire stale chain drop proposals
         if (isset($this->services['CleanupService']) && isset($this->services['ChainDropService'])) {
             $this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
+        }
+
+        // Wire CleanupService -> Rp2pCandidateRepository, Rp2pService
+        // Reason: CleanupService needs to select best-fee route before expiring P2P with candidates
+        if (isset($this->services['CleanupService'])) {
+            $this->services['CleanupService']->setRp2pCandidateRepository($this->getRp2pCandidateRepository());
+            if (isset($this->services['Rp2pService'])) {
+                $this->services['CleanupService']->setRp2pService($this->services['Rp2pService']);
+            }
         }
     }
 

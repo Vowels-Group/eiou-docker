@@ -25,7 +25,8 @@ class P2pRepository extends AbstractRepository {
         'my_fee_amount', 'destination_address', 'destination_pubkey',
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
-        'description', 'status', 'created_at', 'incoming_txid',
+        'description', 'fast', 'contacts_sent_count', 'contacts_responded_count',
+        'status', 'created_at', 'incoming_txid',
         'outgoing_txid', 'completed_at'
     ];
 
@@ -108,7 +109,8 @@ class P2pRepository extends AbstractRepository {
             'incoming_txid' => $request['incoming_txid'] ?? null,
             'outgoing_txid' => $request['outgoing_txid'] ?? null,
             'status' => $status,
-            'description' => $description // Privacy: Only stored locally, never sent to relay nodes
+            'description' => $description, // Privacy: Only stored locally, never sent to relay nodes
+            'fast' => $request['fast'] ?? 1
         ];
 
         $result = $this->insert($data);
@@ -446,6 +448,54 @@ class P2pRepository extends AbstractRepository {
         }
 
         return $affectedRows >= 0;
+    }
+
+    /**
+     * Update contacts sent count for a P2P hash
+     *
+     * @param string $hash P2P hash
+     * @param int $count Number of contacts sent to
+     * @return bool Success status
+     */
+    public function updateContactsSentCount(string $hash, int $count): bool {
+        $affectedRows = $this->update(['contacts_sent_count' => $count], 'hash', $hash);
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Atomically increment the contacts responded count for a P2P hash
+     *
+     * @param string $hash P2P hash
+     * @return bool Success status
+     */
+    public function incrementContactsRespondedCount(string $hash): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET contacts_responded_count = contacts_responded_count + 1
+                  WHERE hash = :hash";
+
+        $stmt = $this->execute($query, [':hash' => $hash]);
+        return $stmt !== false;
+    }
+
+    /**
+     * Get tracking counts for a P2P hash (sent count, responded count, fast flag)
+     *
+     * @param string $hash P2P hash
+     * @return array|null Array with contacts_sent_count, contacts_responded_count, fast or null
+     */
+    public function getTrackingCounts(string $hash): ?array {
+        $query = "SELECT contacts_sent_count, contacts_responded_count, fast
+                  FROM {$this->tableName}
+                  WHERE hash = :hash";
+
+        $stmt = $this->execute($query, [':hash' => $hash]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
     }
 
     /**

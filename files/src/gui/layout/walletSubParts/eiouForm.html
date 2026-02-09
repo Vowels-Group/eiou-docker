@@ -91,6 +91,18 @@
             </small>
         </div>
 
+        <!-- P2P Routing Mode -->
+        <div class="form-group" id="fast-send-group">
+            <label for="fast-send" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" id="fast-send" name="fast_send" value="1">
+                <span><i class="fas fa-bolt"></i> Fast Send</span>
+            </label>
+            <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
+                <i class="fas fa-info-circle"></i>
+                When checked, the first available route is used immediately. When unchecked, the system finds the cheapest fee route.
+            </small>
+        </div>
+
         <!-- Transaction Type Indicator -->
         <div id="transaction-type-indicator" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 1rem; margin-bottom: 1rem; display: none;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">

@@ -564,11 +564,12 @@ class CliService implements CliServiceInterface {
             ],
             'send' => [
                 'description' => 'Send an eIOU',
-                'usage' => 'send [address/name] [amount] [currency]',
+                'usage' => 'send [address/name] [amount] [currency] (--fast)',
                 'arguments' => [
                     'address/name' => ['type' => 'required', 'description' => 'Recipient address or name'],
                     'amount' => ['type' => 'required', 'description' => 'Amount to send'],
-                    'currency' => ['type' => 'required', 'description' => 'Currency code']
+                    'currency' => ['type' => 'required', 'description' => 'Currency code'],
+                    '--fast' => ['type' => 'optional', 'description' => 'Use fast routing (first response wins, skips fee optimization)']
                 ]
             ],
             'viewbalances' => [

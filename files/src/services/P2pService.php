@@ -318,9 +318,10 @@ class P2pService implements P2pServiceInterface {
         // Check if P2P already exists for hash in database
         try{
             if($this->p2pRepository->p2pExists($request['hash'])){
-                //If P2P already exists
+                // P2P already exists via another route - inform sender with already_relayed
+                // This allows the sender to count this as a responded contact in best-fee mode
                 if($echo){
-                    echo $this->p2pPayload->buildRejection($request, 'duplicate');
+                    echo $this->p2pPayload->buildAlreadyRelayed($request);
                 }
                 return false;
             }
@@ -545,6 +546,9 @@ class P2pService implements P2pServiceInterface {
         ) + rand(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH);
         $data['maxRequestLevel'] = $data['minRequestLevel'] + $this->transportUtility->jitter($this->currentUser->getMaxP2pLevel());
 
+        // Thread fast flag from user request (default: true for backward compatibility)
+        $data['fast'] = $request['fast'] ?? true;
+
         return $data;
     }
 
@@ -691,6 +695,9 @@ class P2pService implements P2pServiceInterface {
                     $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
                     continue;
                 }
+
+                // Track how many contacts were sent to (used for best-fee mode response counting)
+                $this->p2pRepository->updateContactsSentCount($p2pHash, $sentMessages);
             }
 
             $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);

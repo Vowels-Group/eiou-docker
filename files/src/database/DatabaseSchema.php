@@ -100,6 +100,9 @@ function getP2pTableSchema() {
         sender_address VARCHAR(255) NOT NULL,
         sender_signature TEXT,
         description TEXT,
+        fast TINYINT(1) DEFAULT 1, /* 1=fast mode (first rp2p wins), 0=best-fee mode (collect all, pick cheapest) */
+        contacts_sent_count INT DEFAULT 0, /* number of contacts the p2p was sent to */
+        contacts_responded_count INT DEFAULT 0, /* number of contacts that responded with rp2p */
         status ENUM(
             'initial',      /* First received p2p request */
             'queued',       /* Waiting to be processed */
@@ -142,6 +145,25 @@ function getRp2pTableSchema() {
         INDEX idx_rp2p_hash (hash),
         INDEX idx_rp2p_created_at (created_at),
         INDEX idx_rp2p_sender_address (sender_address)
+    )";
+}
+
+// RP2P Candidates table - stores candidate rp2p responses for best-fee route selection
+function getRp2pCandidatesTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS rp2p_candidates (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        hash VARCHAR(255) NOT NULL,
+        time BIGINT NOT NULL,
+        amount INTEGER NOT NULL,
+        currency VARCHAR(10) NOT NULL,
+        sender_public_key TEXT NOT NULL,
+        sender_address VARCHAR(255) NOT NULL,
+        sender_signature TEXT NOT NULL,
+        fee_amount INTEGER NOT NULL,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_rp2p_cand_hash (hash),
+        INDEX idx_rp2p_cand_hash_amount (hash, amount ASC),
+        INDEX idx_rp2p_cand_created_at (created_at)
     )";
 }
 

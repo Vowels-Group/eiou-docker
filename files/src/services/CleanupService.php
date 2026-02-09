@@ -7,6 +7,8 @@ use Eiou\Utils\Logger;
 use Eiou\Contracts\CleanupServiceInterface;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Contracts\ChainDropServiceInterface;
+use Eiou\Contracts\Rp2pServiceInterface;
+use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\TransactionRepository;
@@ -82,6 +84,16 @@ class CleanupService implements CleanupServiceInterface {
     private ?ChainDropServiceInterface $chainDropService = null;
 
     /**
+     * @var Rp2pCandidateRepository|null Repository for rp2p candidates (best-fee mode)
+     */
+    private ?Rp2pCandidateRepository $rp2pCandidateRepository = null;
+
+    /**
+     * @var Rp2pServiceInterface|null Rp2p service for best-fee route selection
+     */
+    private ?Rp2pServiceInterface $rp2pService = null;
+
+    /**
      * Constructor
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
@@ -123,6 +135,28 @@ class CleanupService implements CleanupServiceInterface {
     public function setChainDropService(ChainDropServiceInterface $chainDropService): void
     {
         $this->chainDropService = $chainDropService;
+    }
+
+    /**
+     * Set the Rp2pCandidateRepository for best-fee mode candidate handling
+     *
+     * @param Rp2pCandidateRepository $rp2pCandidateRepository
+     * @return void
+     */
+    public function setRp2pCandidateRepository(Rp2pCandidateRepository $rp2pCandidateRepository): void
+    {
+        $this->rp2pCandidateRepository = $rp2pCandidateRepository;
+    }
+
+    /**
+     * Set the Rp2pService for best-fee route selection on expiration
+     *
+     * @param Rp2pServiceInterface $rp2pService
+     * @return void
+     */
+    public function setRp2pService(Rp2pServiceInterface $rp2pService): void
+    {
+        $this->rp2pService = $rp2pService;
     }
 
     /**
@@ -219,6 +253,27 @@ class CleanupService implements CleanupServiceInterface {
                 'recovery_method' => 'local_check'
             ]);
             return;
+        }
+
+        // Step 1.5: If P2P is in best-fee mode, select best candidate before expiring
+        if (!((int)($message['fast'] ?? 1))
+            && $this->rp2pCandidateRepository !== null
+            && $this->rp2pService !== null
+        ) {
+            $candidateCount = $this->rp2pCandidateRepository->getCandidateCount($hash);
+            if ($candidateCount > 0) {
+                // Select and forward best route before expiring
+                $this->rp2pService->selectAndForwardBestRp2p($hash);
+                if (function_exists('output')) {
+                    output("P2P {$hash} best-fee selection triggered on expiration ({$candidateCount} candidates)", 'SILENT');
+                }
+                Logger::getInstance()->info("Best-fee selection triggered on P2P expiration", [
+                    'hash' => $hash,
+                    'candidate_count' => $candidateCount,
+                ]);
+                // Don't expire - the P2P is now being processed via best route
+                return;
+            }
         }
 
         // Step 2: Query the P2P sender about their status
