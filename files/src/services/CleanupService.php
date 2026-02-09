@@ -9,6 +9,7 @@ use Eiou\Contracts\MessageDeliveryServiceInterface;
 use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Contracts\Rp2pServiceInterface;
 use Eiou\Database\Rp2pCandidateRepository;
+use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\TransactionRepository;
@@ -94,6 +95,11 @@ class CleanupService implements CleanupServiceInterface {
     private ?Rp2pServiceInterface $rp2pService = null;
 
     /**
+     * @var P2pSenderRepository|null Repository for cleaning up old P2P sender records
+     */
+    private ?P2pSenderRepository $p2pSenderRepository = null;
+
+    /**
      * Constructor
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
@@ -160,6 +166,17 @@ class CleanupService implements CleanupServiceInterface {
     }
 
     /**
+     * Set the P2pSenderRepository for cleaning up old sender records
+     *
+     * @param P2pSenderRepository $p2pSenderRepository
+     * @return void
+     */
+    public function setP2pSenderRepository(P2pSenderRepository $p2pSenderRepository): void
+    {
+        $this->p2pSenderRepository = $p2pSenderRepository;
+    }
+
+    /**
      * Check if there are any messages that will expire and process them
      *
      * This function retrieves all expired P2P messages from the database
@@ -205,6 +222,15 @@ class CleanupService implements CleanupServiceInterface {
             }
         } catch (Exception $e) {
             Logger::getInstance()->error("Error expiring chain drop proposals", ['error' => $e->getMessage()]);
+        }
+
+        // Clean up old P2P sender records (1-day retention)
+        try {
+            if ($this->p2pSenderRepository !== null) {
+                $this->p2pSenderRepository->deleteOldRecords();
+            }
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Error cleaning up P2P sender records", ['error' => $e->getMessage()]);
         }
 
         return $processed;

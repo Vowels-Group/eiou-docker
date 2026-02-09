@@ -10,6 +10,7 @@ use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
+use Eiou\Database\P2pSenderRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -109,6 +110,11 @@ class P2pService implements P2pServiceInterface {
     private Logger $secureLogger;
 
     /**
+     * @var P2pSenderRepository|null Repository for tracking P2P senders (multi-path support)
+     */
+    private ?P2pSenderRepository $p2pSenderRepository = null;
+
+    /**
      * Constructor
      *
      * @param ContactServiceInterface $contactService Contact service
@@ -118,6 +124,7 @@ class P2pService implements P2pServiceInterface {
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
+     * @param P2pSenderRepository|null $p2pSenderRepository Optional repository for multi-path sender tracking
      */
     public function __construct(
         ContactServiceInterface $contactService,
@@ -126,7 +133,8 @@ class P2pService implements P2pServiceInterface {
         TransactionRepository $transactionRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser,
-        ?MessageDeliveryService $messageDeliveryService = null
+        ?MessageDeliveryService $messageDeliveryService = null,
+        ?P2pSenderRepository $p2pSenderRepository = null
     ) {
         $this->contactService = $contactService;
         $this->balanceRepository = $balanceRepository;
@@ -139,6 +147,7 @@ class P2pService implements P2pServiceInterface {
         $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
+        $this->p2pSenderRepository = $p2pSenderRepository;
         $this->secureLogger = Logger::getInstance();
 
         $this->p2pPayload = new P2pPayload($this->currentUser, $this->utilityContainer);
@@ -318,6 +327,10 @@ class P2pService implements P2pServiceInterface {
         // Check if P2P already exists for hash in database
         try{
             if($this->p2pRepository->p2pExists($request['hash'])){
+                // Record this additional sender so RP2P is sent back to all paths
+                $this->p2pSenderRepository?->insertSender(
+                    $request['hash'], $request['senderAddress'], $request['senderPublicKey']
+                );
                 // P2P already exists via another route - inform sender with already_relayed
                 // This allows the sender to count this as a responded contact in best-fee mode
                 if($echo){
@@ -421,6 +434,10 @@ class P2pService implements P2pServiceInterface {
                 }
 
                 $this->p2pRepository->insertP2pRequest($request, NULL);
+                // Record the first sender for multi-path RP2P delivery
+                $this->p2pSenderRepository?->insertSender(
+                    $request['hash'], $request['senderAddress'], $request['senderPublicKey']
+                );
                 $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_QUEUED);
             }
         } catch (PDOException $e) {

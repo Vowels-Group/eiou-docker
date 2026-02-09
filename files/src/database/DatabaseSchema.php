@@ -167,6 +167,20 @@ function getRp2pCandidatesTableSchema() {
     )";
 }
 
+// P2P Senders table - tracks all upstream senders per P2P hash for multi-path RP2P delivery
+function getP2pSendersTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS p2p_senders (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        hash VARCHAR(255) NOT NULL,
+        sender_address VARCHAR(255) NOT NULL,
+        sender_public_key TEXT NOT NULL,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE INDEX idx_p2p_senders_hash_addr (hash, sender_address),
+        INDEX idx_p2p_senders_hash (hash),
+        INDEX idx_p2p_senders_created_at (created_at)
+    )";
+}
+
 // Transactions table
 function getTransactionsTableSchema() {
     return "CREATE TABLE IF NOT EXISTS transactions (

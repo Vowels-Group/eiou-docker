@@ -26,6 +26,7 @@ use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
+use Eiou\Database\P2pSenderRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -50,6 +51,7 @@ class P2pServiceTest extends TestCase
     private MockObject|CurrencyUtilityService $currencyUtility;
     private MockObject|UserContext $userContext;
     private MockObject|MessageDeliveryService $messageDeliveryService;
+    private MockObject|P2pSenderRepository $p2pSenderRepository;
     private P2pService $service;
 
     private const TEST_ADDRESS = 'http://test.example.com';
@@ -72,6 +74,7 @@ class P2pServiceTest extends TestCase
         $this->currencyUtility = $this->createMock(CurrencyUtilityService::class);
         $this->userContext = $this->createMock(UserContext::class);
         $this->messageDeliveryService = $this->createMock(MessageDeliveryService::class);
+        $this->p2pSenderRepository = $this->createMock(P2pSenderRepository::class);
 
         // Setup utility container
         $this->utilityContainer->method('getValidationUtility')
@@ -102,7 +105,8 @@ class P2pServiceTest extends TestCase
             $this->transactionRepository,
             $this->utilityContainer,
             $this->userContext,
-            $this->messageDeliveryService
+            $this->messageDeliveryService,
+            $this->p2pSenderRepository
         );
     }
 
@@ -428,6 +432,106 @@ class P2pServiceTest extends TestCase
         ob_get_clean();
 
         $this->assertFalse($result);
+    }
+
+    /**
+     * Test checkP2pPossible records additional sender when P2P already exists
+     */
+    public function testCheckP2pPossibleRecordsSenderOnAlreadyRelayed(): void
+    {
+        $request = [
+            'senderAddress' => 'http://second-sender.test',
+            'senderPublicKey' => 'second-sender-pubkey',
+            'requestLevel' => 1,
+            'maxRequestLevel' => 5,
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'salt' => 'test-salt',
+            'time' => 1234567890
+        ];
+
+        $this->contactService->method('isNotBlocked')
+            ->willReturn(true);
+        $this->validationUtility->method('validateRequestLevel')
+            ->willReturn(true);
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn(self::TEST_ADDRESS);
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://me.test']);
+
+        // Funds check mocks (intermediary path — matchYourselfP2P returns false)
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(100000);
+        $this->p2pRepository->method('getCreditInP2p')
+            ->willReturn(0);
+        $this->contactService->method('getCreditLimit')
+            ->willReturn(100000.0);
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(['fee_percent' => 1.0]);
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(100);
+
+        $this->p2pRepository->method('p2pExists')
+            ->with(self::TEST_HASH)
+            ->willReturn(true);
+
+        // Verify sender is recorded for multi-path RP2P delivery
+        $this->p2pSenderRepository->expects($this->once())
+            ->method('insertSender')
+            ->with(self::TEST_HASH, 'http://second-sender.test', 'second-sender-pubkey');
+
+        ob_start();
+        $result = $this->service->checkP2pPossible($request);
+        ob_get_clean();
+
+        $this->assertFalse($result);
+    }
+
+    /**
+     * Test handleP2pRequest records first sender for intermediary relay
+     */
+    public function testHandleP2pRequestRecordsFirstSender(): void
+    {
+        $request = [
+            'senderAddress' => self::TEST_ADDRESS,
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'requestLevel' => 1,
+            'maxRequestLevel' => 3,
+            'fast' => true,
+            'salt' => 'test-salt',
+            'time' => 1234567890
+        ];
+
+        // Not matching self → intermediary path
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://different.test');
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://different.test']);
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(['fee_percent' => 1.0]);
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(100);
+
+        $this->p2pRepository->method('insertP2pRequest')
+            ->willReturn('1');
+        $this->p2pRepository->method('updateStatus')
+            ->willReturn(true);
+
+        // Verify first sender is recorded
+        $this->p2pSenderRepository->expects($this->once())
+            ->method('insertSender')
+            ->with(self::TEST_HASH, self::TEST_ADDRESS, self::TEST_PUBLIC_KEY);
+
+        $this->service->handleP2pRequest($request);
+
+        $this->assertTrue(true);
     }
 
     /**

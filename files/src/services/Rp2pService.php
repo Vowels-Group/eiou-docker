@@ -11,6 +11,7 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\Rp2pCandidateRepository;
+use Eiou\Database\P2pSenderRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -86,6 +87,11 @@ class Rp2pService implements Rp2pServiceInterface {
     private ?Rp2pCandidateRepository $rp2pCandidateRepository = null;
 
     /**
+     * @var P2pSenderRepository|null Repository for tracking P2P senders (multi-path support)
+     */
+    private ?P2pSenderRepository $p2pSenderRepository = null;
+
+    /**
      * @var MessageDeliveryService|null Message delivery service for reliable delivery
      */
     private ?MessageDeliveryService $messageDeliveryService = null;
@@ -135,6 +141,8 @@ class Rp2pService implements Rp2pServiceInterface {
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
+     * @param Rp2pCandidateRepository|null $rp2pCandidateRepository Optional repository for best-fee candidates
+     * @param P2pSenderRepository|null $p2pSenderRepository Optional repository for multi-path sender tracking
      */
     public function __construct(
         ContactRepository $contactRepository,
@@ -144,7 +152,8 @@ class Rp2pService implements Rp2pServiceInterface {
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser,
         ?MessageDeliveryService $messageDeliveryService = null,
-        ?Rp2pCandidateRepository $rp2pCandidateRepository = null
+        ?Rp2pCandidateRepository $rp2pCandidateRepository = null,
+        ?P2pSenderRepository $p2pSenderRepository = null
     ) {
         $this->contactRepository = $contactRepository;
         $this->balanceRepository = $balanceRepository;
@@ -157,6 +166,7 @@ class Rp2pService implements Rp2pServiceInterface {
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
         $this->rp2pCandidateRepository = $rp2pCandidateRepository;
+        $this->p2pSenderRepository = $p2pSenderRepository;
 
         $this->rp2pPayload = new Rp2pPayload($this->currentUser,$this->utilityContainer);
     }
@@ -256,35 +266,45 @@ class Rp2pService implements Rp2pServiceInterface {
                     output(outputFeeRejection(), 'SILENT');
                 }
             } else{
-                // Send rp2p messages onwards to sender of p2p with delivery tracking
+                // Send rp2p back to ALL upstream senders (multi-path support)
                 $rP2pPayload = $this->rp2pPayload->build($request); // Build rp2p payload
                 $this->p2pRepository->updateStatus($request['hash'], 'found');  // Update the p2p request status to found
 
-                // Use tracked delivery for reliable message sending
-                $sendResult = $this->sendRp2pMessage($p2p['sender_address'], $rP2pPayload, $request['hash']);
-                $response = $sendResult['response'];
+                // Get all senders from p2p_senders table (multi-path tracking)
+                $senders = $this->p2pSenderRepository
+                    ? $this->p2pSenderRepository->getSendersByHash($request['hash'])
+                    : [];
 
-                if ($sendResult['success']) {
-                    // RP2P delivery is automatically marked as completed by MessageDeliveryService
-                    // when the recipient confirms 'forwarded' or 'inserted' status
-                    output(outputRp2pResponse($response), 'SILENT');
-                } else {
-                    // Log delivery failure details
-                    $trackingResult = $sendResult['tracking'] ?? [];
-                    $attempts = $trackingResult['attempts'] ?? 'unknown';
-                    $lastError = $trackingResult['error'] ?? 'No response received';
+                // Fallback to single sender from p2p record if no p2p_senders rows
+                if (empty($senders)) {
+                    $senders = [['sender_address' => $p2p['sender_address']]];
+                }
 
-                    if (class_exists(Logger::class)) {
-                        Logger::getInstance()->warning("RP2P message delivery failed", [
-                            'hash' => $request['hash'],
-                            'sender_address' => $p2p['sender_address'],
-                            'attempts' => $attempts,
-                            'error' => $lastError,
-                            'moved_to_dlq' => $trackingResult['dlq'] ?? false
-                        ]);
+                foreach ($senders as $sender) {
+                    // Use tracked delivery for reliable message sending
+                    $sendResult = $this->sendRp2pMessage($sender['sender_address'], $rP2pPayload, $request['hash']);
+                    $response = $sendResult['response'];
+
+                    if ($sendResult['success']) {
+                        output(outputRp2pResponse($response), 'SILENT');
+                    } else {
+                        // Log delivery failure details
+                        $trackingResult = $sendResult['tracking'] ?? [];
+                        $attempts = $trackingResult['attempts'] ?? 'unknown';
+                        $lastError = $trackingResult['error'] ?? 'No response received';
+
+                        if (class_exists(Logger::class)) {
+                            Logger::getInstance()->warning("RP2P message delivery failed", [
+                                'hash' => $request['hash'],
+                                'sender_address' => $sender['sender_address'],
+                                'attempts' => $attempts,
+                                'error' => $lastError,
+                                'moved_to_dlq' => $trackingResult['dlq'] ?? false
+                            ]);
+                        }
+
+                        output(outputRp2pResponse($response ?? ['status' => 'failed', 'error' => $lastError]), 'SILENT');
                     }
-
-                    output(outputRp2pResponse($response ?? ['status' => 'failed', 'error' => $lastError]), 'SILENT');
                 }
             }
         }

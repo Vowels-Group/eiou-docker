@@ -21,6 +21,7 @@ use Eiou\Database\ContactRepository;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
+use Eiou\Database\P2pSenderRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -46,6 +47,7 @@ class Rp2pServiceTest extends TestCase
     private MockObject|UserContext $userContext;
     private MockObject|MessageDeliveryService $messageDeliveryService;
     private MockObject|P2pTransactionSenderInterface $p2pTransactionSender;
+    private MockObject|P2pSenderRepository $p2pSenderRepository;
     private Rp2pService $service;
 
     private const TEST_ADDRESS = 'http://test.example.com';
@@ -68,6 +70,7 @@ class Rp2pServiceTest extends TestCase
         $this->userContext = $this->createMock(UserContext::class);
         $this->messageDeliveryService = $this->createMock(MessageDeliveryService::class);
         $this->p2pTransactionSender = $this->createMock(P2pTransactionSenderInterface::class);
+        $this->p2pSenderRepository = $this->createMock(P2pSenderRepository::class);
 
         // Setup utility container
         $this->utilityContainer->method('getValidationUtility')
@@ -1233,6 +1236,147 @@ class Rp2pServiceTest extends TestCase
         $this->service->handleRp2pRequest($request);
 
         // Successfully processed with zero fee
+        $this->assertTrue(true);
+    }
+
+    // =========================================================================
+    // Multi-sender RP2P Tests
+    // =========================================================================
+
+    /**
+     * Test handleRp2pRequest sends to all upstream senders from p2p_senders table
+     */
+    public function testHandleRp2pRequestSendsToMultipleSenders(): void
+    {
+        // Create service with P2pSenderRepository injected
+        $serviceWithSenders = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            null, // rp2pCandidateRepository
+            $this->p2pSenderRepository
+        );
+        $serviceWithSenders->setP2pTransactionSender($this->p2pTransactionSender);
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
+        ];
+
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            // No destination_address means intermediate node
+            'my_fee_amount' => 100,
+            'sender_address' => 'http://first-sender.test',
+            'sender_public_key' => self::TEST_PUBLIC_KEY
+        ];
+
+        $this->p2pRepository->method('getByHash')
+            ->willReturn($p2p);
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(100000);
+        $this->contactRepository->method('getCreditLimit')
+            ->willReturn(100000.0);
+        $this->rp2pRepository->method('insertRp2pRequest')
+            ->willReturn('test-rp2p-id');
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, 'found');
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1234567890);
+
+        // Return two senders from p2p_senders table
+        $this->p2pSenderRepository->expects($this->once())
+            ->method('getSendersByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                ['sender_address' => 'http://first-sender.test', 'sender_public_key' => 'key1'],
+                ['sender_address' => 'http://second-sender.test', 'sender_public_key' => 'key2'],
+            ]);
+
+        // sendMessage should be called twice (once per sender)
+        $this->messageDeliveryService->expects($this->exactly(2))
+            ->method('sendMessage')
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{}',
+                'messageId' => 'relay-' . self::TEST_HASH . '-1234567890'
+            ]);
+
+        $serviceWithSenders->handleRp2pRequest($request);
+
+        $this->assertTrue(true);
+    }
+
+    /**
+     * Test handleRp2pRequest falls back to single sender when no p2p_senders rows exist
+     */
+    public function testHandleRp2pRequestFallsBackToSingleSender(): void
+    {
+        // Create service with P2pSenderRepository injected
+        $serviceWithSenders = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            null,
+            $this->p2pSenderRepository
+        );
+        $serviceWithSenders->setP2pTransactionSender($this->p2pTransactionSender);
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
+        ];
+
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'my_fee_amount' => 100,
+            'sender_address' => 'http://original-sender.test',
+            'sender_public_key' => self::TEST_PUBLIC_KEY
+        ];
+
+        $this->p2pRepository->method('getByHash')
+            ->willReturn($p2p);
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(100000);
+        $this->contactRepository->method('getCreditLimit')
+            ->willReturn(100000.0);
+        $this->rp2pRepository->method('insertRp2pRequest')
+            ->willReturn('test-rp2p-id');
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1234567890);
+
+        // Return empty array — no p2p_senders rows
+        $this->p2pSenderRepository->expects($this->once())
+            ->method('getSendersByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([]);
+
+        // Should fall back to p2p['sender_address'] — one sendMessage call
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{}',
+                'messageId' => 'relay-' . self::TEST_HASH . '-1234567890'
+            ]);
+
+        $serviceWithSenders->handleRp2pRequest($request);
+
         $this->assertTrue(true);
     }
 }
