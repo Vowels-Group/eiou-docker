@@ -307,9 +307,14 @@ class Rp2pService implements Rp2pServiceInterface {
                 return false;
             }
 
-            // Check if P2P is in best-fee mode (fast=0)
+            // Check if P2P is in best-fee mode (fast=0).
+            // Every node collects RP2P candidates from its downstream contacts,
+            // picks the best, and forwards it upstream. This builds the optimal
+            // fee route hop-by-hop backwards through the network.
             $p2p = $this->p2pRepository->getByHash($request['hash']);
-            if ($p2p && !((int)($p2p['fast'] ?? 1)) && $this->rp2pCandidateRepository !== null) {
+            if ($p2p && !((int)($p2p['fast'] ?? 1))
+                && $this->rp2pCandidateRepository !== null
+            ) {
                 // Best-fee mode: store as candidate instead of processing immediately
                 try {
                     $this->handleRp2pCandidate($request, $p2p);

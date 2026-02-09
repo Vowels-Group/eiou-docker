@@ -110,7 +110,7 @@ class P2pRepository extends AbstractRepository {
             'outgoing_txid' => $request['outgoing_txid'] ?? null,
             'status' => $status,
             'description' => $description, // Privacy: Only stored locally, never sent to relay nodes
-            'fast' => $request['fast'] ?? 1
+            'fast' => (int)($request['fast'] ?? 1)
         ];
 
         $result = $this->insert($data);

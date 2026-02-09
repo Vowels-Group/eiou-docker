@@ -547,7 +547,7 @@ class P2pService implements P2pServiceInterface {
         $data['maxRequestLevel'] = $data['minRequestLevel'] + $this->transportUtility->jitter($this->currentUser->getMaxP2pLevel());
 
         // Thread fast flag from user request (default: true for backward compatibility)
-        $data['fast'] = $request['fast'] ?? true;
+        $data['fast'] = (int)($request['fast'] ?? true);
 
         return $data;
     }
@@ -632,6 +632,7 @@ class P2pService implements P2pServiceInterface {
             } else{
                 $contactsToSend = $contactsCount; // Reset sendable contact count
                 $sentMessages = 0;
+                $acceptedContacts = 0; // Only contacts that accepted P2P ('inserted')
                 $successfulSends = [];
 
                 // Send p2p request to all accepted contacts
@@ -668,6 +669,12 @@ class P2pService implements P2pServiceInterface {
                     }
 
                     $sentMessages += 1;
+                    // Track contacts that accepted the P2P for best-fee response counting.
+                    // Contacts responding 'already_relayed' won't send RP2Ps back via this
+                    // path, so they must not be counted as expected respondents.
+                    if ($response['status'] === 'inserted') {
+                        $acceptedContacts += 1;
+                    }
                     if ($sendResult['success']) {
                         $successfulSends[] = ['messageId' => $messageId, 'nextHop' => $contactAddress];
                     }
@@ -696,8 +703,8 @@ class P2pService implements P2pServiceInterface {
                     continue;
                 }
 
-                // Track how many contacts were sent to (used for best-fee mode response counting)
-                $this->p2pRepository->updateContactsSentCount($p2pHash, $sentMessages);
+                // Track how many contacts accepted (used for best-fee mode response counting)
+                $this->p2pRepository->updateContactsSentCount($p2pHash, $acceptedContacts);
             }
 
             $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);

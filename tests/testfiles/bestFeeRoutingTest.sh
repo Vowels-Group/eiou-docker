@@ -291,21 +291,41 @@ initialBalanceBest=$(docker exec ${testReceiver} php -r "
 # Send WITHOUT --fast (best-fee mode: collect all rp2p responses, pick cheapest)
 bestFeeSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[${testReceiver}]} 5 USD 2>&1)
 
-# Best-fee mode waits for all contacts to respond or P2P expiration, allow more time
-echo -e "\t   Waiting for best-fee mode routing (timeout: 45s)..."
-newBalanceBest=$(wait_for_balance_change "${testReceiver}" "$initialBalanceBest" "$balance_cmd" 45 "best-fee mode send")
+# Best-fee mode: RP2P candidates are collected at the originator.
+# Not all contacts may respond (paths blocked by already_relayed collisions),
+# so selection is triggered by P2P expiration cleanup. We simulate that here
+# by processing queues, then force-expiring the P2P and triggering cleanup.
 
-# Retry with queue processing if needed
+echo -e "\t   Waiting for P2P propagation and RP2P collection (timeout: 30s)..."
+all_containers="${containers[*]}"
+
+# Process queues to propagate P2P and collect RP2P candidates
+for attempt in 1 2 3 4 5 6; do
+    process_routing_queues "$all_containers"
+done
+
+# Force-expire the best-fee P2P on ALL containers to trigger candidate selection.
+# Each node collects RP2P candidates from its downstream contacts and picks the best.
+# By expiring on all nodes, we trigger this selection at every hop simultaneously.
+echo -e "\t   Triggering best-fee selection via forced expiration on all nodes..."
+for container in "${containers[@]}"; do
+    docker exec ${container} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$app = \Eiou\Core\Application::getInstance();
+        \$pdo = \$app->services->getPdo();
+        \$pdo->exec('UPDATE p2p SET expiration = 1 WHERE fast = 0 AND status IN (\"queued\", \"sent\")');
+        \$app->services->getCleanupService()->processCleanupMessages();
+    " 2>/dev/null || true
+done
+
+# Process queues to propagate the best RP2P selections back through the network
+for attempt in 1 2 3 4 5 6; do
+    process_routing_queues "$all_containers"
+done
+
+# Check balance change
+newBalanceBest=$(docker exec ${testReceiver} sh -c "$balance_cmd" 2>/dev/null || echo "$initialBalanceBest")
 balanceChangedBest=$(awk "BEGIN {print ($newBalanceBest != $initialBalanceBest) ? 1 : 0}")
-if [ "$balanceChangedBest" -eq 0 ]; then
-    echo -e "\t   Balance unchanged, retrying with queue processing..."
-    all_containers="${containers[*]}"
-    for attempt in 1 2 3 4 5; do
-        process_routing_queues "$all_containers"
-    done
-    newBalanceBest=$(docker exec ${testReceiver} sh -c "$balance_cmd" 2>/dev/null || echo "$initialBalanceBest")
-    balanceChangedBest=$(awk "BEGIN {print ($newBalanceBest != $initialBalanceBest) ? 1 : 0}")
-fi
 
 if [ "$balanceChangedBest" -eq 1 ]; then
     printf "\t   Best-fee mode send ${GREEN}PASSED${NC} (Balance: %s -> %s)\n" "$initialBalanceBest" "$newBalanceBest"
