@@ -676,11 +676,27 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n[3.7 Trigger sync from A to B (simulating ping-triggered sync)]"
 
-# First A needs to re-add B as a contact (B's address is deterministic from seedphrase)
+# Delete B from A's contacts so eiou add sends a fresh create request
+# (A still has B as 'accepted', which causes eiou add to short-circuit with "already exists")
+docker exec ${containerA} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
+    if (\$pubkey) {
+        \$hash = hash('sha256', \$pubkey);
+        \$pdo->exec(\"DELETE FROM contacts WHERE pubkey_hash = '\" . \$hash . \"'\");
+        \$pdo->exec(\"DELETE FROM addresses WHERE pubkey_hash = '\" . \$hash . \"'\");
+    }
+" 2>/dev/null || true
+
+# Both sides add each other before processing queues (mirrors initial setup pattern)
 docker exec ${containerA} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
-# Process queues for contact exchange
-wait_for_queue_processed ${containerA}
-wait_for_queue_processed ${containerB}
+docker exec ${containerB} eiou add ${addressA} ${containerA} 0.1 1000 USD 2>&1 > /dev/null || true
+
+# Process queues - mutual create exchange completes acceptance
+wait_for_queue_processed ${containerA} 2
+wait_for_queue_processed ${containerB} 2
 
 # Get B's pubkey for sync
 pubkeyBfromAforSync=$(docker exec ${containerA} php -r "
@@ -711,11 +727,26 @@ fi
 totaltests=$(( totaltests + 1 ))
 echo -e "\n[3.8 Trigger sync from C to B]"
 
-# C re-adds B
+# Delete B from C's contacts (same reason as 3.7)
+docker exec ${containerC} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
+    if (\$pubkey) {
+        \$hash = hash('sha256', \$pubkey);
+        \$pdo->exec(\"DELETE FROM contacts WHERE pubkey_hash = '\" . \$hash . \"'\");
+        \$pdo->exec(\"DELETE FROM addresses WHERE pubkey_hash = '\" . \$hash . \"'\");
+    }
+" 2>/dev/null || true
+
+# Both sides add each other before processing queues
 docker exec ${containerC} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
-# Process queues for contact exchange
-wait_for_queue_processed ${containerC}
-wait_for_queue_processed ${containerB}
+docker exec ${containerB} eiou add ${addressC} ${containerC} 0.1 1000 USD 2>&1 > /dev/null || true
+
+# Process queues - mutual create exchange completes acceptance
+wait_for_queue_processed ${containerC} 2
+wait_for_queue_processed ${containerB} 2
 
 # Get B's pubkey from C's perspective
 pubkeyBfromCforSync=$(docker exec ${containerC} php -r "
