@@ -7,7 +7,7 @@
 # Usage: ./run-all-tests.sh <build_name> [mode] [subset]
 #
 # Arguments:
-#   build_name  - The topology to test (http4, http10, http13)
+#   build_name  - The topology to test (http4, http10, http13, collisions)
 #   mode        - Transport mode: http, https, or tor (default: http)
 #   subset      - Test subset to run (default: all)
 #
@@ -16,6 +16,7 @@
 #   ./run-all-tests.sh http4 https        # Run all tests with HTTPS mode
 #   ./run-all-tests.sh http4 http quick   # Run quick validation tests
 #   ./run-all-tests.sh http4 http contacts # Run contact-related tests
+#   ./run-all-tests.sh collisions http bestfee  # Run best-fee routing tests on collision topology
 #
 # Mode descriptions:
 #   http  - Test containers with http:// addresses
@@ -33,6 +34,7 @@
 #   connections  - SSL certificates and Tor connectivity tests
 #   system       - System tests: shutdown, lockfiles, seedphrase
 #   performance  - Performance baseline benchmarks
+#   bestfee      - Best-fee P2P route selection tests (best with collisions build)
 #
 # Environment Variables (for WSL2/slow environments):
 #   EIOU_INIT_TIMEOUT  - Container initialization wait in seconds (default: 120)
@@ -46,9 +48,9 @@ set -e  # Exit on error
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <build_name> [mode] [subset]"
     echo ""
-    echo "Available builds: http4, http10, http13"
+    echo "Available builds: http4, http10, http13, collisions"
     echo "Available modes:  http, https, tor (default: http)"
-    echo "Available subsets: all, quick, contacts, transactions, messaging, api, sync, connections, system"
+    echo "Available subsets: all, quick, contacts, transactions, messaging, api, sync, connections, system, bestfee"
     exit 1
 fi
 
@@ -86,6 +88,7 @@ show_available_subsets() {
     printf "  ${GREEN}connections${NC}  - SSL certificates and Tor connectivity tests\n"
     printf "  ${GREEN}system${NC}       - System tests: shutdown, lockfiles, seedphrase\n"
     printf "  ${GREEN}performance${NC}  - Performance baseline benchmarks\n"
+    printf "  ${GREEN}bestfee${NC}      - Best-fee P2P route selection tests (best with collisions build)\n"
     echo ""
     printf "${YELLOW}Note:${NC} Some subsets require 'addContactsTest' to run first.\n"
     printf "      The runner automatically includes prerequisites when needed.\n"
@@ -93,7 +96,7 @@ show_available_subsets() {
 }
 
 # Validate SUBSET is one of the allowed values
-VALID_SUBSETS="all quick contacts transactions messaging api sync connections system performance"
+VALID_SUBSETS="all quick contacts transactions messaging api sync connections system performance bestfee"
 if ! echo "$VALID_SUBSETS" | grep -qw "$SUBSET"; then
     printf "${RED}Error: Invalid test subset '${SUBSET}'${NC}\n"
     show_available_subsets
@@ -380,6 +383,7 @@ pingTestSuite
 serviceInterfaceTest
 serviceExceptionTest
 nodeIdentityTest
+bestFeeRoutingTest
 performanceBaseline
 "
 
@@ -458,6 +462,12 @@ addContactsTest
 performanceBaseline
 "
 
+# Best-fee routing tests (best with collisions topology for multiple route paths)
+TESTS_BESTFEE="
+addContactsTest
+bestFeeRoutingTest
+"
+
 # Select test order based on subset
 case "$SUBSET" in
     all)
@@ -489,6 +499,9 @@ case "$SUBSET" in
         ;;
     performance)
         TEST_ORDER="$TESTS_PERFORMANCE"
+        ;;
+    bestfee)
+        TEST_ORDER="$TESTS_BESTFEE"
         ;;
 esac
 
