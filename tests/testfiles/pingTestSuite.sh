@@ -674,7 +674,7 @@ fi
 ############################ TEST 3.7: TRIGGER SYNC FROM A TO B ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n[3.7 Trigger sync from A to B (simulating ping-triggered sync)]"
+echo -e "\n[3.7 Trigger sync B->A (B requests transaction history from A)]"
 
 # Delete B from A's contacts so eiou add sends a fresh create request
 # (A still has B as 'accepted', which causes eiou add to short-circuit with "already exists")
@@ -698,11 +698,11 @@ docker exec ${containerB} eiou add ${addressA} ${containerA} 0.1 1000 USD 2>&1 >
 wait_for_queue_processed ${containerA} 2
 wait_for_queue_processed ${containerB} 2
 
-# Get B's pubkey for sync
-pubkeyBfromAforSync=$(docker exec ${containerA} php -r "
+# Get A's pubkey from B's perspective for sync
+pubkeyAfromBforSync=$(docker exec ${containerB} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportA}', '${addressA}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -710,22 +710,23 @@ pubkeyBfromAforSync=$(docker exec ${containerA} php -r "
     }
 " 2>/dev/null || echo "ERROR")
 
-# Trigger sync from A to B
-syncResultA=$(trigger_sync "${containerA}" "${addressB}" "${pubkeyBfromAforSync}")
+# Trigger sync from B to A (B requests its transaction history from A)
+# B was wiped so it needs to pull transactions FROM A, not the other way around
+syncResultBA=$(trigger_sync "${containerB}" "${addressA}" "${pubkeyAfromBforSync}")
 
-if [[ "$syncResultA" == SYNC_SUCCESS* ]]; then
-    syncedCount=$(echo "$syncResultA" | cut -d':' -f2)
-    printf "\t   Sync A->B succeeded, synced ${syncedCount} transactions ${GREEN}PASSED${NC}\n"
+if [[ "$syncResultBA" == SYNC_SUCCESS* ]]; then
+    syncedCount=$(echo "$syncResultBA" | cut -d':' -f2)
+    printf "\t   Sync B->A succeeded, synced ${syncedCount} transactions ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Sync A->B ${YELLOW}WARNING${NC} - ${syncResultA}\n"
+    printf "\t   Sync B->A ${YELLOW}WARNING${NC} - ${syncResultBA}\n"
     passed=$(( passed + 1 ))  # Non-critical
 fi
 
 ############################ TEST 3.8: TRIGGER SYNC FROM C TO B ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n[3.8 Trigger sync from C to B]"
+echo -e "\n[3.8 Trigger sync B->C (B requests transaction history from C)]"
 
 # Delete B from C's contacts (same reason as 3.7)
 docker exec ${containerC} php -r "
@@ -748,11 +749,11 @@ docker exec ${containerB} eiou add ${addressC} ${containerC} 0.1 1000 USD 2>&1 >
 wait_for_queue_processed ${containerC} 2
 wait_for_queue_processed ${containerB} 2
 
-# Get B's pubkey from C's perspective
-pubkeyBfromCforSync=$(docker exec ${containerC} php -r "
+# Get C's pubkey from B's perspective for sync
+pubkeyCfromBforSync=$(docker exec ${containerB} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
+    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportC}', '${addressC}');
     if (\$pubkey) {
         echo base64_encode(\$pubkey);
     } else {
@@ -760,15 +761,15 @@ pubkeyBfromCforSync=$(docker exec ${containerC} php -r "
     }
 " 2>/dev/null || echo "ERROR")
 
-# Trigger sync from C to B
-syncResultC=$(trigger_sync "${containerC}" "${addressB}" "${pubkeyBfromCforSync}")
+# Trigger sync from B to C (B requests its transaction history from C)
+syncResultBC=$(trigger_sync "${containerB}" "${addressC}" "${pubkeyCfromBforSync}")
 
-if [[ "$syncResultC" == SYNC_SUCCESS* ]]; then
-    syncedCount=$(echo "$syncResultC" | cut -d':' -f2)
-    printf "\t   Sync C->B succeeded, synced ${syncedCount} transactions ${GREEN}PASSED${NC}\n"
+if [[ "$syncResultBC" == SYNC_SUCCESS* ]]; then
+    syncedCount=$(echo "$syncResultBC" | cut -d':' -f2)
+    printf "\t   Sync B->C succeeded, synced ${syncedCount} transactions ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Sync C->B ${YELLOW}WARNING${NC} - ${syncResultC}\n"
+    printf "\t   Sync B->C ${YELLOW}WARNING${NC} - ${syncResultBC}\n"
     passed=$(( passed + 1 ))  # Non-critical
 fi
 
@@ -789,12 +790,15 @@ finalContactCountB=$(docker exec ${containerB} php -r "
     echo \$count;
 " 2>/dev/null || echo "0")
 
-if [[ "$finalContactCountB" -ge 1 ]]; then
-    printf "\t   B has ${finalContactCountB} contacts restored ${GREEN}PASSED${NC}\n"
+if [[ "$finalContactCountB" -ge "$originalContactCountB" ]] && [[ "$finalContactCountB" -ge 1 ]]; then
+    printf "\t   B has ${finalContactCountB}/${originalContactCountB} contacts restored ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+elif [[ "$finalContactCountB" -ge 1 ]]; then
+    printf "\t   B has ${finalContactCountB}/${originalContactCountB} contacts restored ${YELLOW}WARNING${NC} (partial)\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   B contacts restoration ${YELLOW}WARNING${NC} - Only ${finalContactCountB} contacts\n"
-    passed=$(( passed + 1 ))
+    printf "\t   B contacts restoration ${RED}FAILED${NC} - 0/${originalContactCountB} contacts\n"
+    failure=$(( failure + 1 ))
 fi
 
 ############################ TEST 3.10: VERIFY B HAS TRANSACTIONS RESTORED ############################
@@ -809,12 +813,15 @@ finalTxCountB=$(docker exec ${containerB} php -r "
     echo \$count;
 " 2>/dev/null || echo "0")
 
-if [[ "$finalTxCountB" -ge 1 ]]; then
-    printf "\t   B has ${finalTxCountB} transactions restored ${GREEN}PASSED${NC}\n"
+if [[ "$finalTxCountB" -ge "$originalTxCountB" ]] && [[ "$finalTxCountB" -ge 1 ]]; then
+    printf "\t   B has ${finalTxCountB}/${originalTxCountB} transactions restored ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+elif [[ "$finalTxCountB" -ge 1 ]]; then
+    printf "\t   B has ${finalTxCountB}/${originalTxCountB} transactions restored ${YELLOW}WARNING${NC} (partial)\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   B transactions restoration ${YELLOW}WARNING${NC} - Only ${finalTxCountB} transactions\n"
-    passed=$(( passed + 1 ))
+    printf "\t   B transactions restoration ${RED}FAILED${NC} - 0/${originalTxCountB} transactions\n"
+    failure=$(( failure + 1 ))
 fi
 
 ############################ TEST 3.11: VERIFY B'S ONLINE STATUS UPDATED ON A ############################
