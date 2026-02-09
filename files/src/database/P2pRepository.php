@@ -25,7 +25,7 @@ class P2pRepository extends AbstractRepository {
         'my_fee_amount', 'destination_address', 'destination_pubkey',
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
-        'description', 'fast', 'contacts_sent_count', 'contacts_responded_count',
+        'description', 'fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait',
         'status', 'created_at', 'incoming_txid',
         'outgoing_txid', 'completed_at'
     ];
@@ -110,7 +110,8 @@ class P2pRepository extends AbstractRepository {
             'outgoing_txid' => $request['outgoing_txid'] ?? null,
             'status' => $status,
             'description' => $description, // Privacy: Only stored locally, never sent to relay nodes
-            'fast' => (int)($request['fast'] ?? 1)
+            'fast' => (int)($request['fast'] ?? 1),
+            'hop_wait' => (int)($request['hopWait'] ?? 0)
         ];
 
         $result = $this->insert($data);

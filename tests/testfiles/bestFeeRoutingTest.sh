@@ -57,7 +57,7 @@ for container in "$testSender" "$testReceiver"; do
         \$pdo = \$app->services->getPdo();
         \$stmt = \$pdo->query('DESCRIBE p2p');
         \$columns = array_column(\$stmt->fetchAll(PDO::FETCH_ASSOC), 'Field');
-        \$required = ['fast', 'contacts_sent_count', 'contacts_responded_count'];
+        \$required = ['fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait'];
         \$missing = array_diff(\$required, \$columns);
         echo empty(\$missing) ? 'OK' : 'MISSING:' . implode(',', \$missing);
     " 2>/dev/null || echo "ERROR")
@@ -279,6 +279,18 @@ fi
 echo -e "\n[Test 9: Best-fee mode send (no --fast)]"
 
 totaltests=$(( totaltests + 1 ))
+
+# Set a short P2P expiration for testing (60s instead of default 300s)
+# With hop_wait = floor(60/20) - 2 = 1 → clamped to min 3s per hop
+# Relay nodes expire after ~3s, originator after 60s max
+testExpiration=60
+echo -e "\t-> Setting P2P expiration to ${testExpiration}s on ${testSender}"
+docker exec ${testSender} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$app->services->getCurrentUser()->set('p2pExpiration', ${testExpiration});
+" 2>/dev/null || true
+
 echo -e "\t-> Sending 5 USD from ${testSender} to ${testReceiver} without --fast (best-fee mode)"
 
 # Get initial balance of receiver
@@ -288,50 +300,60 @@ initialBalanceBest=$(docker exec ${testReceiver} php -r "
     echo \$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
 " 2>/dev/null || echo "0")
 
+# Start timing benchmark
+sendStartTime=$(date +%s)
+
 # Send WITHOUT --fast (best-fee mode: collect all rp2p responses, pick cheapest)
 bestFeeSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[${testReceiver}]} 5 USD 2>&1)
 
-# Best-fee mode: RP2P candidates are collected at the originator.
-# Not all contacts may respond (paths blocked by already_relayed collisions),
-# so selection is triggered by P2P expiration cleanup. We simulate that here
-# by processing queues, then force-expiring the P2P and triggering cleanup.
+# Best-fee mode with per-hop expiration:
+# - Originator defines hopWait = floor(expiration/max_routing_level) - buffer
+# - Relay nodes use hopWait as their P2P expiration (much shorter than originator's)
+# - Leaf nodes expire first → select best candidate → forward upstream
+# - Each level cascades until originator gets all best routes
+# - Originator's full expiration is the backstop
+#
+# We process queues continuously and wait for natural P2P expiration to trigger
+# candidate selection at each hop. The total time should be well under the
+# originator's expiration since relay nodes expire after just hopWait seconds.
 
-echo -e "\t   Waiting for P2P propagation and RP2P collection (timeout: 30s)..."
 all_containers="${containers[*]}"
+bestfeeTimeout=$((testExpiration + 30))  # Allow some headroom beyond expiration
+echo -e "\t   Waiting for best-fee routing via natural expiration (timeout: ${bestfeeTimeout}s)..."
 
-# Process queues to propagate P2P and collect RP2P candidates
-for attempt in 1 2 3 4 5 6; do
+elapsed=0
+balanceChangedBest=0
+while [ $elapsed -lt $bestfeeTimeout ]; do
+    # Process queues to propagate P2P and RP2P messages
     process_routing_queues "$all_containers"
+
+    # Check if balance changed
+    newBalanceBest=$(docker exec ${testReceiver} sh -c "$balance_cmd" 2>/dev/null || echo "$initialBalanceBest")
+    balanceChangedBest=$(awk "BEGIN {print ($newBalanceBest != $initialBalanceBest) ? 1 : 0}")
+    if [ "$balanceChangedBest" -eq 1 ]; then
+        break
+    fi
+
+    # Run cleanup on all nodes to process any expired P2Ps (triggers candidate selection)
+    for container in "${containers[@]}"; do
+        docker exec ${container} php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \Eiou\Core\Application::getInstance()->services->getCleanupService()->processCleanupMessages();
+        " 2>/dev/null || true
+    done
+
+    elapsed=$(( $(date +%s) - sendStartTime ))
 done
 
-# Force-expire the best-fee P2P on ALL containers to trigger candidate selection.
-# Each node collects RP2P candidates from its downstream contacts and picks the best.
-# By expiring on all nodes, we trigger this selection at every hop simultaneously.
-echo -e "\t   Triggering best-fee selection via forced expiration on all nodes..."
-for container in "${containers[@]}"; do
-    docker exec ${container} php -r "
-        require_once('${BOOTSTRAP_PATH}');
-        \$app = \Eiou\Core\Application::getInstance();
-        \$pdo = \$app->services->getPdo();
-        \$pdo->exec('UPDATE p2p SET expiration = 1 WHERE fast = 0 AND status IN (\"queued\", \"sent\")');
-        \$app->services->getCleanupService()->processCleanupMessages();
-    " 2>/dev/null || true
-done
-
-# Process queues to propagate the best RP2P selections back through the network
-for attempt in 1 2 3 4 5 6; do
-    process_routing_queues "$all_containers"
-done
-
-# Check balance change
-newBalanceBest=$(docker exec ${testReceiver} sh -c "$balance_cmd" 2>/dev/null || echo "$initialBalanceBest")
-balanceChangedBest=$(awk "BEGIN {print ($newBalanceBest != $initialBalanceBest) ? 1 : 0}")
+# Calculate benchmark time
+sendEndTime=$(date +%s)
+bestfeeElapsed=$((sendEndTime - sendStartTime))
 
 if [ "$balanceChangedBest" -eq 1 ]; then
-    printf "\t   Best-fee mode send ${GREEN}PASSED${NC} (Balance: %s -> %s)\n" "$initialBalanceBest" "$newBalanceBest"
+    printf "\t   Best-fee mode send ${GREEN}PASSED${NC} (Balance: %s -> %s, Time: %ds)\n" "$initialBalanceBest" "$newBalanceBest" "$bestfeeElapsed"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Best-fee mode send ${RED}FAILED${NC} (Balance unchanged: %s)\n" "$initialBalanceBest"
+    printf "\t   Best-fee mode send ${RED}FAILED${NC} (Balance unchanged: %s, Timeout after %ds)\n" "$initialBalanceBest" "$bestfeeElapsed"
     printf "\t   Send result: %s\n" "${bestFeeSendResult:0:200}"
     failure=$(( failure + 1 ))
 fi

@@ -143,6 +143,8 @@ class Constants {
     const P2P_MIN_EXPIRATION_SECONDS = 60; // Minimum expiration time to allow network propagation
     const P2P_REQUEST_LEVEL_VALIDATION_MAX = 1000; // Maximum valid request level for input validation
     const P2P_MAX_ROUTING_LEVEL = 20; // Maximum allowed P2P routing hops (prevents infinite routing)
+    const P2P_HOP_PROCESSING_BUFFER_SECONDS = 2; // Per-hop buffer for network latency and processing time
+    const P2P_MIN_HOP_WAIT_SECONDS = 3; // Minimum per-hop wait time for best-fee candidate collection
 
     // Contact management
     const CONTACT_DEFAULT_FEE_PERCENT = 0.1;

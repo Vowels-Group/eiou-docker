@@ -408,6 +408,14 @@ class P2pService implements P2pServiceInterface {
                 $request['feeAmount'] = $requestedAmount - $request['amount'];
                 $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
 
+                // In best-fee mode, relay nodes use per-hop expiration so downstream
+                // nodes expire first and cascade their best candidates upstream
+                $hopWait = (int) ($request['hopWait'] ?? 0);
+                if ($hopWait > 0 && !($request['fast'] ?? true)) {
+                    $request['expiration'] = $this->timeUtility->getCurrentMicrotime()
+                        + $this->timeUtility->convertMicrotimeToInt((float) $hopWait);
+                }
+
                 $this->p2pRepository->insertP2pRequest($request, NULL);
                 $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_QUEUED);
             }

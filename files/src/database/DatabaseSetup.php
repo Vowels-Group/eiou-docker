@@ -186,6 +186,7 @@ function runColumnMigrations(PDO $pdo): array {
             'fast' => 'TINYINT(1) DEFAULT 1 AFTER description',
             'contacts_sent_count' => 'INT DEFAULT 0 AFTER fast',
             'contacts_responded_count' => 'INT DEFAULT 0 AFTER contacts_sent_count',
+            'hop_wait' => 'INT DEFAULT 0 AFTER contacts_responded_count',
         ],
     ];
 
