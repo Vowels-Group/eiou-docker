@@ -8,8 +8,8 @@
 # - Database schema includes new columns (fast, contacts_sent_count, contacts_responded_count)
 # - rp2p_candidates table exists and is accessible
 # - Service methods for best-fee routing are present
-# - Fast mode (--fast) P2P completes successfully (backward compatibility)
-# - Best-fee mode (no --fast) P2P completes successfully
+# - Fast mode (default, no flag) P2P completes successfully
+# - Best-fee mode (--best) P2P completes successfully
 # - P2P tracking columns are populated after send
 # - Already-relayed collision handling method exists
 #
@@ -202,10 +202,10 @@ else
 fi
 
 # ==================== Test 7: Fast Mode Send ====================
-echo -e "\n[Test 7: Fast mode send (--fast)]"
+echo -e "\n[Test 7: Fast mode send (default)]"
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\t-> Sending 5 USD from ${testSender} to ${testReceiver} with --fast"
+echo -e "\t-> Sending 5 USD from ${testSender} to ${testReceiver} (default fast mode)"
 
 # Get initial balance of receiver
 initialBalanceFast=$(docker exec ${testReceiver} php -r "
@@ -214,8 +214,8 @@ initialBalanceFast=$(docker exec ${testReceiver} php -r "
     echo \$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
 " 2>/dev/null || echo "0")
 
-# Send with --fast flag (first route wins)
-fastSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[${testReceiver}]} 5 USD --fast 2>&1)
+# Send without flags (default fast mode: first route wins)
+fastSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[${testReceiver}]} 5 USD 2>&1)
 
 # Wait for routing with polling
 echo -e "\t   Waiting for fast mode routing (timeout: 30s)..."
@@ -276,16 +276,16 @@ else
 fi
 
 # ==================== Test 9: Best-Fee Mode Send ====================
-echo -e "\n[Test 9: Best-fee mode send (no --fast)]"
+echo -e "\n[Test 9: Best-fee mode send (--best)]"
 
 totaltests=$(( totaltests + 1 ))
 
 # Set a short P2P expiration for testing (60s instead of default 300s)
-# With hop_wait = floor(60/20) - 2 = 1 → clamped to min 3s per hop
+# With hop_wait = max(floor(60/20) - 2, 15) = 15s per hop
 # Relay expiration is proportional to remaining hops (hopWait * remainingHops):
-#   - Deepest relay (1 hop remaining): 3s
-#   - Mid-chain relay (5 hops remaining): 15s
-#   - First relay (10 hops remaining): 30s
+#   - Deepest relay (1 hop remaining): 15s
+#   - Mid-chain relay (3 hops remaining): 45s
+#   - First relay (5 hops remaining): 75s
 # This guarantees deeper nodes expire before upstream ones, cascading correctly.
 testExpiration=60
 echo -e "\t-> Setting P2P expiration to ${testExpiration}s on ${testSender}"
@@ -295,7 +295,7 @@ docker exec ${testSender} php -r "
     \$app->services->getCurrentUser()->set('p2pExpiration', ${testExpiration});
 " 2>/dev/null || true
 
-echo -e "\t-> Sending 5 USD from ${testSender} to ${testReceiver} without --fast (best-fee mode)"
+echo -e "\t-> Sending 5 USD from ${testSender} to ${testReceiver} with --best (best-fee mode)"
 
 # Get initial balance of receiver
 initialBalanceBest=$(docker exec ${testReceiver} php -r "
@@ -307,8 +307,8 @@ initialBalanceBest=$(docker exec ${testReceiver} php -r "
 # Start timing benchmark
 sendStartTime=$(date +%s)
 
-# Send WITHOUT --fast (best-fee mode: collect all rp2p responses, pick cheapest)
-bestFeeSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[${testReceiver}]} 5 USD 2>&1)
+# Send WITH --best (best-fee mode: collect all rp2p responses, pick cheapest)
+bestFeeSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[${testReceiver}]} 5 USD --best 2>&1)
 
 # Best-fee mode with per-hop expiration:
 # - Originator defines hopWait = floor(expiration/max_routing_level) - buffer

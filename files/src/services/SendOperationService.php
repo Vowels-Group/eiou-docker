@@ -349,9 +349,9 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
     public function handleP2pRoute(array $request, ?CliOutputManager $output = null): void {
         $output = $output ?? CliOutputManager::getInstance();
 
-        // Detect --fast flag: when present, use fast routing (first response wins)
-        // When absent, use best-fee mode (collect all responses, pick cheapest)
-        $request['fast'] = in_array('--fast', $request, true);
+        // Default is fast mode (first response wins). --best flag enables
+        // best-fee mode (collect all responses, pick cheapest route).
+        $request['fast'] = !in_array('--best', $request, true);
 
         // Remove flags from positional arguments so they aren't treated as description/currency
         foreach ($request as $key => $value) {

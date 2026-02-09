@@ -545,9 +545,9 @@ class SendOperationServiceTest extends TestCase
 
         $request = ['eiou', 'send', 'http://test.example.com', '10', 'USD'];
 
-        // handleP2pRoute adds 'fast' key after detecting --fast flag
+        // handleP2pRoute adds 'fast' key: true by default, false with --best
         $expectedRequest = $request;
-        $expectedRequest['fast'] = false;
+        $expectedRequest['fast'] = true;
 
         $this->mockP2pService->expects($this->once())
             ->method('sendP2pRequest')
@@ -574,9 +574,9 @@ class SendOperationServiceTest extends TestCase
 
         $request = ['eiou', 'send', 'invalid-recipient', '10', 'USD'];
 
-        // handleP2pRoute adds 'fast' key after detecting --fast flag
+        // handleP2pRoute adds 'fast' key: true by default, false with --best
         $expectedRequest = $request;
-        $expectedRequest['fast'] = false;
+        $expectedRequest['fast'] = true;
 
         $this->mockP2pService->expects($this->once())
             ->method('sendP2pRequest')
