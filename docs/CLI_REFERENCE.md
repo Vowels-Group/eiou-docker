@@ -130,6 +130,9 @@ eiou generate --json
 - Using `restore-file` is more secure as the seed phrase won't appear in process listings
 - Rate limited: 5 generations per 5 minutes
 
+**Restoring contacts from a prior wallet:**
+After restoring a wallet from a seed phrase, your previous contacts are not immediately present. When a prior contact pings or sends a message to your restored node, the ContactStatusService automatically creates a pending contact entry and triggers a sync to restore the shared transaction chain. The restored contact appears as a pending request (visible via `eiou pending`) that you can re-accept with the `add` command. Prior contacts are identified by having existing transaction history after the sync completes.
+
 ---
 
 ### info
@@ -408,6 +411,9 @@ eiou ping --json Alice
 - Chain validity status (includes internal gap detection)
 - Response message
 
+**Wallet restore behavior:**
+When a ping is received by a node that was restored from a seed phrase, the ContactStatusService detects the incoming ping from a previously unknown address, auto-creates a pending contact, and triggers a sync to restore the shared transaction chain. The prior contact then appears as a pending request that the restored wallet owner can review via `eiou pending` and re-accept via `eiou add`. This allows prior contacts to re-establish their relationship with a restored wallet simply by pinging it.
+
 ---
 
 ### block
@@ -521,6 +527,8 @@ eiou pending --json
 - Incoming requests (from others awaiting your acceptance)
 - Outgoing requests (your requests awaiting others' acceptance)
 - Count of pending requests
+
+**Note:** After a wallet restore, prior contacts that ping your node are auto-created as pending contacts by the ContactStatusService. These appear as incoming requests in the pending list. Contacts with existing transaction history (visible after sync) are prior contacts from the previous wallet and can be re-accepted with `eiou add`.
 
 ---
 

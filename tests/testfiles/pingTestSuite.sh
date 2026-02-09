@@ -671,99 +671,90 @@ else
     passed=$(( passed + 1 ))
 fi
 
-############################ TEST 3.7: TRIGGER SYNC FROM A TO B ############################
+############################ TEST 3.7: A PINGS B (TRIGGERS AUTO-RESTORE SYNC) ############################
 
 totaltests=$(( totaltests + 1 ))
-echo -e "\n[3.7 Trigger sync from A to B (simulating ping-triggered sync)]"
+echo -e "\n[3.7 A pings B - triggers auto-restore sync]"
 
-# First A needs to re-add B as a contact (B's address is deterministic from seedphrase)
-docker exec ${containerA} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
-# Process queues for contact exchange
+# A pings B. B was wiped and doesn't know A, so handlePingRequest detects an
+# unknown contact, auto-creates pending contact, and triggers sync to restore
+# transaction history from A. This is the core feature added by this PR.
+pingResultA=$(docker exec -e EIOU_TEST_MODE=true ${containerA} php -r "
+    try {
+        require_once('/etc/eiou/Functions.php');
+        \$app = \Eiou\Core\Application::getInstance();
+        \$contactStatusService = \$app->services->getContactStatusService();
+        \$result = \$contactStatusService->pingContact('${addressB}');
+        echo json_encode(\$result);
+    } catch (Throwable \$e) {
+        echo json_encode(['success' => false, 'error' => 'exception', 'message' => \$e->getMessage()]);
+    }
+" 2>&1 || echo '{"success":false,"error":"php_failed"}')
+
+pingSuccessA=$(echo "$pingResultA" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
+
+if [[ "$pingSuccessA" == "true" ]]; then
+    printf "\t   A->B ping succeeded (auto-restore triggered) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   A->B ping ${RED}FAILED${NC} - Result: ${pingResultA}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 3.8: C PINGS B (TRIGGERS AUTO-RESTORE SYNC) ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n[3.8 C pings B - triggers auto-restore sync]"
+
+# C pings B. Same flow: B doesn't know C, auto-creates pending contact, syncs.
+pingResultC=$(docker exec -e EIOU_TEST_MODE=true ${containerC} php -r "
+    try {
+        require_once('/etc/eiou/Functions.php');
+        \$app = \Eiou\Core\Application::getInstance();
+        \$contactStatusService = \$app->services->getContactStatusService();
+        \$result = \$contactStatusService->pingContact('${addressB}');
+        echo json_encode(\$result);
+    } catch (Throwable \$e) {
+        echo json_encode(['success' => false, 'error' => 'exception', 'message' => \$e->getMessage()]);
+    }
+" 2>&1 || echo '{"success":false,"error":"php_failed"}')
+
+pingSuccessC=$(echo "$pingResultC" | grep -o '"success":[^,}]*' | grep -o 'true\|false' | head -1)
+
+if [[ "$pingSuccessC" == "true" ]]; then
+    printf "\t   C->B ping succeeded (auto-restore triggered) ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   C->B ping ${RED}FAILED${NC} - Result: ${pingResultC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+# Process queues to ensure all sync operations complete
 wait_for_queue_processed ${containerA}
 wait_for_queue_processed ${containerB}
-
-# Get B's pubkey for sync
-pubkeyBfromAforSync=$(docker exec ${containerA} php -r "
-    require_once('${BOOTSTRAP_PATH}');
-    \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
-    if (\$pubkey) {
-        echo base64_encode(\$pubkey);
-    } else {
-        echo 'ERROR';
-    }
-" 2>/dev/null || echo "ERROR")
-
-# Trigger sync from A to B
-syncResultA=$(trigger_sync "${containerA}" "${addressB}" "${pubkeyBfromAforSync}")
-
-if [[ "$syncResultA" == SYNC_SUCCESS* ]]; then
-    syncedCount=$(echo "$syncResultA" | cut -d':' -f2)
-    printf "\t   Sync A->B succeeded, synced ${syncedCount} transactions ${GREEN}PASSED${NC}\n"
-    passed=$(( passed + 1 ))
-else
-    printf "\t   Sync A->B ${YELLOW}WARNING${NC} - ${syncResultA}\n"
-    passed=$(( passed + 1 ))  # Non-critical
-fi
-
-############################ TEST 3.8: TRIGGER SYNC FROM C TO B ############################
-
-totaltests=$(( totaltests + 1 ))
-echo -e "\n[3.8 Trigger sync from C to B]"
-
-# C re-adds B
-docker exec ${containerC} eiou add ${addressB} ${containerB} 0.1 1000 USD 2>&1 > /dev/null || true
-# Process queues for contact exchange
 wait_for_queue_processed ${containerC}
-wait_for_queue_processed ${containerB}
-
-# Get B's pubkey from C's perspective
-pubkeyBfromCforSync=$(docker exec ${containerC} php -r "
-    require_once('${BOOTSTRAP_PATH}');
-    \$app = \Eiou\Core\Application::getInstance();
-    \$pubkey = \$app->services->getContactRepository()->getContactPubkey('${transportB}', '${addressB}');
-    if (\$pubkey) {
-        echo base64_encode(\$pubkey);
-    } else {
-        echo 'ERROR';
-    }
-" 2>/dev/null || echo "ERROR")
-
-# Trigger sync from C to B
-syncResultC=$(trigger_sync "${containerC}" "${addressB}" "${pubkeyBfromCforSync}")
-
-if [[ "$syncResultC" == SYNC_SUCCESS* ]]; then
-    syncedCount=$(echo "$syncResultC" | cut -d':' -f2)
-    printf "\t   Sync C->B succeeded, synced ${syncedCount} transactions ${GREEN}PASSED${NC}\n"
-    passed=$(( passed + 1 ))
-else
-    printf "\t   Sync C->B ${YELLOW}WARNING${NC} - ${syncResultC}\n"
-    passed=$(( passed + 1 ))  # Non-critical
-fi
 
 ############################ TEST 3.9: VERIFY B HAS CONTACTS RESTORED ############################
 
 totaltests=$(( totaltests + 1 ))
 echo -e "\n[3.9 Verify B has contacts restored after sync]"
 
-# Process all queues to ensure sync completes
-wait_for_queue_processed ${containerA}
-wait_for_queue_processed ${containerB}
-wait_for_queue_processed ${containerC}
-
 finalContactCountB=$(docker exec ${containerB} php -r "
     require_once('${BOOTSTRAP_PATH}');
     \$app = \Eiou\Core\Application::getInstance();
-    \$count = \$app->services->getPdo()->query(\"SELECT COUNT(*) FROM contacts WHERE status = 'accepted'\")->fetchColumn();
+    \$count = \$app->services->getPdo()->query('SELECT COUNT(*) FROM contacts')->fetchColumn();
     echo \$count;
 " 2>/dev/null || echo "0")
 
-if [[ "$finalContactCountB" -ge 1 ]]; then
-    printf "\t   B has ${finalContactCountB} contacts restored ${GREEN}PASSED${NC}\n"
+if [[ "$finalContactCountB" -ge "$originalContactCountB" ]] && [[ "$finalContactCountB" -ge 1 ]]; then
+    printf "\t   B has ${finalContactCountB}/${originalContactCountB} contacts restored ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+elif [[ "$finalContactCountB" -ge 1 ]]; then
+    printf "\t   B has ${finalContactCountB}/${originalContactCountB} contacts restored ${YELLOW}WARNING${NC} (partial)\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   B contacts restoration ${YELLOW}WARNING${NC} - Only ${finalContactCountB} contacts\n"
-    passed=$(( passed + 1 ))
+    printf "\t   B contacts restoration ${RED}FAILED${NC} - 0/${originalContactCountB} contacts\n"
+    failure=$(( failure + 1 ))
 fi
 
 ############################ TEST 3.10: VERIFY B HAS TRANSACTIONS RESTORED ############################
@@ -778,12 +769,15 @@ finalTxCountB=$(docker exec ${containerB} php -r "
     echo \$count;
 " 2>/dev/null || echo "0")
 
-if [[ "$finalTxCountB" -ge 1 ]]; then
-    printf "\t   B has ${finalTxCountB} transactions restored ${GREEN}PASSED${NC}\n"
+if [[ "$finalTxCountB" -ge "$originalTxCountB" ]] && [[ "$finalTxCountB" -ge 1 ]]; then
+    printf "\t   B has ${finalTxCountB}/${originalTxCountB} transactions restored ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+elif [[ "$finalTxCountB" -ge 1 ]]; then
+    printf "\t   B has ${finalTxCountB}/${originalTxCountB} transactions restored ${YELLOW}WARNING${NC} (partial)\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   B transactions restoration ${YELLOW}WARNING${NC} - Only ${finalTxCountB} transactions\n"
-    passed=$(( passed + 1 ))
+    printf "\t   B transactions restoration ${RED}FAILED${NC} - 0/${originalTxCountB} transactions\n"
+    failure=$(( failure + 1 ))
 fi
 
 ############################ TEST 3.11: VERIFY B'S ONLINE STATUS UPDATED ON A ############################
@@ -959,11 +953,188 @@ else
     passed=$(( passed + 1 ))
 fi
 
-##################### SECTION 5: Cleanup Test Transactions #####################
+##################### SECTION 6: Dual-Signature Protocol Verification #####################
 
 echo -e "\n"
 echo "========================================================================"
-echo "Section 5: Cleanup"
+echo "Section 6: Dual-Signature Protocol Verification"
+echo "========================================================================"
+echo -e "Testing: Contact transactions have dual signatures (sender + recipient)\n"
+
+############################ TEST 6.1: A'S CONTACT TX HAS RECIPIENT SIGNATURE ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n[6.1 Verify A's contact transaction with B has recipient signature]"
+
+dualSigResultA=$(docker exec ${containerA} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$config = json_decode(file_get_contents('${USERCONFIG}'), true);
+    \$myPubkey = \$config['public'];
+
+    // Get B's pubkey from contacts
+    \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    if (!\$contactB) {
+        echo json_encode(['result' => 'NO_CONTACT']);
+        exit;
+    }
+
+    // Find contact transaction between A and B (try both directions)
+    \$tcRepo = \$app->services->getTransactionContactRepository();
+    \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
+    if (!\$tx) {
+        \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
+    }
+
+    if (!\$tx) {
+        echo json_encode(['result' => 'NO_CONTACT_TX']);
+        exit;
+    }
+
+    // Check if recipient_signature exists on this transaction
+    \$stmt = \$pdo->prepare('SELECT recipient_signature FROM transactions WHERE txid = :txid');
+    \$stmt->execute([':txid' => \$tx['txid']]);
+    \$fullTx = \$stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (\$fullTx && !empty(\$fullTx['recipient_signature'])) {
+        echo json_encode(['result' => 'HAS_DUAL_SIG', 'txid' => substr(\$tx['txid'], 0, 8)]);
+    } else {
+        echo json_encode(['result' => 'NO_RECIPIENT_SIG', 'txid' => substr(\$tx['txid'], 0, 8)]);
+    }
+" 2>/dev/null || echo '{"result":"ERROR"}')
+
+dualSigA=$(echo "$dualSigResultA" | grep -o '"result":"[^"]*"' | sed 's/"result":"\([^"]*\)"/\1/' | head -1)
+
+if [[ "$dualSigA" == "HAS_DUAL_SIG" ]]; then
+    printf "\t   A's contact tx has recipient signature ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   A's contact tx dual signature ${RED}FAILED${NC} - ${dualSigResultA}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 6.2: C'S CONTACT TX HAS RECIPIENT SIGNATURE ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n[6.2 Verify C's contact transaction with B has recipient signature]"
+
+dualSigResultC=$(docker exec ${containerC} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$config = json_decode(file_get_contents('${USERCONFIG}'), true);
+    \$myPubkey = \$config['public'];
+
+    // Get B's pubkey from contacts
+    \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    if (!\$contactB) {
+        echo json_encode(['result' => 'NO_CONTACT']);
+        exit;
+    }
+
+    // Find contact transaction between C and B (try both directions)
+    \$tcRepo = \$app->services->getTransactionContactRepository();
+    \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
+    if (!\$tx) {
+        \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
+    }
+
+    if (!\$tx) {
+        echo json_encode(['result' => 'NO_CONTACT_TX']);
+        exit;
+    }
+
+    // Check if recipient_signature exists on this transaction
+    \$stmt = \$pdo->prepare('SELECT recipient_signature FROM transactions WHERE txid = :txid');
+    \$stmt->execute([':txid' => \$tx['txid']]);
+    \$fullTx = \$stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (\$fullTx && !empty(\$fullTx['recipient_signature'])) {
+        echo json_encode(['result' => 'HAS_DUAL_SIG', 'txid' => substr(\$tx['txid'], 0, 8)]);
+    } else {
+        echo json_encode(['result' => 'NO_RECIPIENT_SIG', 'txid' => substr(\$tx['txid'], 0, 8)]);
+    }
+" 2>/dev/null || echo '{"result":"ERROR"}')
+
+dualSigC=$(echo "$dualSigResultC" | grep -o '"result":"[^"]*"' | sed 's/"result":"\([^"]*\)"/\1/' | head -1)
+
+if [[ "$dualSigC" == "HAS_DUAL_SIG" ]]; then
+    printf "\t   C's contact tx has recipient signature ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   C's contact tx dual signature ${RED}FAILED${NC} - ${dualSigResultC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 6.3: VERIFY RECIPIENT SIGNATURE CRYPTOGRAPHICALLY ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n[6.3 Verify recipient signature is cryptographically valid on A]"
+
+verifySigResult=$(docker exec ${containerA} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$config = json_decode(file_get_contents('${USERCONFIG}'), true);
+    \$myPubkey = \$config['public'];
+
+    // Get B's pubkey from contacts
+    \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    if (!\$contactB) { echo 'NO_CONTACT'; exit; }
+
+    // Find contact transaction between A and B
+    \$tcRepo = \$app->services->getTransactionContactRepository();
+    \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
+    \$iAmSender = true;
+    if (!\$tx) {
+        \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
+        \$iAmSender = false;
+    }
+    if (!\$tx) { echo 'NO_CONTACT_TX'; exit; }
+
+    // Get full transaction data
+    \$stmt = \$pdo->prepare('SELECT signature_nonce, recipient_signature FROM transactions WHERE txid = :txid');
+    \$stmt->execute([':txid' => \$tx['txid']]);
+    \$fullTx = \$stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!\$fullTx || empty(\$fullTx['recipient_signature']) || empty(\$fullTx['signature_nonce'])) {
+        echo 'MISSING_DATA';
+        exit;
+    }
+
+    // Recipient signature is always signed by the receiver
+    // If I'm sender, receiver is B; if I'm receiver, receiver is me
+    \$verifyPubkey = \$iAmSender ? \$contactB['pubkey'] : \$myPubkey;
+
+    // Reconstruct the signed message: {'type':'create','nonce':N}
+    \$message = json_encode(['type' => 'create', 'nonce' => (int)\$fullTx['signature_nonce']]);
+
+    \$pubkeyResource = openssl_pkey_get_public(\$verifyPubkey);
+    if (!\$pubkeyResource) { echo 'BAD_PUBKEY'; exit; }
+
+    \$verified = openssl_verify(
+        \$message,
+        base64_decode(\$fullTx['recipient_signature']),
+        \$pubkeyResource
+    );
+
+    echo (\$verified === 1) ? 'VERIFIED' : 'VERIFY_FAILED:' . \$verified;
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$verifySigResult" == "VERIFIED" ]]; then
+    printf "\t   Recipient signature cryptographically valid ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Recipient signature verification ${RED}FAILED${NC} - ${verifySigResult}\n"
+    failure=$(( failure + 1 ))
+fi
+
+##################### SECTION 7: Cleanup Test Transactions #####################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 7: Cleanup"
 echo "========================================================================"
 
 ############################ CLEANUP TEST DATA ############################

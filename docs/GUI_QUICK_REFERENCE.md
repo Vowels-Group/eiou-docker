@@ -84,7 +84,7 @@ Optional: `address_type` (when contact selected), `description`
 | Main layout | `layout/wallet.html` | Page structure, includes all sections |
 | Auth form | `layout/authenticationForm.html` | Login form |
 | Header | `layout/walletSubParts/header.html` | Page header |
-| Notifications | `layout/walletSubParts/notifications.html` | Toast/alert messages |
+| Notifications | `layout/walletSubParts/notifications.html` | Toast/alert messages, pending contact banners, chain drop proposal banners |
 | Quick actions | `layout/walletSubParts/quickActions.html` | Action buttons |
 | Wallet info | `layout/walletSubParts/walletInformation.html` | Balance, earnings display |
 | Send form | `layout/walletSubParts/eiouForm.html` | Send transaction form |

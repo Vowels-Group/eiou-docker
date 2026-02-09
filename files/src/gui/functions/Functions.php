@@ -161,6 +161,19 @@ $_SESSION['known_txids'] = $currentTxids;
 // Contact data
 $allContacts = $contactService->getAllContacts();
 $pendingContacts = $contactService->getPendingContactRequests();
+
+// Check if pending contacts have prior transaction history (wallet restore scenario)
+// Contacts created via auto-restore from ping will have synced transactions
+if (!empty($pendingContacts) && $user->has('public')) {
+    $txRepo = $serviceContainer->getTransactionRepository();
+    $myPubkey = $user->getPublicKey();
+    foreach ($pendingContacts as &$pc) {
+        $history = $txRepo->getTransactionsBetweenPubkeys($myPubkey, $pc['pubkey'], 1);
+        $pc['has_prior_history'] = !empty($history);
+    }
+    unset($pc);
+}
+
 $pendingUserContacts = $transactionService->contactBalanceConversion($contactService->getUserPendingContactRequests(), $maxDisplayLines);
 $acceptedContacts = $transactionService->contactBalanceConversion($contactService->getAcceptedContacts(), $maxDisplayLines);
 $blockedContacts = $transactionService->contactBalanceConversion($contactService->getBlockedContacts(), $maxDisplayLines);

@@ -6,6 +6,7 @@ namespace Eiou\Services;
 use Eiou\Cli\CliOutputManager;
 use Eiou\Contracts\ContactManagementServiceInterface;
 use Eiou\Contracts\ContactSyncServiceInterface;
+use Eiou\Contracts\SyncTriggerInterface;
 use Eiou\Core\Constants;
 use Eiou\Core\ErrorCodes;
 use Eiou\Core\UserContext;
@@ -85,6 +86,11 @@ class ContactManagementService implements ContactManagementServiceInterface
      */
     private ?ContactSyncServiceInterface $contactSyncService = null;
 
+    /**
+     * @var SyncTriggerInterface|null Sync trigger for balance recalculation
+     */
+    private ?SyncTriggerInterface $syncTrigger = null;
+
     // =========================================================================
     // CONSTRUCTOR & DEPENDENCY INJECTION
     // =========================================================================
@@ -126,6 +132,17 @@ class ContactManagementService implements ContactManagementServiceInterface
     public function setContactSyncService(ContactSyncServiceInterface $syncService): void
     {
         $this->contactSyncService = $syncService;
+    }
+
+    /**
+     * Set the sync trigger for balance recalculation (breaks circular dependency)
+     *
+     * @param SyncTriggerInterface $syncTrigger Sync trigger (proxy or actual service)
+     * @return void
+     */
+    public function setSyncTrigger(SyncTriggerInterface $syncTrigger): void
+    {
+        $this->syncTrigger = $syncTrigger;
     }
 
     /**
@@ -262,6 +279,18 @@ class ContactManagementService implements ContactManagementServiceInterface
         if ($success) {
             // Addresses already saved, just need to add initial contact balances
             $this->balanceRepository->insertInitialContactBalances($pubkey, $currency);
+
+            // Recalculate balances from existing transactions (wallet restore scenario:
+            // transactions were synced during ping but balances are still zero)
+            if ($this->syncTrigger !== null) {
+                try {
+                    $this->syncTrigger->syncContactBalance($pubkey);
+                } catch (\Exception $e) {
+                    $this->secureLogger->warning("Failed to sync contact balance after acceptance", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
         }
         return $success;
     }

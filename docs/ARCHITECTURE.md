@@ -315,7 +315,7 @@ if ($container->has(ContactServiceInterface::class)) {
 | `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
-| `ContactStatusService` | Contact ping/status checking | ContactRepo, TransactionRepo, SyncTriggerProxy, TransactionChainRepo, RateLimiterService, ChainDropService |
+| `ContactStatusService` | Contact ping/status checking; auto-creates pending contacts for unknown pings (wallet restore scenario) | ContactRepo, TransactionRepo, SyncTriggerProxy, TransactionChainRepo, RateLimiterService, ChainDropService |
 | `SyncService` | Transaction chain synchronization | ContactRepo, AddressRepo, P2pRepo, Rp2pRepo, TransactionRepo, TransactionChainRepo, TransactionContactRepo, BalanceRepo, UtilityContainer, HeldTransactionService, BackupService |
 | `ChainDropService` | Chain drop agreement protocol | ChainDropProposalRepo, TransactionChainRepo, TransactionRepo, ContactRepo, UtilityContainer, BackupService, SyncTriggerProxy |
 | `ChainOperationsService` | Centralized chain verification/repair | SyncService |
@@ -861,7 +861,19 @@ chains. Operates in 5-minute cycles.
 - Validates transaction chain integrity (prev_txid matching)
 - Triggers sync if chains don't match
 - Auto-proposes chain drop if sync detects mutual gaps (both sides missing same transaction)
+- Auto-creates pending contact records for unknown incoming pings (wallet restore scenario)
 - Respects `EIOU_CONTACT_STATUS_ENABLED` environment variable
+
+**Wallet Restore Contact Re-establishment:**
+
+When a node receives a ping from an address that is not in its contacts database at all,
+`ContactStatusService` auto-creates a pending contact record and inserts the address. This
+handles the wallet restore scenario where a user restores from a seed phrase only (no backups)
+and their prior contacts ping them. After the pending contact is created, sync is triggered
+to restore the transaction chain from the contact. Once sync restores transactions, the
+pending contact appears in the GUI with a "Prior Contact" badge indicating it has prior
+transaction history. The user must then re-accept the contact by providing a name, fee,
+credit limit, and currency before normal operations can resume.
 
 ### Watchdog Monitoring
 
@@ -1452,6 +1464,7 @@ Contacts progress through states managed by the `contacts` table:
 | State | Description |
 |-------|-------------|
 | `pending` | Contact request created, awaiting acceptance by other party |
+| `pending` (prior contact) | Auto-created by `ContactStatusService` when an unknown address pings after wallet restore; displayed with a "Prior Contact" badge in the GUI indicating prior transaction history exists; user must re-accept with name, fee, credit limit, and currency |
 | `accepted` | Both parties confirmed; transactions and sync are enabled |
 | `blocked` | Contact blocked; incoming messages rejected |
 

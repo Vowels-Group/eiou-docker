@@ -486,9 +486,12 @@ class ContactSyncService implements ContactSyncServiceInterface {
             // Contact was blocked when user received contact request
             else{
                 if($this->contactRepository->updateUnblockContact($contact['pubkey'], $name, $fee, $credit, $currency)){
+                    // Generate recipient signature for dual-signature protocol
+                    $recipientSig = $this->generateAndStoreContactRecipientSignature($contact['pubkey']);
+
                     // Send message of successful contact acceptance back to original contact requester with tracking
                     // Message ID format: unblock-accept-{hash} (message_type 'contact' provides context)
-                    $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
+                    $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig);
                     $messageId = 'unblock-accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
                     $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId);
 
@@ -533,12 +536,15 @@ class ContactSyncService implements ContactSyncServiceInterface {
             } else{
                 // If contact already exists with an address, it's a contact request, skip sending a message
                 if ($this->acceptContact($contact['pubkey'], $name, $fee, $credit, $currency)) {
+                    // Generate recipient signature for dual-signature protocol
+                    $recipientSig = $this->generateAndStoreContactRecipientSignature($contact['pubkey']);
+
                     // Send message of successful contact acceptance back to original contact requester with tracking
                     // Message ID format: accept-{hash} (message_type 'contact' provides context)
                     // IMPORTANT: Use sync delivery (async=false) to ensure the original requester updates
                     // their contact status to 'accepted' before we return success. This prevents race conditions
                     // when multiple contacts are added in rapid succession.
-                    $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
+                    $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig);
                     $messageId = 'accept-' . hash('sha256', $address . $contact['pubkey'] . $this->timeUtility->getCurrentMicrotime());
                     $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $messageId, false); // sync delivery
 
@@ -628,8 +634,11 @@ class ContactSyncService implements ContactSyncServiceInterface {
                 if ($existingLocalContact['status'] === Constants::CONTACT_STATUS_PENDING && $existingLocalContact['name'] === null) {
                     // Accept the contact with the user-provided name/fee/credit values
                     if ($this->acceptContact($senderPublicKey, $name, $fee, $credit, $currency)) {
+                        // Generate recipient signature for dual-signature protocol
+                        $recipientSig = $this->generateAndStoreContactRecipientSignature($senderPublicKey);
+
                         // Send acceptance message back to them
-                        $acceptPayload = $this->messagePayload->buildContactIsAccepted($address);
+                        $acceptPayload = $this->messagePayload->buildContactIsAccepted($address, false, $recipientSig);
                         $acceptMessageId = 'accept-' . hash('sha256', $address . $senderPublicKey . $this->timeUtility->getCurrentMicrotime());
                         $sendResult = $this->sendContactMessageInternal($address, $acceptPayload, $acceptMessageId, false);
 
@@ -966,6 +975,38 @@ class ContactSyncService implements ContactSyncServiceInterface {
     // =========================================================================
 
     /**
+     * Generate and store recipient signature for a contact transaction
+     *
+     * Looks up the contact transaction between the sender and current user,
+     * generates a recipient signature (signing the same message the sender signed),
+     * and stores it on the transaction. Returns the signature for inclusion in
+     * the acceptance message sent back to the sender.
+     *
+     * @param string $senderPublicKey The public key of the contact who sent the request
+     * @return string|null The recipient signature, or null if generation failed
+     */
+    private function generateAndStoreContactRecipientSignature(string $senderPublicKey): ?string
+    {
+        $txData = $this->transactionContactRepository->getContactTransactionByParties(
+            $senderPublicKey, $this->currentUser->getPublicKey()
+        );
+
+        if ($txData === null || empty($txData['signature_nonce'])) {
+            return null;
+        }
+
+        $recipientSig = $this->contactPayload->generateRecipientSignature((int)$txData['signature_nonce']);
+
+        if ($recipientSig === null) {
+            return null;
+        }
+
+        $this->transactionRepository->updateRecipientSignature($txData['txid'], $recipientSig);
+
+        return $recipientSig;
+    }
+
+    /**
      * Accept a contact request
      *
      * @param string $pubkey Contact pubkey
@@ -980,6 +1021,19 @@ class ContactSyncService implements ContactSyncServiceInterface {
         if($success){
             // Addresses already saved, just need to add initial contact balances
             $this->balanceRepository->insertInitialContactBalances($pubkey, $currency);
+
+            // Recalculate balances from existing transactions (wallet restore scenario:
+            // transactions were synced during ping but balances are still zero)
+            $syncTrigger = $this->getSyncTrigger();
+            if ($syncTrigger !== null) {
+                try {
+                    $syncTrigger->syncContactBalance($pubkey);
+                } catch (\Exception $e) {
+                    Logger::getInstance()->warning("Failed to sync contact balance after acceptance", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
         }
         return $success;
     }

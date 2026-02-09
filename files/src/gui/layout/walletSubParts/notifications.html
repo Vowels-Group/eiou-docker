@@ -86,8 +86,16 @@
             <h4 style="margin: 0; color: #0d6efd;">
                 <?php echo count($pendingContacts); ?> Pending Contact Request<?php echo count($pendingContacts) > 1 ? 's' : ''; ?>
             </h4>
+            <?php
+                $priorCount = 0;
+                foreach ($pendingContacts as $pc) {
+                    if (!empty($pc['has_prior_history'])) $priorCount++;
+                }
+            ?>
             <p style="margin: 0.5rem 0 0 0; color: #6c757d;">
-                You have contact requests waiting for your approval.
+                You have contact requests waiting for your approval.<?php if ($priorCount > 0): ?>
+                <br><strong><?php echo $priorCount; ?></strong> of these <?php echo $priorCount === 1 ? 'is a' : 'are'; ?> prior contact<?php echo $priorCount > 1 ? 's' : ''; ?> with existing transaction history.
+                <?php endif; ?>
             </p>
         </div>
         <a href="#pending-contacts" class="btn btn-primary" style="padding: 0.5rem 1rem;">

@@ -220,6 +220,37 @@ class TransactionContactRepository extends AbstractRepository {
     }
 
     /**
+     * Get the contact transaction between two specific parties
+     *
+     * Looks up the contact transaction where senderPubkey sent a contact request
+     * to receiverPubkey. Returns the txid and signature_nonce needed for
+     * generating/storing the recipient signature.
+     *
+     * @param string $senderPubkey The sender's public key
+     * @param string $receiverPubkey The receiver's public key
+     * @return array|null Array with 'txid' and 'signature_nonce', or null if not found
+     */
+    public function getContactTransactionByParties(string $senderPubkey, string $receiverPubkey): ?array
+    {
+        $senderHash = hash(Constants::HASH_ALGORITHM, $senderPubkey);
+        $receiverHash = hash(Constants::HASH_ALGORITHM, $receiverPubkey);
+
+        $query = "SELECT txid, signature_nonce FROM {$this->tableName}
+                  WHERE tx_type = 'contact'
+                  AND sender_public_key_hash = :sender AND receiver_public_key_hash = :receiver
+                  LIMIT 1";
+
+        $stmt = $this->execute($query, [':sender' => $senderHash, ':receiver' => $receiverHash]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row !== false ? $row : null;
+    }
+
+    /**
      * Check if a contact transaction exists for a given receiver public key hash
      *
      * Used to prevent duplicate contact transactions when re-adding a deleted contact.

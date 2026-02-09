@@ -1421,17 +1421,36 @@ class SyncService implements SyncServiceInterface, SyncTriggerInterface {
             return true; // Not required for this status
         }
 
+        $memo = $tx['memo'] ?? '';
+
+        // Backwards compatibility: Contact transactions (memo='contact') created before
+        // dual-signature support will not have a recipient_signature. These are amount=0
+        // transactions that establish a contact relationship. Allow them through to avoid
+        // a perpetual sync retry loop where the same old transaction is served, fails
+        // verification, gets skipped, and is retried every cycle.
+        // New contact transactions DO have recipient_signature and are verified below.
+        if ($memo === 'contact' && empty($tx['recipient_signature'])) {
+            return true;
+        }
+
         // For accepted/completed, recipient_signature is required
         if (empty($tx['recipient_signature'])) {
             Logger::getInstance()->warning("Transaction missing required recipient signature", [
                 'txid' => $tx['txid'] ?? 'unknown',
-                'status' => $status
+                'status' => $status,
+                'memo' => $memo
             ]);
             return false;
         }
 
-        // Reconstruct the message that was signed (same as sender signature)
-        $messageContent = $this->reconstructSignedMessage($tx);
+        // Reconstruct the message that was signed
+        // Contact transactions use {'type':'create','nonce':N} format
+        // Regular transactions use {'type':'send',...} format
+        if ($memo === 'contact') {
+            $messageContent = $this->reconstructContactSignedMessage($tx);
+        } else {
+            $messageContent = $this->reconstructSignedMessage($tx);
+        }
         if ($messageContent === null) {
             Logger::getInstance()->debug("Could not reconstruct message for recipient signature verification", [
                 'txid' => $tx['txid'] ?? 'unknown'

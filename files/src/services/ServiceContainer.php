@@ -1197,10 +1197,14 @@ class ServiceContainer implements ContainerInterface {
         // These now use SyncTriggerInterface via proxy for loose coupling
         // =========================================================================
 
-        // Wire ContactManagementService with ContactSyncService
+        // Wire ContactManagementService with ContactSyncService and SyncTriggerInterface
         // Reason: ContactManagementService needs to trigger sync operations after contact changes
-        if (isset($this->services['ContactManagementService']) && isset($this->services['ContactSyncService'])) {
-            $this->services['ContactManagementService']->setContactSyncService($this->services['ContactSyncService']);
+        //         and recalculate balances after accepting contacts (wallet restore scenario)
+        if (isset($this->services['ContactManagementService'])) {
+            if (isset($this->services['ContactSyncService'])) {
+                $this->services['ContactManagementService']->setContactSyncService($this->services['ContactSyncService']);
+            }
+            $this->services['ContactManagementService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
         // Wire ContactSyncService -> SyncTriggerInterface (via proxy)
@@ -1222,12 +1226,14 @@ class ServiceContainer implements ContainerInterface {
             $this->services['ContactService']->setSyncTrigger($this->getSyncServiceProxy());
         }
 
-        // Wire ContactStatusService -> SyncTriggerInterface (via proxy), RateLimiterService, TransactionChainRepository, ChainDropService
-        // Reason: ContactStatusService validates chains, needs rate limiting, detects internal gaps, and auto-proposes chain drops
+        // Wire ContactStatusService -> SyncTriggerInterface (via proxy), RateLimiterService, TransactionChainRepository, ChainDropService, AddressRepository
+        // Reason: ContactStatusService validates chains, needs rate limiting, detects internal gaps, auto-proposes chain drops,
+        //         and auto-creates pending contacts from pings (wallet restore scenario)
         // Note: Uses SyncTriggerInterface for loose coupling
         if (isset($this->services['ContactStatusService'])) {
             $this->services['ContactStatusService']->setSyncTrigger($this->getSyncServiceProxy());
             $this->services['ContactStatusService']->setTransactionChainRepository($this->getTransactionChainRepository());
+            $this->services['ContactStatusService']->setAddressRepository($this->getAddressRepository());
             if (isset($this->services['RateLimiterService'])) {
                 $this->services['ContactStatusService']->setRateLimiterService($this->services['RateLimiterService']);
             }
