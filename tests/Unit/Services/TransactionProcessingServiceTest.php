@@ -610,6 +610,179 @@ class TransactionProcessingServiceTest extends TestCase
         $this->assertEquals(1, $result);
     }
 
+    /**
+     * Test processIncomingP2p relay updates sender_address when actual sender differs from stored P2P sender
+     */
+    public function testProcessIncomingP2pRelayUpdatesSenderAddressWhenDifferent(): void
+    {
+        $pendingMessage = [
+            'memo' => 'p2p-hash-12345',
+            'txid' => 'test-txid-12345',
+            'sender_address' => 'http://actual-sender.example.com',
+            'receiver_address' => 'http://user.example.com',
+            'sender_public_key' => 'sender-public-key',
+            'receiver_public_key' => 'receiver-public-key',
+            'amount' => 1000,
+            'currency' => 'USD'
+        ];
+
+        $this->mockRecoveryRepo->expects($this->once())
+            ->method('getPendingTransactions')
+            ->willReturn([$pendingMessage]);
+
+        // Not the sender (incoming transaction)
+        $this->mockTransportUtility->expects($this->any())
+            ->method('resolveUserAddressForTransport')
+            ->willReturn('http://user.example.com');
+
+        // Not the end recipient — matchYourselfTransaction returns false
+        // getByHash is called by matchYourselfTransaction AND by our new sender_address check
+        $this->mockP2pRepo->expects($this->exactly(2))
+            ->method('getByHash')
+            ->with('p2p-hash-12345')
+            ->willReturn([
+                'hash' => 'p2p-hash-12345',
+                'salt' => 'test-salt',
+                'time' => '12345',
+                'sender_address' => 'http://original-sender.example.com',
+            ]);
+
+        // Relay path: rp2pRepository->getByHash returns null so matchYourselfTransaction
+        // is called. For the relay to fire, rp2pRepository must NOT match (processP2pIncoming
+        // from processTransaction), but we go through processPendingTransactions which calls
+        // processP2pTransaction -> processIncomingP2p directly.
+        // In processIncomingP2p, matchYourselfTransaction must return false for relay path.
+        // matchYourselfTransaction hashes address+salt+time and compares to memo — won't match.
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getUserLocaters')
+            ->willReturn(['http://user.example.com']);
+
+        // Relay branch: updateIncomingTxid called
+        $this->mockP2pRepo->expects($this->once())
+            ->method('updateIncomingTxid')
+            ->with('p2p-hash-12345', 'test-txid-12345');
+
+        // Key assertion: updateSenderAddress should be called because actual sender differs
+        $this->mockP2pRepo->expects($this->once())
+            ->method('updateSenderAddress')
+            ->with('p2p-hash-12345', 'http://actual-sender.example.com');
+
+        // Relay continues: rp2p fetch, build forwarding, insert transaction
+        $this->mockRp2pRepo->expects($this->once())
+            ->method('getByHash')
+            ->with('p2p-hash-12345')
+            ->willReturn(['hash' => 'p2p-hash-12345', 'time' => time()]);
+
+        $this->mockTransactionPayload->expects($this->once())
+            ->method('buildForwarding')
+            ->willReturn([
+                'memo' => 'p2p-hash-12345',
+                'txid' => 'forwarded-txid',
+                'sender_address' => 'http://user.example.com',
+                'receiver_address' => 'http://next-hop.example.com'
+            ]);
+
+        $this->mockTransactionPayload->expects($this->once())
+            ->method('buildFromDatabase')
+            ->willReturn(['type' => 'relay']);
+
+        $this->mockTransactionRepo->expects($this->any())
+            ->method('insertTransaction')
+            ->willReturn('{"status":"success"}');
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('updateStatus')
+            ->with('p2p-hash-12345', Constants::STATUS_ACCEPTED);
+
+        $this->mockP2pRepo->expects($this->once())
+            ->method('updateOutgoingTxid');
+
+        $result = $this->service->processPendingTransactions();
+
+        $this->assertEquals(1, $result);
+    }
+
+    /**
+     * Test processIncomingP2p relay does NOT call updateSenderAddress when sender matches
+     */
+    public function testProcessIncomingP2pRelayDoesNotUpdateSenderAddressWhenSame(): void
+    {
+        $pendingMessage = [
+            'memo' => 'p2p-hash-12345',
+            'txid' => 'test-txid-12345',
+            'sender_address' => 'http://original-sender.example.com',
+            'receiver_address' => 'http://user.example.com',
+            'sender_public_key' => 'sender-public-key',
+            'receiver_public_key' => 'receiver-public-key',
+            'amount' => 1000,
+            'currency' => 'USD'
+        ];
+
+        $this->mockRecoveryRepo->expects($this->once())
+            ->method('getPendingTransactions')
+            ->willReturn([$pendingMessage]);
+
+        $this->mockTransportUtility->expects($this->any())
+            ->method('resolveUserAddressForTransport')
+            ->willReturn('http://user.example.com');
+
+        $this->mockP2pRepo->expects($this->exactly(2))
+            ->method('getByHash')
+            ->with('p2p-hash-12345')
+            ->willReturn([
+                'hash' => 'p2p-hash-12345',
+                'salt' => 'test-salt',
+                'time' => '12345',
+                'sender_address' => 'http://original-sender.example.com',
+            ]);
+
+        $this->mockUserContext->expects($this->any())
+            ->method('getUserLocaters')
+            ->willReturn(['http://user.example.com']);
+
+        $this->mockP2pRepo->expects($this->once())
+            ->method('updateIncomingTxid')
+            ->with('p2p-hash-12345', 'test-txid-12345');
+
+        // Key assertion: updateSenderAddress should NOT be called
+        $this->mockP2pRepo->expects($this->never())
+            ->method('updateSenderAddress');
+
+        $this->mockRp2pRepo->expects($this->once())
+            ->method('getByHash')
+            ->with('p2p-hash-12345')
+            ->willReturn(['hash' => 'p2p-hash-12345', 'time' => time()]);
+
+        $this->mockTransactionPayload->expects($this->once())
+            ->method('buildForwarding')
+            ->willReturn([
+                'memo' => 'p2p-hash-12345',
+                'txid' => 'forwarded-txid',
+                'sender_address' => 'http://user.example.com',
+                'receiver_address' => 'http://next-hop.example.com'
+            ]);
+
+        $this->mockTransactionPayload->expects($this->once())
+            ->method('buildFromDatabase')
+            ->willReturn(['type' => 'relay']);
+
+        $this->mockTransactionRepo->expects($this->any())
+            ->method('insertTransaction')
+            ->willReturn('{"status":"success"}');
+
+        $this->mockTransactionRepo->expects($this->once())
+            ->method('updateStatus')
+            ->with('p2p-hash-12345', Constants::STATUS_ACCEPTED);
+
+        $this->mockP2pRepo->expects($this->once())
+            ->method('updateOutgoingTxid');
+
+        $result = $this->service->processPendingTransactions();
+
+        $this->assertEquals(1, $result);
+    }
+
     // =========================================================================
     // Exception Handling Tests
     // =========================================================================

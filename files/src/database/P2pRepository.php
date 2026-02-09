@@ -422,6 +422,22 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
+     * Update P2P sender address
+     *
+     * Used when the actual transaction sender differs from the originally stored
+     * sender, e.g. in multi-path routing where the chosen route uses a different
+     * upstream node than the first one that relayed the P2P request.
+     *
+     * @param string $hash P2P hash
+     * @param string $senderAddress New sender address
+     * @return bool Success status
+     */
+    public function updateSenderAddress(string $hash, string $senderAddress): bool {
+        $affectedRows = $this->update(['sender_address' => $senderAddress], 'hash', $hash);
+        return $affectedRows >= 0;
+    }
+
+    /**
      * Update P2P fee amount
      *
      * @param string $hash P2P hash
