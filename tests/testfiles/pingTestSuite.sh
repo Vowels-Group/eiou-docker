@@ -953,11 +953,188 @@ else
     passed=$(( passed + 1 ))
 fi
 
-##################### SECTION 5: Cleanup Test Transactions #####################
+##################### SECTION 6: Dual-Signature Protocol Verification #####################
 
 echo -e "\n"
 echo "========================================================================"
-echo "Section 5: Cleanup"
+echo "Section 6: Dual-Signature Protocol Verification"
+echo "========================================================================"
+echo -e "Testing: Contact transactions have dual signatures (sender + recipient)\n"
+
+############################ TEST 6.1: A'S CONTACT TX HAS RECIPIENT SIGNATURE ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n[6.1 Verify A's contact transaction with B has recipient signature]"
+
+dualSigResultA=$(docker exec ${containerA} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$config = json_decode(file_get_contents('${USERCONFIG}'), true);
+    \$myPubkey = \$config['public'];
+
+    // Get B's pubkey from contacts
+    \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    if (!\$contactB) {
+        echo json_encode(['result' => 'NO_CONTACT']);
+        exit;
+    }
+
+    // Find contact transaction between A and B (try both directions)
+    \$tcRepo = \$app->services->getTransactionContactRepository();
+    \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
+    if (!\$tx) {
+        \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
+    }
+
+    if (!\$tx) {
+        echo json_encode(['result' => 'NO_CONTACT_TX']);
+        exit;
+    }
+
+    // Check if recipient_signature exists on this transaction
+    \$stmt = \$pdo->prepare('SELECT recipient_signature FROM transactions WHERE txid = :txid');
+    \$stmt->execute([':txid' => \$tx['txid']]);
+    \$fullTx = \$stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (\$fullTx && !empty(\$fullTx['recipient_signature'])) {
+        echo json_encode(['result' => 'HAS_DUAL_SIG', 'txid' => substr(\$tx['txid'], 0, 8)]);
+    } else {
+        echo json_encode(['result' => 'NO_RECIPIENT_SIG', 'txid' => substr(\$tx['txid'], 0, 8)]);
+    }
+" 2>/dev/null || echo '{"result":"ERROR"}')
+
+dualSigA=$(echo "$dualSigResultA" | grep -o '"result":"[^"]*"' | sed 's/"result":"\([^"]*\)"/\1/' | head -1)
+
+if [[ "$dualSigA" == "HAS_DUAL_SIG" ]]; then
+    printf "\t   A's contact tx has recipient signature ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   A's contact tx dual signature ${RED}FAILED${NC} - ${dualSigResultA}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 6.2: C'S CONTACT TX HAS RECIPIENT SIGNATURE ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n[6.2 Verify C's contact transaction with B has recipient signature]"
+
+dualSigResultC=$(docker exec ${containerC} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$config = json_decode(file_get_contents('${USERCONFIG}'), true);
+    \$myPubkey = \$config['public'];
+
+    // Get B's pubkey from contacts
+    \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    if (!\$contactB) {
+        echo json_encode(['result' => 'NO_CONTACT']);
+        exit;
+    }
+
+    // Find contact transaction between C and B (try both directions)
+    \$tcRepo = \$app->services->getTransactionContactRepository();
+    \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
+    if (!\$tx) {
+        \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
+    }
+
+    if (!\$tx) {
+        echo json_encode(['result' => 'NO_CONTACT_TX']);
+        exit;
+    }
+
+    // Check if recipient_signature exists on this transaction
+    \$stmt = \$pdo->prepare('SELECT recipient_signature FROM transactions WHERE txid = :txid');
+    \$stmt->execute([':txid' => \$tx['txid']]);
+    \$fullTx = \$stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (\$fullTx && !empty(\$fullTx['recipient_signature'])) {
+        echo json_encode(['result' => 'HAS_DUAL_SIG', 'txid' => substr(\$tx['txid'], 0, 8)]);
+    } else {
+        echo json_encode(['result' => 'NO_RECIPIENT_SIG', 'txid' => substr(\$tx['txid'], 0, 8)]);
+    }
+" 2>/dev/null || echo '{"result":"ERROR"}')
+
+dualSigC=$(echo "$dualSigResultC" | grep -o '"result":"[^"]*"' | sed 's/"result":"\([^"]*\)"/\1/' | head -1)
+
+if [[ "$dualSigC" == "HAS_DUAL_SIG" ]]; then
+    printf "\t   C's contact tx has recipient signature ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   C's contact tx dual signature ${RED}FAILED${NC} - ${dualSigResultC}\n"
+    failure=$(( failure + 1 ))
+fi
+
+############################ TEST 6.3: VERIFY RECIPIENT SIGNATURE CRYPTOGRAPHICALLY ############################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n[6.3 Verify recipient signature is cryptographically valid on A]"
+
+verifySigResult=$(docker exec ${containerA} php -r "
+    require_once('${BOOTSTRAP_PATH}');
+    \$app = \Eiou\Core\Application::getInstance();
+    \$pdo = \$app->services->getPdo();
+    \$config = json_decode(file_get_contents('${USERCONFIG}'), true);
+    \$myPubkey = \$config['public'];
+
+    // Get B's pubkey from contacts
+    \$contactB = \$app->services->getContactRepository()->getContactByAddress('${transportB}', '${addressB}');
+    if (!\$contactB) { echo 'NO_CONTACT'; exit; }
+
+    // Find contact transaction between A and B
+    \$tcRepo = \$app->services->getTransactionContactRepository();
+    \$tx = \$tcRepo->getContactTransactionByParties(\$myPubkey, \$contactB['pubkey']);
+    \$iAmSender = true;
+    if (!\$tx) {
+        \$tx = \$tcRepo->getContactTransactionByParties(\$contactB['pubkey'], \$myPubkey);
+        \$iAmSender = false;
+    }
+    if (!\$tx) { echo 'NO_CONTACT_TX'; exit; }
+
+    // Get full transaction data
+    \$stmt = \$pdo->prepare('SELECT signature_nonce, recipient_signature FROM transactions WHERE txid = :txid');
+    \$stmt->execute([':txid' => \$tx['txid']]);
+    \$fullTx = \$stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!\$fullTx || empty(\$fullTx['recipient_signature']) || empty(\$fullTx['signature_nonce'])) {
+        echo 'MISSING_DATA';
+        exit;
+    }
+
+    // Recipient signature is always signed by the receiver
+    // If I'm sender, receiver is B; if I'm receiver, receiver is me
+    \$verifyPubkey = \$iAmSender ? \$contactB['pubkey'] : \$myPubkey;
+
+    // Reconstruct the signed message: {'type':'create','nonce':N}
+    \$message = json_encode(['type' => 'create', 'nonce' => (int)\$fullTx['signature_nonce']]);
+
+    \$pubkeyResource = openssl_pkey_get_public(\$verifyPubkey);
+    if (!\$pubkeyResource) { echo 'BAD_PUBKEY'; exit; }
+
+    \$verified = openssl_verify(
+        \$message,
+        base64_decode(\$fullTx['recipient_signature']),
+        \$pubkeyResource
+    );
+
+    echo (\$verified === 1) ? 'VERIFIED' : 'VERIFY_FAILED:' . \$verified;
+" 2>/dev/null || echo "ERROR")
+
+if [[ "$verifySigResult" == "VERIFIED" ]]; then
+    printf "\t   Recipient signature cryptographically valid ${GREEN}PASSED${NC}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Recipient signature verification ${RED}FAILED${NC} - ${verifySigResult}\n"
+    failure=$(( failure + 1 ))
+fi
+
+##################### SECTION 7: Cleanup Test Transactions #####################
+
+echo -e "\n"
+echo "========================================================================"
+echo "Section 7: Cleanup"
 echo "========================================================================"
 
 ############################ CLEANUP TEST DATA ############################
