@@ -12,6 +12,7 @@ use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
 use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\Rp2pRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -121,6 +122,11 @@ class P2pService implements P2pServiceInterface {
     private ?P2pRelayedContactRepository $p2pRelayedContactRepository = null;
 
     /**
+     * @var Rp2pRepository|null RP2P repository for forwarding existing RP2P to late P2P senders
+     */
+    private ?Rp2pRepository $rp2pRepository = null;
+
+    /**
      * Constructor
      *
      * @param ContactServiceInterface $contactService Contact service
@@ -178,6 +184,16 @@ class P2pService implements P2pServiceInterface {
      */
     public function setP2pRelayedContactRepository(P2pRelayedContactRepository $repository): void {
         $this->p2pRelayedContactRepository = $repository;
+    }
+
+    /**
+     * Set the Rp2pRepository for forwarding existing RP2P to late P2P senders
+     *
+     * @param Rp2pRepository $repository
+     * @return void
+     */
+    public function setRp2pRepository(Rp2pRepository $repository): void {
+        $this->rp2pRepository = $repository;
     }
 
     /**
@@ -348,11 +364,10 @@ class P2pService implements P2pServiceInterface {
                     $request['hash'], $request['senderAddress'], $request['senderPublicKey']
                 );
 
-                // If this node is the destination and has already sent rp2p to the first sender,
-                // immediately send rp2p to this additional sender too. Without this, only the
-                // first path from the destination gets an rp2p response, and all other paths
-                // must wait for the cascade expiration to propagate - causing timeouts and
-                // preventing true best-fee comparison at upstream relay nodes.
+                // If this node already has an RP2P for this hash (either as destination or
+                // relay that already completed selection), send it to the new sender immediately.
+                // Without this, late P2P senders never receive an RP2P and their upstream
+                // relay nodes must wait for hop-wait expiration — missing optimal routes.
                 $existingP2p = $this->p2pRepository->getByHash($request['hash']);
                 if ($existingP2p
                     && $existingP2p['status'] === 'found'
@@ -365,6 +380,16 @@ class P2pService implements P2pServiceInterface {
                         $contactHash = substr(hash('sha256', $request['senderAddress']), 0, 8);
                         $messageId = 'response-' . $request['hash'] . '-' . $contactHash;
                         $this->sendP2pMessage('rp2p', $request['senderAddress'], $rP2pPayload, $messageId);
+                    }
+                } elseif ($this->rp2pRepository !== null) {
+                    // Relay node: if we already selected and forwarded an RP2P for this hash,
+                    // send it to the new sender so their upstream cascade gets a response
+                    $existingRp2p = $this->rp2pRepository->getByHash($request['hash']);
+                    if ($existingRp2p) {
+                        $rp2pPayload = $this->rp2pPayload->buildFromDatabase($existingRp2p);
+                        $contactHash = substr(hash('sha256', $request['senderAddress']), 0, 8);
+                        $messageId = 'relay-rp2p-' . $request['hash'] . '-' . $contactHash;
+                        $this->sendP2pMessage('rp2p', $request['senderAddress'], $rp2pPayload, $messageId);
                     }
                 }
 

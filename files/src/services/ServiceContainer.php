@@ -1445,10 +1445,12 @@ class ServiceContainer implements ContainerInterface {
             $this->services['Rp2pService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
         }
 
-        // Wire P2pService -> P2pRelayedContactRepository
+        // Wire P2pService -> P2pRelayedContactRepository + Rp2pRepository
         // Reason: P2pService stores already_relayed contacts during broadcast for two-phase selection
+        //         and forwards existing RP2P to late P2P senders for better route discovery
         if (isset($this->services['P2pService'])) {
             $this->services['P2pService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
+            $this->services['P2pService']->setRp2pRepository($this->getRp2pRepository());
         }
     }
 
