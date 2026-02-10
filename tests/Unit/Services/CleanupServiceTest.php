@@ -28,6 +28,8 @@ use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Core\UserContext;
 use Eiou\Core\Constants;
 use Eiou\Contracts\MessageDeliveryServiceInterface;
+use Eiou\Contracts\Rp2pServiceInterface;
+use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Schemas\Payloads\MessagePayload;
 use PDOException;
 use Exception;
@@ -865,5 +867,79 @@ class CleanupServiceTest extends TestCase
             ->with(self::TEST_HASH, Constants::STATUS_EXPIRED);
 
         $this->service->expireMessage($message);
+    }
+
+    // =========================================================================
+    // Originator Fallback Tests
+    // =========================================================================
+
+    /**
+     * Test processCleanupMessages triggers originator fallback selection
+     *
+     * When rp2pService and rp2pCandidateRepository are set, and there are
+     * expired originator P2Ps with candidates past the grace period,
+     * the cleanup should trigger best-fee selection and mark as 'found'.
+     */
+    public function testProcessCleanupMessagesTriggersOriginatorFallback(): void
+    {
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(self::TEST_MICROTIME);
+
+        $this->p2pRepository->method('getExpiredP2p')
+            ->willReturn([]);
+
+        $rp2pService = $this->createMock(Rp2pServiceInterface::class);
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+
+        $this->service->setRp2pService($rp2pService);
+        $this->service->setRp2pCandidateRepository($rp2pCandidateRepo);
+
+        $staleP2p = [
+            'hash' => self::TEST_HASH,
+            'destination_address' => 'http://destination.test',
+            'fast' => 0,
+            'status' => Constants::STATUS_EXPIRED,
+        ];
+
+        $this->p2pRepository->expects($this->once())
+            ->method('getExpiredOriginatorP2psWithCandidates')
+            ->with(self::TEST_MICROTIME)
+            ->willReturn([$staleP2p]);
+
+        $rp2pService->expects($this->once())
+            ->method('selectAndForwardBestRp2p')
+            ->with(self::TEST_HASH);
+
+        $this->p2pRepository->expects($this->once())
+            ->method('updateStatus')
+            ->with(self::TEST_HASH, 'found');
+
+        $result = $this->service->processCleanupMessages();
+
+        $this->assertEquals(1, $result);
+    }
+
+    /**
+     * Test processCleanupMessages skips originator fallback when no rp2pService
+     *
+     * When rp2pService is not set, the originator fallback should be skipped.
+     */
+    public function testProcessCleanupMessagesSkipsFallbackWithoutRp2pService(): void
+    {
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(self::TEST_MICROTIME);
+
+        $this->p2pRepository->method('getExpiredP2p')
+            ->willReturn([]);
+
+        // Do NOT set rp2pService or rp2pCandidateRepository
+
+        // getExpiredOriginatorP2psWithCandidates should NOT be called
+        $this->p2pRepository->expects($this->never())
+            ->method('getExpiredOriginatorP2psWithCandidates');
+
+        $result = $this->service->processCleanupMessages();
+
+        $this->assertEquals(0, $result);
     }
 }

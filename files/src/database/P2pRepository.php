@@ -382,6 +382,42 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
+     * Get expired originator P2Ps that have rp2p candidates but haven't been processed yet
+     *
+     * Used by CleanupService as a fallback: after a grace period, selects the best route
+     * for originator P2Ps even if not all contacts responded (some paths may be dead).
+     *
+     * @param int $currentMicrotime Current microtime
+     * @param int $gracePeriod Grace period in microtime-int units (default 300000 = ~30s)
+     * @return array Array of expired originator P2P messages with candidates
+     */
+    public function getExpiredOriginatorP2psWithCandidates(int $currentMicrotime, int $gracePeriod = 300000): array {
+        $query = "SELECT p.* FROM {$this->tableName} p
+                  INNER JOIN rp2p_candidates rc ON rc.hash = p.hash
+                  LEFT JOIN rp2p r ON r.hash = p.hash
+                  WHERE p.status = :status
+                    AND p.destination_address IS NOT NULL
+                    AND p.fast = 0
+                    AND (p.expiration + :gracePeriod) < :currentTime
+                    AND r.hash IS NULL
+                  GROUP BY p.hash
+                  ORDER BY p.created_at ASC";
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':status', Constants::STATUS_EXPIRED, PDO::PARAM_STR);
+        $stmt->bindValue(':gracePeriod', $gracePeriod, PDO::PARAM_INT);
+        $stmt->bindValue(':currentTime', $currentMicrotime, PDO::PARAM_INT);
+
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve expired originator P2Ps with candidates", $e);
+            return [];
+        }
+    }
+
+    /**
      * Get P2P statistics
      *
      * @return array Statistics array with counts and totals

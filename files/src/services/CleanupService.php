@@ -233,6 +233,25 @@ class CleanupService implements CleanupServiceInterface {
             Logger::getInstance()->error("Error cleaning up P2P sender records", ['error' => $e->getMessage()]);
         }
 
+        // Originator fallback: select best route for expired originator P2Ps
+        // whose contacts never all responded (dead paths). After a grace period,
+        // pick the best candidate we have rather than waiting indefinitely.
+        try {
+            if ($this->rp2pService !== null && $this->rp2pCandidateRepository !== null) {
+                $staleOriginators = $this->p2pRepository->getExpiredOriginatorP2psWithCandidates($currentMicrotime);
+                foreach ($staleOriginators as $p2p) {
+                    $this->rp2pService->selectAndForwardBestRp2p($p2p['hash']);
+                    $this->p2pRepository->updateStatus($p2p['hash'], 'found');
+                    Logger::getInstance()->info("Originator fallback: best-fee selection for stale P2P", [
+                        'hash' => $p2p['hash'],
+                    ]);
+                    $processed++;
+                }
+            }
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Error processing originator fallback selection", ['error' => $e->getMessage()]);
+        }
+
         return $processed;
     }
 

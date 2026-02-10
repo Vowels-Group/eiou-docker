@@ -22,6 +22,7 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -1378,5 +1379,283 @@ class Rp2pServiceTest extends TestCase
         $serviceWithSenders->handleRp2pRequest($request);
 
         $this->assertTrue(true);
+    }
+
+    // =========================================================================
+    // handleRp2pCandidate() Tests
+    // =========================================================================
+
+    /**
+     * Test handleRp2pCandidate selects immediately for relay node when P2P expired
+     *
+     * Relay nodes (no destination_address) should trigger immediate selection
+     * because cleanup already ran and won't re-process this P2P.
+     */
+    public function testHandleRp2pCandidateRelayExpiredSelectsImmediately(): void
+    {
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            $rp2pCandidateRepo,
+            $this->p2pSenderRepository
+        );
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'time' => 1234567890,
+            'currency' => 'EIOU',
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'senderAddress' => self::TEST_ADDRESS,
+            'signature' => 'test-sig',
+        ];
+
+        // Relay node: no destination_address, expired status
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'my_fee_amount' => 50,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'sender_address' => 'http://upstream.test',
+            'status' => Constants::STATUS_EXPIRED,
+        ];
+
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(100000);
+        $this->contactRepository->method('getCreditLimit')
+            ->willReturn(100000.0);
+
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('insertCandidate');
+
+        $this->p2pRepository->expects($this->once())
+            ->method('incrementContactsRespondedCount')
+            ->with(self::TEST_HASH);
+
+        // Should call selectAndForwardBestRp2p (via rp2pExists check inside it)
+        $this->rp2pRepository->expects($this->once())
+            ->method('rp2pExists')
+            ->with(self::TEST_HASH)
+            ->willReturn(false);
+
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('getBestCandidate')
+            ->with(self::TEST_HASH)
+            ->willReturn(null); // No candidate found, just verifying selection was triggered
+
+        // getTrackingCounts should NOT be called because we return early
+        $this->p2pRepository->expects($this->never())
+            ->method('getTrackingCounts');
+
+        $service->handleRp2pCandidate($request, $p2p);
+    }
+
+    /**
+     * Test handleRp2pCandidate defers selection for originator when P2P expired
+     *
+     * Originators (have destination_address) should NOT trigger immediate selection
+     * on expiration — they fall through to the tracking check to wait for all contacts.
+     */
+    public function testHandleRp2pCandidateOriginatorExpiredDefersSelection(): void
+    {
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            $rp2pCandidateRepo,
+            $this->p2pSenderRepository
+        );
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'time' => 1234567890,
+            'currency' => 'EIOU',
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'senderAddress' => self::TEST_ADDRESS,
+            'signature' => 'test-sig',
+        ];
+
+        // Originator: HAS destination_address, expired status
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'my_fee_amount' => 50,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'destination_address' => 'http://destination.test',
+            'status' => Constants::STATUS_EXPIRED,
+        ];
+
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('insertCandidate');
+
+        $this->p2pRepository->expects($this->once())
+            ->method('incrementContactsRespondedCount');
+
+        // Should fall through to tracking check (not select immediately)
+        $this->p2pRepository->expects($this->once())
+            ->method('getTrackingCounts')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'contacts_sent_count' => 3,
+                'contacts_responded_count' => 1, // Not all responded yet
+                'fast' => 0,
+            ]);
+
+        // selectAndForwardBestRp2p should NOT be called since not all responded
+        $this->rp2pRepository->expects($this->never())
+            ->method('rp2pExists');
+
+        $service->handleRp2pCandidate($request, $p2p);
+    }
+
+    /**
+     * Test handleRp2pCandidate originator selects when all contacts have responded
+     *
+     * When the originator has received responses from all contacts, it should
+     * trigger selection even if the P2P is expired.
+     */
+    public function testHandleRp2pCandidateOriginatorSelectsWhenAllResponded(): void
+    {
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            $rp2pCandidateRepo,
+            $this->p2pSenderRepository
+        );
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'time' => 1234567890,
+            'currency' => 'EIOU',
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'senderAddress' => self::TEST_ADDRESS,
+            'signature' => 'test-sig',
+        ];
+
+        // Originator: HAS destination_address, expired status
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'my_fee_amount' => 50,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'destination_address' => 'http://destination.test',
+            'status' => Constants::STATUS_EXPIRED,
+        ];
+
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('insertCandidate');
+
+        $this->p2pRepository->expects($this->once())
+            ->method('incrementContactsRespondedCount');
+
+        // All contacts have responded
+        $this->p2pRepository->expects($this->once())
+            ->method('getTrackingCounts')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'contacts_sent_count' => 3,
+                'contacts_responded_count' => 3,
+                'fast' => 0,
+            ]);
+
+        // selectAndForwardBestRp2p should be called
+        $this->rp2pRepository->expects($this->once())
+            ->method('rp2pExists')
+            ->with(self::TEST_HASH)
+            ->willReturn(false);
+
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('getBestCandidate')
+            ->with(self::TEST_HASH)
+            ->willReturn(null);
+
+        $service->handleRp2pCandidate($request, $p2p);
+    }
+
+    /**
+     * Test handleRp2pCandidate non-expired P2P triggers selection when all responded
+     */
+    public function testHandleRp2pCandidateNonExpiredAllRespondedSelectsBest(): void
+    {
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            $rp2pCandidateRepo,
+            $this->p2pSenderRepository
+        );
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'time' => 1234567890,
+            'currency' => 'EIOU',
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'senderAddress' => self::TEST_ADDRESS,
+            'signature' => 'test-sig',
+        ];
+
+        // Non-expired P2P, either originator or relay
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'my_fee_amount' => 50,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'destination_address' => 'http://destination.test',
+            'status' => 'sent',
+        ];
+
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('insertCandidate');
+
+        $this->p2pRepository->expects($this->once())
+            ->method('incrementContactsRespondedCount');
+
+        // All contacts have responded
+        $this->p2pRepository->expects($this->once())
+            ->method('getTrackingCounts')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'contacts_sent_count' => 2,
+                'contacts_responded_count' => 2,
+                'fast' => 0,
+            ]);
+
+        // selectAndForwardBestRp2p should be called
+        $this->rp2pRepository->expects($this->once())
+            ->method('rp2pExists')
+            ->with(self::TEST_HASH)
+            ->willReturn(false);
+
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('getBestCandidate')
+            ->with(self::TEST_HASH)
+            ->willReturn(null);
+
+        $service->handleRp2pCandidate($request, $p2p);
     }
 }
