@@ -127,6 +127,11 @@ class P2pService implements P2pServiceInterface {
     private ?Rp2pRepository $rp2pRepository = null;
 
     /**
+     * @var Rp2pService|null RP2P service for re-checking best-fee selection after broadcast completes
+     */
+    private ?Rp2pService $rp2pService = null;
+
+    /**
      * Constructor
      *
      * @param ContactServiceInterface $contactService Contact service
@@ -194,6 +199,16 @@ class P2pService implements P2pServiceInterface {
      */
     public function setRp2pRepository(Rp2pRepository $repository): void {
         $this->rp2pRepository = $repository;
+    }
+
+    /**
+     * Set the Rp2pService for re-checking best-fee selection after broadcast
+     *
+     * @param Rp2pService $service
+     * @return void
+     */
+    public function setRp2pService(Rp2pService $service): void {
+        $this->rp2pService = $service;
     }
 
     /**
@@ -751,6 +766,13 @@ class P2pService implements P2pServiceInterface {
                 $relayedContacts = 0; // Contacts that returned 'already_relayed' (two-phase selection)
                 $successfulSends = [];
 
+                // Set contacts_sent_count ceiling BEFORE broadcasting to prevent race condition.
+                // RP2P responses can arrive via HTTP handler while we're still sending to contacts.
+                // Without this, contacts_sent_count defaults to 0 and the first RP2P triggers
+                // immediate best-fee selection (responded >= 0), ignoring later/better paths.
+                // The ceiling is updated to the actual count after the loop completes.
+                $this->p2pRepository->updateContactsSentCount($p2pHash, $contactsCount);
+
                 // Send p2p request to all accepted contacts
                 foreach ($contacts as $contact) {
                     $contactAddress = $contact[$transportIndex]; // Get similar contact address to message
@@ -824,11 +846,17 @@ class P2pService implements P2pServiceInterface {
                     continue;
                 }
 
-                // Track how many contacts accepted (used for best-fee mode response counting)
+                // Update contacts_sent_count from ceiling to actual accepted count
                 $this->p2pRepository->updateContactsSentCount($p2pHash, $acceptedContacts);
                 if ($relayedContacts > 0) {
                     $this->p2pRepository->updateContactsRelayedCount($p2pHash, $relayedContacts);
                 }
+
+                // Re-check best-fee selection: RP2Ps may have arrived during broadcast
+                // and been stored as candidates without triggering selection (ceiling was
+                // higher than actual count). Now that the real count is set, check if
+                // enough responses have arrived to trigger selection.
+                $this->rp2pService?->checkBestFeeSelection($p2pHash);
             }
 
             $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);

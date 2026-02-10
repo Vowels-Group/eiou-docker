@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- Best-fee broadcast race condition: set `contacts_sent_count` ceiling before broadcast loop to prevent RP2P responses arriving via HTTP handler from triggering premature selection while the broadcast is still sending to other contacts
+
 ### Changed
 - `P2P_MAX_ROUTING_LEVEL` reduced from 20 to 10 (max hops a user can configure); hopWait formula now uses separate `P2P_HOP_WAIT_DIVISOR` (fixed at 20) to preserve privacy
 

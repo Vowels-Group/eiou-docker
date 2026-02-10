@@ -535,6 +535,53 @@ class Rp2pService implements Rp2pServiceInterface {
     }
 
     /**
+     * Re-check best-fee selection after broadcast updates tracking counts
+     *
+     * Called by P2pService after setting the actual contacts_sent_count,
+     * to handle RP2P responses that arrived during the broadcast loop
+     * but couldn't trigger selection because the ceiling count was too high.
+     *
+     * @param string $hash P2P hash to check
+     * @return void
+     */
+    public function checkBestFeeSelection(string $hash): void {
+        if ($this->rp2pCandidateRepository === null) {
+            return;
+        }
+
+        // Don't re-check if already selected
+        if ($this->rp2pRepository->rp2pExists($hash)) {
+            return;
+        }
+
+        $tracking = $this->p2pRepository->getTrackingCounts($hash);
+        if (!$tracking) {
+            return;
+        }
+
+        $sentCount = (int) $tracking['contacts_sent_count'];
+        $relayedCount = (int) ($tracking['contacts_relayed_count'] ?? 0);
+        $respondedCount = (int) $tracking['contacts_responded_count'];
+
+        // Phase 2: ALL contacts (inserted + relayed) responded
+        if ($relayedCount > 0 && $respondedCount >= $sentCount + $relayedCount) {
+            $this->selectAndForwardBestRp2p($hash);
+            return;
+        }
+
+        // Phase 1: all inserted contacts responded, relayed contacts exist
+        if ($relayedCount > 0 && $respondedCount >= $sentCount) {
+            $this->sendBestCandidateToRelayedContacts($hash);
+            return;
+        }
+
+        // No relayed contacts: all inserted responded
+        if ($relayedCount === 0 && $respondedCount >= $sentCount) {
+            $this->selectAndForwardBestRp2p($hash);
+        }
+    }
+
+    /**
      * Select the best (lowest fee) RP2P candidate and process it
      *
      * Called when all contacts have responded in best-fee mode, or when
