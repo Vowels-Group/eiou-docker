@@ -438,6 +438,7 @@ Send a transaction to a contact.
 | `amount` | number | Yes | Amount to send (must be > 0) |
 | `currency` | string | Yes | Currency code (e.g., USD) |
 | `description` | string | No | Optional transaction description |
+| `best_fee` | boolean | No | **[Experimental]** Use best-fee routing: collects all P2P route responses and selects the lowest accumulated fee. May be slower than default fast mode. |
 
 **Response:**
 

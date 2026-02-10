@@ -88,6 +88,11 @@ The project is currently in **ALPHA** status.
 - Dead `if(!$stmt)` checks after `pdo->prepare()` replaced with proper try/catch across 4 repository files
 - AJAX requests returning HTML login form instead of JSON when session expired (debug report download error)
 
+### Docs
+- Document best-fee routing `best_fee` parameter in API_REFERENCE, API_QUICK_REFERENCE, GUI_REFERENCE, GUI_QUICK_REFERENCE
+- Add `--best` flag and best-fee routing example to CLI_DEMO_GUIDE
+- Add collision topology and best-fee integration tests to TESTING.md
+
 ---
 
 ## 2026-02-01 -- 2026-02-05

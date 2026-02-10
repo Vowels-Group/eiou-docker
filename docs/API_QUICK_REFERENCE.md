@@ -125,7 +125,8 @@ All requests require HMAC-SHA256 authentication:
     "address": "http://bob.local:8080",
     "amount": 25.00,
     "currency": "USD",
-    "description": "Optional description"
+    "description": "Optional description",
+    "best_fee": false
 }
 ```
 

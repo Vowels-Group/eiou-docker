@@ -296,11 +296,13 @@ Quick navigation cards linking to main sections:
 | amount | number | Transaction amount |
 | currency | select | Currency code |
 | description | text | Optional memo |
+| best_fee | checkbox | **[Experimental]** Use best-fee routing: collects all route responses and selects the lowest fee |
 
 **Features:**
 - P2P routing information alert
 - Dynamic address type selector
 - Transaction type indicator
+- Best-fee routing checkbox with experimental warning label
 
 ---
 

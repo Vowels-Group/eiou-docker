@@ -36,7 +36,13 @@ Integration tests validate the complete system behavior using Docker containers.
 
 - **Location**: `tests/`
 - **Runner**: `./run-all-tests.sh`
-- **Coverage**: API endpoints, multi-node communication, transaction flows
+- **Coverage**: API endpoints, multi-node communication, transaction flows, P2P routing (fast and best-fee modes)
+
+**Topologies:**
+- `http4` / `https4` / `tor4` — 4-node linear chain (standard transaction and routing tests)
+- `collisions` — 9-node mesh topology with randomized fees (best-fee routing, path selection, deadlock prevention)
+
+**Best-fee routing tests** (`bestFeeRoutingTest.sh`): 9 tests covering single-node, 4-node line, and 9-node collision topologies. Includes fast vs best-fee timing comparison and path analysis with randomized fee structures.
 
 ## Unit Test Inventory
 
@@ -90,6 +96,7 @@ Integration tests validate the complete system behavior using Docker containers.
 |-----------|-------|----------|
 | **DatabaseSchemaTest.php** | 67 | Schema validation for all 14 tables, column types, constraints, indexes |
 | **DatabaseSetupTest.php** | 15+ | Migration execution, column migrations, idempotency |
+| **P2pSenderRepositoryTest.php** | 20+ | Multi-path upstream sender tracking for RP2P forwarding |
 | **PdoConnectionTest.php** | 10+ | Connection creation, DSN format, PDO options |
 
 ### Processors Tests (`tests/Unit/Processors/`)
@@ -350,7 +357,8 @@ tests/
 │   │   ├── ConstantsTest.php
 │   │   └── ErrorCodesTest.php
 │   ├── Database/
-│   │   └── DatabaseSchemaTest.php
+│   │   ├── DatabaseSchemaTest.php
+│   │   └── P2pSenderRepositoryTest.php
 │   ├── Events/
 │   │   ├── EventDispatcherTest.php
 │   │   └── SyncEventsTest.php
