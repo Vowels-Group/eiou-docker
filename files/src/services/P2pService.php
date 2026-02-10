@@ -743,15 +743,15 @@ class P2pService implements P2pServiceInterface {
                     }
 
                     $sentMessages += 1;
-                    // Track contacts that will send RP2P back for best-fee response counting.
-                    // 'inserted': new P2P stored, contact will forward RP2P after cascade.
-                    // 'already_relayed': contact already has P2P from another path, but
-                    //   recorded us as an additional sender (p2p_senders) and will forward
-                    //   its best RP2P to all senders including us. Counting both gives the
-                    //   relay more candidates before selecting, improving route quality.
-                    //   Per-hop expiration prevents deadlocks: if the contact never responds,
-                    //   we still select at hop-wait expiration via CleanupService::expireMessage().
-                    if ($response['status'] === 'inserted' || $response['status'] === 'already_relayed') {
+                    // Track contacts that accepted P2P as NEW for best-fee response counting.
+                    // Only count 'inserted' — these contacts will forward RP2P back to us
+                    // after their own cascade completes.
+                    // Do NOT count 'already_relayed': the contact received the P2P from a
+                    // different path and runs its own cascade on an independent hop-wait timer.
+                    // Waiting for its RP2P would delay selection until that cascade completes
+                    // (up to the full hop-wait chain), negating per-hop expiration benefits.
+                    // If its RP2P arrives before we select, it's still stored as a candidate.
+                    if ($response['status'] === 'inserted') {
                         $acceptedContacts += 1;
                     }
                     if ($sendResult['success']) {
