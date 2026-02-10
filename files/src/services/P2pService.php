@@ -331,6 +331,27 @@ class P2pService implements P2pServiceInterface {
                 $this->p2pSenderRepository?->insertSender(
                     $request['hash'], $request['senderAddress'], $request['senderPublicKey']
                 );
+
+                // If this node is the destination and has already sent rp2p to the first sender,
+                // immediately send rp2p to this additional sender too. Without this, only the
+                // first path from the destination gets an rp2p response, and all other paths
+                // must wait for the cascade expiration to propagate - causing timeouts and
+                // preventing true best-fee comparison at upstream relay nodes.
+                $existingP2p = $this->p2pRepository->getByHash($request['hash']);
+                if ($existingP2p
+                    && $existingP2p['status'] === 'found'
+                    && isset($existingP2p['destination_address'])
+                ) {
+                    $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+                    if ($this->matchYourselfP2P($request, $myAddress)) {
+                        // We are the destination - send rp2p to this new sender
+                        $rP2pPayload = $this->rp2pPayload->build($request);
+                        $contactHash = substr(hash('sha256', $request['senderAddress']), 0, 8);
+                        $messageId = 'response-' . $request['hash'] . '-' . $contactHash;
+                        $this->sendP2pMessage('rp2p', $request['senderAddress'], $rP2pPayload, $messageId);
+                    }
+                }
+
                 // P2P already exists via another route - inform sender with already_relayed
                 // This allows the sender to count this as a responded contact in best-fee mode
                 if($echo){
@@ -674,8 +695,10 @@ class P2pService implements P2pServiceInterface {
                 }
 
                 // Track sent count for best-fee mode: the matched contact will send
-                // an RP2P response, so we expect exactly 1 response
-                if (isset($response['status']) && $response['status'] === 'inserted') {
+                // an RP2P response, so we expect exactly 1 response.
+                // Both 'inserted' (new P2P) and 'already_relayed' (P2P exists via
+                // another path) contacts track this sender and will forward RP2P back.
+                if (isset($response['status']) && ($response['status'] === 'inserted' || $response['status'] === 'already_relayed')) {
                     $this->p2pRepository->updateContactsSentCount($p2pHash, 1);
                 }
 
@@ -720,11 +743,13 @@ class P2pService implements P2pServiceInterface {
                     }
 
                     $sentMessages += 1;
-                    // Track contacts that may send RP2P responses for best-fee counting.
-                    // Both 'inserted' (new P2P accepted) and 'already_relayed' (P2P exists
-                    // via another path) contacts record this sender in p2p_senders and will
-                    // forward RP2P responses back via multi-path routing.
-                    if ($response['status'] === 'inserted' || $response['status'] === 'already_relayed') {
+                    // Track contacts that accepted the P2P as NEW for best-fee response counting.
+                    // Only count 'inserted' — these contacts will forward RP2P back to us.
+                    // Do NOT count 'already_relayed' contacts: they have their own RP2P cascade
+                    // which may create circular dependencies (A waits for B, B waits for A)
+                    // that deadlock until expiration. If their RP2P arrives before we select,
+                    // it's still stored as a candidate and considered in selection.
+                    if ($response['status'] === 'inserted') {
                         $acceptedContacts += 1;
                     }
                     if ($sendResult['success']) {

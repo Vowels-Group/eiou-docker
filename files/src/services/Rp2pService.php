@@ -432,10 +432,11 @@ class Rp2pService implements Rp2pServiceInterface {
             return;
         }
 
-        // Check if all contacts have responded
+        // Check if all contacts have responded (or node forwarded to 0 contacts,
+        // e.g. leaf relay that sent directly to destination which already had the P2P).
+        // In that case, forward immediately — no other candidates are coming.
         $tracking = $this->p2pRepository->getTrackingCounts($request['hash']);
         if ($tracking
-            && $tracking['contacts_sent_count'] > 0
             && $tracking['contacts_responded_count'] >= $tracking['contacts_sent_count']
         ) {
             // All contacts responded - select and forward best route

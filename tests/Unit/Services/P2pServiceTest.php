@@ -477,10 +477,196 @@ class P2pServiceTest extends TestCase
             ->with(self::TEST_HASH)
             ->willReturn(true);
 
+        // P2P has status 'sent' (relay node, not destination) - no rp2p forwarding
+        $this->p2pRepository->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'status' => 'sent',
+                'destination_address' => null,
+                'sender_address' => 'http://first-sender.test',
+                'amount' => self::TEST_AMOUNT,
+            ]);
+
         // Verify sender is recorded for multi-path RP2P delivery
         $this->p2pSenderRepository->expects($this->once())
             ->method('insertSender')
             ->with(self::TEST_HASH, 'http://second-sender.test', 'second-sender-pubkey');
+
+        ob_start();
+        $result = $this->service->checkP2pPossible($request);
+        ob_get_clean();
+
+        $this->assertFalse($result);
+    }
+
+    /**
+     * Test checkP2pPossible sends rp2p to new sender when node is the destination
+     *
+     * When a P2P already exists with status 'found' (destination matched) and a new
+     * sender sends the same P2P hash, the destination should immediately send an rp2p
+     * response to the new sender. This ensures all paths from the destination get
+     * rp2p responses simultaneously, enabling true best-fee comparison.
+     */
+    public function testCheckP2pPossibleSendsRp2pToNewSenderAtDestination(): void
+    {
+        // Use a hash that matches: sha256('http://destination.test' . 'test-salt' . '1234567890')
+        $destinationHash = '5ec8c754e8f1aea38364c5c9da36b15f427c1b7157dc5cec1769d0515c41343d';
+
+        $request = [
+            'senderAddress' => 'http://second-sender.test',
+            'senderPublicKey' => 'second-sender-pubkey',
+            'requestLevel' => 1,
+            'maxRequestLevel' => 5,
+            'hash' => $destinationHash,
+            'amount' => self::TEST_AMOUNT,
+            'currency' => 'USD',
+            'salt' => 'test-salt',
+            'time' => '1234567890',
+            'signature' => 'test-signature',
+        ];
+
+        $this->contactService->method('isNotBlocked')
+            ->willReturn(true);
+        $this->validationUtility->method('validateRequestLevel')
+            ->willReturn(true);
+
+        // resolveUserAddressForTransport returns our local address for the transport type
+        // This address must hash-match the P2P hash for matchYourselfP2P to return true
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://destination.test');
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://destination.test']);
+
+        // Funds check mocks
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(100000);
+        $this->p2pRepository->method('getCreditInP2p')
+            ->willReturn(0);
+        $this->contactService->method('getCreditLimit')
+            ->willReturn(100000.0);
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(['fee_percent' => 1.0]);
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(100);
+
+        // P2P exists (already relayed)
+        $this->p2pRepository->method('p2pExists')
+            ->with($destinationHash)
+            ->willReturn(true);
+
+        // P2P record shows this node is the destination (status='found', destination_address set)
+        $this->p2pRepository->method('getByHash')
+            ->with($destinationHash)
+            ->willReturn([
+                'hash' => $destinationHash,
+                'status' => 'found',
+                'destination_address' => 'http://destination.test',
+                'sender_address' => 'http://first-sender.test',
+                'amount' => self::TEST_AMOUNT,
+            ]);
+
+        // Verify sender is recorded
+        $this->p2pSenderRepository->expects($this->once())
+            ->method('insertSender')
+            ->with($destinationHash, 'http://second-sender.test', 'second-sender-pubkey');
+
+        // Verify rp2p is sent to the new sender (the key assertion for this fix)
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'rp2p',
+                'http://second-sender.test',
+                $this->callback(function ($payload) use ($destinationHash) {
+                    return $payload['type'] === 'rp2p'
+                        && $payload['hash'] === $destinationHash
+                        && $payload['senderAddress'] === 'http://destination.test';
+                }),
+                $this->stringContains('response-' . $destinationHash),
+                $this->anything()
+            )
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{"status":"inserted"}',
+                'messageId' => 'response-' . $destinationHash . '-test',
+            ]);
+
+        ob_start();
+        $result = $this->service->checkP2pPossible($request);
+        $output = ob_get_clean();
+
+        $this->assertFalse($result);
+
+        // Verify the response is still 'already_relayed' (not changed)
+        $decoded = json_decode($output, true);
+        $this->assertIsArray($decoded);
+        $this->assertEquals('already_relayed', $decoded['status']);
+    }
+
+    /**
+     * Test checkP2pPossible does NOT send rp2p when node is a relay (not destination)
+     */
+    public function testCheckP2pPossibleDoesNotSendRp2pWhenRelay(): void
+    {
+        $request = [
+            'senderAddress' => 'http://second-sender.test',
+            'senderPublicKey' => 'second-sender-pubkey',
+            'requestLevel' => 1,
+            'maxRequestLevel' => 5,
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'salt' => 'test-salt',
+            'time' => 1234567890,
+        ];
+
+        $this->contactService->method('isNotBlocked')
+            ->willReturn(true);
+        $this->validationUtility->method('validateRequestLevel')
+            ->willReturn(true);
+        // Different address = not the destination
+        $this->transportUtility->method('resolveUserAddressForTransport')
+            ->willReturn('http://relay-node.test');
+        $this->userContext->method('getUserLocaters')
+            ->willReturn(['http' => 'http://relay-node.test']);
+
+        // Funds check mocks
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(100000);
+        $this->p2pRepository->method('getCreditInP2p')
+            ->willReturn(0);
+        $this->contactService->method('getCreditLimit')
+            ->willReturn(100000.0);
+        $this->transportUtility->method('determineTransportType')
+            ->willReturn('http');
+        $this->contactService->method('lookupByAddress')
+            ->willReturn(['fee_percent' => 1.0]);
+        $this->currencyUtility->method('calculateFee')
+            ->willReturn(100);
+
+        $this->p2pRepository->method('p2pExists')
+            ->with(self::TEST_HASH)
+            ->willReturn(true);
+
+        // P2P exists with status 'found' but this is a relay (matchYourselfP2P will fail)
+        $this->p2pRepository->method('getByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'status' => 'found',
+                'destination_address' => 'http://relay-node.test',
+                'sender_address' => 'http://first-sender.test',
+                'amount' => self::TEST_AMOUNT,
+            ]);
+
+        $this->p2pSenderRepository->expects($this->once())
+            ->method('insertSender');
+
+        // Verify NO rp2p is sent (relay node should not forward rp2p here)
+        $this->messageDeliveryService->expects($this->never())
+            ->method('sendMessage');
 
         ob_start();
         $result = $this->service->checkP2pPossible($request);
@@ -1752,15 +1938,15 @@ class P2pServiceTest extends TestCase
     }
 
     /**
-     * Test broadcast path counts already_relayed responses in contacts_sent_count
+     * Test broadcast path only counts inserted (not already_relayed) in contacts_sent_count
      *
      * When a contact already has the P2P via another route, it responds
-     * 'already_relayed' and records the sender in p2p_senders. Since
-     * multi-path RP2P forwarding will send RP2P back to all recorded
-     * senders, already_relayed contacts must be counted as expected
-     * respondents for best-fee mode.
+     * 'already_relayed'. These contacts should NOT be counted as expected
+     * respondents because they have their own RP2P cascade which may
+     * create circular dependencies (A waits for B, B waits for A).
+     * Only 'inserted' contacts are counted as expected respondents.
      */
-    public function testProcessQueuedP2pMessagesBroadcastCountsAlreadyRelayed(): void
+    public function testProcessQueuedP2pMessagesBroadcastOnlyCountsInserted(): void
     {
         $p2pHash = self::TEST_HASH;
         $queuedMessage = [
@@ -1816,10 +2002,10 @@ class P2pServiceTest extends TestCase
                 ]
             );
 
-        // Both should be counted: inserted + already_relayed = 2 expected respondents
+        // Only 'inserted' should be counted (not already_relayed) to avoid circular deadlocks
         $this->p2pRepository->expects($this->once())
             ->method('updateContactsSentCount')
-            ->with($p2pHash, 2);
+            ->with($p2pHash, 1);
 
         ob_start();
         $this->service->processQueuedP2pMessages();

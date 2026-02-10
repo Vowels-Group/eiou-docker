@@ -1658,4 +1658,76 @@ class Rp2pServiceTest extends TestCase
 
         $service->handleRp2pCandidate($request, $p2p);
     }
+
+    /**
+     * Test handleRp2pCandidate leaf relay node selects immediately with contacts_sent_count=0
+     *
+     * When a relay node forwarded P2P to the destination directly (via matchContact)
+     * and the destination already had it (already_relayed), contacts_sent_count is 0.
+     * The node should still trigger selection when an RP2P candidate arrives,
+     * since contacts_responded_count (1) >= contacts_sent_count (0).
+     */
+    public function testHandleRp2pCandidateLeafRelaySelectsWithZeroSentCount(): void
+    {
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            $rp2pCandidateRepo,
+            $this->p2pSenderRepository
+        );
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'time' => 1234567890,
+            'currency' => 'EIOU',
+            'senderPublicKey' => self::TEST_PUBLIC_KEY,
+            'senderAddress' => self::TEST_ADDRESS,
+            'signature' => 'test-sig',
+        ];
+
+        // Relay node: no destination_address, sent status
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'my_fee_amount' => 50,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+            'status' => 'sent',
+        ];
+
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('insertCandidate');
+
+        $this->p2pRepository->expects($this->once())
+            ->method('incrementContactsRespondedCount');
+
+        // Leaf relay: sent to 0 contacts, 1 candidate just arrived
+        $this->p2pRepository->expects($this->once())
+            ->method('getTrackingCounts')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                'contacts_sent_count' => 0,
+                'contacts_responded_count' => 1,
+                'fast' => 0,
+            ]);
+
+        // selectAndForwardBestRp2p should be called (1 >= 0)
+        $this->rp2pRepository->expects($this->once())
+            ->method('rp2pExists')
+            ->with(self::TEST_HASH)
+            ->willReturn(false);
+
+        $rp2pCandidateRepo->expects($this->once())
+            ->method('getBestCandidate')
+            ->with(self::TEST_HASH)
+            ->willReturn(null);
+
+        $service->handleRp2pCandidate($request, $p2p);
+    }
 }

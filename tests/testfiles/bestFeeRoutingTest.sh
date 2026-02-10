@@ -215,6 +215,7 @@ initialBalanceFast=$(docker exec ${testReceiver} php -r "
 " 2>/dev/null || echo "0")
 
 # Send without flags (default fast mode: first route wins)
+fastStartTime=$(date +%s)
 fastSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[${testReceiver}]} 5 USD 2>&1)
 
 # Wait for routing with polling
@@ -239,11 +240,14 @@ if [ "$balanceChangedFast" -eq 0 ]; then
     balanceChangedFast=$(awk "BEGIN {print ($newBalanceFast != $initialBalanceFast) ? 1 : 0}")
 fi
 
+fastEndTime=$(date +%s)
+fastElapsed=$((fastEndTime - fastStartTime))
+
 if [ "$balanceChangedFast" -eq 1 ]; then
-    printf "\t   Fast mode send ${GREEN}PASSED${NC} (Balance: %s -> %s)\n" "$initialBalanceFast" "$newBalanceFast"
+    printf "\t   Fast mode send ${GREEN}PASSED${NC} (Balance: %s -> %s, Time: %ds)\n" "$initialBalanceFast" "$newBalanceFast" "$fastElapsed"
     passed=$(( passed + 1 ))
 else
-    printf "\t   Fast mode send ${RED}FAILED${NC} (Balance unchanged: %s)\n" "$initialBalanceFast"
+    printf "\t   Fast mode send ${RED}FAILED${NC} (Balance unchanged: %s, Time: %ds)\n" "$initialBalanceFast" "$fastElapsed"
     printf "\t   Send result: %s\n" "${fastSendResult:0:200}"
     failure=$(( failure + 1 ))
 fi
@@ -360,6 +364,15 @@ else
     printf "\t   Best-fee mode send ${RED}FAILED${NC} (Balance unchanged: %s, Timeout after %ds)\n" "$initialBalanceBest" "$bestfeeElapsed"
     printf "\t   Send result: %s\n" "${bestFeeSendResult:0:200}"
     failure=$(( failure + 1 ))
+fi
+
+# Timing comparison: fast vs best-fee
+echo -e "\n   --- Routing Mode Comparison ---"
+printf "\t   Fast mode (first route):  %ds\n" "$fastElapsed"
+printf "\t   Best-fee mode (optimal):  %ds\n" "$bestfeeElapsed"
+if [ "$bestfeeElapsed" -gt 0 ] && [ "$fastElapsed" -gt 0 ]; then
+    overhead=$((bestfeeElapsed - fastElapsed))
+    printf "\t   Best-fee overhead:        +%ds\n" "$overhead"
 fi
 
 # ==================== Path Analysis for Best-Fee Test ====================
