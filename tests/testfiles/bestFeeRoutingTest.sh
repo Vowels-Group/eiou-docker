@@ -393,10 +393,11 @@ balanceChangedBest=0
 while [ $elapsed -lt $bestfeeTimeout ]; do
     # Process queues multiple times before cleanup to let the full P2P/RP2P cascade
     # propagate. Each process_routing_queues call advances messages ~1 hop. With 4-5
-    # hops forward + 4-5 hops backward, we need ~10 rounds for the cascade to complete.
+    # hops forward + 4-5 hops backward, we need ~10+ rounds for the cascade to complete.
     # Running cleanup too early forces premature selection from incomplete candidate pools.
-    for round in $(seq 1 10); do
-        process_routing_queues "$all_containers"
+    # Use settle_time=0 to eliminate sleep overhead (20 rounds × 0s vs 10 × 2s).
+    for round in $(seq 1 20); do
+        process_routing_queues "$all_containers" 0
 
         # Check if balance changed (early exit)
         newBalanceBest=$(docker exec ${testReceiver} sh -c "$balance_cmd" 2>/dev/null || echo "$initialBalanceBest")
