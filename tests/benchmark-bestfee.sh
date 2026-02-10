@@ -47,7 +47,8 @@ for ((run=1; run<=RUNS; run++)); do
     echo "============================================"
 
     # Run the full test (build + contacts + bestfee)
-    output=$(cd /mnt/c/Users/fcvan/eiou/ai-dev/github/eiou-docker/tests && SKIP_CLEANUP=1 ./run-all-tests.sh collisions "$MODE" bestfee 2>&1)
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    output=$(cd "$SCRIPT_DIR" && SKIP_CLEANUP=1 ./run-all-tests.sh collisions "$MODE" bestfee 2>&1)
 
     # Extract timing
     fast_time=$(echo "$output" | grep -oP 'Fast mode \(first route\):\s+\K\d+')
