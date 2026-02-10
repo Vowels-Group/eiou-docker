@@ -11,6 +11,7 @@ use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
 use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\P2pRelayedContactRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -115,6 +116,11 @@ class P2pService implements P2pServiceInterface {
     private ?P2pSenderRepository $p2pSenderRepository = null;
 
     /**
+     * @var P2pRelayedContactRepository|null Repository for tracking already_relayed contacts (two-phase selection)
+     */
+    private ?P2pRelayedContactRepository $p2pRelayedContactRepository = null;
+
+    /**
      * Constructor
      *
      * @param ContactServiceInterface $contactService Contact service
@@ -162,6 +168,16 @@ class P2pService implements P2pServiceInterface {
      */
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Set the P2pRelayedContactRepository for two-phase best-fee selection
+     *
+     * @param P2pRelayedContactRepository $repository
+     * @return void
+     */
+    public function setP2pRelayedContactRepository(P2pRelayedContactRepository $repository): void {
+        $this->p2pRelayedContactRepository = $repository;
     }
 
     /**
@@ -706,7 +722,8 @@ class P2pService implements P2pServiceInterface {
             } else{
                 $contactsToSend = $contactsCount; // Reset sendable contact count
                 $sentMessages = 0;
-                $acceptedContacts = 0; // Contacts that will send RP2P back ('inserted' or 'already_relayed')
+                $acceptedContacts = 0; // Contacts that accepted P2P as new ('inserted')
+                $relayedContacts = 0; // Contacts that returned 'already_relayed' (two-phase selection)
                 $successfulSends = [];
 
                 // Send p2p request to all accepted contacts
@@ -743,16 +760,16 @@ class P2pService implements P2pServiceInterface {
                     }
 
                     $sentMessages += 1;
-                    // Track contacts that accepted P2P as NEW for best-fee response counting.
-                    // Only count 'inserted' — these contacts will forward RP2P back to us
-                    // after their own cascade completes.
-                    // Do NOT count 'already_relayed': the contact received the P2P from a
-                    // different path and runs its own cascade on an independent hop-wait timer.
-                    // Waiting for its RP2P would delay selection until that cascade completes
-                    // (up to the full hop-wait chain), negating per-hop expiration benefits.
-                    // If its RP2P arrives before we select, it's still stored as a candidate.
+                    // Track contacts for best-fee response counting.
+                    // 'inserted': contact accepted P2P as new — will forward RP2P back after its cascade.
+                    // 'already_relayed': contact received P2P from another path and runs its own cascade
+                    //   on an independent timer. Two-phase selection: phase 1 selects from inserted contacts,
+                    //   sends result to relayed contacts; phase 2 re-selects after relayed contacts respond.
                     if ($response['status'] === 'inserted') {
                         $acceptedContacts += 1;
+                    } elseif ($response['status'] === 'already_relayed') {
+                        $relayedContacts += 1;
+                        $this->p2pRelayedContactRepository?->insertRelayedContact($p2pHash, $contactAddress);
                     }
                     if ($sendResult['success']) {
                         $successfulSends[] = ['messageId' => $messageId, 'nextHop' => $contactAddress];
@@ -784,6 +801,9 @@ class P2pService implements P2pServiceInterface {
 
                 // Track how many contacts accepted (used for best-fee mode response counting)
                 $this->p2pRepository->updateContactsSentCount($p2pHash, $acceptedContacts);
+                if ($relayedContacts > 0) {
+                    $this->p2pRepository->updateContactsRelayedCount($p2pHash, $relayedContacts);
+                }
             }
 
             $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);

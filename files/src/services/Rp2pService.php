@@ -12,6 +12,7 @@ use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\P2pRelayedContactRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -90,6 +91,11 @@ class Rp2pService implements Rp2pServiceInterface {
      * @var P2pSenderRepository|null Repository for tracking P2P senders (multi-path support)
      */
     private ?P2pSenderRepository $p2pSenderRepository = null;
+
+    /**
+     * @var P2pRelayedContactRepository|null Repository for tracking already_relayed contacts (two-phase selection)
+     */
+    private ?P2pRelayedContactRepository $p2pRelayedContactRepository = null;
 
     /**
      * @var MessageDeliveryService|null Message delivery service for reliable delivery
@@ -178,6 +184,16 @@ class Rp2pService implements Rp2pServiceInterface {
      */
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Set the P2pRelayedContactRepository for two-phase best-fee selection
+     *
+     * @param P2pRelayedContactRepository $repository
+     * @return void
+     */
+    public function setP2pRelayedContactRepository(P2pRelayedContactRepository $repository): void {
+        $this->p2pRelayedContactRepository = $repository;
     }
 
     /**
@@ -432,16 +448,90 @@ class Rp2pService implements Rp2pServiceInterface {
             return;
         }
 
-        // Check if all contacts have responded (or node forwarded to 0 contacts,
-        // e.g. leaf relay that sent directly to destination which already had the P2P).
-        // In that case, forward immediately — no other candidates are coming.
+        // Two-phase best-fee selection logic:
+        // Phase 1: all inserted contacts responded → send best candidate to relayed contacts
+        // Phase 2: all contacts (inserted + relayed) responded → re-select from ALL candidates
+        // No relayed contacts: select immediately when all inserted responded (current behavior)
         $tracking = $this->p2pRepository->getTrackingCounts($request['hash']);
-        if ($tracking
-            && $tracking['contacts_responded_count'] >= $tracking['contacts_sent_count']
-        ) {
-            // All contacts responded - select and forward best route
+        if (!$tracking) {
+            return;
+        }
+
+        $sentCount = (int) $tracking['contacts_sent_count'];
+        $relayedCount = (int) ($tracking['contacts_relayed_count'] ?? 0);
+        $respondedCount = (int) $tracking['contacts_responded_count'];
+
+        // Phase 2 trigger: ALL contacts (inserted + relayed) responded
+        if ($relayedCount > 0 && $respondedCount >= $sentCount + $relayedCount) {
+            $this->selectAndForwardBestRp2p($request['hash']);
+            return;
+        }
+
+        // Phase 1 trigger: all inserted contacts responded, relayed contacts exist
+        if ($relayedCount > 0 && $respondedCount >= $sentCount) {
+            $this->sendBestCandidateToRelayedContacts($request['hash']);
+            return;
+        }
+
+        // No relayed contacts: select immediately when all inserted responded (current behavior)
+        if ($relayedCount === 0 && $respondedCount >= $sentCount) {
             $this->selectAndForwardBestRp2p($request['hash']);
         }
+    }
+
+    /**
+     * Phase 1: Send the best candidate to all already_relayed contacts
+     *
+     * Called when all inserted contacts have responded but relayed contacts
+     * haven't yet. Sends the current best candidate as a standard RP2P to
+     * break the mutual deadlock — relayed contacts receive it, incorporate
+     * it into their own selection, and respond back for phase 2.
+     *
+     * @param string $hash The P2P hash
+     * @return void
+     */
+    private function sendBestCandidateToRelayedContacts(string $hash): void
+    {
+        if ($this->rp2pCandidateRepository === null || $this->p2pRelayedContactRepository === null) {
+            // Fallback: no relayed contact tracking, select immediately
+            $this->selectAndForwardBestRp2p($hash);
+            return;
+        }
+
+        // Guard: if already processed, skip
+        if ($this->rp2pRepository->rp2pExists($hash)) {
+            $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
+            return;
+        }
+
+        $bestCandidate = $this->rp2pCandidateRepository->getBestCandidate($hash);
+        if (!$bestCandidate) {
+            return; // No candidates yet, wait for more
+        }
+
+        // Build RP2P payload from best candidate
+        $request = [
+            'hash' => $bestCandidate['hash'],
+            'time' => $bestCandidate['time'],
+            'amount' => (int) $bestCandidate['amount'],
+            'currency' => $bestCandidate['currency'],
+            'senderPublicKey' => $bestCandidate['sender_public_key'],
+            'senderAddress' => $bestCandidate['sender_address'],
+            'signature' => $bestCandidate['sender_signature'],
+        ];
+        $rp2pPayload = $this->rp2pPayload->build($request);
+
+        // Send to all already_relayed contacts
+        $relayedContacts = $this->p2pRelayedContactRepository->getRelayedContactsByHash($hash);
+        foreach ($relayedContacts as $contact) {
+            $this->sendRp2pMessage($contact['contact_address'], $rp2pPayload, $hash);
+        }
+
+        Logger::getInstance()->info("Phase 1: sent best candidate to relayed contacts", [
+            'hash' => $hash,
+            'relayed_contacts' => count($relayedContacts),
+            'best_amount' => $bestCandidate['amount'],
+        ]);
     }
 
     /**

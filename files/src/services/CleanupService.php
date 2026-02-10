@@ -10,6 +10,7 @@ use Eiou\Contracts\ChainDropServiceInterface;
 use Eiou\Contracts\Rp2pServiceInterface;
 use Eiou\Database\Rp2pCandidateRepository;
 use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\P2pRelayedContactRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\Rp2pRepository;
 use Eiou\Database\TransactionRepository;
@@ -100,6 +101,11 @@ class CleanupService implements CleanupServiceInterface {
     private ?P2pSenderRepository $p2pSenderRepository = null;
 
     /**
+     * @var P2pRelayedContactRepository|null Repository for cleaning up old P2P relayed contact records
+     */
+    private ?P2pRelayedContactRepository $p2pRelayedContactRepository = null;
+
+    /**
      * Constructor
      * @param P2pRepository $p2pRepository P2P repository
      * @param Rp2pRepository $rp2pRepository RP2P repository
@@ -177,6 +183,17 @@ class CleanupService implements CleanupServiceInterface {
     }
 
     /**
+     * Set the P2pRelayedContactRepository for cleaning up old relayed contact records
+     *
+     * @param P2pRelayedContactRepository $p2pRelayedContactRepository
+     * @return void
+     */
+    public function setP2pRelayedContactRepository(P2pRelayedContactRepository $p2pRelayedContactRepository): void
+    {
+        $this->p2pRelayedContactRepository = $p2pRelayedContactRepository;
+    }
+
+    /**
      * Check if there are any messages that will expire and process them
      *
      * This function retrieves all expired P2P messages from the database
@@ -231,6 +248,15 @@ class CleanupService implements CleanupServiceInterface {
             }
         } catch (Exception $e) {
             Logger::getInstance()->error("Error cleaning up P2P sender records", ['error' => $e->getMessage()]);
+        }
+
+        // Clean up old P2P relayed contact records (1-day retention)
+        try {
+            if ($this->p2pRelayedContactRepository !== null) {
+                $this->p2pRelayedContactRepository->deleteOldRecords(1);
+            }
+        } catch (Exception $e) {
+            Logger::getInstance()->error("Error cleaning up P2P relayed contact records", ['error' => $e->getMessage()]);
         }
 
         // Originator fallback: select best route for expired originator P2Ps

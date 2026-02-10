@@ -103,6 +103,7 @@ function getP2pTableSchema() {
         fast TINYINT(1) DEFAULT 1, /* 1=fast mode (first rp2p wins), 0=best-fee mode (collect all, pick cheapest) */
         contacts_sent_count INT DEFAULT 0, /* number of contacts the p2p was sent to */
         contacts_responded_count INT DEFAULT 0, /* number of contacts that responded with rp2p */
+        contacts_relayed_count INT DEFAULT 0, /* number of contacts that returned already_relayed (two-phase selection) */
         status ENUM(
             'initial',      /* First received p2p request */
             'queued',       /* Waiting to be processed */
@@ -178,6 +179,19 @@ function getP2pSendersTableSchema() {
         UNIQUE INDEX idx_p2p_senders_hash_addr (hash, sender_address),
         INDEX idx_p2p_senders_hash (hash),
         INDEX idx_p2p_senders_created_at (created_at)
+    )";
+}
+
+// P2P Relayed Contacts table - tracks contacts that returned already_relayed during broadcast (two-phase selection)
+function getP2pRelayedContactsTableSchema() {
+    return "CREATE TABLE IF NOT EXISTS p2p_relayed_contacts (
+        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+        hash VARCHAR(255) NOT NULL,
+        contact_address VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE INDEX idx_p2p_relayed_hash_addr (hash, contact_address),
+        INDEX idx_p2p_relayed_hash (hash),
+        INDEX idx_p2p_relayed_created_at (created_at)
     )";
 }
 

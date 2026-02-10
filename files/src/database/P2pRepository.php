@@ -25,7 +25,7 @@ class P2pRepository extends AbstractRepository {
         'my_fee_amount', 'destination_address', 'destination_pubkey',
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
-        'description', 'fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait',
+        'description', 'fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait', 'contacts_relayed_count',
         'status', 'created_at', 'incoming_txid',
         'outgoing_txid', 'completed_at'
     ];
@@ -516,6 +516,21 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
+     * Update contacts relayed count for a P2P hash
+     *
+     * Tracks the number of contacts that returned 'already_relayed' during broadcast.
+     * Used by two-phase best-fee selection to know when all relayed contacts have responded.
+     *
+     * @param string $hash P2P hash
+     * @param int $count Number of already_relayed contacts
+     * @return bool Success status
+     */
+    public function updateContactsRelayedCount(string $hash, int $count): bool {
+        $affectedRows = $this->update(['contacts_relayed_count' => $count], 'hash', $hash);
+        return $affectedRows >= 0;
+    }
+
+    /**
      * Atomically increment the contacts responded count for a P2P hash
      *
      * @param string $hash P2P hash
@@ -537,7 +552,7 @@ class P2pRepository extends AbstractRepository {
      * @return array|null Array with contacts_sent_count, contacts_responded_count, fast or null
      */
     public function getTrackingCounts(string $hash): ?array {
-        $query = "SELECT contacts_sent_count, contacts_responded_count, fast
+        $query = "SELECT contacts_sent_count, contacts_responded_count, contacts_relayed_count, fast
                   FROM {$this->tableName}
                   WHERE hash = :hash";
 

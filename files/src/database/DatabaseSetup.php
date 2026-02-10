@@ -87,6 +87,7 @@ function freshInstall(){
                 $dbConn->exec(getChainDropProposalsTableSchema());
                 $dbConn->exec(getRp2pCandidatesTableSchema());
                 $dbConn->exec(getP2pSendersTableSchema());
+                $dbConn->exec(getP2pRelayedContactsTableSchema());
             } catch (PDOException $tableError) {
                 Logger::getInstance()->error("Table creation failed", [
                     'error' => $tableError->getMessage()
@@ -142,6 +143,7 @@ function runMigrations(PDO $pdo): array {
         'chain_drop_proposals' => 'getChainDropProposalsTableSchema',
         'rp2p_candidates' => 'getRp2pCandidatesTableSchema',
         'p2p_senders' => 'getP2pSendersTableSchema',
+        'p2p_relayed_contacts' => 'getP2pRelayedContactsTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {
@@ -189,6 +191,7 @@ function runColumnMigrations(PDO $pdo): array {
             'contacts_sent_count' => 'INT DEFAULT 0 AFTER fast',
             'contacts_responded_count' => 'INT DEFAULT 0 AFTER contacts_sent_count',
             'hop_wait' => 'INT DEFAULT 0 AFTER contacts_responded_count',
+            'contacts_relayed_count' => 'INT DEFAULT 0 AFTER hop_wait',
         ],
     ];
 
