@@ -316,44 +316,35 @@ totaltests=$(( totaltests + 1 ))
 
 # --- Best-fee expiration sizing math ---
 #
-# The originator's P2P expiration must be large enough for the relay cascade
-# to complete AND for the RP2P response to propagate back before expiration.
+# Use the real-world default P2P expiration (300s) so relay nodes have adequate
+# hop-wait time for best-fee candidate collection. The test still finishes fast
+# when paths work (waits for balance change, not the full expiration).
 #
 # Constants (from Constants.php):
 #   MIN_HOP_WAIT  = 15s  (P2P_MIN_HOP_WAIT_SECONDS = HTTP_TRANSPORT_TIMEOUT)
-#   HOP_DIVISOR   = 20   (P2P_HOP_WAIT_DIVISOR, fixed divisor in hopWait formula for privacy)
-#   MAX_ROUTE_LVL = 10   (P2P_MAX_ROUTING_LEVEL, user-facing cap — NOT used in formula)
+#   HOP_DIVISOR   = 12   (P2P_HOP_WAIT_DIVISOR, fixed divisor in hopWait formula for privacy)
 #   HOP_BUFFER    = 2s   (P2P_HOP_PROCESSING_BUFFER_SECONDS)
 #   DEFAULT_MAX   = 6    (P2P_DEFAULT_MAX_REQUEST_LEVEL, per-user setting)
 #   JITTER        = +0/1 (random_int(0,1) added to maxLevel)
 #
 # hopWait = max(floor(expiration / HOP_DIVISOR) - HOP_BUFFER, MIN_HOP_WAIT)
-#   For expiration <= 340:  floor(exp/20)-2 <= 15  →  hopWait = 15 (clamped)
+#   300s expiration: floor(300/12)-2 = 23s per hop
 #
-# Closest relay (level 1) expiration:
-#   A1 = hopWait × (maxLevel - 1) = 15 × ((DEFAULT_MAX + jitter) - 1)
-#   maxLevel=6: A1 = 15 × 5 = 75s   (jitter=0)
-#   maxLevel=7: A1 = 15 × 6 = 90s   (jitter=1)
+# Relay expirations (scaledWait = hopWait × remainingHops):
+#   A1 (5 remaining): 23 × 5 = 115s
+#   A4 (4 remaining): 23 × 4 =  92s
+#   A5 (3 remaining): 23 × 3 =  69s
+#   A7 (2 remaining): 23 × 2 =  46s
+#   A8 (1 remaining): 23 × 1 =  23s
 #
-# Gap = testExpiration - A1 = time for RP2P to propagate from A1 to originator.
-# On WSL2/Docker, each test loop iteration is ~8-13s (process_routing_queues +
-# cleanup). Need at least 2-3 iterations → minimum 30s gap for reliability.
-#
-# Minimum testExpiration for 30s gap:
-#   maxLevel=7 (worst case): 90 + 30 = 120s
-#   maxLevel=6:              75 + 30 = 105s
-#
-# Scaling guide (if defaults change):
-#   testExpiration >= MIN_HOP_WAIT × (DEFAULT_MAX + JITTER_MAX - 1) + 30
-#   Example: hopWait=15, maxLevel=8, jitter=1 → 15×8 + 30 = 150s
-#   Example: hopWait=20, maxLevel=6, jitter=1 → 20×6 + 30 = 150s
+# Each level gets ~23s breathing room before its upstream expires.
 #
 # Tor mode needs higher expiration because inter-node messages travel over Tor
 # (30s timeout per request), so the RP2P cascade propagation is slower.
 if [[ "${MODE:-http}" == "tor" ]]; then
-    testExpiration=180
+    testExpiration=450
 else
-    testExpiration=120
+    testExpiration=300
 fi
 echo -e "\t-> Setting P2P expiration to ${testExpiration}s on ${testSender}"
 docker exec ${testSender} php -r "

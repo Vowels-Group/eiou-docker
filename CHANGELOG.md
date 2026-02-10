@@ -16,7 +16,8 @@ The project is currently in **ALPHA** status.
 - Best-fee broadcast race condition: set `contacts_sent_count` ceiling before broadcast loop to prevent RP2P responses arriving via HTTP handler from triggering premature selection while the broadcast is still sending to other contacts
 
 ### Changed
-- `P2P_MAX_ROUTING_LEVEL` reduced from 20 to 10 (max hops a user can configure); hopWait formula now uses separate `P2P_HOP_WAIT_DIVISOR` (fixed at 20) to preserve privacy
+- `P2P_HOP_WAIT_DIVISOR` reduced from 20 to 12 — gives relay nodes 23s per hop (up from 15s clamped minimum) with the default 300s expiration, allowing more time for best-fee candidate collection
+- `P2P_MAX_ROUTING_LEVEL` reduced from 20 to 10 (max hops a user can configure); hopWait formula now uses separate `P2P_HOP_WAIT_DIVISOR` (fixed at 12) to preserve privacy
 
 ### Added
 - Two-phase best-fee selection: relay nodes first select from `inserted` contacts, then share the result with `already_relayed` contacts to break mutual deadlock, wait for their response, and re-select from all candidates before forwarding upstream
