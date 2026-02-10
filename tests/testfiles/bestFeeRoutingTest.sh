@@ -321,12 +321,13 @@ totaltests=$(( totaltests + 1 ))
 #
 # Constants (from Constants.php):
 #   MIN_HOP_WAIT  = 15s  (P2P_MIN_HOP_WAIT_SECONDS = HTTP_TRANSPORT_TIMEOUT)
-#   MAX_ROUTE_LVL = 20   (P2P_MAX_ROUTING_LEVEL, used in hopWait formula)
+#   HOP_DIVISOR   = 20   (P2P_HOP_WAIT_DIVISOR, fixed divisor in hopWait formula for privacy)
+#   MAX_ROUTE_LVL = 10   (P2P_MAX_ROUTING_LEVEL, user-facing cap — NOT used in formula)
 #   HOP_BUFFER    = 2s   (P2P_HOP_PROCESSING_BUFFER_SECONDS)
 #   DEFAULT_MAX   = 6    (P2P_DEFAULT_MAX_REQUEST_LEVEL, per-user setting)
 #   JITTER        = +0/1 (random_int(0,1) added to maxLevel)
 #
-# hopWait = max(floor(expiration / MAX_ROUTE_LVL) - HOP_BUFFER, MIN_HOP_WAIT)
+# hopWait = max(floor(expiration / HOP_DIVISOR) - HOP_BUFFER, MIN_HOP_WAIT)
 #   For expiration <= 340:  floor(exp/20)-2 <= 15  →  hopWait = 15 (clamped)
 #
 # Closest relay (level 1) expiration:

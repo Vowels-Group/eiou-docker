@@ -142,7 +142,8 @@ class Constants {
     const P2P_DEFAULT_EXPIRATION_SECONDS = 300; // 5 minutes - time before P2P request expires
     const P2P_MIN_EXPIRATION_SECONDS = 60; // Minimum expiration time to allow network propagation
     const P2P_REQUEST_LEVEL_VALIDATION_MAX = 1000; // Maximum valid request level for input validation
-    const P2P_MAX_ROUTING_LEVEL = 20; // Maximum allowed P2P routing hops (prevents infinite routing)
+    const P2P_MAX_ROUTING_LEVEL = 10; // Maximum allowed P2P routing hops (user setting cap)
+    const P2P_HOP_WAIT_DIVISOR = 20; // Fixed divisor for hopWait formula (hides actual max level for privacy)
     const P2P_HOP_PROCESSING_BUFFER_SECONDS = 2; // Per-hop buffer for network latency and processing time
 
     // Transport timeouts (single HTTP/TOR request to a node)

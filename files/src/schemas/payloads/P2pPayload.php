@@ -29,10 +29,12 @@ class P2pPayload extends BasePayload
         $userAddress = $this->transportUtility->resolveUserAddressForTransport($data['receiverAddress']);
 
         // Calculate per-hop wait time for best-fee mode relay nodes
-        // Formula: floor(expiration / max_routing_level) - processing_buffer, clamped to minimum
+        // Formula: floor(expiration / hop_wait_divisor) - processing_buffer, clamped to minimum
+        // Uses HOP_WAIT_DIVISOR (fixed, not actual max level) so all P2Ps produce the same
+        // hopWait regardless of the user's maxP2pLevel setting (prevents topology inference).
         $expirationSeconds = $this->currentUser->getP2pExpirationTime();
         $hopWait = max(
-            (int) floor($expirationSeconds / Constants::P2P_MAX_ROUTING_LEVEL) - Constants::P2P_HOP_PROCESSING_BUFFER_SECONDS,
+            (int) floor($expirationSeconds / Constants::P2P_HOP_WAIT_DIVISOR) - Constants::P2P_HOP_PROCESSING_BUFFER_SECONDS,
             Constants::P2P_MIN_HOP_WAIT_SECONDS
         );
 

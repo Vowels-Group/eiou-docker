@@ -12,6 +12,9 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Changed
+- `P2P_MAX_ROUTING_LEVEL` reduced from 20 to 10 (max hops a user can configure); hopWait formula now uses separate `P2P_HOP_WAIT_DIVISOR` (fixed at 20) to preserve privacy
+
 ### Added
 - Best-fee routing mode (`--best` flag): collects all RP2P responses and selects the lowest accumulated fee route (experimental)
 - `rp2p_candidates` table for storing RP2P candidate responses during best-fee selection
