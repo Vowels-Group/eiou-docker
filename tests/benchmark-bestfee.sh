@@ -214,9 +214,9 @@ for ((i=0; i<${#results[@]}; i++)); do
 
     echo ""
     printf "  ${CYAN}Run %d${NC}  %s\n" "$((i+1))" "${results[$i]}"
-    printf "    Fast:     %3ss  %-28s  %s\n" "${fast_times[$i]:-?}" "${fast_paths[$i]:-?}" "$ff"
-    printf "    Best-fee: %3ss  %-28s  %s\n" "${bestfee_times[$i]:-?}" "${bestfee_paths[$i]:-?}" "$bf"
-    printf "    Optimal:  ${DIM}%-33s${NC}  %s\n" "${optimal_paths_list[$i]:-?}" "$of"
+    printf "    Fast:     %3ss  %-9s  %s\n" "${fast_times[$i]:-?}" "$ff" "${fast_paths[$i]:-?}"
+    printf "    Best-fee: %3ss  %-9s  %s\n" "${bestfee_times[$i]:-?}" "$bf" "${bestfee_paths[$i]:-?}"
+    printf "    Optimal:       %-9s  ${DIM}%s${NC}\n" "$of" "${optimal_paths_list[$i]:-?}"
 done
 
 echo ""
