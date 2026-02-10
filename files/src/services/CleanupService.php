@@ -300,14 +300,12 @@ class CleanupService implements CleanupServiceInterface {
             return;
         }
 
-        // Step 1.5: If P2P is in best-fee mode at a RELAY node, select best candidate
-        // before expiring. Relay nodes (no destination_address) select immediately because
-        // their upstream node is waiting for the rp2p response.
-        // Originators (have destination_address) skip this — they expire to 'expired' status
-        // so handleRp2pCandidate can keep collecting responses from all contacts, and the
-        // cleanup fallback handles the case where some contacts never respond.
+        // Step 1.5: If P2P is in best-fee mode, select best candidate before expiring.
+        // Both relay and originator nodes select immediately at expiration when candidates
+        // exist. This avoids the originator waiting an extra grace period when one contact's
+        // cascade is slow/dead. Double-selection is safe: selectAndForwardBestRp2p() has
+        // an rp2pExists() guard that prevents duplicate processing.
         if (!((int)($message['fast'] ?? 1))
-            && empty($message['destination_address'])
             && $this->rp2pCandidateRepository !== null
             && $this->rp2pService !== null
         ) {
