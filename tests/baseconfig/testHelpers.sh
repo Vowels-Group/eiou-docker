@@ -810,25 +810,29 @@ trigger_sync() {
 
 # Enumerate all paths between two nodes using containersLinks topology
 # Usage: enumerate_paths <source> <destination>
-# Output: one line per path, sorted by fee ascending
-#   Format: "A0->A2->A4->A7->A8 fee=0.700"
+# Output: one line per path, sorted by fee multiplier ascending
+#   Format: "A0->A2->A4->A7->A8 fee=1.015030"
+#   Fee is a compound multiplier: product of (1 + feePercent/100) at each relay hop.
+#   Destination hop excluded (destination doesn't charge relay fee).
 # Requires global: containersLinks associative array
 enumerate_paths() {
     local source="$1"
     local dest="$2"
-    _find_paths_dfs "$source" "$dest" "$source" ",${source}," "0" | sort -t= -k2 -n
+    _find_paths_dfs "$source" "$dest" "$dest" "$source" ",${source}," "1.000000" | sort -t= -k2 -n
 }
 
 # Internal DFS recursive helper for enumerate_paths
+# Args: current, finalDest, dest(for fee skip), path, visited, multiplier
 _find_paths_dfs() {
     local current="$1"
-    local dest="$2"
-    local path="$3"
-    local visited="$4"    # ",A0,A2," format for O(1) membership check
-    local fee="$5"
+    local finalDest="$2"
+    local dest="$3"
+    local path="$4"
+    local visited="$5"    # ",A0,A2," format for O(1) membership check
+    local multiplier="$6"
 
-    if [ "$current" = "$dest" ]; then
-        printf "%s fee=%s\n" "$path" "$fee"
+    if [ "$current" = "$finalDest" ]; then
+        printf "%s fee=%s\n" "$path" "$multiplier"
         return
     fi
 
@@ -837,8 +841,14 @@ _find_paths_dfs() {
         local to="${key##*,}"
         if [ "$from" = "$current" ] && [[ "$visited" != *",$to,"* ]]; then
             local link_fee=$(echo "${containersLinks[$key]}" | awk '{print $1}')
-            local new_fee=$(awk "BEGIN {printf \"%.3f\", $fee + $link_fee}")
-            _find_paths_dfs "$to" "$dest" "${path}->${to}" "${visited}${to}," "$new_fee"
+            if [ "$to" = "$dest" ]; then
+                # Destination doesn't charge relay fee
+                _find_paths_dfs "$to" "$finalDest" "$dest" "${path}->${to}" "${visited}${to}," "$multiplier"
+            else
+                # Relay charges fee: compound multiply by (1 + fee/100)
+                local new_multiplier=$(awk "BEGIN {printf \"%.6f\", $multiplier * (1 + $link_fee/100)}")
+                _find_paths_dfs "$to" "$finalDest" "$dest" "${path}->${to}" "${visited}${to}," "$new_multiplier"
+            fi
         fi
     done
 }

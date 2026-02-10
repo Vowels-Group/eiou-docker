@@ -252,6 +252,34 @@ else
     failure=$(( failure + 1 ))
 fi
 
+# Trace fast mode path (for comparison with best-fee later)
+fastPath=""
+fastMultiplier="1.000000"
+if [ "$balanceChangedFast" -eq 1 ]; then
+    fastHash=$(docker exec ${testSender} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->query('SELECT hash FROM p2p WHERE fast = 1 ORDER BY id DESC LIMIT 1');
+        \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+        echo \$row ? \$row['hash'] : 'UNKNOWN';
+    " 2>/dev/null || echo "UNKNOWN")
+
+    if [ "$fastHash" != "UNKNOWN" ]; then
+        fastPath=$(trace_actual_path "$fastHash" "$testSender" "$testReceiver")
+        # Compute compound fee multiplier for fast path (exclude destination)
+        IFS=' ' read -ra fastHops <<< "${fastPath//->/ }"
+        for ((i=0; i<${#fastHops[@]}-1; i++)); do
+            from="${fastHops[$i]}"
+            to="${fastHops[$((i+1))]}"
+            if [ "$to" != "$testReceiver" ]; then
+                linkFee=$(echo "${containersLinks[$from,$to]}" | awk '{print $1}')
+                fastMultiplier=$(awk "BEGIN {printf \"%.6f\", $fastMultiplier * (1 + ${linkFee:-0}/100)}")
+            fi
+        done
+        printf "\t   Fast path: %s (fee multiplier: %s)\n" "$fastPath" "$fastMultiplier"
+    fi
+fi
+
 # ==================== Test 8: P2P Tracking Columns Populated ====================
 echo -e "\n[Test 8: P2P tracking columns populated after send]"
 
@@ -374,6 +402,7 @@ if [ "$bestfeeElapsed" -gt 0 ] && [ "$fastElapsed" -gt 0 ]; then
     overhead=$((bestfeeElapsed - fastElapsed))
     printf "\t   Best-fee overhead:        +%ds\n" "$overhead"
 fi
+# Path comparison is printed after path analysis below (needs bestFeePath/bestFeeMultiplier)
 
 # ==================== Path Analysis for Best-Fee Test ====================
 echo -e "\n   --- Path Analysis ---"
@@ -386,12 +415,14 @@ for key in $(echo "${!containersLinks[@]}" | tr ' ' '\n' | sort); do
     # Only print one direction per edge (from < to alphabetically)
     if [[ "$from" < "$to" ]]; then
         linkFee=$(echo "${containersLinks[$key]}" | awk '{print $1}')
-        printf "\t     %s <-> %s : %s\n" "$from" "$to" "$linkFee"
+        linkMultiplier=$(awk "BEGIN {printf \"%.3f\", 1 + $linkFee/100}")
+        printf "\t     %s <-> %s : %s%% (%sx)\n" "$from" "$to" "$linkFee" "$linkMultiplier"
     fi
 done
 
-# Show all possible paths with fees
-echo -e "\n\t   All paths from ${testSender} to ${testReceiver} (by fee):"
+# Show all possible paths with compound fee multipliers
+# Fee = product of (1 + feePercent/100) at each relay hop; destination excluded
+echo -e "\n\t   All paths from ${testSender} to ${testReceiver} (by compound fee multiplier):"
 allPaths=$(enumerate_paths "$testSender" "$testReceiver")
 bestFee=$(echo "$allPaths" | head -1 | grep -oP 'fee=\K[0-9.]+')
 
@@ -409,16 +440,18 @@ while IFS= read -r pathLine; do
     pathRoute=$(echo "$pathLine" | sed 's/ fee=.*//')
     if [ "$pathFee" = "$bestFee" ]; then
         if [ "$bestCount" -gt 1 ]; then
-            printf "\t   ${GREEN}* %-40s fee=%s [TIED BEST]${NC}\n" "$pathRoute" "$pathFee"
+            printf "\t   ${GREEN}* %-40s %sx [TIED BEST]${NC}\n" "$pathRoute" "$pathFee"
         else
-            printf "\t   ${GREEN}* %-40s fee=%s [BEST]${NC}\n" "$pathRoute" "$pathFee"
+            printf "\t   ${GREEN}* %-40s %sx [BEST]${NC}\n" "$pathRoute" "$pathFee"
         fi
     else
-        printf "\t     %-40s fee=%s\n" "$pathRoute" "$pathFee"
+        printf "\t     %-40s %sx\n" "$pathRoute" "$pathFee"
     fi
 done <<< "$allPaths"
 
 # Trace actual path taken (only if test passed)
+bestFeePath=""
+bestFeeMultiplier="1.000000"
 if [ "$balanceChangedBest" -eq 1 ]; then
     # Get the P2P hash from the originator (most recent best-fee P2P)
     bestFeeHash=$(docker exec ${testSender} php -r "
@@ -430,27 +463,43 @@ if [ "$balanceChangedBest" -eq 1 ]; then
     " 2>/dev/null || echo "UNKNOWN")
 
     if [ "$bestFeeHash" != "UNKNOWN" ]; then
-        actualPath=$(trace_actual_path "$bestFeeHash" "$testSender" "$testReceiver")
-        # Calculate actual path fee from containersLinks
-        actualFee="0"
-        IFS='->' read -ra hops <<< "${actualPath//->/ }"
-        # Filter empty elements from split
-        actualHops=()
-        for h in "${hops[@]}"; do
-            [ -n "$h" ] && actualHops+=("$h")
-        done
+        bestFeePath=$(trace_actual_path "$bestFeeHash" "$testSender" "$testReceiver")
+        # Compute compound fee multiplier for actual path (exclude destination)
+        IFS=' ' read -ra actualHops <<< "${bestFeePath//->/ }"
         for ((i=0; i<${#actualHops[@]}-1; i++)); do
             from="${actualHops[$i]}"
             to="${actualHops[$((i+1))]}"
-            linkFee=$(echo "${containersLinks[$from,$to]}" | awk '{print $1}')
-            actualFee=$(awk "BEGIN {printf \"%.3f\", $actualFee + ${linkFee:-0}}")
+            if [ "$to" != "$testReceiver" ]; then
+                linkFee=$(echo "${containersLinks[$from,$to]}" | awk '{print $1}')
+                bestFeeMultiplier=$(awk "BEGIN {printf \"%.6f\", $bestFeeMultiplier * (1 + ${linkFee:-0}/100)}")
+            fi
         done
-        printf "\n\t   Actual path: ${GREEN}%s${NC} fee=%s\n" "$actualPath" "$actualFee"
-        if [ "$actualFee" = "$bestFee" ]; then
+        printf "\n\t   Best-fee path: ${GREEN}%s${NC} (%sx)\n" "$bestFeePath" "$bestFeeMultiplier"
+        # Compare with enumerated best (float comparison via awk)
+        isOptimal=$(awk "BEGIN {printf \"%d\", ($bestFeeMultiplier <= $bestFee * 1.000001) ? 1 : 0}")
+        if [ "$isOptimal" -eq 1 ]; then
             printf "\t   ${GREEN}Route matches optimal best-fee path${NC}\n"
         else
-            printf "\t   ${YELLOW}Route does NOT match optimal (best=%s, actual=%s)${NC}\n" "$bestFee" "$actualFee"
+            printf "\t   ${YELLOW}Route does NOT match optimal (best=%sx, actual=%sx)${NC}\n" "$bestFee" "$bestFeeMultiplier"
         fi
+    fi
+fi
+
+# Path comparison: fast vs best-fee
+if [ -n "$fastPath" ] && [ -n "$bestFeePath" ]; then
+    echo -e "\n   --- Path Comparison ---"
+    printf "\t   Fast path:     %-30s %sx\n" "$fastPath" "$fastMultiplier"
+    printf "\t   Best-fee path: %-30s %sx\n" "$bestFeePath" "$bestFeeMultiplier"
+    # Compare: did best-fee find a cheaper route?
+    betterRoute=$(awk "BEGIN {printf \"%d\", ($bestFeeMultiplier < $fastMultiplier - 0.000001) ? 1 : 0}")
+    sameRoute=$(awk "BEGIN {printf \"%d\", ($bestFeeMultiplier >= $fastMultiplier - 0.000001 && $bestFeeMultiplier <= $fastMultiplier + 0.000001) ? 1 : 0}")
+    if [ "$betterRoute" -eq 1 ]; then
+        savings=$(awk "BEGIN {printf \"%.4f\", $fastMultiplier - $bestFeeMultiplier}")
+        printf "\t   ${GREEN}Best-fee found a cheaper route (saved %sx multiplier)${NC}\n" "$savings"
+    elif [ "$sameRoute" -eq 1 ]; then
+        printf "\t   Both modes found the same route cost\n"
+    else
+        printf "\t   ${YELLOW}Fast mode found a cheaper route than best-fee${NC}\n"
     fi
 fi
 

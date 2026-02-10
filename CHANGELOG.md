@@ -25,6 +25,8 @@ The project is currently in **ALPHA** status.
 - Collision topology test fees randomized (0.1-0.9) per run so best-fee routing is verified against varying fee structures
 - Best-fee path analysis labels tied optimal routes as `[TIED BEST]` and prints the randomized fee structure
 - Best-fee routing test shows timing comparison between fast mode and best-fee mode
+- Best-fee path analysis uses compound fee multiplier `(1 + fee/100)` product instead of additive sum; destination hop excluded from fee calculation
+- Best-fee routing test traces actual path for both fast and best-fee modes with a side-by-side path comparison
 - Best-fee routing GUI checkbox now displays a prominent warning-styled "Experimental" label instead of a subtle info note
 - Best-fee routing CLI `--best` flag help text emphasises experimental status with `[EXPERIMENTAL]` prefix
 - GUI notifications use session flash messages instead of URL parameters; messages no longer re-appear on page refresh
