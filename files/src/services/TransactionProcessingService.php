@@ -373,6 +373,13 @@ class TransactionProcessingService implements TransactionProcessingServiceInterf
             $this->transactionRepository->updateStatus($memo, Constants::STATUS_COMPLETED);
             $this->balanceRepository->updateBalance($message['sender_public_key'], 'received', $message['amount'], $message['currency']);
             $this->p2pRepository->updateIncomingTxid($message['memo'], $message['txid']);
+
+            // Update sender_address if the actual transaction sender differs from stored P2P sender
+            // This happens in multi-path routing when the chosen route uses a different upstream node
+            $p2p = $this->p2pRepository->getByHash($memo);
+            if ($p2p && $p2p['sender_address'] !== $message['sender_address']) {
+                $this->p2pRepository->updateSenderAddress($memo, $message['sender_address']);
+            }
             output(outputTransactionAmountReceived($message), 'SILENT');
 
             $this->ensureDescriptionFromP2p($message, $memo);
