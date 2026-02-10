@@ -429,8 +429,24 @@ class P2pService implements P2pServiceInterface {
                 if ($hopWait > 0 && !($request['fast'] ?? true)) {
                     $remainingHops = max(1, (int)($request['maxRequestLevel'] ?? 1) - (int)($request['requestLevel'] ?? 0));
                     $scaledWait = $hopWait * $remainingHops;
-                    $request['expiration'] = $this->timeUtility->getCurrentMicrotime()
-                        + $this->timeUtility->convertMicrotimeToInt((float) $scaledWait);
+                    $now = $this->timeUtility->getCurrentMicrotime();
+                    $scaledExpiration = $now + $this->timeUtility->convertMicrotimeToInt((float) $scaledWait);
+
+                    // Cap relay expiration to upstream's expiration minus hopWait buffer.
+                    // This ensures each relay expires before its upstream node, preserving
+                    // the cascade ordering required for best-fee selection to propagate
+                    // from leaves back to the originator.
+                    $upstreamExpiration = (int) ($request['expiration'] ?? 0);
+                    if ($upstreamExpiration > 0 && $scaledExpiration >= $upstreamExpiration) {
+                        $hopWaitMicrotime = $this->timeUtility->convertMicrotimeToInt((float) $hopWait);
+                        $cappedExpiration = $upstreamExpiration - $hopWaitMicrotime;
+                        $minExpiration = $now + $this->timeUtility->convertMicrotimeToInt(
+                            (float) Constants::P2P_HOP_PROCESSING_BUFFER_SECONDS
+                        );
+                        $request['expiration'] = max($minExpiration, $cappedExpiration);
+                    } else {
+                        $request['expiration'] = $scaledExpiration;
+                    }
                 }
 
                 $this->p2pRepository->insertP2pRequest($request, NULL);

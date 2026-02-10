@@ -569,7 +569,7 @@ class CliService implements CliServiceInterface {
                     'address/name' => ['type' => 'required', 'description' => 'Recipient address or name'],
                     'amount' => ['type' => 'required', 'description' => 'Amount to send'],
                     'currency' => ['type' => 'required', 'description' => 'Currency code'],
-                    '--best' => ['type' => 'optional', 'description' => 'Find the best fee route (experimental, slower than default)']
+                    '--best' => ['type' => 'optional', 'description' => '[EXPERIMENTAL] Find the best fee route. This feature is experimental and may be slower or less reliable than the default first-available routing']
                 ]
             ],
             'viewbalances' => [

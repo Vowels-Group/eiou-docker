@@ -290,6 +290,8 @@ class CleanupService implements CleanupServiceInterface {
             if ($candidateCount > 0) {
                 // Select and forward best route before expiring
                 $this->rp2pService->selectAndForwardBestRp2p($hash);
+                // Mark as 'found' to prevent re-processing by subsequent cleanup cycles
+                $this->p2pRepository->updateStatus($hash, 'found');
                 if (function_exists('output')) {
                     output("P2P {$hash} best-fee selection triggered on expiration ({$candidateCount} candidates)", 'SILENT');
                 }

@@ -440,4 +440,5 @@ else
     failure=$(( failure + 1 ))
 fi
 
+echo ""
 succesrate "${totaltests}" "${passed}" "${failure}" "'best-fee routing'"

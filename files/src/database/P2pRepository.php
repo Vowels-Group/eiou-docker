@@ -358,7 +358,7 @@ class P2pRepository extends AbstractRepository {
     public function getExpiredP2p(int $currentMicrotime, int $limit = 0): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE expiration < :currentTime
-                    AND status NOT IN ('completed', 'expired', 'cancelled')
+                    AND status NOT IN ('completed', 'expired', 'cancelled', 'found')
                   ORDER BY created_at ASC";
 
         if ($limit > 0) {
