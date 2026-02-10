@@ -530,16 +530,41 @@ if [ -n "$fastPath" ] && [ -n "$bestFeePath" ]; then
     echo -e "\n   --- Path Comparison ---"
     printf "\t   Fast path:     %-30s %sx\n" "$fastPath" "$fastMultiplier"
     printf "\t   Best-fee path: %-30s %sx\n" "$bestFeePath" "$bestFeeMultiplier"
-    # Compare: did best-fee find a cheaper route?
+    printf "\t   Optimal fee:   %-30s %sx\n" "" "$bestFee"
+
+    # Check optimality of each route against enumerated best
+    fastIsOptimal=$(awk "BEGIN {printf \"%d\", ($fastMultiplier <= $bestFee * 1.000001) ? 1 : 0}")
+    bestFeeIsOptimal=$(awk "BEGIN {printf \"%d\", ($bestFeeMultiplier <= $bestFee * 1.000001) ? 1 : 0}")
+
+    # Compare: did best-fee find a cheaper route than fast?
     betterRoute=$(awk "BEGIN {printf \"%d\", ($bestFeeMultiplier < $fastMultiplier - 0.000001) ? 1 : 0}")
     sameRoute=$(awk "BEGIN {printf \"%d\", ($bestFeeMultiplier >= $fastMultiplier - 0.000001 && $bestFeeMultiplier <= $fastMultiplier + 0.000001) ? 1 : 0}")
+
     if [ "$betterRoute" -eq 1 ]; then
         savings=$(awk "BEGIN {printf \"%.4f\", $fastMultiplier - $bestFeeMultiplier}")
-        printf "\t   ${GREEN}Best-fee found a cheaper route (saved %sx multiplier)${NC}\n" "$savings"
+        if [ "$bestFeeIsOptimal" -eq 1 ]; then
+            printf "\t   ${GREEN}Best-fee found the optimal route (saved %sx vs fast)${NC}\n" "$savings"
+            printf "\t   RESULT: OPTIMAL\n"
+        else
+            printf "\t   ${GREEN}Best-fee found a cheaper route (saved %sx), but not optimal (best=%sx)${NC}\n" "$savings" "$bestFee"
+            printf "\t   RESULT: BETTER (not optimal)\n"
+        fi
     elif [ "$sameRoute" -eq 1 ]; then
-        printf "\t   Both modes found the same route cost\n"
+        if [ "$bestFeeIsOptimal" -eq 1 ]; then
+            printf "\t   ${GREEN}Both modes found the same route — and it is the optimal path${NC}\n"
+            printf "\t   RESULT: SAME (optimal)\n"
+        else
+            printf "\t   ${YELLOW}Both modes found the same route — but it is sub-optimal (best=%sx)${NC}\n" "$bestFee"
+            printf "\t   RESULT: SAME (sub-optimal)\n"
+        fi
     else
-        printf "\t   ${YELLOW}Fast mode found a cheaper route than best-fee${NC}\n"
+        extra=$(awk "BEGIN {printf \"%.4f\", $bestFeeMultiplier - $fastMultiplier}")
+        if [ "$fastIsOptimal" -eq 1 ]; then
+            printf "\t   ${YELLOW}Fast mode found the optimal route; best-fee did not (+%sx)${NC}\n" "$extra"
+        else
+            printf "\t   ${YELLOW}Fast mode found a cheaper route than best-fee (+%sx), neither is optimal (best=%sx)${NC}\n" "$extra" "$bestFee"
+        fi
+        printf "\t   RESULT: WORSE (fast won)\n"
     fi
 fi
 

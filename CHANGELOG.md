@@ -29,7 +29,7 @@ The project is currently in **ALPHA** status.
 - Best-fee path analysis labels tied optimal routes as `[TIED BEST]` and prints the randomized fee structure
 - Best-fee routing test shows timing comparison between fast mode and best-fee mode
 - Best-fee path analysis uses compound fee multiplier `(1 + fee/100)` product instead of additive sum; destination hop excluded from fee calculation
-- Best-fee routing test traces actual path for both fast and best-fee modes with a side-by-side path comparison
+- Best-fee routing test traces actual path for both fast and best-fee modes with a side-by-side path comparison; comparison now shows optimality status for each result category (OPTIMAL, BETTER, SAME optimal/sub-optimal, WORSE) and prints a `RESULT:` summary line for easy multi-run grep
 - Best-fee routing test timeouts are transport-mode aware: HTTP uses 120s P2P expiration (was 60s), Tor uses 180s (was 120s), sized to guarantee 30s+ gap between closest relay and originator even with maxLevel jitter
 - Best-fee routing test timeout includes grace period + headroom (180s for HTTP, 240s for Tor) to prevent false failures at the boundary
 - `run-all-tests.sh` supports `SKIP_CLEANUP=1` environment variable to keep containers alive after test completion
