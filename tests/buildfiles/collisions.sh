@@ -25,39 +25,55 @@ declare -a containers=(
     "A8"
 )
 
-# Setup of simple fees and credit, easy edit for every person
-readonly defaultFee=0.1
+# Randomized fees (0.1-0.9) per edge, same both directions
+# This ensures best-fee routing is tested against varying fee structures
 readonly defaultCredit=1000
+
+# Generate a random fee: 0.1 to 0.9 (single decimal digit)
+random_fee() { echo "0.$(( RANDOM % 9 + 1 ))"; }
+
+fee_A0_A1=$(random_fee)
+fee_A0_A2=$(random_fee)
+fee_A1_A3=$(random_fee)
+fee_A1_A4=$(random_fee)
+fee_A2_A4=$(random_fee)
+fee_A2_A5=$(random_fee)
+fee_A3_A6=$(random_fee)
+fee_A4_A6=$(random_fee)
+fee_A4_A7=$(random_fee)
+fee_A5_A7=$(random_fee)
+fee_A6_A8=$(random_fee)
+fee_A7_A8=$(random_fee)
 
 # Define contacts, direction ->
 # example: [A0,A1] defines A0 as a contact of A1
-#          must be accepted in reverse that is to say: 
+#          must be accepted in reverse that is to say:
 #          [A0,A1] needs to be followed by [A1,A0]
 declare -A containersLinks=(
-    [A0,A1]="$defaultFee $defaultCredit USD"
-    [A1,A0]="$defaultFee $defaultCredit USD"
-    [A1,A3]="0.5 $defaultCredit USD"
-    [A3,A1]="0.5 $defaultCredit USD"
-    [A1,A4]="0.3 $defaultCredit USD"
-    [A4,A1]="0.3 $defaultCredit USD"
-    [A0,A2]="$defaultFee $defaultCredit USD"
-    [A2,A0]="$defaultFee $defaultCredit USD"
-    [A2,A5]="0.4 $defaultCredit USD"
-    [A5,A2]="0.4 $defaultCredit USD" 
-    [A2,A4]="0.2 $defaultCredit USD"
-    [A4,A2]="0.2 $defaultCredit USD"   
-    [A6,A3]="0.6 $defaultCredit USD"
-    [A3,A6]="0.6 $defaultCredit USD"
-    [A6,A4]="$defaultFee $defaultCredit USD"
-    [A4,A6]="$defaultFee $defaultCredit USD"
-    [A6,A8]="0.8 $defaultCredit USD"
-    [A8,A6]="0.8 $defaultCredit USD"
-    [A7,A4]="0.3 $defaultCredit USD"
-    [A4,A7]="0.3 $defaultCredit USD"
-    [A7,A5]="0.5 $defaultCredit USD"
-    [A5,A7]="0.5 $defaultCredit USD"
-    [A7,A8]="$defaultFee $defaultCredit USD"
-    [A8,A7]="$defaultFee $defaultCredit USD"
+    [A0,A1]="$fee_A0_A1 $defaultCredit USD"
+    [A1,A0]="$fee_A0_A1 $defaultCredit USD"
+    [A1,A3]="$fee_A1_A3 $defaultCredit USD"
+    [A3,A1]="$fee_A1_A3 $defaultCredit USD"
+    [A1,A4]="$fee_A1_A4 $defaultCredit USD"
+    [A4,A1]="$fee_A1_A4 $defaultCredit USD"
+    [A0,A2]="$fee_A0_A2 $defaultCredit USD"
+    [A2,A0]="$fee_A0_A2 $defaultCredit USD"
+    [A2,A5]="$fee_A2_A5 $defaultCredit USD"
+    [A5,A2]="$fee_A2_A5 $defaultCredit USD"
+    [A2,A4]="$fee_A2_A4 $defaultCredit USD"
+    [A4,A2]="$fee_A2_A4 $defaultCredit USD"
+    [A6,A3]="$fee_A3_A6 $defaultCredit USD"
+    [A3,A6]="$fee_A3_A6 $defaultCredit USD"
+    [A6,A4]="$fee_A4_A6 $defaultCredit USD"
+    [A4,A6]="$fee_A4_A6 $defaultCredit USD"
+    [A6,A8]="$fee_A6_A8 $defaultCredit USD"
+    [A8,A6]="$fee_A6_A8 $defaultCredit USD"
+    [A7,A4]="$fee_A4_A7 $defaultCredit USD"
+    [A4,A7]="$fee_A4_A7 $defaultCredit USD"
+    [A7,A5]="$fee_A5_A7 $defaultCredit USD"
+    [A5,A7]="$fee_A5_A7 $defaultCredit USD"
+    [A7,A8]="$fee_A7_A8 $defaultCredit USD"
+    [A8,A7]="$fee_A7_A8 $defaultCredit USD"
 )
 
 declare -A expectedContacts=(
@@ -73,25 +89,19 @@ declare -A expectedContacts=(
 
 )
 
-# For 9-node cluster (collision) topology:
+# 9-node cluster (collision) topology with randomized fees:
 ##
-##            A3
-##          /0.5 \0.6
-##       A1        A6
-##     /0.1 \0.3 /0.1 \0.8
-##  A0        A4        A8
-##     \0.1 /0.2 \0.3 /0.1
-##       A2        A7
-##          \0.4 /0.5
-##            A5
+##              A3
+##            /    \
+##         A1        A6
+##       /    \    /    \
+##    A0        A4        A8
+##       \    /    \    /
+##         A2        A7
+##            \    /
+##              A5
 ##
-
-#Best Fee Route from A0 to A8 should be A0->A2->A4->A7->A8
-
-# Test A0->A3 (should route through A1)
-# Test A0->A8 (should route through A3, A4 and A7)
-# Test A8->A2 (should route through A7 and A2)
-# Test A2->A3 (should route through A5, A7, A8 and A6)
+## Fees are randomized (0.1-0.9) per run; best-fee route varies each time.
 declare -A routingTests=(
     [A0,A3]="A1"
     [A0,A8]="A1,A4,A7"

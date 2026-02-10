@@ -365,16 +365,41 @@ fi
 # ==================== Path Analysis for Best-Fee Test ====================
 echo -e "\n   --- Path Analysis ---"
 
+# Print the randomized fee structure for this run
+echo -e "\t   Fee structure (randomized per run):"
+for key in $(echo "${!containersLinks[@]}" | tr ' ' '\n' | sort); do
+    from="${key%%,*}"
+    to="${key##*,}"
+    # Only print one direction per edge (from < to alphabetically)
+    if [[ "$from" < "$to" ]]; then
+        linkFee=$(echo "${containersLinks[$key]}" | awk '{print $1}')
+        printf "\t     %s <-> %s : %s\n" "$from" "$to" "$linkFee"
+    fi
+done
+
 # Show all possible paths with fees
-echo -e "\t   All paths from ${testSender} to ${testReceiver} (by fee):"
+echo -e "\n\t   All paths from ${testSender} to ${testReceiver} (by fee):"
 allPaths=$(enumerate_paths "$testSender" "$testReceiver")
 bestFee=$(echo "$allPaths" | head -1 | grep -oP 'fee=\K[0-9.]+')
+
+# Count how many paths share the best fee
+bestCount=0
+while IFS= read -r pathLine; do
+    pathFee=$(echo "$pathLine" | grep -oP 'fee=\K[0-9.]+')
+    if [ "$pathFee" = "$bestFee" ]; then
+        bestCount=$((bestCount + 1))
+    fi
+done <<< "$allPaths"
 
 while IFS= read -r pathLine; do
     pathFee=$(echo "$pathLine" | grep -oP 'fee=\K[0-9.]+')
     pathRoute=$(echo "$pathLine" | sed 's/ fee=.*//')
     if [ "$pathFee" = "$bestFee" ]; then
-        printf "\t   ${GREEN}* %-40s fee=%s [BEST]${NC}\n" "$pathRoute" "$pathFee"
+        if [ "$bestCount" -gt 1 ]; then
+            printf "\t   ${GREEN}* %-40s fee=%s [TIED BEST]${NC}\n" "$pathRoute" "$pathFee"
+        else
+            printf "\t   ${GREEN}* %-40s fee=%s [BEST]${NC}\n" "$pathRoute" "$pathFee"
+        fi
     else
         printf "\t     %-40s fee=%s\n" "$pathRoute" "$pathFee"
     fi
