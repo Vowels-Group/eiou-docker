@@ -118,13 +118,10 @@ for ((run=1; run<=RUNS; run++)); do
     optimal_paths_list+=("$optimal_paths")
     results+=("$category")
 
-    printf "  Fast: %3ss (%sx) | Best-fee: %3ss (%sx) | Optimal: %sx | %s\n" \
-        "${fast_time:-?}" "${fast_fee:-?}" "${bestfee_time:-?}" "${bestfee_fee:-?}" "${optimal_fee:-?}" "$category"
-    printf "  Paths — Fast: %s | Best-fee: %s | Optimal: %s\n" \
-        "${fast_path:-?}" "${bestfee_path:-?}" "${optimal_paths:-?}"
-
-    # Print path details
-    echo "$output" | grep -A2 -- '--- Path Comparison ---' | tail -3
+    printf "  %s\n" "$category"
+    printf "    Fast:     %3ss  %-12s  %s\n" "${fast_time:-?}" "${fast_fee:+${fast_fee}x}" "${fast_path:-?}"
+    printf "    Best-fee: %3ss  %-12s  %s\n" "${bestfee_time:-?}" "${bestfee_fee:+${bestfee_fee}x}" "${bestfee_path:-?}"
+    printf "    Optimal:       %-12s  ${DIM}%s${NC}\n" "${optimal_fee:+${optimal_fee}x}" "${optimal_paths:-?}"
 done
 
 # Summary
