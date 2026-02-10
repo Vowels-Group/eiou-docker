@@ -1081,11 +1081,6 @@ This trait centralizes common query patterns to reduce code duplication across r
 
 ## P2P Networking
 
-> **Diagrams:** See [`docs/diagrams/`](diagrams/) for Mermaid diagrams:
-> - [`best-fee-sequence.mmd`](diagrams/best-fee-sequence.mmd) — Full 4-phase best-fee flow
-> - [`best-fee-cascade-timing.mmd`](diagrams/best-fee-cascade-timing.mmd) — Relay expiration timeline
-> - [`best-fee-status-flow.mmd`](diagrams/best-fee-status-flow.mmd) — P2P status transitions
-
 ### P2P Routing Overview
 
 P2P routing enables transactions to reach recipients through intermediate nodes when

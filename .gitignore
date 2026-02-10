@@ -3,11 +3,9 @@ yarn.lock
 .swarm/*
 .hive-mind/*
 .claude-flow/*
-# Ignore generated docs but track API documentation and diagrams
+# Ignore generated docs but track API documentation
 docs/*
 !docs/*.md
-!docs/diagrams/
-!docs/diagrams/*.mmd
 memory/*
 
 # Test credentials (credentials.example.sh should be committed as template)
