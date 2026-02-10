@@ -555,7 +555,7 @@ eiou send <address|name> <amount> <currency> [--best]
 
 | Flag | Description |
 |------|-------------|
-| `--best` | Use best-fee routing (experimental). Collects all P2P route responses and selects the one with the lowest accumulated fee. Higher latency than default fast mode. |
+| `--best` | **[EXPERIMENTAL]** Use best-fee routing. Collects all P2P route responses and selects the one with the lowest accumulated fee. This feature is experimental and may be slower or less reliable than the default fast mode. |
 
 **Examples:**
 ```bash

@@ -22,6 +22,8 @@ The project is currently in **ALPHA** status.
 - `contacts_sent_count`, `contacts_responded_count`, `hop_wait`, and `fast` columns on `p2p` table for routing mode tracking
 
 ### Changed
+- Best-fee routing GUI checkbox now displays a prominent warning-styled "Experimental" label instead of a subtle info note
+- Best-fee routing CLI `--best` flag help text emphasises experimental status with `[EXPERIMENTAL]` prefix
 - GUI notifications use session flash messages instead of URL parameters; messages no longer re-appear on page refresh
 - GUI shows toast notification when receiving transactions ("Payment Received" with amount and sender name)
 - GUI recent transactions list shows description instead of counterparty address; click to view full details with address in modal (#589)
@@ -52,6 +54,8 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
+- Best-fee relay expiration exceeding originator timeout: relay nodes computed `hopWait * remainingHops` which could far exceed the originator's P2P expiration (e.g. 75-285s vs 60s). Relay expiration is now capped to `upstreamExpiration - hopWait` with a minimum viability floor of `P2P_HOP_PROCESSING_BUFFER_SECONDS` (2s)
+- Best-fee P2P re-expiration after selection: after `selectAndForwardBestRp2p()` ran during cleanup, the next cleanup cycle could re-process the same P2P because `getExpiredP2p()` didn't exclude `'found'` status. Now sets status to `'found'` after selection and excludes `'found'` from expired P2P queries
 - Best-fee mode `contacts_sent_count` not set on direct-match path: relay nodes with the end-recipient as a direct contact used the `matchContact` shortcut without tracking sent count, blocking the "all contacts responded" trigger and forcing per-hop expiration fallback
 - Best-fee mode `contacts_sent_count` not counting `already_relayed` responses: contacts that already had the P2P via another path record the sender in `p2p_senders` and forward RP2P back via multi-path, but were not counted as expected respondents
 - P2P `sender_address` not updated when relay receives transaction from a different upstream node than the original P2P sender (multi-path routing)

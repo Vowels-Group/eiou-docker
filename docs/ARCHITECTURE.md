@@ -1081,6 +1081,11 @@ This trait centralizes common query patterns to reduce code duplication across r
 
 ## P2P Networking
 
+> **Diagrams:** See [`docs/diagrams/`](diagrams/) for Mermaid diagrams:
+> - [`best-fee-sequence.mmd`](diagrams/best-fee-sequence.mmd) — Full 4-phase best-fee flow
+> - [`best-fee-cascade-timing.mmd`](diagrams/best-fee-cascade-timing.mmd) — Relay expiration timeline
+> - [`best-fee-status-flow.mmd`](diagrams/best-fee-status-flow.mmd) — P2P status transitions
+
 ### P2P Routing Overview
 
 P2P routing enables transactions to reach recipients through intermediate nodes when
@@ -1239,19 +1244,43 @@ $hopWait = max($hopWait, P2P_MIN_HOP_WAIT_SECONDS);  // Minimum 3 seconds
 ```php
 $remainingHops = max(1, $maxRequestLevel - $requestLevel);
 $scaledWait = $hopWait * $remainingHops;
-$localExpiration = now() + $scaledWait;
+$scaledExpiration = now() + $scaledWait;
 ```
 
-**Example cascade** (120s full expiration, max 10 hops, `hopWait = 10s`):
+**Upstream expiration cap:**
+
+The scaled calculation can produce expirations that exceed the originator's timeout
+(e.g., `15s * 19 hops = 285s` vs a 60s originator expiration). When this happens,
+the originator expires first, finds zero candidates (relays are still alive), and
+kills the P2P — defeating best-fee routing entirely.
+
+To prevent this, each relay caps its expiration to the upstream node's expiration
+minus one `hopWait` buffer. This preserves the leaf-to-root cascade ordering while
+guaranteeing no relay outlives its upstream:
+
+```php
+$upstreamExpiration = $request['expiration'];  // Incoming from upstream node
+if ($upstreamExpiration > 0 && $scaledExpiration >= $upstreamExpiration) {
+    $cappedExpiration = $upstreamExpiration - convertToMicrotime($hopWait);
+    $minExpiration = now() + convertToMicrotime(P2P_HOP_PROCESSING_BUFFER_SECONDS);
+    $localExpiration = max($minExpiration, $cappedExpiration);
+} else {
+    $localExpiration = $scaledExpiration;
+}
+```
+
+**Example cascade** (60s originator expiration, `hopWait = 15s`, 4 relay levels):
 
 ```
-Level 200 (Originator):  expiration = now() + (10s * 8)  = now() + 80s
-Level 201 (Relay 1):     expiration = now() + (10s * 7)  = now() + 70s
-Level 202 (Relay 2):     expiration = now() + (10s * 6)  = now() + 60s
-Level 203 (Recipient):   expiration = now() + (10s * 5)  = now() + 50s
+A0 (Originator):  expiration = T+60   (set by user's p2pExpiration)
+A1 (Relay 1):     min(T+75, T+60-15) = T+45   ← capped by upstream
+A3 (Relay 2):     min(T+60, T+45-15) = T+30   ← capped by upstream
+A6 (Relay 3):     min(T+45, T+30-15) = T+15   ← capped by upstream
 ```
 
-Leaves expire first, forcing best-fee selection at each level to cascade upstream.
+Leaves expire first → select best candidate → RP2P propagates upstream → each
+level selects its best → originator selects at T+60. The cascade completes within
+the originator's window regardless of hop count or `maxRequestLevel`.
 
 ### Orphaned Candidate Recovery
 
@@ -1262,9 +1291,16 @@ best-fee selection on the available candidates rather than expiring the P2P:
 // In CleanupService::expireMessage()
 if (!$message['fast'] && $candidateCount > 0) {
     $this->rp2pService->selectAndForwardBestRp2p($hash);
+    $this->p2pRepository->updateStatus($hash, 'found');  // Prevent re-processing
     return;  // Don't expire — forward best available route
 }
 ```
+
+After selection, the P2P status is set to `'found'`. This is critical because
+`getExpiredP2p()` runs on every cleanup cycle — without this status update, the
+same P2P would be re-processed on the next cycle, potentially interfering with
+the in-progress best-fee delivery. The `getExpiredP2p()` query excludes
+`'found'` alongside `'completed'`, `'expired'`, and `'cancelled'`.
 
 This ensures that even partial responses produce a usable route.
 

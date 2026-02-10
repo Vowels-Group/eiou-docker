@@ -1,0 +1,62 @@
+%% Best-Fee Mode Full Sequence Diagram
+%% Shows the 4-phase flow: broadcast, candidate collection,
+%% selection (via expiration cascade), and delivery.
+
+sequenceDiagram
+    participant User
+    participant A0 as A0 (Originator)
+    participant A1 as A1 (Relay 1)
+    participant A3 as A3 (Relay 2)
+    participant A6 as A6 (Relay 3 - Leaf)
+    participant A8 as A8 (Recipient)
+    participant Cleanup as CleanupService
+
+    Note over User,A8: Phase 1 — Request Broadcasting (fast=0, hopWait=15s)
+
+    User->>A0: eiou send A8 5 USD --best
+    A0->>A0: Set expiration=T+60, hopWait=15
+    A0->>A1: P2P(hash, fast=0, hopWait=15, exp=T+60)
+    A1->>A1: Cap exp: min(scaled, T+60-15) = T+45
+    A1->>A3: P2P(hash, fast=0, hopWait=15, exp=T+45)
+    A3->>A3: Cap exp: min(scaled, T+45-15) = T+30
+    A3->>A6: P2P(hash, fast=0, hopWait=15, exp=T+30)
+    A6->>A6: Cap exp: min(scaled, T+30-15) = T+15
+    A6->>A8: P2P(hash, fast=0, hopWait=15, exp=T+15)
+
+    Note over User,A8: Phase 2 — Candidate Collection
+
+    A8->>A6: RP2P(hash, amount=5.03, fee=0.03)
+    A6->>A6: Store in rp2p_candidates
+    Note right of A6: Other paths may also<br/>deliver RP2P candidates
+
+    Note over User,A8: Phase 3 — Cascading Selection (leaf-to-root)
+
+    Cleanup->>A6: processCleanupMessages() [T+15]
+    A6->>A6: Expired! selectAndForwardBestRp2p()
+    A6->>A6: Status → 'found' (prevents re-processing)
+    A6->>A3: RP2P(hash, best candidate)
+    A3->>A3: Store in rp2p_candidates
+
+    Cleanup->>A3: processCleanupMessages() [T+30]
+    A3->>A3: Expired! selectAndForwardBestRp2p()
+    A3->>A3: Status → 'found'
+    A3->>A1: RP2P(hash, best candidate)
+    A1->>A1: Store in rp2p_candidates
+
+    Cleanup->>A1: processCleanupMessages() [T+45]
+    A1->>A1: Expired! selectAndForwardBestRp2p()
+    A1->>A1: Status → 'found'
+    A1->>A0: RP2P(hash, best candidate)
+    A0->>A0: Store in rp2p_candidates
+
+    Cleanup->>A0: processCleanupMessages() [T+60]
+    A0->>A0: Expired! selectAndForwardBestRp2p()
+    A0->>A0: Status → 'found'
+
+    Note over User,A8: Phase 4 — Transaction Delivery (along best route)
+
+    A0->>A1: Transaction (5 USD + fees)
+    A1->>A3: Transaction (forwarded)
+    A3->>A6: Transaction (forwarded)
+    A6->>A8: Transaction (delivered)
+    A8->>A8: Balance updated
