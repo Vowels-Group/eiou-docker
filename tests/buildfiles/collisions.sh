@@ -23,7 +23,6 @@ declare -a containers=(
     "A6"
     "A7"
     "A8"
-    "A9"
 )
 
 # Setup of simple fees and credit, easy edit for every person
