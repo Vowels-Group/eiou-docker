@@ -12,11 +12,13 @@
 
 RUNS="${1:-10}"
 MODE="${2:-http}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+DIM='\033[2m'
 NC='\033[0m'
 
 echo ""
@@ -33,6 +35,9 @@ declare -a bestfee_times
 declare -a fast_fees
 declare -a bestfee_fees
 declare -a optimal_fees
+declare -a fast_paths
+declare -a bestfee_paths
+declare -a optimal_paths_list
 optimal=0
 better=0
 same_optimal=0
@@ -47,7 +52,6 @@ for ((run=1; run<=RUNS; run++)); do
     echo "============================================"
 
     # Run the full test (build + contacts + bestfee)
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     output=$(cd "$SCRIPT_DIR" && SKIP_CLEANUP=1 ./run-all-tests.sh collisions "$MODE" bestfee 2>&1)
 
     # Extract timing
@@ -58,6 +62,27 @@ for ((run=1; run<=RUNS; run++)); do
     fast_fee=$(echo "$output" | grep 'Fast path:' | tail -1 | grep -oP '[0-9]+\.[0-9]+x' | head -1 | tr -d 'x')
     bestfee_fee=$(echo "$output" | grep 'Best-fee path:' | tail -1 | grep -oP '[0-9]+\.[0-9]+x' | head -1 | tr -d 'x')
     optimal_fee=$(echo "$output" | grep 'Optimal fee:' | tail -1 | grep -oP '[0-9]+\.[0-9]+x' | head -1 | tr -d 'x')
+
+    # Extract actual paths from Path Comparison section
+    fast_path=$(echo "$output" | grep 'Fast path:' | tail -1 | grep -oP 'Fast path:\s+\K\S+')
+    bestfee_path=$(echo "$output" | grep 'Best-fee path:' | tail -1 | grep -oP 'Best-fee path:\s+\K\S+')
+
+    # Extract optimal path(s) — lines with [BEST] or [TIED BEST]
+    # Format: "* A1->A3->A5   1.0100x [BEST]" or "[TIED BEST]"
+    optimal_paths=""
+    while IFS= read -r line; do
+        # Strip ANSI color codes and leading whitespace
+        clean=$(echo "$line" | sed 's/\x1b\[[0-9;]*m//g' | sed 's/^[[:space:]]*//')
+        # Extract the path (first token after *)
+        path=$(echo "$clean" | grep -oP '^\*\s+\K\S+')
+        if [ -n "$path" ]; then
+            if [ -n "$optimal_paths" ]; then
+                optimal_paths="${optimal_paths}, ${path}"
+            else
+                optimal_paths="$path"
+            fi
+        fi
+    done <<< "$(echo "$output" | grep -E '\[(TIED )?BEST\]')"
 
     # Extract RESULT line
     result_line=$(echo "$output" | grep 'RESULT:' | tail -1)
@@ -88,10 +113,15 @@ for ((run=1; run<=RUNS; run++)); do
     fast_fees+=("$fast_fee")
     bestfee_fees+=("$bestfee_fee")
     optimal_fees+=("$optimal_fee")
+    fast_paths+=("$fast_path")
+    bestfee_paths+=("$bestfee_path")
+    optimal_paths_list+=("$optimal_paths")
     results+=("$category")
 
     printf "  Fast: %3ss (%sx) | Best-fee: %3ss (%sx) | Optimal: %sx | %s\n" \
         "${fast_time:-?}" "${fast_fee:-?}" "${bestfee_time:-?}" "${bestfee_fee:-?}" "${optimal_fee:-?}" "$category"
+    printf "  Paths — Fast: %s | Best-fee: %s | Optimal: %s\n" \
+        "${fast_path:-?}" "${bestfee_path:-?}" "${optimal_paths:-?}"
 
     # Print path details
     echo "$output" | grep -A2 -- '--- Path Comparison ---' | tail -3
@@ -174,10 +204,6 @@ fi
 
 echo ""
 echo "--- Per-Run Details ---"
-printf "  ${CYAN}%-4s  %-8s  %-11s  %-10s  %-10s  %-10s  %s${NC}\n" \
-    "Run" "Fast(s)" "BestFee(s)" "FastFee" "BestFee" "Optimal" "Result"
-printf "  %-4s  %-8s  %-11s  %-10s  %-10s  %-10s  %s\n" \
-    "---" "-------" "----------" "-------" "-------" "-------" "------"
 for ((i=0; i<${#results[@]}; i++)); do
     ff="${fast_fees[$i]:-?}"
     bf="${bestfee_fees[$i]:-?}"
@@ -185,8 +211,12 @@ for ((i=0; i<${#results[@]}; i++)); do
     [ "$ff" != "?" ] && ff="${ff}x"
     [ "$bf" != "?" ] && bf="${bf}x"
     [ "$of" != "?" ] && of="${of}x"
-    printf "  %-4s  %-8s  %-11s  %-10s  %-10s  %-10s  %s\n" \
-        "$((i+1))" "${fast_times[$i]:-?}s" "${bestfee_times[$i]:-?}s" "$ff" "$bf" "$of" "${results[$i]}"
+
+    echo ""
+    printf "  ${CYAN}Run %d${NC}  %s\n" "$((i+1))" "${results[$i]}"
+    printf "    Fast:     %3ss  %-28s  %s\n" "${fast_times[$i]:-?}" "${fast_paths[$i]:-?}" "$ff"
+    printf "    Best-fee: %3ss  %-28s  %s\n" "${bestfee_times[$i]:-?}" "${bestfee_paths[$i]:-?}" "$bf"
+    printf "    Optimal:  ${DIM}%-33s${NC}  %s\n" "${optimal_paths_list[$i]:-?}" "$of"
 done
 
 echo ""
