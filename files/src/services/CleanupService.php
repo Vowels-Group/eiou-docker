@@ -300,8 +300,14 @@ class CleanupService implements CleanupServiceInterface {
             return;
         }
 
-        // Step 1.5: If P2P is in best-fee mode, select best candidate before expiring
+        // Step 1.5: If P2P is in best-fee mode at a RELAY node, select best candidate
+        // before expiring. Relay nodes (no destination_address) select immediately because
+        // their upstream node is waiting for the rp2p response.
+        // Originators (have destination_address) skip this — they expire to 'expired' status
+        // so handleRp2pCandidate can keep collecting responses from all contacts, and the
+        // cleanup fallback handles the case where some contacts never respond.
         if (!((int)($message['fast'] ?? 1))
+            && empty($message['destination_address'])
             && $this->rp2pCandidateRepository !== null
             && $this->rp2pService !== null
         ) {

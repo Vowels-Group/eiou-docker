@@ -54,7 +54,7 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
-- Best-fee originator selecting 2nd-best route: originator (A0) triggered immediate route selection on the first rp2p candidate after P2P expiration instead of waiting for all contacts to respond. Now only relay nodes select immediately on expiration; originators wait for all contacts or fall back via cleanup after a grace period
+- Best-fee originator selecting suboptimal route: originator triggered immediate route selection on the first candidate after P2P expiration — both in `handleRp2pCandidate` (late arrivals) and in `expireMessage` step 1.5 (cleanup cycle). Now only relay nodes select immediately on expiration; originators wait for all contacts or fall back via cleanup after a grace period
 - Best-fee relay expiration exceeding originator timeout: relay nodes computed `hopWait * remainingHops` which could far exceed the originator's P2P expiration (e.g. 75-285s vs 60s). Relay expiration is now capped to `upstreamExpiration - hopWait` with a minimum viability floor of `P2P_HOP_PROCESSING_BUFFER_SECONDS` (2s)
 - Best-fee P2P re-expiration after selection: after `selectAndForwardBestRp2p()` ran during cleanup, the next cleanup cycle could re-process the same P2P because `getExpiredP2p()` didn't exclude `'found'` status. Now sets status to `'found'` after selection and excludes `'found'` from expired P2P queries
 - Best-fee mode `contacts_sent_count` not set on direct-match path: relay nodes with the end-recipient as a direct contact used the `matchContact` shortcut without tracking sent count, blocking the "all contacts responded" trigger and forcing per-hop expiration fallback
