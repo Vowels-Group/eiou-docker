@@ -391,15 +391,20 @@ echo -e "\t   Waiting for best-fee routing via natural expiration (timeout: ${be
 elapsed=0
 balanceChangedBest=0
 while [ $elapsed -lt $bestfeeTimeout ]; do
-    # Process queues to propagate P2P and RP2P messages
-    process_routing_queues "$all_containers"
+    # Process queues multiple times before cleanup to let the full P2P/RP2P cascade
+    # propagate. Each process_routing_queues call advances messages ~1 hop. With 4-5
+    # hops forward + 4-5 hops backward, we need ~10 rounds for the cascade to complete.
+    # Running cleanup too early forces premature selection from incomplete candidate pools.
+    for round in $(seq 1 10); do
+        process_routing_queues "$all_containers"
 
-    # Check if balance changed
-    newBalanceBest=$(docker exec ${testReceiver} sh -c "$balance_cmd" 2>/dev/null || echo "$initialBalanceBest")
-    balanceChangedBest=$(awk "BEGIN {print ($newBalanceBest != $initialBalanceBest) ? 1 : 0}")
-    if [ "$balanceChangedBest" -eq 1 ]; then
-        break
-    fi
+        # Check if balance changed (early exit)
+        newBalanceBest=$(docker exec ${testReceiver} sh -c "$balance_cmd" 2>/dev/null || echo "$initialBalanceBest")
+        balanceChangedBest=$(awk "BEGIN {print ($newBalanceBest != $initialBalanceBest) ? 1 : 0}")
+        if [ "$balanceChangedBest" -eq 1 ]; then
+            break 2
+        fi
+    done
 
     # Run cleanup on all nodes to process any expired P2Ps (triggers candidate selection)
     for container in "${containers[@]}"; do
