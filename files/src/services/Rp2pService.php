@@ -421,11 +421,13 @@ class Rp2pService implements Rp2pServiceInterface {
         // Atomically increment responded count
         $this->p2pRepository->incrementContactsRespondedCount($request['hash']);
 
-        // If the P2P already expired (hop-wait elapsed), select immediately since
-        // cleanup already ran and won't re-process this P2P. Both relay and originator
-        // nodes benefit: dead paths that never respond won't block route selection.
-        // Double-selection is safe: selectAndForwardBestRp2p() has an rp2pExists() guard.
-        if ($p2p['status'] === Constants::STATUS_EXPIRED) {
+        // If the P2P already expired (hop-wait elapsed) at a relay node, select
+        // immediately since cleanup already ran and won't re-process this P2P.
+        // Relay nodes (no destination_address) may have dead paths that never respond,
+        // so we pick the best candidate as soon as any arrives after expiration.
+        // Originators (have destination_address) fall through to the tracking check
+        // below, which waits for all contacts to respond before selecting.
+        if ($p2p['status'] === Constants::STATUS_EXPIRED && !isset($p2p['destination_address'])) {
             $this->selectAndForwardBestRp2p($request['hash']);
             return;
         }
