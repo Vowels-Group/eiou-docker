@@ -121,7 +121,7 @@ for ((run=1; run<=RUNS; run++)); do
     printf "  %s\n" "$category"
     printf "    Fast:     %3ss  %-12s  %s\n" "${fast_time:-?}" "${fast_fee:+${fast_fee}x}" "${fast_path:-?}"
     printf "    Best-fee: %3ss  %-12s  %s\n" "${bestfee_time:-?}" "${bestfee_fee:+${bestfee_fee}x}" "${bestfee_path:-?}"
-    printf "    Optimal:       %-12s  ${DIM}%s${NC}\n" "${optimal_fee:+${optimal_fee}x}" "${optimal_paths:-?}"
+    printf "    Optimal:        %-12s  ${DIM}%s${NC}\n" "${optimal_fee:+${optimal_fee}x}" "${optimal_paths:-?}"
 done
 
 # Summary
@@ -213,7 +213,7 @@ for ((i=0; i<${#results[@]}; i++)); do
     printf "  ${CYAN}Run %d${NC}  %s\n" "$((i+1))" "${results[$i]}"
     printf "    Fast:     %3ss  %-9s  %s\n" "${fast_times[$i]:-?}" "$ff" "${fast_paths[$i]:-?}"
     printf "    Best-fee: %3ss  %-9s  %s\n" "${bestfee_times[$i]:-?}" "$bf" "${bestfee_paths[$i]:-?}"
-    printf "    Optimal:       %-9s  ${DIM}%s${NC}\n" "$of" "${optimal_paths_list[$i]:-?}"
+    printf "    Optimal:        %-9s  ${DIM}%s${NC}\n" "$of" "${optimal_paths_list[$i]:-?}"
 done
 
 echo ""
