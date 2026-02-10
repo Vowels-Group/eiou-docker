@@ -219,14 +219,16 @@ fastStartTime=$(date +%s)
 fastSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[${testReceiver}]} 5 USD 2>&1)
 
 # Wait for routing with polling
-echo -e "\t   Waiting for fast mode routing (timeout: 30s)..."
+# Tor needs longer timeout for fast mode too (30s transport per hop vs 15s for HTTP)
+fastTimeout=$( [[ "${MODE:-http}" == "tor" ]] && echo 90 || echo 30 )
+echo -e "\t   Waiting for fast mode routing (timeout: ${fastTimeout}s)..."
 balance_cmd="php -r \"
     require_once('${BOOTSTRAP_PATH}');
     \\\$balance = \Eiou\Core\Application::getInstance()->services->getBalanceRepository()->getUserBalanceCurrency('USD');
     echo \\\$balance/\Eiou\Core\Constants::TRANSACTION_USD_CONVERSION_FACTOR ?: '0';
 \""
 
-newBalanceFast=$(wait_for_balance_change "${testReceiver}" "$initialBalanceFast" "$balance_cmd" 30 "fast mode send")
+newBalanceFast=$(wait_for_balance_change "${testReceiver}" "$initialBalanceFast" "$balance_cmd" "$fastTimeout" "fast mode send")
 
 # Retry with queue processing if needed
 balanceChangedFast=$(awk "BEGIN {print ($newBalanceFast != $initialBalanceFast) ? 1 : 0}")
@@ -312,14 +314,23 @@ echo -e "\n[Test 9: Best-fee mode send (--best)]"
 
 totaltests=$(( totaltests + 1 ))
 
-# Set a short P2P expiration for testing (60s instead of default 300s)
-# With hop_wait = max(floor(60/20) - 2, 15) = 15s per hop
+# Set a short P2P expiration for testing (instead of default 300s).
+# hop_wait = max(floor(expiration/20) - 2, MIN_HOP_WAIT) per hop.
 # Relay expiration is proportional to remaining hops (hopWait * remainingHops):
-#   - Deepest relay (1 hop remaining): 15s
-#   - Mid-chain relay (3 hops remaining): 45s
-#   - First relay (5 hops remaining): 75s
+#   - Deepest relay (1 hop remaining): hop_wait
+#   - Mid-chain relay (3 hops remaining): 3 * hop_wait
+#   - First relay (5 hops remaining): 5 * hop_wait
 # This guarantees deeper nodes expire before upstream ones, cascading correctly.
-testExpiration=60
+#
+# Tor mode needs a longer expiration because:
+#   - TOR_TRANSPORT_TIMEOUT_SECONDS = 30s (vs HTTP 15s) per request
+#   - MIN_HOP_WAIT_SECONDS = 15s is based on HTTP timeout
+#   - Each cascade level involves multiple Tor round-trips
+if [[ "${MODE:-http}" == "tor" ]]; then
+    testExpiration=120
+else
+    testExpiration=60
+fi
 echo -e "\t-> Setting P2P expiration to ${testExpiration}s on ${testSender}"
 docker exec ${testSender} php -r "
     require_once('${BOOTSTRAP_PATH}');
@@ -354,7 +365,12 @@ bestFeeSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[${t
 # originator's expiration since relay nodes expire after just hopWait seconds.
 
 all_containers="${containers[*]}"
-bestfeeTimeout=$((testExpiration + 30))  # Allow some headroom beyond expiration
+# Timeout must exceed: expiration + grace period (30s) + processing headroom (30s).
+# The cleanup fallback triggers at expiration + grace period, so the test timeout
+# must comfortably exceed that to avoid false failures at the boundary.
+gracePeriod=30
+headroom=30
+bestfeeTimeout=$((testExpiration + gracePeriod + headroom))
 echo -e "\t   Waiting for best-fee routing via natural expiration (timeout: ${bestfeeTimeout}s)..."
 
 elapsed=0

@@ -515,18 +515,23 @@ for test_name in $TEST_ORDER; do
 done
 
 # Cleaning up all made containers and volumes
-printf "\n"
-printf "Removing existing test containers and associated volumes (if any)..."
-for container in "${containers[@]}"; do
-    remove_container_if_exists $container
-done
+if [ "${SKIP_CLEANUP:-0}" = "1" ]; then
+    printf "\n"
+    printf "Skipping container cleanup (SKIP_CLEANUP=1)\n"
+else
+    printf "\n"
+    printf "Removing existing test containers and associated volumes (if any)..."
+    for container in "${containers[@]}"; do
+        remove_container_if_exists $container
+    done
 
-remove_container_if_exists $restoreContainer
-remove_container_if_exists $authcodeRestoreContainer
-remove_container_if_exists "httpRestoreFileTest"
-remove_container_if_exists "httpRestoreEnvTest"
-remove_container_if_exists "httpRestoreQuickstartTest"
-remove_container_if_exists "httpRestoreFileQsTest"
+    remove_container_if_exists $restoreContainer
+    remove_container_if_exists $authcodeRestoreContainer
+    remove_container_if_exists "httpRestoreFileTest"
+    remove_container_if_exists "httpRestoreEnvTest"
+    remove_container_if_exists "httpRestoreQuickstartTest"
+    remove_container_if_exists "httpRestoreFileQsTest"
+fi
 
 # Final summary
 printf "\n"
