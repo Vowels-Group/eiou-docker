@@ -362,6 +362,60 @@ else
     failure=$(( failure + 1 ))
 fi
 
+# ==================== Path Analysis for Best-Fee Test ====================
+echo -e "\n   --- Path Analysis ---"
+
+# Show all possible paths with fees
+echo -e "\t   All paths from ${testSender} to ${testReceiver} (by fee):"
+allPaths=$(enumerate_paths "$testSender" "$testReceiver")
+bestFee=$(echo "$allPaths" | head -1 | grep -oP 'fee=\K[0-9.]+')
+
+while IFS= read -r pathLine; do
+    pathFee=$(echo "$pathLine" | grep -oP 'fee=\K[0-9.]+')
+    pathRoute=$(echo "$pathLine" | sed 's/ fee=.*//')
+    if [ "$pathFee" = "$bestFee" ]; then
+        printf "\t   ${GREEN}* %-40s fee=%s [BEST]${NC}\n" "$pathRoute" "$pathFee"
+    else
+        printf "\t     %-40s fee=%s\n" "$pathRoute" "$pathFee"
+    fi
+done <<< "$allPaths"
+
+# Trace actual path taken (only if test passed)
+if [ "$balanceChangedBest" -eq 1 ]; then
+    # Get the P2P hash from the originator (most recent best-fee P2P)
+    bestFeeHash=$(docker exec ${testSender} php -r "
+        require_once('${BOOTSTRAP_PATH}');
+        \$pdo = \Eiou\Core\Application::getInstance()->services->getPdo();
+        \$stmt = \$pdo->query('SELECT hash FROM p2p WHERE fast = 0 ORDER BY id DESC LIMIT 1');
+        \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+        echo \$row ? \$row['hash'] : 'UNKNOWN';
+    " 2>/dev/null || echo "UNKNOWN")
+
+    if [ "$bestFeeHash" != "UNKNOWN" ]; then
+        actualPath=$(trace_actual_path "$bestFeeHash" "$testSender" "$testReceiver")
+        # Calculate actual path fee from containersLinks
+        actualFee="0"
+        IFS='->' read -ra hops <<< "${actualPath//->/ }"
+        # Filter empty elements from split
+        actualHops=()
+        for h in "${hops[@]}"; do
+            [ -n "$h" ] && actualHops+=("$h")
+        done
+        for ((i=0; i<${#actualHops[@]}-1; i++)); do
+            from="${actualHops[$i]}"
+            to="${actualHops[$((i+1))]}"
+            linkFee=$(echo "${containersLinks[$from,$to]}" | awk '{print $1}')
+            actualFee=$(awk "BEGIN {printf \"%.3f\", $actualFee + ${linkFee:-0}}")
+        done
+        printf "\n\t   Actual path: ${GREEN}%s${NC} fee=%s\n" "$actualPath" "$actualFee"
+        if [ "$actualFee" = "$bestFee" ]; then
+            printf "\t   ${GREEN}Route matches optimal best-fee path${NC}\n"
+        else
+            printf "\t   ${YELLOW}Route does NOT match optimal (best=%s, actual=%s)${NC}\n" "$bestFee" "$actualFee"
+        fi
+    fi
+fi
+
 # ==================== Test 10: Best-Fee P2P Has fast=0 ====================
 echo -e "\n[Test 10: Best-fee P2P stored with fast=0]"
 

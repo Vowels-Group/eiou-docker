@@ -806,4 +806,92 @@ trigger_sync() {
     " 2>/dev/null || echo "ERROR"
 }
 
+# ==================== Path Analysis Functions ====================
+
+# Enumerate all paths between two nodes using containersLinks topology
+# Usage: enumerate_paths <source> <destination>
+# Output: one line per path, sorted by fee ascending
+#   Format: "A0->A2->A4->A7->A8 fee=0.700"
+# Requires global: containersLinks associative array
+enumerate_paths() {
+    local source="$1"
+    local dest="$2"
+    _find_paths_dfs "$source" "$dest" "$source" ",${source}," "0" | sort -t= -k2 -n
+}
+
+# Internal DFS recursive helper for enumerate_paths
+_find_paths_dfs() {
+    local current="$1"
+    local dest="$2"
+    local path="$3"
+    local visited="$4"    # ",A0,A2," format for O(1) membership check
+    local fee="$5"
+
+    if [ "$current" = "$dest" ]; then
+        printf "%s fee=%s\n" "$path" "$fee"
+        return
+    fi
+
+    for key in "${!containersLinks[@]}"; do
+        local from="${key%%,*}"
+        local to="${key##*,}"
+        if [ "$from" = "$current" ] && [[ "$visited" != *",$to,"* ]]; then
+            local link_fee=$(echo "${containersLinks[$key]}" | awk '{print $1}')
+            local new_fee=$(awk "BEGIN {printf \"%.3f\", $fee + $link_fee}")
+            _find_paths_dfs "$to" "$dest" "${path}->${to}" "${visited}${to}," "$new_fee"
+        fi
+    done
+}
+
+# Trace the actual P2P route taken after completion
+# Usage: trace_actual_path <hash> <source_container> <destination_container>
+# Output: "A0->A2->A4->A7->A8"
+# Requires globals: containerAddresses, containers
+trace_actual_path() {
+    local hash="$1"
+    local source="$2"
+    local dest="$3"
+
+    # Build reverse map: address → container name
+    declare -A addrToName
+    for name in "${containers[@]}"; do
+        addrToName["${containerAddresses[$name]}"]="$name"
+    done
+
+    # Walk backwards from destination using p2p.sender_address
+    local path="$dest"
+    local current="$dest"
+    local max_hops=20
+    local hops=0
+
+    while [ "$current" != "$source" ] && [ $hops -lt $max_hops ]; do
+        local sender_addr=$(docker exec ${current} php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \$app = \Eiou\Core\Application::getInstance();
+            \$pdo = \$app->services->getPdo();
+            \$stmt = \$pdo->prepare('SELECT sender_address FROM p2p WHERE hash = ? LIMIT 1');
+            \$stmt->execute(['${hash}']);
+            \$row = \$stmt->fetch(PDO::FETCH_ASSOC);
+            echo \$row ? \$row['sender_address'] : 'UNKNOWN';
+        " 2>/dev/null || echo "ERROR")
+
+        if [ "$sender_addr" = "UNKNOWN" ] || [ "$sender_addr" = "ERROR" ]; then
+            path="UNKNOWN->${path}"
+            break
+        fi
+
+        local sender_name="${addrToName[$sender_addr]}"
+        if [ -z "$sender_name" ]; then
+            path="??(${sender_addr:0:12}..)->${path}"
+            break
+        fi
+
+        path="${sender_name}->${path}"
+        current="$sender_name"
+        hops=$((hops + 1))
+    done
+
+    echo "$path"
+}
+
 ###################################################################################
