@@ -507,8 +507,9 @@ class Rp2pService implements Rp2pServiceInterface {
         $relayedRespondedCount = (int) ($tracking['contacts_relayed_responded_count'] ?? 0);
         $phase1Sent = (bool) ($tracking['phase1_sent'] ?? 0);
 
-        // Phase 2 trigger: all INSERTED and all RELAYED contacts responded
-        if ($relayedCount > 0 && $insertedRespondedCount >= $sentCount && $relayedRespondedCount >= $relayedCount) {
+        // Phase 2 trigger: all propagated contacts (inserted + relayed) responded
+        // The original P2P sender (upstream) is NOT counted — we send the result TO them
+        if ($relayedCount > 0 && ($insertedRespondedCount + $relayedRespondedCount) >= ($sentCount + $relayedCount)) {
             $this->selectAndForwardBestRp2p($request['hash']);
             return;
         }
@@ -622,8 +623,8 @@ class Rp2pService implements Rp2pServiceInterface {
         $relayedRespondedCount = (int) ($tracking['contacts_relayed_responded_count'] ?? 0);
         $phase1Sent = (bool) ($tracking['phase1_sent'] ?? 0);
 
-        // Phase 2: all INSERTED and all RELAYED contacts responded
-        if ($relayedCount > 0 && $insertedRespondedCount >= $sentCount && $relayedRespondedCount >= $relayedCount) {
+        // Phase 2: all propagated contacts (inserted + relayed) responded
+        if ($relayedCount > 0 && ($insertedRespondedCount + $relayedRespondedCount) >= ($sentCount + $relayedCount)) {
             $this->selectAndForwardBestRp2p($hash);
             return;
         }
