@@ -283,8 +283,11 @@ class Rp2pService implements Rp2pServiceInterface {
                 }
             } else{
                 // Send rp2p back to ALL upstream senders (multi-path support)
-                $rP2pPayload = $this->rp2pPayload->build($request); // Build rp2p payload
                 $this->p2pRepository->updateStatus($request['hash'], 'found');  // Update the p2p request status to found
+
+                // Base amount before this node's fee — used for per-sender fee calculation.
+                // Each sender may have a different fee relationship with this node.
+                $baseAmount = $request['amount'] - ($p2p['my_fee_amount'] ?? 0);
 
                 // Get all senders from p2p_senders table (multi-path tracking)
                 $senders = $this->p2pSenderRepository
@@ -304,9 +307,28 @@ class Rp2pService implements Rp2pServiceInterface {
                     }
                 }
 
+                $currencyUtility = $this->utilityContainer->getCurrencyUtility();
+                $defaultFee = $this->currentUser->getDefaultFee();
+                $minimumFee = $this->currentUser->getMinimumFee();
+
                 foreach ($senders as $sender) {
+                    // Calculate per-sender fee: each sender has a different fee
+                    // relationship with this node (per-contact fee setting).
+                    $senderAddress = $sender['sender_address'];
+                    $transportIndex = $this->transportUtility->determineTransportType($senderAddress);
+                    $senderContact = ($transportIndex !== null)
+                        ? $this->contactRepository->lookupByAddress($transportIndex, $senderAddress)
+                        : null;
+                    $feePercent = $senderContact ? $senderContact['fee_percent'] : $defaultFee;
+                    $senderFee = $currencyUtility->calculateFee($p2p['amount'], $feePercent, $minimumFee);
+
+                    // Build per-sender RP2P payload with the correct fee
+                    $senderRequest = $request;
+                    $senderRequest['amount'] = $baseAmount + $senderFee;
+                    $rP2pPayload = $this->rp2pPayload->build($senderRequest);
+
                     // Use tracked delivery for reliable message sending
-                    $sendResult = $this->sendRp2pMessage($sender['sender_address'], $rP2pPayload, $request['hash']);
+                    $sendResult = $this->sendRp2pMessage($senderAddress, $rP2pPayload, $request['hash']);
                     $response = $sendResult['response'];
 
                     if ($sendResult['success']) {
@@ -517,11 +539,18 @@ class Rp2pService implements Rp2pServiceInterface {
             return; // No candidates yet, wait for more
         }
 
-        // Build RP2P payload from best candidate
+        // Build RP2P payload from best candidate.
+        // Subtract this node's fee: the candidate amount includes our fee
+        // (added by handleRp2pCandidate), but when the relayed contact processes
+        // this and sends it back, handleRp2pCandidate will add our fee again.
+        // Removing it here prevents double-counting.
+        $p2p = $this->p2pRepository->getByHash($hash);
+        $myFee = $p2p ? ($p2p['my_fee_amount'] ?? 0) : 0;
+
         $request = [
             'hash' => $bestCandidate['hash'],
             'time' => $bestCandidate['time'],
-            'amount' => (int) $bestCandidate['amount'],
+            'amount' => (int) $bestCandidate['amount'] - $myFee,
             'currency' => $bestCandidate['currency'],
             'senderPublicKey' => $bestCandidate['sender_public_key'],
             'senderAddress' => $bestCandidate['sender_address'],
