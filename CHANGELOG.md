@@ -26,7 +26,8 @@ The project is currently in **ALPHA** status.
 - Two-phase best-fee selection: relay nodes first select from `inserted` contacts, then share the result with `already_relayed` contacts to break mutual deadlock, wait for their response, and re-select from all candidates before forwarding upstream
 - Relay RP2P forwarding to late P2P senders: when a node already has an RP2P and receives a P2P from a new sender (`already_relayed`), it immediately sends the existing RP2P back — enabling optimal route discovery without waiting for hop-wait expiration
 - `p2p_relayed_contacts` table for tracking contacts that returned `already_relayed` during P2P broadcast
-- `contacts_relayed_count` column on `p2p` table for two-phase selection tracking
+- `contacts_relayed_count` and `contacts_relayed_responded_count` columns on `p2p` table for two-phase selection tracking
+- Separate RP2P response counting: inserted contacts increment `contacts_responded_count` (phase 1), relayed contacts increment `contacts_relayed_responded_count` (phase 2) — prevents premature phase triggers from cross-path RP2P candidates
 - Best-fee routing mode (`--best` flag): collects all RP2P responses and selects the lowest accumulated fee route (experimental)
 - `rp2p_candidates` table for storing RP2P candidate responses during best-fee selection
 - `p2p_senders` table for tracking all upstream P2P senders in multi-path routing

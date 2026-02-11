@@ -79,6 +79,30 @@ class P2pRelayedContactRepository extends AbstractRepository {
     }
 
     /**
+     * Check if a contact is a relayed contact for a given hash
+     *
+     * @param string $hash P2P hash
+     * @param string $contactAddress Contact address to check
+     * @return bool True if the contact returned 'already_relayed' during broadcast
+     */
+    public function isRelayedContact(string $hash, string $contactAddress): bool {
+        $query = "SELECT 1 FROM {$this->tableName}
+                  WHERE hash = :hash AND contact_address = :contact_address
+                  LIMIT 1";
+
+        $stmt = $this->execute($query, [
+            ':hash' => $hash,
+            ':contact_address' => $contactAddress,
+        ]);
+
+        if (!$stmt) {
+            return false;
+        }
+
+        return $stmt->fetch() !== false;
+    }
+
+    /**
      * Delete all relayed contacts for a hash
      *
      * @param string $hash P2P hash

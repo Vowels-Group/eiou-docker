@@ -25,7 +25,7 @@ class P2pRepository extends AbstractRepository {
         'my_fee_amount', 'destination_address', 'destination_pubkey',
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
-        'description', 'fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait', 'contacts_relayed_count',
+        'description', 'fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait', 'contacts_relayed_count', 'contacts_relayed_responded_count',
         'status', 'created_at', 'incoming_txid',
         'outgoing_txid', 'completed_at'
     ];
@@ -546,13 +546,31 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
+     * Atomically increment the relayed contacts responded count for a P2P hash
+     *
+     * Tracks responses from contacts that returned 'already_relayed' during broadcast.
+     * Used for phase 2 trigger: inserted + relayed responses >= sentCount + relayedCount.
+     *
+     * @param string $hash P2P hash
+     * @return bool Success status
+     */
+    public function incrementContactsRelayedRespondedCount(string $hash): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET contacts_relayed_responded_count = contacts_relayed_responded_count + 1
+                  WHERE hash = :hash";
+
+        $stmt = $this->execute($query, [':hash' => $hash]);
+        return $stmt !== false;
+    }
+
+    /**
      * Get tracking counts for a P2P hash (sent count, responded count, fast flag)
      *
      * @param string $hash P2P hash
-     * @return array|null Array with contacts_sent_count, contacts_responded_count, fast or null
+     * @return array|null Array with contacts_sent_count, contacts_responded_count, contacts_relayed_count, contacts_relayed_responded_count, fast or null
      */
     public function getTrackingCounts(string $hash): ?array {
-        $query = "SELECT contacts_sent_count, contacts_responded_count, contacts_relayed_count, fast
+        $query = "SELECT contacts_sent_count, contacts_responded_count, contacts_relayed_count, contacts_relayed_responded_count, fast
                   FROM {$this->tableName}
                   WHERE hash = :hash";
 

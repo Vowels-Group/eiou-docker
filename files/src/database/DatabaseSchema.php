@@ -104,6 +104,7 @@ function getP2pTableSchema() {
         contacts_sent_count INT DEFAULT 0, /* number of contacts the p2p was sent to */
         contacts_responded_count INT DEFAULT 0, /* number of contacts that responded with rp2p */
         contacts_relayed_count INT DEFAULT 0, /* number of contacts that returned already_relayed (two-phase selection) */
+        contacts_relayed_responded_count INT DEFAULT 0, /* number of relayed contacts that responded with rp2p (phase 2) */
         status ENUM(
             'initial',      /* First received p2p request */
             'queued',       /* Waiting to be processed */
