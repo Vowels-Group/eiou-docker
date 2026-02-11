@@ -466,27 +466,16 @@ class Rp2pService implements Rp2pServiceInterface {
 
         // Classify the RP2P source to increment the correct response counter.
         // senderAddress is always the direct contact (each hop re-stamps the payload).
-        // Three categories:
-        //   1. Upstream sender (in p2p_senders) — Phase 1 cross-pollination, don't count
-        //   2. Relayed downstream contact (in p2p_relayed_contacts) — Phase 2 response
-        //   3. Inserted downstream contact — Phase 1 response
+        // Two categories:
+        //   1. Relayed downstream contact (in p2p_relayed_contacts) — Phase 2 response
+        //   2. Inserted downstream contact (default) — Phase 1 response
         $fromAddress = $request['senderAddress'] ?? null;
-        $isUpstream = false;
         $isFromRelayed = false;
-        if ($fromAddress) {
-            if ($this->p2pSenderRepository !== null) {
-                $isUpstream = $this->p2pSenderRepository->senderExists($request['hash'], $fromAddress);
-            }
-            if (!$isUpstream && $this->p2pRelayedContactRepository !== null) {
-                $isFromRelayed = $this->p2pRelayedContactRepository->isRelayedContact($request['hash'], $fromAddress);
-            }
+        if ($fromAddress && $this->p2pRelayedContactRepository !== null) {
+            $isFromRelayed = $this->p2pRelayedContactRepository->isRelayedContact($request['hash'], $fromAddress);
         }
 
-        // Increment the appropriate counter (upstream senders don't count — they're
-        // Phase 1 cross-pollination RP2Ps, not responses to this node's broadcast)
-        if ($isUpstream) {
-            // Don't increment any broadcast counter
-        } elseif ($isFromRelayed) {
+        if ($isFromRelayed) {
             $this->p2pRepository->incrementContactsRelayedRespondedCount($request['hash']);
         } else {
             $this->p2pRepository->incrementContactsRespondedCount($request['hash']);
@@ -504,8 +493,8 @@ class Rp2pService implements Rp2pServiceInterface {
         }
 
         // Two-phase best-fee selection logic:
-        // Phase 1: all INSERTED contacts responded → send best candidate to relayed contacts
-        // Phase 2: all contacts (inserted + relayed) responded → re-select from ALL candidates
+        // Phase 1: all INSERTED contacts responded → send best candidate to relayed contacts (once)
+        // Phase 2: all RELAYED contacts responded → select final best from ALL candidates
         // No relayed contacts: select immediately when all inserted responded
         $tracking = $this->p2pRepository->getTrackingCounts($request['hash']);
         if (!$tracking) {
@@ -516,15 +505,17 @@ class Rp2pService implements Rp2pServiceInterface {
         $relayedCount = (int) ($tracking['contacts_relayed_count'] ?? 0);
         $insertedRespondedCount = (int) $tracking['contacts_responded_count'];
         $relayedRespondedCount = (int) ($tracking['contacts_relayed_responded_count'] ?? 0);
+        $phase1Sent = (bool) ($tracking['phase1_sent'] ?? 0);
 
-        // Phase 2 trigger: ALL contacts (inserted + relayed) responded
-        if ($relayedCount > 0 && ($insertedRespondedCount + $relayedRespondedCount) >= ($sentCount + $relayedCount)) {
+        // Phase 2 trigger: all INSERTED and all RELAYED contacts responded
+        if ($relayedCount > 0 && $insertedRespondedCount >= $sentCount && $relayedRespondedCount >= $relayedCount) {
             $this->selectAndForwardBestRp2p($request['hash']);
             return;
         }
 
-        // Phase 1 trigger: all inserted contacts responded, relayed contacts exist
-        if ($relayedCount > 0 && $insertedRespondedCount >= $sentCount) {
+        // Phase 1 trigger: all inserted contacts responded, relayed contacts still pending
+        // Only fires ONCE (phase1_sent guard prevents infinite loop between nodes)
+        if ($relayedCount > 0 && $insertedRespondedCount >= $sentCount && !$phase1Sent) {
             $this->sendBestCandidateToRelayedContacts($request['hash']);
             return;
         }
@@ -559,6 +550,10 @@ class Rp2pService implements Rp2pServiceInterface {
             $this->rp2pCandidateRepository->deleteCandidatesByHash($hash);
             return;
         }
+
+        // Mark Phase 1 as sent BEFORE sending to prevent re-triggering
+        // (additional candidates arriving during delivery won't fire Phase 1 again)
+        $this->p2pRepository->markPhase1Sent($hash);
 
         $bestCandidate = $this->rp2pCandidateRepository->getBestCandidate($hash);
         if (!$bestCandidate) {
@@ -625,15 +620,16 @@ class Rp2pService implements Rp2pServiceInterface {
         $relayedCount = (int) ($tracking['contacts_relayed_count'] ?? 0);
         $insertedRespondedCount = (int) $tracking['contacts_responded_count'];
         $relayedRespondedCount = (int) ($tracking['contacts_relayed_responded_count'] ?? 0);
+        $phase1Sent = (bool) ($tracking['phase1_sent'] ?? 0);
 
-        // Phase 2: ALL contacts (inserted + relayed) responded
-        if ($relayedCount > 0 && ($insertedRespondedCount + $relayedRespondedCount) >= ($sentCount + $relayedCount)) {
+        // Phase 2: all INSERTED and all RELAYED contacts responded
+        if ($relayedCount > 0 && $insertedRespondedCount >= $sentCount && $relayedRespondedCount >= $relayedCount) {
             $this->selectAndForwardBestRp2p($hash);
             return;
         }
 
-        // Phase 1: all inserted contacts responded, relayed contacts exist
-        if ($relayedCount > 0 && $insertedRespondedCount >= $sentCount) {
+        // Phase 1: all inserted contacts responded, relayed contacts still pending (once only)
+        if ($relayedCount > 0 && $insertedRespondedCount >= $sentCount && !$phase1Sent) {
             $this->sendBestCandidateToRelayedContacts($hash);
             return;
         }

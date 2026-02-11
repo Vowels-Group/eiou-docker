@@ -13,6 +13,9 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Fixed
+- Phase 1 infinite loop: added `phase1_sent` flag to prevent `sendBestCandidateToRelayedContacts` from re-triggering when additional RP2P candidates arrive after Phase 1 has already fired — previously each new candidate that met the inserted threshold re-sent to relayed contacts, creating an exponential loop between nodes
+- RP2P source classification: removed incorrect 3-category approach (upstream/relayed/inserted) — all RP2Ps at a node come from downstream contacts only (inserted or relayed), not upstream senders
+- Phase 2 trigger condition: changed from combined total (`inserted + relayed >= sentCount + relayedCount`) to separate checks (`inserted >= sentCount AND relayed >= relayedCount`) — ensures both phases complete independently before final selection
 - Per-sender fee calculation: relay nodes now calculate separate fees for each upstream sender based on their individual contact fee settings, instead of using the first sender's fee for all paths — fixes incorrect fee comparison that caused sub-optimal route selection
 - Phase 1 fee forwarding: reverted incorrect fee subtraction in `sendBestCandidateToRelayedContacts` — this node's fee must be included when sending to relayed contacts because cycle prevention ensures the RP2P won't loop back, and paths continuing through the relayed contact to other upstream nodes need this hop's fee in the accumulated total
 - Multi-path RP2P forwarding: first P2P sender (inserted) was missing from `p2p_senders` table, causing collision nodes to only forward RP2P to later (already_relayed) senders — the first sender's upstream relay never received the RP2P and fell back to hop-wait expiration, missing potentially optimal routes
@@ -26,7 +29,7 @@ The project is currently in **ALPHA** status.
 - Two-phase best-fee selection: relay nodes first select from `inserted` contacts, then share the result with `already_relayed` contacts to break mutual deadlock, wait for their response, and re-select from all candidates before forwarding upstream
 - Relay RP2P forwarding to late P2P senders: when a node already has an RP2P and receives a P2P from a new sender (`already_relayed`), it immediately sends the existing RP2P back — enabling optimal route discovery without waiting for hop-wait expiration
 - `p2p_relayed_contacts` table for tracking contacts that returned `already_relayed` during P2P broadcast
-- `contacts_relayed_count` and `contacts_relayed_responded_count` columns on `p2p` table for two-phase selection tracking
+- `contacts_relayed_count`, `contacts_relayed_responded_count`, and `phase1_sent` columns on `p2p` table for two-phase selection tracking
 - Separate RP2P response counting: inserted contacts increment `contacts_responded_count` (phase 1), relayed contacts increment `contacts_relayed_responded_count` (phase 2) — prevents premature phase triggers from cross-path RP2P candidates
 - Best-fee routing mode (`--best` flag): collects all RP2P responses and selects the lowest accumulated fee route (experimental)
 - `rp2p_candidates` table for storing RP2P candidate responses during best-fee selection

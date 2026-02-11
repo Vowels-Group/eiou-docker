@@ -193,6 +193,7 @@ function runColumnMigrations(PDO $pdo): array {
             'hop_wait' => 'INT DEFAULT 0 AFTER contacts_responded_count',
             'contacts_relayed_count' => 'INT DEFAULT 0 AFTER hop_wait',
             'contacts_relayed_responded_count' => 'INT DEFAULT 0 AFTER contacts_relayed_count',
+            'phase1_sent' => 'TINYINT(1) DEFAULT 0 AFTER contacts_relayed_responded_count',
         ],
     ];
 

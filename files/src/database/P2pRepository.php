@@ -26,7 +26,7 @@ class P2pRepository extends AbstractRepository {
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
         'description', 'fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait', 'contacts_relayed_count', 'contacts_relayed_responded_count',
-        'status', 'created_at', 'incoming_txid',
+        'phase1_sent', 'status', 'created_at', 'incoming_txid',
         'outgoing_txid', 'completed_at'
     ];
 
@@ -564,13 +564,27 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
+     * Mark Phase 1 as sent for a P2P hash
+     *
+     * Prevents Phase 1 (sendBestCandidateToRelayedContacts) from re-triggering
+     * when additional RP2P candidates arrive after it has already fired.
+     *
+     * @param string $hash P2P hash
+     * @return bool Success status
+     */
+    public function markPhase1Sent(string $hash): bool {
+        $affectedRows = $this->update(['phase1_sent' => 1], 'hash', $hash);
+        return $affectedRows >= 0;
+    }
+
+    /**
      * Get tracking counts for a P2P hash (sent count, responded count, fast flag)
      *
      * @param string $hash P2P hash
      * @return array|null Array with contacts_sent_count, contacts_responded_count, contacts_relayed_count, contacts_relayed_responded_count, fast or null
      */
     public function getTrackingCounts(string $hash): ?array {
-        $query = "SELECT contacts_sent_count, contacts_responded_count, contacts_relayed_count, contacts_relayed_responded_count, fast
+        $query = "SELECT contacts_sent_count, contacts_responded_count, contacts_relayed_count, contacts_relayed_responded_count, phase1_sent, fast
                   FROM {$this->tableName}
                   WHERE hash = :hash";
 
