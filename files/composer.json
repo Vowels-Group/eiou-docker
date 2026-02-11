@@ -2,7 +2,7 @@
     "name": "eiou/node",
     "description": "EIOU Node - Distributed IOU Network",
     "type": "project",
-    "license": "proprietary",
+    "license": "Apache-2.0",
     "autoload": {
         "classmap": ["src/"],
         "files": [
