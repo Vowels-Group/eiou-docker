@@ -13,6 +13,7 @@ The project is currently in **ALPHA** status.
 ## [Unreleased]
 
 ### Fixed
+- Multi-path RP2P forwarding: first P2P sender (inserted) was missing from `p2p_senders` table, causing collision nodes to only forward RP2P to later (already_relayed) senders — the first sender's upstream relay never received the RP2P and fell back to hop-wait expiration, missing potentially optimal routes
 - Best-fee broadcast race condition: set `contacts_sent_count` ceiling before broadcast loop to prevent RP2P responses arriving via HTTP handler from triggering premature selection while the broadcast is still sending to other contacts
 
 ### Changed

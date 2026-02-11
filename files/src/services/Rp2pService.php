@@ -291,9 +291,17 @@ class Rp2pService implements Rp2pServiceInterface {
                     ? $this->p2pSenderRepository->getSendersByHash($request['hash'])
                     : [];
 
-                // Fallback to single sender from p2p record if no p2p_senders rows
+                // Always include the original sender from the p2p record.
+                // p2p_senders may be empty (legacy) or may not include the first
+                // sender if it was stored before the p2p_senders tracking was added.
+                $originalSender = $p2p['sender_address'];
                 if (empty($senders)) {
-                    $senders = [['sender_address' => $p2p['sender_address']]];
+                    $senders = [['sender_address' => $originalSender]];
+                } else {
+                    $senderAddresses = array_column($senders, 'sender_address');
+                    if (!in_array($originalSender, $senderAddresses)) {
+                        $senders[] = ['sender_address' => $originalSender];
+                    }
                 }
 
                 foreach ($senders as $sender) {

@@ -421,6 +421,12 @@ class P2pService implements P2pServiceInterface {
             // to prevent false positives from acceptance-before-storage bug
             // (follows same pattern as TransactionService.checkTransactionPossible)
             try {
+                // Track this sender in p2p_senders so multi-path RP2P forwarding
+                // includes them. Without this, only 'already_relayed' senders are
+                // tracked and the first sender is excluded when p2p_senders has entries.
+                $this->p2pSenderRepository?->insertSender(
+                    $request['hash'], $request['senderAddress'], $request['senderPublicKey']
+                );
                 $this->handleP2pRequest($request);
                 if($echo){
                     // Return 'inserted' status AFTER the P2P has been stored in the database
