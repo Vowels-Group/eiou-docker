@@ -540,17 +540,16 @@ class Rp2pService implements Rp2pServiceInterface {
         }
 
         // Build RP2P payload from best candidate.
-        // Subtract this node's fee: the candidate amount includes our fee
-        // (added by handleRp2pCandidate), but when the relayed contact processes
-        // this and sends it back, handleRp2pCandidate will add our fee again.
-        // Removing it here prevents double-counting.
-        $p2p = $this->p2pRepository->getByHash($hash);
-        $myFee = $p2p ? ($p2p['my_fee_amount'] ?? 0) : 0;
-
+        // The candidate amount includes this node's fee (added by handleRp2pCandidate).
+        // We send it as-is: the relayed contact won't route it back to us (that
+        // would be a cycle), and even if it did, the round-trip fee (ours + theirs)
+        // makes the path clearly suboptimal so we'd never select it. Our fee must
+        // be present for paths that continue through the relayed contact to other
+        // upstream nodes — those routes legitimately include our hop.
         $request = [
             'hash' => $bestCandidate['hash'],
             'time' => $bestCandidate['time'],
-            'amount' => (int) $bestCandidate['amount'] - $myFee,
+            'amount' => (int) $bestCandidate['amount'],
             'currency' => $bestCandidate['currency'],
             'senderPublicKey' => $bestCandidate['sender_public_key'],
             'senderAddress' => $bestCandidate['sender_address'],
