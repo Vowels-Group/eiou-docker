@@ -464,18 +464,29 @@ class Rp2pService implements Rp2pServiceInterface {
         // Store as candidate
         $this->rp2pCandidateRepository->insertCandidate($request, $feeAmount);
 
-        // Classify the RP2P source: is it from an inserted contact or a relayed contact?
-        // senderAddress is always the direct contact (each hop re-stamps the RP2P payload
-        // with its own address). If the sender is in p2p_relayed_contacts, this is a
-        // phase 2 response from a relayed contact. Otherwise, it's from an inserted contact.
+        // Classify the RP2P source to increment the correct response counter.
+        // senderAddress is always the direct contact (each hop re-stamps the payload).
+        // Three categories:
+        //   1. Upstream sender (in p2p_senders) — Phase 1 cross-pollination, don't count
+        //   2. Relayed downstream contact (in p2p_relayed_contacts) — Phase 2 response
+        //   3. Inserted downstream contact — Phase 1 response
         $fromAddress = $request['senderAddress'] ?? null;
+        $isUpstream = false;
         $isFromRelayed = false;
-        if ($fromAddress && $this->p2pRelayedContactRepository !== null) {
-            $isFromRelayed = $this->p2pRelayedContactRepository->isRelayedContact($request['hash'], $fromAddress);
+        if ($fromAddress) {
+            if ($this->p2pSenderRepository !== null) {
+                $isUpstream = $this->p2pSenderRepository->senderExists($request['hash'], $fromAddress);
+            }
+            if (!$isUpstream && $this->p2pRelayedContactRepository !== null) {
+                $isFromRelayed = $this->p2pRelayedContactRepository->isRelayedContact($request['hash'], $fromAddress);
+            }
         }
 
-        // Increment the appropriate counter
-        if ($isFromRelayed) {
+        // Increment the appropriate counter (upstream senders don't count — they're
+        // Phase 1 cross-pollination RP2Ps, not responses to this node's broadcast)
+        if ($isUpstream) {
+            // Don't increment any broadcast counter
+        } elseif ($isFromRelayed) {
             $this->p2pRepository->incrementContactsRelayedRespondedCount($request['hash']);
         } else {
             $this->p2pRepository->incrementContactsRespondedCount($request['hash']);
