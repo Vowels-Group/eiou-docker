@@ -216,8 +216,8 @@ echo -e "\n[Test 6: Cascade cancel timing benchmark]"
 totaltests=$(( totaltests + 1 ))
 
 # The cascade cancel should resolve significantly faster than full expiration.
-# With hopWait=23s and 5 hops in collisions topology:
-# - Without cascade cancel: ~115s (each hop waits independently)
+# With hopWait=23s and 4 hops in collisions topology (A0→A11):
+# - Without cascade cancel: ~92s (each hop waits independently)
 # - With cascade cancel: ~30-60s (dead-ends propagate immediately)
 # Accept any resolution within half the expiration as a pass.
 if [ "$cancelDetected" -eq 1 ]; then

@@ -40,9 +40,9 @@ Integration tests validate the complete system behavior using Docker containers.
 
 **Topologies:**
 - `http4` / `https4` / `tor4` — 4-node linear chain (standard transaction and routing tests)
-- `collisions` — 9-node mesh topology with randomized fees (best-fee routing, path selection, deadlock prevention)
+- `collisions` — 12-node mesh topology with randomized fees and dead-end nodes (best-fee routing, path selection, deadlock prevention, cascade cancel)
 
-**Best-fee routing tests** (`bestFeeRoutingTest.sh`): 9 tests covering single-node, 4-node line, and 9-node collision topologies. Includes fast vs best-fee timing comparison and path analysis with randomized fee structures.
+**Best-fee routing tests** (`bestFeeRoutingTest.sh`): 11 tests covering single-node, 4-node line, and 12-node collision topologies. Includes fast vs best-fee timing comparison, path analysis with randomized fee structures, and dead-end cascade cancel validation.
 
 ## Unit Test Inventory
 
