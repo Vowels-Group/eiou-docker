@@ -1598,7 +1598,7 @@ echo -e "\n\t-> Step 5.1: Checking docker logs contain authcode temp file instru
 # Check that the new format appears in logs (not the old hardcoded "(see secure temp file)" alone)
 startupLogs=$(docker logs ${testContainer} 2>&1)
 
-if echo "$startupLogs" | grep -q "docker exec.*cat.*/dev/shm/eiou_authcode_\|docker exec.*cat.*/tmp/eiou_authcode_\|displayed securely via terminal"; then
+if echo "$startupLogs" | grep -q "docker exec.*cat.*/dev/shm/eiou_wallet_info_\|docker exec.*cat.*/tmp/eiou_wallet_info_\|docker exec.*cat.*/dev/shm/eiou_authcode_\|docker exec.*cat.*/tmp/eiou_authcode_\|displayed securely via terminal"; then
     printf "\t   Docker logs contain authcode retrieval instructions ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
