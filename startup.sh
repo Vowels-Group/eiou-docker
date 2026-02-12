@@ -181,6 +181,8 @@ graceful_shutdown() {
     echo "[Shutdown] Stopping MariaDB..."
     timeout 5 service mariadb stop 2>/dev/null || true
 
+    # Tor's init script may report "failed" with a PID mismatch warning —
+    # this is a known quirk of the Tor service script and is harmless.
     echo "[Shutdown] Stopping Tor..."
     timeout 3 service tor stop 2>/dev/null || true
 
