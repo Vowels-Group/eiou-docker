@@ -1278,6 +1278,18 @@ function showManualCopyModal(text, successMessage) {
 // CONTACT SECTION FUNCTIONS
 // ============================================================================
 
+/**
+ * Scrolls the contacts grid left or right by one card width.
+ * @param {number} direction - -1 for left, 1 for right
+ */
+function scrollContacts(direction) {
+    var grid = document.getElementById('contacts-grid');
+    if (!grid) return;
+    // Card width (250px) + gap (16px)
+    var scrollAmount = 266 * direction;
+    grid.scrollLeft = grid.scrollLeft + scrollAmount;
+}
+
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
 var currentContactId = null;
 var currentContactPubkeyHash = null;
