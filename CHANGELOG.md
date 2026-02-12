@@ -18,6 +18,9 @@ The project is currently in **ALPHA** status.
 - Searchable contact dropdown in GUI send form — type to filter contacts by name or address instead of scrolling through a static list
 - `lookupAllByName()` repository method for retrieving all contacts matching a name
 
+### Changed
+- Contacts grid now scrolls horizontally instead of wrapping into rows — cards continue to the right in a single scrollable row
+
 ### Fixed
 - Missing name validation in `updateContact()` command — names with invalid characters were accepted on update but rejected on add
 - Clarified error message when recipient is not found — now reads "not a valid address or known contact" instead of just "not a valid address"

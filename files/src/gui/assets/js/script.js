@@ -1384,7 +1384,7 @@ function toggleShowAllContacts() {
             contactCards[i].style.display = '';
         }
         if (showMoreBtn) {
-            showMoreBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Show Less';
+            showMoreBtn.innerHTML = '<i class="fas fa-chevron-left"></i> Show Less';
         }
     } else {
         // Show only first 16 contacts
@@ -1396,7 +1396,7 @@ function toggleShowAllContacts() {
             }
         }
         if (showMoreBtn && hiddenCount) {
-            showMoreBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Show All (<span id="hidden-contacts-count">' + (totalContacts - CONTACTS_DEFAULT_LIMIT) + '</span> more)';
+            showMoreBtn.innerHTML = '<i class="fas fa-chevron-right"></i> Show All (<span id="hidden-contacts-count">' + (totalContacts - CONTACTS_DEFAULT_LIMIT) + '</span> more)';
         }
     }
 }

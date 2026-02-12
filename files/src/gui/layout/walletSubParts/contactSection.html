@@ -177,9 +177,9 @@
         <?php endif; ?>
     </div>
     <?php if (count($allContacts) > 16): ?>
-    <div id="contacts-show-more" style="text-align: center; margin-top: 1rem;">
+    <div id="contacts-show-more" style="text-align: center; margin-top: 0.5rem;">
         <button type="button" class="btn btn-outline" onclick="toggleShowAllContacts()" id="show-more-btn">
-            <i class="fas fa-chevron-down"></i> Show All (<span id="hidden-contacts-count"><?php echo count($allContacts) - 16; ?></span> more)
+            <i class="fas fa-chevron-right"></i> Show All (<span id="hidden-contacts-count"><?php echo count($allContacts) - 16; ?></span> more)
         </button>
     </div>
     <?php endif; ?>
