@@ -826,16 +826,27 @@ while true; do
         http=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["hostname"])){echo $json["hostname"];}')
         tor=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["torAddress"])){echo $json["torAddress"];}')
         pubkey=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["public"])){echo $json["public"];}')
-        # Create secure temp file for authcode via SecureSeedphraseDisplay (returns file path, "tty", or empty)
+        # Check for existing seedphrase file (from initial wallet generation) or create authcode file
+        # On first creation, the seedphrase file already contains the authcode — no need for a second file.
+        # On restart/restore, no seedphrase file exists so we create an authcode-only file.
         # SECURITY: The authcode never touches a bash variable — it stays inside the PHP process
         authcode_file=$(php -r '
             require_once("/etc/eiou/vendor/autoload.php");
             require_once("/etc/eiou/src/bootstrap.php");
-            $ac = \Eiou\Core\UserContext::getInstance()->getAuthCode();
-            if ($ac) {
-                $r = \Eiou\Utils\SecureSeedphraseDisplay::displayAuthcode($ac);
-                if ($r["success"] && $r["method"] === "tty") { echo "tty"; }
-                elseif ($r["success"] && isset($r["filepath"])) { echo $r["filepath"]; }
+            // Check if a seedphrase file already exists (first wallet creation)
+            $seedFiles = glob("/dev/shm/eiou_wallet_info_*");
+            if (empty($seedFiles)) { $seedFiles = glob("/tmp/eiou_wallet_info_*"); }
+            if (!empty($seedFiles)) {
+                // Seedphrase file exists (contains authcode too) — use it
+                echo "seedfile:" . $seedFiles[0];
+            } else {
+                // No seedphrase file — create authcode-only file (restart/restore)
+                $ac = \Eiou\Core\UserContext::getInstance()->getAuthCode();
+                if ($ac) {
+                    $r = \Eiou\Utils\SecureSeedphraseDisplay::displayAuthcode($ac);
+                    if ($r["success"] && $r["method"] === "tty") { echo "tty"; }
+                    elseif ($r["success"] && isset($r["filepath"])) { echo $r["filepath"]; }
+                }
             }
         ' 2>/dev/null)
         displayname=$(php -r '$json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"),true); if(isset($json["name"])){echo $json["name"];}')
@@ -929,6 +940,12 @@ readable="${pubkey//$'\n'/$'\n\t\t'}"
 echo -e "\t Public Key: \n\t\t $readable"
 if [ "$authcode_file" = "tty" ]; then
     echo -e "\t Authentication Code: (displayed securely via terminal)"
+elif [[ "$authcode_file" == seedfile:* ]]; then
+    # First wallet creation — seedphrase file already contains the authcode
+    seedfile_path="${authcode_file#seedfile:}"
+    echo -e "\t Seedphrase & Auth Code: (stored in secure temp file)"
+    echo -e "\t   View: docker exec $(hostname) cat $seedfile_path"
+    echo -e "\t   Auto-deletes in 300 seconds"
 elif [ -n "$authcode_file" ]; then
     echo -e "\t Authentication Code: (stored in secure temp file)"
     echo -e "\t   View: docker exec $(hostname) cat $authcode_file"

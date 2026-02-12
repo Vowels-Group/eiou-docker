@@ -322,10 +322,13 @@ class Wallet{
             'word_count' => $wordCount
         ];
 
-        // Display seedphrase and authcode via secure mechanism so user can retrieve them
-        // This creates a temp file with instructions, same as during initial generation
-        // Users may need to retrieve their authcode after restore
-        self::displaySeedPhrase($mnemonic, $output, $authCode);
+        // Display authcode only — the user already has the seedphrase (they just
+        // used it to restore), so re-creating a seedphrase file is unnecessary
+        // and an unneeded security exposure. The authcode is re-displayed so the
+        // user can retrieve it if they lost it.
+        if ($authCode) {
+            SecureSeedphraseDisplay::displayAuthcode($authCode);
+        }
 
         $output->success("Wallet restored successfully from seed phrase", $walletData, "Wallet restored with deterministic EC keys derived from seed phrase.");
 

@@ -207,6 +207,9 @@ fi
 deleteResult=$(docker exec ${testContainer} rm -f ${USERCONFIG} 2>&1)
 verifyDeleted=$(docker exec ${testContainer} test -f ${USERCONFIG} && echo "EXISTS" || echo "DELETED")
 
+# Clean up any existing temp files so we can verify restore doesn't re-create seedphrase file
+docker exec ${testContainer} sh -c 'rm -f /dev/shm/eiou_wallet_info_* /tmp/eiou_wallet_info_* /dev/shm/eiou_authcode_* /tmp/eiou_authcode_*' 2>/dev/null
+
 # Also delete Tor hidden service files to test deterministic regeneration
 deleteTorResult=$(docker exec ${testContainer} rm -f ${TOR_SECRET_KEY} ${TOR_PUBLIC_KEY} ${TOR_HOSTNAME} 2>&1)
 verifyTorDeleted=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "EXISTS" || echo "DELETED")
@@ -247,6 +250,42 @@ if [[ "$verifyRestored" == "CREATED" ]]; then
 else
     printf "\t   Wallet restoration ${RED}FAILED${NC}\n"
     printf "\t   Restore output: ${restoreOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+######################## VERIFY NO SEEDPHRASE FILE ON RESTORE ########################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 1.7a: Verify seedphrase file NOT created on restore"
+
+# Check that no eiou_wallet_info_* file exists (seedphrase should not be written on restore)
+seedphraseFileExists=$(docker exec ${testContainer} sh -c 'ls /dev/shm/eiou_wallet_info_* /tmp/eiou_wallet_info_* 2>/dev/null | head -1')
+
+if [[ -z "$seedphraseFileExists" ]]; then
+    printf "\t   Seedphrase file NOT created on restore ${GREEN}PASSED${NC}\n"
+    printf "\t   No eiou_wallet_info_* files found (expected)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Seedphrase file created on restore ${RED}FAILED${NC}\n"
+    printf "\t   Found unexpected file: ${seedphraseFileExists}\n"
+    failure=$(( failure + 1 ))
+fi
+
+######################## VERIFY AUTHCODE FILE ON RESTORE ########################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 1.7b: Verify authcode file IS created on restore"
+
+# Check that eiou_authcode_* file exists (authcode should be written on restore)
+authcodeFileExists=$(docker exec ${testContainer} sh -c 'ls /dev/shm/eiou_authcode_* /tmp/eiou_authcode_* 2>/dev/null | head -1')
+
+if [[ -n "$authcodeFileExists" ]]; then
+    printf "\t   Authcode file created on restore ${GREEN}PASSED${NC}\n"
+    printf "\t   Found: ${authcodeFileExists}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Authcode file NOT created on restore ${RED}FAILED${NC}\n"
+    printf "\t   No eiou_authcode_* files found in /dev/shm/ or /tmp/\n"
     failure=$(( failure + 1 ))
 fi
 
@@ -340,6 +379,12 @@ echo -e "\n\t-> Step 1.12: Restoring wallet with 'docker run -d ... -e RESTORE=<
 
 # Create a completely new Container
 restoreContainer="httpRestoreSeedTest"
+
+# Clean up any existing container and volumes from previous runs
+# Without this, stale volumes cause ConfigCheck to skip RESTORE (userconfig.json already exists)
+docker rm -f ${restoreContainer} > /dev/null 2>&1
+docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-files ${restoreContainer}-eiou > /dev/null 2>&1
+
 restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-files:/etc/eiou/" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
 
 # Wait for container to fully initialize and process RESTORE env var
@@ -492,6 +537,10 @@ else
     printf "\t   Config check result: ${configCheck}\n"
     failure=$(( failure + 1 ))
 fi
+
+# Clean up the restore container from Step 1.12
+docker rm -f ${restoreContainer} > /dev/null 2>&1
+docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-files ${restoreContainer}-eiou > /dev/null 2>&1
 
 ################################################################################
 #                    PART 2: SECURE SEEDPHRASE DISPLAY TEST
@@ -956,7 +1005,7 @@ originalAuthCodeResult=$(docker exec ${testContainer} php -r '
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode . "|" . $json["authcode_encrypted"];
+        echo $authcode . "|" . json_encode($json["authcode_encrypted"]);
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
@@ -1089,7 +1138,7 @@ restoredAuthCodeResult=$(docker exec ${testContainer} php -r '
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode . "|" . $json["authcode_encrypted"];
+        echo $authcode . "|" . json_encode($json["authcode_encrypted"]);
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
@@ -1163,9 +1212,7 @@ if [[ "$originalAuthCode" == "$restoredAuthCode" ]]; then
     printf "\t   Authcode comparison ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   ${RED}AUTHCODES DO NOT MATCH - Authcode is not being derived from seedphrase!${NC}\n"
-    printf "\t   ${YELLOW}This is the expected behavior currently - authcode uses random_bytes()${NC}\n"
-    printf "\t   ${YELLOW}To fix: derive authcode deterministically from seed in Wallet.php${NC}\n"
+    printf "\t   ${RED}AUTHCODES DO NOT MATCH - Deterministic authcode derivation broken!${NC}\n"
     printf "\t   Authcode comparison ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
@@ -1189,7 +1236,7 @@ iteration2AuthCodeResult=$(docker exec ${testContainer} php -r '
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode . "|" . $json["authcode_encrypted"];
+        echo $authcode . "|" . json_encode($json["authcode_encrypted"]);
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
@@ -1207,7 +1254,7 @@ iteration3AuthCodeResult=$(docker exec ${testContainer} php -r '
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode . "|" . $json["authcode_encrypted"];
+        echo $authcode . "|" . json_encode($json["authcode_encrypted"]);
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
@@ -1224,8 +1271,7 @@ if [[ "$iteration1AuthCode" == "$iteration2AuthCode" ]] && [[ "$iteration2AuthCo
     printf "\t   Multiple iterations ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   ${RED}Authcodes differ between iterations - random generation detected${NC}\n"
-    printf "\t   ${YELLOW}This confirms authcode is NOT derived from seedphrase${NC}\n"
+    printf "\t   ${RED}Authcodes differ between iterations - deterministic derivation broken!${NC}\n"
     printf "\t   Multiple iterations ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
@@ -1248,7 +1294,7 @@ newContainerAuthCodeResult=$(docker exec ${authcodeRestoreContainer} php -r '
     $json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode . "|" . $json["authcode_encrypted"];
+        echo $authcode . "|" . json_encode($json["authcode_encrypted"]);
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
@@ -1290,10 +1336,8 @@ echo -e "\t   ============================================"
 if [[ "$originalAuthCode" == "$restoredAuthCode" ]]; then
     echo -e "\t   ${GREEN}Authcode restoration: WORKING${NC}"
 else
-    echo -e "\t   ${RED}Authcode restoration: NOT IMPLEMENTED${NC}"
-    echo -e "\t   ${YELLOW}The authcode is randomly generated, not derived from seed.${NC}"
-    echo -e "\t   ${YELLOW}To fix: Modify Wallet.php to derive authcode from seed${NC}"
-    echo -e "\t   ${YELLOW}using HMAC-SHA256 or similar deterministic method.${NC}"
+    echo -e "\t   ${RED}Authcode restoration: BROKEN${NC}"
+    echo -e "\t   ${RED}Authcodes should be deterministic (derived from seed).${NC}"
 fi
 echo -e "\t   ============================================\n"
 
@@ -1549,7 +1593,7 @@ echo -e "\n\t-> Step 5.1: Checking docker logs contain authcode temp file instru
 # Check that the new format appears in logs (not the old hardcoded "(see secure temp file)" alone)
 startupLogs=$(docker logs ${testContainer} 2>&1)
 
-if echo "$startupLogs" | grep -q "docker exec.*cat.*/dev/shm/eiou_authcode_\|docker exec.*cat.*/tmp/eiou_authcode_\|displayed securely via terminal"; then
+if echo "$startupLogs" | grep -q "docker exec.*cat.*/dev/shm/eiou_wallet_info_\|docker exec.*cat.*/tmp/eiou_wallet_info_\|docker exec.*cat.*/dev/shm/eiou_authcode_\|docker exec.*cat.*/tmp/eiou_authcode_\|displayed securely via terminal"; then
     printf "\t   Docker logs contain authcode retrieval instructions ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
