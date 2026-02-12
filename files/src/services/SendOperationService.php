@@ -368,7 +368,7 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
                 array_merge($txData, ['status' => Constants::STATUS_PENDING, 'type' => 'p2p', 'message' => 'P2P route discovery initiated']),
                 "Searching for route to recipient via P2P network");
         } catch (\InvalidArgumentException $e) {
-            $output->error("Recipient not found: " . ($request[2] ?? 'unknown') . " is not a valid address", ErrorCodes::INVALID_RECIPIENT, 400, $txData);
+            $output->error("Recipient not found: " . ($request[2] ?? 'unknown') . " is not a valid address or known contact", ErrorCodes::INVALID_RECIPIENT, 400, $txData);
         }
     }
 
