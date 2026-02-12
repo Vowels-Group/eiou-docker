@@ -160,24 +160,34 @@ graceful_shutdown() {
                 fi
             done
         fi
+
+        # Reap background jobs to suppress shell "Killed" messages
+        for pid in $pids_to_wait; do
+            wait "$pid" 2>/dev/null || true
+        done
     else
         echo "[Shutdown] No PHP processors were running"
     fi
 
     # Step 3: Stop services in reverse order of startup
+    # Each service stop is wrapped in a timeout to ensure the entire shutdown
+    # completes within Docker's stop_grace_period (45s). The PHP processor
+    # shutdown above may have used up to 30s, so service stops must be quick.
     echo "[Shutdown] Stopping services in reverse order..."
 
     echo "[Shutdown] Stopping Apache..."
-    service apache2 stop 2>/dev/null || true
+    timeout 5 service apache2 stop 2>/dev/null || true
 
     echo "[Shutdown] Stopping MariaDB..."
-    service mariadb stop 2>/dev/null || true
+    timeout 5 service mariadb stop 2>/dev/null || true
 
+    # Tor's init script may report "failed" with a PID mismatch warning —
+    # this is a known quirk of the Tor service script and is harmless.
     echo "[Shutdown] Stopping Tor..."
-    service tor stop 2>/dev/null || true
+    timeout 3 service tor stop 2>/dev/null || true
 
     echo "[Shutdown] Stopping Cron..."
-    service cron stop 2>/dev/null || true
+    timeout 2 service cron stop 2>/dev/null || true
 
     # Step 4: Clean up lockfiles and shutdown flag
     echo "[Shutdown] Cleaning up lockfiles..."
@@ -1053,6 +1063,9 @@ watchdog() {
 
         # Skip restart cycle if shutdown was requested via 'eiou shutdown'
         if [ -f "$SHUTDOWN_FLAG" ]; then
+            if [ "$WAS_SHUTDOWN" = false ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Shutdown flag detected, pausing processor monitoring"
+            fi
             WAS_SHUTDOWN=true
             continue
         fi

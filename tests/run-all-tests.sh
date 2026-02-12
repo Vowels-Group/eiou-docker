@@ -376,6 +376,7 @@ apiInputValidationTest
 syncTestSuite
 chainDropTestSuite
 gracefulShutdownTest
+sigTermTest
 transactionRecoveryTest
 seedphraseTestSuite
 backupTestSuite
@@ -450,6 +451,7 @@ torTestSuite
 # System tests
 TESTS_SYSTEM="
 gracefulShutdownTest
+sigTermTest
 seedphraseTestSuite
 processorLockfileTest
 serviceInterfaceTest

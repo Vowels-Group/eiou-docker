@@ -10,51 +10,15 @@ The project is currently in **ALPHA** status.
 
 ---
 
-## [Unreleased]
+## 2026-02-06 -- 2026-02-12
 
 ### Added
 - Multi-part contact names with spaces supported in CLI (use quotes: `"John Doe"`)
 - Contact disambiguation when multiple contacts share the same name — CLI prompts for selection, JSON mode returns `multiple_matches` error with contact list
 - Searchable contact dropdown in GUI send form — type to filter contacts by name or address instead of scrolling through a static list
 - `lookupAllByName()` repository method for retrieving all contacts matching a name
-
-### Changed
-- Contacts grid now scrolls horizontally instead of wrapping into rows — cards continue to the right in a single scrollable row
-- GUI banner system — place images in `assets/banners/` to display a banner above the wallet and login screens; empty folder shows nothing
-
-### Fixed
-- Missing name validation in `updateContact()` command — names with invalid characters were accepted on update but rejected on add
-- Clarified error message when recipient is not found — now reads "not a valid address or known contact" instead of just "not a valid address"
-
-### Security
-- Wallet restore no longer re-creates the seedphrase file — the user already has the seedphrase (they just used it to restore), so writing it to a temp file was an unnecessary security exposure; only the authcode file is regenerated so the user can retrieve it if lost
-
-### Added
 - `STOPSIGNAL SIGTERM` directive in Dockerfile — makes the graceful shutdown signal explicit so `--restart unless-stopped` works correctly (containers restart on Docker daemon restart but stay stopped after `docker stop`)
-
-### Changed
-- Startup user info section no longer creates a separate authcode temp file on first wallet creation — the seedphrase file already contains the authcode, so creating a second file was redundant and confusing; on restart or restore, the authcode-only file is still created as before
-
-### Docs
-- All `docker run` examples in CLI_DEMO_GUIDE.md now include `--restart unless-stopped` so containers automatically restart after host/Docker daemon restarts
-- All `docker run` commands in legacy demo files (`tests/old/demo/`, `tests/gui.txt`) updated with `--restart unless-stopped`
-
-### Fixed
-- Phase 1/Phase 2 race condition: `selectAndForwardBestRp2p` now checks `phase1_sent` before forwarding upstream — if a relayed contact's RP2P arrived before all inserted contacts responded, Phase 2 triggered directly (skipping Phase 1), so the relayed contact never received our best downstream candidate and fell back to expiration with potentially sub-optimal candidates
-- Relayed contacts merge in RP2P forwarding: `handleRp2pRequest` now merges `p2p_relayed_contacts` into the senders list — contacts that returned `already_relayed` during broadcast but whose P2P to us hadn't arrived yet were missing from `p2p_senders` and never received the RP2P response
-- Phase 1 infinite loop: added `phase1_sent` flag to prevent `sendBestCandidateToRelayedContacts` from re-triggering when additional RP2P candidates arrive after Phase 1 has already fired — previously each new candidate that met the inserted threshold re-sent to relayed contacts, creating an exponential loop between nodes
-- RP2P source classification: removed incorrect 3-category approach (upstream/relayed/inserted) — all RP2Ps at a node come from downstream contacts only (inserted or relayed), not upstream senders
-- Phase 2 trigger condition: waits for all propagated contacts (inserted + relayed combined) to respond before final selection — the original upstream P2P sender is not counted since we send the result TO them
-- Per-sender fee calculation: relay nodes now calculate separate fees for each upstream sender based on their individual contact fee settings, instead of using the first sender's fee for all paths — fixes incorrect fee comparison that caused sub-optimal route selection
-- Phase 1 fee forwarding: reverted incorrect fee subtraction in `sendBestCandidateToRelayedContacts` — this node's fee must be included when sending to relayed contacts because cycle prevention ensures the RP2P won't loop back, and paths continuing through the relayed contact to other upstream nodes need this hop's fee in the accumulated total
-- Multi-path RP2P forwarding: first P2P sender (inserted) was missing from `p2p_senders` table, causing collision nodes to only forward RP2P to later (already_relayed) senders — the first sender's upstream relay never received the RP2P and fell back to hop-wait expiration, missing potentially optimal routes
-- Best-fee broadcast race condition: set `contacts_sent_count` ceiling before broadcast loop to prevent RP2P responses arriving via HTTP handler from triggering premature selection while the broadcast is still sending to other contacts
-
-### Changed
-- `P2P_HOP_WAIT_DIVISOR` reduced from 20 to 12 — gives relay nodes 23s per hop (up from 15s clamped minimum) with the default 300s expiration, allowing more time for best-fee candidate collection
-- `P2P_MAX_ROUTING_LEVEL` reduced from 20 to 10 (max hops a user can configure); hopWait formula now uses separate `P2P_HOP_WAIT_DIVISOR` (fixed at 12) to preserve privacy
-
-### Added
+- SIGTERM integration test (`sigTermTest.sh`) — verifies `docker stop` triggers graceful shutdown within the grace period, container exits cleanly (not SIGKILL'd), and restarts with data intact
 - Two-phase best-fee selection: relay nodes first select from `inserted` contacts, then share the result with `already_relayed` contacts to break mutual deadlock, wait for their response, and re-select from all candidates before forwarding upstream
 - Relay RP2P forwarding to late P2P senders: when a node already has an RP2P and receives a P2P from a new sender (`already_relayed`), it immediately sends the existing RP2P back — enabling optimal route discovery without waiting for hop-wait expiration
 - `p2p_relayed_contacts` table for tracking contacts that returned `already_relayed` during P2P broadcast
@@ -67,26 +31,6 @@ The project is currently in **ALPHA** status.
 - Per-hop expiration for best-fee mode: leaf nodes expire first, cascading selection upstream
 - Orphaned candidate recovery: `CleanupService` triggers best-fee selection when P2P expires with available candidates
 - `contacts_sent_count`, `contacts_responded_count`, `hop_wait`, and `fast` columns on `p2p` table for routing mode tracking
-
-### Changed
-- Collision topology test fees randomized (0.1-0.9) per run so best-fee routing is verified against varying fee structures
-- Best-fee path analysis labels tied optimal routes as `[TIED BEST]` and prints the randomized fee structure
-- Best-fee routing test shows timing comparison between fast mode and best-fee mode
-- Best-fee path analysis uses compound fee multiplier `(1 + fee/100)` product instead of additive sum; destination hop excluded from fee calculation
-- Best-fee routing test traces actual path for both fast and best-fee modes with a side-by-side path comparison; comparison now shows optimality status for each result category (OPTIMAL, BETTER, SAME optimal/sub-optimal, WORSE) and prints a `RESULT:` summary line for easy multi-run grep
-- Best-fee routing test timeouts are transport-mode aware: HTTP uses 120s P2P expiration (was 60s), Tor uses 180s (was 120s), sized to guarantee 30s+ gap between closest relay and originator even with maxLevel jitter
-- Best-fee routing test timeout includes grace period + headroom (180s for HTTP, 240s for Tor) to prevent false failures at the boundary
-- `run-all-tests.sh` supports `SKIP_CLEANUP=1` environment variable to keep containers alive after test completion
-- Best-fee routing GUI checkbox now displays a prominent warning-styled "Experimental" label instead of a subtle info note
-- Best-fee routing CLI `--best` flag help text emphasises experimental status with `[EXPERIMENTAL]` prefix
-- GUI notifications use session flash messages instead of URL parameters; messages no longer re-appear on page refresh
-- GUI shows toast notification when receiving transactions ("Payment Received" with amount and sender name)
-- GUI recent transactions list shows description instead of counterparty address; click to view full details with address in modal (#589)
-- GUI chain drop terminology changed from "chain drop" to "drop missing transaction(s)" in all user-facing text
-- GUI Check Status (ping) now reloads the page and reopens the contact modal so updated values persist
-- GUI chain drop propose/accept/reject actions reload page and reopen contact modal after completion
-
-### Added
 - GUI chain drop proposal badges on contact cards: red "Action Required" (incoming), blue "Awaiting Response" (outgoing), orange "Blocked" (rejected)
 - GUI chain status badge in contact modal is now proposal-aware: shows "Action Required", "Awaiting Acceptance", or "Blocked" with clickable scroll to chain drop section
 - GUI chain drop resolution section in contact modal with four states: propose, awaiting acceptance, incoming (accept/reject), rejected (repropose)
@@ -108,7 +52,42 @@ The project is currently in **ALPHA** status.
 - Full codebase migration from `SecureLogger` to `Logger` across 46 source files (#557)
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
+### Changed
+- Contacts grid now scrolls horizontally instead of wrapping into rows — cards continue to the right in a single scrollable row
+- GUI banner system — place images in `assets/banners/` to display a banner above the wallet and login screens; empty folder shows nothing
+- Startup user info section no longer creates a separate authcode temp file on first wallet creation — the seedphrase file already contains the authcode, so creating a second file was redundant and confusing; on restart or restore, the authcode-only file is still created as before
+- `P2P_HOP_WAIT_DIVISOR` reduced from 20 to 12 — gives relay nodes 23s per hop (up from 15s clamped minimum) with the default 300s expiration, allowing more time for best-fee candidate collection
+- `P2P_MAX_ROUTING_LEVEL` reduced from 20 to 10 (max hops a user can configure); hopWait formula now uses separate `P2P_HOP_WAIT_DIVISOR` (fixed at 12) to preserve privacy
+- Collision topology test fees randomized (0.1-0.9) per run so best-fee routing is verified against varying fee structures
+- Best-fee path analysis labels tied optimal routes as `[TIED BEST]` and prints the randomized fee structure
+- Best-fee routing test shows timing comparison between fast mode and best-fee mode
+- Best-fee path analysis uses compound fee multiplier `(1 + fee/100)` product instead of additive sum; destination hop excluded from fee calculation
+- Best-fee routing test traces actual path for both fast and best-fee modes with a side-by-side path comparison; comparison now shows optimality status for each result category (OPTIMAL, BETTER, SAME optimal/sub-optimal, WORSE) and prints a `RESULT:` summary line for easy multi-run grep
+- Best-fee routing test timeouts are transport-mode aware: HTTP uses 120s P2P expiration (was 60s), Tor uses 180s (was 120s), sized to guarantee 30s+ gap between closest relay and originator even with maxLevel jitter
+- Best-fee routing test timeout includes grace period + headroom (180s for HTTP, 240s for Tor) to prevent false failures at the boundary
+- `run-all-tests.sh` supports `SKIP_CLEANUP=1` environment variable to keep containers alive after test completion
+- Best-fee routing GUI checkbox now displays a prominent warning-styled "Experimental" label instead of a subtle info note
+- Best-fee routing CLI `--best` flag help text emphasises experimental status with `[EXPERIMENTAL]` prefix
+- GUI notifications use session flash messages instead of URL parameters; messages no longer re-appear on page refresh
+- GUI shows toast notification when receiving transactions ("Payment Received" with amount and sender name)
+- GUI recent transactions list shows description instead of counterparty address; click to view full details with address in modal (#589)
+- GUI chain drop terminology changed from "chain drop" to "drop missing transaction(s)" in all user-facing text
+- GUI Check Status (ping) now reloads the page and reopens the contact modal so updated values persist
+- GUI chain drop propose/accept/reject actions reload page and reopen contact modal after completion
+
 ### Fixed
+- Missing name validation in `updateContact()` command — names with invalid characters were accepted on update but rejected on add
+- Clarified error message when recipient is not found — now reads "not a valid address or known contact" instead of just "not a valid address"
+- Graceful shutdown output truncated after Apache stop — `service apache2 stop` blocked indefinitely with no timeout, consuming the Docker grace period before MariaDB/Tor/Cron stops and completion message could execute; all service stops now wrapped in `timeout` commands
+- Phase 1/Phase 2 race condition: `selectAndForwardBestRp2p` now checks `phase1_sent` before forwarding upstream — if a relayed contact's RP2P arrived before all inserted contacts responded, Phase 2 triggered directly (skipping Phase 1), so the relayed contact never received our best downstream candidate and fell back to expiration with potentially sub-optimal candidates
+- Relayed contacts merge in RP2P forwarding: `handleRp2pRequest` now merges `p2p_relayed_contacts` into the senders list — contacts that returned `already_relayed` during broadcast but whose P2P to us hadn't arrived yet were missing from `p2p_senders` and never received the RP2P response
+- Phase 1 infinite loop: added `phase1_sent` flag to prevent `sendBestCandidateToRelayedContacts` from re-triggering when additional RP2P candidates arrive after Phase 1 has already fired — previously each new candidate that met the inserted threshold re-sent to relayed contacts, creating an exponential loop between nodes
+- RP2P source classification: removed incorrect 3-category approach (upstream/relayed/inserted) — all RP2Ps at a node come from downstream contacts only (inserted or relayed), not upstream senders
+- Phase 2 trigger condition: waits for all propagated contacts (inserted + relayed combined) to respond before final selection — the original upstream P2P sender is not counted since we send the result TO them
+- Per-sender fee calculation: relay nodes now calculate separate fees for each upstream sender based on their individual contact fee settings, instead of using the first sender's fee for all paths — fixes incorrect fee comparison that caused sub-optimal route selection
+- Phase 1 fee forwarding: reverted incorrect fee subtraction in `sendBestCandidateToRelayedContacts` — this node's fee must be included when sending to relayed contacts because cycle prevention ensures the RP2P won't loop back, and paths continuing through the relayed contact to other upstream nodes need this hop's fee in the accumulated total
+- Multi-path RP2P forwarding: first P2P sender (inserted) was missing from `p2p_senders` table, causing collision nodes to only forward RP2P to later (already_relayed) senders — the first sender's upstream relay never received the RP2P and fell back to hop-wait expiration, missing potentially optimal routes
+- Best-fee broadcast race condition: set `contacts_sent_count` ceiling before broadcast loop to prevent RP2P responses arriving via HTTP handler from triggering premature selection while the broadcast is still sending to other contacts
 - Best-fee originator slow fallback when candidates exist at expiration: `expireMessage()` now triggers best-fee selection for originators (not just relays) when candidates are available at P2P expiration time, avoiding the extra 30s grace period wait
 - Best-fee originator selecting suboptimal route: originator triggered immediate route selection on the first candidate after P2P expiration — both in `handleRp2pCandidate` (late arrivals) and in `expireMessage` step 1.5 (cleanup cycle). Now only relay nodes select immediately on expiration; originators wait for all contacts or fall back via cleanup after a grace period
 - P2P `sender_address` not updated at end recipient in multi-path routing: when the RP2P-selected route differs from the P2P propagation path, the end recipient's P2P record retained the original propagation sender instead of the actual transaction sender; relay nodes already had this fix
@@ -141,7 +120,12 @@ The project is currently in **ALPHA** status.
 - Dead `if(!$stmt)` checks after `pdo->prepare()` replaced with proper try/catch across 4 repository files
 - AJAX requests returning HTML login form instead of JSON when session expired (debug report download error)
 
+### Security
+- Wallet restore no longer re-creates the seedphrase file — the user already has the seedphrase (they just used it to restore), so writing it to a temp file was an unnecessary security exposure; only the authcode file is regenerated so the user can retrieve it if lost
+
 ### Docs
+- All `docker run` examples in CLI_DEMO_GUIDE.md now include `--restart unless-stopped` so containers automatically restart after host/Docker daemon restarts
+- All `docker run` commands in legacy demo files (`tests/old/demo/`, `tests/gui.txt`) updated with `--restart unless-stopped`
 - Document best-fee routing `best_fee` parameter in API_REFERENCE, API_QUICK_REFERENCE, GUI_REFERENCE, GUI_QUICK_REFERENCE
 - Add `--best` flag and best-fee routing example to CLI_DEMO_GUIDE
 - Add collision topology and best-fee integration tests to TESTING.md
