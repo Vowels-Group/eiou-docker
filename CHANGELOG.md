@@ -12,6 +12,20 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Added
+- Multi-part contact names with spaces supported in CLI (use quotes: `"John Doe"`)
+- Contact disambiguation when multiple contacts share the same name — CLI prompts for selection, JSON mode returns `multiple_matches` error with contact list
+- Searchable contact dropdown in GUI send form — type to filter contacts by name or address instead of scrolling through a static list
+- `lookupAllByName()` repository method for retrieving all contacts matching a name
+
+### Changed
+- Contacts grid now scrolls horizontally instead of wrapping into rows — cards continue to the right in a single scrollable row
+- GUI banner system — place images in `assets/banners/` to display a banner above the wallet and login screens; empty folder shows nothing
+
+### Fixed
+- Missing name validation in `updateContact()` command — names with invalid characters were accepted on update but rejected on add
+- Clarified error message when recipient is not found — now reads "not a valid address or known contact" instead of just "not a valid address"
+
 ### Security
 - Wallet restore no longer re-creates the seedphrase file — the user already has the seedphrase (they just used it to restore), so writing it to a temp file was an unnecessary security exposure; only the authcode file is regenerated so the user can retrieve it if lost
 

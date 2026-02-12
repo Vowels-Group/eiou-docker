@@ -852,6 +852,124 @@ class ContactRepositoryTest extends TestCase
     }
 
     // =========================================================================
+    // lookupAllByName() Tests
+    // =========================================================================
+
+    /**
+     * Test lookupAllByName returns all matching contacts
+     */
+    public function testLookupAllByNameReturnsAllMatches(): void
+    {
+        $contacts = [
+            ['pubkey' => 'key1', 'name' => 'John', 'http' => 'http://node1.example.com'],
+            ['pubkey' => 'key2', 'name' => 'John', 'http' => 'http://node2.example.com'],
+        ];
+
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->atLeastOnce())
+            ->method('bindValue');
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('fetchAll')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn($contacts);
+
+        $result = $this->repository->lookupAllByName('John');
+
+        $this->assertIsArray($result);
+        $this->assertCount(2, $result);
+        $this->assertEquals('key1', $result[0]['pubkey']);
+        $this->assertEquals('key2', $result[1]['pubkey']);
+    }
+
+    /**
+     * Test lookupAllByName returns empty array when no matches
+     */
+    public function testLookupAllByNameReturnsEmptyWhenNoMatches(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->atLeastOnce())
+            ->method('bindValue');
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('fetchAll')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn([]);
+
+        $result = $this->repository->lookupAllByName('Nonexistent');
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
+
+    /**
+     * Test lookupAllByName returns single match as array with one element
+     */
+    public function testLookupAllByNameReturnsSingleMatchAsArray(): void
+    {
+        $contacts = [
+            ['pubkey' => 'key1', 'name' => 'Alice', 'http' => 'http://alice.example.com'],
+        ];
+
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->atLeastOnce())
+            ->method('bindValue');
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(true);
+
+        $this->stmt->expects($this->once())
+            ->method('fetchAll')
+            ->with(PDO::FETCH_ASSOC)
+            ->willReturn($contacts);
+
+        $result = $this->repository->lookupAllByName('Alice');
+
+        $this->assertIsArray($result);
+        $this->assertCount(1, $result);
+    }
+
+    /**
+     * Test lookupAllByName returns empty array on query failure
+     */
+    public function testLookupAllByNameReturnsEmptyOnFailure(): void
+    {
+        $this->pdo->expects($this->once())
+            ->method('prepare')
+            ->willReturn($this->stmt);
+
+        $this->stmt->expects($this->atLeastOnce())
+            ->method('bindValue');
+
+        $this->stmt->expects($this->once())
+            ->method('execute')
+            ->willReturn(false);
+
+        $result = $this->repository->lookupAllByName('Test');
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
+
+    // =========================================================================
     // lookupByName() Tests
     // =========================================================================
 

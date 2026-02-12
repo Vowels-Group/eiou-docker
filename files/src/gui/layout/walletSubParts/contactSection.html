@@ -17,7 +17,11 @@
         </div>
     </div>
     <?php endif; ?>
-    <div class="contacts-grid" id="contacts-grid">
+    <div class="contacts-slider">
+        <button type="button" class="contacts-scroll-btn contacts-scroll-left" onclick="scrollContacts(-1)" title="Scroll left">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        <div class="contacts-grid" id="contacts-grid">
         <?php if (empty($allContacts)): ?>
             <div class="empty-state">
                 <i class="fas fa-users"></i>
@@ -176,10 +180,14 @@
 
         <?php endif; ?>
     </div>
+        <button type="button" class="contacts-scroll-btn contacts-scroll-right" onclick="scrollContacts(1)" title="Scroll right">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+    </div>
     <?php if (count($allContacts) > 16): ?>
-    <div id="contacts-show-more" style="text-align: center; margin-top: 1rem;">
+    <div id="contacts-show-more" style="text-align: center; margin-top: 0.5rem;">
         <button type="button" class="btn btn-outline" onclick="toggleShowAllContacts()" id="show-more-btn">
-            <i class="fas fa-chevron-down"></i> Show All (<span id="hidden-contacts-count"><?php echo count($allContacts) - 16; ?></span> more)
+            <i class="fas fa-chevron-right"></i> Show All (<span id="hidden-contacts-count"><?php echo count($allContacts) - 16; ?></span> more)
         </button>
     </div>
     <?php endif; ?>

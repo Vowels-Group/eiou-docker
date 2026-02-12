@@ -21,13 +21,14 @@
         <input type="hidden" name="action" value="sendEIOU">
         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken); ?>">
         
-        <div class="form-group">
-            <label for="recipient">Recipient:</label>
-            <select id="recipient" name="recipient" data-address-types='<?php echo htmlspecialchars(json_encode($addressTypes, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
-                <option value="">Or select from contacts below</option>
+        <div class="form-group" style="position: relative;">
+            <label for="recipient-search">Recipient:</label>
+            <input type="hidden" id="recipient" name="recipient" value="">
+            <input type="text" id="recipient-search" placeholder="Search contacts by name or address..." autocomplete="off"
+                   data-address-types='<?php echo htmlspecialchars(json_encode($addressTypes, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
+            <div id="recipient-dropdown" style="display:none; position:absolute; left:0; right:0; z-index:100; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #ced4da; border-top:none; border-radius:0 0 4px 4px; box-shadow:0 4px 8px rgba(0,0,0,0.1);">
                 <?php foreach ($acceptedContacts as $contact): ?>
                     <?php
-                    // Build dynamic address data attributes
                     $addressData = [];
                     foreach ($addressTypes as $type) {
                         if (!empty($contact[$type])) {
@@ -35,15 +36,15 @@
                         }
                     }
                     ?>
-                    <option value="<?php echo htmlspecialchars($contact['name']); ?>"
-                            data-addresses='<?php echo htmlspecialchars(json_encode($addressData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
-                        <?php echo htmlspecialchars($contact['name']); ?> (Contact)
-                    </option>
+                    <div class="recipient-option" style="padding:0.5rem 0.75rem; cursor:pointer;"
+                         data-name="<?php echo htmlspecialchars($contact['name']); ?>"
+                         data-addresses='<?php echo htmlspecialchars(json_encode($addressData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'
+                         ><?php echo htmlspecialchars($contact['name']); ?> <span style="color:#6c757d; font-size:0.85em;">(Contact)</span></div>
                 <?php endforeach; ?>
-            </select>
+            </div>
             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                 <i class="fas fa-lightbulb"></i>
-                <strong>Tip:</strong> You can also enter an address directly to send to non-contacts via P2P routing.
+                <strong>Tip:</strong> Search contacts by name or address, or enter an address directly below for P2P routing.
             </small>
         </div>
 

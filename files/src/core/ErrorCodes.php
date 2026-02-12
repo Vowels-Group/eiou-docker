@@ -88,6 +88,7 @@ class ErrorCodes
     public const ADDRESS_UPDATE_FAILED = 'ADDRESS_UPDATE_FAILED';
     public const NO_CONTACTS = 'NO_CONTACTS';
     public const CONTACT_UNREACHABLE = 'CONTACT_UNREACHABLE';
+    public const MULTIPLE_MATCHES = 'MULTIPLE_MATCHES';
 
     // Transaction errors
     public const TRANSACTION_FAILED = 'TRANSACTION_FAILED';
@@ -250,6 +251,7 @@ class ErrorCodes
             // 409 Conflict
             self::WALLET_EXISTS => 409,
             self::CONTACT_EXISTS => 409,
+            self::MULTIPLE_MATCHES => 409,
 
             // 429 Too Many Requests
             self::RATE_LIMIT_EXCEEDED => 429,
@@ -358,6 +360,7 @@ class ErrorCodes
             self::ADDRESS_UPDATE_FAILED => 'Address Update Failed',
             self::NO_CONTACTS => 'No Contacts Available',
             self::CONTACT_UNREACHABLE => 'Contact Unreachable',
+            self::MULTIPLE_MATCHES => 'Multiple Contacts Match',
 
             self::TRANSACTION_FAILED => 'Transaction Failed',
             self::TRANSACTION_IN_PROGRESS => 'Transaction In Progress',

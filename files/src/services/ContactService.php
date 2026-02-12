@@ -120,6 +120,18 @@ class ContactService implements ContactServiceInterface
     }
 
     /**
+     * Lookup contact information with disambiguation for duplicate names.
+     *
+     * @param mixed $request The lookup request data (name or address)
+     * @param CliOutputManager|null $output Output manager for interactive prompt / JSON error
+     * @return array|null The contact information or null if not found/cancelled
+     */
+    public function lookupContactInfoWithDisambiguation($request, ?CliOutputManager $output = null): ?array
+    {
+        return $this->managementService->lookupContactInfoWithDisambiguation($request, $output);
+    }
+
+    /**
      * Lookup a contact by name.
      *
      * @param string $name The contact name to search for

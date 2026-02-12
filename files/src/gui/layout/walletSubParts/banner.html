@@ -1,0 +1,30 @@
+<!-- Copyright 2025-2026 Vowels Group, LLC -->
+
+<!-- Banner Display — loads images from /gui/assets/banners/ -->
+<?php
+$bannerDir = '/etc/eiou/src/gui/assets/banners';
+$bannerExtensions = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'];
+$banners = [];
+
+if (is_dir($bannerDir)) {
+    $files = scandir($bannerDir);
+    foreach ($files as $file) {
+        if ($file === '.' || $file === '..' || $file[0] === '.') {
+            continue;
+        }
+        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        if (in_array($ext, $bannerExtensions, true)) {
+            $banners[] = $file;
+        }
+    }
+    sort($banners);
+}
+
+if (!empty($banners)):
+?>
+<div class="banner-container">
+    <?php foreach ($banners as $banner): ?>
+        <img src="/gui/assets/banners/<?php echo htmlspecialchars($banner); ?>" alt="Banner" class="banner-image">
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
