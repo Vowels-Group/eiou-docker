@@ -21,10 +21,12 @@
 }
 
 .banner-image {
-    max-width: 100%;
+    width: 100%;
     height: auto;
+    min-height: 50px;
     display: block;
-    margin: 0 auto;
+    object-fit: cover;
+    object-position: center;
 }
 
 body {
