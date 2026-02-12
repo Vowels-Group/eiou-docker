@@ -207,6 +207,9 @@ fi
 deleteResult=$(docker exec ${testContainer} rm -f ${USERCONFIG} 2>&1)
 verifyDeleted=$(docker exec ${testContainer} test -f ${USERCONFIG} && echo "EXISTS" || echo "DELETED")
 
+# Clean up any existing temp files so we can verify restore doesn't re-create seedphrase file
+docker exec ${testContainer} sh -c 'rm -f /dev/shm/eiou_wallet_info_* /tmp/eiou_wallet_info_* /dev/shm/eiou_authcode_* /tmp/eiou_authcode_*' 2>/dev/null
+
 # Also delete Tor hidden service files to test deterministic regeneration
 deleteTorResult=$(docker exec ${testContainer} rm -f ${TOR_SECRET_KEY} ${TOR_PUBLIC_KEY} ${TOR_HOSTNAME} 2>&1)
 verifyTorDeleted=$(docker exec ${testContainer} test -f ${TOR_HOSTNAME} && echo "EXISTS" || echo "DELETED")
@@ -247,6 +250,42 @@ if [[ "$verifyRestored" == "CREATED" ]]; then
 else
     printf "\t   Wallet restoration ${RED}FAILED${NC}\n"
     printf "\t   Restore output: ${restoreOutput}\n"
+    failure=$(( failure + 1 ))
+fi
+
+######################## VERIFY NO SEEDPHRASE FILE ON RESTORE ########################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 1.7a: Verify seedphrase file NOT created on restore"
+
+# Check that no eiou_wallet_info_* file exists (seedphrase should not be written on restore)
+seedphraseFileExists=$(docker exec ${testContainer} sh -c 'ls /dev/shm/eiou_wallet_info_* /tmp/eiou_wallet_info_* 2>/dev/null | head -1')
+
+if [[ -z "$seedphraseFileExists" ]]; then
+    printf "\t   Seedphrase file NOT created on restore ${GREEN}PASSED${NC}\n"
+    printf "\t   No eiou_wallet_info_* files found (expected)\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Seedphrase file created on restore ${RED}FAILED${NC}\n"
+    printf "\t   Found unexpected file: ${seedphraseFileExists}\n"
+    failure=$(( failure + 1 ))
+fi
+
+######################## VERIFY AUTHCODE FILE ON RESTORE ########################
+
+totaltests=$(( totaltests + 1 ))
+echo -e "\n\t-> Step 1.7b: Verify authcode file IS created on restore"
+
+# Check that eiou_authcode_* file exists (authcode should be written on restore)
+authcodeFileExists=$(docker exec ${testContainer} sh -c 'ls /dev/shm/eiou_authcode_* /tmp/eiou_authcode_* 2>/dev/null | head -1')
+
+if [[ -n "$authcodeFileExists" ]]; then
+    printf "\t   Authcode file created on restore ${GREEN}PASSED${NC}\n"
+    printf "\t   Found: ${authcodeFileExists}\n"
+    passed=$(( passed + 1 ))
+else
+    printf "\t   Authcode file NOT created on restore ${RED}FAILED${NC}\n"
+    printf "\t   No eiou_authcode_* files found in /dev/shm/ or /tmp/\n"
     failure=$(( failure + 1 ))
 fi
 
