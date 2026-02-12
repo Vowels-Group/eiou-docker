@@ -8,6 +8,7 @@
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     overflow: hidden;
     margin-bottom: 0;
+    background: #16213e;
 }
 
 .banner-container + .header {
@@ -16,12 +17,9 @@
 
 .banner-image {
     width: 100%;
-    height: auto;
-    min-height: 80px;
-    max-height: 150px;
+    max-height: 160px;
     display: block;
-    object-fit: cover;
-    object-position: center;
+    object-fit: contain;
 }
 
 * {
