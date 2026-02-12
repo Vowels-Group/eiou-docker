@@ -341,6 +341,104 @@ class ContactManagementService implements ContactManagementServiceInterface
     }
 
     /**
+     * Lookup contact information with disambiguation for duplicate names
+     *
+     * When multiple contacts share the same name, displays a numbered list
+     * and prompts the user to choose (CLI interactive mode) or returns a
+     * multiple_matches error (JSON mode).
+     *
+     * @param mixed $request Request data (name or address)
+     * @param CliOutputManager|null $output Output manager for interactive prompt / JSON error
+     * @return array|null Contact information or null
+     */
+    public function lookupContactInfoWithDisambiguation($request, ?CliOutputManager $output = null): ?array
+    {
+        $output = $output ?? CliOutputManager::getInstance();
+
+        // Try name lookup first - check for multiple matches
+        $allMatches = $this->contactRepository->lookupAllByName($request);
+
+        if (count($allMatches) === 1) {
+            // Single match - return as normal
+            return $this->lookupContactInfo($request);
+        }
+
+        if (count($allMatches) > 1) {
+            $addressTypes = $this->getAllAddressTypes();
+
+            if ($output->isJsonMode()) {
+                // JSON mode: return error with match data for API/GUI callers
+                $contacts = [];
+                foreach ($allMatches as $match) {
+                    $contact = ['name' => $match['name'] ?? null];
+                    foreach ($addressTypes as $type) {
+                        $contact[$type] = $match[$type] ?? null;
+                    }
+                    $contact['status'] = $match['status'] ?? null;
+                    $contacts[] = $contact;
+                }
+                $output->error(
+                    "Multiple contacts found with name: " . $request,
+                    ErrorCodes::MULTIPLE_MATCHES,
+                    409,
+                    ['multiple_matches' => $contacts, 'count' => count($allMatches)]
+                );
+                return null;
+            }
+
+            // Interactive CLI mode: display numbered list and prompt
+            echo "\nMultiple contacts found with name \"" . $request . "\":\n";
+            foreach ($allMatches as $i => $match) {
+                $address = $this->transportUtility->fallbackTransportAddress($match) ?? 'unknown';
+                echo "\t[" . ($i + 1) . "] " . ($match['name'] ?? 'N/A') . " - " . $address . "\n";
+            }
+            echo "\t[0] Cancel\n";
+            echo "Choose a contact (0-" . count($allMatches) . "): ";
+
+            $choice = trim(fgets(STDIN));
+            if (!is_numeric($choice) || (int)$choice < 1 || (int)$choice > count($allMatches)) {
+                echo "Cancelled.\n";
+                return null;
+            }
+
+            $selected = $allMatches[(int)$choice - 1];
+            return $this->buildContactInfoFromResult($selected);
+        }
+
+        // No name matches - fall through to address lookup (existing behavior)
+        return $this->lookupContactInfo($request);
+    }
+
+    /**
+     * Build contact info array from a raw database result
+     *
+     * @param array $lookupResult Raw contact data from repository
+     * @return array|null Structured contact info
+     */
+    private function buildContactInfoFromResult(array $lookupResult): ?array
+    {
+        $data = [];
+        if (isset($lookupResult['name'])) {
+            $data['receiverName'] = $lookupResult['name'];
+        }
+        if (isset($lookupResult['pubkey'])) {
+            $data['receiverPublicKey'] = $lookupResult['pubkey'];
+        }
+        if (isset($lookupResult['pubkey_hash'])) {
+            $data['receiverPublicKeyHash'] = $lookupResult['pubkey_hash'];
+        }
+        foreach ($this->getAllAddressTypes() as $type) {
+            if (isset($lookupResult[$type])) {
+                $data[$type] = $lookupResult[$type];
+            }
+        }
+        if (isset($lookupResult['status'])) {
+            $data['status'] = $lookupResult['status'];
+        }
+        return !empty($data) ? $data : null;
+    }
+
+    /**
      * Lookup contact by name
      *
      * @param string $name Contact name
@@ -875,8 +973,49 @@ class ContactManagementService implements ContactManagementServiceInterface
         }
 
         if (!$contact) {
-            // Try by name (input was either a name or address lookup returned no result)
-            $contact = $this->contactRepository->lookupByName($address);
+            // Try by name with disambiguation for duplicate names
+            $allMatches = $this->contactRepository->lookupAllByName($address);
+
+            if (count($allMatches) === 1) {
+                $contact = $allMatches[0];
+            } elseif (count($allMatches) > 1) {
+                $addressTypes = $this->getAllAddressTypes();
+
+                if ($output->isJsonMode()) {
+                    $contacts = [];
+                    foreach ($allMatches as $match) {
+                        $c = ['name' => $match['name'] ?? null];
+                        foreach ($addressTypes as $type) {
+                            $c[$type] = $match[$type] ?? null;
+                        }
+                        $c['status'] = $match['status'] ?? null;
+                        $contacts[] = $c;
+                    }
+                    $output->error(
+                        "Multiple contacts found with name: " . $address,
+                        ErrorCodes::MULTIPLE_MATCHES,
+                        409,
+                        ['multiple_matches' => $contacts, 'count' => count($allMatches)]
+                    );
+                    return;
+                }
+
+                // Interactive CLI: prompt user to choose
+                echo "\nMultiple contacts found with name \"" . $address . "\":\n";
+                foreach ($allMatches as $i => $match) {
+                    $addr = $this->transportUtility->fallbackTransportAddress($match) ?? 'unknown';
+                    echo "\t[" . ($i + 1) . "] " . ($match['name'] ?? 'N/A') . " - " . $addr . "\n";
+                }
+                echo "\t[0] Cancel\n";
+                echo "Choose a contact (0-" . count($allMatches) . "): ";
+
+                $choice = trim(fgets(STDIN));
+                if (!is_numeric($choice) || (int)$choice < 1 || (int)$choice > count($allMatches)) {
+                    echo "Cancelled.\n";
+                    return;
+                }
+                $contact = $allMatches[(int)$choice - 1];
+            }
         }
 
         if (!$contact) {
@@ -901,6 +1040,20 @@ class ContactManagementService implements ContactManagementServiceInterface
                     : "update [address] $field [value]"
             ]);
             return;
+        }
+
+        // Validate name if being updated
+        if ($field === 'name' || $field === 'all') {
+            $nameValue = ($field === 'all') ? $value : $value;
+            $nameValidation = $this->inputValidator->validateContactName($nameValue);
+            if (!$nameValidation['valid']) {
+                $this->secureLogger->warning("Invalid contact name in update", [
+                    'name' => $nameValue,
+                    'error' => $nameValidation['error']
+                ]);
+                $output->error("Invalid name: " . $nameValidation['error'], ErrorCodes::INVALID_NAME, 400);
+                return;
+            }
         }
 
         // Build update fields

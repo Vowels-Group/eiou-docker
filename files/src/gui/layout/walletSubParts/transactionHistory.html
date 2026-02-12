@@ -37,11 +37,11 @@
                     <div class="tx-in-progress-status">
                         <?php
                         $phaseLabels = [
-                            'pending' => ['label' => 'Pending', 'icon' => 'fa-hourglass-half', 'color' => '#6c757d'],
-                            'route_search' => ['label' => 'Searching for route...', 'icon' => 'fa-search', 'color' => '#ffc107'],
-                            'route_found' => ['label' => 'Route found', 'icon' => 'fa-route', 'color' => '#17a2b8'],
-                            'sending' => ['label' => 'Sending...', 'icon' => 'fa-paper-plane', 'color' => '#0d6efd'],
-                            'syncing' => ['label' => 'Syncing chain...', 'icon' => 'fa-link', 'color' => '#fd7e14']
+                            'pending' => ['label' => 'Pending', 'short' => 'Pending', 'icon' => 'fa-hourglass-half', 'color' => '#6c757d'],
+                            'route_search' => ['label' => 'Searching for route...', 'short' => 'Searching...', 'icon' => 'fa-search', 'color' => '#ffc107'],
+                            'route_found' => ['label' => 'Route found', 'short' => 'Found', 'icon' => 'fa-route', 'color' => '#17a2b8'],
+                            'sending' => ['label' => 'Sending...', 'short' => 'Sending...', 'icon' => 'fa-paper-plane', 'color' => '#0d6efd'],
+                            'syncing' => ['label' => 'Syncing chain...', 'short' => 'Syncing...', 'icon' => 'fa-link', 'color' => '#fd7e14']
                         ];
                         $phase = $ipTx['phase'] ?? 'pending';
                         $phaseInfo = $phaseLabels[$phase] ?? $phaseLabels['pending'];
@@ -49,7 +49,8 @@
                         ?>
                         <span class="tx-phase-badge" style="background: <?php echo $phaseInfo['color']; ?>; color: white;">
                             <i class="fas <?php echo $phaseInfo['icon']; ?>"></i>
-                            <?php echo htmlspecialchars($phaseInfo['label']); ?>
+                            <span class="phase-label-full"><?php echo htmlspecialchars($phaseInfo['label']); ?></span>
+                            <span class="phase-label-short"><?php echo htmlspecialchars($phaseInfo['short']); ?></span>
                         </span>
                         <?php if ($ipTx['source_type'] === 'p2p_request'): ?>
                             <span class="tx-type-badge tx-type-p2p"><i class="fas fa-network-wired"></i> P2P</span>

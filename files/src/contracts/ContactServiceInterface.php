@@ -42,6 +42,15 @@ interface ContactServiceInterface
     public function lookupContactInfo($request): ?array;
 
     /**
+     * Lookup contact information with disambiguation for duplicate names.
+     *
+     * @param mixed $request The lookup request data (name or address)
+     * @param \Eiou\Cli\CliOutputManager|null $output Output manager
+     * @return array|null The contact information or null if not found/cancelled
+     */
+    public function lookupContactInfoWithDisambiguation($request, ?\Eiou\Cli\CliOutputManager $output = null): ?array;
+
+    /**
      * Lookup a contact by name.
      *
      * @param string $name The contact name to search for

@@ -5,6 +5,28 @@
     box-sizing: border-box;
 }
 
+/* Banner — displayed above login when images exist in assets/banners/ */
+.banner-container {
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    border-radius: 8px 8px 0 0;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #16213e;
+}
+
+.banner-container + .auth-container {
+    border-radius: 0 0 8px 8px;
+    margin-top: 0;
+}
+
+.banner-image {
+    width: 100%;
+    display: block;
+    object-fit: contain;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.6;
@@ -12,6 +34,7 @@ body {
     background: #f8f9fa;
     min-height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
 }

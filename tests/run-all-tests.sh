@@ -364,6 +364,7 @@ balanceTest
 sendAllPeersTest
 routingTest
 contactListTest
+contactNameTest
 transactionTestSuite
 negativeFinancialTest
 messageDeliveryTest
@@ -399,6 +400,7 @@ balanceTest
 TESTS_CONTACTS="
 addContactsTest
 contactListTest
+contactNameTest
 pingTestSuite
 "
 

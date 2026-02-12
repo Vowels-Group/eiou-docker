@@ -56,6 +56,18 @@ interface ContactManagementServiceInterface
     public function lookupContactInfo($request): ?array;
 
     /**
+     * Lookup contact information with disambiguation for duplicate names.
+     *
+     * When multiple contacts share the same name, prompts for selection
+     * (CLI) or returns a multiple_matches error (JSON mode).
+     *
+     * @param mixed $request The lookup request data (name or address)
+     * @param CliOutputManager|null $output Output manager for interactive prompt / JSON error
+     * @return array|null The contact information or null if not found/cancelled
+     */
+    public function lookupContactInfoWithDisambiguation($request, ?CliOutputManager $output = null): ?array;
+
+    /**
      * Lookup a contact by name.
      *
      * @param string $name The contact name to search for

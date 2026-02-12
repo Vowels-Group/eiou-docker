@@ -568,6 +568,30 @@ class ContactRepository extends AbstractRepository {
     }
 
     /**
+     * Lookup all contacts matching a name (case-insensitive)
+     *
+     * Unlike lookupByName() which returns only the first match,
+     * this returns all contacts with the given name for disambiguation.
+     *
+     * @param string $name Contact name (case-insensitive)
+     * @return array Array of matching contacts (empty if none found)
+     */
+    public function lookupAllByName(string $name): array {
+        $query = "SELECT *
+                    FROM addresses a JOIN {$this->tableName} c
+                    ON a.pubkey_hash = c.pubkey_hash
+                    AND LOWER(c.name) = LOWER(:name)";
+
+        $stmt = $this->execute($query, [':name' => $name]);
+
+        if (!$stmt) {
+            return [];
+        }
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
      * Lookup contact by name
      *
      * @param string $name Contact name (case-insensitive)

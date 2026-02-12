@@ -220,7 +220,9 @@ function refreshWalletData() {
  * });
  */
 function initializeSendForm() {
-    var recipientSelect = document.getElementById('recipient');
+    var recipientHidden = document.getElementById('recipient');
+    var recipientSearch = document.getElementById('recipient-search');
+    var recipientDropdown = document.getElementById('recipient-dropdown');
     var manualAddressGroup = document.getElementById('manual-address-group');
     var manualAddressInput = document.getElementById('manual-address');
     var transactionTypeIndicator = document.getElementById('transaction-type-indicator');
@@ -230,65 +232,113 @@ function initializeSendForm() {
 
     // Set initial state - manual address is visible by default
     if (manualAddressInput) manualAddressInput.required = true;
-    if (recipientSelect) recipientSelect.required = false;
     if (transactionTypeIndicator) {
         transactionTypeIndicator.style.display = 'block';
         transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
         transactionTypeText.style.color = '#ffc107';
     }
 
-    if (recipientSelect) {
-        recipientSelect.addEventListener('change', function() {
-            var selectedValue = this.value;
-            var selectedOption = this.options[this.selectedIndex];
+    // Initialize searchable contact dropdown
+    if (recipientSearch && recipientDropdown) {
+        var allOptions = recipientDropdown.querySelectorAll('.recipient-option');
 
-            if (selectedValue === '') {
-                // Show manual address input (default state)
+        // Filter dropdown on text input
+        recipientSearch.addEventListener('input', function() {
+            var query = this.value.toLowerCase().trim();
+
+            // Clear selected contact if user is typing
+            if (recipientHidden) recipientHidden.value = '';
+
+            // Reset to P2P state when search cleared
+            if (!query) {
+                recipientDropdown.style.display = 'none';
                 manualAddressGroup.style.display = 'block';
-                manualAddressInput.required = true;
-                recipientSelect.required = false;
+                if (manualAddressInput) manualAddressInput.required = true;
                 addressTypeGroup.style.display = 'none';
                 if (addressTypeSelect) addressTypeSelect.required = false;
                 transactionTypeIndicator.style.display = 'block';
                 transactionTypeText.textContent = 'P2P Transaction (routed through contacts)';
                 transactionTypeText.style.color = '#ffc107';
-            } else {
-                // Contact selected - show address type selector, hide manual input
-                manualAddressGroup.style.display = 'none';
-                manualAddressInput.required = false;
-                manualAddressInput.value = '';
-                recipientSelect.required = true;
+                return;
+            }
 
-                // Get available addresses from JSON data attribute
-                var addressesJson = selectedOption.getAttribute('data-addresses');
+            var hasVisible = false;
+            for (var i = 0; i < allOptions.length; i++) {
+                var name = (allOptions[i].getAttribute('data-name') || '').toLowerCase();
+                var matched = name.indexOf(query) !== -1;
+
+                // Also match against contact addresses
+                if (!matched) {
+                    var addrJson = allOptions[i].getAttribute('data-addresses') || '{}';
+                    try {
+                        var addrs = JSON.parse(addrJson);
+                        for (var key in addrs) {
+                            if (addrs[key] && addrs[key].toLowerCase().indexOf(query) !== -1) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                    } catch (e) {}
+                }
+
+                if (matched) {
+                    allOptions[i].style.display = '';
+                    hasVisible = true;
+                } else {
+                    allOptions[i].style.display = 'none';
+                }
+            }
+            recipientDropdown.style.display = hasVisible ? 'block' : 'none';
+        });
+
+        // Show dropdown on focus if there's text
+        recipientSearch.addEventListener('focus', function() {
+            if (this.value.trim()) {
+                // Re-trigger filter
+                this.dispatchEvent(new Event('input'));
+            }
+        });
+
+        // Handle option click
+        for (var i = 0; i < allOptions.length; i++) {
+            allOptions[i].addEventListener('mousedown', function(e) {
+                e.preventDefault(); // Prevent blur from hiding dropdown before click registers
+                var name = this.getAttribute('data-name');
+                recipientSearch.value = name;
+                if (recipientHidden) recipientHidden.value = name;
+                recipientDropdown.style.display = 'none';
+
+                // Hide manual address, show address type selector
+                manualAddressGroup.style.display = 'none';
+                if (manualAddressInput) {
+                    manualAddressInput.required = false;
+                    manualAddressInput.value = '';
+                }
+
+                // Populate address type dropdown
+                var addressesJson = this.getAttribute('data-addresses');
                 var addresses = {};
                 try {
                     addresses = addressesJson ? JSON.parse(addressesJson) : {};
-                } catch (e) {
+                } catch (err) {
                     addresses = {};
                 }
 
-                // Populate address type dropdown dynamically
                 addressTypeSelect.innerHTML = '<option value="">Select address type</option>';
-
                 var addressTypes = Object.keys(addresses);
-                var addressCount = addressTypes.length;
 
-                for (var i = 0; i < addressTypes.length; i++) {
-                    var type = addressTypes[i];
+                for (var j = 0; j < addressTypes.length; j++) {
+                    var type = addressTypes[j];
                     var addr = addresses[type];
                     var truncatedAddr = addr.length > 30 ? addr.substring(0, 30) + '...' : addr;
                     var displayType = type.toUpperCase();
                     addressTypeSelect.innerHTML += '<option value="' + escapeHtml(type) + '">' + escapeHtml(displayType) + ' (' + escapeHtml(truncatedAddr) + ')</option>';
                 }
 
-                // Show address type selector if at least one address available
-                if (addressCount > 0) {
+                if (addressTypes.length > 0) {
                     addressTypeGroup.style.display = 'block';
                     addressTypeSelect.required = true;
-
-                    // Auto-select if only one address available
-                    if (addressCount === 1) {
+                    if (addressTypes.length === 1) {
                         addressTypeSelect.value = addressTypes[0];
                     }
                 } else {
@@ -299,7 +349,23 @@ function initializeSendForm() {
                 transactionTypeIndicator.style.display = 'block';
                 transactionTypeText.textContent = 'Direct Transaction (to contact)';
                 transactionTypeText.style.color = '#28a745';
-            }
+            });
+
+            // Hover highlight
+            allOptions[i].addEventListener('mouseenter', function() {
+                this.style.background = '#e9ecef';
+            });
+            allOptions[i].addEventListener('mouseleave', function() {
+                this.style.background = '';
+            });
+        }
+
+        // Hide dropdown on blur
+        recipientSearch.addEventListener('blur', function() {
+            // Small delay to allow option click to register
+            setTimeout(function() {
+                recipientDropdown.style.display = 'none';
+            }, 150);
         });
     }
 
@@ -1212,6 +1278,18 @@ function showManualCopyModal(text, successMessage) {
 // CONTACT SECTION FUNCTIONS
 // ============================================================================
 
+/**
+ * Scrolls the contacts grid left or right by one card width.
+ * @param {number} direction - -1 for left, 1 for right
+ */
+function scrollContacts(direction) {
+    var grid = document.getElementById('contacts-grid');
+    if (!grid) return;
+    // Card width (250px) + gap (16px)
+    var scrollAmount = 266 * direction;
+    grid.scrollLeft = grid.scrollLeft + scrollAmount;
+}
+
 // Contact Modal Functions (Tor Browser compatible - uses var and for loops)
 var currentContactId = null;
 var currentContactPubkeyHash = null;
@@ -1318,7 +1396,7 @@ function toggleShowAllContacts() {
             contactCards[i].style.display = '';
         }
         if (showMoreBtn) {
-            showMoreBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Show Less';
+            showMoreBtn.innerHTML = '<i class="fas fa-chevron-left"></i> Show Less';
         }
     } else {
         // Show only first 16 contacts
@@ -1330,7 +1408,7 @@ function toggleShowAllContacts() {
             }
         }
         if (showMoreBtn && hiddenCount) {
-            showMoreBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Show All (<span id="hidden-contacts-count">' + (totalContacts - CONTACTS_DEFAULT_LIMIT) + '</span> more)';
+            showMoreBtn.innerHTML = '<i class="fas fa-chevron-right"></i> Show All (<span id="hidden-contacts-count">' + (totalContacts - CONTACTS_DEFAULT_LIMIT) + '</span> more)';
         }
     }
 }

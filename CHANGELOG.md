@@ -13,6 +13,10 @@ The project is currently in **ALPHA** status.
 ## 2026-02-06 -- 2026-02-12
 
 ### Added
+- Multi-part contact names with spaces supported in CLI (use quotes: `"John Doe"`)
+- Contact disambiguation when multiple contacts share the same name — CLI prompts for selection, JSON mode returns `multiple_matches` error with contact list
+- Searchable contact dropdown in GUI send form — type to filter contacts by name or address instead of scrolling through a static list
+- `lookupAllByName()` repository method for retrieving all contacts matching a name
 - `STOPSIGNAL SIGTERM` directive in Dockerfile — makes the graceful shutdown signal explicit so `--restart unless-stopped` works correctly (containers restart on Docker daemon restart but stay stopped after `docker stop`)
 - SIGTERM integration test (`sigTermTest.sh`) — verifies `docker stop` triggers graceful shutdown within the grace period, container exits cleanly (not SIGKILL'd), and restarts with data intact
 - Two-phase best-fee selection: relay nodes first select from `inserted` contacts, then share the result with `already_relayed` contacts to break mutual deadlock, wait for their response, and re-select from all candidates before forwarding upstream
@@ -49,6 +53,8 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Changed
+- Contacts grid now scrolls horizontally instead of wrapping into rows — cards continue to the right in a single scrollable row
+- GUI banner system — place images in `assets/banners/` to display a banner above the wallet and login screens; empty folder shows nothing
 - Startup user info section no longer creates a separate authcode temp file on first wallet creation — the seedphrase file already contains the authcode, so creating a second file was redundant and confusing; on restart or restore, the authcode-only file is still created as before
 - `P2P_HOP_WAIT_DIVISOR` reduced from 20 to 12 — gives relay nodes 23s per hop (up from 15s clamped minimum) with the default 300s expiration, allowing more time for best-fee candidate collection
 - `P2P_MAX_ROUTING_LEVEL` reduced from 20 to 10 (max hops a user can configure); hopWait formula now uses separate `P2P_HOP_WAIT_DIVISOR` (fixed at 12) to preserve privacy
@@ -70,6 +76,8 @@ The project is currently in **ALPHA** status.
 - GUI chain drop propose/accept/reject actions reload page and reopen contact modal after completion
 
 ### Fixed
+- Missing name validation in `updateContact()` command — names with invalid characters were accepted on update but rejected on add
+- Clarified error message when recipient is not found — now reads "not a valid address or known contact" instead of just "not a valid address"
 - Graceful shutdown output truncated after Apache stop — `service apache2 stop` blocked indefinitely with no timeout, consuming the Docker grace period before MariaDB/Tor/Cron stops and completion message could execute; all service stops now wrapped in `timeout` commands
 - Phase 1/Phase 2 race condition: `selectAndForwardBestRp2p` now checks `phase1_sent` before forwarding upstream — if a relayed contact's RP2P arrived before all inserted contacts responded, Phase 2 triggered directly (skipping Phase 1), so the relayed contact never received our best downstream candidate and fell back to expiration with potentially sub-optimal candidates
 - Relayed contacts merge in RP2P forwarding: `handleRp2pRequest` now merges `p2p_relayed_contacts` into the senders list — contacts that returned `already_relayed` during broadcast but whose P2P to us hadn't arrived yet were missing from `p2p_senders` and never received the RP2P response
