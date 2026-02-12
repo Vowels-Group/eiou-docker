@@ -2010,6 +2010,268 @@ class Rp2pServiceTest extends TestCase
         $this->assertTrue(true);
     }
 
+    // =========================================================================
+    // Phase 1/Phase 2 Race Condition Fix Tests
+    // =========================================================================
+
+    /**
+     * Test selectAndForwardBestRp2p sends Phase 1 to relayed contacts when phase1_sent is false
+     *
+     * Race condition: if a relayed contact's RP2P arrived before all inserted contacts
+     * responded, Phase 2 triggers directly (skipping Phase 1). selectAndForwardBestRp2p
+     * must detect this and send Phase 1 before forwarding upstream.
+     */
+    public function testSelectAndForwardBestRp2pSendsPhase1WhenSkipped(): void
+    {
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+        $p2pRelayedContactRepo = $this->createMock(P2pRelayedContactRepository::class);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            $rp2pCandidateRepo,
+            $this->p2pSenderRepository
+        );
+        $service->setP2pRelayedContactRepository($p2pRelayedContactRepo);
+
+        // rp2pExists: false initially (not yet processed), then checked again in sendBestCandidateToRelayedContacts
+        $this->rp2pRepository->method('rp2pExists')
+            ->willReturn(false);
+
+        // Best candidate exists
+        $rp2pCandidateRepo->method('getBestCandidate')
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'time' => 1234567890,
+                'amount' => 10050,
+                'currency' => 'EIOU',
+                'sender_public_key' => self::TEST_PUBLIC_KEY,
+                'sender_address' => self::TEST_ADDRESS,
+                'sender_signature' => 'test-sig',
+                'fee_amount' => 50,
+            ]);
+
+        $rp2pCandidateRepo->method('getCandidateCount')
+            ->willReturn(1);
+
+        // P2P record (intermediate node — no destination_address)
+        $this->p2pRepository->method('getByHash')
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'amount' => self::TEST_AMOUNT,
+                'my_fee_amount' => 50,
+                'sender_address' => 'http://upstream.test',
+                'sender_public_key' => self::TEST_PUBLIC_KEY,
+            ]);
+
+        // Tracking: relayed contacts exist, Phase 1 was NOT sent (race condition)
+        $this->p2pRepository->method('getTrackingCounts')
+            ->willReturn([
+                'contacts_sent_count' => 2,
+                'contacts_responded_count' => 2,
+                'contacts_relayed_count' => 1,
+                'contacts_relayed_responded_count' => 1,
+                'phase1_sent' => 0,
+                'fast' => 0,
+            ]);
+
+        // KEY ASSERTION: Phase 1 catch-up fires — markPhase1Sent proves it
+        $this->p2pRepository->expects($this->once())
+            ->method('markPhase1Sent')
+            ->with(self::TEST_HASH);
+
+        // Phase 1 looks up relayed contacts, then handleRp2pRequest also merges them
+        $p2pRelayedContactRepo->expects($this->exactly(2))
+            ->method('getRelayedContactsByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                ['contact_address' => 'http://relayed-contact.test'],
+            ]);
+
+        // Setup for handleRp2pRequest (sends upstream after Phase 1)
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(100000);
+        $this->contactRepository->method('getCreditLimit')
+            ->willReturn(100000.0);
+        $this->rp2pRepository->method('insertRp2pRequest')
+            ->willReturn('test-rp2p-id');
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1234567890);
+        $this->messageDeliveryService->method('sendMessage')
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{}',
+                'messageId' => 'test-msg'
+            ]);
+
+        $service->selectAndForwardBestRp2p(self::TEST_HASH);
+    }
+
+    /**
+     * Test selectAndForwardBestRp2p skips Phase 1 catch-up when phase1_sent is already true
+     *
+     * Normal flow: Phase 1 was already sent. selectAndForwardBestRp2p should NOT
+     * re-send Phase 1 to relayed contacts.
+     */
+    public function testSelectAndForwardBestRp2pSkipsPhase1WhenAlreadySent(): void
+    {
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+        $p2pRelayedContactRepo = $this->createMock(P2pRelayedContactRepository::class);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            $rp2pCandidateRepo,
+            $this->p2pSenderRepository
+        );
+        $service->setP2pRelayedContactRepository($p2pRelayedContactRepo);
+
+        $this->rp2pRepository->method('rp2pExists')
+            ->willReturn(false);
+
+        $rp2pCandidateRepo->method('getBestCandidate')
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'time' => 1234567890,
+                'amount' => 10050,
+                'currency' => 'EIOU',
+                'sender_public_key' => self::TEST_PUBLIC_KEY,
+                'sender_address' => self::TEST_ADDRESS,
+                'sender_signature' => 'test-sig',
+                'fee_amount' => 50,
+            ]);
+
+        $rp2pCandidateRepo->method('getCandidateCount')
+            ->willReturn(1);
+
+        $this->p2pRepository->method('getByHash')
+            ->willReturn([
+                'hash' => self::TEST_HASH,
+                'amount' => self::TEST_AMOUNT,
+                'my_fee_amount' => 50,
+                'sender_address' => 'http://upstream.test',
+                'sender_public_key' => self::TEST_PUBLIC_KEY,
+            ]);
+
+        // Phase 1 already sent
+        $this->p2pRepository->method('getTrackingCounts')
+            ->willReturn([
+                'contacts_sent_count' => 2,
+                'contacts_responded_count' => 2,
+                'contacts_relayed_count' => 1,
+                'contacts_relayed_responded_count' => 1,
+                'phase1_sent' => 1,
+                'fast' => 0,
+            ]);
+
+        // KEY ASSERTION: Phase 1 should NOT re-fire
+        $this->p2pRepository->expects($this->never())
+            ->method('markPhase1Sent');
+
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(100000);
+        $this->contactRepository->method('getCreditLimit')
+            ->willReturn(100000.0);
+        $this->rp2pRepository->method('insertRp2pRequest')
+            ->willReturn('test-rp2p-id');
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1234567890);
+        $this->messageDeliveryService->method('sendMessage')
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{}',
+                'messageId' => 'test-msg'
+            ]);
+
+        $service->selectAndForwardBestRp2p(self::TEST_HASH);
+    }
+
+    /**
+     * Test handleRp2pRequest merges relayed contacts into senders list
+     *
+     * When a relayed contact is in p2p_relayed_contacts but not in p2p_senders
+     * (due to broadcast timing), handleRp2pRequest should still send the RP2P
+     * to that contact by merging the two lists.
+     */
+    public function testHandleRp2pRequestMergesRelayedContactsIntoSenders(): void
+    {
+        $p2pRelayedContactRepo = $this->createMock(P2pRelayedContactRepository::class);
+        $service = new Rp2pService(
+            $this->contactRepository,
+            $this->balanceRepository,
+            $this->p2pRepository,
+            $this->rp2pRepository,
+            $this->utilityContainer,
+            $this->userContext,
+            $this->messageDeliveryService,
+            null, // rp2pCandidateRepository
+            $this->p2pSenderRepository
+        );
+        $service->setP2pRelayedContactRepository($p2pRelayedContactRepo);
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'senderAddress' => self::TEST_ADDRESS
+        ];
+
+        // Intermediate node (no destination_address)
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'my_fee_amount' => 50,
+            'sender_address' => 'http://upstream.test',
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+        ];
+
+        $this->p2pRepository->method('getByHash')
+            ->willReturn($p2p);
+        $this->validationUtility->method('calculateAvailableFunds')
+            ->willReturn(100000);
+        $this->contactRepository->method('getCreditLimit')
+            ->willReturn(100000.0);
+        $this->rp2pRepository->method('insertRp2pRequest')
+            ->willReturn('test-rp2p-id');
+        $this->timeUtility->method('getCurrentMicrotime')
+            ->willReturn(1234567890);
+
+        // p2p_senders only has the upstream sender
+        $this->p2pSenderRepository->method('getSendersByHash')
+            ->willReturn([
+                ['sender_address' => 'http://upstream.test', 'sender_public_key' => 'key1'],
+            ]);
+
+        // p2p_relayed_contacts has a contact NOT in p2p_senders
+        $p2pRelayedContactRepo->expects($this->once())
+            ->method('getRelayedContactsByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                ['contact_address' => 'http://relayed-not-in-senders.test'],
+            ]);
+
+        // KEY ASSERTION: sendMessage called twice — upstream + merged relayed contact
+        $this->messageDeliveryService->expects($this->exactly(2))
+            ->method('sendMessage')
+            ->willReturn([
+                'success' => true,
+                'response' => ['status' => 'inserted'],
+                'raw' => '{}',
+                'messageId' => 'test-msg'
+            ]);
+
+        $service->handleRp2pRequest($request);
+    }
+
     /**
      * Test handleRp2pCandidate phase 1 falls back to selectAndForwardBestRp2p when no relayed contact repo
      */
