@@ -1514,6 +1514,7 @@ html {
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .tx-in-progress-amount {
@@ -1627,6 +1628,20 @@ html {
 @supports (gap: 0.25rem) {
     .tx-phase-badge > * + * {
         margin-left: 0;
+    }
+}
+
+/* Phase badge responsive labels — short text on small screens */
+.phase-label-short {
+    display: none;
+}
+
+@media (max-width: 576px) {
+    .phase-label-full {
+        display: none;
+    }
+    .phase-label-short {
+        display: inline;
     }
 }
 
