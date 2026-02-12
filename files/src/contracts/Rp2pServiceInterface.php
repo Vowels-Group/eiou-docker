@@ -59,6 +59,17 @@ interface Rp2pServiceInterface
     public function checkRp2pPossible($request, $echo = true);
 
     /**
+     * Select the best (lowest fee) RP2P candidate and process it
+     *
+     * Called when all contacts have responded in best-fee mode, or when
+     * the P2P is about to expire with pending candidates.
+     *
+     * @param string $hash The P2P hash
+     * @return void
+     */
+    public function selectAndForwardBestRp2p(string $hash): void;
+
+    /**
      * Calculate and return fee percent of request, output fee information into the log
      *
      * @param array $p2p The P2P request data from the database

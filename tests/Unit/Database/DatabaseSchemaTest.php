@@ -28,6 +28,7 @@ use function Eiou\Database\getDeadLetterQueueTableSchema;
 use function Eiou\Database\getDeliveryMetricsTableSchema;
 use function Eiou\Database\getRateLimitsTableSchema;
 use function Eiou\Database\getHeldTransactionsTableSchema;
+use function Eiou\Database\getP2pSendersTableSchema;
 
 #[CoversFunction('Eiou\Database\getContactsTableSchema')]
 #[CoversFunction('Eiou\Database\getAddressTableSchema')]
@@ -43,6 +44,7 @@ use function Eiou\Database\getHeldTransactionsTableSchema;
 #[CoversFunction('Eiou\Database\getDeliveryMetricsTableSchema')]
 #[CoversFunction('Eiou\Database\getRateLimitsTableSchema')]
 #[CoversFunction('Eiou\Database\getHeldTransactionsTableSchema')]
+#[CoversFunction('Eiou\Database\getP2pSendersTableSchema')]
 class DatabaseSchemaTest extends TestCase
 {
     // =========================================================================
@@ -1378,5 +1380,54 @@ class DatabaseSchemaTest extends TestCase
     {
         $schema = getTransactionsTableSchema();
         $this->assertStringContainsString('DATETIME(6)', $schema);
+    }
+
+    // =========================================================================
+    // P2P Senders Table Tests
+    // =========================================================================
+
+    /**
+     * Test p2p_senders table schema returns valid SQL
+     */
+    public function testGetP2pSendersTableSchemaReturnsValidSql(): void
+    {
+        $schema = getP2pSendersTableSchema();
+
+        $this->assertIsString($schema);
+        $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS p2p_senders', $schema);
+    }
+
+    /**
+     * Test p2p_senders table has required columns
+     */
+    public function testP2pSendersTableHasRequiredColumns(): void
+    {
+        $schema = getP2pSendersTableSchema();
+
+        $this->assertStringContainsString('hash VARCHAR(255)', $schema);
+        $this->assertStringContainsString('sender_address VARCHAR(255)', $schema);
+        $this->assertStringContainsString('sender_public_key TEXT', $schema);
+        $this->assertStringContainsString('created_at TIMESTAMP(6)', $schema);
+    }
+
+    /**
+     * Test p2p_senders table has unique index on hash + sender_address
+     */
+    public function testP2pSendersTableHasUniqueIndex(): void
+    {
+        $schema = getP2pSendersTableSchema();
+
+        $this->assertStringContainsString('UNIQUE INDEX idx_p2p_senders_hash_addr (hash, sender_address)', $schema);
+    }
+
+    /**
+     * Test p2p_senders table has required indexes
+     */
+    public function testP2pSendersTableHasRequiredIndexes(): void
+    {
+        $schema = getP2pSendersTableSchema();
+
+        $this->assertStringContainsString('INDEX idx_p2p_senders_hash (hash)', $schema);
+        $this->assertStringContainsString('INDEX idx_p2p_senders_created_at (created_at)', $schema);
     }
 }

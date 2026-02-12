@@ -25,7 +25,8 @@ class P2pRepository extends AbstractRepository {
         'my_fee_amount', 'destination_address', 'destination_pubkey',
         'destination_signature', 'request_level', 'max_request_level',
         'sender_public_key', 'sender_address', 'sender_signature',
-        'description', 'status', 'created_at', 'incoming_txid',
+        'description', 'fast', 'contacts_sent_count', 'contacts_responded_count', 'hop_wait', 'contacts_relayed_count', 'contacts_relayed_responded_count',
+        'phase1_sent', 'status', 'created_at', 'incoming_txid',
         'outgoing_txid', 'completed_at'
     ];
 
@@ -108,7 +109,9 @@ class P2pRepository extends AbstractRepository {
             'incoming_txid' => $request['incoming_txid'] ?? null,
             'outgoing_txid' => $request['outgoing_txid'] ?? null,
             'status' => $status,
-            'description' => $description // Privacy: Only stored locally, never sent to relay nodes
+            'description' => $description, // Privacy: Only stored locally, never sent to relay nodes
+            'fast' => (int)($request['fast'] ?? 1),
+            'hop_wait' => (int)($request['hopWait'] ?? 0)
         ];
 
         $result = $this->insert($data);
@@ -355,7 +358,7 @@ class P2pRepository extends AbstractRepository {
     public function getExpiredP2p(int $currentMicrotime, int $limit = 0): array {
         $query = "SELECT * FROM {$this->tableName}
                   WHERE expiration < :currentTime
-                    AND status NOT IN ('completed', 'expired', 'cancelled')
+                    AND status NOT IN ('completed', 'expired', 'cancelled', 'found')
                   ORDER BY created_at ASC";
 
         if ($limit > 0) {
@@ -374,6 +377,42 @@ class P2pRepository extends AbstractRepository {
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
             $this->logError("Failed to retrieve expired P2P messages", $e);
+            return [];
+        }
+    }
+
+    /**
+     * Get expired originator P2Ps that have rp2p candidates but haven't been processed yet
+     *
+     * Used by CleanupService as a fallback: after a grace period, selects the best route
+     * for originator P2Ps even if not all contacts responded (some paths may be dead).
+     *
+     * @param int $currentMicrotime Current microtime
+     * @param int $gracePeriod Grace period in microtime-int units (default 300000 = ~30s)
+     * @return array Array of expired originator P2P messages with candidates
+     */
+    public function getExpiredOriginatorP2psWithCandidates(int $currentMicrotime, int $gracePeriod = 300000): array {
+        $query = "SELECT p.* FROM {$this->tableName} p
+                  INNER JOIN rp2p_candidates rc ON rc.hash = p.hash
+                  LEFT JOIN rp2p r ON r.hash = p.hash
+                  WHERE p.status = :status
+                    AND p.destination_address IS NOT NULL
+                    AND p.fast = 0
+                    AND (p.expiration + :gracePeriod) < :currentTime
+                    AND r.hash IS NULL
+                  GROUP BY p.hash
+                  ORDER BY p.created_at ASC";
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->bindValue(':status', Constants::STATUS_EXPIRED, PDO::PARAM_STR);
+        $stmt->bindValue(':gracePeriod', $gracePeriod, PDO::PARAM_INT);
+        $stmt->bindValue(':currentTime', $currentMicrotime, PDO::PARAM_INT);
+
+        try {
+            $stmt->execute();
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->logError("Failed to retrieve expired originator P2Ps with candidates", $e);
             return [];
         }
     }
@@ -419,6 +458,22 @@ class P2pRepository extends AbstractRepository {
     }
 
     /**
+     * Update P2P sender address
+     *
+     * Used when the actual transaction sender differs from the originally stored
+     * sender, e.g. in multi-path routing where the chosen route uses a different
+     * upstream node than the first one that relayed the P2P request.
+     *
+     * @param string $hash P2P hash
+     * @param string $senderAddress New sender address
+     * @return bool Success status
+     */
+    public function updateSenderAddress(string $hash, string $senderAddress): bool {
+        $affectedRows = $this->update(['sender_address' => $senderAddress], 'hash', $hash);
+        return $affectedRows >= 0;
+    }
+
+    /**
      * Update P2P fee amount
      *
      * @param string $hash P2P hash
@@ -446,6 +501,101 @@ class P2pRepository extends AbstractRepository {
         }
 
         return $affectedRows >= 0;
+    }
+
+    /**
+     * Update contacts sent count for a P2P hash
+     *
+     * @param string $hash P2P hash
+     * @param int $count Number of contacts sent to
+     * @return bool Success status
+     */
+    public function updateContactsSentCount(string $hash, int $count): bool {
+        $affectedRows = $this->update(['contacts_sent_count' => $count], 'hash', $hash);
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Update contacts relayed count for a P2P hash
+     *
+     * Tracks the number of contacts that returned 'already_relayed' during broadcast.
+     * Used by two-phase best-fee selection to know when all relayed contacts have responded.
+     *
+     * @param string $hash P2P hash
+     * @param int $count Number of already_relayed contacts
+     * @return bool Success status
+     */
+    public function updateContactsRelayedCount(string $hash, int $count): bool {
+        $affectedRows = $this->update(['contacts_relayed_count' => $count], 'hash', $hash);
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Atomically increment the contacts responded count for a P2P hash
+     *
+     * @param string $hash P2P hash
+     * @return bool Success status
+     */
+    public function incrementContactsRespondedCount(string $hash): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET contacts_responded_count = contacts_responded_count + 1
+                  WHERE hash = :hash";
+
+        $stmt = $this->execute($query, [':hash' => $hash]);
+        return $stmt !== false;
+    }
+
+    /**
+     * Atomically increment the relayed contacts responded count for a P2P hash
+     *
+     * Tracks responses from contacts that returned 'already_relayed' during broadcast.
+     * Used for phase 2 trigger: inserted + relayed responses >= sentCount + relayedCount.
+     *
+     * @param string $hash P2P hash
+     * @return bool Success status
+     */
+    public function incrementContactsRelayedRespondedCount(string $hash): bool {
+        $query = "UPDATE {$this->tableName}
+                  SET contacts_relayed_responded_count = contacts_relayed_responded_count + 1
+                  WHERE hash = :hash";
+
+        $stmt = $this->execute($query, [':hash' => $hash]);
+        return $stmt !== false;
+    }
+
+    /**
+     * Mark Phase 1 as sent for a P2P hash
+     *
+     * Prevents Phase 1 (sendBestCandidateToRelayedContacts) from re-triggering
+     * when additional RP2P candidates arrive after it has already fired.
+     *
+     * @param string $hash P2P hash
+     * @return bool Success status
+     */
+    public function markPhase1Sent(string $hash): bool {
+        $affectedRows = $this->update(['phase1_sent' => 1], 'hash', $hash);
+        return $affectedRows >= 0;
+    }
+
+    /**
+     * Get tracking counts for a P2P hash (sent count, responded count, fast flag)
+     *
+     * @param string $hash P2P hash
+     * @return array|null Array with contacts_sent_count, contacts_responded_count, contacts_relayed_count, contacts_relayed_responded_count, fast or null
+     */
+    public function getTrackingCounts(string $hash): ?array {
+        $query = "SELECT contacts_sent_count, contacts_responded_count, contacts_relayed_count, contacts_relayed_responded_count, phase1_sent, fast
+                  FROM {$this->tableName}
+                  WHERE hash = :hash";
+
+        $stmt = $this->execute($query, [':hash' => $hash]);
+
+        if (!$stmt) {
+            return null;
+        }
+
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
     }
 
     /**

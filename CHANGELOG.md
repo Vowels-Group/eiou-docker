@@ -12,7 +12,46 @@ The project is currently in **ALPHA** status.
 
 ## [Unreleased]
 
+### Fixed
+- Phase 1/Phase 2 race condition: `selectAndForwardBestRp2p` now checks `phase1_sent` before forwarding upstream — if a relayed contact's RP2P arrived before all inserted contacts responded, Phase 2 triggered directly (skipping Phase 1), so the relayed contact never received our best downstream candidate and fell back to expiration with potentially sub-optimal candidates
+- Relayed contacts merge in RP2P forwarding: `handleRp2pRequest` now merges `p2p_relayed_contacts` into the senders list — contacts that returned `already_relayed` during broadcast but whose P2P to us hadn't arrived yet were missing from `p2p_senders` and never received the RP2P response
+- Phase 1 infinite loop: added `phase1_sent` flag to prevent `sendBestCandidateToRelayedContacts` from re-triggering when additional RP2P candidates arrive after Phase 1 has already fired — previously each new candidate that met the inserted threshold re-sent to relayed contacts, creating an exponential loop between nodes
+- RP2P source classification: removed incorrect 3-category approach (upstream/relayed/inserted) — all RP2Ps at a node come from downstream contacts only (inserted or relayed), not upstream senders
+- Phase 2 trigger condition: waits for all propagated contacts (inserted + relayed combined) to respond before final selection — the original upstream P2P sender is not counted since we send the result TO them
+- Per-sender fee calculation: relay nodes now calculate separate fees for each upstream sender based on their individual contact fee settings, instead of using the first sender's fee for all paths — fixes incorrect fee comparison that caused sub-optimal route selection
+- Phase 1 fee forwarding: reverted incorrect fee subtraction in `sendBestCandidateToRelayedContacts` — this node's fee must be included when sending to relayed contacts because cycle prevention ensures the RP2P won't loop back, and paths continuing through the relayed contact to other upstream nodes need this hop's fee in the accumulated total
+- Multi-path RP2P forwarding: first P2P sender (inserted) was missing from `p2p_senders` table, causing collision nodes to only forward RP2P to later (already_relayed) senders — the first sender's upstream relay never received the RP2P and fell back to hop-wait expiration, missing potentially optimal routes
+- Best-fee broadcast race condition: set `contacts_sent_count` ceiling before broadcast loop to prevent RP2P responses arriving via HTTP handler from triggering premature selection while the broadcast is still sending to other contacts
+
 ### Changed
+- `P2P_HOP_WAIT_DIVISOR` reduced from 20 to 12 — gives relay nodes 23s per hop (up from 15s clamped minimum) with the default 300s expiration, allowing more time for best-fee candidate collection
+- `P2P_MAX_ROUTING_LEVEL` reduced from 20 to 10 (max hops a user can configure); hopWait formula now uses separate `P2P_HOP_WAIT_DIVISOR` (fixed at 12) to preserve privacy
+
+### Added
+- Two-phase best-fee selection: relay nodes first select from `inserted` contacts, then share the result with `already_relayed` contacts to break mutual deadlock, wait for their response, and re-select from all candidates before forwarding upstream
+- Relay RP2P forwarding to late P2P senders: when a node already has an RP2P and receives a P2P from a new sender (`already_relayed`), it immediately sends the existing RP2P back — enabling optimal route discovery without waiting for hop-wait expiration
+- `p2p_relayed_contacts` table for tracking contacts that returned `already_relayed` during P2P broadcast
+- `contacts_relayed_count`, `contacts_relayed_responded_count`, and `phase1_sent` columns on `p2p` table for two-phase selection tracking
+- Separate RP2P response counting: inserted contacts increment `contacts_responded_count` (phase 1), relayed contacts increment `contacts_relayed_responded_count` (phase 2) — prevents premature phase triggers from cross-path RP2P candidates
+- Best-fee routing mode (`--best` flag): collects all RP2P responses and selects the lowest accumulated fee route (experimental)
+- `rp2p_candidates` table for storing RP2P candidate responses during best-fee selection
+- `p2p_senders` table for tracking all upstream P2P senders in multi-path routing
+- Multi-path RP2P forwarding: relay nodes forward RP2P responses to all upstream senders, not just the first
+- Per-hop expiration for best-fee mode: leaf nodes expire first, cascading selection upstream
+- Orphaned candidate recovery: `CleanupService` triggers best-fee selection when P2P expires with available candidates
+- `contacts_sent_count`, `contacts_responded_count`, `hop_wait`, and `fast` columns on `p2p` table for routing mode tracking
+
+### Changed
+- Collision topology test fees randomized (0.1-0.9) per run so best-fee routing is verified against varying fee structures
+- Best-fee path analysis labels tied optimal routes as `[TIED BEST]` and prints the randomized fee structure
+- Best-fee routing test shows timing comparison between fast mode and best-fee mode
+- Best-fee path analysis uses compound fee multiplier `(1 + fee/100)` product instead of additive sum; destination hop excluded from fee calculation
+- Best-fee routing test traces actual path for both fast and best-fee modes with a side-by-side path comparison; comparison now shows optimality status for each result category (OPTIMAL, BETTER, SAME optimal/sub-optimal, WORSE) and prints a `RESULT:` summary line for easy multi-run grep
+- Best-fee routing test timeouts are transport-mode aware: HTTP uses 120s P2P expiration (was 60s), Tor uses 180s (was 120s), sized to guarantee 30s+ gap between closest relay and originator even with maxLevel jitter
+- Best-fee routing test timeout includes grace period + headroom (180s for HTTP, 240s for Tor) to prevent false failures at the boundary
+- `run-all-tests.sh` supports `SKIP_CLEANUP=1` environment variable to keep containers alive after test completion
+- Best-fee routing GUI checkbox now displays a prominent warning-styled "Experimental" label instead of a subtle info note
+- Best-fee routing CLI `--best` flag help text emphasises experimental status with `[EXPERIMENTAL]` prefix
 - GUI notifications use session flash messages instead of URL parameters; messages no longer re-appear on page refresh
 - GUI shows toast notification when receiving transactions ("Payment Received" with amount and sender name)
 - GUI recent transactions list shows description instead of counterparty address; click to view full details with address in modal (#589)
@@ -43,6 +82,15 @@ The project is currently in **ALPHA** status.
 - `LoggerInterface` contract for dependency injection and testability (#557)
 
 ### Fixed
+- Best-fee originator slow fallback when candidates exist at expiration: `expireMessage()` now triggers best-fee selection for originators (not just relays) when candidates are available at P2P expiration time, avoiding the extra 30s grace period wait
+- Best-fee originator selecting suboptimal route: originator triggered immediate route selection on the first candidate after P2P expiration — both in `handleRp2pCandidate` (late arrivals) and in `expireMessage` step 1.5 (cleanup cycle). Now only relay nodes select immediately on expiration; originators wait for all contacts or fall back via cleanup after a grace period
+- P2P `sender_address` not updated at end recipient in multi-path routing: when the RP2P-selected route differs from the P2P propagation path, the end recipient's P2P record retained the original propagation sender instead of the actual transaction sender; relay nodes already had this fix
+- Best-fee relay expiration exceeding originator timeout: relay nodes computed `hopWait * remainingHops` which could far exceed the originator's P2P expiration (e.g. 75-285s vs 60s). Relay expiration is now capped to `upstreamExpiration - hopWait` with a minimum viability floor of `P2P_HOP_PROCESSING_BUFFER_SECONDS` (2s)
+- Best-fee P2P re-expiration after selection: after `selectAndForwardBestRp2p()` ran during cleanup, the next cleanup cycle could re-process the same P2P because `getExpiredP2p()` didn't exclude `'found'` status. Now sets status to `'found'` after selection and excludes `'found'` from expired P2P queries
+- Best-fee mode `contacts_sent_count` not set on direct-match path: relay nodes with the end-recipient as a direct contact used the `matchContact` shortcut without tracking sent count, blocking the "all contacts responded" trigger and forcing per-hop expiration fallback. Now counts both `inserted` and `already_relayed` from the destination (terminal node, no circular dependency risk)
+- Best-fee mode broadcast path excludes `already_relayed` contacts from `contacts_sent_count`: these contacts run their own RP2P cascade on an independent hop-wait timer, and waiting for them delays selection until their full cascade completes. Their RP2P is still accepted as a bonus candidate if it arrives before selection
+- Best-fee mode leaf relay nodes blocked with `contacts_sent_count=0`: tracking check required `contacts_sent_count > 0`, preventing leaf relays (that only forwarded to the destination) from ever triggering the "all responded" path. Removed the `> 0` guard so `contacts_responded_count >= 0` correctly triggers immediate forwarding
+- P2P `sender_address` not updated when relay receives transaction from a different upstream node than the original P2P sender (multi-path routing)
 - Contact request transactions now use dual-signature protocol: recipient signs `{'type':'create','nonce':N}` on acceptance, matching the sender's signature; `verifyRecipientSignature()` uses `reconstructContactSignedMessage()` for contact transactions instead of bypassing verification
 - Balance not recalculating after accepting a restored prior contact: `acceptContact()` now calls `syncContactBalance()` after `insertInitialContactBalances()` to recalculate from synced transactions
 - Chain status stuck on "Needs Sync" after accepting chain drop proposal: `valid_chain` now updated after execution
@@ -65,6 +113,11 @@ The project is currently in **ALPHA** status.
 - `getAllContactBalances` unhandled PDOException on query failure
 - Dead `if(!$stmt)` checks after `pdo->prepare()` replaced with proper try/catch across 4 repository files
 - AJAX requests returning HTML login form instead of JSON when session expired (debug report download error)
+
+### Docs
+- Document best-fee routing `best_fee` parameter in API_REFERENCE, API_QUICK_REFERENCE, GUI_REFERENCE, GUI_QUICK_REFERENCE
+- Add `--best` flag and best-fee routing example to CLI_DEMO_GUIDE
+- Add collision topology and best-fee integration tests to TESTING.md
 
 ---
 

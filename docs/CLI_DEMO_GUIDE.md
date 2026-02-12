@@ -831,7 +831,7 @@ docker exec alice eiou delete OldContact
 
 **Syntax:**
 ```bash
-eiou send <address|name> <amount> <currency>
+eiou send <address|name> <amount> <currency> [--best]
 ```
 
 #### Direct Transactions
@@ -972,6 +972,17 @@ With 0.1% fee per hop, when Alice sends 100 USD to Daniel:
 **Daniel receives: 100.00 USD**
 
 Only relay nodes charge fees. The sender's direct contact (Bob) and the recipient (Daniel) do not add relay fees.
+
+#### Best-Fee Routing (Experimental)
+
+By default, P2P uses **fast mode**: the first route found is accepted immediately. With `--best`, the system collects responses from all available routes and selects the one with the lowest accumulated fee.
+
+```bash
+# Send with best-fee routing
+docker exec alice eiou send Daniel 100 USD --best
+```
+
+Best-fee mode is useful in mesh topologies where multiple routes exist with different fee structures. It adds latency (the system waits for all routes to respond) but may find a cheaper path.
 
 ---
 

@@ -64,7 +64,7 @@ All POST actions require CSRF token.
 |--------|-----------------|----------|
 | `sendEIOU` | `recipient` OR `manual_recipient`, `amount`, `currency` | Redirect with message |
 
-Optional: `address_type` (when contact selected), `description`
+Optional: `address_type` (when contact selected), `description`, `best_fee` (experimental best-fee routing)
 
 ### Settings Actions (SettingsController)
 

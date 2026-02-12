@@ -146,8 +146,15 @@ class TransactionController
             $description = Security::sanitizeInput($_POST['description'] ?? '');
             $description = !empty($description) ? $description : null;
 
+            // Check best-fee route option (experimental)
+            $bestFee = !empty($_POST['best_fee']);
+
             // Create argv array with --json flag for structured output
             $argv = ['eiou', 'send', $finalRecipient, $amount, $currency, $description, '--json'];
+
+            if ($bestFee) {
+                $argv[] = '--best';
+            }
 
             // Create CliOutputManager with JSON mode enabled
             CliOutputManager::resetInstance();

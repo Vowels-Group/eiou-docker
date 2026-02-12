@@ -58,6 +58,9 @@ use Eiou\Database\MessageDeliveryRepository;
 use Eiou\Database\DeadLetterQueueRepository;
 use Eiou\Database\DeliveryMetricsRepository;
 use Eiou\Database\HeldTransactionRepository;
+use Eiou\Database\Rp2pCandidateRepository;
+use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\P2pRelayedContactRepository;
 use Eiou\Database\ChainDropProposalRepository;
 use Eiou\Database\RateLimiterRepository;
 use Eiou\Database\TransactionStatisticsRepository;
@@ -271,6 +274,48 @@ class ServiceContainer implements ContainerInterface {
             );
         }
         return $this->repositories['Rp2pRepository'];
+    }
+
+    /**
+     * Get Rp2pCandidateRepository instance
+     *
+     * @return Rp2pCandidateRepository
+     */
+    public function getRp2pCandidateRepository(): Rp2pCandidateRepository {
+        if (!isset($this->repositories['Rp2pCandidateRepository'])) {
+            $this->repositories['Rp2pCandidateRepository'] = new Rp2pCandidateRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['Rp2pCandidateRepository'];
+    }
+
+    /**
+     * Get P2pSenderRepository instance
+     *
+     * @return P2pSenderRepository
+     */
+    public function getP2pSenderRepository(): P2pSenderRepository {
+        if (!isset($this->repositories['P2pSenderRepository'])) {
+            $this->repositories['P2pSenderRepository'] = new P2pSenderRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['P2pSenderRepository'];
+    }
+
+    /**
+     * Get P2pRelayedContactRepository instance
+     *
+     * @return P2pRelayedContactRepository
+     */
+    public function getP2pRelayedContactRepository(): P2pRelayedContactRepository {
+        if (!isset($this->repositories['P2pRelayedContactRepository'])) {
+            $this->repositories['P2pRelayedContactRepository'] = new P2pRelayedContactRepository(
+                $this->pdo
+            );
+        }
+        return $this->repositories['P2pRelayedContactRepository'];
     }
 
     /**
@@ -559,7 +604,8 @@ class ServiceContainer implements ContainerInterface {
                 $this->getTransactionRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser,
-                $this->getMessageDeliveryService()
+                $this->getMessageDeliveryService(),
+                $this->getP2pSenderRepository()
             );
         }
         return $this->services['P2pService'];
@@ -582,7 +628,9 @@ class ServiceContainer implements ContainerInterface {
                 $this->getRp2pRepository(),
                 $this->getUtilityContainer(),
                 $this->currentUser,
-                $this->getMessageDeliveryService()
+                $this->getMessageDeliveryService(),
+                $this->getRp2pCandidateRepository(),
+                $this->getP2pSenderRepository()
             );
         }
         return $this->services['Rp2pService'];
@@ -1377,6 +1425,36 @@ class ServiceContainer implements ContainerInterface {
         // Reason: CleanupService needs to expire stale chain drop proposals
         if (isset($this->services['CleanupService']) && isset($this->services['ChainDropService'])) {
             $this->services['CleanupService']->setChainDropService($this->services['ChainDropService']);
+        }
+
+        // Wire CleanupService -> Rp2pCandidateRepository, Rp2pService, P2pSenderRepository, P2pRelayedContactRepository
+        // Reason: CleanupService needs to select best-fee route before expiring P2P with candidates
+        //         and clean up old P2P sender and relayed contact records
+        if (isset($this->services['CleanupService'])) {
+            $this->services['CleanupService']->setRp2pCandidateRepository($this->getRp2pCandidateRepository());
+            $this->services['CleanupService']->setP2pSenderRepository($this->getP2pSenderRepository());
+            $this->services['CleanupService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
+            if (isset($this->services['Rp2pService'])) {
+                $this->services['CleanupService']->setRp2pService($this->services['Rp2pService']);
+            }
+        }
+
+        // Wire Rp2pService -> P2pRelayedContactRepository
+        // Reason: Rp2pService needs relayed contacts for two-phase best-fee selection
+        if (isset($this->services['Rp2pService'])) {
+            $this->services['Rp2pService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
+        }
+
+        // Wire P2pService -> P2pRelayedContactRepository + Rp2pRepository + Rp2pService
+        // Reason: P2pService stores already_relayed contacts during broadcast for two-phase selection,
+        //         forwards existing RP2P to late P2P senders for better route discovery,
+        //         and re-checks best-fee selection after broadcast completes (race condition fix)
+        if (isset($this->services['P2pService'])) {
+            $this->services['P2pService']->setP2pRelayedContactRepository($this->getP2pRelayedContactRepository());
+            $this->services['P2pService']->setRp2pRepository($this->getRp2pRepository());
+            if (isset($this->services['Rp2pService'])) {
+                $this->services['P2pService']->setRp2pService($this->services['Rp2pService']);
+            }
         }
     }
 

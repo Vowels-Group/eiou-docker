@@ -85,6 +85,9 @@ function freshInstall(){
                 $dbConn->exec(getRateLimitsTableSchema());
                 $dbConn->exec(getHeldTransactionsTableSchema());
                 $dbConn->exec(getChainDropProposalsTableSchema());
+                $dbConn->exec(getRp2pCandidatesTableSchema());
+                $dbConn->exec(getP2pSendersTableSchema());
+                $dbConn->exec(getP2pRelayedContactsTableSchema());
             } catch (PDOException $tableError) {
                 Logger::getInstance()->error("Table creation failed", [
                     'error' => $tableError->getMessage()
@@ -138,6 +141,9 @@ function runMigrations(PDO $pdo): array {
     // List of migration tables to create (added after initial release)
     $migrations = [
         'chain_drop_proposals' => 'getChainDropProposalsTableSchema',
+        'rp2p_candidates' => 'getRp2pCandidatesTableSchema',
+        'p2p_senders' => 'getP2pSendersTableSchema',
+        'p2p_relayed_contacts' => 'getP2pRelayedContactsTableSchema',
     ];
 
     foreach ($migrations as $tableName => $schemaFunction) {
@@ -179,7 +185,17 @@ function runColumnMigrations(PDO $pdo): array {
     $results = [];
 
     // List of columns to ADD: [tableName => [columnName => columnDefinition]]
-    $columnsToAdd = [];
+    $columnsToAdd = [
+        'p2p' => [
+            'fast' => 'TINYINT(1) DEFAULT 1 AFTER description',
+            'contacts_sent_count' => 'INT DEFAULT 0 AFTER fast',
+            'contacts_responded_count' => 'INT DEFAULT 0 AFTER contacts_sent_count',
+            'hop_wait' => 'INT DEFAULT 0 AFTER contacts_responded_count',
+            'contacts_relayed_count' => 'INT DEFAULT 0 AFTER hop_wait',
+            'contacts_relayed_responded_count' => 'INT DEFAULT 0 AFTER contacts_relayed_count',
+            'phase1_sent' => 'TINYINT(1) DEFAULT 0 AFTER contacts_relayed_responded_count',
+        ],
+    ];
 
     // List of columns to DROP: [tableName => [columnName, ...]]
     $columnsToDrop = [];

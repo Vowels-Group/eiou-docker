@@ -142,7 +142,18 @@ class Constants {
     const P2P_DEFAULT_EXPIRATION_SECONDS = 300; // 5 minutes - time before P2P request expires
     const P2P_MIN_EXPIRATION_SECONDS = 60; // Minimum expiration time to allow network propagation
     const P2P_REQUEST_LEVEL_VALIDATION_MAX = 1000; // Maximum valid request level for input validation
-    const P2P_MAX_ROUTING_LEVEL = 20; // Maximum allowed P2P routing hops (prevents infinite routing)
+    const P2P_MAX_ROUTING_LEVEL = 10; // Maximum allowed P2P routing hops (user setting cap)
+    const P2P_HOP_WAIT_DIVISOR = 12; // Fixed divisor for hopWait formula (hides actual max level for privacy)
+    const P2P_HOP_PROCESSING_BUFFER_SECONDS = 2; // Per-hop buffer for network latency and processing time
+
+    // Transport timeouts (single HTTP/TOR request to a node)
+    const HTTP_TRANSPORT_TIMEOUT_SECONDS = 15; // Max time for one HTTP request between nodes
+    const TOR_TRANSPORT_TIMEOUT_SECONDS = 30;  // Max time for one TOR request between nodes
+
+    // Minimum per-hop wait: based on a single HTTP round-trip (send P2P + receive RP2P).
+    // Must be at least the transport timeout so a relay never expires before a
+    // back-and-forth with its direct contact can complete.
+    const P2P_MIN_HOP_WAIT_SECONDS = self::HTTP_TRANSPORT_TIMEOUT_SECONDS;
 
     // Contact management
     const CONTACT_DEFAULT_FEE_PERCENT = 0.1;

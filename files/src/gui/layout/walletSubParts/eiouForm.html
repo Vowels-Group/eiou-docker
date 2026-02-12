@@ -91,6 +91,22 @@
             </small>
         </div>
 
+        <!-- P2P Routing Mode -->
+        <div class="form-group" id="best-fee-group">
+            <label><i class="fas fa-route"></i> Best Fee Route:</label>
+            <div class="toggle-row">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="best-fee" name="best_fee" value="1">
+                    <span class="toggle-slider"></span>
+                </label>
+                <span id="bestFeeStatus" class="toggle-status">Disabled</span>
+            </div>
+            <small style="color: #856404; background: #fff3cd; border: 1px solid #ffc107; border-radius: 3px; padding: 0.35rem 0.5rem; margin-top: 0.25rem; display: block;">
+                <i class="fas fa-flask"></i> <strong>Experimental:</strong>
+                Finds the cheapest fee route but may be slower or less reliable than the default. When disabled, the first available route is used.
+            </small>
+        </div>
+
         <!-- Transaction Type Indicator -->
         <div id="transaction-type-indicator" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 1rem; margin-bottom: 1rem; display: none;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">

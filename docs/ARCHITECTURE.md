@@ -12,7 +12,7 @@ Technical architecture documentation for the EIOU Docker node implementation.
 6. [Circular Dependency Management](#circular-dependency-management)
 7. [Message Processing Pipeline](#message-processing-pipeline)
 8. [Data Layer](#data-layer)
-9. [P2P Networking](#p2p-networking)
+9. [P2P Networking](#p2p-networking) (Fast vs Best-Fee routing, per-hop expiration, multi-path sender tracking)
 10. [Transaction Lifecycle](#transaction-lifecycle)
 11. [Startup Sequence](#startup-sequence)
 12. [Security Model](#security-model)
@@ -308,10 +308,10 @@ if ($container->has(ContactServiceInterface::class)) {
 | `BalanceService` | Balance calculations and currency conversions | BalanceRepo, TransactionContactRepo, AddressRepo, CurrencyUtility |
 | `ChainVerificationService` | Transaction chain integrity verification | TransactionChainRepo, SyncTriggerProxy |
 | `TransactionValidationService` | Transaction validation with proactive sync | TransactionRepo, ContactRepo, ValidationUtility, SyncTriggerProxy, TransactionService |
-| `TransactionProcessingService` | Transaction processing with atomic claiming | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncTriggerProxy, P2pService, HeldTransactionService |
+| `TransactionProcessingService` | Transaction processing with atomic claiming; updates P2P sender address on relay when actual transaction sender differs from stored sender | TransactionRepo, TransactionRecoveryRepo, TransactionChainRepo, P2pRepo, BalanceRepo, SyncTriggerProxy, P2pService, HeldTransactionService |
 | `SendOperationService` | Send orchestration with distributed locking | TransactionRepo, AddressRepo, P2pRepo, TransportUtility, LockingService, ContactService, P2pService, SyncTriggerProxy, TransactionService, TransactionChainRepo, ChainDropService |
-| `P2pService` | Peer-to-peer message routing | ContactRepo, P2pRepo, TransportUtility, MessageDeliveryService |
-| `Rp2pService` | Return P2P (response) message handling | ContactRepo, Rp2pRepo, SendOperationService (via P2pTransactionSenderInterface) |
+| `P2pService` | Peer-to-peer message routing; broadcasts P2P requests, handles fast/best-fee mode, tracks multi-path senders | ContactRepo, P2pRepo, P2pSenderRepo, TransportUtility, MessageDeliveryService |
+| `Rp2pService` | Return P2P (response) message handling; candidate storage and best-fee selection in best-fee mode | ContactRepo, Rp2pRepo, Rp2pCandidateRepo, P2pRepo, SendOperationService (via P2pTransactionSenderInterface) |
 | `ContactService` | Contact management facade | ContactRepo, AddressRepo, TransactionContactRepo, SyncTriggerProxy, MessageDeliveryService |
 | `ContactManagementService` | Contact CRUD and blocking | ContactRepo, ContactSyncService |
 | `ContactSyncService` | Contact-level sync operations | ContactRepo, SyncTriggerProxy, MessageDeliveryService |
@@ -948,6 +948,8 @@ Each node maintains a MariaDB database with these primary tables:
 | `api_request_log` | API request audit trail |
 | `rate_limits` | Rate limiting state |
 | `chain_drop_proposals` | Mutual chain drop agreement tracking |
+| `p2p_senders` | Multi-path upstream sender tracking for RP2P forwarding |
+| `rp2p_candidates` | Best-fee RP2P candidate responses awaiting selection |
 
 ### Repository Pattern
 
@@ -966,7 +968,9 @@ AbstractRepository
     |       +-- TransactionRecoveryRepository (stuck transaction recovery)
     |       +-- TransactionContactRepository (contact-based queries)
     +-- P2pRepository
+    +-- P2pSenderRepository
     +-- Rp2pRepository
+    +-- Rp2pCandidateRepository
     +-- MessageDeliveryRepository
     +-- DeadLetterQueueRepository
     +-- HeldTransactionRepository
@@ -1080,7 +1084,12 @@ This trait centralizes common query patterns to reduce code duplication across r
 ### P2P Routing Overview
 
 P2P routing enables transactions to reach recipients through intermediate nodes when
-no direct connection exists.
+no direct connection exists. The system supports two routing modes:
+
+| Mode | Flag | Internal | Behavior |
+|------|------|----------|----------|
+| **Fast** (default) | None | `fast=1` | First RP2P response wins; lowest latency |
+| **Best-Fee** (experimental) | `--best` | `fast=0` | Collects all responses, selects lowest accumulated fee |
 
 ```
       ALICE                   BOB                    CAROL                   EVE
@@ -1147,7 +1156,229 @@ request patterns.
 2. Recipient sends RP2P response back along route
 3. Intermediaries forward RP2P (reverse path)
 4. Original sender receives acceptance
-5. Direct transaction now possible
+5. Transaction sent along the established route
+
+### Routing Modes
+
+#### Fast Mode (Default)
+
+Fast mode processes the first RP2P response immediately. When a node receives an RP2P
+in fast mode, `Rp2pService::checkRp2pPossible()` calls `handleRp2pRequest()` directly.
+No candidate storage or selection logic is involved.
+
+**Characteristics:**
+
+- Lowest latency — uses first successful route
+- May not select the cheapest fee route
+- Single transaction path, no waiting
+- Status flow: initial → queued → sent → found → completed
+
+#### Best-Fee Mode (Experimental)
+
+Best-fee mode collects RP2P responses from all paths and selects the route with the
+lowest accumulated fee. Enabled with the `--best` CLI flag or the GUI checkbox.
+
+**Phase 1 — Request Broadcasting:**
+
+The P2P request is broadcast to all accepted contacts with `fast=0` and a `hopWait`
+value that controls per-hop expiration timing. Each relay stores the request and
+tracks how many contacts it forwarded to (`contacts_sent_count`).
+
+**Phase 2 — Candidate Collection:**
+
+When an RP2P response arrives at a node in best-fee mode, it is stored as a
+candidate in the `rp2p_candidates` table rather than being processed immediately.
+The node atomically increments `contacts_responded_count` on the P2P record.
+
+```php
+// In Rp2pService::checkRp2pPossible()
+if ($fast == 0) {
+    handleRp2pCandidate();  // Store candidate, don't process yet
+} else {
+    handleRp2pRequest();    // Process immediately (fast mode)
+}
+```
+
+**Phase 3 — Best-Fee Selection:**
+
+Selection is triggered when either:
+1. All contacts have responded (`contacts_responded_count >= contacts_sent_count`)
+2. The per-hop expiration fires (orphaned candidate recovery via `CleanupService`)
+
+The best candidate is the one with the lowest `amount` (since accumulated fees
+increase the final amount):
+
+```sql
+SELECT * FROM rp2p_candidates WHERE hash = ? ORDER BY amount ASC LIMIT 1
+```
+
+After selection, `selectAndForwardBestRp2p()` processes the winning candidate
+through the normal `handleRp2pRequest()` flow and deletes all candidates for
+that hash.
+
+**Phase 3a — Two-Phase Relay Selection (Mesh Deadlock Prevention):**
+
+In mesh topologies, two relay nodes may be contacts of each other (e.g., A2 and
+A4). Both receive the P2P from upstream, broadcast to their downstream contacts,
+and record each other as `already_relayed` in the `p2p_relayed_contacts` table.
+Neither can complete selection without the other's best candidate — a deadlock.
+
+The two-phase relay mechanism breaks this deadlock:
+
+1. **Relay Phase 1** — When all *inserted* contacts have responded but relayed
+   contacts haven't, the node sends its current best downstream candidate to all
+   `already_relayed` contacts via `sendBestCandidateToRelayedContacts()`. The
+   `phase1_sent` flag is set atomically before sending to prevent re-triggering.
+
+2. **Relay Phase 2** — When all propagated contacts (inserted + relayed combined)
+   have responded, `selectAndForwardBestRp2p()` picks the overall best candidate
+   (which now includes candidates from relayed contacts) and forwards it upstream
+   via `handleRp2pRequest()`.
+
+```
+  A1 (upstream)          A3 (upstream)
+   |                      |
+  A2 ←-- already_relayed --→ A4
+   |                          |
+  A5 (downstream)            A6 (downstream)
+
+Timeline:
+1. A5 responds to A2, A6 responds to A4  (inserted contacts done)
+2. A2 sends best(A5) to A4              (relay Phase 1)
+   A4 sends best(A6) to A2              (relay Phase 1)
+3. A2 re-selects from {A5, A4's candidate}, sends upstream to A1  (relay Phase 2)
+   A4 re-selects from {A6, A2's candidate}, sends upstream to A3  (relay Phase 2)
+```
+
+**Race condition guard:** If a relayed contact's RP2P arrives before all inserted
+contacts respond, relay Phase 2 can trigger directly (skipping relay Phase 1).
+To prevent this, `selectAndForwardBestRp2p()` checks `phase1_sent` before
+forwarding upstream. If Phase 1 was skipped, it calls
+`sendBestCandidateToRelayedContacts()` first, ensuring the relayed contact
+receives the node's best downstream candidate before the final selection goes
+upstream.
+
+**Sender list merge:** `handleRp2pRequest()` merges `p2p_relayed_contacts` into
+the `p2p_senders` list before sending RP2P responses. This ensures that contacts
+which returned `already_relayed` during broadcast — but whose own P2P hasn't
+arrived at this node yet — still receive the RP2P response.
+
+**Phase 4 — Cascading Selection:**
+
+Per-hop expiration ensures selection cascades from leaf nodes back to the originator.
+Leaf nodes (closest to recipient) expire first, forward their best route upstream,
+and each level selects its best before its own expiration fires.
+
+### Per-Hop Expiration
+
+In best-fee mode, each relay node calculates a local expiration based on its
+position in the route, ensuring leaves expire before upstream nodes.
+
+**Calculation at originator:**
+
+```php
+$hopWait = floor($fullExpiration / $maxRoutingLevel) - P2P_HOP_PROCESSING_BUFFER_SECONDS;
+$hopWait = max($hopWait, P2P_MIN_HOP_WAIT_SECONDS);  // Minimum 3 seconds
+```
+
+**Calculation at relay:**
+
+```php
+$remainingHops = max(1, $maxRequestLevel - $requestLevel);
+$scaledWait = $hopWait * $remainingHops;
+$scaledExpiration = now() + $scaledWait;
+```
+
+**Upstream expiration cap:**
+
+The scaled calculation can produce expirations that exceed the originator's timeout
+(e.g., `15s * 19 hops = 285s` vs a 60s originator expiration). When this happens,
+the originator expires first, finds zero candidates (relays are still alive), and
+kills the P2P — defeating best-fee routing entirely.
+
+To prevent this, each relay caps its expiration to the upstream node's expiration
+minus one `hopWait` buffer. This preserves the leaf-to-root cascade ordering while
+guaranteeing no relay outlives its upstream:
+
+```php
+$upstreamExpiration = $request['expiration'];  // Incoming from upstream node
+if ($upstreamExpiration > 0 && $scaledExpiration >= $upstreamExpiration) {
+    $cappedExpiration = $upstreamExpiration - convertToMicrotime($hopWait);
+    $minExpiration = now() + convertToMicrotime(P2P_HOP_PROCESSING_BUFFER_SECONDS);
+    $localExpiration = max($minExpiration, $cappedExpiration);
+} else {
+    $localExpiration = $scaledExpiration;
+}
+```
+
+**Example cascade** (60s originator expiration, `hopWait = 15s`, 4 relay levels):
+
+```
+A0 (Originator):  expiration = T+60   (set by user's p2pExpiration)
+A1 (Relay 1):     min(T+75, T+60-15) = T+45   ← capped by upstream
+A3 (Relay 2):     min(T+60, T+45-15) = T+30   ← capped by upstream
+A6 (Relay 3):     min(T+45, T+30-15) = T+15   ← capped by upstream
+```
+
+Leaves expire first → select best candidate → RP2P propagates upstream → each
+level selects its best → originator selects at T+60. The cascade completes within
+the originator's window regardless of hop count or `maxRequestLevel`.
+
+### Orphaned Candidate Recovery
+
+If a P2P expires before all contacts respond, the `CleanupService` triggers
+best-fee selection on the available candidates rather than expiring the P2P:
+
+```php
+// In CleanupService::expireMessage()
+if (!$message['fast'] && $candidateCount > 0) {
+    $this->rp2pService->selectAndForwardBestRp2p($hash);
+    $this->p2pRepository->updateStatus($hash, 'found');  // Prevent re-processing
+    return;  // Don't expire — forward best available route
+}
+```
+
+After selection, the P2P status is set to `'found'`. This is critical because
+`getExpiredP2p()` runs on every cleanup cycle — without this status update, the
+same P2P would be re-processed on the next cycle, potentially interfering with
+the in-progress best-fee delivery. The `getExpiredP2p()` query excludes
+`'found'` alongside `'completed'`, `'expired'`, and `'cancelled'`.
+
+This ensures that even partial responses produce a usable route.
+
+### Multi-Path Sender Tracking
+
+In a mesh network, a relay node may receive the same P2P request from multiple
+upstream nodes (e.g., A1 and A3 both relay to A4). The `p2p_senders` table
+tracks all upstream senders so RP2P responses can be forwarded back along every
+path that delivered the P2P.
+
+```
+  A0 (originator)
+   |  \
+  A1   A2
+   |    |
+  A3---A4 (relay)    ← A4 receives P2P from both A1 and A3
+         |
+        A5 (recipient)
+```
+
+**How it works:**
+
+1. When A4 first receives the P2P from A1, it stores the P2P record
+   (`p2p.sender_address = A1`) and records A1 in `p2p_senders`.
+2. When A4 receives the duplicate P2P from A3, it returns `already_relayed`
+   but also records A3 in `p2p_senders`.
+3. When A4 receives the RP2P from A5, it forwards the response to **all**
+   senders in `p2p_senders` (both A1 and A3), not just the original sender.
+
+**Sender address correction on transaction arrival:**
+
+When the actual transaction arrives at A4, it may come from A3 (the route A0 chose)
+rather than A1 (stored in `p2p.sender_address`). The `TransactionProcessingService`
+detects this mismatch and updates `p2p.sender_address` to match the actual sender.
+This ensures completion relay, cleanup recovery, and txid bookkeeping reference the
+correct upstream node.
 
 ### Transport Modes
 

@@ -1150,5 +1150,77 @@ class P2pRepositoryTest extends TestCase
         foreach ($expectedColumns as $column) {
             $this->assertContains($column, $allowedColumns);
         }
+        // Two-phase selection column
+        $this->assertContains('contacts_relayed_count', $allowedColumns);
+    }
+
+    // =========================================================================
+    // updateContactsRelayedCount() Tests
+    // =========================================================================
+
+    /**
+     * Test updateContactsRelayedCount updates the relayed count
+     */
+    public function testUpdateContactsRelayedCountSuccess(): void
+    {
+        $this->pdo->method('prepare')
+            ->willReturn($this->stmt);
+        $this->stmt->method('execute')
+            ->willReturn(true);
+        $this->stmt->method('rowCount')
+            ->willReturn(1);
+
+        $result = $this->repository->updateContactsRelayedCount('test-hash', 3);
+
+        $this->assertTrue($result);
+    }
+
+    // =========================================================================
+    // getTrackingCounts() Tests
+    // =========================================================================
+
+    /**
+     * Test getTrackingCounts returns contacts_relayed_count in result
+     */
+    public function testGetTrackingCountsIncludesRelayedCount(): void
+    {
+        $expectedResult = [
+            'contacts_sent_count' => 2,
+            'contacts_responded_count' => 1,
+            'contacts_relayed_count' => 1,
+            'fast' => 0,
+        ];
+
+        $this->pdo->method('prepare')
+            ->willReturn($this->stmt);
+        $this->stmt->method('execute')
+            ->willReturn(true);
+        $this->stmt->method('fetch')
+            ->willReturn($expectedResult);
+
+        $result = $this->repository->getTrackingCounts('test-hash');
+
+        $this->assertNotNull($result);
+        $this->assertArrayHasKey('contacts_relayed_count', $result);
+        $this->assertEquals(1, $result['contacts_relayed_count']);
+        $this->assertEquals(2, $result['contacts_sent_count']);
+        $this->assertEquals(1, $result['contacts_responded_count']);
+    }
+
+    /**
+     * Test getTrackingCounts returns null when hash not found
+     */
+    public function testGetTrackingCountsReturnsNullWhenNotFound(): void
+    {
+        $this->pdo->method('prepare')
+            ->willReturn($this->stmt);
+        $this->stmt->method('execute')
+            ->willReturn(true);
+        $this->stmt->method('fetch')
+            ->willReturn(false);
+
+        $result = $this->repository->getTrackingCounts('nonexistent-hash');
+
+        $this->assertNull($result);
     }
 }

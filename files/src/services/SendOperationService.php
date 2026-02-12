@@ -348,6 +348,18 @@ class SendOperationService implements SendOperationServiceInterface, P2pTransact
     /** Handle P2P transaction route */
     public function handleP2pRoute(array $request, ?CliOutputManager $output = null): void {
         $output = $output ?? CliOutputManager::getInstance();
+
+        // Default is fast mode (first response wins). --best flag enables
+        // best-fee mode (collect all responses, pick cheapest route).
+        $request['fast'] = !in_array('--best', $request, true);
+
+        // Remove flags from positional arguments so they aren't treated as description/currency
+        foreach ($request as $key => $value) {
+            if (is_int($key) && is_string($value) && strncmp($value, '--', 2) === 0) {
+                unset($request[$key]);
+            }
+        }
+
         $txData = ['recipient' => $request[2] ?? null, 'amount' => $request[3] ?? null, 'currency' => $request[4] ?? 'USD', 'description' => $request[5] ?? null];
 
         try {

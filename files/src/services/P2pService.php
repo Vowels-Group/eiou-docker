@@ -10,6 +10,9 @@ use Eiou\Contracts\ContactServiceInterface;
 use Eiou\Database\BalanceRepository;
 use Eiou\Database\P2pRepository;
 use Eiou\Database\TransactionRepository;
+use Eiou\Database\P2pSenderRepository;
+use Eiou\Database\P2pRelayedContactRepository;
+use Eiou\Database\Rp2pRepository;
 use Eiou\Services\Utilities\UtilityServiceContainer;
 use Eiou\Services\Utilities\ValidationUtilityService;
 use Eiou\Services\Utilities\TransportUtilityService;
@@ -109,6 +112,26 @@ class P2pService implements P2pServiceInterface {
     private Logger $secureLogger;
 
     /**
+     * @var P2pSenderRepository|null Repository for tracking P2P senders (multi-path support)
+     */
+    private ?P2pSenderRepository $p2pSenderRepository = null;
+
+    /**
+     * @var P2pRelayedContactRepository|null Repository for tracking already_relayed contacts (two-phase selection)
+     */
+    private ?P2pRelayedContactRepository $p2pRelayedContactRepository = null;
+
+    /**
+     * @var Rp2pRepository|null RP2P repository for forwarding existing RP2P to late P2P senders
+     */
+    private ?Rp2pRepository $rp2pRepository = null;
+
+    /**
+     * @var Rp2pService|null RP2P service for re-checking best-fee selection after broadcast completes
+     */
+    private ?Rp2pService $rp2pService = null;
+
+    /**
      * Constructor
      *
      * @param ContactServiceInterface $contactService Contact service
@@ -118,6 +141,7 @@ class P2pService implements P2pServiceInterface {
      * @param UtilityServiceContainer $utilityContainer Utility Container
      * @param UserContext $currentUser Current user data
      * @param MessageDeliveryService|null $messageDeliveryService Optional delivery service for tracking
+     * @param P2pSenderRepository|null $p2pSenderRepository Optional repository for multi-path sender tracking
      */
     public function __construct(
         ContactServiceInterface $contactService,
@@ -126,7 +150,8 @@ class P2pService implements P2pServiceInterface {
         TransactionRepository $transactionRepository,
         UtilityServiceContainer $utilityContainer,
         UserContext $currentUser,
-        ?MessageDeliveryService $messageDeliveryService = null
+        ?MessageDeliveryService $messageDeliveryService = null,
+        ?P2pSenderRepository $p2pSenderRepository = null
     ) {
         $this->contactService = $contactService;
         $this->balanceRepository = $balanceRepository;
@@ -139,6 +164,7 @@ class P2pService implements P2pServiceInterface {
         $this->timeUtility = $this->utilityContainer->getTimeUtility();
         $this->currentUser = $currentUser;
         $this->messageDeliveryService = $messageDeliveryService;
+        $this->p2pSenderRepository = $p2pSenderRepository;
         $this->secureLogger = Logger::getInstance();
 
         $this->p2pPayload = new P2pPayload($this->currentUser, $this->utilityContainer);
@@ -153,6 +179,36 @@ class P2pService implements P2pServiceInterface {
      */
     public function setMessageDeliveryService(MessageDeliveryService $service): void {
         $this->messageDeliveryService = $service;
+    }
+
+    /**
+     * Set the P2pRelayedContactRepository for two-phase best-fee selection
+     *
+     * @param P2pRelayedContactRepository $repository
+     * @return void
+     */
+    public function setP2pRelayedContactRepository(P2pRelayedContactRepository $repository): void {
+        $this->p2pRelayedContactRepository = $repository;
+    }
+
+    /**
+     * Set the Rp2pRepository for forwarding existing RP2P to late P2P senders
+     *
+     * @param Rp2pRepository $repository
+     * @return void
+     */
+    public function setRp2pRepository(Rp2pRepository $repository): void {
+        $this->rp2pRepository = $repository;
+    }
+
+    /**
+     * Set the Rp2pService for re-checking best-fee selection after broadcast
+     *
+     * @param Rp2pService $service
+     * @return void
+     */
+    public function setRp2pService(Rp2pService $service): void {
+        $this->rp2pService = $service;
     }
 
     /**
@@ -318,9 +374,44 @@ class P2pService implements P2pServiceInterface {
         // Check if P2P already exists for hash in database
         try{
             if($this->p2pRepository->p2pExists($request['hash'])){
-                //If P2P already exists
+                // Record this additional sender so RP2P is sent back to all paths
+                $this->p2pSenderRepository?->insertSender(
+                    $request['hash'], $request['senderAddress'], $request['senderPublicKey']
+                );
+
+                // If this node already has an RP2P for this hash (either as destination or
+                // relay that already completed selection), send it to the new sender immediately.
+                // Without this, late P2P senders never receive an RP2P and their upstream
+                // relay nodes must wait for hop-wait expiration — missing optimal routes.
+                $existingP2p = $this->p2pRepository->getByHash($request['hash']);
+                if ($existingP2p
+                    && $existingP2p['status'] === 'found'
+                    && isset($existingP2p['destination_address'])
+                ) {
+                    $myAddress = $this->transportUtility->resolveUserAddressForTransport($request['senderAddress']);
+                    if ($this->matchYourselfP2P($request, $myAddress)) {
+                        // We are the destination - send rp2p to this new sender
+                        $rP2pPayload = $this->rp2pPayload->build($request);
+                        $contactHash = substr(hash('sha256', $request['senderAddress']), 0, 8);
+                        $messageId = 'response-' . $request['hash'] . '-' . $contactHash;
+                        $this->sendP2pMessage('rp2p', $request['senderAddress'], $rP2pPayload, $messageId);
+                    }
+                } elseif ($this->rp2pRepository !== null) {
+                    // Relay node: if we already selected and forwarded an RP2P for this hash,
+                    // send it to the new sender so their upstream cascade gets a response
+                    $existingRp2p = $this->rp2pRepository->getByHash($request['hash']);
+                    if ($existingRp2p) {
+                        $rp2pPayload = $this->rp2pPayload->buildFromDatabase($existingRp2p);
+                        $contactHash = substr(hash('sha256', $request['senderAddress']), 0, 8);
+                        $messageId = 'relay-rp2p-' . $request['hash'] . '-' . $contactHash;
+                        $this->sendP2pMessage('rp2p', $request['senderAddress'], $rp2pPayload, $messageId);
+                    }
+                }
+
+                // P2P already exists via another route - inform sender with already_relayed
+                // This allows the sender to count this as a responded contact in best-fee mode
                 if($echo){
-                    echo $this->p2pPayload->buildRejection($request, 'duplicate');
+                    echo $this->p2pPayload->buildAlreadyRelayed($request);
                 }
                 return false;
             }
@@ -330,6 +421,12 @@ class P2pService implements P2pServiceInterface {
             // to prevent false positives from acceptance-before-storage bug
             // (follows same pattern as TransactionService.checkTransactionPossible)
             try {
+                // Track this sender in p2p_senders so multi-path RP2P forwarding
+                // includes them. Without this, only 'already_relayed' senders are
+                // tracked and the first sender is excluded when p2p_senders has entries.
+                $this->p2pSenderRepository?->insertSender(
+                    $request['hash'], $request['senderAddress'], $request['senderPublicKey']
+                );
                 $this->handleP2pRequest($request);
                 if($echo){
                     // Return 'inserted' status AFTER the P2P has been stored in the database
@@ -407,7 +504,39 @@ class P2pService implements P2pServiceInterface {
                 $request['feeAmount'] = $requestedAmount - $request['amount'];
                 $request['maxRequestLevel'] = $this->reAdjustP2pLevel($request); // Change (remaining) RequestLevel if need be based on user config
 
+                // In best-fee mode, scale relay expiration proportionally to remaining hops.
+                // Deeper nodes (high requestLevel, few remaining hops) expire sooner,
+                // guaranteeing downstream nodes always expire before upstream ones.
+                // This cascades best-fee selection from leaves back to originator.
+                $hopWait = (int) ($request['hopWait'] ?? 0);
+                if ($hopWait > 0 && !($request['fast'] ?? true)) {
+                    $remainingHops = max(1, (int)($request['maxRequestLevel'] ?? 1) - (int)($request['requestLevel'] ?? 0));
+                    $scaledWait = $hopWait * $remainingHops;
+                    $now = $this->timeUtility->getCurrentMicrotime();
+                    $scaledExpiration = $now + $this->timeUtility->convertMicrotimeToInt((float) $scaledWait);
+
+                    // Cap relay expiration to upstream's expiration minus hopWait buffer.
+                    // This ensures each relay expires before its upstream node, preserving
+                    // the cascade ordering required for best-fee selection to propagate
+                    // from leaves back to the originator.
+                    $upstreamExpiration = (int) ($request['expiration'] ?? 0);
+                    if ($upstreamExpiration > 0 && $scaledExpiration >= $upstreamExpiration) {
+                        $hopWaitMicrotime = $this->timeUtility->convertMicrotimeToInt((float) $hopWait);
+                        $cappedExpiration = $upstreamExpiration - $hopWaitMicrotime;
+                        $minExpiration = $now + $this->timeUtility->convertMicrotimeToInt(
+                            (float) Constants::P2P_HOP_PROCESSING_BUFFER_SECONDS
+                        );
+                        $request['expiration'] = max($minExpiration, $cappedExpiration);
+                    } else {
+                        $request['expiration'] = $scaledExpiration;
+                    }
+                }
+
                 $this->p2pRepository->insertP2pRequest($request, NULL);
+                // Record the first sender for multi-path RP2P delivery
+                $this->p2pSenderRepository?->insertSender(
+                    $request['hash'], $request['senderAddress'], $request['senderPublicKey']
+                );
                 $this->p2pRepository->updateStatus($request['hash'], Constants::STATUS_QUEUED);
             }
         } catch (PDOException $e) {
@@ -545,6 +674,9 @@ class P2pService implements P2pServiceInterface {
         ) + rand(Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_LOW, Constants::P2P_MIN_REQUEST_LEVEL_RANDOM_OFFSET_HIGH);
         $data['maxRequestLevel'] = $data['minRequestLevel'] + $this->transportUtility->jitter($this->currentUser->getMaxP2pLevel());
 
+        // Thread fast flag from user request (default: true for backward compatibility)
+        $data['fast'] = (int)($request['fast'] ?? true);
+
         return $data;
     }
 
@@ -624,11 +756,28 @@ class P2pService implements P2pServiceInterface {
                     $this->messageDeliveryService->updateStageToForwarded('p2p', $messageId, $matchedContact[$transportIndex]);
                 }
 
+                // Track sent count for best-fee mode: the matched contact will send
+                // an RP2P response, so we expect exactly 1 response.
+                // Both 'inserted' (new P2P) and 'already_relayed' (P2P exists via
+                // another path) contacts track this sender and will forward RP2P back.
+                if (isset($response['status']) && ($response['status'] === 'inserted' || $response['status'] === 'already_relayed')) {
+                    $this->p2pRepository->updateContactsSentCount($p2pHash, 1);
+                }
+
                 output(outputP2pSendResult($response),'SILENT');
             } else{
                 $contactsToSend = $contactsCount; // Reset sendable contact count
                 $sentMessages = 0;
+                $acceptedContacts = 0; // Contacts that accepted P2P as new ('inserted')
+                $relayedContacts = 0; // Contacts that returned 'already_relayed' (two-phase selection)
                 $successfulSends = [];
+
+                // Set contacts_sent_count ceiling BEFORE broadcasting to prevent race condition.
+                // RP2P responses can arrive via HTTP handler while we're still sending to contacts.
+                // Without this, contacts_sent_count defaults to 0 and the first RP2P triggers
+                // immediate best-fee selection (responded >= 0), ignoring later/better paths.
+                // The ceiling is updated to the actual count after the loop completes.
+                $this->p2pRepository->updateContactsSentCount($p2pHash, $contactsCount);
 
                 // Send p2p request to all accepted contacts
                 foreach ($contacts as $contact) {
@@ -664,6 +813,17 @@ class P2pService implements P2pServiceInterface {
                     }
 
                     $sentMessages += 1;
+                    // Track contacts for best-fee response counting.
+                    // 'inserted': contact accepted P2P as new — will forward RP2P back after its cascade.
+                    // 'already_relayed': contact received P2P from another path and runs its own cascade
+                    //   on an independent timer. Two-phase selection: phase 1 selects from inserted contacts,
+                    //   sends result to relayed contacts; phase 2 re-selects after relayed contacts respond.
+                    if ($response['status'] === 'inserted') {
+                        $acceptedContacts += 1;
+                    } elseif ($response['status'] === 'already_relayed') {
+                        $relayedContacts += 1;
+                        $this->p2pRelayedContactRepository?->insertRelayedContact($p2pHash, $contactAddress);
+                    }
                     if ($sendResult['success']) {
                         $successfulSends[] = ['messageId' => $messageId, 'nextHop' => $contactAddress];
                     }
@@ -691,6 +851,18 @@ class P2pService implements P2pServiceInterface {
                     $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_CANCELLED);
                     continue;
                 }
+
+                // Update contacts_sent_count from ceiling to actual accepted count
+                $this->p2pRepository->updateContactsSentCount($p2pHash, $acceptedContacts);
+                if ($relayedContacts > 0) {
+                    $this->p2pRepository->updateContactsRelayedCount($p2pHash, $relayedContacts);
+                }
+
+                // Re-check best-fee selection: RP2Ps may have arrived during broadcast
+                // and been stored as candidates without triggering selection (ceiling was
+                // higher than actual count). Now that the real count is set, check if
+                // enough responses have arrived to trigger selection.
+                $this->rp2pService?->checkBestFeeSelection($p2pHash);
             }
 
             $this->p2pRepository->updateStatus($p2pHash, Constants::STATUS_SENT);
@@ -742,7 +914,7 @@ class P2pService implements P2pServiceInterface {
         $p2pPayload = $this->p2pPayload->build($this->prepareP2pRequestData($data));
         output(outputInsertingP2pRequest($address), 'SILENT');
         // Privacy: Store description locally but don't include in P2P payload sent to relays
-        $description = isset($data[5]) && !empty($data[5]) ? $data[5] : null;
+        $description = isset($data[5]) && !empty($data[5]) && strncmp($data[5], '--', 2) !== 0 ? $data[5] : null;
         $this->p2pRepository->insertP2pRequest($p2pPayload, $address, $description);
         $this->p2pRepository->updateStatus($p2pPayload['hash'], Constants::STATUS_QUEUED);
     }
