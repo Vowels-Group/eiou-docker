@@ -379,6 +379,12 @@ echo -e "\n\t-> Step 1.12: Restoring wallet with 'docker run -d ... -e RESTORE=<
 
 # Create a completely new Container
 restoreContainer="httpRestoreSeedTest"
+
+# Clean up any existing container and volumes from previous runs
+# Without this, stale volumes cause ConfigCheck to skip RESTORE (userconfig.json already exists)
+docker rm -f ${restoreContainer} > /dev/null 2>&1
+docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-files ${restoreContainer}-eiou > /dev/null 2>&1
+
 restoreContainerHash=$(docker run -d  --network="${network}" --name "${restoreContainer}" -v "${restoreContainer}-mysql-data:/var/lib/mysql" -v "${restoreContainer}-files:/etc/eiou/" -e  RESTORE="${seedPhrase}" eiou/eiou 2>&1)
 
 # Wait for container to fully initialize and process RESTORE env var
@@ -531,6 +537,10 @@ else
     printf "\t   Config check result: ${configCheck}\n"
     failure=$(( failure + 1 ))
 fi
+
+# Clean up the restore container from Step 1.12
+docker rm -f ${restoreContainer} > /dev/null 2>&1
+docker volume rm ${restoreContainer}-mysql-data ${restoreContainer}-files ${restoreContainer}-eiou > /dev/null 2>&1
 
 ################################################################################
 #                    PART 2: SECURE SEEDPHRASE DISPLAY TEST
