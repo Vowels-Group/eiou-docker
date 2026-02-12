@@ -330,12 +330,10 @@ totaltests=$(( totaltests + 1 ))
 # hopWait = max(floor(expiration / HOP_DIVISOR) - HOP_BUFFER, MIN_HOP_WAIT)
 #   300s expiration: floor(300/12)-2 = 23s per hop
 #
-# Relay expirations (scaledWait = hopWait × remainingHops):
-#   A1 (5 remaining): 23 × 5 = 115s
-#   A4 (4 remaining): 23 × 4 =  92s
-#   A5 (3 remaining): 23 × 3 =  69s
-#   A7 (2 remaining): 23 × 2 =  46s
-#   A8 (1 remaining): 23 × 1 =  23s
+# Relay expirations (scaledWait = hopWait × remainingHops, A0→A11 shortest = 4 hops):
+#   A1/A2 (3 remaining): 23 × 3 = 69s
+#   A4/A5 (2 remaining): 23 × 2 = 46s
+#   A8    (1 remaining): 23 × 1 = 23s
 #
 # Each level gets ~23s breathing room before its upstream expires.
 #
