@@ -1005,7 +1005,7 @@ originalAuthCodeResult=$(docker exec ${testContainer} php -r '
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode . "|" . $json["authcode_encrypted"];
+        echo $authcode . "|" . json_encode($json["authcode_encrypted"]);
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
@@ -1138,7 +1138,7 @@ restoredAuthCodeResult=$(docker exec ${testContainer} php -r '
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode . "|" . $json["authcode_encrypted"];
+        echo $authcode . "|" . json_encode($json["authcode_encrypted"]);
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
@@ -1212,9 +1212,7 @@ if [[ "$originalAuthCode" == "$restoredAuthCode" ]]; then
     printf "\t   Authcode comparison ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   ${RED}AUTHCODES DO NOT MATCH - Authcode is not being derived from seedphrase!${NC}\n"
-    printf "\t   ${YELLOW}This is the expected behavior currently - authcode uses random_bytes()${NC}\n"
-    printf "\t   ${YELLOW}To fix: derive authcode deterministically from seed in Wallet.php${NC}\n"
+    printf "\t   ${RED}AUTHCODES DO NOT MATCH - Deterministic authcode derivation broken!${NC}\n"
     printf "\t   Authcode comparison ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
@@ -1238,7 +1236,7 @@ iteration2AuthCodeResult=$(docker exec ${testContainer} php -r '
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode . "|" . $json["authcode_encrypted"];
+        echo $authcode . "|" . json_encode($json["authcode_encrypted"]);
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
@@ -1256,7 +1254,7 @@ iteration3AuthCodeResult=$(docker exec ${testContainer} php -r '
     $json = json_decode(file_get_contents("'"${USERCONFIG}"'"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode . "|" . $json["authcode_encrypted"];
+        echo $authcode . "|" . json_encode($json["authcode_encrypted"]);
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
@@ -1273,8 +1271,7 @@ if [[ "$iteration1AuthCode" == "$iteration2AuthCode" ]] && [[ "$iteration2AuthCo
     printf "\t   Multiple iterations ${GREEN}PASSED${NC}\n"
     passed=$(( passed + 1 ))
 else
-    printf "\t   ${RED}Authcodes differ between iterations - random generation detected${NC}\n"
-    printf "\t   ${YELLOW}This confirms authcode is NOT derived from seedphrase${NC}\n"
+    printf "\t   ${RED}Authcodes differ between iterations - deterministic derivation broken!${NC}\n"
     printf "\t   Multiple iterations ${RED}FAILED${NC}\n"
     failure=$(( failure + 1 ))
 fi
@@ -1297,7 +1294,7 @@ newContainerAuthCodeResult=$(docker exec ${authcodeRestoreContainer} php -r '
     $json = json_decode(file_get_contents("/etc/eiou/config/userconfig.json"), true);
     if (isset($json["authcode_encrypted"])) {
         $authcode = \Eiou\Security\KeyEncryption::decrypt($json["authcode_encrypted"]);
-        echo $authcode . "|" . $json["authcode_encrypted"];
+        echo $authcode . "|" . json_encode($json["authcode_encrypted"]);
     } else {
         echo "ERROR_NO_AUTHCODE";
     }
@@ -1339,10 +1336,8 @@ echo -e "\t   ============================================"
 if [[ "$originalAuthCode" == "$restoredAuthCode" ]]; then
     echo -e "\t   ${GREEN}Authcode restoration: WORKING${NC}"
 else
-    echo -e "\t   ${RED}Authcode restoration: NOT IMPLEMENTED${NC}"
-    echo -e "\t   ${YELLOW}The authcode is randomly generated, not derived from seed.${NC}"
-    echo -e "\t   ${YELLOW}To fix: Modify Wallet.php to derive authcode from seed${NC}"
-    echo -e "\t   ${YELLOW}using HMAC-SHA256 or similar deterministic method.${NC}"
+    echo -e "\t   ${RED}Authcode restoration: BROKEN${NC}"
+    echo -e "\t   ${RED}Authcodes should be deterministic (derived from seed).${NC}"
 fi
 echo -e "\t   ============================================\n"
 
