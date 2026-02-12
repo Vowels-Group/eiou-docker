@@ -307,6 +307,20 @@ class Rp2pService implements Rp2pServiceInterface {
                     }
                 }
 
+                // Ensure relayed contacts are included in the senders list.
+                // A contact may be in p2p_relayed_contacts (from our broadcast) but
+                // not yet in p2p_senders (their broadcast to us hasn't arrived).
+                // Without this, such contacts never receive the RP2P response.
+                if ($this->p2pRelayedContactRepository !== null) {
+                    $relayedContacts = $this->p2pRelayedContactRepository->getRelayedContactsByHash($request['hash']);
+                    $senderAddresses = array_column($senders, 'sender_address');
+                    foreach ($relayedContacts as $contact) {
+                        if (!in_array($contact['contact_address'], $senderAddresses)) {
+                            $senders[] = ['sender_address' => $contact['contact_address']];
+                        }
+                    }
+                }
+
                 $currencyUtility = $this->utilityContainer->getCurrencyUtility();
                 $defaultFee = $this->currentUser->getDefaultFee();
                 $minimumFee = $this->currentUser->getMinimumFee();
@@ -693,6 +707,21 @@ class Rp2pService implements Rp2pServiceInterface {
         $p2p = $this->p2pRepository->getByHash($hash);
         if ($p2p) {
             $request['amount'] -= ($p2p['my_fee_amount'] ?? 0);
+        }
+
+        // Before forwarding upstream: ensure Phase 1 sent to relayed contacts.
+        // Race condition: if a relayed contact's RP2P arrived before all inserted
+        // contacts responded, Phase 2 triggers directly (skipping Phase 1).
+        // Without this, the relayed contact never receives our best downstream
+        // candidate and must rely on expiration fallback with potentially
+        // sub-optimal candidates.
+        $tracking = $this->p2pRepository->getTrackingCounts($hash);
+        if ($tracking) {
+            $relayedCount = (int) ($tracking['contacts_relayed_count'] ?? 0);
+            $phase1Sent = (bool) ($tracking['phase1_sent'] ?? 0);
+            if ($relayedCount > 0 && !$phase1Sent) {
+                $this->sendBestCandidateToRelayedContacts($hash);
+            }
         }
 
         $this->handleRp2pRequest($request);
