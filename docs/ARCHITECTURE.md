@@ -1216,6 +1216,53 @@ After selection, `selectAndForwardBestRp2p()` processes the winning candidate
 through the normal `handleRp2pRequest()` flow and deletes all candidates for
 that hash.
 
+**Phase 3a — Two-Phase Relay Selection (Mesh Deadlock Prevention):**
+
+In mesh topologies, two relay nodes may be contacts of each other (e.g., A2 and
+A4). Both receive the P2P from upstream, broadcast to their downstream contacts,
+and record each other as `already_relayed` in the `p2p_relayed_contacts` table.
+Neither can complete selection without the other's best candidate — a deadlock.
+
+The two-phase relay mechanism breaks this deadlock:
+
+1. **Relay Phase 1** — When all *inserted* contacts have responded but relayed
+   contacts haven't, the node sends its current best downstream candidate to all
+   `already_relayed` contacts via `sendBestCandidateToRelayedContacts()`. The
+   `phase1_sent` flag is set atomically before sending to prevent re-triggering.
+
+2. **Relay Phase 2** — When all propagated contacts (inserted + relayed combined)
+   have responded, `selectAndForwardBestRp2p()` picks the overall best candidate
+   (which now includes candidates from relayed contacts) and forwards it upstream
+   via `handleRp2pRequest()`.
+
+```
+  A1 (upstream)          A3 (upstream)
+   |                      |
+  A2 ←-- already_relayed --→ A4
+   |                          |
+  A5 (downstream)            A6 (downstream)
+
+Timeline:
+1. A5 responds to A2, A6 responds to A4  (inserted contacts done)
+2. A2 sends best(A5) to A4              (relay Phase 1)
+   A4 sends best(A6) to A2              (relay Phase 1)
+3. A2 re-selects from {A5, A4's candidate}, sends upstream to A1  (relay Phase 2)
+   A4 re-selects from {A6, A2's candidate}, sends upstream to A3  (relay Phase 2)
+```
+
+**Race condition guard:** If a relayed contact's RP2P arrives before all inserted
+contacts respond, relay Phase 2 can trigger directly (skipping relay Phase 1).
+To prevent this, `selectAndForwardBestRp2p()` checks `phase1_sent` before
+forwarding upstream. If Phase 1 was skipped, it calls
+`sendBestCandidateToRelayedContacts()` first, ensuring the relayed contact
+receives the node's best downstream candidate before the final selection goes
+upstream.
+
+**Sender list merge:** `handleRp2pRequest()` merges `p2p_relayed_contacts` into
+the `p2p_senders` list before sending RP2P responses. This ensures that contacts
+which returned `already_relayed` during broadcast — but whose own P2P hasn't
+arrived at this node yet — still receive the RP2P response.
+
 **Phase 4 — Cascading Selection:**
 
 Per-hop expiration ensures selection cascades from leaf nodes back to the originator.

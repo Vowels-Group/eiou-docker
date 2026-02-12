@@ -157,7 +157,7 @@ Integration tests validate the complete system behavior using Docker containers.
 | **DebugServiceTest.php** | 15+ | Debug context, error logging setup |
 | **MessageServiceTest.php** | 25+ | Message processing, validation, routing |
 | **P2pServiceTest.php** | 30+ | P2P routing logic, fund availability, matching |
-| **Rp2pServiceTest.php** | 25+ | RP2P relay logic, fee calculation |
+| **Rp2pServiceTest.php** | 46 | RP2P relay logic, fee calculation, two-phase relay selection, race condition coverage |
 | **SendOperationServiceTest.php** | 20+ | Send operations with locking, message delivery |
 | **ServiceContainerTest.php** | 20+ | Singleton pattern, dependency management, lazy loading |
 | **SyncServiceTest.php** | 20+ | Synchronization operations, contact/transaction sync |
