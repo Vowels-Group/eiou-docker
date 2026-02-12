@@ -23,19 +23,19 @@ docker volume rm A42-mysql-data A42-files A42-index A42-eiou A42-backups
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d --network=demo-net --name A0 -v "A0-mysql-data:/var/lib/mysql" -v "A0-files:/etc/eiou/" -v "A0-backups:/var/lib/eiou/backups" -e QUICKSTART=A0 eiou/eiou
-docker run -d --network=demo-net --name A1 -v "A1-mysql-data:/var/lib/mysql" -v "A1-files:/etc/eiou/" -v "A1-backups:/var/lib/eiou/backups" -e QUICKSTART=A1 eiou/eiou
-docker run -d --network=demo-net --name A11 -v "A11-mysql-data:/var/lib/mysql" -v "A11-files:/etc/eiou/" -v "A11-backups:/var/lib/eiou/backups" -e QUICKSTART=A11 eiou/eiou
-docker run -d --network=demo-net --name A12 -v "A12-mysql-data:/var/lib/mysql" -v "A12-files:/etc/eiou/" -v "A12-backups:/var/lib/eiou/backups" -e QUICKSTART=A12 eiou/eiou
-docker run -d --network=demo-net --name A2 -v "A2-mysql-data:/var/lib/mysql" -v "A2-files:/etc/eiou/" -v "A2-backups:/var/lib/eiou/backups" -e QUICKSTART=A2 eiou/eiou
-docker run -d --network=demo-net --name A21 -v "A21-mysql-data:/var/lib/mysql" -v "A21-files:/etc/eiou/" -v "A21-backups:/var/lib/eiou/backups" -e QUICKSTART=A21 eiou/eiou
-docker run -d --network=demo-net --name A22 -v "A22-mysql-data:/var/lib/mysql" -v "A22-files:/etc/eiou/" -v "A22-backups:/var/lib/eiou/backups" -e QUICKSTART=A22 eiou/eiou
-docker run -d --network=demo-net --name A3 -v "A3-mysql-data:/var/lib/mysql" -v "A3-files:/etc/eiou/" -v "A3-backups:/var/lib/eiou/backups" -e QUICKSTART=A3 eiou/eiou
-docker run -d --network=demo-net --name A31 -v "A31-mysql-data:/var/lib/mysql" -v "A31-files:/etc/eiou/" -v "A31-backups:/var/lib/eiou/backups" -e QUICKSTART=A31 eiou/eiou
-docker run -d --network=demo-net --name A32 -v "A32-mysql-data:/var/lib/mysql" -v "A32-files:/etc/eiou/" -v "A32-backups:/var/lib/eiou/backups" -e QUICKSTART=A32 eiou/eiou
-docker run -d --network=demo-net --name A4 -v "A4-mysql-data:/var/lib/mysql" -v "A4-files:/etc/eiou/" -v "A4-backups:/var/lib/eiou/backups" -e QUICKSTART=A4 eiou/eiou
-docker run -d --network=demo-net --name A41 -v "A41-mysql-data:/var/lib/mysql" -v "A41-files:/etc/eiou/" -v "A41-backups:/var/lib/eiou/backups" -e QUICKSTART=A41 eiou/eiou
-docker run -d --network=demo-net --name A42 -v "A42-mysql-data:/var/lib/mysql" -v "A42-files:/etc/eiou/" -v "A42-backups:/var/lib/eiou/backups" -e QUICKSTART=A42 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A0 -v "A0-mysql-data:/var/lib/mysql" -v "A0-files:/etc/eiou/" -v "A0-backups:/var/lib/eiou/backups" -e QUICKSTART=A0 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A1 -v "A1-mysql-data:/var/lib/mysql" -v "A1-files:/etc/eiou/" -v "A1-backups:/var/lib/eiou/backups" -e QUICKSTART=A1 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A11 -v "A11-mysql-data:/var/lib/mysql" -v "A11-files:/etc/eiou/" -v "A11-backups:/var/lib/eiou/backups" -e QUICKSTART=A11 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A12 -v "A12-mysql-data:/var/lib/mysql" -v "A12-files:/etc/eiou/" -v "A12-backups:/var/lib/eiou/backups" -e QUICKSTART=A12 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A2 -v "A2-mysql-data:/var/lib/mysql" -v "A2-files:/etc/eiou/" -v "A2-backups:/var/lib/eiou/backups" -e QUICKSTART=A2 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A21 -v "A21-mysql-data:/var/lib/mysql" -v "A21-files:/etc/eiou/" -v "A21-backups:/var/lib/eiou/backups" -e QUICKSTART=A21 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A22 -v "A22-mysql-data:/var/lib/mysql" -v "A22-files:/etc/eiou/" -v "A22-backups:/var/lib/eiou/backups" -e QUICKSTART=A22 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A3 -v "A3-mysql-data:/var/lib/mysql" -v "A3-files:/etc/eiou/" -v "A3-backups:/var/lib/eiou/backups" -e QUICKSTART=A3 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A31 -v "A31-mysql-data:/var/lib/mysql" -v "A31-files:/etc/eiou/" -v "A31-backups:/var/lib/eiou/backups" -e QUICKSTART=A31 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A32 -v "A32-mysql-data:/var/lib/mysql" -v "A32-files:/etc/eiou/" -v "A32-backups:/var/lib/eiou/backups" -e QUICKSTART=A32 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A4 -v "A4-mysql-data:/var/lib/mysql" -v "A4-files:/etc/eiou/" -v "A4-backups:/var/lib/eiou/backups" -e QUICKSTART=A4 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A41 -v "A41-mysql-data:/var/lib/mysql" -v "A41-files:/etc/eiou/" -v "A41-backups:/var/lib/eiou/backups" -e QUICKSTART=A41 eiou/eiou
+docker run -d --restart unless-stopped --network=demo-net --name A42 -v "A42-mysql-data:/var/lib/mysql" -v "A42-files:/etc/eiou/" -v "A42-backups:/var/lib/eiou/backups" -e QUICKSTART=A42 eiou/eiou
 sleep 5
 
 # Add friends (NOTE that names are NOT arbitrary)
