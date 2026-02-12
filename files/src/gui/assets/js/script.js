@@ -265,7 +265,23 @@ function initializeSendForm() {
             var hasVisible = false;
             for (var i = 0; i < allOptions.length; i++) {
                 var name = (allOptions[i].getAttribute('data-name') || '').toLowerCase();
-                if (name.indexOf(query) !== -1) {
+                var matched = name.indexOf(query) !== -1;
+
+                // Also match against contact addresses
+                if (!matched) {
+                    var addrJson = allOptions[i].getAttribute('data-addresses') || '{}';
+                    try {
+                        var addrs = JSON.parse(addrJson);
+                        for (var key in addrs) {
+                            if (addrs[key] && addrs[key].toLowerCase().indexOf(query) !== -1) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                    } catch (e) {}
+                }
+
+                if (matched) {
                     allOptions[i].style.display = '';
                     hasVisible = true;
                 } else {

@@ -24,7 +24,7 @@
         <div class="form-group" style="position: relative;">
             <label for="recipient-search">Recipient:</label>
             <input type="hidden" id="recipient" name="recipient" value="">
-            <input type="text" id="recipient-search" placeholder="Search contacts by name..." autocomplete="off"
+            <input type="text" id="recipient-search" placeholder="Search contacts by name or address..." autocomplete="off"
                    data-address-types='<?php echo htmlspecialchars(json_encode($addressTypes, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>'>
             <div id="recipient-dropdown" style="display:none; position:absolute; left:0; right:0; z-index:100; max-height:200px; overflow-y:auto; background:#fff; border:1px solid #ced4da; border-top:none; border-radius:0 0 4px 4px; box-shadow:0 4px 8px rgba(0,0,0,0.1);">
                 <?php foreach ($acceptedContacts as $contact): ?>
@@ -44,7 +44,7 @@
             </div>
             <small style="color: #6c757d; margin-top: 0.25rem; display: block;">
                 <i class="fas fa-lightbulb"></i>
-                <strong>Tip:</strong> Type to search contacts, or enter an address directly below for P2P routing.
+                <strong>Tip:</strong> Search contacts by name or address, or enter an address directly below for P2P routing.
             </small>
         </div>
 
