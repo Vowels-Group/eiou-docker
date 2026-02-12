@@ -20,16 +20,16 @@ docker volume rm httpJ-mysql-data httpJ-files httpJ-index httpJ-eiou httpJ-backu
 docker build -f eiou.dockerfile -t eiou/eiou .
 
 # Start containers
-docker run -d  --network=demo-net --name httpA -v "httpA-mysql-data:/var/lib/mysql" -v "httpA-files:/etc/eiou/" -v "httpA-backups:/var/lib/eiou/backups" -e QUICKSTART=httpA eiou/eiou
-docker run -d  --network=demo-net --name httpB -v "httpB-mysql-data:/var/lib/mysql" -v "httpB-files:/etc/eiou/" -v "httpB-backups:/var/lib/eiou/backups" -e QUICKSTART=httpB eiou/eiou
-docker run -d  --network=demo-net --name httpC -v "httpC-mysql-data:/var/lib/mysql" -v "httpC-files:/etc/eiou/" -v "httpC-backups:/var/lib/eiou/backups" -e QUICKSTART=httpC eiou/eiou
-docker run -d  --network=demo-net --name httpD -v "httpD-mysql-data:/var/lib/mysql" -v "httpD-files:/etc/eiou/" -v "httpD-backups:/var/lib/eiou/backups" -e QUICKSTART=httpD eiou/eiou
-docker run -d  --network=demo-net --name httpE -v "httpE-mysql-data:/var/lib/mysql" -v "httpE-files:/etc/eiou/" -v "httpE-backups:/var/lib/eiou/backups" -e QUICKSTART=httpE eiou/eiou
-docker run -d  --network=demo-net --name httpF -v "httpF-mysql-data:/var/lib/mysql" -v "httpF-files:/etc/eiou/" -v "httpF-backups:/var/lib/eiou/backups" -e QUICKSTART=httpF eiou/eiou
-docker run -d  --network=demo-net --name httpG -v "httpG-mysql-data:/var/lib/mysql" -v "httpG-files:/etc/eiou/" -v "httpG-backups:/var/lib/eiou/backups" -e QUICKSTART=httpG eiou/eiou
-docker run -d  --network=demo-net --name httpH -v "httpH-mysql-data:/var/lib/mysql" -v "httpH-files:/etc/eiou/" -v "httpH-backups:/var/lib/eiou/backups" -e QUICKSTART=httpH eiou/eiou
-docker run -d  --network=demo-net --name httpI -v "httpI-mysql-data:/var/lib/mysql" -v "httpI-files:/etc/eiou/" -v "httpI-backups:/var/lib/eiou/backups" -e QUICKSTART=httpI eiou/eiou
-docker run -d  --network=demo-net --name httpJ -v "httpJ-mysql-data:/var/lib/mysql" -v "httpJ-files:/etc/eiou/" -v "httpJ-backups:/var/lib/eiou/backups" -e QUICKSTART=httpJ eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpA -v "httpA-mysql-data:/var/lib/mysql" -v "httpA-files:/etc/eiou/" -v "httpA-backups:/var/lib/eiou/backups" -e QUICKSTART=httpA eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpB -v "httpB-mysql-data:/var/lib/mysql" -v "httpB-files:/etc/eiou/" -v "httpB-backups:/var/lib/eiou/backups" -e QUICKSTART=httpB eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpC -v "httpC-mysql-data:/var/lib/mysql" -v "httpC-files:/etc/eiou/" -v "httpC-backups:/var/lib/eiou/backups" -e QUICKSTART=httpC eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpD -v "httpD-mysql-data:/var/lib/mysql" -v "httpD-files:/etc/eiou/" -v "httpD-backups:/var/lib/eiou/backups" -e QUICKSTART=httpD eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpE -v "httpE-mysql-data:/var/lib/mysql" -v "httpE-files:/etc/eiou/" -v "httpE-backups:/var/lib/eiou/backups" -e QUICKSTART=httpE eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpF -v "httpF-mysql-data:/var/lib/mysql" -v "httpF-files:/etc/eiou/" -v "httpF-backups:/var/lib/eiou/backups" -e QUICKSTART=httpF eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpG -v "httpG-mysql-data:/var/lib/mysql" -v "httpG-files:/etc/eiou/" -v "httpG-backups:/var/lib/eiou/backups" -e QUICKSTART=httpG eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpH -v "httpH-mysql-data:/var/lib/mysql" -v "httpH-files:/etc/eiou/" -v "httpH-backups:/var/lib/eiou/backups" -e QUICKSTART=httpH eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpI -v "httpI-mysql-data:/var/lib/mysql" -v "httpI-files:/etc/eiou/" -v "httpI-backups:/var/lib/eiou/backups" -e QUICKSTART=httpI eiou/eiou
+docker run -d --restart unless-stopped  --network=demo-net --name httpJ -v "httpJ-mysql-data:/var/lib/mysql" -v "httpJ-files:/etc/eiou/" -v "httpJ-backups:/var/lib/eiou/backups" -e QUICKSTART=httpJ eiou/eiou
 sleep 5
 
 # add contacts
