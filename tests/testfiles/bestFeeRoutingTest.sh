@@ -30,7 +30,7 @@ testSender="${containers[0]}"
 testReceiver=""
 for ((i=${#containers[@]}-1; i>=0; i--)); do
     candidate="${containers[$i]}"
-    if [[ "$candidate" != "$testSender" ]] && [[ -n "${expectedContacts[$candidate]}" ]]; then
+    if [[ "$candidate" != "$testSender" ]] && [[ "${expectedContacts[$candidate]:-0}" -gt 0 ]]; then
         testReceiver="$candidate"
         break
     fi
@@ -590,7 +590,7 @@ totaltests=$(( totaltests + 1 ))
 echo -e "\t-> Sending 5 USD from ${testSender} to non-existent address with --best (expect fast cancel)"
 
 cancelStartTime=$(date +%s)
-cancelSendResult=$(docker exec ${testSender} eiou send http://nonexistent.eiou.internal 5 USD --best 2>&1)
+cancelSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[A12]} 5 USD --best 2>&1)
 
 # With cascade cancel, dead-end nodes cancel immediately and propagate upstream.
 # The originator should see cancellation well before full expiration.

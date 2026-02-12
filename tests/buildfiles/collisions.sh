@@ -26,6 +26,7 @@ declare -a containers=(
     "A9"
     "A10"
     "A11"
+    "A12"
 )
 
 # Randomized fees (0.1-0.9) per edge, same both directions
@@ -102,6 +103,7 @@ declare -A expectedContacts=(
     [A9]=1   # Connected to A6
     [A10]=2  # Connected to A6 and A8
     [A11]=1  # Connected to A8
+    [A12]=0  # Isolated node (cascade cancel target)
 )
 
 # 12-node cluster (collision) topology with randomized fees and dead ends:
@@ -116,6 +118,7 @@ declare -A expectedContacts=(
 ##            \    /    \
 ##              A5        A11
 ##
+## A12 is isolated (no connections) — used as cascade cancel target.
 ## Fees are randomized (0.1-0.9) per run; best-fee route varies each time.
 declare -A routingTests=(
     [A0,A3]="A1"

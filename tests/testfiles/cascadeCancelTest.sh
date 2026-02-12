@@ -154,7 +154,7 @@ docker exec ${testSender} php -r "
 echo -e "\t-> Sending 5 USD from ${testSender} to non-existent address with --best"
 
 cancelStartTime=$(date +%s)
-cancelSendResult=$(docker exec ${testSender} eiou send http://nonexistent-zz.eiou.internal 5 USD --best 2>&1)
+cancelSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[A12]} 5 USD --best 2>&1)
 
 # With cascade cancel, dead-end nodes cancel immediately and propagate upstream.
 # The originator should see cancellation well before full expiration.

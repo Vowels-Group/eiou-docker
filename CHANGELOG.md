@@ -78,7 +78,7 @@ The project is currently in **ALPHA** status.
 
 ### Fixed
 - Collisions topology bugs: duplicate fee variable, missing `fee_A6_A9` (A6↔A9 link used wrong fee), duplicate `[A8,A10]` key instead of reverse `[A10,A8]`, wrong `expectedContacts` counts for A4 (4→5), A6 (3→4), wrong comment for A5; routing test intermediary lists now cover all shortest-path variations
-- Cascade cancel test used `nonexistent-a9` hostname which conflicts with real node A9 in 12-node topology — changed to `nonexistent-zz`
+- Cascade cancel tests sent to nonexistent hostname which fails address validation before P2P is broadcast — added isolated A12 node (no connections) as cascade cancel target so the P2P propagates through the mesh and dead-end nodes actually exercise cascade cancel
 - Missing name validation in `updateContact()` command — names with invalid characters were accepted on update but rejected on add
 - Clarified error message when recipient is not found — now reads "not a valid address or known contact" instead of just "not a valid address"
 - Graceful shutdown output truncated after Apache stop — `service apache2 stop` blocked indefinitely with no timeout, consuming the Docker grace period before MariaDB/Tor/Cron stops and completion message could execute; all service stops now wrapped in `timeout` commands
