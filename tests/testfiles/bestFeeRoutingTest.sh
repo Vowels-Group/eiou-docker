@@ -230,14 +230,11 @@ balance_cmd="php -r \"
 
 newBalanceFast=$(wait_for_balance_change "${testReceiver}" "$initialBalanceFast" "$balance_cmd" "$fastTimeout" "fast mode send")
 
-# Retry with queue processing if needed
+# Retry: wait for daemon processing
 balanceChangedFast=$(awk "BEGIN {print ($newBalanceFast != $initialBalanceFast) ? 1 : 0}")
 if [ "$balanceChangedFast" -eq 0 ]; then
-    echo -e "\t   Balance unchanged, retrying with queue processing..."
-    all_containers="${containers[*]}"
-    for attempt in 1 2 3 4; do
-        process_routing_queues "$all_containers"
-    done
+    echo -e "\t   Balance unchanged, waiting for daemon processing..."
+    sleep 10
     newBalanceFast=$(docker exec ${testReceiver} sh -c "$balance_cmd" 2>/dev/null || echo "$initialBalanceFast")
     balanceChangedFast=$(awk "BEGIN {print ($newBalanceFast != $initialBalanceFast) ? 1 : 0}")
 fi
@@ -377,22 +374,18 @@ bestFeeSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[${t
 # candidate selection at each hop. The total time should be well under the
 # originator's expiration since relay nodes expire after just hopWait seconds.
 
-all_containers="${containers[*]}"
 # Timeout must exceed: expiration + grace period (30s) + processing headroom (30s).
 # The cleanup fallback triggers at expiration + grace period, so the test timeout
 # must comfortably exceed that to avoid false failures at the boundary.
 gracePeriod=30
 headroom=30
 bestfeeTimeout=$((testExpiration + gracePeriod + headroom))
-echo -e "\t   Waiting for best-fee routing via natural expiration (timeout: ${bestfeeTimeout}s)..."
+echo -e "\t   Waiting for best-fee routing via daemon processing (timeout: ${bestfeeTimeout}s)..."
 
 elapsed=0
 balanceChangedBest=0
 while [ $elapsed -lt $bestfeeTimeout ]; do
-    # Process queues once per iteration. RP2P messages are sent via synchronous HTTP
-    # (not queued), so the backward cascade propagates inline within request handlers.
-    # Queue processing advances P2P forward propagation ~1 hop per round.
-    process_routing_queues "$all_containers"
+    sleep 3
 
     # Check if balance changed (early exit)
     newBalanceBest=$(docker exec ${testReceiver} sh -c "$balance_cmd" 2>/dev/null || echo "$initialBalanceBest")
@@ -400,14 +393,6 @@ while [ $elapsed -lt $bestfeeTimeout ]; do
     if [ "$balanceChangedBest" -eq 1 ]; then
         break
     fi
-
-    # Run cleanup on all nodes to process any expired P2Ps (triggers candidate selection)
-    for container in "${containers[@]}"; do
-        docker exec ${container} php -r "
-            require_once('${BOOTSTRAP_PATH}');
-            \Eiou\Core\Application::getInstance()->services->getCleanupService()->processCleanupMessages();
-        " 2>/dev/null || true
-    done
 
     elapsed=$(( $(date +%s) - sendStartTime ))
 done
@@ -600,14 +585,7 @@ echo -e "\t   Waiting for cascade cancel (timeout: ${cancelTimeout}s, expiration
 elapsed=0
 cancelDetected=0
 while [ $elapsed -lt $cancelTimeout ]; do
-    # Process queues to trigger P2P forwarding and cleanup
-    process_routing_queues "$all_containers"
-    for container in "${containers[@]}"; do
-        docker exec ${container} php -r "
-            require_once('${BOOTSTRAP_PATH}');
-            \Eiou\Core\Application::getInstance()->services->getCleanupService()->processCleanupMessages();
-        " 2>/dev/null || true
-    done
+    sleep 3
 
     # Check if the P2P was cancelled on the originator
     p2pStatus=$(docker exec ${testSender} php -r "

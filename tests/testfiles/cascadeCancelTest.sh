@@ -162,20 +162,10 @@ cancelSendResult=$(docker exec ${testSender} eiou send ${containerAddresses[A12]
 cancelTimeout=$((testExpiration / 2))
 echo -e "\t   Waiting for cascade cancel (timeout: ${cancelTimeout}s, full expiration: ${testExpiration}s)..."
 
-all_containers="${containers[*]}"
 elapsed=0
 cancelDetected=0
 while [ $elapsed -lt $cancelTimeout ]; do
-    # Process queues to trigger P2P forwarding on all nodes
-    process_routing_queues "$all_containers"
-
-    # Run cleanup on all nodes to process expired P2Ps and trigger cascade cancel
-    for container in "${containers[@]}"; do
-        docker exec ${container} php -r "
-            require_once('${BOOTSTRAP_PATH}');
-            \Eiou\Core\Application::getInstance()->services->getCleanupService()->processCleanupMessages();
-        " 2>/dev/null || true
-    done
+    sleep 3
 
     # Check if the P2P was cancelled/expired on the originator
     p2pStatus=$(docker exec ${testSender} php -r "

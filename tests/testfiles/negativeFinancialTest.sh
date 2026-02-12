@@ -335,30 +335,22 @@ if [[ -z "$txid" ]]; then
 else
     echo -e "\t   Transaction queued with txid: ${txid}"
 
-    # Trigger message processing: A sends to B
-    # Use eiou CLI commands to avoid MSYS path conversion issues on Windows Git Bash
-    echo -e "\t   Processing outgoing messages on sender..."
-    docker exec -e EIOU_TEST_MODE=true ${testContainer} eiou out >/dev/null 2>&1 || true
-    sleep 1
-
-    # Trigger message processing: B receives and validates (should reject)
-    echo -e "\t   Processing incoming messages on receiver..."
-    docker exec -e EIOU_TEST_MODE=true ${realContactContainer} eiou in >/dev/null 2>&1 || true
-    sleep 1
-
-    # Trigger message processing: A receives B's response
-    echo -e "\t   Processing response on sender..."
-    docker exec -e EIOU_TEST_MODE=true ${testContainer} eiou in >/dev/null 2>&1 || true
-    sleep 1
-
-    # Check transaction status - should be rejected
-    echo -e "\t   Checking transaction status..."
-    txStatus=$(docker exec ${testContainer} php -r "
-        require_once('${BOOTSTRAP_PATH}');
-        \$app = \Eiou\Core\Application::getInstance();
-        // Use getStatusByTxid which returns status string directly
-        echo \$app->services->getTransactionRepository()->getStatusByTxid('${txid}') ?? 'unknown';
-    " 2>/dev/null || echo "unknown")
+    # Wait for daemon processors to handle the send/receive/validation cycle
+    echo -e "\t   Waiting for daemon processing (timeout: 15s)..."
+    elapsed=0
+    txStatus="unknown"
+    while [ $elapsed -lt 15 ]; do
+        txStatus=$(docker exec ${testContainer} php -r "
+            require_once('${BOOTSTRAP_PATH}');
+            \$app = \Eiou\Core\Application::getInstance();
+            echo \$app->services->getTransactionRepository()->getStatusByTxid('${txid}') ?? 'unknown';
+        " 2>/dev/null || echo "unknown")
+        if [[ "$txStatus" == "rejected" || "$txStatus" == "failed" || "$txStatus" == "cancelled" ]]; then
+            break
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
 
     echo -e "\t   Transaction status: ${txStatus}"
 
