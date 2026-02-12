@@ -1063,6 +1063,9 @@ watchdog() {
 
         # Skip restart cycle if shutdown was requested via 'eiou shutdown'
         if [ -f "$SHUTDOWN_FLAG" ]; then
+            if [ "$WAS_SHUTDOWN" = false ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] WATCHDOG: Shutdown flag detected, pausing processor monitoring"
+            fi
             WAS_SHUTDOWN=true
             continue
         fi
