@@ -200,5 +200,8 @@ RUN chmod +x /startup.sh
 HEALTHCHECK --interval=30s --timeout=20s --start-period=120s --retries=5 \
     CMD curl -f http://localhost/gui/ || exit 1
 
+# Ensure Docker sends SIGTERM for graceful shutdown (startup.sh traps this)
+STOPSIGNAL SIGTERM
+
 # Start services using the startup script
 ENTRYPOINT ["/startup.sh"]

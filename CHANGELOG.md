@@ -15,8 +15,14 @@ The project is currently in **ALPHA** status.
 ### Security
 - Wallet restore no longer re-creates the seedphrase file — the user already has the seedphrase (they just used it to restore), so writing it to a temp file was an unnecessary security exposure; only the authcode file is regenerated so the user can retrieve it if lost
 
+### Added
+- `STOPSIGNAL SIGTERM` directive in Dockerfile — makes the graceful shutdown signal explicit so `--restart unless-stopped` works correctly (containers restart on Docker daemon restart but stay stopped after `docker stop`)
+
 ### Changed
 - Startup user info section no longer creates a separate authcode temp file on first wallet creation — the seedphrase file already contains the authcode, so creating a second file was redundant and confusing; on restart or restore, the authcode-only file is still created as before
+
+### Docs
+- All `docker run` examples in CLI_DEMO_GUIDE.md now include `--restart unless-stopped` so containers automatically restart after host/Docker daemon restarts
 
 ### Fixed
 - Phase 1/Phase 2 race condition: `selectAndForwardBestRp2p` now checks `phase1_sent` before forwarding upstream — if a relayed contact's RP2P arrived before all inserted contacts responded, Phase 2 triggered directly (skipping Phase 1), so the relayed contact never received our best downstream candidate and fell back to expiration with potentially sub-optimal candidates
