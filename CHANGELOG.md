@@ -20,6 +20,7 @@ The project is currently in **ALPHA** status.
 
 ### Changed
 - Contacts grid now scrolls horizontally instead of wrapping into rows — cards continue to the right in a single scrollable row
+- GUI banner system — place images in `assets/banners/` to display a banner above the wallet and login screens; empty folder shows nothing
 
 ### Fixed
 - Missing name validation in `updateContact()` command — names with invalid characters were accepted on update but rejected on add

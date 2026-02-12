@@ -5,6 +5,22 @@
     box-sizing: border-box;
 }
 
+/* Banner — displayed above login when images exist in assets/banners/ */
+.banner-container {
+    width: 100%;
+    text-align: center;
+    background: #f8f9fa;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.banner-image {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.6;
@@ -12,6 +28,7 @@ body {
     background: #f8f9fa;
     min-height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
 }
