@@ -707,6 +707,80 @@ class Rp2pServiceCascadeCancelTest extends TestCase
     }
 
     /**
+     * Test Phase 1 sends cancel to relayed contacts when no candidates exist
+     *
+     * When all inserted contacts cancelled (getBestCandidate returns null),
+     * sendBestCandidateToRelayedContacts should send cancel notifications to
+     * relayed contacts so they can count the response and break mutual deadlocks.
+     */
+    public function testHandleCancelNotificationPhase1SendsCancelToRelayedWhenNoCandidates(): void
+    {
+        $rp2pCandidateRepo = $this->createMock(Rp2pCandidateRepository::class);
+        $p2pRelayedContactRepo = $this->createMock(P2pRelayedContactRepository::class);
+        $service = $this->createServiceWithCandidateRepoAndP2pService($rp2pCandidateRepo, $p2pRelayedContactRepo);
+
+        $request = [
+            'hash' => self::TEST_HASH,
+            'senderAddress' => self::TEST_ADDRESS,
+        ];
+
+        $p2p = [
+            'hash' => self::TEST_HASH,
+            'amount' => self::TEST_AMOUNT,
+            'sender_public_key' => self::TEST_PUBLIC_KEY,
+        ];
+
+        $this->rp2pRepository->method('rp2pExists')
+            ->willReturn(false);
+
+        // Phase 1: all inserted responded, relayed not yet
+        $this->p2pRepository->method('getTrackingCounts')
+            ->willReturn([
+                'contacts_sent_count' => 2,
+                'contacts_responded_count' => 2,
+                'contacts_relayed_count' => 1,
+                'contacts_relayed_responded_count' => 0,
+                'phase1_sent' => 0,
+                'fast' => 0,
+            ]);
+
+        // Phase 1 should mark as sent
+        $this->p2pRepository->expects($this->once())
+            ->method('markPhase1Sent')
+            ->with(self::TEST_HASH);
+
+        // Phase 1 looks up best candidate — none found (all cancelled)
+        $rp2pCandidateRepo->method('getBestCandidate')
+            ->willReturn(null);
+
+        // Should look up relayed contacts to send cancel
+        $p2pRelayedContactRepo->expects($this->once())
+            ->method('getRelayedContactsByHash')
+            ->with(self::TEST_HASH)
+            ->willReturn([
+                ['contact_address' => 'http://relayed-contact.test'],
+            ]);
+
+        // Should send cancel message to relayed contact
+        $this->messageDeliveryService->expects($this->once())
+            ->method('sendMessage')
+            ->with(
+                'rp2p',
+                'http://relayed-contact.test',
+                $this->callback(function ($payload) {
+                    return $payload['type'] === 'rp2p'
+                        && $payload['cancelled'] === true
+                        && $payload['amount'] === 0
+                        && $payload['hash'] === self::TEST_HASH;
+                }),
+                $this->anything(),
+                false
+            );
+
+        $service->handleCancelNotification($request, $p2p);
+    }
+
+    /**
      * Test handleCancelNotification does not trigger selection when not all contacts responded
      */
     public function testHandleCancelNotificationDoesNotTriggerSelectionWhenNotAllResponded(): void

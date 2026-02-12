@@ -675,7 +675,10 @@ class Rp2pService implements Rp2pServiceInterface {
 
         $bestCandidate = $this->rp2pCandidateRepository->getBestCandidate($hash);
         if (!$bestCandidate) {
-            return; // No candidates yet, wait for more
+            // All inserted contacts cancelled — notify relayed contacts
+            // so they can count our response and break mutual deadlocks.
+            $this->sendCancelToRelayedContacts($hash);
+            return;
         }
 
         // Build RP2P payload from best candidate.
@@ -706,6 +709,39 @@ class Rp2pService implements Rp2pServiceInterface {
             'hash' => $hash,
             'relayed_contacts' => count($relayedContacts),
             'best_amount' => $bestCandidate['amount'],
+        ]);
+    }
+
+    /**
+     * Phase 1 cancel: notify relayed contacts when all inserted contacts cancelled
+     *
+     * When all inserted contacts respond with cancels (zero RP2P candidates),
+     * relayed contacts need to be notified so they can count our response and
+     * potentially break mutual deadlocks. Without this, hub nodes with mutual
+     * relayed references (e.g. A4↔A8) wait for each other indefinitely until
+     * hop-wait expiration.
+     *
+     * This mirrors the Phase 2 pattern in selectAndForwardBestRp2p() where
+     * zero candidates triggers cancel + upstream propagation.
+     *
+     * @param string $hash The P2P hash
+     * @return void
+     */
+    private function sendCancelToRelayedContacts(string $hash): void
+    {
+        if ($this->p2pRelayedContactRepository === null) {
+            return;
+        }
+
+        $relayedContacts = $this->p2pRelayedContactRepository->getRelayedContactsByHash($hash);
+        foreach ($relayedContacts as $contact) {
+            $cancelPayload = $this->rp2pPayload->buildCancelled($hash, $contact['contact_address']);
+            $this->sendRp2pMessage($contact['contact_address'], $cancelPayload, $hash);
+        }
+
+        Logger::getInstance()->info("Phase 1: sent cancel to relayed contacts (no candidates)", [
+            'hash' => $hash,
+            'relayed_contacts' => count($relayedContacts),
         ]);
     }
 

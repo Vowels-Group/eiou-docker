@@ -77,6 +77,7 @@ The project is currently in **ALPHA** status.
 - GUI chain drop propose/accept/reject actions reload page and reopen contact modal after completion
 
 ### Fixed
+- Phase 1 cancel deadlock between hub nodes: when all inserted contacts cancelled with no RP2P candidates, `sendBestCandidateToRelayedContacts` silently returned without notifying relayed contacts — hub nodes with mutual relayed references (e.g. A4↔A8) deadlocked until hop-wait expiration instead of cascading cancel immediately
 - Collisions topology bugs: duplicate fee variable, missing `fee_A6_A9` (A6↔A9 link used wrong fee), duplicate `[A8,A10]` key instead of reverse `[A10,A8]`, wrong `expectedContacts` counts for A4 (4→5), A6 (3→4), wrong comment for A5; routing test intermediary lists now cover all shortest-path variations
 - Cascade cancel tests sent to nonexistent hostname which fails address validation before P2P is broadcast — added isolated A12 node (no connections) as cascade cancel target so the P2P propagates through the mesh and dead-end nodes actually exercise cascade cancel
 - Missing name validation in `updateContact()` command — names with invalid characters were accepted on update but rejected on add

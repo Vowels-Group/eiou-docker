@@ -59,6 +59,31 @@ class Rp2pPayload extends BasePayload
     }
 
     /**
+     * Build a cancel notification payload
+     *
+     * Used when all downstream contacts cancelled with no viable RP2P candidates.
+     * Sent to relayed contacts during Phase 1 to break mutual deadlocks.
+     *
+     * @param string $hash The P2P hash being cancelled
+     * @param string $recipientAddress The address of the recipient (used to resolve
+     *        this node's address for the matching transport type)
+     * @return array The cancel notification payload
+     */
+    public function buildCancelled(string $hash, string $recipientAddress): array
+    {
+        return [
+            'type' => 'rp2p',
+            'hash' => $hash,
+            'cancelled' => true,
+            'amount' => 0,
+            'time' => $this->timeUtility->getCurrentMicrotime(),
+            'currency' => Constants::TRANSACTION_DEFAULT_CURRENCY,
+            'senderAddress' => $this->transportUtility->resolveUserAddressForTransport($recipientAddress),
+            'senderPublicKey' => $this->currentUser->getPublicKey(),
+        ];
+    }
+
+    /**
      * Build RP2P accepted payload when request was received successfully
      *
      * @param array $request The RP2P request data
