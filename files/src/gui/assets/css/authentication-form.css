@@ -23,7 +23,7 @@
 .banner-image {
     width: 100%;
     height: auto;
-    min-height: 50px;
+    min-height: 90px;
     display: block;
     object-fit: cover;
     object-position: center;
